@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beantester"
+dynamic = ["version"]                  # the version lives in VERSION.txt, nowhere else
+description = "Bean Network Tester - poor network conditions simulator for Windows (WinDivert)"
+readme = "README.md"
+authors = [{ name = "DonislawDev" }]
+requires-python = ">=3.10"
+license = { file = "LICENSE" }        # GNU GPL v3.0 - free & open source, copyleft (see LICENSE)
+keywords = ["network", "testing", "qa", "windivert", "throttling", "latency", "packet-loss"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Networking",
+]
+
+[project.optional-dependencies]
+windows = ["pydivert", "psutil"]
+dev = ["pytest", "hypothesis", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://donislawdev.com/"
+Support = "https://donislawdev.com/support/"
+
+[project.scripts]
+bean-network-tester = "beantester.cli:main"
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION.txt" }
+
+[tool.setuptools.packages.find]
+include = ["beantester*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["beantester"]
+parallel = true                 # the GUI tests run in subprocesses; each writes its own data file
+concurrency = ["thread", "multiprocessing"]
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+# The gate. Re-measured at 79% after the engineering-review test pass (pass-through
+# invariant, jsonfile, views, clilog, crashlog, scenario_runner, processes). Set two
+# points below the measurement so it blocks a real regression without failing on the
+# small run-to-run variance of the subprocess GUI coverage. Raise it as coverage
+# climbs - never lower it to make a red build go green.
+#
+# NOTE: it only means anything with COVERAGE_PROCESS_START set, because the GUI
+# tests run in subprocesses. Without it the same suite reports 51%, and a gate at
+# 75 would fail on a codebase that is actually fine.
+fail_under = 77
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

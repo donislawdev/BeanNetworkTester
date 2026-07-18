@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.spec
+!BeanNetworkTester.spec   # the build recipe IS part of the repo
+.venv/
+venv/
+# files generated at runtime next to the app
+bean_network_tester_profiles.json
+bean_network_tester_stats.csv
+bean_network_tester_ui.json
+*.ndjson
+bean_run.log
+debug.log
+.hypothesis/
+.coverage
+# runtime crash artefacts (never commit or ship)
+crashes/
+SHA256SUMS.txt
+BeanNetworkTester-*.zip
+
+# Claude config and dev notes - kept in the private BeanNetworkTester-Doc repo
+.claude/
+PROJECT_NOTES.md
+HISTORY_NOTES.md

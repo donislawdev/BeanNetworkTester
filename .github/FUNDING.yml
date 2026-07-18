@@ -1,0 +1,3 @@
+# Adds a "Sponsor" button to the repository. The project takes voluntary support
+# through its own page rather than a funding platform.
+custom: ["https://donislawdev.com/support/"]

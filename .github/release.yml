@@ -1,0 +1,19 @@
+# Groups the auto-generated release notes (release.yml runs `gh release create
+# --generate-notes`) by the labels on merged pull requests, instead of one flat list.
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+  categories:
+    - title: New features
+      labels: ["enhancement", "feature"]
+    - title: Bug fixes
+      labels: ["bug", "fix"]
+    - title: Performance
+      labels: ["performance"]
+    - title: Documentation
+      labels: ["documentation", "docs"]
+    - title: CI / build
+      labels: ["ci", "build"]
+    - title: Other changes
+      labels: ["*"]

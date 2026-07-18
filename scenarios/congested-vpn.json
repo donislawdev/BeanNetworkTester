@@ -1,0 +1,9 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 60, "jitter": 20, "up": 400, "down": 4000, "max_size": 1400 } },
+    { "at": 20, "settings": { "latency": 110, "jitter": 55, "up": 180, "spike_prob": 15, "spike_ms": 400 } },
+    { "at": 45, "settings": { "latency": 140, "jitter": 70, "up": 120, "loss": 2, "rst_prob": 1, "rst_cooldown": 20 } },
+    { "at": 70, "settings": { "latency": 70, "jitter": 25, "up": 400, "loss": 0, "spike_prob": 0 } }
+  ]
+}

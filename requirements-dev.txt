@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest
+hypothesis        # property-based tests (matchers) and CLI fuzzing
+pytest-cov        # coverage gate (see [tool.coverage] in pyproject.toml)

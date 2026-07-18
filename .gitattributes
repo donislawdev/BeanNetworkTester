@@ -1,0 +1,8 @@
+# Normalise text files to LF in the repository and on checkout. This ends the
+# "LF will be replaced by CRLF" churn on Windows and keeps diffs clean across
+# contributors and CI (Linux + Windows runners see identical bytes).
+* text=auto eol=lf
+
+# Binary assets: never normalise their bytes.
+*.png binary
+*.ico binary

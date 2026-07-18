@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or support
+    url: https://donislawdev.com/support/
+    about: For usage questions and general support, start here rather than opening an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/donislawdev/BeanNetworkTester/security/advisories/new
+    about: Please report security issues privately, never as a public issue.

@@ -1,0 +1,9 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 40, "jitter": 15, "loss": 0, "down": 8000, "up": 2000 } },
+    { "at": 20, "settings": { "block_ip": "203.0.113.0/24" } },
+    { "at": 45, "settings": { "latency": 120, "jitter": 60, "loss": 3 } },
+    { "at": 65, "settings": { "block_ip": "", "latency": 40, "jitter": 15, "loss": 0 } }
+  ]
+}

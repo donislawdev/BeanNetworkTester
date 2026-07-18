@@ -1,0 +1,72 @@
+name: Bug report
+description: Something in Bean Network Tester does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The version and the `--doctor`
+        output are the two most useful things you can give us.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `BeanNetworkTester.exe --version` (or `python bean_network_tester.py --version`).
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: How were you running it?
+      options:
+        - GUI
+        - CLI (real capture)
+        - CLI --simulate
+    validations:
+      required: true
+  - type: dropdown
+    id: elevated
+    attributes:
+      label: Elevated (Administrator)?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that triggers it. A CLI command or a saved reproduction report is ideal.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Environment report
+      description: Output of `BeanNetworkTester.exe --doctor`. Pasted here it renders as a code block automatically.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Logs (`--log-file`), screenshots, or a crash file from the `crashes/` folder.

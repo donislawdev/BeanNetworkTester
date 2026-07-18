@@ -1,0 +1,11 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "filter": "udp", "dst_port": "53", "latency": 20, "jitter": 5 } },
+    { "at": 15, "settings": { "loss": 25, "latency": 400, "jitter": 200 } },
+    { "at": 35, "settings": { "loss": 60, "latency": 1500, "jitter": 500 } },
+    { "at": 55, "settings": { "loss": 100 } },
+    { "at": 68, "settings": { "loss": 10, "latency": 200, "jitter": 80 } },
+    { "at": 85, "settings": { "loss": 0, "latency": 20, "jitter": 5 } }
+  ]
+}

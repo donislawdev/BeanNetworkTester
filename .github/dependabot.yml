@@ -1,0 +1,22 @@
+version: 2
+
+# Keeps dependencies current without a human polling release pages.
+# - github-actions: the pinned action majors in .github/workflows (Node 24 upkeep,
+#   security fixes). Grouped so one PR carries the whole bump, not four.
+# - pip: requirements*.txt (pydivert, psutil, pytest, hypothesis, ...). Review these
+#   before merging - pydivert/psutil touch the packet path and the build.
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

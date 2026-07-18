@@ -1,0 +1,10 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 30, "jitter": 8,  "loss": 0, "dup": 0 } },
+    { "at": 15, "settings": { "latency": 55, "jitter": 40, "loss": 2, "spike_prob": 20, "spike_ms": 250 } },
+    { "at": 35, "settings": { "latency": 90, "jitter": 90, "loss": 5, "dup": 2, "spike_prob": 35, "spike_ms": 500 } },
+    { "at": 55, "settings": { "latency": 130, "jitter": 130, "loss": 9, "spike_prob": 45, "spike_ms": 800 } },
+    { "at": 72, "settings": { "latency": 45, "jitter": 20, "loss": 1, "dup": 0, "spike_prob": 10, "spike_ms": 200 } }
+  ]
+}

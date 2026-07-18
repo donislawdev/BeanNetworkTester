@@ -1,0 +1,92 @@
+name: Release
+
+# Build and publish a Windows release whenever a version tag is pushed. Tag the
+# default branch only after CI (tests + build) is green:
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - "v*"
+
+# The default token only reads the repo; creating a Release and uploading assets
+# needs write. Scoped to this workflow, not the whole repository.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish the Windows executable
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      # The version is single-sourced in VERSION.txt. The tag is v<version> for a
+      # final release, or v<version>-rc.N (also -beta.N / -alpha.N) for a pre-release.
+      # Its BASE must match VERSION.txt so a release can never ship mislabelled, and the
+      # presence of a -suffix decides whether GitHub marks it a pre-release.
+      - name: Check the tag against VERSION.txt
+        shell: bash
+        run: |
+          ref="${GITHUB_REF_NAME}"       # v0.3.0        or  v0.3.0-rc.4
+          ver="${ref#v}"                 # 0.3.0             0.3.0-rc.4
+          base="${ver%%-*}"              # 0.3.0             0.3.0
+          version="$(cat VERSION.txt)"
+          echo "tag=$ref base=$base VERSION.txt=$version"
+          test "$base" = "$version" || { echo "tag base v$base != VERSION.txt $version"; exit 1; }
+          if [ "$ver" != "$base" ]; then echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          else echo "PRERELEASE=false" >> "$GITHUB_ENV"; fi
+          echo "TITLE=$ver" >> "$GITHUB_ENV"
+
+      # CI (ci.yml) already runs the full test suite on every push to master - i.e. on
+      # exactly this commit - so the release does not re-test. It builds, smoke-tests the
+      # exe and publishes. (Re-testing here would also need the dev deps and could hit
+      # environment-specific flakes that CI's environment does not.)
+      # onedir + console subsystem + asInvoker - see BeanNetworkTester.spec
+      - name: Build
+        run: pyinstaller --noconfirm BeanNetworkTester.spec
+
+      # Prove the shipped artefact actually runs before it is attached to a public
+      # release (the console-subsystem build means the exe returns an exit code).
+      - name: Smoke the built exe
+        shell: bash
+        run: |
+          set +e
+          EXE="dist/BeanNetworkTester/BeanNetworkTester.exe"
+          "$EXE" --version ; v=$?
+          "$EXE" --simulate --duration 2 --interval 1 --seed 42 ; r=$?
+          set -e
+          echo "version=$v run=$r"
+          test "$v" = "0" || { echo "--version failed";        exit 1; }
+          test "$r" = "0" || { echo "simulated run failed";     exit 1; }
+
+      # Zip the onedir bundle and write the checksum the README tells users to verify.
+      - name: Package (zip + SHA-256)
+        shell: bash
+        run: |
+          name="BeanNetworkTester-${GITHUB_REF_NAME}-windows-x64"
+          ( cd dist && 7z a "../${name}.zip" BeanNetworkTester >/dev/null )
+          sha256sum "${name}.zip" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          echo "ASSET=${name}.zip" >> "$GITHUB_ENV"
+
+      # gh is preinstalled on the runner - no third-party action, uses the job token.
+      # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          flags=(--title "$TITLE" --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "${flags[@]}"

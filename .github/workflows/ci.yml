@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  # Only master runs on push. Feature branches are covered by their pull_request run,
+  # so a branch with an open PR no longer runs the whole matrix twice (push + PR events;
+  # the concurrency group below only dedupes within a single event).
+  push:
+    branches: [master]
+  pull_request:
+  # Weekly run (Mon 06:00 UTC): requirements are not fully pinned (pydivert/psutil
+  # track latest), so a scheduled build catches upstream breakage before a push does.
+  schedule:
+    - cron: "0 6 * * 1"
+  # Allow running the pipeline by hand from the Actions tab.
+  workflow_dispatch:
+
+# Least-privilege token: CI only reads the repository. If a step ever needs to write
+# (releases, pages), raise the permission on THAT job, not here.
+permissions:
+  contents: read
+
+# One in-flight run per ref: a push to a branch with an open PR no longer runs CI twice,
+# and a newer push cancels the superseded run (saves minutes, above all the Windows build).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify required release files are in the checkout
+        # These are git-ignored by pattern and re-included by exception, so a
+        # missing force-add or a broken .gitignore makes them vanish on a fresh
+        # clone. Fail here, loudly, instead of deep inside a test or PyInstaller.
+        shell: bash
+        run: |
+          missing=0
+          for f in BeanNetworkTester.spec VERSION.txt LICENSE \
+                   THIRD-PARTY-NOTICES.md pyproject.toml CHANGELOG.md; do
+            if [ ! -f "$f" ]; then echo "MISSING from the repo: $f"; missing=1; fi
+          done
+          for d in beantester tests lang licenses scenarios; do
+            if [ ! -d "$d" ]; then echo "MISSING from the repo: $d/"; missing=1; fi
+          done
+          if [ "$missing" != "0" ]; then
+            echo "A required file is not tracked by git. If it is BeanNetworkTester.spec,"
+            echo "it is git-ignored by *.spec - force-add it: git add -f BeanNetworkTester.spec"
+            exit 1
+          fi
+          echo "All required release files are present."
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Test suite (engine + i18n + CLI + fail-safe + tables + GUI smoke)
+        run: python -m pytest tests
+
+      # The two suites that find what example-based tests cannot: the filter
+      # mini-language runs in the packet hot path (it must never raise), and the
+      # CLI is the CI contract (every outcome has an exit code, never a traceback).
+      - name: Property-based tests + CLI fuzzing
+        run: python -m pytest tests/test_matchers_properties.py tests/test_cli_fuzz.py -q
+
+      # Threads are only dangerous together: a "running" engine with a dead capture
+      # thread means WinDivert is queueing the user's packets into a void.
+      - name: Concurrency chaos (fail-open, deadlocks, thread leaks)
+        run: python -m pytest tests/test_concurrency_chaos.py -q
+
+      # COVERAGE_PROCESS_START is not optional: the GUI tests run in subprocesses,
+      # and without it every line they exercise is reported as uncovered (the same
+      # suite reads 51% instead of 77%). The gate lives in pyproject (fail_under).
+      - name: Coverage gate
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
+        run: python -m pytest tests --cov=beantester --cov-report=term --cov-report=xml
+
+      - name: Coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore
+
+      - name: GUI smoke (fake tkinter)
+        run: python smoke_gui.py
+
+      # Headed render on real Tk under a virtual display (Linux only). The fake-tk
+      # smoke cannot see truncation or DPI/layout breakage; this builds the real App
+      # at the minimum supported resolution in BOTH languages (Polish strings are the
+      # longest - that is where layouts crack) and fails on any clipped key widget.
+      - name: GUI render check (real Tk, Xvfb, 1366x768, PL+EN)
+        if: runner.os == 'Linux'
+        env:
+          BEAN_NO_ELEVATE: "1"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+          xvfb-run -a --server-args="-screen 0 1366x768x24" \
+            python tools/ci_gui_render.py
+
+      # The CLI contract itself: --simulate needs neither Windows, WinDivert nor
+      # admin, so every runner can prove it end to end.
+      - name: CLI - simulation run
+        run: python bean_network_tester.py --simulate --loss 10 --duration 2 --interval 1 --seed 42
+
+      - name: CLI - config validation without touching the driver
+        run: python bean_network_tester.py --dry-run --loss 10 --dst-port "80,443,!8080"
+
+      - name: CLI - environment report
+        run: python bean_network_tester.py --doctor
+
+      - name: CLI - licence and third-party notices
+        run: python bean_network_tester.py --license
+
+      # Exit codes are the contract CI depends on - assert them, do not assume.
+      - name: CLI - exit codes are honoured
+        shell: bash
+        run: |
+          set +e
+          python bean_network_tester.py --simulate --duration 1 ; ok=$?
+          python bean_network_tester.py --simulate --loss 250   ; bad_cfg=$?
+          python bean_network_tester.py --simulate --duration 1 --scenario nope.json ; bad_scen=$?
+          python bean_network_tester.py --simulate --duration 1 --min-packets 999999999 ; assertion=$?
+          set -e
+          echo "ok=$ok config=$bad_cfg scenario=$bad_scen assertion=$assertion"
+          test "$ok" = "0"        || { echo "a clean run must exit 0";       exit 1; }
+          test "$bad_cfg" = "3"   || { echo "a bad value must exit 3";       exit 1; }
+          test "$bad_scen" = "4"  || { echo "a bad scenario must exit 4";    exit 1; }
+          test "$assertion" = "6" || { echo "a failed check must exit 6";    exit 1; }
+
+      # Machine-readable output must stay machine-readable (stdout = NDJSON only).
+      - name: CLI - NDJSON output parses
+        shell: bash
+        run: |
+          python bean_network_tester.py --simulate --duration 2 --interval 1 --format json --seed 7 > run.ndjson
+          python -c "
+          import json
+          records = [json.loads(l) for l in open('run.ndjson') if l.strip()]
+          summary = records[-1]
+          assert summary['event'] == 'summary', summary
+          assert summary['exit_code'] == 0 and summary['seed'] == 7, summary
+          print('NDJSON ok:', len(records), 'records')
+          "
+
+  build:
+    name: build the executable (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    needs: tests
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      # onedir + console subsystem + asInvoker - see BeanNetworkTester.spec
+      - name: Build
+        run: pyinstaller --noconfirm BeanNetworkTester.spec
+
+      # The whole point of the console-subsystem build: the CLI works from the
+      # EXECUTABLE, the shell waits for it, and the exit code comes back.
+      - name: Smoke the built exe (CLI mode)
+        shell: bash
+        run: |
+          set +e
+          EXE="dist/BeanNetworkTester/BeanNetworkTester.exe"
+          "$EXE" --version ; version=$?
+          "$EXE" --simulate --duration 2 --interval 1 --seed 42 ; run=$?
+          "$EXE" --simulate --loss 250 ; bad=$?
+          set -e
+          echo "version=$version run=$run bad=$bad"
+          test "$version" = "0" || { echo "--version must work from the exe";        exit 1; }
+          test "$run" = "0"     || { echo "the exe must run a simulated session";    exit 1; }
+          test "$bad" = "3"     || { echo "the exe must report a config error as 3"; exit 1; }
+
+      - name: The exe ships the WinDivert driver next to itself (never in %TEMP%)
+        shell: bash
+        run: |
+          find dist/BeanNetworkTester -iname "WinDivert*" -print | tee found.txt
+          test -s found.txt || { echo "WinDivert.dll/.sys is missing from the bundle"; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BeanNetworkTester-windows
+          path: dist/BeanNetworkTester

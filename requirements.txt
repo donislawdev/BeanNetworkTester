@@ -1,0 +1,4 @@
+# Runtime dependencies (traffic capture works only on Windows).
+# We always ship the newest pydivert; it bundles the WinDivert DLL + driver.
+pydivert; sys_platform == "win32"
+psutil

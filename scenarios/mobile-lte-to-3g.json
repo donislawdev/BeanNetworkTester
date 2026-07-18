@@ -1,0 +1,12 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,   "settings": { "latency": 45,  "jitter": 20, "loss": 0, "down": 8000, "up": 2000 } },
+    { "at": 25,  "settings": { "latency": 120, "jitter": 60, "loss": 2, "down": 1200, "up": 300 } },
+    { "at": 45,  "settings": { "latency": 300, "jitter": 120, "loss": 8, "down": 400, "up": 128 } },
+    { "at": 60,  "action": "reset_tcp" },
+    { "at": 60,  "settings": { "loss": 100 } },
+    { "at": 68,  "settings": { "loss": 6,  "latency": 250, "jitter": 100, "down": 600, "up": 200 } },
+    { "at": 85,  "settings": { "latency": 45, "jitter": 20, "loss": 0, "down": 8000, "up": 2000 } }
+  ]
+}
