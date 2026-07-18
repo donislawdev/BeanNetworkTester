@@ -15,6 +15,22 @@ interface with tooltips and a command-line mode for CI.
 
 > This is the English documentation. Polish version: [README.pl.md](README.pl.md).
 
+**What it can do**
+
+- **Add lag and jitter** - fixed or random delay.
+- **Drop, corrupt or duplicate packets** - fake a flaky link.
+- **Cap download/upload speed** - throttle to a set KB/s.
+- **Tear connections down** - TCP resets or a dead link.
+- **Flap the link on and off** - outages that come and go.
+- **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet).
+- **Aim at one app** - by process, PID, IP or port.
+- **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite and more.
+- **Run scripted scenarios** - timed steps that change the network on their own.
+- **Reproducible by seed** - replay the exact same random loss and jitter.
+- **Watch it live** - chart, connections table, counters.
+- **Command-line mode** - scriptable for CI.
+- **No telemetry, fully offline** - sends no data anywhere.
+
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
 </p>

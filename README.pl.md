@@ -13,6 +13,22 @@ przechwytywanie ruchu sterownikiem **[WinDivert](https://www.reqrypt.org/windive
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**) i daje zarówno czytelny interfejs okienkowy
 z podpowiedziami, jak i tryb wiersza poleceń do CI.
 
+**Co potrafi**
+
+- **Dodaje opóźnienie i jitter** - stałe lub losowe.
+- **Gubi, uszkadza i duplikuje pakiety** - udaje kapryśne łącze.
+- **Ogranicza prędkość pobierania/wysyłania** - dławi do zadanych KB/s.
+- **Zrywa połączenia** - resety TCP albo martwe łącze.
+- **Miga łączem** - przerwy, które przychodzą i znikają.
+- **Blokuje porty lub adresy IP** - mały wbudowany firewall, plus tryb LAN (bez internetu).
+- **Celuje w jedną aplikację** - po nazwie procesu, PID, IP lub porcie.
+- **Presety i zapisane profile** - modem 56k, kawiarniane WiFi, łącze satelitarne i więcej.
+- **Odtwarza skryptowane scenariusze** - kroki w czasie, które same zmieniają sieć.
+- **Powtarzalne dzięki seedowi** - odtwórz te same losowe straty i jitter.
+- **Podgląd na żywo** - wykres, tabela połączeń, liczniki.
+- **Tryb wiersza poleceń** - skryptowalny do CI.
+- **Zero telemetrii, w pełni offline** - niczego nigdzie nie wysyła.
+
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester dodający opóźnienie i straty pakietów do działającego pinga" width="820">
 </p>
