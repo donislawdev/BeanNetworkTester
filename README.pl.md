@@ -13,6 +13,10 @@ przechwytywanie ruchu sterownikiem **[WinDivert](https://www.reqrypt.org/windive
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**) i daje zarówno czytelny interfejs okienkowy
 z podpowiedziami, jak i tryb wiersza poleceń do CI.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Bean Network Tester dodający opóźnienie i straty pakietów do działającego pinga" width="820">
+</p>
+
 **Spis treści**
 
 - [Dla niecierpliwych (3 kroki)](#dla-niecierpliwych-3-kroki)

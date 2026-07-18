@@ -15,6 +15,10 @@ interface with tooltips and a command-line mode for CI.
 
 > This is the English documentation. Polish version: [README.pl.md](README.pl.md).
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
+</p>
+
 **Table of contents**
 
 - [Quick start (3 steps)](#quick-start-3-steps)
