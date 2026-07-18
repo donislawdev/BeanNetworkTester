@@ -328,7 +328,7 @@ class App:
         # is held on self or Tk garbage-collects it and the button goes blank.
         self._gear_icon = None
         try:
-            self._gear_icon = make_gear_icon(scaled(18), FG)
+            self._gear_icon = make_gear_icon(scaled(20), MUT)
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         if self._gear_icon is not None:
