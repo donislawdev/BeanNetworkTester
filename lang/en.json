@@ -211,7 +211,7 @@
   "frames.speed_limit": "Speed limit  (0 = unlimited)",
   "frames.tables": "Tables",
   "frames.target_process": "Target process  (name, PID, list, wildcard, re: ...; empty = all traffic)",
-  "frames.throughput": "Throughput (last ~84 s)",
+  "frames.throughput": "Throughput (last ~{s} s)",
   "frames.traffic": "Traffic to modify",
   "log.applied_changes": "Applied changes",
   "log.apply_needed": "Click \"Apply changes\" to push this to the running session.",

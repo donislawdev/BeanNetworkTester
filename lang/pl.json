@@ -211,7 +211,7 @@
   "frames.speed_limit": "Limit prędkości  (0 = bez limitu)",
   "frames.tables": "Tabele",
   "frames.target_process": "Celuj w proces  (nazwa, PID, lista, wildcard, re: ...; puste = cały ruch)",
-  "frames.throughput": "Przepustowość (ostatnie ~84 s)",
+  "frames.throughput": "Przepustowość (ostatnie ~{s} s)",
   "frames.traffic": "Ruch do modyfikacji",
   "log.applied_changes": "Zastosowano zmiany",
   "log.apply_needed": "Kliknij „Zastosuj zmiany”, aby przekazać to do działającej sesji.",
