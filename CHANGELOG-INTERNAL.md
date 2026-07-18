@@ -17,6 +17,15 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### Docs: intro wording and third-party links
+
+- **README intro (EN + PL)** reworded: leads with the product name (branding + the auto-snippet),
+  compares to Clumsy/NetLimiter by what the tool *does* rather than by the driver - NetLimiter does
+  not use WinDivert, and the old phrasing implied it did - and names WinDivert **via PyDivert**, both
+  linked.
+- **Third-party section (EN + PL):** each named component now links to its homepage/source
+  (WinDivert, PyDivert, psutil, CPython, Tcl/Tk, PyInstaller).
+
 ### CI: one run per commit
 
 - **`ci.yml` `push` trigger scoped to `master`.** With `on: [push, pull_request]` a branch that

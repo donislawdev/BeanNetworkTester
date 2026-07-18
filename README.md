@@ -6,12 +6,12 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
-A tool for testers and developers: check how your application behaves on a poor
-connection. It intercepts network traffic with the **[WinDivert](https://www.reqrypt.org/windivert.html)** driver (like
-Clumsy / NetLimiter) and lets you deliberately "break" it - add ping, drop
-packets, cap the speed, tear connections down and so on. It is called **Bean
-Network Tester** and ships with a clear windowed interface with tooltips plus a
-command-line mode for CI.
+**Bean Network Tester** is a tool for testers and developers: check how your application behaves
+on a poor connection. Like Clumsy or NetLimiter, it lets you deliberately degrade the network -
+add ping, drop packets, cap the speed, tear connections down, and more. It works by intercepting
+traffic with the **[WinDivert](https://www.reqrypt.org/windivert.html)** driver (via
+**[PyDivert](https://github.com/ffalcinelli/pydivert)**), and offers both a clear windowed
+interface with tooltips and a command-line mode for CI.
 
 > This is the English documentation. Polish version: [README.pl.md](README.pl.md).
 
@@ -973,8 +973,11 @@ under the same GPLv3 terms and make the corresponding source available. The prog
 
 ## Third-party components
 
-The program uses libraries by other authors, under their own licenses - among them **WinDivert** and
-**PyDivert** under **LGPLv3**, **psutil** (BSD), **CPython** (PSF), **Tcl/Tk** and the **PyInstaller**
+The program uses libraries by other authors, under their own licenses - among them
+**[WinDivert](https://www.reqrypt.org/windivert.html)** and
+**[PyDivert](https://github.com/ffalcinelli/pydivert)** under **LGPLv3**,
+**[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
+**[Tcl/Tk](https://www.tcl-lang.org/)** and the **[PyInstaller](https://pyinstaller.org/)**
 bootloader. The full list, versions and source addresses are in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the full license texts are in the `licenses/`
 directory. From within the program: `--license` (CLI) or the **About** button in the interface.

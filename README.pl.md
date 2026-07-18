@@ -6,10 +6,12 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
-Narzędzie dla testerów i deweloperów: sprawdź, jak aplikacja zachowuje się przy słabym
-internecie. Przechwytuje ruch sieciowy sterownikiem **[WinDivert](https://www.reqrypt.org/windivert.html)** (jak Clumsy / NetLimiter)
-i pozwala go kontrolowanie „psuć” - dodać ping, gubić pakiety, ograniczyć prędkość, zrywać
-połączenia itd. Nazywa się **Bean Network Tester** i ma czytelny interfejs okienkowy z podpowiedziami oraz tryb wiersza poleceń do CI.
+**Bean Network Tester** to narzędzie dla testerów i deweloperów: sprawdź, jak aplikacja zachowuje
+się przy słabym internecie. Podobnie jak Clumsy czy NetLimiter, pozwala celowo pogarszać sieć -
+dodać ping, gubić pakiety, ograniczyć prędkość, zrywać połączenia i więcej. Działa przez
+przechwytywanie ruchu sterownikiem **[WinDivert](https://www.reqrypt.org/windivert.html)** (przez
+**[PyDivert](https://github.com/ffalcinelli/pydivert)**) i daje zarówno czytelny interfejs okienkowy
+z podpowiedziami, jak i tryb wiersza poleceń do CI.
 
 **Spis treści**
 
@@ -880,8 +882,10 @@ bez gwarancji i bez odpowiedzialności autora. Autorem jest **DonislawDev**.
 ## Komponenty firm trzecich
 
 Program korzysta z bibliotek innych autorów, na ich własnych licencjach - m.in.
-**WinDivert** i **PyDivert** na licencji **LGPLv3**, **psutil** (BSD),
-**CPython** (PSF), **Tcl/Tk** i bootloader **PyInstaller**. Pełna lista, wersje i
+**[WinDivert](https://www.reqrypt.org/windivert.html)** i
+**[PyDivert](https://github.com/ffalcinelli/pydivert)** na licencji **LGPLv3**,
+**[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
+**[Tcl/Tk](https://www.tcl-lang.org/)** i bootloader **[PyInstaller](https://pyinstaller.org/)**. Pełna lista, wersje i
 adresy źródeł są w [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), a pełne
 teksty licencji w katalogu `licenses/`. Z poziomu programu: `--license` (CLI)
 albo przycisk **O programie** w interfejsie.
