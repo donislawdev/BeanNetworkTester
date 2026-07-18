@@ -15,7 +15,7 @@ flags, exit codes, the NDJSON schema, on-disk file formats, or the facade's publ
 a `### BREAKING` section placed FIRST in that version, and each such line is prefixed with
 `**BREAKING:**`. A breaking change also requires a version bump by the owner (convention 34).
 
-## [Unreleased]
+## [0.3.0]
 
 ### Docs: intro wording and third-party links
 

@@ -3,7 +3,7 @@
 All notable changes to Bean Network Tester.
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
-## [Unreleased]
+## [0.3.0]
 
 ### Changed
 
