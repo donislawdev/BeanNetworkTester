@@ -123,7 +123,8 @@ class StatsPage:
         scope.pack(fill="x", padx=scaled(10), pady=(scaled(2), 0))
         add_tooltip(scope, "tips.scope_note")
 
-        frame = ttk.LabelFrame(parent, text=T("frames.throughput"))
+        self._chart_frame = ttk.LabelFrame(parent, text=self._throughput_title())
+        frame = self._chart_frame
         frame.pack(fill="both", expand=True, padx=scaled(8), pady=scaled(6))
         self.canvas = tk.Canvas(frame, bg=BG2, highlightthickness=0,
                                 height=scaled(180))
@@ -212,6 +213,12 @@ class StatsPage:
             self._chart_job = None
             self.draw_chart()
 
+    def _throughput_title(self):
+        """Frame caption reflecting the actual chart window (the ``chart_seconds``
+        preference), so it never drifts from the live X-axis label."""
+        secs = self.app.pref("chart_seconds")
+        return T("frames.throughput", s=f"{secs:.0f}")
+
     def draw_chart(self):
         self._chart_job = None
         try:
@@ -252,6 +259,7 @@ class StatsPage:
             self.refresh_events()
 
     def refresh_counters(self):
+        self._chart_frame.config(text=self._throughput_title())
         snap = self.app.last_snapshot or {}
         rates = self.app.last_rates
         self.stat_labels["down"].config(text=f"{rates[0]:.0f}")

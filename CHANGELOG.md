@@ -172,7 +172,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   row used to leave a blank row looking selected.
 - **The throughput chart reads cleanly at any window size.** An idle chart used to stack
   duplicate "1 1 0 0" numbers up the Y axis; the axis labels are now distinct, the chart
-  drops to two labels when the window is short, and the "last ~84 s" caption matches the axis.
+  drops to two labels when the window is short, and the caption tracks the chosen history
+  length (e.g. "last ~120 s") so it always matches the axis.
 - **No `crashes/` folder appears just from launching the tool.** The `crashes/native-crash.txt`
   file used to be created on every launch, which looked as if something had crashed. Native
   crash capture is now armed only when a real capture starts (the only moment a hard crash can
