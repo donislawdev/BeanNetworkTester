@@ -175,14 +175,20 @@ def init_style(root=None):
                 padding=(scaled(2), scaled(3)), anchor="w")
     s.map("Section.TButton", background=[("focus", BG2), ("active", BG2)])
 
-    # header gear: an icon-only button that opens the Settings window. Flat and
-    # on the header background so it sits quietly next to the status/donate, and
-    # lights up to BG2 on hover/focus like the section headers.
-    s.configure("Gear.TButton", background=BG, borderwidth=0, focuscolor=ACC,
-                relief="flat", padding=(scaled(4), scaled(2)))
+    # header gear: an icon-only button that opens the Settings window. Flat on the
+    # header at rest (bevel colours pinned to BG so clam draws no raised edge), but
+    # a small icon needs a REAL hover chip - the old BG->BG2 map was a one-shade
+    # change nobody could see, so it never read as clickable. Hover/focus light up
+    # to the secondary-button surface; press goes a shade lighter.
+    s.configure("Gear.TButton", background=BG, bordercolor=BG, lightcolor=BG,
+                darkcolor=BG, borderwidth=0, focuscolor=ACC, relief="flat",
+                padding=scaled(5))
     s.map("Gear.TButton",
-          background=[("focus", BG2), ("active", BG2), ("pressed", BG2),
-                      ("disabled", BG)])
+          background=[("disabled", BG), ("pressed", BTN_HOVER),
+                      ("focus", BTN_BG), ("active", BTN_BG)],
+          bordercolor=[("focus", ACC), ("active", BTN_BORDER)],
+          lightcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)],
+          darkcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)])
 
     # -- checkbuttons ------------------------------------------------------- #
     # clam's built-in indicator is a flat, tiny, badly aligned square that no
