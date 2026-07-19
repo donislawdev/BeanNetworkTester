@@ -1308,6 +1308,10 @@ class App:
         self._pending_start_settings = s
         filt = windivert_for(s["filter"])
         duration = s.get("duration", 0)
+        # Immediate feedback: the psutil target resolution and the WinDivert driver
+        # load (~0.5-1 s) run on the worker thread below, so without this the click
+        # feels dead until the driver is up. Log now, on the UI thread, before work.
+        self.log(T("log.starting"))
 
         def work():
             # Both the psutil target resolution and the WinDivert driver load
@@ -1350,6 +1354,7 @@ class App:
     def _stop(self):
         if self._transition is not None:
             return
+        self.log(T("log.stopping"))     # immediate feedback (see _start)
         self._begin_transition("stopping", self.engine.stop)
 
     def _finish_stop(self, _err):
