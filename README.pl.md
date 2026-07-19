@@ -33,6 +33,10 @@ z podpowiedziami, jak i tryb wiersza poleceń do CI.
   <img src="docs/demo.gif" alt="Bean Network Tester dodający opóźnienie i straty pakietów do działającego pinga" width="820">
 </p>
 
+<p align="center">
+  <a href="https://github.com/donislawdev/BeanNetworkTester"><img src="docs/star.gif" alt="Podoba się? Dodaj gwiazdkę Bean Network Tester na GitHubie" width="820"></a>
+</p>
+
 **Spis treści**
 
 - [Dla niecierpliwych (3 kroki)](#dla-niecierpliwych-3-kroki)
