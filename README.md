@@ -35,6 +35,10 @@ interface with tooltips and a command-line mode for CI.
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
 </p>
 
+<p align="center">
+  <a href="https://github.com/donislawdev/BeanNetworkTester"><img src="docs/star.gif" alt="Like it? Star Bean Network Tester on GitHub" width="820"></a>
+</p>
+
 **Table of contents**
 
 - [Quick start (3 steps)](#quick-start-3-steps)
