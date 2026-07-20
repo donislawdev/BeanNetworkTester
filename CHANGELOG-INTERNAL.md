@@ -17,6 +17,32 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI: dark mode for the parts Windows draws itself (system menu, menu frames)
+
+- **New `theme.apply_dark_app_mode()`**, called once from the top of
+  `theme.apply_dark_titlebar` (module flag `_app_mode_applied`, one attempt per process).
+  Piggy-backed there deliberately: `App`, every `PanelWindow` in the registry and `dialogs.py`
+  already call `apply_dark_titlebar`, so no window can ask for a dark frame and still get a
+  white system menu - and no caller needed changing.
+- **Why a second mechanism at all:** `DWMWA_USE_IMMERSIVE_DARK_MODE` is a PER-WINDOW attribute
+  and only covers the DWM-drawn frame. The system menu (title-bar icon / Alt+Space) and the
+  frame user32 puts around a classic `tk.Menu` popup follow a PROCESS-WIDE flag in undocumented
+  `uxtheme` exports instead, which nothing in the package was setting - so every window had a
+  white system menu, and the Connections context menu kept the light rim noted in convention 41
+  ("Tk reaches the entries but not the system-drawn frame").
+- **Implementation:** `uxtheme` ordinals 135 (`SetPreferredAppMode`, `AllowDarkModeForApp` on
+  1809) and 136 (`FlushMenuThemes`). `ForceDark` (2), not `AllowDark` (1): the UI is dark
+  unconditionally, so following the system theme would leave a light menu for a user running
+  Windows in light mode. The flush is required - the menu theme is cached per process and is
+  already light by the time we get here. Gated on `sys.getwindowsversion().build >= 17763`
+  (first build with these exports), wrapped in `crashlog.note` (convention 30): the exports are
+  undocumented, and the worst case on failure is the light menu we had before.
+- Side effect, accepted by the owner: the native `filedialog` pickers render dark now. They stay
+  native on purpose (see the `dialogs.py` docstring) and dark is the consistent look.
+- **No test guard.** This is pixels painted by the OS outside the widget tree - the tkinter
+  fake cannot observe it and `tools/ci_gui_render.py` only sees the client area. Verified by
+  render on Windows 11 build 26200 (convention 41: check live, not from the code).
+
 ### GUI fixes: truncated About text, a button left highlighted, and a render check that lied
 
 - **`panels/about.py` uses `labels.wrapping_label` for every prose line** (author, copyright,
