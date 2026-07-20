@@ -17,6 +17,27 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI fix: a widened throughput chart crept into its new window instead of filling it
+
+- **`App._reconcile_chart_len` now zero-pads when GROWING** (new `App._resized_hist(hist, n)`).
+  Two paths build the history and only one padded: `__init__` creates
+  `deque([0] * n, maxlen=n)`, while the reconcile did `deque(hist, maxlen=n)` - correct when
+  shrinking (the deque drops the oldest itself), but on a grow it left `len` at the OLD value
+  and only raised `maxlen`.
+- **Why it was visible:** `chart.draw_throughput_chart` labels the X axis from
+  `len(down_hist) * sample_interval_s`, so raising `chart_seconds` from ~20 s to 250 s left the
+  axis reading "-28 s" and counting up one sample per `TICK_MS`, ~4 minutes to fill, while
+  `stats._throughput_title` reads the preference directly and said 250 immediately - breaking
+  the invariant its own docstring promises ("never drifts from the live X-axis label"). The
+  series is also drawn across the full plot width (`x = i / (len - 1)`), so the horizontal
+  scale crept with every tick. `chart.py` and `stats.py` are unchanged: with `len == maxlen`
+  restored as an invariant, both are already right.
+- Tests: `test_prefs.py::test_a_resized_chart_spans_its_whole_window_at_once` (len matches the
+  window after growing AND shrinking, newest sample stays newest, padding lands on the left).
+  Verified to fail on the pre-fix code with `(171, 357)`. The existing
+  `test_chart_history_length_follows_the_preference` asserted `maxlen` only, which was correct
+  throughout - the bug lived in `len`, which is what the axis is computed from.
+
 ### GUI: dark mode for the parts Windows draws itself (system menu, menu frames)
 
 - **New `theme.apply_dark_app_mode()`**, called once from the top of

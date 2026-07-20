@@ -113,6 +113,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Making the chart history longer now widens the chart immediately.** Setting "Chart history"
+  to a bigger number left the graph on its old span: the label under the left edge still read
+  "-28 s" and crawled towards the new value one tick at a time, taking minutes to get there,
+  while the caption above the graph already said "last ~250 s". The graph now covers the full
+  span at once, with the time you have not recorded yet drawn as a flat zero line - exactly how
+  it looks right after the app starts. Shortening the history was never affected.
 - **The window menu is now dark, like the rest of the app.** Clicking the bean icon in the title
   bar (or pressing Alt+Space) opened a bright white "Minimise / Maximise / Close" menu in every
   window, and the right-click menu on the Connections table had a light rim around it. Both now
