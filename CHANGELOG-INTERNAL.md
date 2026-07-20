@@ -42,6 +42,30 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### AsyncModel: a build returning None no longer wedges the worker for good
+
+- **`poll()` used `None` for two different things** - "no result arrived" and "the result". It
+  started with `rows = None` and returned early on `rows is None`, so a build that genuinely
+  produced `None` looked identical to an empty queue and **`_pending` was never cleared**. From
+  that moment `request()` coalesced into `_latest` for ever and nothing ran again: the table
+  stopped rebuilding for the rest of the session, and `busy()` stayed True, which leaves
+  `conns._poll_soon()` rescheduling its 40 ms catch-up timer indefinitely on the UI thread.
+- Fixed with a module-level `_NOTHING` sentinel. The caller's contract is unchanged (`poll()`
+  still returns `None` for "nothing new to show"); what changed is that a result for the request
+  in flight now clears `_pending` whatever its value.
+- Latent, not live: `conns._build_model` always returns a dict. But convention 29 makes
+  `AsyncModel` the mechanism every future heavy table is meant to use, so the contract had to
+  hold before something is built on it.
+- **Deliberately NOT fixed in the same pass:** the exception path in `_run` clears `_pending` but
+  drops a request that queued into `_latest` while the build was failing. It self-heals - the page
+  calls `request()` on every tick, so a newer payload starts within about a second - and
+  re-submitting would mean calling `request()` (documented UI-thread only) from the worker thread,
+  outside the lock to avoid deadlocking on it. Threading complexity for a case that already
+  recovers is the wrong trade in a tool whose STOP button has to keep working.
+- New test: `tests/test_model_worker.py::test_a_build_returning_none_does_not_wedge_the_worker`.
+  Verified non-vacuous by restoring the old collision (`_NOTHING = None`) and confirming the
+  worker wedges.
+
 ### portmap/engine/processes: port-resolution failures stop being invisible
 
 - **`_Native.port_pid_map` accepted a PARTIAL socket table as the truth.** `ok |= self._table(...)`

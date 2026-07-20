@@ -145,6 +145,48 @@ def test_a_worker_that_raises_keeps_the_old_model_on_screen():
     assert _wait(lambda: ok.poll() is not None, timeout=5)
 
 
+def test_a_build_returning_none_does_not_wedge_the_worker():
+    """``None`` used to mean two things at once, and the collision was permanent.
+
+    ``poll()`` started with ``rows = None`` and bailed out early on ``rows is None``,
+    so a build that genuinely returned ``None`` looked like "nothing arrived" - and
+    ``_pending`` was never cleared. From then on every ``request()`` coalesced into
+    ``_latest`` and nothing ever ran again: the table stopped rebuilding for the rest
+    of the session, and ``busy()`` stayed True, leaving the page's 40 ms catch-up
+    poll rescheduling itself for ever.
+
+    Latent today (the connections page always returns a dict), but ``AsyncModel`` is
+    the mechanism every future heavy table is meant to use, so the contract has to
+    hold before somebody builds on it.
+    """
+    model = AsyncModel(lambda payload: None)
+    model.request("first")
+
+    # poll the way the page does - busy() only clears once a result is COLLECTED
+    def polled_until_idle(timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            assert model.poll() is None, "there is no model to show, and that is fine"
+            if not model.busy():
+                return True
+            time.sleep(0.005)
+        return False
+
+    assert polled_until_idle(), \
+        "a build returning None never released the worker"
+
+    # the point of the fix: the worker is still usable afterwards
+    delivered = AsyncModel(lambda payload: [payload])
+    delivered.request("later")
+    assert _collect(delivered, timeout=5) == ["later"]
+
+    # and the SAME instance recovers too, once its build starts producing rows
+    model._build = lambda payload: [payload]
+    model.request("second")
+    assert _collect(model, timeout=5) == ["second"], \
+        "the worker never accepted another request"
+
+
 def test_no_thread_is_left_behind():
     """Twenty rebuilds must not leave twenty threads.
 
