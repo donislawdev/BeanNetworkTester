@@ -5,6 +5,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--doctor` could report a WinDivert driver as "not loaded" when it simply was not allowed
+  to look.** Windows refuses full access to some services even for an Administrator, and the
+  check treated that refusal as "the service is not there" - in the one command whose whole job
+  is to tell you the truth about your machine. It now asks only for permission to read the
+  state, which also means the driver line is accurate **without** running as Administrator. If
+  the state genuinely cannot be read, the line now says so and warns, instead of quietly
+  reporting a clean machine.
+- **`--cleanup-driver` explains a refusal instead of calling it "not installed".** Being told
+  "access denied - the service exists but this account may not remove it" points somewhere;
+  being told the service was never there does not.
+
 ### BREAKING
 
 - **BREAKING:** **`--gui` no longer accepts any other option.** Combining it with settings -
