@@ -15,6 +15,27 @@ flags, exit codes, the NDJSON schema, on-disk file formats, or the facade's publ
 a `### BREAKING` section placed FIRST in that version, and each such line is prefixed with
 `**BREAKING:**`. A breaking change also requires a version bump by the owner (convention 34).
 
+## [Unreleased]
+
+### CI: one run of the test suite, under coverage
+
+- **`.github/workflows/ci.yml`: the `tests` job ran the whole suite twice over, plus two
+  overlapping subsets.** Four steps executed: `pytest tests`, then the
+  `test_matchers_properties.py` + `test_cli_fuzz.py` subset, then `test_concurrency_chaos.py`,
+  then `pytest tests --cov` over everything again. `testpaths = ["tests"]` (pyproject) already
+  pulls both subsets into every full run, so the middle steps re-executed tests that had just
+  passed - on ubuntu and windows, on 3.10 and 3.13, four cells deep.
+- **Now a single step:** `pytest tests --cov=beantester` with `COVERAGE_PROCESS_START`, keeping
+  the `fail_under = 77` gate and the `coverage.xml` artifact. Nothing changed about WHICH tests
+  run. The rationale each deleted step carried (why the property/fuzz suites and the chaos suite
+  earn their keep) moved into a comment on the surviving step, so the reasoning outlived the
+  checkmarks it was attached to.
+- **Accepted trade:** a failure now surfaces as one red step instead of a named one (pytest
+  still names the file and test, so diagnosis is unaffected), and the wall-clock assertions
+  (`test_failsafe.py` start/stop under 0.2 s, `test_model_worker.py`, `test_audit_fixes.py`) lose
+  their uninstrumented reference run. They already ran under coverage in the old gate step and
+  passed; if one starts flaking, split the clean run back out.
+
 ## [0.3.0] - 2026-07-20
 
 ### GUI fix: numeric preferences went red without a reason
