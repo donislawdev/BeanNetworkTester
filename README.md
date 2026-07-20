@@ -590,7 +590,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--log-conns` | print the observed connections at the end |
 | `--repro-out FILE` | save a reproduction report (JSON) |
 | `--simulate` | synthetic traffic instead of WinDivert (test with no Windows, no driver, no admin) |
-| `--gui` | force the GUI |
+| `--gui` | open the GUI. Valid **on its own only** - the GUI has its own controls, so combining it with settings flags is a usage error (exit 2) rather than a silent headless run |
 | `--version` | print the version and exit |
 
 **Output and diagnostics**

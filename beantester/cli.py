@@ -70,7 +70,9 @@ def build_arg_parser():
                    version=f"{APP_NAME} {__version__}")
     p.add_argument("--license", action="store_true",
                    help="print the licence and the third-party notices, then exit")
-    p.add_argument("--gui", action="store_true", help="force the GUI")
+    p.add_argument("--gui", action="store_true",
+                   help="open the GUI (only valid on its own - the GUI has its "
+                        "own controls, so it takes no settings flags)")
     p.add_argument("--config", help="load settings from a JSON file")
     p.add_argument("--save-config", help="save effective settings to a JSON file and exit")
     p.add_argument("--preset", metavar="PRESET",
@@ -536,6 +538,16 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                  out=out, err=err)
     _install_signal_handlers()
     try:
+        # --gui reaching the CLI runner means it was combined with something else:
+        # main() sends a bare --gui straight to the GUI. It used to be accepted and
+        # then ignored, so `--gui --loss 30 --duration 600` promised a window and
+        # instead ran a headless ten-minute impairment - no window, no STOP button,
+        # on a tool whose whole job is to break the user's own network.
+        if args.gui:
+            _fail(exitcodes.USAGE,
+                  "--gui cannot be combined with other options: it opens the GUI, "
+                  "which has its own controls. Launch the GUI with no arguments, or "
+                  "drop --gui to run these settings from the command line.")
         if args.license:
             return _run_license(log)
         if args.doctor:
