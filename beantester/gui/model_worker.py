@@ -44,6 +44,14 @@ import threading
 from .. import crashlog
 
 
+# "no result arrived", which is NOT the same as "the build returned None". Sharing
+# one value between those two meanings wedged the worker permanently: poll() bailed
+# out before clearing _pending, so request() coalesced into _latest for ever, the
+# table stopped rebuilding for the rest of the session, and busy() stayed True -
+# which leaves the page's 40 ms catch-up poll rescheduling itself indefinitely.
+_NOTHING = object()
+
+
 class AsyncModel:
     """A model rebuilt off-thread, delivered to the UI thread whole.
 
@@ -73,8 +81,14 @@ class AsyncModel:
         self._spawn(token, payload)
 
     def poll(self):
-        """Main thread: the finished model, or None. Never blocks."""
-        rows = None
+        """Main thread: the finished model, or None. Never blocks.
+
+        ``None`` back means "nothing new to show" - either no result arrived, or the
+        build genuinely produced ``None``. The difference matters INSIDE: whatever
+        the value, a result for the request in flight clears ``_pending``, or the
+        model never rebuilds again (see ``_NOTHING``).
+        """
+        rows = _NOTHING
         while True:
             try:
                 token, result = self._results.get_nowait()
@@ -84,7 +98,7 @@ class AsyncModel:
                 current = self._pending
             if token == current:
                 rows = result               # a newer request supersedes an older result
-        if rows is None:
+        if rows is _NOTHING:
             return None
 
         with self._lock:
@@ -114,5 +128,12 @@ class AsyncModel:
             with self._lock:
                 if self._pending == token:
                     self._pending = None
+            # A request that queued into _latest while this build was failing is
+            # dropped here rather than re-submitted. Deliberate: the page calls
+            # request() on every tick, so a newer payload starts within ~1 s anyway,
+            # and re-submitting would mean calling request() from the WORKER thread
+            # (documented UI-thread only) and doing it outside this lock to avoid
+            # deadlocking on it. Threading complexity for a case that self-heals is
+            # a bad trade in a tool whose STOP button must keep working.
             return
         self._results.put((token, rows))
