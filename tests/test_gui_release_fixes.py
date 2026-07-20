@@ -1,4 +1,6 @@
 """GUI regressions for the 1.3 release fixes (run on the fake tkinter)."""
+from pathlib import Path
+
 from gui_harness import run_gui
 
 
@@ -106,7 +108,7 @@ def test_tooltip_is_suppressed_while_a_dropdown_is_open():
     covering the very options the user was about to pick."""
     run_gui("""
         from beantester.gui import tooltip
-        w = app.profile_mb
+        w = app.profile_cb
 
         assert tooltip._grab_active(w) is False           # nothing grabbing yet
 
@@ -127,13 +129,22 @@ def test_short_dropdowns_do_not_spawn_a_popdown_scrollbar():
     """)
 
 
-def test_profile_menu_has_no_indicator_gutter():
-    """The removed checkbox left tk.Menu's indicator column as a stray left indent;
-    hidemargin on every entry drops it."""
+def test_profile_picker_is_the_same_widget_as_the_traffic_filter():
+    """Conv 41: a dropdown looks like its sibling by BEING it. The picker spent a
+    while as a Menubutton + tk.Menu imitating a combobox, and the imitation could
+    not be finished - on Windows a tk.Menu is a native Win32 popup, so its frame,
+    its width and the highlight on the current row are outside Tk's reach."""
+    source = (Path(__file__).resolve().parents[1]
+              / "beantester" / "gui" / "pages" / "control.py").read_text(encoding="utf-8")
+    assert "ttk.Combobox(" in source
+    assert "Menubutton" not in source and "tk.Menu(" not in source
     run_gui("""
-        app._rebuild_profile_menu()
-        items = [c for c in app.profile_menu.commands if "separator" not in c]
-        assert items and all(c.get("hidemargin") for c in items), app.profile_menu.commands
+        cb = app.profile_cb
+        assert cb.kw.get("state") == "readonly", cb.kw
+        assert not cb.kw.get("style"), cb.kw        # the plain, shared TCombobox look
+        assert list(cb.kw["values"]) == app.profile_names(), cb.kw
+        # a list that fits must not spawn the popdown scrollbar
+        assert cb.kw["height"] == len(app.profile_names()), cb.kw
     """)
 
 
@@ -152,14 +163,6 @@ def test_shortcut_buttons_advertise_their_key():
     run_gui("""
         assert "F5" in app.btn_start._bnt_tooltip.text, app.btn_start._bnt_tooltip.text
         assert "Ctrl+Enter" in app.btn_apply._bnt_tooltip.text, app.btn_apply._bnt_tooltip.text
-    """)
-
-
-def test_profile_picker_uses_the_combobox_field_style():
-    """The profile Menubutton borrows the combobox field+downarrow so the two read
-    as siblings instead of a flat button next to a proper field."""
-    run_gui("""
-        assert app.profile_mb.kw.get("style") == "Profile.TMenubutton", app.profile_mb.kw
     """)
 
 

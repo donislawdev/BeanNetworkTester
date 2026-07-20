@@ -305,8 +305,6 @@
   "presets.satellite": "Łącze satelitarne",
   "presets.terrible": "Fatalna sieć",
   "presets.weak_wifi": "Słabe WiFi",
-  "profiles.mine_separator": "Moje profile",
-  "profiles.presets_separator": "Presety",
   "session.avg_rate": "Śr. przepustowość",
   "session.down_mb": "Pobrano (MB)",
   "session.duration": "Czas trwania",

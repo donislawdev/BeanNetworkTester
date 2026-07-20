@@ -152,18 +152,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The traffic-filter dropdown no longer keeps a highlight after you pick a value.** The
   combobox held keyboard focus after a selection, leaving it outlined as if still active.
 - **Short dropdowns no longer show a stray scrollbar.** Lists that already fit (traffic filter,
-  language) used to draw a light scrollbar strip down the side for nothing.
-- **The profile picker lost a stray left indent.** A leftover indicator column from the removed
-  selection checkbox left an empty gap in front of every entry.
-- **The profile picker now matches the traffic-filter dropdown.** It was a flat button next to a
-  proper field; it now has the same outlined field and boxed arrow, so the two read as siblings.
+  profiles, language) used to draw a light scrollbar strip down the side for nothing.
+- **The profile list now looks exactly like the traffic-filter list.** It was built differently
+  under the hood, so it opened as a pale, system-drawn list with a light border, a width of its
+  own and no highlight on the profile you are using. It is now the same kind of dropdown as
+  every other one in the app: same dark colours, same width as the box above it, and your
+  current profile highlighted when it opens.
+- **The profile list no longer has "Presets" and "My profiles" rows.** They were headings you
+  could click and get nothing from. The list is now just the profiles themselves - the ready-made
+  ones first, your own saved ones after them.
 - **The Connections highlight follows the current target, not a flow's last packet.** A connection
   that was in scope before you narrowed the target (e.g. to `chrome`) kept its amber highlight and
   "yes" in the scope column while sitting idle, so unrelated apps like `firefox` looked like they
   were being hit. The highlight and that column are now recomputed against the target as it stands.
-- **The profile dropdown now opens reliably.** The profile picker could intermittently
-  refuse to open (it toggled shut again on the same click); it now posts on click every
-  time, and the list is always current.
 - **Connection rows are highlighted only when a target is actually narrowing the traffic.**
   With no target set, every connection is in scope, so the whole table used to be
   highlighted for nothing. The highlight now appears only when some connections are targeted

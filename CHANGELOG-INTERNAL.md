@@ -17,6 +17,49 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI: the profile picker is a ttk.Combobox again (convention 41)
+
+- **`gui/pages/control.py::_build_profiles`: `ttk.Menubutton` + `tk.Menu` -> `ttk.Combobox`**
+  (readonly, no named style - the shared `TCombobox` look), bound to
+  `App.on_profile_selected` (`unhighlight_combobox` + `load_selected_profile`), i.e. exactly
+  how the traffic filter is built in `form.py`. The menu was introduced so group headings
+  could be rendered non-pickable, but the headings had already been dropped from the menu, so
+  all it still bought was a dropdown that could not be made to match: **on Windows a `tk.Menu`
+  is a native Win32 popup**, so its frame (a light system border), its width (no `-width`
+  option, so it is sized to the longest label instead of to the button) and the highlight on
+  the current entry are outside Tk's reach - no amount of styling closes that gap.
+- **Group headings dropped entirely** (owner's decision, convention 41: every row in a list
+  must DO something). `App.profile_names()` is now `presets + own profiles`, full stop;
+  `App._profile_separators` and the snap-back branch in `App.load_selected_profile` are gone,
+  `_is_reserved_profile_name` is down to the preset check (a user profile may now be called
+  "Presets"), and the `profiles.presets_separator` / `profiles.mine_separator` keys are
+  deleted from `lang/en.json` + `lang/pl.json`. `smoke_gui.py`'s separator check is replaced
+  by one asserting the picker offers presets then own profiles and nothing else.
+- **Removed:** `App._rebuild_profile_menu`, `App._post_profile_menu` (a workaround for the
+  Menubutton's post-on-mouse-down toggle - a combobox has no such problem), the
+  `App.profile_menu` attribute, the `Profile.TMenubutton` layout/configure/map and the bare
+  `TMenubutton` styles in `gui/theme.py`, and the `like_combobox` parameter of
+  `theme.style_menu` (context menus were its only other caller). `App.profile_mb` ->
+  `App.profile_cb`.
+- **`theme.popdown_height(values)`** (+ `POPDOWN_ROWS = 20`) is now the single source for the
+  "a list that fits must not spawn the popdown scrollbar" rule, used by the profile picker,
+  the traffic filter (`form.py`) and the language box (`panels/settings.py`), which each had
+  their own `height=len(...)`. The profile list is the only one the user can grow without
+  limit, hence the cap at ttk's own default rather than a dropdown taller than the screen.
+  `App._sync_profile_widgets` now refills `values=`/`height=` instead of rebuilding a menu.
+- **Tests:** `test_gui_release_fixes.py::test_profile_menu_has_no_indicator_gutter` and
+  `::test_profile_picker_uses_the_combobox_field_style` (both about the retired Menubutton)
+  replaced by `::test_profile_picker_is_the_same_widget_as_the_traffic_filter`, which checks
+  the built widget (readonly, no style override, `values` == `profile_names()`, `height` ==
+  item count) AND greps `gui/pages/control.py` for `Menubutton`/`tk.Menu(`, so the imitation
+  cannot come back.
+- **PROJECT_NOTES convention 41** rewritten with two lessons: same role -> same widget (do not
+  imitate a sibling widget with styles - the imitation has a ceiling that is invisible in the
+  code), and every row in a list must do something. The stale "405 keys per lang file" figure
+  in the repo-structure section (really 465) was replaced by the command that counts them -
+  a number copied out of its source file drifts, which is exactly what convention "one fact,
+  one source" is about.
+
 ### Docs: intro wording and third-party links
 
 - **README intro (EN + PL)** reworded: leads with the product name (branding + the auto-snippet),
