@@ -35,6 +35,7 @@ except (AttributeError, ValueError):
 
 import tempfile                                      # noqa: E402
 import tkinter as tk                                 # noqa: E402
+from tkinter import ttk                              # noqa: E402
 
 import beantester.gui.profiles as _profiles          # noqa: E402
 import beantester.gui.ui_state as _ui_state          # noqa: E402
@@ -88,7 +89,7 @@ def _wraps(widget):
         return False
 
 
-def _scan(root):
+def _scan(root, styles=None):
     """Clipped widgets, split into the three kinds that mean different things.
 
     ``cut`` is the damaging one: a label with no wraplength that does not fit is
@@ -105,6 +106,12 @@ def _scan(root):
             cls = widget.winfo_class()
         except tk.TclError:
             continue
+        # Collect the styles actually on screen, so the focus-vs-hover check below
+        # needs no hand-kept list: a new styled control is covered the day it ships.
+        if styles is not None:
+            name = _style_of(widget)
+            if name:
+                styles.add(name)
         is_button = cls in BUTTON_CLASSES
         if not is_button and cls not in LABEL_CLASSES:
             continue
@@ -122,6 +129,62 @@ def _scan(root):
         else:
             cut.append((text, req, got))
     return buttons, labels, cut
+
+
+PAINT_OPTIONS = ("background", "foreground", "bordercolor", "lightcolor", "darkcolor")
+
+
+def _declared_styles():
+    """Every style name gui/theme.py configures or maps.
+
+    Walking the widget tree only finds the styles that are on SCREEN, and some of
+    the most important ones are not: "Stop.TButton" exists only while a capture
+    runs, "Dirty.TButton" only while the form differs from the engine. Reading the
+    names out of the theme covers them without a list to keep in step by hand.
+    """
+    import re
+
+    from beantester.gui import theme
+    try:
+        with open(theme.__file__, encoding="utf-8") as handle:
+            source = handle.read()
+    except OSError:
+        return set()
+    return set(re.findall(r's\.(?:configure|map)\(\s*"([\w.]+)"', source))
+
+
+def _style_of(widget):
+    """The ttk style a widget actually draws with ("" for a plain tk widget)."""
+    try:
+        return str(widget.cget("style") or widget.winfo_class())
+    except tk.TclError:
+        return ""
+
+
+def _focus_looks_like_hover(style, name):
+    """Options this style paints identically for `focus` and for `active`.
+
+    Hover is the fill, focus is the ring - a style that maps both states to the
+    same colour makes "the mouse is here" and "the keyboard is here" the same
+    picture, which is how a button that kept focus after its window closed ended
+    up looking permanently hovered.
+    """
+    same = []
+    for option in PAINT_OPTIONS:
+        focus = hover = None
+        try:
+            spec = style.map(name, option)
+        except tk.TclError:
+            continue
+        for entry in spec or ():
+            states, value = tuple(entry[:-1]), str(entry[-1])
+            if states == ("focus",):
+                focus = value
+            elif states == ("active",):
+                hover = value
+        if focus is not None and focus == hover:
+            same.append(f"{option}={focus}")
+    return same
 
 
 def _cancel_afters(root):
@@ -145,9 +208,10 @@ def check_language(code):
     root.update()
 
     buttons, labels, cut = [], [], []
+    styles = _declared_styles()
 
     def scan():
-        b, l, c = _scan(root)
+        b, l, c = _scan(root, styles)
         buttons.extend(b)
         labels.extend(l)
         cut.extend(c)
@@ -169,6 +233,10 @@ def check_language(code):
         except Exception as exc:                 # noqa: BLE001 - report, keep going
             print(f"  [{code}] could not open the {window_id!r} window: {exc}")
 
+    style = ttk.Style(root)
+    twins = [(name, same) for name in sorted(styles)
+             for same in [_focus_looks_like_hover(style, name)] if same]
+
     buttons = sorted(set(buttons))
     labels = sorted(set(labels))
     cut = sorted(set(cut))
@@ -178,14 +246,18 @@ def check_language(code):
     for text, req, got in cut:
         print(f"  [{code}] TRUNCATED LABEL - no wraplength, the text is CUT "
               f"(req={req} got={got}): {text!r}")
+    for name, same in twins:
+        print(f"  [{code}] FOCUS LOOKS LIKE HOVER in {name}: {', '.join(same)}")
     for text, req, got in buttons:
         print(f"  [{code}] CLIPPED BUTTON (req={req} got={got}): {text!r}")
-    ok = not buttons and not cut
+    ok = not buttons and not cut and not twins
     problems = []
     if buttons:
         problems.append(f"{len(buttons)} clipped button(s)")
     if cut:
         problems.append(f"{len(cut)} truncated label(s)")
+    if twins:
+        problems.append(f"{len(twins)} style(s) where focus looks like hover")
     print(f"  [{code}] {'OK' if ok else ', '.join(problems)}")
 
     # Teardown is best-effort: the result above is already computed, and a noisy

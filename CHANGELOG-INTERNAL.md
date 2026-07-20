@@ -47,6 +47,27 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   and `::test_every_prose_label_in_the_about_window_can_wrap`. Both were confirmed to fail against
   the pre-fix code, and the render check was confirmed to report `2 truncated label(s)` on it.
 
+### GUI: focus is a ring, hover is a fill (they used to be the same picture)
+
+- **`gui/theme.py`: every `("focus", <colour>)` entry that duplicated the style's `("active",
+  <colour>)` is gone** (`TButton`, `Accent`, `Stop`, `Dirty`, `Help`, `Donate`, `Section`,
+  `Gear`). Hover keeps the fill; focus is drawn by clam's **`Button.focus` element** through
+  `focuscolor` (`focusthickness=1`, `focussolid=True` on `TButton`, inherited by the derived
+  styles; the coloured buttons keep their own ink colour, because an accent ring on an
+  accent-blue button is invisible). Measured, not assumed: at thickness 1 the ring costs no
+  space (a button is 82x31 either way) and at 3 it grows to 86x35 - which is why this one
+  number is not `scaled()`.
+- **`tools/ci_gui_render.py` fails when a style paints `focus` and `active` the same.** The
+  styles it checks come from two places, neither hand-kept: the widgets actually on screen, plus
+  every name `theme.py` configures or maps (regex over the module source) - `Stop.TButton` only
+  exists while a capture runs and `Dirty.TButton` only while the form is dirty, so a screen walk
+  alone missed exactly the styles nobody looks at. Against the pre-fix theme it reports all 8
+  offending styles; after the fix, none.
+- Theme module docstring gained the rule as a third invariant, next to "no hard pixels" and
+  "a disabled widget must look disabled". This is the other half of the "button left
+  highlighted" fix above: that one stops focus LANDING on the button, this one stops focus from
+  being painted as hover in the first place.
+
 ### GUI: the profile picker is a ttk.Combobox again (convention 41)
 
 - **`gui/pages/control.py::_build_profiles`: `ttk.Menubutton` + `tk.Menu` -> `ttk.Combobox`**
