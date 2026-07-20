@@ -17,6 +17,48 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### driver.py: read a service with read rights, not ALL_ACCESS
+
+- **`service_state` opened services with `SERVICE_ALL_ACCESS` (0xF01FF) just to read their
+  state, and mapped the resulting failure to `None` = "not installed".** Measured on Windows 11
+  from an ELEVATED shell, so this was never a "needs admin" problem:
+
+      OpenServiceW(Schedule, SERVICE_ALL_ACCESS)    -> NULL, error 5 (ACCESS_DENIED)
+      OpenServiceW(Schedule, SERVICE_QUERY_STATUS)  -> handle, QueryServiceStatus = running
+
+  Same for `Dnscache`; `EventLog` grants both, which is why the path looked fine. Any service
+  whose security descriptor withholds full control read back as absent. Now
+  `SC_MANAGER_CONNECT` + `SERVICE_QUERY_STATUS`, which also makes the read work unelevated.
+- **Third return value `NO_ACCESS`**, distinct from a state label and from `None`. "I cannot
+  tell" and "it is not there" lead to opposite conclusions, so they no longer share a value.
+  `installed_drivers()` keeps such a service in the dict (absence from that dict has to keep
+  meaning "not installed"); `doctor()` renders it `warn` with a "re-run as Administrator" hint
+  instead of `ok / not loaded`. Exit codes are untouched: `warn` is not `fail`, and
+  `ok = all(state != "fail")` is unchanged.
+- **`_advapi()` now loads advapi32 with `use_last_error=True`.** `ctypes.get_last_error()` in
+  `stop_and_remove` read a thread-local ctypes never populated, so it was always 0 and both
+  branches of the `if` returned the same string - dead code pretending to discriminate. With the
+  flag it works, so a refusal is reported as `access denied` rather than `not installed`.
+- **`stop_and_remove` deliberately keeps `SERVICE_ALL_ACCESS`.** Narrowing it to
+  `SERVICE_STOP|DELETE|SERVICE_QUERY_STATUS` (0x10024) was measured and does NOT help: a
+  hardened service denies `DELETE` itself. The only honest improvement there is the message.
+- **`_advapi()` and the `SERVICE_STATUS` structure are cached** in module-level slots.
+  `installed_drivers()` asks about three service names, and each call used to rebuild the
+  binding, re-assign six sets of prototypes and define a fresh `ctypes.Structure` subclass.
+  `ctypes.WinDLL(...)` (unlike `ctypes.windll.advapi32`) returns a NEW object per call, so
+  without the cache the `use_last_error` change would have been a small regression. Both stay
+  lazy: `ctypes.wintypes` does not import on Linux and CI runs on ubuntu too.
+- New tests in `tests/test_driver_windows.py`:
+  `test_reading_a_service_state_asks_only_for_the_right_to_read` (the regression guard - probes
+  `Schedule`/`Dnscache`/`EventLog` on Windows and requires a real state back, plus a genuinely
+  absent service still returning `None`), `test_advapi_and_status_type_are_built_once`,
+  `test_doctor_says_it_could_not_look_rather_than_not_loaded` and
+  `test_doctor_still_calls_a_clean_machine_not_loaded` (both directions of the doctor row).
+- Not proven, stated plainly: no WinDivert driver was loaded on the test machine, so this is a
+  correctness and robustness fix rather than a reproduced WinDivert failure. WinDivert's own
+  service descriptor is probably permissive today; the point is that `--doctor` no longer
+  depends on it staying that way.
+
 ### BREAKING
 
 - **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was

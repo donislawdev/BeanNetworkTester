@@ -44,6 +44,10 @@ from .winenv import is_admin, is_windows
 # not a test fake): only then is there a driver to unload at exit.
 _DRIVER_USED = [False]
 
+# Lazy, Windows-only singletons (see _advapi / _status_type).
+_ADVAPI = [None]
+_STATUS_TYPE = [None]
+
 
 def mark_driver_used():
     _DRIVER_USED[0] = True
@@ -57,15 +61,37 @@ def driver_used():
 DRIVER_SERVICES = ("WinDivert", "WinDivert1.4", "WinDivert1.1")
 
 # Service control constants (winsvc.h)
+#
+# READING a service state must ask for the RIGHTS TO READ, nothing more. This is
+# not hygiene, it is correctness: a service whose security descriptor does not
+# grant full control reads back as "not installed" if you open it with
+# SERVICE_ALL_ACCESS. Measured on Windows 11, from an ELEVATED shell:
+#
+#     OpenServiceW(Schedule, SERVICE_ALL_ACCESS)    -> NULL, error 5 (access denied)
+#     OpenServiceW(Schedule, SERVICE_QUERY_STATUS)  -> handle, state = running
+#
+# Same for Dnscache; EventLog happens to grant both. So the old mask turned "this
+# service is protected" into "this service does not exist" - in the one command
+# (--doctor) whose entire job is to tell the user the truth about their machine.
+# The ALL_ACCESS pair below is still used by the CLEANUP path, which genuinely
+# needs to stop and delete (and is gated on is_admin()).
 _SC_MANAGER_ALL_ACCESS = 0xF003F
+_SC_MANAGER_CONNECT = 0x0001
 _SERVICE_ALL_ACCESS = 0xF01FF
+_SERVICE_QUERY_STATUS = 0x0004
 _SERVICE_CONTROL_STOP = 0x1
 _SERVICE_STOPPED = 0x1
+_ERROR_ACCESS_DENIED = 5
 _ERROR_SERVICE_DOES_NOT_EXIST = 1060
 
 STATE_LABELS = {1: "stopped", 2: "start pending", 3: "stop pending",
                 4: "running", 5: "continue pending", 6: "pause pending",
                 7: "paused"}
+
+# Third answer, distinct from a state and from None: the service manager refused
+# to let us look. "I cannot tell" and "it is not there" lead the user to opposite
+# conclusions, so they must not share a return value.
+NO_ACCESS = "no access"
 
 
 def _advapi():
@@ -83,11 +109,21 @@ def _advapi():
 
     Declaring argtypes/restype makes ctypes pass real 64-bit handles and marshal
     the return values correctly. This is not optional on Win64; it is the contract.
+
+    Loaded with ``use_last_error=True`` so ``ctypes.get_last_error()`` actually
+    reports the Win32 error. Without it the call site read a thread-local that
+    ctypes never populated, so it always saw 0 and could not tell "not installed"
+    (1060) from "access denied" (5) - both branches returned the same string.
+
+    Cached: ``installed_drivers()`` asks about three service names, and each call
+    used to rebuild the binding and re-assign six sets of prototypes.
     """
+    if _ADVAPI[0] is not None:
+        return _ADVAPI[0]
     import ctypes
     from ctypes import wintypes
 
-    lib = ctypes.windll.advapi32
+    lib = ctypes.WinDLL("advapi32", use_last_error=True)
     # A handle is pointer-sized. wintypes.HANDLE is the right width on 32- and 64-bit.
     H = wintypes.HANDLE
     lib.OpenSCManagerW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
@@ -102,13 +138,15 @@ def _advapi():
     lib.DeleteService.restype = wintypes.BOOL
     lib.CloseServiceHandle.argtypes = [H]
     lib.CloseServiceHandle.restype = wintypes.BOOL
+    _ADVAPI[0] = lib
     return lib
 
 
-def service_state(name):
-    """Return ``'running'`` / ``'stopped'`` / ... , or ``None`` if not installed."""
-    if not is_windows():
-        return None
+def _status_type():
+    """SERVICE_STATUS, built once. Windows-only: ``ctypes.wintypes`` does not even
+    import on Linux, so this cannot live at module level (CI runs on ubuntu too)."""
+    if _STATUS_TYPE[0] is not None:
+        return _STATUS_TYPE[0]
     import ctypes
     from ctypes import wintypes
 
@@ -121,18 +159,39 @@ def service_state(name):
                     ("dwCheckPoint", wintypes.DWORD),
                     ("dwWaitHint", wintypes.DWORD)]
 
-    api = _advapi()
-    manager = api.OpenSCManagerW(None, None, _SC_MANAGER_ALL_ACCESS)
-    if not manager:
+    _STATUS_TYPE[0] = _STATUS
+    return _STATUS
+
+
+def service_state(name):
+    """State of one service, asking only for the right to READ it.
+
+    Returns a label from ``STATE_LABELS``, ``None`` when the service is genuinely
+    not installed, or ``NO_ACCESS`` when the service manager refused to tell us.
+    That third answer matters: reporting "not installed" for a service we were not
+    allowed to open sends the user looking in the wrong place - see the note on the
+    access masks above, where SERVICE_ALL_ACCESS is denied on real Windows services
+    even to an Administrator.
+    """
+    if not is_windows():
         return None
+    import ctypes
+
+    api = _advapi()
+    manager = api.OpenSCManagerW(None, None, _SC_MANAGER_CONNECT)
+    if not manager:
+        # SC_MANAGER_CONNECT is granted to Authenticated Users, so this failing at
+        # all means something unusual - not an absent service.
+        return NO_ACCESS
     try:
-        handle = api.OpenServiceW(manager, name, _SERVICE_ALL_ACCESS)
+        handle = api.OpenServiceW(manager, name, _SERVICE_QUERY_STATUS)
         if not handle:
-            return None
+            err = ctypes.get_last_error()
+            return None if err == _ERROR_SERVICE_DOES_NOT_EXIST else NO_ACCESS
         try:
-            status = _STATUS()
+            status = _status_type()()
             if not api.QueryServiceStatus(handle, ctypes.byref(status)):
-                return None
+                return NO_ACCESS
             return STATE_LABELS.get(int(status.dwCurrentState), "unknown")
         finally:
             api.CloseServiceHandle(handle)
@@ -141,7 +200,12 @@ def service_state(name):
 
 
 def installed_drivers():
-    """``{service name: state}`` for every WinDivert service present."""
+    """``{service name: state}`` for every WinDivert service present.
+
+    A service we were not allowed to read is present with the state ``NO_ACCESS``
+    rather than being dropped: absent from this dict means "not installed", and
+    that claim has to stay trustworthy.
+    """
     found = {}
     for name in DRIVER_SERVICES:
         state = service_state(name)
@@ -155,30 +219,27 @@ def stop_and_remove(name):
     if not is_windows():
         return f"{name}: not Windows, nothing to do"
     import ctypes
-    from ctypes import wintypes
-
-    class _STATUS(ctypes.Structure):
-        _fields_ = [("dwServiceType", wintypes.DWORD),
-                    ("dwCurrentState", wintypes.DWORD),
-                    ("dwControlsAccepted", wintypes.DWORD),
-                    ("dwWin32ExitCode", wintypes.DWORD),
-                    ("dwServiceSpecificExitCode", wintypes.DWORD),
-                    ("dwCheckPoint", wintypes.DWORD),
-                    ("dwWaitHint", wintypes.DWORD)]
 
     api = _advapi()
     manager = api.OpenSCManagerW(None, None, _SC_MANAGER_ALL_ACCESS)
     if not manager:
         return f"{name}: cannot open the service manager (Administrator required)"
     try:
+        # ALL_ACCESS on purpose here: this path stops and DELETES. Narrowing it to
+        # SERVICE_STOP|DELETE|QUERY_STATUS was measured and does NOT help - a
+        # hardened service denies DELETE itself, so the honest thing left to do is
+        # report WHY rather than pretend the service was never there.
         handle = api.OpenServiceW(manager, name, _SERVICE_ALL_ACCESS)
         if not handle:
-            err = ctypes.get_last_error() if hasattr(ctypes, "get_last_error") else 0
-            if err == _ERROR_SERVICE_DOES_NOT_EXIST:
-                return f"{name}: not installed"
+            err = ctypes.get_last_error()
+            if err == _ERROR_ACCESS_DENIED:
+                return (f"{name}: access denied - the service exists but this "
+                        f"account may not stop or remove it")
+            if err != _ERROR_SERVICE_DOES_NOT_EXIST:
+                return f"{name}: cannot open the service (Windows error {err})"
             return f"{name}: not installed"
         try:
-            status = _STATUS()
+            status = _status_type()()
             api.ControlService(handle, _SERVICE_CONTROL_STOP, ctypes.byref(status))
             deleted = bool(api.DeleteService(handle))
             return (f"{name}: stopped and removed" if deleted
@@ -264,11 +325,17 @@ def doctor():
         drivers = installed_drivers()
         if drivers:
             running = [n for n, s in drivers.items() if s == "running"]
+            blocked = [n for n, s in drivers.items() if s == NO_ACCESS]
+            detail = ", ".join(f"{n}={s}" for n, s in drivers.items())
+            if blocked:
+                # "I could not look" must never be printed as a clean bill of health
+                detail += (" - the service manager would not report the state; "
+                           "re-run as Administrator to be sure")
+            elif running:
+                detail += (" - a session may still be active elsewhere; "
+                           "use --cleanup-driver if not")
             checks.append(("windivert driver",
-                           "warn" if running else "ok",
-                           ", ".join(f"{n}={s}" for n, s in drivers.items())
-                           + (" - a session may still be active elsewhere; "
-                              "use --cleanup-driver if not" if running else "")))
+                           "warn" if (running or blocked) else "ok", detail))
         else:
             checks.append(("windivert driver", "ok", "not loaded"))
         leftovers = stale_temp_dirs()
