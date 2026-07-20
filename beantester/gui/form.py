@@ -31,7 +31,7 @@ from . import dialogs
 from .accordion import CollapsibleSection
 from .labels import wrapping_label
 from .scaling import scaled
-from .theme import unhighlight_combobox
+from .theme import popdown_height, unhighlight_combobox
 from .tooltip import add_tooltip
 from .. import crashlog
 
@@ -198,11 +198,8 @@ class ControlForm:
             var = app.vars[field.key]
             if var.get() not in display:
                 var.set(display[0])
-            # height = item count: a short list must not spawn a popdown scrollbar
-            # (it renders as a light bar against the near-black dropdown - an eyesore
-            # for a list that fits without scrolling)
             widget = ttk.Combobox(row, textvariable=var, values=display,
-                                  state="readonly", height=len(display))
+                                  state="readonly", height=popdown_height(display))
             widget.pack(side="left", fill="x", expand=True)
             widget.bind("<<ComboboxSelected>>", self._on_choice, add="+")
             add_tooltip(widget, field.tip)

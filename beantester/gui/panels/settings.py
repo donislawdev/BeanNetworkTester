@@ -25,7 +25,7 @@ from ..accordion import CollapsibleSection
 from ..form import ControlForm
 from ..prefs import ACTION, BOOL, PREF_GROUPS, PREFS_BY_KEY
 from ..scaling import scaled
-from ..theme import unhighlight_combobox
+from ..theme import popdown_height, unhighlight_combobox
 from ..tooltip import add_tooltip
 from ..windows import PanelWindow, register_window
 
@@ -51,7 +51,7 @@ class SettingsWindow(PanelWindow):
         names = [name for _, name in available_languages()]
         cb = ttk.Combobox(lang_row, textvariable=app.lang_var, values=names,
                           state="disabled" if app.running else "readonly",
-                          width=14, height=len(names))
+                          width=14, height=popdown_height(names))
         cb.pack(side="left", padx=(scaled(8), 0))
         # Switching the language rebuilds the whole UI (and this window with it),
         # so it is not safe mid-session - locked exactly like on the header before.

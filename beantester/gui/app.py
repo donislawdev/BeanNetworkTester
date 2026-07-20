@@ -58,7 +58,8 @@ from .scaling import (geometry_fits, init_scaling, initial_geometry,
                       max_window_size, min_window_size, scaled)
 from .scrollable import WheelDispatcher
 from .theme import (BG, FIELD, FG, MONO_FONT, MUT, apply_dark_titlebar,
-                    disable_maximize, init_style)
+                    disable_maximize, init_style, popdown_height,
+                    unhighlight_combobox)
 from .tooltip import add_tooltip
 from .ui_state import DEFAULTS as UI_DEFAULTS, UiStateStore
 from . import prefs
@@ -191,8 +192,7 @@ class App:
         self._summary_text = None
         self._dirty_style = None
         self.scenario_lbl = None
-        self.profile_mb = None        # the profile picker (a grouped Menubutton)
-        self.profile_menu = None      # its dropdown menu (rebuilt on every change)
+        self.profile_cb = None        # the profile picker (the same widget as the filter)
         self.btn_delete_profile = None
         self.target_warning = None      # "no process matched" banner
 
@@ -785,19 +785,18 @@ class App:
         return [self._short_label(key) for key in non_profile_active(s)]
 
     def _is_reserved_profile_name(self, name):
-        """True for names taken by built-in presets (any language) / separators."""
-        if name in getattr(self, "_profile_separators", ()):
-            return True
+        """True for names taken by a built-in preset (in any language)."""
         return resolve_preset(name) is not None
 
     def profile_names(self):
+        """Everything the picker offers: presets first, then the user's own.
+
+        Nothing else - no group headings. The dropdown sits under the "Profiles"
+        heading and every row in it is a profile, so a row that only says which
+        group comes next is a row the user can pick and get nothing from.
+        """
         self._preset_disp2canon = {T(k): k for k in PRESETS}
-        self._profile_separators = {T("profiles.presets_separator"),
-                                    T("profiles.mine_separator")}
-        names = [T("profiles.presets_separator")] + [T(k) for k in PRESETS]
-        if self.profiles:
-            names += [T("profiles.mine_separator")] + self.profiles.names()
-        return names
+        return [T(k) for k in PRESETS] + self.profiles.names()
 
     def profile_label(self, key):
         """Displayed name of a profile id (presets are translated, own ones are not)."""
@@ -808,10 +807,14 @@ class App:
         return getattr(self, "_preset_disp2canon", {}).get(label, label)
 
     def _sync_profile_widgets(self):
-        """Rebuild the profile menu, show the selection, gate the Delete button."""
-        if self.profile_mb is None:
+        """Refill the profile list, show the selection, gate the Delete button."""
+        if self.profile_cb is None:
             return
-        self._rebuild_profile_menu()
+        try:
+            names = self.profile_names()      # also refreshes the label<->key lookups
+            self.profile_cb.config(values=names, height=popdown_height(names))
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.app")
         try:
             self.profile_var.set(self.profile_label(self._profile_key))
         except Exception as _exc:
@@ -826,65 +829,10 @@ class App:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.app")
 
-    def _rebuild_profile_menu(self):
-        """Fill the profile dropdown: presets, then the user's own profiles.
-
-        A plain, crisp list. There are no group HEADINGS: a disabled menu entry
-        renders as muddy, washed-out text that reads as "blurry" next to the
-        real items, and a menu radiobutton's native tick renders as a stretched
-        blob at high DPI. The two groups are separated by a rule instead, and the
-        current profile is shown in the button itself (``textvariable``), so the
-        menu needs no in-list marker. The old combobox could not do this - it
-        listed the headings as pickable options that snapped back - which is why
-        this is a menu, but the headings themselves are gone.
-        """
-        menu = self.profile_menu
-        if menu is None:
-            return
-        self.profile_names()          # refresh the display<->key lookups it maintains
-        try:
-            menu.delete(0, "end")
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        try:
-            # hidemargin drops the empty indicator column tk.Menu reserves for a
-            # check/radio tick: this menu has none, and the leftover gutter read as
-            # a stray indent (a ghost of the removed checkbox).
-            for key in PRESETS:
-                menu.add_command(label=T(key), hidemargin=True,
-                                 command=lambda k=key: self.select_profile(k))
-            if self.profiles:
-                menu.add_separator()
-                for name in self.profiles.names():
-                    menu.add_command(label=name, hidemargin=True,
-                                     command=lambda k=name: self.select_profile(k))
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-
-    def _post_profile_menu(self, _event=None):
-        """Open the profile menu explicitly (see the bind in ``control.py``).
-
-        A ttk.Menubutton posts on mouse-down and a quick release can toggle it
-        shut again; rebuilding and posting it here on click is deterministic and
-        keeps the list current. Returns ``"break"`` so the default toggle does
-        not also run.
-        """
-        if self.profile_mb is None:
-            return None
-        self._rebuild_profile_menu()
-        mb, menu = self.profile_mb, self.profile_menu
-        try:
-            x = mb.winfo_rootx()
-            y = mb.winfo_rooty() + mb.winfo_height()
-            menu.tk_popup(x, y)
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        finally:
-            try:
-                menu.grab_release()
-            except Exception as _exc:
-                crashlog.note(_exc, "gui.app")
-        return "break"
+    def on_profile_selected(self, event=None):
+        """``<<ComboboxSelected>>`` on the profile picker."""
+        unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
+        self.load_selected_profile()
 
     def select_profile(self, key):
         """Fill the form from a preset/profile id. Never applies by itself."""
@@ -904,17 +852,12 @@ class App:
             self.log(T("log.apply_needed"))
 
     def load_selected_profile(self):
-        """Load whatever ``profile_var`` currently names (compat entry point).
+        """Load whatever ``profile_var`` currently names.
 
-        The menu radiobuttons call ``select_profile`` directly; this remains for
-        callers that set ``profile_var`` and expect it to take effect, and it
-        ignores the non-selectable group headings.
+        Every row in the picker is a real profile (``profile_names``), so there
+        is nothing to pick that does not load something.
         """
-        label = self.profile_var.get()
-        if label in getattr(self, "_profile_separators", ()):
-            self._sync_profile_widgets()
-            return
-        self.select_profile(self.profile_key_for(label))
+        self.select_profile(self.profile_key_for(self.profile_var.get()))
 
     def save_profile(self):
         # warn up front (once, contextually) when active settings fall outside the

@@ -121,7 +121,7 @@ app.lang_var.set("Polski")
 app._switch_language()
 check("GUI: switch back to Polish", app._lang == "pl")
 
-# -- profiles: scope warning, reserved names, separator selection -------------
+# -- profiles: scope warning, reserved names ----------------------------------
 # (the app uses its own themed dialogs, not the native white message boxes)
 import beantester.gui.dialogs as _dlg             # noqa: E402
 warnings, errors = [], []
@@ -149,10 +149,9 @@ _dlg.ask_string = lambda *a, **k: "Moje VPN"
 app._save_profile()
 check("GUI: valid profile name is saved", app.profiles.names() == ["Moje VPN"])
 
-app.profile_var.set(n.T("profiles.presets_separator"))
-app._load_selected_profile()
-check("GUI: selecting a separator restores the previous selection",
-      app.profile_var.get() == "Moje VPN", f"(got={app.profile_var.get()!r})")
+check("GUI: the picker offers presets then own profiles, nothing else",
+      app._profile_names() == [n.T(k) for k in n.PRESETS] + ["Moje VPN"],
+      f"({app._profile_names()[-3:]})")
 
 # -- preset only fills the form; it never applies by itself -------------------
 app.profile_var.set(n.T("presets.terrible"))

@@ -305,8 +305,6 @@
   "presets.satellite": "Satellite link",
   "presets.terrible": "Terrible network",
   "presets.weak_wifi": "Weak WiFi",
-  "profiles.mine_separator": "My profiles",
-  "profiles.presets_separator": "Presets",
   "session.avg_rate": "Avg throughput",
   "session.down_mb": "Downloaded (MB)",
   "session.duration": "Duration",

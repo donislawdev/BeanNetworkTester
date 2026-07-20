@@ -231,49 +231,11 @@ def init_style(root=None):
           selectbackground=[("readonly", FIELD), ("!focus", FIELD)],
           selectforeground=[("readonly", FG), ("!focus", FG)])
 
-    # -- menubutton (the profile picker: a grouped menu, not a combobox) ----- #
-    # Styled to read like the old combobox (dark field + a down arrow), so the
-    # only visible change is that its dropdown groups presets and own profiles
-    # under headings that cannot be picked.
-    s.configure("TMenubutton", background=FIELD, foreground=FG, arrowcolor=MUT,
-                bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
-                relief="flat", borderwidth=1, padding=scaled(3), focuscolor=FIELD,
-                anchor="w")
-    s.map("TMenubutton",
-          background=[("disabled", DIS_BG), ("focus", "#20242e"), ("active", "#20242e")],
-          foreground=[("disabled", DIS_FG)],
-          arrowcolor=[("disabled", DIS_FG)],
-          bordercolor=[("disabled", DIS_BG), ("focus", ACC), ("active", ACC)],
-          lightcolor=[("focus", ACC), ("active", ACC)],
-          darkcolor=[("focus", ACC), ("active", ACC)])
-
-    # The profile picker must read like the traffic-filter combobox: a FLAT dark
-    # field, no raised arrow button. Borrow the combobox's own field element (same
-    # outline + fieldbackground, so the two are pixel-siblings), but for the arrow
-    # use the plain ``Menubutton.indicator`` triangle - NOT ``Combobox.downarrow``.
-    # clam draws the downarrow as a bordered, sunken button (a lighter #39404e box
-    # around the arrow), which stood out as a "white arrow" next to the flat filter
-    # combobox; the menubutton indicator is a bare triangle with no box. The label
-    # still comes from the menubutton (textvariable) and clicking posts the grouped
-    # menu. See gui/pages/control.py.
-    try:
-        s.layout("Profile.TMenubutton", [
-            ("Combobox.field", {"sticky": "nswe", "children": [
-                ("Menubutton.indicator", {"side": "right", "sticky": ""}),
-                ("Combobox.padding", {"sticky": "nswe", "children": [
-                    ("Menubutton.label", {"sticky": "w"})]})]})])
-    except Exception as _exc:
-        crashlog.note(_exc, "gui.theme")
-    s.configure("Profile.TMenubutton", fieldbackground=FIELD, background=FIELD,
-                foreground=FG, arrowcolor=MUT, bordercolor=BORDER, lightcolor=BORDER,
-                darkcolor=BORDER, borderwidth=1, padding=scaled(2), anchor="w")
-    s.map("Profile.TMenubutton",
-          fieldbackground=[("disabled", DIS_BG)],
-          foreground=[("disabled", DIS_FG)],
-          arrowcolor=[("disabled", DIS_FG)],
-          bordercolor=[("disabled", DIS_BG), ("focus", ACC), ("active", ACC)],
-          lightcolor=[("focus", ACC), ("active", ACC)],
-          darkcolor=[("focus", ACC), ("active", ACC)])
+    # NOTE: the profile picker is a plain readonly TCombobox on purpose - it used
+    # to be a Menubutton + tk.Menu styled to imitate one, and the imitation could
+    # never be finished: on Windows a tk.Menu is a native Win32 popup, so its
+    # frame, its width and the highlight on the current entry are outside Tk's
+    # reach. Two dropdowns on the same page must be the same widget.
 
     # -- scrollbars --------------------------------------------------------- #
     for orient in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
@@ -408,17 +370,14 @@ def apply_dark_titlebar(window):
     return False
 
 
-def style_menu(menu, like_combobox=False):
+def style_menu(menu):
     """Dark-theme a classic ``tk.Menu`` (ttk styles do not reach it).
 
-    ``like_combobox`` paints the menu like a readonly combobox's popdown - the
-    darker ``FIELD`` surface used by ``*TCombobox*Listbox`` in ``init_style`` -
-    so the profile picker's dropdown matches the traffic-filter combobox it sits
-    next to (a menu on the lighter ``BG2`` card colour read as a different, paler
-    control). Context menus keep the default card colour.
+    Only context menus use this now - a menu is never a stand-in for a dropdown
+    (see the note next to the combobox styles in ``init_style``).
     """
     try:
-        menu.configure(background=FIELD if like_combobox else BG2, foreground=FG,
+        menu.configure(background=BG2, foreground=FG,
                        activebackground=ACC, activeforeground="#0c1220",
                        disabledforeground=DIS_FG, selectcolor=ACC,
                        borderwidth=0, relief="flat", activeborderwidth=0,
@@ -426,6 +385,22 @@ def style_menu(menu, like_combobox=False):
     except Exception as _exc:
         crashlog.note(_exc, "gui.theme")
     return menu
+
+
+POPDOWN_ROWS = 20                 # ttk's own default popdown height, in rows
+
+
+def popdown_height(values):
+    """Rows to give a combobox popdown so a list that FITS gets no scrollbar.
+
+    ttk adds the popdown scrollbar as soon as the list is longer than ``height``,
+    and it renders as a light bar over the near-black dropdown - an eyesore for a
+    list that would fit anyway. Asking for exactly as many rows as there are
+    values removes it; past ``POPDOWN_ROWS`` we fall back to ttk's own default
+    instead of growing a dropdown taller than the screen (the profile list is the
+    only one the user can grow without limit).
+    """
+    return min(len(values), POPDOWN_ROWS)
 
 
 def unhighlight_combobox(event=None, widget=None):
