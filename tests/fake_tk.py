@@ -250,6 +250,17 @@ class Root(W):
     def title(self, text=None):
         self.kw["title"] = text
 
+    # Recorded, not swallowed by W.__getattr__: which icon call the app makes is
+    # the whole difference between a running-state icon that shows and one that
+    # does not. Tk's "default" flag feeds FUTURE toplevels, so a swap made only
+    # with it never reaches the window the user is looking at.
+    def iconphoto(self, default=False, *images):
+        self.kw.setdefault("icons", []).append(
+            ("default" if default else "window", images[0] if images else None))
+
+    def iconbitmap(self, path=None, **_kw):
+        self.kw.setdefault("icons", []).append(("bitmap", path))
+
     def protocol(self, *a):
         return None
 

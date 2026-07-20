@@ -17,6 +17,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI fix: the running-state icon never reached the main window (Tk `-default` trap)
+
+- **`gui/icon.py`: new `show_running_icon` / `show_idle_icon`** (over `_set_icon`), called from
+  `App._sync_running_ui` in place of the bare `root.iconphoto(True, icon)`.
+- **Root cause:** `iconphoto(True, img)` is Tk's `-default` - the icon for toplevels created
+  from then on. On Windows it lands on the window CLASS, and a window owning an icon of its own
+  keeps that one; the main window owns `bean.ico` from `apply_window_icon`'s `iconbitmap`. So
+  the swap was a no-op where it mattered and DID paint the dot on the next Toplevel opened
+  (the close-confirmation dialog), which is how the owner spotted it. Measured, not guessed:
+  `WM_GETICON` on the toplevel returned the same `HICON` before and after `iconphoto(True, ...)`
+  and a different one after `iconphoto(False, ...)`. Both calls are kept - `False` for this
+  window, `True` so panels opened later carry the state too.
+- **Idle restores through `iconbitmap(bean.ico)`, not the photo.** `bean.ico` ships 16/24/32/48/
+  64/128/256 px frames; `bean.png` is 256 px only, so restoring through the photo would leave
+  the taskbar on a downscale of it permanently after the first capture. Windows-only, guarded,
+  falls back to the photo.
+- The 0.2.0 entry below ("swaps `root.iconphoto` between an idle and a running icon") described
+  a feature that only half-worked on the one platform this tool targets.
+- Tests: `test_gui_state.py::test_the_running_icon_lands_on_the_window_not_just_the_default`
+  asserts the swap hits BOTH the window and the default. Needed a fake that can see it -
+  `fake_tk.Root` now records `iconphoto`/`iconbitmap` into `kw["icons"]` instead of swallowing
+  them in `W.__getattr__`. Verified to fail pre-fix with `[('default', ...)]` alone. Limits:
+  the fake can only prove which call we make - that Windows repaints the taskbar is not
+  testable here (convention 41: confirmed by render).
+
 ### GUI fix: a widened throughput chart crept into its new window instead of filling it
 
 - **`App._reconcile_chart_len` now zero-pads when GROWING** (new `App._resized_hist(hist, n)`).

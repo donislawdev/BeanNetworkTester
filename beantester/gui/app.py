@@ -49,7 +49,8 @@ from ..summary import settings_summary
 from ..utils import number_string
 from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
 from . import dialogs
-from .icon import apply_window_icon, make_gear_icon
+from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
+                   show_running_icon)
 from .pages import PAGES
 from .profiles import ProfileStore
 from .rates import PeakWindow
@@ -1512,9 +1513,10 @@ class App:
             self.root.title(
                 "%s  %s" % (APP_NAME, T("app.title.running")) if running
                 else APP_NAME)
-            icon = self._icon_running if running else self._icon_idle
-            if icon is not None:
-                self.root.iconphoto(True, icon)
+            if running:
+                show_running_icon(self.root, self._icon_running)
+            else:
+                show_idle_icon(self.root, self._icon_idle)
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         # lang_cb is None whenever the Settings window is closed - it lives there

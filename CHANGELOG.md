@@ -113,6 +113,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The app icon now shows the red dot while a capture is running.** The dot was only ever
+  reaching windows opened after you pressed START - which is why it turned up on the "close the
+  app?" box and nowhere else. The icon in the title bar and on the taskbar stayed the resting
+  bean for the whole session, so a minimised window gave no sign the tool was still touching
+  your traffic. It now switches on START and back on STOP, and going back drops you on the
+  original crisp icon rather than a blurrier copy of it.
 - **Making the chart history longer now widens the chart immediately.** Setting "Chart history"
   to a bigger number left the graph on its old span: the label under the left edge still read
   "-28 s" and crawled towards the new value one tick at a time, taking minutes to get there,
