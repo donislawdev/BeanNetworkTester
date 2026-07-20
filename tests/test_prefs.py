@@ -92,6 +92,35 @@ def test_chart_history_length_follows_the_preference():
     """)
 
 
+def test_a_resized_chart_spans_its_whole_window_at_once():
+    """A widened chart must FILL the new window, not creep into it.
+
+    The X axis is labelled from the number of samples the chart is handed, so a
+    history that only grows a sample per tick keeps reporting the old window:
+    raising the preference used to leave the axis at "-28 s", counting up for
+    minutes, under a caption that already said 250. maxlen alone (the assertion
+    above) never saw it - maxlen was right the whole time, len was not.
+    """
+    run_gui("""
+        app.down_hist.append(11.0)           # newest sample, must stay newest
+        app.up_hist.append(22.0)
+
+        app.set_pref("chart_seconds", 250)
+        app._reconcile_chart_len()
+        n = app.chart_samples()
+        assert len(app.down_hist) == n, (len(app.down_hist), n)
+        assert len(app.up_hist) == n, (len(app.up_hist), n)
+        assert app.down_hist[-1] == 11.0 and app.up_hist[-1] == 22.0
+        assert app.down_hist[0] == 0 and app.up_hist[0] == 0
+
+        app.set_pref("chart_seconds", 30)    # shrinking keeps the newest samples
+        app._reconcile_chart_len()
+        n = app.chart_samples()
+        assert len(app.down_hist) == n, (len(app.down_hist), n)
+        assert app.down_hist[-1] == 11.0 and app.up_hist[-1] == 22.0
+    """)
+
+
 def test_log_length_follows_the_preference():
     run_gui("""
         app.set_pref("log_lines", 50)

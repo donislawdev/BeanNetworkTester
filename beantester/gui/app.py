@@ -667,14 +667,29 @@ class App:
         secs = self.pref("chart_seconds")
         return max(2, round(secs / (self.TICK_MS / 1000.0)))
 
+    @staticmethod
+    def _resized_hist(hist, n):
+        """History resized to ``n`` samples: newest kept, missing past zero-filled.
+
+        The zero padding is the whole point. The chart's X axis is labelled from
+        the number of samples it was handed, so a history that is merely ALLOWED
+        to grow to the new length keeps reporting the OLD window and creeps
+        towards the new one one tick at a time - raising the preference to 250 s
+        left the axis reading "-28 s" and counting up for four minutes while the
+        caption already claimed 250. Padding makes a widened chart look exactly
+        like a freshly started one, which is what ``__init__`` builds.
+        Shrinking needs no padding: the deque drops the oldest samples itself.
+        """
+        pad = [0] * max(0, n - len(hist))
+        return deque(pad + list(hist), maxlen=n)
+
     def _reconcile_chart_len(self):
-        """Resize the throughput history to match the current preference, keeping
-        the most recent samples (a deque with a new maxlen drops from the left)."""
+        """Resize the throughput history to match the current preference."""
         n = self.chart_samples()
         if getattr(self, "down_hist", None) is None or self.down_hist.maxlen == n:
             return
-        self.down_hist = deque(self.down_hist, maxlen=n)
-        self.up_hist = deque(self.up_hist, maxlen=n)
+        self.down_hist = self._resized_hist(self.down_hist, n)
+        self.up_hist = self._resized_hist(self.up_hist, n)
 
     def reset_ui_layout(self):
         """Forget remembered window state: geometry, collapsed sections, table
