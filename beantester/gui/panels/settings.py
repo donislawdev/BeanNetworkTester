@@ -23,7 +23,8 @@ from ...utils import number_string
 from ...validators import parse_number
 from ..accordion import CollapsibleSection
 from ..form import ControlForm
-from ..prefs import ACTION, BOOL, PREF_GROUPS, PREFS_BY_KEY
+from ..labels import wrapping_label
+from ..prefs import ACTION, BOOL, NUMBER, PREF_GROUPS, PREFS_BY_KEY
 from ..scaling import scaled
 from ..theme import popdown_height, unhighlight_combobox
 from ..tooltip import add_tooltip
@@ -43,6 +44,8 @@ class SettingsWindow(PanelWindow):
         app = self.app
         self._pref_vars = {}
         self._pref_entries = {}
+        self._pref_errors = {}      # group label -> (error label, its number keys)
+        self._pref_messages = {}    # pref key -> live validation message
 
         # -- language (not a registry field: it lives in *_ui.json) ------------ #
         lang_row = ttk.Frame(body)
@@ -91,6 +94,12 @@ class SettingsWindow(PanelWindow):
         panel.pack()
         for key in keys:
             self._build_pref_row(panel.body, PREFS_BY_KEY[key])
+        numbers = tuple(k for k in keys if PREFS_BY_KEY[k].kind == NUMBER)
+        if numbers:
+            # Same error line the registry fields get from ControlForm: packed only
+            # while it says something, so the card does not reserve a blank row.
+            err = wrapping_label(panel.body, "", style="Bad.TLabel")
+            self._pref_errors[group_label] = (err, numbers)
 
     def _build_pref_row(self, card, pref):
         app = self.app
@@ -135,17 +144,36 @@ class SettingsWindow(PanelWindow):
         entry.bind("<FocusOut>", handler, add="+")
 
     def _on_pref_number(self, pref):
-        """Validate a numeric preference and persist it; paint the field red on a
-        bad value (out of range or not a number) instead of storing garbage."""
+        """Validate a numeric preference and persist it; a bad value (out of range
+        or not a number) paints the field red and SAYS WHY, instead of storing
+        garbage. The red border alone never named the allowed range - the registry
+        fields above it did, which made the same mistake look like two bugs."""
         var = self._pref_vars[pref.key]
         entry = self._pref_entries[pref.key]
         try:
             value = parse_number(str(var.get()).strip(), pref.label, pref.bounds)
+        except ValueError as exc:
+            entry.config(style="Bad.TEntry")
+            self._pref_messages[pref.key] = str(exc)
+        else:
             entry.config(style="TEntry")
+            self._pref_messages.pop(pref.key, None)
             self.app.set_pref(
                 pref.key, int(value) if float(value).is_integer() else value)
-        except ValueError:
-            entry.config(style="Bad.TEntry")
+        self._show_pref_errors()
+
+    def _show_pref_errors(self):
+        """List every live reason under its group, the way ControlForm does."""
+        for err, keys in self._pref_errors.values():
+            messages = [self._pref_messages[k] for k in keys
+                        if k in self._pref_messages]
+            if messages:
+                err.config(text="  •  ".join(messages))
+                if not err.winfo_ismapped():
+                    err.pack(fill="x", pady=(scaled(5), 0))
+            else:
+                err.config(text="")
+                err.pack_forget()
 
     def close(self):
         # Drop the App's handle to our language box before the widgets die, so

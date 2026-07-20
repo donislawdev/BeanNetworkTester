@@ -113,6 +113,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Chart history" and "Log lines kept" now say what went wrong, not just turn red.** Typing a
+  value they do not accept outlined the box in red and left it at that, so the only way to find
+  the allowed range was to guess - while "Row limit", one card above in the same window, has
+  always spelled it out. Both now show the same sentence under their card, naming the field and
+  the range it accepts, and it disappears as soon as the value is good again. As before, a value
+  that is not accepted is never saved.
 - **The app icon now shows the red dot while a capture is running.** The dot was only ever
   reaching windows opened after you pressed START - which is why it turned up on the "close the
   app?" box and nowhere else. The icon in the title bar and on the taskbar stayed the resting
