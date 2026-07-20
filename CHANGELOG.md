@@ -124,6 +124,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   same way whether the mouse was over it or the keyboard had landed on it, so you could not tell
   the two apart - and a button that kept focus looked as if the cursor were parked on it. Hover
   still fills the button; keyboard focus now draws a thin outline inside it instead.
+- **Tooltips no longer pop up far away from the text they explain.** The summary line under the
+  title ("Active: ...") stretched across the whole window even when it was one short sentence, so
+  hovering the empty space beside it - halfway across the header - still brought up its tooltip.
+  The same went for the notes above the Statistics counters and the Connections table. Those
+  tooltips now appear only over the text itself.
 
 - **"Restore the last profile on startup" now works for your own profiles.** Saving a profile
   makes it the one you are using, but the tool remembered only profiles picked from the list -

@@ -103,7 +103,7 @@ class ConnsPage:
         self.count.pack(side="right")
 
         scope = wrapping_label(self.frame, T("conns.scope_note"))
-        scope.pack(fill="x", padx=scaled(10), pady=(0, scaled(4)))
+        scope.pack(anchor="w", padx=scaled(10), pady=(0, scaled(4)))
         add_tooltip(scope, "tips.scope_note")
 
         holder = ttk.Frame(self.frame)

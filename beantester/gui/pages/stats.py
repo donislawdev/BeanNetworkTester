@@ -119,8 +119,11 @@ class StatsPage:
         self.grid.bind("<Configure>", self._on_grid_configure)
         self._relayout_cells(4)
 
+        # anchor, not fill: the wraplength follows the PARENT's width either way
+        # (gui/labels.py), while filling would hand the note - and its tooltip -
+        # the empty space to the right of the sentence.
         scope = wrapping_label(parent, T("stats.scope_note"))
-        scope.pack(fill="x", padx=scaled(10), pady=(scaled(2), 0))
+        scope.pack(anchor="w", padx=scaled(10), pady=(scaled(2), 0))
         add_tooltip(scope, "tips.scope_note")
 
         self._chart_frame = ttk.LabelFrame(parent, text=self._throughput_title())
