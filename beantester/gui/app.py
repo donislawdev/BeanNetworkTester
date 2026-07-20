@@ -380,7 +380,11 @@ class App:
         self.summary = ttk.Label(self.summary_holder, text=T("summary.none"),
                                  style="Muted.TLabel", justify="left", anchor="nw",
                                  wraplength=scaled(620))
-        self.summary.pack(fill="both", expand=True)
+        # Packed to its TEXT, not to the strip. Filling the (full-width, fixed-height)
+        # holder made the label 500 px wider than its own sentence, and a tooltip
+        # covers the WIDGET - so the bubble fired over empty background halfway
+        # across the header, nowhere near the line it explains.
+        self.summary.pack(side="left", anchor="nw")
         add_tooltip(self.summary, "tips.summary")
         # Not admin -> the WinDivert driver will not load and START will fail. Say
         # it up front, as a banner, instead of only a line in the log strip at the

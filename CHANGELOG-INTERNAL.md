@@ -68,6 +68,22 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   highlighted" fix above: that one stops focus LANDING on the button, this one stops focus from
   being painted as hover in the first place.
 
+### GUI fix: a tooltip covered the whole row, not the text
+
+- **A tooltip belongs to a WIDGET, so a label packed `fill`/`expand` shows its bubble over the
+  blank space next to the sentence.** Measured on real Tk at 1366x768: `App.summary` was **508 px
+  wider and 17 px taller than its own text** (it filled the fixed-height summary strip), so the
+  bubble fired over empty header background nowhere near the line it explains. Same shape, smaller
+  numbers, on the two `wrapping_label` scope notes (`pages/stats.py` 118 px, `pages/conns.py`).
+- **Fix:** pack them to their content - `App.summary` -> `side="left", anchor="nw"`, both scope
+  notes -> `anchor="w"` instead of `fill="x"`. A `wrapping_label` does NOT need `fill` to wrap:
+  `labels.bind_wraplength` follows the PARENT's `<Configure>`, so the wrap width is unchanged.
+- **Test:** `tests/test_gui_layout.py::test_a_tooltip_never_covers_empty_space` - walks all three
+  pages and fails on any LEAF widget that has a tooltip, carries `text`, no `command`, and is
+  packed with `fill`/`expand`. Containers are exempt on purpose (a stat tile or a `LabelFrame`
+  with a tooltip does answer for everything inside it), and so are entries/comboboxes/buttons,
+  where the whole box is the control. Confirmed to report all three offenders before the fix.
+
 ### GUI: the profile picker is a ttk.Combobox again (convention 41)
 
 - **`gui/pages/control.py::_build_profiles`: `ttk.Menubutton` + `tk.Menu` -> `ttk.Combobox`**

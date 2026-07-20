@@ -282,3 +282,35 @@ def test_expanding_a_section_scrolls_it_into_view():
         assert seen == [panel.frame], seen
         assert "profiles" not in app.collapsed_sections
     """)
+
+
+def test_a_tooltip_never_covers_empty_space():
+    """A tooltip belongs to the WIDGET, so a label stretched across its row shows
+    its bubble over the blank space beside the sentence too. The summary strip did
+    exactly that: measured on real Tk, the label was 508 px wider and 17 px taller
+    than its own text, so hovering the empty header fired "what the tool is doing
+    with your traffic" nowhere near the line it explains.
+
+    Exempt: buttons, entries and comboboxes (there the whole box IS the control,
+    so covering all of it is right) and containers - a group box or a stat tile
+    with a tooltip is meant to answer for everything inside it.
+    """
+    run_gui("""
+        def stretched(widget, found=None):
+            found = [] if found is None else found
+            for child in widget.winfo_children():
+                info = child.pack_info or {}
+                text = child.kw.get("text")
+                is_leaf_label = (bool(text) and not child.kw.get("command")
+                                 and not child.winfo_children())
+                if (hasattr(child, "_bnt_tooltip") and is_leaf_label
+                        and (info.get("fill") in ("x", "both") or info.get("expand"))):
+                    found.append((text, info))
+                stretched(child, found)
+            return found
+
+        for page in ("control", "statistics", "connections"):
+            app.select_page(page)
+        bad = stretched(root)
+        assert not bad, bad
+    """)
