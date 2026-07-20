@@ -101,3 +101,34 @@ def test_no_stale_license_references_in_metadata():
     if os.path.exists(spec_path):
         spec = open(spec_path, encoding="utf-8").read()
         check("the exe metadata no longer says MIT", "MIT License" not in spec)
+
+
+def test_breaking_sections_come_first():
+    """Convention 39: `### BREAKING` must be the FIRST section of its version.
+
+    The point of the rule is that a reader scanning a release sees the contract
+    breakage before anything else. This guard exists because the rule was broken two
+    chunks after it was written down: a `Fixed` entry was inserted above `BREAKING`
+    in both changelogs and nothing noticed - the em/en-dash guard reads changelog
+    TEXT, never its structure.
+    """
+    for name in ("CHANGELOG.md", "CHANGELOG-INTERNAL.md"):
+        lines = open(os.path.join(ROOT, name), encoding="utf-8").read().splitlines()
+        version, sections = None, []
+        problems = []
+
+        def close(version, sections):
+            if version and "### BREAKING" in sections and sections[0] != "### BREAKING":
+                problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"
+                                f" of {len(sections)} (first is {sections[0]!r})")
+
+        for line in lines:
+            if line.startswith("## "):
+                close(version, sections)
+                version, sections = line.strip(), []
+            elif line.startswith("### ") and version:
+                sections.append(line.strip())
+        close(version, sections)
+
+        check(f"{name}: every BREAKING section comes first in its version",
+              not problems, f"({problems})")

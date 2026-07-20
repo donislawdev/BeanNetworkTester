@@ -17,6 +17,105 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### BREAKING
+
+- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
+  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
+  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
+  while `--help` advertised "force the GUI". On real WinDivert that meant
+  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
+  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
+  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
+  to stderr and stdout stays clean.
+- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
+  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
+  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
+  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
+  than widening it.
+- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
+  loss and getting zero without being told is the class of quiet lie this project removes), and
+  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
+  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
+  than declined.
+- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
+  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
+- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
+- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
+
+### portmap/engine/processes: port-resolution failures stop being invisible
+
+- **`_Native.port_pid_map` accepted a PARTIAL socket table as the truth.** `ok |= self._table(...)`
+  over the four (proto, family) combinations left `ok` True when three of four answered, and
+  `refresh()` cached the result as authoritative. A missing table means sockets the tool cannot
+  see, and an unseen socket is traffic the user asked to impair sailing through untouched -
+  which on screen looks exactly like "the application coped". The failures are now counted and
+  named: all four failing still returns `None` (psutil fallback, unchanged), a partial result is
+  still returned but goes through `crashlog.once("portmap.native.<tables>")`, with the failing
+  tables in the key so a different failure is recorded too.
+- **The stricter option (any failure -> psutil) was rejected on purpose.** Measured on the dev
+  machine, all four tables answer `rc=0` (tcp/v4 103 rows, tcp/v6 10, udp/v4 90, udp/v6 23), so
+  the failure mode is NOT reproducible here. Trading a possible gap for a certain order-of-
+  magnitude slowdown, on a path that cannot be tested, is the wrong bet; when a real machine
+  reports it, `crashes/` will hold the evidence and the decision can be made on data.
+- **`_Native._table` no longer pretends to reuse its buffer.** The comment claimed "grow and KEEP
+  one buffer per table", but a fresh `create_string_buffer` was allocated on every call and the
+  stored buffer was never read back - the cache only pinned memory. `self._buffers` becomes
+  `self._sizes` (the size hint is the part that was doing work). Real reuse was considered and
+  rejected: four allocations a few times a second against aliasing between calls in ctypes code.
+- **`engine._process_for` / `_pid_for` now use `crashlog.once("engine.ports*")`.** They swallowed
+  silently while the same file, 200 lines up, already used `crashlog.once("engine.packet")` for
+  the same class of event on the same thread. `once()` and not `note()` because this is the
+  capture path: a port table that starts failing turns every row's process into "?", which is
+  worth one traceback, not one per packet.
+- **`processes.port_process_map` uses `crashlog.quiet("processes.port_map")`.** Best-effort for
+  the caller (an empty map still just means "?"), recorded for us.
+- New tests in `tests/test_processes.py`: `test_port_process_map_records_a_failure_instead_of_swallowing_it`,
+  `test_a_partial_socket_table_is_reported_not_silently_trusted`,
+  `test_every_socket_table_failing_falls_back_to_psutil`,
+  `test_engine_records_a_broken_port_table_instead_of_going_quiet`. They spy on `crashlog.record`
+  (and reset `_once_seen`) instead of reading the crash directory, so they touch no disk.
+
+### Changelog structure: `### BREAKING` first, now guarded
+
+- Convention 39 requires `### BREAKING` to be the FIRST section of a version in both changelogs.
+  The `--doctor` entry was added ABOVE it in both files, pushing it to second place - the exact
+  drift the convention exists to prevent, committed two chunks after writing the convention down.
+  Nothing caught it: `test_no_em_or_en_dashes` reads changelog TEXT, never its structure.
+- Fixed in both files, and `tests/test_version_and_release.py::test_breaking_sections_come_first`
+  now enforces it: in every version block of either changelog, if a `### BREAKING` heading exists
+  it must be the first `###` under its `##`.
+
+### Hygiene guard: measured, then deliberately NOT tightened
+
+- The audit proposed extending `test_code_hygiene` to catch `except ...: return <default>`, not
+  only `except ...: pass`. A prototype was run across the package first. Result: **66 silent
+  handlers, of which 26 catch a NARROW type** (`OSError`, `(TypeError, ValueError)`) and are
+  idiomatic, and 40 are broad. Of the 40: 7 are `crashlog.py` (already exempt), 12 sit in modules
+  whose docstring states a "never raises" contract (`portmap` 6, `winenv` 4, `matchers.matches()`,
+  `utils.is_local_ip`), 2 in `legal.py` already carry `# noqa: BLE001` with a reason, and 14 are
+  in `gui/` - against roughly 100 correct `crashlog.*` uses in the same directory.
+- **Conclusion: the codebase is disciplined and the guard would mostly encode the status quo**,
+  at the cost of a wide diff and future false positives. Tightening was dropped; the three
+  handlers that were genuinely inconsistent with their own neighbours were fixed above instead.
+  If it is ever revisited, the mechanism to use is the one `legal.py` already established -
+  `# noqa: BLE001 - <reason>` at the handler - not a central allowlist.
+
+### Deferred: PID reuse in the portmap info cache (audit item P2)
+
+- `PortTable._expire_info` returns early below 512 entries, so on a normal machine (50-250
+  socket-owning PIDs) the `pid -> (name, ppid)` cache never expires and a recycled PID keeps the
+  dead process's name. That matters beyond a wrong column: `ProcessTargeting.refresh()` matches on
+  `name_of(pid)`, so the tool can impair a process the user did not target.
+- **The obvious fix does not work.** `info()` refreshes `last_seen` on every cache HIT, so the
+  dangerous case - a recycled PID that is being actively looked up - never expires no matter what
+  the TTL is. Real fixes (TTL from INSERTION, `create_time()` validation, or evicting PIDs that
+  vanish from the socket table) all add work to `PortTable.refresh()`, which today runs **on the
+  capture thread** via `ProcessTargeting.__contains__`. TTL-from-insertion additionally gives a
+  thundering herd: entries created together expire together, so one refresh re-resolves dozens of
+  PIDs at once, in the packet path.
+- Therefore P2 is scheduled straight after the targeting rewrite, when the cost no longer sits on
+  the capture thread. Designing around a constraint that is about to be removed would be wasted work.
+
 ### driver.py: read a service with read rights, not ALL_ACCESS
 
 - **`service_state` opened services with `SERVICE_ALL_ACCESS` (0xF01FF) just to read their
@@ -58,31 +157,6 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   correctness and robustness fix rather than a reproduced WinDivert failure. WinDivert's own
   service descriptor is probably permissive today; the point is that `--doctor` no longer
   depends on it staying that way.
-
-### BREAKING
-
-- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
-  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
-  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
-  while `--help` advertised "force the GUI". On real WinDivert that meant
-  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
-  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
-  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
-  to stderr and stdout stays clean.
-- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
-  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
-  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
-  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
-  than widening it.
-- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
-  loss and getting zero without being told is the class of quiet lie this project removes), and
-  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
-  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
-  than declined.
-- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
-  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
-- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
-- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
 ### CI: one run of the test suite, under coverage
 
