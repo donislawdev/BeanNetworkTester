@@ -313,6 +313,20 @@ def init_style(root=None):
 # a dialog looked half-white until you clicked it.
 DWMWA_USE_IMMERSIVE_DARK_MODE = 20        # 19 on Windows 10 builds < 19041
 
+# The title bar is only half of what Windows draws for us. The SYSTEM MENU (the
+# one behind the icon in the title bar, or Alt+Space) and the frame around a
+# classic ``tk.Menu`` popup are painted by the system too, and they ignore the
+# per-window DWM attribute above - they follow a PROCESS-WIDE dark-mode flag that
+# lives in undocumented uxtheme exports. Without it a dark app shows a bright
+# white system menu in every window (and a light rim around our context menus).
+# The exports have no names, only ordinals:
+_UXTHEME_SET_PREFERRED_APP_MODE = 135     # AllowDarkModeForApp(BOOL) on 1809
+_UXTHEME_FLUSH_MENU_THEMES = 136          # drops the cached (light) menu theme
+_PREFERRED_APP_MODE_FORCE_DARK = 2        # not "allow": our UI is dark ALWAYS,
+# so following the system theme would leave a light menu on a light Windows.
+_DARK_MODE_MIN_BUILD = 17763              # first build with these exports
+_app_mode_applied = False
+
 
 _GWL_STYLE = -16
 _WS_MAXIMIZEBOX = 0x00010000
@@ -344,6 +358,43 @@ def disable_maximize(window):
         return False
 
 
+def apply_dark_app_mode():
+    """Put the whole PROCESS in dark mode, for the parts Windows draws itself.
+
+    Covers what ``apply_dark_titlebar`` cannot: the system menu behind the title
+    bar icon, the frame Windows puts around a ``tk.Menu`` popup and the native
+    file pickers. It is a process flag, not a window one, so calling it once is
+    enough - every window created afterwards inherits it.
+
+    Undocumented on purpose (these uxtheme exports have ordinals, no names), so
+    it is gated on the build that introduced them and every failure is silent:
+    the worst case is the light menu we already had. No-op off Windows.
+    """
+    global _app_mode_applied
+    if _app_mode_applied or not sys.platform.startswith("win"):
+        return False
+    _app_mode_applied = True          # one attempt per process, success or not
+    try:
+        import ctypes
+        if sys.getwindowsversion().build < _DARK_MODE_MIN_BUILD:
+            return False
+        uxtheme = ctypes.windll.uxtheme
+        set_mode = uxtheme[_UXTHEME_SET_PREFERRED_APP_MODE]
+        set_mode.restype = ctypes.c_int
+        set_mode.argtypes = (ctypes.c_int,)
+        set_mode(_PREFERRED_APP_MODE_FORCE_DARK)
+        # Menu themes are cached per process and the cache is already filled with
+        # the light one by the time we get here, so asking is not enough.
+        flush = uxtheme[_UXTHEME_FLUSH_MENU_THEMES]
+        flush.restype = None
+        flush.argtypes = ()
+        flush()
+        return True
+    except Exception as _exc:
+        crashlog.note(_exc, "gui.theme")
+    return False
+
+
 def apply_dark_titlebar(window):
     """Ask DWM for a dark title bar on this window. No-op off Windows.
 
@@ -356,6 +407,9 @@ def apply_dark_titlebar(window):
     """
     if not sys.platform.startswith("win"):
         return False
+    # Piggy-backed here (it is a no-op after the first call) so that no window can
+    # ever ask for a dark frame and still get a white system menu inside it.
+    apply_dark_app_mode()
     try:
         import ctypes
         window.update_idletasks()

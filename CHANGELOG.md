@@ -113,6 +113,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The window menu is now dark, like the rest of the app.** Clicking the bean icon in the title
+  bar (or pressing Alt+Space) opened a bright white "Minimise / Maximise / Close" menu in every
+  window, and the right-click menu on the Connections table had a light rim around it. Both now
+  match the dark interface. The file pickers ("Save file...", "Load file...") are dark too.
 - **The "About" window no longer cuts off its text.** The licence sentence and the "sends no
   data anywhere" line ran off the right edge and were simply chopped - in Polish, where the
   sentences are longer than the English they were translated from. They now wrap to the width
