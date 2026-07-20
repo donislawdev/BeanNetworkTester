@@ -17,6 +17,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### BREAKING
+
+- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
+  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
+  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
+  while `--help` advertised "force the GUI". On real WinDivert that meant
+  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
+  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
+  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
+  to stderr and stdout stays clean.
+- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
+  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
+  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
+  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
+  than widening it.
+- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
+  loss and getting zero without being told is the class of quiet lie this project removes), and
+  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
+  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
+  than declined.
+- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
+  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
+- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
+- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
+
 ### CI: one run of the test suite, under coverage
 
 - **`.github/workflows/ci.yml`: the `tests` job ran the whole suite twice over, plus two

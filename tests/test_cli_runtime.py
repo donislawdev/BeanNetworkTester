@@ -194,6 +194,21 @@ def test_usage_errors_keep_argparse_exit_code_2():
     check("exit: unknown flag -> USAGE(2)", raised == exitcodes.USAGE, f"({raised})")
 
 
+def test_gui_flag_combined_with_settings_is_a_usage_error():
+    """``--gui --loss 30`` must not quietly become a headless impairment run.
+
+    ``main()`` routes a bare ``--gui`` to the GUI, so the flag only reaches the CLI
+    runner when it was combined with something else. That used to be accepted and
+    then ignored: the flag advertised "force the GUI" and instead started a session
+    with no window and no STOP button - on a tool that breaks the user's network.
+    """
+    code, out, err = cli(["--gui", "--loss", "30", "--duration", "600"])
+    check("--gui + settings -> USAGE(2)", code == exitcodes.USAGE, f"(code={code})")
+    check("--gui: the reason is on stderr", "--gui" in err, f"({err!r})")
+    # a failed run never writes to the data channel (same contract as test_cli_fuzz)
+    check("--gui: stdout stays clean", not out.strip(), f"({out!r})")
+
+
 # --- output channels -------------------------------------------------------- #
 
 

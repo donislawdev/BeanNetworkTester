@@ -3,6 +3,18 @@
 All notable changes to Bean Network Tester.
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
+## [Unreleased]
+
+### BREAKING
+
+- **BREAKING:** **`--gui` no longer accepts any other option.** Combining it with settings -
+  for example `--gui --loss 30 --duration 600` - used to open no window at all and quietly run
+  the impairment in the background instead, with no STOP button anywhere and only Ctrl+C in a
+  console you may not have been watching. It now stops immediately with a usage error (exit
+  code 2) and says what to do: launch the GUI with no arguments, or drop `--gui` to run those
+  settings from the command line. If a script of yours relied on the old behaviour, delete
+  `--gui` from it and it behaves exactly as before.
+
 ## [0.3.0] - 2026-07-20
 
 ### Changed

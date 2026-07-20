@@ -500,7 +500,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--log-conns` | wypisz na końcu zaobserwowane połączenia |
 | `--repro-out PLIK` | zapisz raport reprodukcji (JSON) |
 | `--simulate` | sztuczny ruch zamiast WinDivert (test bez Windows, bez sterownika i bez admina) |
-| `--gui` | wymuś GUI |
+| `--gui` | otwórz GUI. Działa **tylko samodzielnie** - GUI ma własne kontrolki, więc połączenie tej flagi z ustawieniami jest błędem użycia (kod 2), a nie cichym przebiegiem bez okna |
 | `--version` | wersja i koniec |
 
 **Wyjście i diagnostyka**
