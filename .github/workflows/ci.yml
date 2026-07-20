@@ -66,24 +66,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Test suite (engine + i18n + CLI + fail-safe + tables + GUI smoke)
-        run: python -m pytest tests
-
-      # The two suites that find what example-based tests cannot: the filter
-      # mini-language runs in the packet hot path (it must never raise), and the
-      # CLI is the CI contract (every outcome has an exit code, never a traceback).
-      - name: Property-based tests + CLI fuzzing
-        run: python -m pytest tests/test_matchers_properties.py tests/test_cli_fuzz.py -q
-
-      # Threads are only dangerous together: a "running" engine with a dead capture
-      # thread means WinDivert is queueing the user's packets into a void.
-      - name: Concurrency chaos (fail-open, deadlocks, thread leaks)
-        run: python -m pytest tests/test_concurrency_chaos.py -q
-
+      # ONE run of the whole suite, under coverage. testpaths=["tests"] (pyproject)
+      # means this already includes the suites that used to own separate steps:
+      #   * property-based matchers + CLI fuzzing - the filter mini-language runs in
+      #     the packet hot path (it must never raise), and the CLI is the CI contract
+      #     (every outcome has an exit code, never a traceback);
+      #   * concurrency chaos - threads are only dangerous together: a "running"
+      #     engine with a dead capture thread means WinDivert is queueing the user's
+      #     packets into a void.
+      # Those steps re-ran tests the full run had just executed, on every matrix cell.
+      # pytest names the failing file, so the extra checkmarks bought no diagnosis.
+      #
       # COVERAGE_PROCESS_START is not optional: the GUI tests run in subprocesses,
       # and without it every line they exercise is reported as uncovered (the same
       # suite reads 51% instead of 77%). The gate lives in pyproject (fail_under).
-      - name: Coverage gate
+      - name: Test suite + coverage gate (engine, i18n, CLI, fail-safe, tables, chaos)
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: python -m pytest tests --cov=beantester --cov-report=term --cov-report=xml
