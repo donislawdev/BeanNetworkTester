@@ -359,7 +359,11 @@ class BeanEngine:
         """
         try:
             return self._ports.process_for_port(local_port)
-        except Exception:
+        except Exception as _exc:
+            # once(), not note(): this is the capture thread. A port table that
+            # started failing turns every row's process into "?" - worth one
+            # traceback, not one per packet.
+            crashlog.once("engine.ports", _exc)
             return ""
 
     def _pid_for(self, local_port):
@@ -370,7 +374,8 @@ class BeanEngine:
         """
         try:
             return self._ports.pid_for(local_port)
-        except Exception:
+        except Exception as _exc:
+            crashlog.once("engine.ports.pid", _exc)
             return None
 
     def stats_snapshot(self):

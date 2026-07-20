@@ -9,7 +9,7 @@ that refreshes itself and follows process trees) on top of
 :mod:`beantester.portmap` (the fast socket table). This module keeps the small,
 stable API the GUI, the CLI and the settings layer have always used.
 """
-from . import portmap
+from . import crashlog, portmap
 from .matchers import KIND_PROCESS, Matcher, parse_matcher
 from .targeting import NO_PROCESS, ProcessTargeting, resolve_ports
 
@@ -57,9 +57,11 @@ def find_process_ports(target):
 def port_process_map():
     """Best-effort map of local port -> process name (empty when unavailable)."""
     table = portmap.default_table()
-    try:
+    # Best-effort stays best-effort for the CALLER (an empty map just means the
+    # process column shows "?"), but the failure itself is recorded: a lookup that
+    # silently stops working looked identical to a machine with nothing to report.
+    with crashlog.quiet("processes.port_map"):
         table.refresh_if_stale()
         return {port: (table.name_of(pid) or str(pid))
                 for port, pid in table.snapshot().items()}
-    except Exception:
-        return {}
+    return {}

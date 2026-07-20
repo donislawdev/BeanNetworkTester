@@ -27,6 +27,8 @@ import sys
 import threading
 import time
 
+from . import crashlog
+
 REFRESH_S = 0.30          # a routine rebuild of the port table
 MISS_REFRESH_S = 0.05     # a rebuild forced by an unknown port (rate limited)
 INFO_TTL_S = 30.0         # how long a pid -> (name, ppid) entry survives unused
@@ -89,7 +91,7 @@ class _Native:
             ("udp", _AF_INET): MIB_UDPROW_OWNER_PID,
             ("udp", _AF_INET6): MIB_UDP6ROW_OWNER_PID,
         }
-        self._buffers = {}
+        self._sizes = {}            # (proto, family) -> bytes the table needed last time
 
     def _table(self, proto, family, out):
         """Append ``(port, pid)`` pairs of one table to ``out``."""
@@ -102,15 +104,22 @@ class _Native:
         table_class = (_TCP_TABLE_OWNER_PID_ALL if proto == "tcp"
                        else _UDP_TABLE_OWNER_PID)
 
-        # Grow (and keep) one buffer per table: the socket table is queried
-        # several times per second, so reallocating it every time would be pure
-        # garbage for the allocator.
-        size = wintypes.DWORD(self._buffers.get((proto, family), (None, 0))[1] or 8192)
+        # Start from the size this table needed last time. The socket table is
+        # queried several times per second and its size barely moves, so the first
+        # attempt normally fits and we skip the grow-and-retry round trip.
+        #
+        # The BUFFER is deliberately not reused. A previous version stored it and
+        # claimed to reuse it, but allocated a fresh one on every call anyway and
+        # never read the stored one back - so the cache only pinned memory. Real
+        # reuse was considered and rejected: it saves four allocations a few times
+        # a second and buys aliasing between calls in ctypes code, which is a poor
+        # trade in the module the packet path leans on.
+        size = wintypes.DWORD(self._sizes.get((proto, family)) or 8192)
         for _ in range(6):                       # the table can grow between calls
             buffer = ctypes.create_string_buffer(size.value)
             rc = call(buffer, ctypes.byref(size), False, family, table_class, 0)
             if rc == 0:
-                self._buffers[(proto, family)] = (buffer, size.value)
+                self._sizes[(proto, family)] = size.value
                 break
             if rc != _ERROR_INSUFFICIENT_BUFFER:
                 return False
@@ -130,13 +139,35 @@ class _Native:
                 out[port] = pid
         return True
 
+    FAMILY_NAMES = {_AF_INET: "v4", _AF_INET6: "v6"}
+
     def port_pid_map(self):
+        """``{local port: pid}`` from all four socket tables, or ``None``.
+
+        A PARTIAL result is still returned. Dropping to psutil because one table
+        of four stopped answering would trade a possible gap for a certain
+        slowdown, and the native path is what makes live targeting affordable at
+        all - so the gap is the better risk.
+
+        What it must not be is SILENT. A table that stops answering means sockets
+        this tool can no longer see, and a socket it cannot see is traffic the user
+        asked to impair sailing through untouched - which looks exactly like "the
+        application coped". ``once()`` keeps that free in the hot path, and the key
+        carries WHICH tables failed, so a different failure still gets recorded.
+        """
         out = {}
-        ok = False
+        failed = []
         for proto in ("tcp", "udp"):
             for family in (_AF_INET, _AF_INET6):
-                ok |= self._table(proto, family, out)
-        return out if ok else None
+                if not self._table(proto, family, out):
+                    failed.append(f"{proto}/{self.FAMILY_NAMES[family]}")
+        if len(failed) == 4:
+            return None                  # nothing answered at all: let psutil try
+        if failed:
+            crashlog.once("portmap.native." + ".".join(failed), RuntimeError(
+                "socket table(s) unavailable, the port map may be incomplete: "
+                + ", ".join(failed)))
+        return out
 
 
 def _make_native():

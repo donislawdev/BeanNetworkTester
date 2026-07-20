@@ -204,3 +204,103 @@ def test_port_process_map_maps_ports_to_names(fake_psutil):
           mapping.get(5001) == "chrome.exe", f"(got {mapping.get(5001)!r})")
     check("firefox port resolves to its process name",
           mapping.get(6001) == "firefox.exe", f"(got {mapping.get(6001)!r})")
+
+
+# -- port resolution fails LOUDLY (for us), quietly (for the user) ---------- #
+#
+# All three of these used to swallow. An empty map, a blank process name and a
+# partial socket table are all legitimate answers on a quiet machine, so a lookup
+# that had STOPPED WORKING was indistinguishable from one with nothing to report.
+# That is how "the process column is all ?" becomes a bug report nobody can act on.
+
+
+def _spy_on_crashlog(monkeypatch):
+    """Capture what would be recorded, without touching the crash directory."""
+    from beantester import crashlog
+    recorded = []
+    monkeypatch.setattr(crashlog, "_once_seen", set())   # once() dedupes per process
+    monkeypatch.setattr(crashlog, "record",
+                        lambda exc, **kw: recorded.append(kw))
+    return recorded
+
+
+def test_port_process_map_records_a_failure_instead_of_swallowing_it(monkeypatch):
+    from beantester import portmap
+    from beantester.processes import port_process_map
+
+    class _Broken:
+        def refresh_if_stale(self, *a, **k):
+            raise RuntimeError("socket table exploded")
+
+    recorded = _spy_on_crashlog(monkeypatch)
+    monkeypatch.setattr(portmap, "default_table", lambda: _Broken())
+
+    mapping = port_process_map()
+    check("the caller still gets a usable empty map", mapping == {}, f"({mapping!r})")
+    check("the failure was recorded, not swallowed", len(recorded) == 1, f"({recorded})")
+    check("it is attributed to its subsystem",
+          recorded[0].get("subsystem") == "processes.port_map", f"({recorded})")
+
+
+def test_a_partial_socket_table_is_reported_not_silently_trusted(monkeypatch):
+    """One table of four failing used to leave `ok` True and cache a map with holes.
+
+    A hole means sockets the tool cannot see, and traffic the user asked to impair
+    sailing through untouched - which looks exactly like "the application coped".
+    """
+    from beantester.portmap import _AF_INET6, _Native
+
+    native = _Native.__new__(_Native)        # no Windows needed: _table is faked
+    native._sizes = {}
+    recorded = _spy_on_crashlog(monkeypatch)
+    seen = []
+
+    def fake_table(proto, family, out):
+        seen.append((proto, family))
+        if proto == "udp" and family == _AF_INET6:
+            return False                     # this one stops answering
+        out[1000 + len(seen)] = 4000 + len(seen)
+        return True
+
+    monkeypatch.setattr(native, "_table", fake_table)
+    result = native.port_pid_map()
+
+    check("all four tables are attempted", len(seen) == 4, f"({seen})")
+    check("a partial map is still returned (psutil is an order slower)", result)
+    check("the gap was recorded", len(recorded) == 1, f"({recorded})")
+    check("the record names the table that failed",
+          "udp/v6" in str(recorded[0].get("subsystem", "")), f"({recorded})")
+
+
+def test_every_socket_table_failing_falls_back_to_psutil(monkeypatch):
+    """Nothing answered at all: return None so refresh() tries psutil instead."""
+    from beantester.portmap import _Native
+
+    native = _Native.__new__(_Native)
+    native._sizes = {}
+    _spy_on_crashlog(monkeypatch)
+    monkeypatch.setattr(native, "_table", lambda *a: False)
+
+    check("no usable map -> None, so the psutil fallback runs",
+          native.port_pid_map() is None)
+
+
+def test_engine_records_a_broken_port_table_instead_of_going_quiet(monkeypatch):
+    """The capture thread keeps going (a blank name beats a dead session), but the
+    reason no longer disappears. ``once()``, not ``note()``: this is the hot path."""
+    class _Broken:
+        def process_for_port(self, port):
+            raise RuntimeError("boom")
+
+        def pid_for(self, port):
+            raise RuntimeError("boom")
+
+    recorded = _spy_on_crashlog(monkeypatch)
+    engine = BeanEngine()
+    engine._ports = _Broken()
+
+    check("a failed name lookup still yields a blank", engine._process_for(1234) == "")
+    check("a failed pid lookup still yields None", engine._pid_for(1234) is None)
+    check("both failures were recorded", len(recorded) == 2, f"({recorded})")
+    check("recorded as hot-path, so they cost one traceback each",
+          all(kw.get("source") == "hot-path" for kw in recorded), f"({recorded})")
