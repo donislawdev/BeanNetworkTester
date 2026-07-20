@@ -113,6 +113,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The "About" window no longer cuts off its text.** The licence sentence and the "sends no
+  data anywhere" line ran off the right edge and were simply chopped - in Polish, where the
+  sentences are longer than the English they were translated from. They now wrap to the width
+  of the window, at any size and any display scaling.
+- **A button no longer stays lit after you close the window it opened.** Clicking "About" or the
+  settings gear left the button looking as if the mouse were still hovering over it, for the rest
+  of the session.
+
 - **"Restore the last profile on startup" now works for your own profiles.** Saving a profile
   makes it the one you are using, but the tool remembered only profiles picked from the list -
   so after "Save...", closing and reopening the app brought back whichever ready-made profile you

@@ -17,6 +17,7 @@ SCREEN = [1920, 1080]     # mutable: tests can pretend to be on a 1366x768 lapto
 DPI = [96.0]
 CLIPBOARD = []            # what the app copied (Ctrl+C, "copy row", repro CLI)
 GRAB = [None]             # what currently holds the Tk grab (an open popdown)
+FOCUS = [None]            # the widget holding keyboard focus (ttk paints it)
 
 
 class TclError(Exception):
@@ -44,6 +45,7 @@ class W:
         self.pack_info = None
         self.grid_info = None
         self.bindings = {}
+        self.states = set()         # ttk widget state flags (active, focus, ...)
         master = args[0] if args else kw.get("master")
         self.master = master if isinstance(master, W) else None
         if isinstance(master, W):
@@ -187,8 +189,26 @@ class W:
             self.kw["minsize"] = tuple(a)
         return self.kw.get("minsize")
 
-    def state(self, *a):
-        return "normal"
+    def focus_set(self):
+        FOCUS[0] = self
+
+    focus_force = focus_set
+
+    def focus_get(self):
+        return FOCUS[0]
+
+    def state(self, spec=None):
+        """ttk state flags: ``state(["!active"])`` clears one, ``["active"]`` sets it.
+
+        A Toplevel's ``state()`` is a different call (window state), so with no
+        argument the Root keeps answering "normal" - see Root.state below.
+        """
+        for flag in spec or ():
+            if str(flag).startswith("!"):
+                self.states.discard(str(flag)[1:])
+            else:
+                self.states.add(str(flag))
+        return tuple(sorted(self.states))
 
     def after(self, _ms, func=None, *a):
         return None                 # timers never fire on their own in the fake
@@ -211,6 +231,10 @@ class W:
 
 
 class Root(W):
+    def state(self, spec=None):
+        """A toplevel's window state, not ttk flags ("normal" / "iconic")."""
+        return "normal"
+
     def geometry(self, spec=None):
         if spec is None:
             return self.winfo_geometry()

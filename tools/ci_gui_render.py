@@ -33,9 +33,22 @@ try:
 except (AttributeError, ValueError):
     pass
 
+import tempfile                                      # noqa: E402
 import tkinter as tk                                 # noqa: E402
 
+import beantester.gui.profiles as _profiles          # noqa: E402
+import beantester.gui.ui_state as _ui_state          # noqa: E402
+
+# Run against EMPTY user state. Reading the developer's own bean_network_tester_ui.json
+# made this check a liar: the file remembers a language, so the "en" pass rendered
+# whatever language the last real run had left behind - and a saved window geometry
+# would have hidden exactly the clipping we are here to find.
+_TMP = tempfile.mkdtemp()
+_ui_state.UiStateStore.__init__.__defaults__ = (os.path.join(_TMP, "ui.json"),)
+_profiles.ProfileStore.__init__.__defaults__ = (os.path.join(_TMP, "profiles.json"),)
+
 import bean_network_tester as n                      # noqa: E402
+from beantester.gui.windows import WINDOWS           # noqa: E402
 
 GEOMETRY = "1366x768"
 BUTTON_CLASSES = ("TButton", "Button")
@@ -67,8 +80,24 @@ def _clip(widget):
     return req, got
 
 
+def _wraps(widget):
+    """True when the label is allowed to wrap (a wraplength is set)."""
+    try:
+        return int(str(widget.cget("wraplength")) or 0) > 0
+    except (tk.TclError, ValueError):
+        return False
+
+
 def _scan(root):
-    buttons, labels = [], []
+    """Clipped widgets, split into the three kinds that mean different things.
+
+    ``cut`` is the damaging one: a label with no wraplength that does not fit is
+    TRUNCATED on screen - there is nowhere for the rest of the sentence to go.
+    That is what happened to the About window's licence and privacy lines, and it
+    went unnoticed for as long as every clipped label was filed under "it wraps,
+    probably". A label that does wrap is still reported, but only as a note.
+    """
+    buttons, labels, cut = [], [], []
     for widget in _walk(root):
         try:
             if not widget.winfo_ismapped():
@@ -86,8 +115,13 @@ def _scan(root):
         if not clip:
             continue
         req, got = clip
-        (buttons if is_button else labels).append((text, req, got))
-    return buttons, labels
+        if is_button:
+            buttons.append((text, req, got))
+        elif _wraps(widget):
+            labels.append((text, req, got))
+        else:
+            cut.append((text, req, got))
+    return buttons, labels, cut
 
 
 def _cancel_afters(root):
@@ -110,33 +144,49 @@ def check_language(code):
     root.update_idletasks()
     root.update()
 
-    buttons, labels = [], []
+    buttons, labels, cut = [], [], []
+
+    def scan():
+        b, l, c = _scan(root)
+        buttons.extend(b)
+        labels.extend(l)
+        cut.extend(c)
+
     for page in ("control", "statistics", "connections"):
         app.select_page(page)
         root.update_idletasks()
         root.update()
-        b, l = _scan(root)
-        buttons += b
-        labels += l
-    try:
-        app.open_window("about")
-        root.update_idletasks()
-        root.update()
-        b, l = _scan(root)
-        buttons += b
-        labels += l
-    except Exception as exc:                     # noqa: BLE001 - report, keep going
-        print(f"  [{code}] could not open the About window: {exc}")
+        scan()
+    # EVERY registered window, not just About: a window nobody renders here is a
+    # window whose clipping nobody finds until a user sends a screenshot.
+    for window_id in sorted(WINDOWS):
+        try:
+            app.open_window(window_id)
+            root.update_idletasks()
+            root.update()
+            scan()
+            app.windows.close(window_id)
+        except Exception as exc:                 # noqa: BLE001 - report, keep going
+            print(f"  [{code}] could not open the {window_id!r} window: {exc}")
 
     buttons = sorted(set(buttons))
     labels = sorted(set(labels))
+    cut = sorted(set(cut))
     for text, req, got in labels:
         print(f"  [{code}] note: label narrower than requested "
               f"(req={req} got={got}): {text!r}")
+    for text, req, got in cut:
+        print(f"  [{code}] TRUNCATED LABEL - no wraplength, the text is CUT "
+              f"(req={req} got={got}): {text!r}")
     for text, req, got in buttons:
         print(f"  [{code}] CLIPPED BUTTON (req={req} got={got}): {text!r}")
-    ok = not buttons
-    print(f"  [{code}] {'OK' if ok else f'{len(buttons)} clipped button(s)'}")
+    ok = not buttons and not cut
+    problems = []
+    if buttons:
+        problems.append(f"{len(buttons)} clipped button(s)")
+    if cut:
+        problems.append(f"{len(cut)} truncated label(s)")
+    print(f"  [{code}] {'OK' if ok else ', '.join(problems)}")
 
     # Teardown is best-effort: the result above is already computed, and a noisy
     # Tk destroy (registered windows, scheduled callbacks) must never fail the run.

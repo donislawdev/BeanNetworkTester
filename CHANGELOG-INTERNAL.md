@@ -17,6 +17,36 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI fixes: truncated About text, a button left highlighted, and a render check that lied
+
+- **`panels/about.py` uses `labels.wrapping_label` for every prose line** (author, copyright,
+  licence, licence terms, the no-telemetry line, the third-party heading). A plain `ttk.Label`
+  never wraps - it is CUT at the frame edge - and the helper written for exactly this was not
+  being used here. `pad` is `2 * 12 + 16`: the `padx` on both sides plus the few pixels a wrapped
+  `ttk.Label` requests on top of its `wraplength` (measured against the render check, not
+  guessed - at `pad=30` the widest wrapped line still overhung by 12 px).
+- **`App._release_focus()`, called from `App.open_window`.** ttk gives a button keyboard focus
+  when it is clicked and `theme.py` paints `focus` exactly like `active` (both -> `BTN_HOVER` +
+  `ACC` border), so closing a window handed focus back to the button that opened it and it kept
+  looking hovered. Focus goes to the toplevel instead, and the invoking widget's `active`/`focus`
+  flags are cleared - the same remedy `theme.unhighlight_combobox` applies to a readonly combobox.
+- **`tools/ci_gui_render.py` now FAILS on a truncated label** instead of filing every clipped
+  label under "it probably wraps". The split is `wraplength > 0` -> note (it re-wraps), no
+  `wraplength` -> `TRUNCATED LABEL`, which is a real defect. This check had been printing the two
+  About lines as harmless notes for as long as they had been broken.
+- **The render check also opens EVERY window in the `WINDOWS` registry** (it only ever opened
+  About), and runs against an **empty user state** - `UiStateStore`/`ProfileStore` are pointed at
+  a temp dir like `tests/gui_harness.py` does. It was reading the developer's own
+  `bean_network_tester_ui.json`, so the `--lang en` pass rendered whatever language that file
+  remembered (the "en" run was reporting Polish strings), and a saved geometry could have hidden
+  the very clipping the check exists to find.
+- **`tests/fake_tk.py`** models keyboard focus (`FOCUS`, `focus_set`/`focus_get`) and ttk state
+  flags (`W.states`, `state(["!active"])` sets/clears; `Root.state()` still answers `"normal"`,
+  since a toplevel's `state()` is the window state, not ttk flags).
+- **Tests:** `tests/test_windows.py::test_opening_a_window_takes_the_highlight_off_the_button_that_opened_it`
+  and `::test_every_prose_label_in_the_about_window_can_wrap`. Both were confirmed to fail against
+  the pre-fix code, and the render check was confirmed to report `2 truncated label(s)` on it.
+
 ### GUI: the profile picker is a ttk.Combobox again (convention 41)
 
 - **`gui/pages/control.py::_build_profiles`: `ttk.Menubutton` + `tk.Menu` -> `ttk.Combobox`**
