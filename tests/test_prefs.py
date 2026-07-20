@@ -123,6 +123,39 @@ def test_restore_last_profile_fills_only_when_enabled():
     """)
 
 
+def test_restore_last_profile_covers_the_users_own_profiles():
+    """Saving a profile is how a user ends up ON their own profile, and that path
+    used to change the current profile without remembering it - so the restore
+    preference reopened on the preset picked before the save. Deleting one must
+    remember the fallback, not the name that no longer exists."""
+    run_gui("""
+        import beantester.gui.dialogs as _dlg
+        app.set_pref("restore_profile", True)
+        app.select_profile("presets.terrible")
+
+        _dlg.ask_string = lambda *a, **k: "My VPN"
+        app.save_profile()
+        assert app._profile_key == "My VPN", app._profile_key
+        assert app.ui.get("profile") == "My VPN", app.ui.get("profile")
+
+        # a fresh start would refill it, not the preset picked before the save
+        app.select_profile("presets.perfect")
+        app.ui.set("profile", "My VPN")
+        app._restore_last_profile()
+        assert app._profile_key == "My VPN", app._profile_key
+
+        app.delete_profile()
+        assert app.ui.get("profile") == "presets.perfect", app.ui.get("profile")
+
+        # a profile that vanished while the app was closed: ignored, and the dead
+        # pointer is dropped rather than kept forever
+        app.ui.set("profile", "gone for good")
+        app._restore_last_profile()
+        assert app._profile_key == "presets.perfect", app._profile_key
+        assert app.ui.get("profile") == "", app.ui.get("profile")
+    """)
+
+
 def test_settings_window_number_field_validates_before_persisting():
     """A numeric preference edited in the window persists only when valid, and
     paints the field red (without storing garbage) when it is not."""

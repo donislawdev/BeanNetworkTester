@@ -60,6 +60,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   a number copied out of its source file drifts, which is exactly what convention "one fact,
   one source" is about.
 
+### GUI fix: "restore the last profile" ignored the user's own profiles
+
+- **`App._set_profile_key(key)` is now the single writer of `_profile_key`** (`gui/app.py`).
+  Three paths change the current profile - `select_profile`, `save_profile`, `delete_profile` -
+  but only the first also wrote `ui["profile"]`, the key the `restore_profile` preference reads
+  on startup. Since **saving** is how a user ends up on their own profile, the preference
+  restored the preset picked before the save; picking an own profile from the list already
+  worked, which is why this looked like "it does not work for custom profiles". `delete_profile`
+  now remembers the fallback (`DEFAULT_PROFILE`) instead of the deleted name.
+- **The key is persisted on the spot** (`ui.persist()` inside `_set_profile_key`), the rule
+  `set_pref` already follows: a deliberate user choice must survive an unclean exit, unlike
+  session state written in `on_close`. One small atomic write per profile change.
+- **`App.__init__` keeps a plain `self._profile_key = DEFAULT_PROFILE`** (commented): routing it
+  through `_set_profile_key` would write the default into `ui.json` before
+  `_restore_last_profile` reads the remembered one.
+- **`_restore_last_profile` clears a dead pointer**: a name that resolves to neither a preset nor
+  a stored profile (deleted by hand, `profiles.json` quarantined as corrupt, removed by another
+  instance) is still ignored without an error, but `ui["profile"]` is reset so the file stops
+  carrying a ghost.
+- **Test:** `tests/test_prefs.py::test_restore_last_profile_covers_the_users_own_profiles` -
+  save remembers, delete falls back, a vanished profile is ignored AND forgotten.
+
 ### Docs: intro wording and third-party links
 
 - **README intro (EN + PL)** reworded: leads with the product name (branding + the auto-snippet),

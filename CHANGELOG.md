@@ -113,6 +113,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Restore the last profile on startup" now works for your own profiles.** Saving a profile
+  makes it the one you are using, but the tool remembered only profiles picked from the list -
+  so after "Save...", closing and reopening the app brought back whichever ready-made profile you
+  had picked before saving. Your choice is also written to disk the moment you make it, so it
+  survives even if the app is killed rather than closed. Deleting a profile no longer leaves the
+  setting pointing at it, and a profile that disappears while the app is closed is simply
+  ignored on the next start, as before.
+
 - **Secondary windows now open with the dark title bar right away.** The About, Settings and
   Event-log windows briefly showed a white Windows title bar until you clicked them; they now
   paint dark from the moment they open.
