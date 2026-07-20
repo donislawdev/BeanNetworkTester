@@ -172,6 +172,9 @@ class App:
         # NOT the displayed text: preset names are translated, so storing the label
         # meant that switching the language left the combobox showing an English
         # name over a Polish list (and any lookup by that name failed).
+        # A plain assignment on purpose: _set_profile_key() would write this
+        # default into ui.json before _restore_last_profile() gets to read the
+        # remembered one.
         self._profile_key = DEFAULT_PROFILE
         self.profile_var = tk.StringVar(value="")
         self.loop_var = tk.BooleanVar(value=False)
@@ -223,8 +226,16 @@ class App:
         if not self.pref("restore_profile"):
             return
         key = str(self.ui.get("profile", "") or "")
-        if key and (key in PRESETS or key in self.profiles):
+        if not key:
+            return
+        if key in PRESETS or key in self.profiles:
             self.select_profile(key)
+        else:
+            # the profile is gone (deleted by hand, file quarantined as corrupt,
+            # removed by another instance): forget it instead of carrying a name
+            # that will never resolve again
+            self.ui.set("profile", "")
+            self.ui.persist()
 
     def _reveal(self):
         """Show the window once it is laid out (see the withdraw() above)."""
@@ -834,13 +845,27 @@ class App:
         unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
         self.load_selected_profile()
 
+    def _set_profile_key(self, key):
+        """Make ``key`` the current profile AND the one remembered for next start.
+
+        The single place that writes ``_profile_key``. It used to be written by
+        each of the three paths that change the current profile, and only one of
+        them (picking from the list) also remembered it - so saving a new profile,
+        which is how a user ENDS UP on their own profile, left "Restore the last
+        profile on startup" pointing at the preset picked before it. Persisting
+        right here, not on close, is the same rule preferences follow: a
+        deliberate choice must survive an unclean exit.
+        """
+        self._profile_key = key
+        self.ui.set("profile", key)
+        self.ui.persist()
+
     def select_profile(self, key):
         """Fill the form from a preset/profile id. Never applies by itself."""
         preset = PRESETS.get(key) or self.profiles.get(key)
         if not preset:
             return
-        self._profile_key = key
-        self.ui.set("profile", key)       # remembered for the restore-on-start pref
+        self._set_profile_key(key)
         for setting, value in preset_to_settings(preset).items():
             self.vars[setting].set(number_string(value))
         self._sync_profile_widgets()
@@ -885,7 +910,7 @@ class App:
             dialogs.show_error(self.root, T("log.error"), T("dialogs.values_numbers"))
             return
         self._persist_profiles()
-        self._profile_key = name
+        self._set_profile_key(name)      # saving one also SELECTS it - remember that
         self._sync_profile_widgets()
         self.log(f"{T('log.profile_saved')}: {name}")
 
@@ -895,7 +920,8 @@ class App:
             return                    # presets are not deletable (button is disabled)
         self.profiles.delete(name)
         self._persist_profiles()
-        self._profile_key = DEFAULT_PROFILE
+        # remember what we fall back TO, not the name that no longer exists
+        self._set_profile_key(DEFAULT_PROFILE)
         self._sync_profile_widgets()
         self.log(f"{T('log.profile_deleted')}: {name}")
 
