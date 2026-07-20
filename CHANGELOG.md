@@ -120,6 +120,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **A button no longer stays lit after you close the window it opened.** Clicking "About" or the
   settings gear left the button looking as if the mouse were still hovering over it, for the rest
   of the session.
+- **Keyboard focus and mouse hover no longer look the same.** Every button lit up in exactly the
+  same way whether the mouse was over it or the keyboard had landed on it, so you could not tell
+  the two apart - and a button that kept focus looked as if the cursor were parked on it. Hover
+  still fills the button; keyboard focus now draws a thin outline inside it instead.
 
 - **"Restore the last profile on startup" now works for your own profiles.** Saving a profile
   makes it the one you are using, but the tool remembered only profiles picked from the list -

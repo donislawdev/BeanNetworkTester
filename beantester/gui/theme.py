@@ -8,6 +8,12 @@ Two rules this file exists to enforce:
   entry whose ``state`` is ``disabled`` keeps its normal colours unless the
   style declares a ``disabled`` map. Every interactive style below therefore
   carries one - otherwise the user cannot tell whether a field is live.
+* **Focus must not look like hover.** Both states existed and both painted the
+  same lighter fill, so "the keyboard is here" and "the mouse is over this" were
+  the same picture - and a button that kept focus after its window closed read as
+  stuck under the cursor. Hover is the FILL; focus is the RING (clam's
+  ``Button.focus`` element, via ``focuscolor``). No style may map ``focus`` to a
+  colour it also maps for ``active``; ``tools/ci_gui_render.py`` fails if one does.
 
 The combobox popdown is a classic Tk listbox living in its own toplevel; ttk
 styles do not reach it, so its colours are set through the option database in
@@ -111,51 +117,50 @@ def init_style(root=None):
     s.configure("TLabelframe.Label", background=BG, foreground=ACC, font=(FONT, 9, "bold"))
 
     # -- buttons ------------------------------------------------------------ #
+    # FOCUS AND HOVER MUST NOT LOOK THE SAME (see the module docstring). Hover is
+    # the fill; focus is the ring clam's ``Button.focus`` element draws INSIDE the
+    # button - every clam button layout has it, and at thickness 1 it costs no
+    # space (measured: a button is 82x31 with and without it; at 3 it grows to
+    # 86x35, which is why this is not scaled()).
     s.configure("TButton", background=BTN_BG, foreground=FG, borderwidth=1,
                 bordercolor=BTN_BORDER, lightcolor=BTN_BG, darkcolor=BTN_BG,
-                focuscolor=BTN_BG, relief="flat",
+                focuscolor=ACC, focusthickness=1, focussolid=True, relief="flat",
                 padding=(scaled(10), scaled(5)), font=(FONT, 9))
-    # A focused control MUST look focused (WCAG 2.4.7). clam draws a focus ring
-    # from the widget's focuscolor / the border's colour; the theme used to gag it
-    # by setting focuscolor to the background, so keyboard users could not tell
-    # where they were. Bordered buttons get a solid accent outline on focus; the
-    # flat coloured buttons below get a contrasting focuscolor so their ring shows.
     s.map("TButton",
           background=[("disabled", DIS_BG), ("pressed", BTN_BORDER),
-                      ("focus", BTN_HOVER), ("active", BTN_HOVER)],
-          bordercolor=[("disabled", DIS_BG), ("focus", ACC), ("active", ACC)],
-          lightcolor=[("focus", ACC), ("active", BTN_HOVER)],
-          darkcolor=[("focus", ACC), ("active", BTN_HOVER)],
+                      ("active", BTN_HOVER)],
+          bordercolor=[("disabled", DIS_BG)],
+          lightcolor=[("active", BTN_HOVER)],
+          darkcolor=[("active", BTN_HOVER)],
           foreground=[("disabled", DIS_FG)])
+    # The coloured buttons carry their ring in their own ink colour: an accent-blue
+    # ring on an accent-blue button would be invisible.
     s.configure("Accent.TButton", background=ACC, foreground="#0c1220",
                 font=(FONT, 10, "bold"), padding=scaled(8), borderwidth=0,
                 focuscolor="#0c1220")
     s.map("Accent.TButton",
-          background=[("disabled", DIS_BG), ("focus", "#6fb0ff"),
-                      ("active", "#6fb0ff")],
+          background=[("disabled", DIS_BG), ("active", "#6fb0ff")],
           foreground=[("disabled", DIS_FG)])
     # STOP is a different action -> a different colour
     s.configure("Stop.TButton", background=STOP_C, foreground="#1a0d0c",
                 font=(FONT, 10, "bold"), padding=scaled(8), borderwidth=0,
                 focuscolor="#1a0d0c")
     s.map("Stop.TButton",
-          background=[("disabled", DIS_BG), ("focus", "#ff8378"),
-                      ("active", "#ff8378")],
+          background=[("disabled", DIS_BG), ("active", "#ff8378")],
           foreground=[("disabled", DIS_FG)])
     # "Apply changes" while the form differs from what the engine runs
     s.configure("Dirty.TButton", background=UP_C, foreground="#20160a",
                 font=(FONT, 9, "bold"), padding=scaled(6), borderwidth=0,
                 focuscolor="#20160a")
     s.map("Dirty.TButton",
-          background=[("disabled", DIS_BG), ("focus", "#ffc978"),
-                      ("active", "#ffc978")],
+          background=[("disabled", DIS_BG), ("active", "#ffc978")],
           foreground=[("disabled", DIS_FG)])
     # the "?" cheat-sheet button next to a filter-expression field
     s.configure("Help.TButton", background=BG2, foreground=ACC,
                 font=(FONT, 9, "bold"), borderwidth=0, focuscolor=ACC,
                 padding=(scaled(3), 0))
     s.map("Help.TButton",
-          background=[("focus", BTN_BG), ("active", BTN_BG), ("disabled", BG2)],
+          background=[("active", BTN_BG), ("disabled", BG2)],
           foreground=[("disabled", DIS_FG)])
 
     # Donate: visible, but an outline button - it must not compete with START,
@@ -164,29 +169,28 @@ def init_style(root=None):
                 bordercolor=DONATE_C, lightcolor=BG, darkcolor=BG, focuscolor=DONATE_C,
                 font=(FONT, 9, "bold"), borderwidth=1, padding=(scaled(10), scaled(4)))
     s.map("Donate.TButton",
-          background=[("focus", "#3a2b33"), ("active", "#3a2b33"),
-                      ("disabled", DIS_BG)],
+          background=[("active", "#3a2b33"), ("disabled", DIS_BG)],
           foreground=[("disabled", DIS_FG)],
-          bordercolor=[("focus", DONATE_C), ("active", DONATE_C)])
+          bordercolor=[("active", DONATE_C)])
 
     # collapsible section header
     s.configure("Section.TButton", background=BG, foreground=ACC,
                 font=(FONT, 9, "bold"), borderwidth=0, focuscolor=ACC,
                 padding=(scaled(2), scaled(3)), anchor="w")
-    s.map("Section.TButton", background=[("focus", BG2), ("active", BG2)])
+    s.map("Section.TButton", background=[("active", BG2)])
 
     # header gear: an icon-only button that opens the Settings window. Flat on the
     # header at rest (bevel colours pinned to BG so clam draws no raised edge), but
     # a small icon needs a REAL hover chip - the old BG->BG2 map was a one-shade
-    # change nobody could see, so it never read as clickable. Hover/focus light up
-    # to the secondary-button surface; press goes a shade lighter.
+    # change nobody could see, so it never read as clickable. Hover lights up to
+    # the secondary-button surface; press goes a shade lighter.
     s.configure("Gear.TButton", background=BG, bordercolor=BG, lightcolor=BG,
                 darkcolor=BG, borderwidth=0, focuscolor=ACC, relief="flat",
                 padding=scaled(5))
     s.map("Gear.TButton",
           background=[("disabled", BG), ("pressed", BTN_HOVER),
-                      ("focus", BTN_BG), ("active", BTN_BG)],
-          bordercolor=[("focus", ACC), ("active", BTN_BORDER)],
+                      ("active", BTN_BG)],
+          bordercolor=[("active", BTN_BORDER)],
           lightcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)],
           darkcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)])
 
