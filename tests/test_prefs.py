@@ -213,6 +213,42 @@ def test_settings_window_number_field_validates_before_persisting():
     """)
 
 
+def test_settings_window_number_field_says_why_it_is_red():
+    """A red border is not a reason. The registry field on the same window (the
+    row limit) named its allowed range from day one, while the preferences only
+    turned red - the same mistake looked like two different bugs. Every reason is
+    listed under its own group, and the line disappears once the value is good."""
+    run_gui("""
+        panel = app.open_window("settings")
+        from beantester.gui.prefs import PREFS_BY_KEY
+        err, keys = panel._pref_errors["prefs.group_view"]
+        assert "chart_seconds" in keys and "log_lines" in keys
+
+        panel._pref_vars["chart_seconds"].set("2")          # bounds are (10, 3600)
+        panel._on_pref_number(PREFS_BY_KEY["chart_seconds"])
+        assert err.pack_info is not None, "the reason must be shown, not just the red box"
+        first = err.kw["text"]
+        assert "3600" in first and "10" in first, first
+
+        # a second bad field in the same group adds a reason, it does not replace one
+        panel._pref_vars["log_lines"].set("3")              # bounds are (50, 100000)
+        panel._on_pref_number(PREFS_BY_KEY["log_lines"])
+        both = err.kw["text"]
+        assert first in both and "100000" in both, both
+
+        # fixing one clears only its own reason
+        panel._pref_vars["chart_seconds"].set("120")
+        panel._on_pref_number(PREFS_BY_KEY["chart_seconds"])
+        assert first not in err.kw["text"] and "100000" in err.kw["text"], err.kw["text"]
+
+        # fixing the last one takes the whole line away again
+        panel._pref_vars["log_lines"].set("500")
+        panel._on_pref_number(PREFS_BY_KEY["log_lines"])
+        assert err.kw["text"] == "", err.kw["text"]
+        assert err.pack_info is None
+    """)
+
+
 def test_reset_ui_layout_forgets_window_state():
     run_gui("""
         from beantester.gui import dialogs

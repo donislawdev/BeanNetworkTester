@@ -17,6 +17,26 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [0.3.0]
 
+### GUI fix: numeric preferences went red without a reason
+
+- **`gui/panels/settings.py`: the `Pref` NUMBER rows grew the error line the registry fields
+  already had.** `_on_pref_number` caught the `ValueError` from `parse_number` and dropped it,
+  keeping only `style="Bad.TEntry"` - yet that exception already carries the translated
+  `errors.field_range` / `errors.field_number` text, min and max included. The same window
+  rendered the row limit through `ControlForm`, which does show it (`form.py::validate_section`),
+  so one dialog answered the user's "what is allowed here?" for one field and stonewalled for the
+  other two.
+- **Shape copied from `ControlForm`, not invented:** one `Bad.TLabel` per `PREF_GROUPS` group
+  (`wrapping_label`, packed only while non-empty so the card keeps its height), reasons joined
+  with the same `"  •  "` separator, live messages kept per pref key in `_pref_messages` so
+  fixing one field clears only its own reason. `_pref_errors[group] = (label, number_keys)`.
+- No new i18n keys and no registry change: `prefs.py` is untouched, the text comes from the
+  `errors.*` keys that already exist in both languages (convention 9 needs nothing here).
+  Persisting is unchanged - an invalid value still never reaches `App.set_pref`.
+- Tests: `test_prefs.py::test_settings_window_number_field_says_why_it_is_red` asserts the reason
+  appears with its bounds, that a second bad field in the group ADDS a reason instead of replacing
+  it, that fixing one field clears only its own, and that the last fix unpacks the line again.
+
 ### GUI fix: the running-state icon never reached the main window (Tk `-default` trap)
 
 - **`gui/icon.py`: new `show_running_icon` / `show_idle_icon`** (over `_set_icon`), called from
