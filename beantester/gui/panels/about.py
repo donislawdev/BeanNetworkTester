@@ -16,6 +16,7 @@ The donate button is here as well as in the header - deliberately. Being in two
 places is not clutter for a voluntary ask that funds the work; being nowhere near
 the "who made this" screen would be strange.
 """
+from functools import partial
 import tkinter as tk
 from tkinter import ttk
 import webbrowser
@@ -24,6 +25,7 @@ from ... import crashlog, legal
 from ...appinfo import (APP_NAME, AUTHOR, COPYRIGHT, LICENSE_NAME, SUPPORT_URL,
                         __version__)
 from ...i18n import T
+from ..labels import wrapping_label
 from ..scaling import scaled
 from ..theme import FIELD, FG, MONO_FONT, MUT
 from ..tooltip import add_tooltip
@@ -48,22 +50,30 @@ class AboutWindow(PanelWindow):
                   style="Muted.TLabel").pack(side="left", padx=(scaled(10), 0),
                                              anchor="s", pady=(0, scaled(3)))
 
-        ttk.Label(body, text=T("about.author", author=AUTHOR)).pack(
-            side="top", anchor="w", padx=pad)
-        ttk.Label(body, text=COPYRIGHT, style="Muted.TLabel").pack(
-            side="top", anchor="w", padx=pad, pady=(0, scaled(8)))
+        # Every line here is PROSE, and prose in a translation is longer than the
+        # English it was written from - the licence sentence and the privacy line
+        # both ran off the right edge and were simply cut. A plain ttk.Label never
+        # wraps; wrapping_label ties its wraplength to the window (see gui/labels.py).
+        # The pad allows for the padx below on BOTH sides, plus the few pixels a
+        # wrapped ttk.Label asks for on top of its wraplength (measured, not
+        # guessed: at pad=30 the widest wrapped line still overhung by 12 px).
+        line = partial(wrapping_label, body, pad=2 * 12 + 16)
+        line(text=T("about.author", author=AUTHOR), style="TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad)
+        line(text=COPYRIGHT, style="Muted.TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad, pady=(0, scaled(8)))
 
-        ttk.Label(body, text=T("about.license", license=LICENSE_NAME)).pack(
-            side="top", anchor="w", padx=pad)
-        ttk.Label(body, text=T("about.license_terms"), style="Muted.TLabel").pack(
-            side="top", anchor="w", padx=pad, pady=(0, scaled(8)))
+        line(text=T("about.license", license=LICENSE_NAME), style="TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad)
+        line(text=T("about.license_terms"), style="Muted.TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad, pady=(0, scaled(8)))
 
         # The privacy line is the one people came here to read.
-        ttk.Label(body, text=T("about.no_telemetry"), style="Good.TLabel").pack(
-            side="top", anchor="w", padx=pad, pady=(0, scaled(10)))
+        line(text=T("about.no_telemetry"), style="Good.TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad, pady=(0, scaled(10)))
 
-        ttk.Label(body, text=T("about.third_party")).pack(
-            side="top", anchor="w", padx=pad)
+        line(text=T("about.third_party"), style="TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad)
 
         # A read-only text box, not a table: this is prose plus links, and it has
         # to be selectable so someone can copy a URL into a browser or a ticket.

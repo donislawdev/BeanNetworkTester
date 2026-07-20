@@ -277,3 +277,45 @@ def test_about_window_shows_version_author_licence_and_third_parties():
         panel.close()
         assert not panel.is_open()
     """, lang="pl")
+
+
+def test_opening_a_window_takes_the_highlight_off_the_button_that_opened_it():
+    """A ttk button keeps keyboard focus after a click, and this theme paints
+    `focus` exactly like `active` - so a button that opened a window sat there
+    looking hovered for the rest of the session once the window was closed."""
+    run_gui("""
+        import fake_tk
+        from tkinter import ttk
+
+        button = ttk.Button(root, text="About")
+        button.focus_set()
+        button.state(["active", "focus"])
+        assert root.focus_get() is button
+
+        app.open_window("about")
+        assert root.focus_get() is root, root.focus_get()
+        assert button.state() == (), button.state()
+    """)
+
+
+def test_every_prose_label_in_the_about_window_can_wrap():
+    """The licence and privacy sentences are longer in translation than in English
+    and were CUT at the window edge (a plain ttk.Label never wraps). Every one of
+    them goes through wrapping_label now; tools/ci_gui_render.py fails on a
+    truncated label, this keeps the intent visible in the fast suite."""
+    run_gui("""
+        panel = app.open_window("about")
+
+        def labels(widget, found=None):
+            found = [] if found is None else found
+            for child in widget.winfo_children():
+                if child.kw.get("text") and "wraplength" in child.kw:
+                    found.append(child)
+                labels(child, found)
+            return found
+
+        wrapping = labels(panel.body)
+        texts = [w.kw["text"] for w in wrapping]
+        for key in ("about.license_terms", "about.no_telemetry", "about.third_party"):
+            assert bnt.T(key) in texts, (key, texts)
+    """)

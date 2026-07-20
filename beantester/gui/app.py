@@ -613,7 +613,24 @@ class App:
         gets the dark title bar, the DPI sizing, the remembered geometry and the
         language-switch rebuild.
         """
+        self._release_focus()
         return self.windows.open(window_id)
+
+    def _release_focus(self):
+        """Take focus (and any stale hover) off the control that just acted.
+
+        ttk hands a button keyboard focus when it is clicked, and this theme paints
+        `focus` exactly like `active` - so a button that opened a window sat there
+        looking permanently hovered once that window was closed and focus came back
+        to it. Giving focus to the window itself is what ``unhighlight_combobox``
+        does about the same symptom on a readonly combobox.
+        """
+        with crashlog.quiet("gui.app"):
+            widget = self.root.focus_get()
+            if widget is not None and widget is not self.root:
+                with crashlog.quiet("gui.app"):
+                    widget.state(["!active", "!focus"])     # ttk widgets only
+            self.root.focus_set()
 
     def row_limit(self):
         """Most rows a table may show (0 = no limit).
