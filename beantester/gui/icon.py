@@ -188,3 +188,47 @@ def apply_window_icon(root):
         except Exception:
             idle = running = None
     return idle, running
+
+
+# Tk's ``iconphoto(True, img)`` is ``-default``: the icon for toplevels created
+# FROM NOW ON. On Windows that lands on the window CLASS, and a window that owns
+# an icon of its own - which the main window does, from ``iconbitmap(bean.ico)``
+# above - keeps showing that one. So the running swap used to be invisible
+# exactly where it matters (title bar, taskbar) while the recording dot DID show
+# up on the next dialog opened, which is how the bug was spotted. Both calls are
+# needed: ``False`` for this window, ``True`` so later windows match the state.
+def _set_icon(window, image, default_too=True):
+    try:
+        if default_too:
+            window.iconphoto(True, image)
+        window.iconphoto(False, image)
+        return True
+    except Exception as _exc:
+        crashlog.note(_exc, "gui.icon")
+        return False
+
+
+def show_running_icon(window, running):
+    """Put the recording-dot icon on ``window`` (and on windows opened later)."""
+    if running is None:
+        return False
+    return _set_icon(window, running)
+
+
+def show_idle_icon(window, idle):
+    """Back to the resting icon, preferring the shipped ``bean.ico``.
+
+    The .ico carries hand-drawn 16/24/32 px frames; ``bean.png`` is a single
+    256 px image, so restoring through the photo would leave the taskbar on a
+    downscale of it for the rest of the session - softer than the icon the app
+    started with, and permanently so after the first capture.
+    """
+    ok = _set_icon(window, idle) if idle is not None else False
+    try:
+        ico = resource_path("bean.ico")
+        if sys.platform.startswith("win") and os.path.exists(ico):
+            window.iconbitmap(ico)
+            return True
+    except Exception as _exc:
+        crashlog.note(_exc, "gui.icon")
+    return ok

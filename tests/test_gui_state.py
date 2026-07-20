@@ -30,6 +30,32 @@ def test_language_switch_keeps_running_state():
     """)
 
 
+def test_the_running_icon_lands_on_the_window_not_just_the_default():
+    """The recording dot must reach the window the user is looking at.
+
+    ``iconphoto(True, img)`` is Tk's ``-default``: the icon for toplevels created
+    from then on. On Windows it lands on the window class, and the main window
+    keeps the icon it owns from ``iconbitmap(bean.ico)`` - so the swap showed the
+    dot on the next dialog opened and never on the title bar or the taskbar,
+    which is exactly how the bug reached a release. Measured with WM_GETICON: the
+    window's icon handle did not change at all until the ``False`` call was added.
+    """
+    run_gui("""
+        app.root.kw["icons"] = []               # forget the startup icon calls
+        app.running = True
+        app._sync_running_ui()
+        icons = app.root.kw["icons"]
+        assert ("window", app._icon_running) in icons, icons
+        assert ("default", app._icon_running) in icons, icons   # future toplevels
+
+        app.root.kw["icons"] = []
+        app.running = False
+        app._sync_running_ui()
+        icons = app.root.kw["icons"]
+        assert ("window", app._icon_idle) in icons, icons
+    """)
+
+
 def test_language_switch_keeps_scenario_and_loop():
     run_gui("""
         import json, tempfile, os
