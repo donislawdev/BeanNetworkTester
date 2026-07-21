@@ -42,6 +42,33 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The chaos test was measuring the machine, not the code
+
+CI failed `test_the_model_worker_survives_a_live_connection_table` with
+`traffic really flowed while it did (8342)`. The test asserted `seen > 10_000` after a fixed three
+seconds - a threshold read off a dev machine, where the same three seconds produce hundreds of
+thousands of packets. A CI runner under coverage managed 8342, about fifteen times less.
+
+The interesting part is that the test had already reached the state it exists for: the
+`rows > 1000` assertion, checked one line earlier, PASSED. The table was big enough for the sort to
+be real work. Only the packet count - a proxy for the same thing, and a worse one - was out of
+range. A green run on a fast machine and a red one on a slow machine, with identical behaviour
+under test.
+
+Fixed by asserting the CONDITION and waiting for it, instead of assuming a duration produces it:
+
+- the request/poll loop now runs for at least `STRESS_SECONDS` and then keeps going until
+  `MIN_BUILDS` rebuilds have completed over a table of at least `MIN_ROWS` rows, with a 30 s hard
+  cap so a broken run still ends;
+- the packet-count assertion is gone. The row count already implies traffic - a thousand distinct
+  flows cannot exist without it - and counting packets measured the runner;
+- `FastDivert`'s docstring now says its measured throughput is a dev-machine number and not a
+  promise, so nobody turns it back into a threshold.
+
+Verified by simulating the slow runner rather than by hoping: throttled to ~3000 packets/s (below
+what CI managed), the old assertions fail with the exact CI symptom
+(`traffic really flowed while it did (2429)`) and the new ones pass. Unthrottled, both pass.
+
 ### A hot-path guard that watches the routes, not one object (audit item #8)
 
 The rule is one sentence: nothing on the capture or inject thread may ask the OS a question. It
