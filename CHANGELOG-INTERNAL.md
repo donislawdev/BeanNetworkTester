@@ -42,6 +42,34 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### --config with valid JSON of the wrong shape was a traceback, not an exit code (audit item #10)
+
+`settings.load_config_file` does a raw `json.load` and goes straight to `data.items()`. For
+`[1, 2, 3]`, `"x"`, `42`, `null` or `true` the parse succeeds and the type error lands one line
+later as an **AttributeError** - which `cli.py` does not catch, since it catches `ValueError` and
+`OSError`. Measured on all five shapes: a Python traceback on stderr and exit **1 (RUNTIME)**,
+where a bad config file is **CONFIG(3)**.
+
+Two contracts at once: convention 18 (every way of ending has a code from `exitcodes.py`) and the
+comment sitting directly above that `try` in `cli.py`, which promises "a clear CLI error, never a
+raw traceback". For a CI/CD pipeline reading the exit code, the difference is being told the tool
+crashed instead of being told its config is wrong.
+
+`load_config_file` now checks the parsed value is a dict and raises `ValueError` otherwise, which
+the existing handler already turns into `CONFIG(3)`. Deliberately NOT routed through
+`jsonfile.read_json`: quarantine is right for the app's own state files, but silently moving aside
+a file the user named explicitly on the command line would be a surprise.
+
+The GUI path is unaffected - `App.load_config_file` catches `Exception` and shows a dialog - so
+this was CLI-only, which is where the exit-code contract lives.
+
+Tests in `tests/test_ondisk_formats.py`: every shape in `BROKEN_JSON` through `--config` must give
+`CONFIG(3)`, an `error:` line on stderr and a clean stdout, plus the other direction - a
+well-formed config file still loads. Run in-process, so an exception escaping `run_cli` fails the
+test with its own traceback, which is the failure mode being guarded. Verified by mutation:
+without the check the suite fails with the original `AttributeError: 'list' object has no
+attribute 'items'`.
+
 ### ui.json: a valid dict with the wrong types stopped the app from starting (audit item #10)
 
 `jsonfile.read_json` guarantees the file parses and is a dict. Nothing beyond that - and

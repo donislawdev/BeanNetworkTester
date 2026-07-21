@@ -36,6 +36,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A settings file in the wrong form now gives a clear message instead of crashing.** If you
+  pointed `--config` at a JSON file that was readable but not a set of settings - a list, say, or
+  a single value, which is what some tools produce - the program stopped with a raw Python error
+  and reported itself as having crashed. It now says what it expected and stops with the "bad
+  configuration" code, so a script running it can tell the difference between "your file is wrong"
+  and "the tool broke".
 - **A damaged window-layout file no longer stops the program from starting.** The program
   remembers your window size, the page you were last on and which sections you had collapsed, in a
   small file next to it. That file is yours to edit, and it also gets copied between machines - and

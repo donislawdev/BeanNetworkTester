@@ -26,12 +26,40 @@ may cost you your settings, never your program.**
 validates every entry, drops what it cannot use and says so - and it is the shape
 the others now follow.
 """
+import io
 import json
 import os
 
+from beantester import exitcodes
+from beantester.cli import run_cli
 from beantester.gui.ui_state import DEFAULTS, UiStateStore
 from fakes import check
 from gui_harness import run_gui
+
+
+class _FakeClock:
+    """Virtual time, so a run that would sleep costs microseconds."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, seconds):
+        self.t += max(0.0, float(seconds))
+
+
+def cli(argv):
+    """Run the CLI in-process; returns ``(code, stdout, stderr)``.
+
+    In-process on purpose: an exception that escapes ``run_cli`` fails the test
+    with its own traceback, which is exactly the failure being guarded against.
+    """
+    clock = _FakeClock()
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(argv, sleep=clock.sleep, clock=clock, out=out, err=err)
+    return code, out.getvalue(), err.getvalue()
 
 # Shapes a JSON file arrives in when something went wrong. Valid JSON of the
 # wrong type is the interesting half: the parser is happy, so nothing downstream
@@ -130,6 +158,40 @@ def test_a_broken_ui_state_file_never_stops_the_app_from_starting():
                 failures.append(f"{key}={bad!r}: {type(exc).__name__}: {exc}")
         assert not failures, "the app did not start: " + "; ".join(failures)
     """ % (POISONED_UI_STATE,))
+
+
+# --------------------------------------------------------------------------- #
+# the config file (--config)
+# --------------------------------------------------------------------------- #
+def test_a_broken_config_file_is_a_coded_error_not_a_traceback(tmp_path):
+    """Convention 18: every way of ending has a code from ``exitcodes.py``.
+
+    ``[1, 2, 3]``, ``"x"``, ``42``, ``null`` and ``true`` are all valid JSON, so
+    ``json.load`` was happy and the type error surfaced one line later at
+    ``data.items()`` - an AttributeError the CLI does not catch. The user got a
+    Python traceback and exit RUNTIME(1) where a bad config file means CONFIG(3),
+    and a CI/CD pipeline reading the exit code was told the tool had crashed
+    rather than that its config was wrong.
+    """
+    for label, text in BROKEN_JSON.items():
+        path = tmp_path / f"config_{label.replace(' ', '_')}.json"
+        path.write_text(text, encoding="utf-8")
+        code, out, err = cli(["--config", str(path), "--simulate", "--dry-run"])
+
+        check(f"{label}: a bad config file is CONFIG(3)", code == exitcodes.CONFIG,
+              f"(code={code}, stderr={err!r})")
+        check(f"{label}: it explains itself on stderr", "error:" in err, f"({err!r})")
+        check(f"{label}: stdout stays clean for the data channel", out == "",
+              f"({out!r})")
+
+
+def test_a_config_file_that_is_a_json_object_still_loads(tmp_path):
+    """The other side of the check: the fix must not reject real config files."""
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"loss": 5, "duration": 1}), encoding="utf-8")
+    code, out, err = cli(["--config", str(path), "--simulate", "--dry-run"])
+    check("a well-formed config file is accepted", code == exitcodes.OK,
+          f"(code={code}, stderr={err!r})")
 
 
 def test_a_ui_state_file_that_is_not_json_at_all_is_quarantined(tmp_path):
