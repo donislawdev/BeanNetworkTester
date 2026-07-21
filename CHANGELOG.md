@@ -36,6 +36,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Ending a session now hands your network back at once, instead of a moment later.** When a run
+  finished - whether you pressed STOP or its time ran out - the tool stopped looking at packets
+  immediately, but kept its grip on your network traffic for a moment longer while it tidied up
+  after itself. In that moment Windows was still handing packets to something that was no longer
+  reading them, so a connection or two could stall right at the end of a run. The moment was
+  usually far too short to notice; if the tool happened to be busy working out which process you
+  were targeting, it stretched to about a quarter of a second. Your traffic is now let go first,
+  and the tidying up happens afterwards.
 - **Targeting could follow a process ID after the process was gone - and Windows hands those
   numbers out again.** Two things went wrong once that happened, both silently. Restart the
   application you are targeting and it could come back with a number the tool still remembered

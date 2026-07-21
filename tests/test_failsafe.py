@@ -97,13 +97,73 @@ def test_engine_stops_itself_when_the_duration_elapses():
     check("duration: time_left counts down", 0 < eng.time_left() <= 0.3 + 0.05,
           f"({eng.time_left()})")
 
-    check("duration: the engine stops itself", _wait_until(lambda: not eng.is_running()))
+    # ``is_running()`` goes False at the TOP of stop(), because ``_capture_loop``
+    # runs ``while self._running`` and has to end there. Everything stop()
+    # PROMISES - the divert closed, the STOP event logged, the workers joined -
+    # happens after it. So waiting on the flag and asserting a post-condition in
+    # the next statement is a race, and not a rare one: measured at 10 failures in
+    # 30 runs, which is what CI caught. Wait for the promise, not for the flag.
+    def stopped_completely():
+        kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
+        return (not eng.is_running() and divert.closed
+                and ("STOP", "events.duration_reached") in kinds)
+
+    check("duration: the engine stops itself", _wait_until(stopped_completely),
+          f"(running={eng.is_running()}, closed={divert.closed}, "
+          f"events={[(e[2], e[3]) for e in eng.events_snapshot()]})")
     check("duration: the reason is recorded", eng.stop_reason == "duration",
           f"({eng.stop_reason})")
     check("duration: the divert is released", divert.closed is True)
     kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
     check("duration: the event log says why",
           ("STOP", "events.duration_reached") in kinds, f"({kinds})")
+
+
+def test_stop_releases_the_divert_before_anything_that_can_block():
+    """Nothing drains the divert between ``_running = False`` and ``close()``.
+
+    ``_capture_loop`` runs ``while self._running``, so the flag going down IS the
+    end of draining: under a real WinDivert, whose ``recv()`` returns immediately
+    under traffic, the thread is gone within microseconds. Everything stop() does
+    after that leaves the divert OPEN while WinDivert keeps diverting into it -
+    and the steps in between can block. ``_resolver.stop()`` joins with a 0.25 s
+    timeout and a resolve in flight really uses it (measured in an earlier
+    session: STOP took 252 ms with a scan running, against ~100 ms idle).
+
+    Measured with a divert whose ``recv()`` returns immediately and a 200 ms
+    resolver join: the divert used to stay open and undrained for 200.06 ms after
+    the capture thread had left. It now closes BEFORE that thread finishes
+    leaving, which is the point - closing is what ends it.
+
+    Asserted as ORDER rather than as elapsed time, so it cannot flake.
+    """
+    eng = BeanEngine()
+    divert = QuietDivert()
+    order = []
+
+    real_close = divert.close
+
+    def close():
+        order.append("divert.close")
+        real_close()
+
+    divert.close = close
+
+    real_resolver_stop = eng._resolver.stop
+
+    def resolver_stop(*a, **kw):
+        order.append("resolver.stop")
+        return real_resolver_stop(*a, **kw)
+
+    eng._resolver.stop = resolver_stop
+
+    eng.start("test", divert=divert)
+    eng.stop()
+
+    check("stop() closed the divert", "divert.close" in order, f"({order})")
+    check("stop() stopped the resolver", "resolver.stop" in order, f"({order})")
+    check("the divert is released BEFORE the blocking joins",
+          order.index("divert.close") < order.index("resolver.stop"), f"({order})")
 
 
 def test_no_duration_means_no_deadline():

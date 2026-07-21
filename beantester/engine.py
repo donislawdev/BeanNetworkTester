@@ -539,6 +539,29 @@ class BeanEngine:
             self._stop_mono = time.monotonic()
             self._stop_wall = time.time()
             self.stop_reason = reason
+            # FIRST, before anything that can block. Closing the divert unblocks a
+            # capture thread stuck in recv() AND releases the WinDivert driver
+            # (which otherwise keeps its .sys file locked - see driver.py).
+            #
+            # The order matters because ``_capture_loop`` runs ``while self._running``:
+            # the line above has already ended it, so from this point NOTHING is
+            # draining the divert while WinDivert keeps diverting into it. Every step
+            # that used to sit in between can block - ``_resolver.stop()`` joins with
+            # a 0.25 s timeout and a resolve in flight really does use it (measured:
+            # STOP took 252 ms with a scan running, against ~100 ms idle). That was up
+            # to a quarter of a second of the user's packets queued into a void, which
+            # is the exact failure FAIL-OPEN exists to prevent (convention 20). It is
+            # invisible on a synthetic divert, whose recv() blocks, and shows up on the
+            # real one, whose recv() returns immediately under traffic.
+            #
+            # It must NOT move above ``self._running = False``: recv() would then raise
+            # while the session still looked live, so ``_capture_loop`` would take the
+            # ``_fail_stop`` path and report a fault for an ordinary stop.
+            if self._divert is not None:
+                try:
+                    self._divert.close()
+                except Exception as _exc:
+                    crashlog.note(_exc, "engine")
             self.stop_scenario()
             # Joins: the resolver holds OS handles and must stop touching them when
             # the session does, not "eventually".
@@ -546,14 +569,6 @@ class BeanEngine:
             self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
             with self._cv:
                 self._cv.notify_all()
-            # closing the divert unblocks a capture thread stuck in recv() AND
-            # releases the WinDivert driver (which otherwise keeps its .sys file
-            # locked - see beantester/driver.py)
-            if self._divert is not None:
-                try:
-                    self._divert.close()
-                except Exception as _exc:
-                    crashlog.note(_exc, "engine")
             # join the worker threads before releasing self._divert: they read the
             # attribute live, so a quick stop->start would otherwise leave an old
             # capture thread consuming packets from the NEW session's divert
