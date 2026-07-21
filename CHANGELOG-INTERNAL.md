@@ -42,6 +42,49 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The model worker meets a live engine (audit item #11, part 1)
+
+`test_concurrency_chaos.py` was engine-only, and the seven `AsyncModel` tests all feed the worker
+a fake `build`. Nothing put the two together - which matters because `ConnectionsPage.refresh()`
+hands the worker **the engine itself**, not a snapshot of it (a snapshot is ~70 ms at half a
+million rows, most of what moving the sort off the UI thread bought back). So `_build_model` calls
+`connections_snapshot()` on the worker thread, and that returns `list(self._conns.values())`:
+the outer list is a copy taken under the lock, but every row in it is the live dict the capture
+thread keeps updating. `model_worker.py` asserts in prose that this is safe. Nothing checked it.
+
+New `test_the_model_worker_survives_a_live_connection_table` runs the real pipeline - snapshot,
+filter, sort, totals, scope - on the real `AsyncModel` against a real engine under load, while
+settings and targeting churn underneath.
+
+**The traffic had to be built for it, and the reason is measured.** `SyntheticDivert` sleeps once
+per packet, and Windows timer granularity turns that into a ceiling: it delivers **~1900
+packets/s whatever `gen_kbps` says** (2000 kbps and 1 Gbps both land there), over a flow space of
+three local ports against three hard-coded remote addresses - so the connection table stops at
+**12 rows** however long a test runs. A model-worker test on that table sorts twelve rows and
+proves nothing. `FastDivert` (test-local, unthrottled) measures **~126 000 packets/s and ~125 000
+connection rows in three seconds**. It stays in the test file on purpose: production has no use
+for an unthrottled generator, and widening `SyntheticDivert` to make a test look better would be
+changing the tool to suit the test.
+
+Verified by mutation, and the negatives are recorded in the test docstring so nobody re-derives
+them:
+
+- **caught:** `connections_snapshot` returning the live `dict.values()` view instead of a copy
+  under the lock - the tempting optimisation here, and the one that turns every rebuild into a
+  race with flow creation.
+- **not caught:** taking the copy without the lock (window too narrow to hit in a few seconds);
+  iterating a row (`dict(c)`, `**c`, `.items()`). The second is harmless only because `_log_conn`
+  builds each row with its full key set and never adds one later, so a row never changes size -
+  if that ever stops being true, this test will not warn anybody.
+
+The test watches `crashlog.note` as well as the thread excepthook. `AsyncModel._run` catches
+everything, records it and keeps the previous table on screen, so a worker raising on every build
+would otherwise leave a green test and a quietly frozen table. It also asserts it ran in the
+regime it claims (builds completed, table over 1000 rows, over 10 000 packets seen): a green run
+that never got there would be decorative.
+
+Stability: the file was run 10 times consecutively, 0 failures.
+
 ### stop() releases the divert before anything that can block
 
 CI caught `test_failsafe.py::test_engine_stops_itself_when_the_duration_elapses` failing on
