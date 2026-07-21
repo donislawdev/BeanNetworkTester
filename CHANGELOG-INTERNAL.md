@@ -42,6 +42,37 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Review pass over the whole targeting diff (four more findings)
+
+Read line by line before merge, on the principle that a green suite had already missed three
+things in this branch. Each one below was verified by running it, not by reasoning about it.
+
+- **The watchdog's new port refresh could cancel the memory work.** `refresh_if_stale()` was put
+  FIRST inside the tick's existing `try`, so a socket-table failure aborted the block and
+  `_trim_conns()` plus `core.drain_retired()` never ran for that tick - the connection log would
+  grow unbounded because a NAME lookup failed. Now its own `try`: cosmetic work and memory safety
+  are different failure domains. Verified with a table that raises on every refresh: `_trim_conns`
+  still ran 6 times in 1.5 s and the row count stayed under the cap.
+- **A failed resolve in `apply_targeting` left the engine and the core disagreeing.** The
+  synchronous announce-path refresh sat inside the `try` whose `except Exception` returns without
+  calling `set_target`, so `engine._targeting` held a new object the core had never been pointed
+  at. Moved out and wrapped in `crashlog.quiet`: a stale announcement is a far smaller problem
+  than two halves disagreeing about what is being impaired, and the resolver corrects it within a
+  tick. Verified with a table that always raises: engine, core and resolver all end up on the
+  same object.
+- **`TargetResolver.stop()` signalled `_stopping` outside its lock**, leaving a window where a
+  concurrent `start()` could clear the flag, spawn a thread, and have the late `set()` kill it on
+  its first check. `BeanEngine` serialises start/stop under `_stop_lock` so it could not happen
+  today, but a threading primitive should not depend on its caller for safety. Verified with 200
+  lifecycle cycles plus 300 start-immediately-after-stop pairs: no thread killed on arrival, no
+  leak, no dangling `on_miss`.
+- **Dead knobs removed from `ProcessTargeting`.** `interval`, `miss_interval` and `_last` were
+  still written but no longer read by anything - pacing lives in `TargetResolver` now. Leaving
+  constructor parameters that control nothing invites somebody to tune them. Also fixed the fake
+  in `test_engine_records_a_broken_port_table_instead_of_going_quiet`, whose `process_for_port`
+  lacked the `allow_refresh` keyword: it was raising `TypeError` instead of the `RuntimeError` the
+  test meant to exercise, and passing for the wrong reason.
+
 ### The connection log was a SECOND socket-table scan on the capture thread
 
 - **Moving targeting off the hot path did nothing for this one, and a green test suite said

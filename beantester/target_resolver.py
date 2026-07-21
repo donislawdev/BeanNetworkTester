@@ -80,14 +80,20 @@ class TargetResolver:
         with self._lock:
             thread, self._thread = self._thread, None
             previous, self._targeting = self._targeting, None
+            # Signalled INSIDE the lock, together with taking the thread. Setting
+            # it afterwards left a window where a concurrent start() could clear
+            # _stopping, spawn a fresh thread, and then have this set() kill it on
+            # its first loop check. BeanEngine serialises start/stop under its own
+            # lock so it cannot happen there today, but a threading primitive
+            # should not depend on its caller to be safe.
+            self._stopping.set()
+            self._wake.set()                # unblock an idle wait()
         if previous is not None:
             # Detach, so a packet arriving late cannot poke the event of a resolver
             # that is no longer listening. Harmless either way, but a dangling
             # callback into a dead worker is the kind of thing that becomes a real
             # bug the next time somebody touches this.
             previous.on_miss(None)
-        self._stopping.set()
-        self._wake.set()                    # unblock an idle wait()
         if thread is not None and thread.is_alive() and thread is not threading.current_thread():
             thread.join(timeout=timeout)
 

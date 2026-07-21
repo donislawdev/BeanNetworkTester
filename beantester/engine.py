@@ -593,13 +593,22 @@ class BeanEngine:
                 return
             # bounded memory is this thread's job now, so the capture thread never
             # pays for it (see _trim_conns)
+            # Keeping the socket table fresh is maintenance, so it belongs here for
+            # the same reason eviction does: the capture thread must not pay for it.
+            # _process_for() reads the table without ever rebuilding it, so this
+            # tick is what makes the connection log's process column work at all.
+            #
+            # Its OWN try block, and deliberately after the memory work below would
+            # be wrong too - this is cosmetic (process names) while trimming is
+            # memory safety. Sharing a failure path meant a socket-table hiccup
+            # silently cancelled _trim_conns() and drain_retired() for that tick,
+            # so the connection log would grow unbounded because a NAME lookup
+            # failed. Different jobs, different failure domains.
             try:
-                # Keeping the socket table fresh is maintenance, so it belongs
-                # here for the same reason eviction does: the capture thread must
-                # not pay for it. _process_for() reads the table without ever
-                # rebuilding it, so this tick is what makes the connection log's
-                # process column work at all.
                 self._ports.refresh_if_stale()
+            except Exception as _exc:
+                crashlog.note(_exc, "engine.ports")
+            try:
                 self._trim_conns()
                 # Same principle: freeing a retired 200k flow generation costs
                 # ~7-22 ms (measured). The capture thread must not spend that in a

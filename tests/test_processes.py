@@ -289,7 +289,11 @@ def test_engine_records_a_broken_port_table_instead_of_going_quiet(monkeypatch):
     """The capture thread keeps going (a blank name beats a dead session), but the
     reason no longer disappears. ``once()``, not ``note()``: this is the hot path."""
     class _Broken:
-        def process_for_port(self, port):
+        # the signature MATTERS: the engine reads with allow_refresh=False (it must
+        # never make the capture thread rebuild the table). A fake missing the
+        # keyword would raise TypeError instead, and the test would pass while
+        # exercising the wrong failure entirely.
+        def process_for_port(self, port, now=None, allow_refresh=True):
             raise RuntimeError("boom")
 
         def pid_for(self, port):

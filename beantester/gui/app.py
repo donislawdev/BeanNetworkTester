@@ -1690,7 +1690,7 @@ class App:
         try:
             self._drain_ui_queue()      # finished async start/stop (main thread only)
             self._drain_log()           # worker-thread log lines (main thread only)
-            self._drain_target_warning()   # worker-thread verdict (main thread only)
+            self._drain_target_warning()   # render the target verdict (main thread)
             self._drain_engine_warning()   # "the tool itself is dropping packets"
             self._sample()
             self._snapshot_target()     # main-thread read of the target field

@@ -16,8 +16,9 @@ the field ("I target chrome and the browser keeps working"):
 
 So targeting is a live object instead:
 
-* it rebuilds its port set every ``interval`` (300 ms by default, cheap thanks
-  to :mod:`beantester.portmap`),
+* its port set is rebuilt on a routine tick (300 ms by default, cheap thanks to
+  :mod:`beantester.portmap`) by :class:`~beantester.target_resolver.TargetResolver`,
+  which also owns the pacing - this class holds no timing knobs of its own,
 * an **unknown port asks for an early rebuild**, which shrinks the "new socket
   slips through" window from seconds to tens of milliseconds,
 * a socket belongs to the target when its owning process **or any of its
@@ -44,7 +45,7 @@ user loses connectivity while the UI still says "running".
 
 Now a miss only sets a flag and wakes :class:`~beantester.target_resolver.TargetResolver`,
 which rebuilds on its own thread. The flag is the reason the wake-up is free:
-``Event.set()` takes a lock, so it is called only on the FALSE -> TRUE transition,
+``Event.set()`` takes a lock, so it is called only on the FALSE -> TRUE transition,
 at most once per resolver cycle, while the flag itself is a plain bool (atomic
 under the GIL). ``refresh()`` stays public and synchronous for one-shot callers
 (``resolve_ports``, ``make_targeting``) and for tests.
@@ -62,19 +63,19 @@ from . import portmap
 class ProcessTargeting:
     """The set of local ports owned by the processes matching an expression."""
 
-    def __init__(self, matcher, table=None, interval=portmap.REFRESH_S,
-                 miss_interval=portmap.MISS_REFRESH_S, clock=time.monotonic):
+    def __init__(self, matcher, table=None, clock=time.monotonic):
+        # No interval/miss_interval here any more. They used to drive the rate
+        # limiting inside __contains__; the pacing now lives entirely in
+        # TargetResolver, and leaving dead knobs on the constructor would invite
+        # somebody to tune something that controls nothing.
         self.matcher = matcher
         self.expression = getattr(matcher, "raw", str(matcher))
         self.table = table if table is not None else portmap.default_table()
-        self.interval = float(interval)
-        self.miss_interval = float(miss_interval)
         self.clock = clock
         self._lock = threading.RLock()
         self._ports = frozenset()
         self._names = ()
         self._pids = frozenset()
-        self._last = 0.0
         self._refreshes = 0
         # Set by the packet path when it is asked about a port it does not know;
         # cleared by the resolver before each rebuild. A plain bool on purpose -
@@ -114,7 +115,6 @@ class ProcessTargeting:
             self._ports = frozenset(port for port, pid in port_pid.items()
                                     if pid in pids)
             self._names = tuple(sorted(n for n in names if n))
-            self._last = now
             self._refreshes += 1
             return self._ports
 
