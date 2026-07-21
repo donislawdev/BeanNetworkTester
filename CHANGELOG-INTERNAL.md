@@ -42,6 +42,61 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Property tests for the decision pipeline (audit item #9)
+
+`BeanCore.decide()` is a twelve-step pipeline over twenty-odd interacting fields, and every test
+it had pinned ONE step at a time. `test_passthrough.py` already drove it with Hypothesis, but
+only in the "everything switched off" configuration, so the INTERACTION between armed steps was
+untested. New file `tests/test_core_properties.py`, 8 tests:
+
+- **Totality.** `decide()` never raises, across the settings space x packet shapes. An exception
+  there kills the capture thread with the divert still open, which is the fail-open failure of
+  convention 20. `flap_enabled` is generated INDEPENDENTLY of `flap_period`, so "enabled with a
+  zero period" stays covered - that combination is reachable only through the setter, because
+  `apply_settings` derives the flag from the period.
+- **Structural coherence.** `drop` and `releases` are the same statement made twice: a dropped
+  packet has no release times, a delivered one has one or two, a duplicate never precedes its
+  original, nothing is released before it arrived, and `emit_rst` implies a drop. The engine
+  injects straight from `releases`, so an incoherent Decision is a lost or a doubled packet.
+- **Pipeline order.** Each deterministic gate (lan, block, nat, rst, flap, mtu, syn), armed alone
+  against 100% loss/corruption/duplication/spike, still names its own reason; and an earlier gate
+  beats a later one. The order is documented as a contract in the module docstring - this states
+  it as a test.
+- **An unnamed drop belongs to loss.** With `loss = 0` every drop carries a reason. That is how
+  the engine picks the counter, and `test_passthrough`'s DAMAGE_COUNTERS assertions rest on it.
+- **Out of scope means untouched, and leaves no trace.** An off-target packet neither charges the
+  token bucket nor writes a flow-table entry. Not covered anywhere before: if observation charged
+  the bucket, merely watching a busy machine would eat the shaped link of the application under
+  test, and the measurement would be wrong invisibly.
+- **A bounded buffer bounds the added delay.** Generalises `test_bandwidth_buffer` across rates,
+  packet sizes and buffer depths.
+
+Two details worth recording, because they cost time:
+
+- The bound in the buffer property is `max(buffer_s, size / rate)`, NOT `buffer_s`. A packet
+  arriving into an EMPTY buffer is always accepted, even when its own serialisation takes longer
+  than the whole buffer - deliberate, and guarded by
+  `test_bandwidth_buffer.test_empty_buffer_never_blacks_out_the_link`. Writing the bound as plain
+  `buffer_s` yields a test that is RED against correct code: measured, a 10 ms buffer with a
+  65535 B packet at 1 KB/s leaves the bucket 64 s ahead of `now`, 6400x the buffer.
+- `set_schedule()` reads `time.monotonic()` directly, so a core carrying a schedule is only
+  deterministic once `reset_buckets(t)` has run after it. Production always does
+  (`BeanEngine.start`); a property test that skips it flakes on the schedule position. Recorded
+  in the test module docstring rather than changed - the coupling is harmless in production, and
+  a rewrite here buys no stability.
+
+**These tests found no bug.** The pipeline survived every attempt to falsify them before the file
+existed: 3000 Hypothesis examples across the settings space and 300-seed sweeps per gate. Their
+value is the regression net. The pipeline GROWS - step 2c (blocking) was added after the pipeline
+was first documented - and a step inserted at the wrong position is invisible to example tests
+that each arm a single knob. Every property was then verified by MUTATION: each guard was
+confirmed to go RED against a deliberately broken `core.py` (the `rate > 0` guard removed, a drop
+carrying a release time, MTU moved ahead of LAN mode, flapping dropping unnamed, the targeting
+gate marking a packet in scope, the flow table written before that gate, and the tail drop
+disabled). A guard that stays green under its own mutation is decoration.
+
+Suite: 582 -> 590 tests, +4.9 s (149.3 s -> 154.2 s, measured on this machine, not estimated).
+
 ### The capture thread could still reach psutil - and the fix for that broke the process column
 
 Two findings from reviewing the PID-reuse diff, both verified by running them.
