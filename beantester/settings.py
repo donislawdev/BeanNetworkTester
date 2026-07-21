@@ -265,6 +265,15 @@ def _coerce_setting(key, value):
 def load_config_file(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
+    if not isinstance(data, dict):
+        # Valid JSON of the wrong shape. Without this check the next statement
+        # reaches ``data.items()`` and raises AttributeError - and the CLI catches
+        # ValueError and OSError, so the user got a raw Python traceback and exit
+        # RUNTIME(1) where the contract says CONFIG(3), against a comment in
+        # ``cli.py`` promising "a clear CLI error, never a raw traceback".
+        # A settings file that is a JSON ARRAY is not exotic: it is what anything
+        # writing one-entry-per-line produces.
+        raise ValueError(f"expected a JSON object, got {type(data).__name__}")
     s = dict(DEFAULT_SETTINGS)
     s.update({k: _coerce_setting(k, v) for k, v in data.items()
               if k in DEFAULT_SETTINGS})

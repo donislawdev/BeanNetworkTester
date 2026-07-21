@@ -36,6 +36,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--dry-run` now checks your scenario file as well.** That option exists to tell you whether a
+  run will work before you start it - but it never actually opened the scenario file, so a damaged,
+  empty or half-written scenario passed the check with "Configuration is valid" and then failed the
+  real run moments later. It now reads the scenario too and tells you straight away what is wrong
+  with it. A check that passes everything is worse than no check at all.
+- **A settings file in the wrong form now gives a clear message instead of crashing.** If you
+  pointed `--config` at a JSON file that was readable but not a set of settings - a list, say, or
+  a single value, which is what some tools produce - the program stopped with a raw Python error
+  and reported itself as having crashed. It now says what it expected and stops with the "bad
+  configuration" code, so a script running it can tell the difference between "your file is wrong"
+  and "the tool broke".
+- **A damaged window-layout file no longer stops the program from starting.** The program
+  remembers your window size, the page you were last on and which sections you had collapsed, in a
+  small file next to it. That file is yours to edit, and it also gets copied between machines - and
+  if an entry in it ended up the wrong shape, the program could fail to open at all, with an error
+  that gave no hint which file was to blame. Anything it cannot make sense of is now ignored, that
+  one setting goes back to its default, and the log tells you which entries were skipped. The rest
+  of your layout is kept.
 - **Ending a session now hands your network back at once, instead of a moment later.** When a run
   finished - whether you pressed STOP or its time ran out - the tool stopped looking at packets
   immediately, but kept its grip on your network traffic for a moment longer while it tidied up

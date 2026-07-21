@@ -42,6 +42,102 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### --dry-run called a scenario valid without ever opening it (audit item #10)
+
+`--dry-run` is the gate a CI/CD pipeline runs before the real command. It returned `OK` for every
+broken scenario file tried - a bare list, a string, a number, truncated JSON, an empty file - and
+printed "Configuration is valid", because the scenario was loaded only inside `_run_session`,
+which `--dry-run` returns before reaching. The same files correctly gave `SCENARIO(4)` on a real
+run. A gate whose verdict disagrees with the thing it gates is worse than no gate.
+
+`run_cli` now loads and validates the scenario inside the `--dry-run` branch, failing with
+`SCENARIO(4)` and the parse error. `--print-config` and `--save-config` return early as before and
+are deliberately left alone: neither claims the configuration is valid, they report or store the
+SETTINGS, and a scenario is not part of those.
+
+**Owner's call: this is a fix, not a BREAKING change** (`--dry-run` on a broken scenario goes from
+`OK` to `SCENARIO(4)`). A script relying on the old outcome is relying on the gate lying to it. No
+`### BREAKING` section, no version bump.
+
+Tests: every shape in `BROKEN_JSON` must be rejected by `--dry-run` *and* the output must not
+contain the word "valid"; the dry run and the real run must return the SAME code for the same
+file; and all seven shipped `scenarios/*.json` must pass `--dry-run` - the check that the fix does
+not start rejecting real files.
+
+Worth recording, because it briefly looked like a regression: the first draft of that test invented
+a scenario shape (`{"duration": 1, "loss": 5}`) instead of using the documented one
+(`{"at": seconds, "settings": {...}}`). `--dry-run` rejected it, correctly, and for a moment that
+read as the fix rejecting good files. The shipped-scenario loop was added as the answer - it
+cannot be argued with.
+
+Verified by mutation: without the change the suite fails with the original symptom, `code=0` and
+`Configuration is valid` for a broken scenario.
+
+### --config with valid JSON of the wrong shape was a traceback, not an exit code (audit item #10)
+
+`settings.load_config_file` does a raw `json.load` and goes straight to `data.items()`. For
+`[1, 2, 3]`, `"x"`, `42`, `null` or `true` the parse succeeds and the type error lands one line
+later as an **AttributeError** - which `cli.py` does not catch, since it catches `ValueError` and
+`OSError`. Measured on all five shapes: a Python traceback on stderr and exit **1 (RUNTIME)**,
+where a bad config file is **CONFIG(3)**.
+
+Two contracts at once: convention 18 (every way of ending has a code from `exitcodes.py`) and the
+comment sitting directly above that `try` in `cli.py`, which promises "a clear CLI error, never a
+raw traceback". For a CI/CD pipeline reading the exit code, the difference is being told the tool
+crashed instead of being told its config is wrong.
+
+`load_config_file` now checks the parsed value is a dict and raises `ValueError` otherwise, which
+the existing handler already turns into `CONFIG(3)`. Deliberately NOT routed through
+`jsonfile.read_json`: quarantine is right for the app's own state files, but silently moving aside
+a file the user named explicitly on the command line would be a surprise.
+
+The GUI path is unaffected - `App.load_config_file` catches `Exception` and shows a dialog - so
+this was CLI-only, which is where the exit-code contract lives.
+
+Tests in `tests/test_ondisk_formats.py`: every shape in `BROKEN_JSON` through `--config` must give
+`CONFIG(3)`, an `error:` line on stderr and a clean stdout, plus the other direction - a
+well-formed config file still loads. Run in-process, so an exception escaping `run_cli` fails the
+test with its own traceback, which is the failure mode being guarded. Verified by mutation:
+without the check the suite fails with the original `AttributeError: 'list' object has no
+attribute 'items'`.
+
+### ui.json: a valid dict with the wrong types stopped the app from starting (audit item #10)
+
+`jsonfile.read_json` guarantees the file parses and is a dict. Nothing beyond that - and
+`UiStateStore` trusted the rest, while its own module docstring promises that corruption "must
+never break startup, so every failure degrades to the defaults". Measured, by building a real
+`App` over a poisoned `bean_network_tester_ui.json`, three keys broke that promise outright:
+
+| key | value | result |
+|---|---|---|
+| `page` | `[1, 2, 3]` | `TypeError: cannot use 'list' as a dict key (unhashable type: 'list')` |
+| `conn_sort` | `[1, 2]` | `TypeError: object is not iterable` |
+| `event_sort` | `"kb"` | `ValueError: dictionary update sequence element #0 has length 1; 2 is required` |
+
+The window never appeared, and the traceback named none of the files involved.
+
+`UiStateStore._clean` now drops values whose TYPE is not the one `DEFAULTS` promises, records
+which keys it ignored in `self.problem` (already surfaced by `App._report_storage_problems`
+through the existing `log.ui_state_problem` key, so no new i18n), and keeps everything else. It is
+deliberately the same shape as `ProfileStore._clean`, which has always done this for the other
+user file - the mechanism existed, it just was not applied here.
+
+**Only the TYPE is checked, and that is a measured decision, not caution.** Every wrong VALUE of
+the right type was tried first and already degrades gracefully: an unknown page id, an unknown
+stats sub-page, an unknown language code, a missing profile name, a nonsense geometry string, a
+negative or absurd sash position, a sort column that does not exist, `collapsed` holding ints or
+nested lists, `conn_sort` with a list under `col`. Validating further would add rules that catch
+nothing. Unknown keys are kept on purpose: `get` only reads keys it knows, and dropping them would
+silently discard state written by a newer version.
+
+New `tests/test_ondisk_formats.py` (4 tests, more coming for the config and scenario paths):
+per-key type fuzzing at the store level, the whole poison set driven through a real `App` in one
+subprocess, and the unparseable-file half - every shape in `BROKEN_JSON` must leave usable state,
+a reported problem and a `.corrupt-<timestamp>` file rather than a clobbered one.
+
+Verified by mutation: with `_clean` removed the suite fails with the original symptom,
+`the app did not start: page=[1, 2, 3]: TypeError: cannot use 'list' as a dict key`.
+
 ### The chaos test was measuring the machine, not the code
 
 CI failed `test_the_model_worker_survives_a_live_connection_table` with

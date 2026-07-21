@@ -517,7 +517,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 
 | Flaga | Opis |
 |---|---|
-| `--dry-run` | sprawdź konfigurację i wyjdź (nie dotyka sterownika, nie puszcza ruchu) - idealne do walidacji plików konfiguracji w pipeline |
+| `--dry-run` | sprawdź konfigurację i wyjdź (nie dotyka sterownika, nie puszcza ruchu) - idealne do walidacji plików konfiguracji w pipeline. Plik `--scenario` też jest wczytywany i sprawdzany, więc próbny przebieg i prawdziwy dają ten sam werdykt |
 | `--print-config` | wypisz efektywne ustawienia (po `domyślne < plik < preset < flagi`) jako JSON i wyjdź |
 | `--min-packets N` | zakończ kodem `6`, jeśli złapano mniej niż N pakietów |
 | `--fail-on-no-traffic` | skrót na `--min-packets 1` - **łapie filtr, który nie złapał niczego** |
