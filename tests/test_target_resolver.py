@@ -110,6 +110,69 @@ def test_stop_joins_the_thread_because_it_holds_os_handles():
     check("stop() joined, it did not merely signal", not resolver.is_running())
 
 
+def test_stop_never_waits_for_a_scan_in_flight():
+    """STOP is the control this tool may never make slow.
+
+    A resolve is not always cheap. Measured on a normal desktop: **1.7 seconds**
+    the first time (25 PIDs own sockets but the process-info cache holds 346 - the
+    expensive part is one full ``psutil.process_iter()``), against 1.4 ms once
+    warm. An earlier version of this joined with a 2 s timeout, so pressing STOP
+    while that scan was in flight blocked for 1.6 s - on the button the user
+    reaches for precisely because they have just broken their own network.
+
+    Not joining that is safe: ``stop()`` has already cleared the target and set the
+    stop flag, so a straggler finishes at most one more scan into an object nobody
+    reads any more, then exits. It is a daemon either way.
+    """
+    class _SlowTable:
+        def __init__(self, delay):
+            self.delay = delay
+            self.inside = threading.Event()
+
+        def refresh(self, now=None, force=False):
+            self.inside.set()
+            time.sleep(self.delay)
+            return True
+
+        def snapshot(self):
+            return {}
+
+        def name_of(self, pid):
+            return ""
+
+        def ancestors(self, pid, depth=8):
+            return []
+
+    slow = _SlowTable(3.0)               # far longer than any sane join timeout
+    targeting = ProcessTargeting(bnt.parse_target("app"), table=slow)
+    resolver = TargetResolver(interval=0.02, min_interval=0.0)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver is inside a scan", slow.inside.wait(timeout=5))
+
+        t0 = time.monotonic()
+        resolver.stop()
+        elapsed_ms = (time.monotonic() - t0) * 1000
+        check("stop() did not wait for the scan", elapsed_ms < 900,
+              f"({elapsed_ms:.0f} ms)")
+    finally:
+        resolver.stop()
+        time.sleep(3.1)                  # let the straggler retire before we leave
+
+
+def test_stop_does_join_an_idle_resolver():
+    """The other half: the common case must still be clean, not merely fast."""
+    targeting, _ = _targeting()
+    resolver = TargetResolver(interval=5.0)
+    resolver.retarget(targeting)
+    resolver.start()
+    check("the resolver settled", _wait(lambda: resolver.rebuilds >= 1))
+
+    resolver.stop()
+    check("an idle resolver is joined, not abandoned", not resolver.is_running())
+
+
 def test_retargeting_swaps_a_reference_instead_of_churning_threads():
     """Applying settings repeatedly must not start and stop a thread each time."""
     first, _ = _targeting("chrome")

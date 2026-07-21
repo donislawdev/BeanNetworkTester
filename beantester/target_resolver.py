@@ -75,8 +75,21 @@ class TargetResolver:
                                             daemon=True)
             self._thread.start()
 
-    def stop(self, timeout=2.0):
-        """Stop the thread and WAIT for it: it holds OS handles."""
+    # Long enough that an IDLE resolver is always joined (it is parked in wait(),
+    # so it exits in microseconds), short enough that a scan in flight can never
+    # hold STOP up. Measured on a normal desktop: a cold resolve is 1.7 SECONDS
+    # (25 PIDs own sockets but the info cache holds 346 - the expensive part is one
+    # full psutil.process_iter()), against 1.4 ms once warm. Joining that would have
+    # meant a 1.6 s STOP, and STOP is the control this tool may never make slow: it
+    # is how the user undoes the damage they just did to their own network.
+    #
+    # Not joining is safe. stop() has already cleared _targeting and set _stopping,
+    # so a straggler finishes at most one more scan - into an object nobody reads
+    # any more - and then exits at its next loop check. It is a daemon either way.
+    JOIN_S = 0.25
+
+    def stop(self, timeout=JOIN_S):
+        """Stop the thread, waiting only briefly - never for a scan in flight."""
         with self._lock:
             thread, self._thread = self._thread, None
             previous, self._targeting = self._targeting, None

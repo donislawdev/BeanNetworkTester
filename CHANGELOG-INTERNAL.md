@@ -42,6 +42,40 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### STOP no longer waits for a resolve, and the number that explains why
+
+- **Measured, because nobody here knew it: a COLD resolve costs 1.7 SECONDS.** On this desktop
+  25 PIDs own sockets but the process-info cache ends up with 346 entries - the expensive part is
+  one full `psutil.process_iter()`, triggered the moment a protected PID refuses `psutil.Process`.
+  Once warm the same resolve is **1.4 ms**. A thousandfold difference that every fake in the
+  suite hides, because fakes answer instantly.
+- **That made `stop()` slow, and STOP is the control this tool may never make slow.** The
+  resolver joined with a 2 s timeout, so pressing STOP while a cold scan was in flight blocked
+  for **1647 ms** (measured; with an artificially slow table it ate the full 2000 ms and still
+  left the thread running). The old GUI refresher was an unjoined daemon, so this was a
+  regression introduced by the rewrite.
+- Fixed with `TargetResolver.JOIN_S = 0.25`: long enough that an IDLE resolver is always joined
+  (it is parked in `wait()` and exits in microseconds), short enough that a scan in flight can
+  never hold STOP up. Not joining a straggler is safe - `stop()` has already cleared the target
+  and set the stop flag, so it finishes at most one more scan into an object nobody reads and
+  then exits; it is a daemon either way. Re-measured: **252 ms** with a 1.7 s scan in flight,
+  **265 ms** with a 5 s one, **100 ms** idle (and that 100 ms is the engine's other joins).
+- Guards: `test_stop_never_waits_for_a_scan_in_flight` (deliberately slow table, asserts under
+  900 ms) and `test_stop_does_join_an_idle_resolver` (the other half - the common case must be
+  clean, not merely fast).
+- **A full GUI session was driven end to end for the first time** - real engine, real resolver,
+  synthetic traffic, real GUI code - because everything until then had exercised the engine
+  directly and left `_tick`'s new wiring unverified. Verified: resolver up for a targetless
+  session, a non-matching target raises the banner, a matching one takes it down, clearing the
+  field drops targeting, traffic never stalls, STOP stays under 900 ms and leaks no thread.
+  Pinned as `test_gui_state.py::test_a_gui_session_keeps_the_target_banner_honest`, on a fake
+  table so it stays fast and deterministic.
+- Two false alarms during that work, recorded so they are not re-chased: `ProcessTargeting`
+  defines `__len__`, so an object with an empty port set is FALSY - a diagnostic printing
+  `"y" if tg else "N"` reported a live target as missing. And `python` owns no sockets on this
+  machine, so a test using it as a "should match" target was wrong, not the code. Production uses
+  `is None` throughout, which is why neither reached the program.
+
 ### Review pass over the whole targeting diff (four more findings)
 
 Read line by line before merge, on the principle that a green suite had already missed three
