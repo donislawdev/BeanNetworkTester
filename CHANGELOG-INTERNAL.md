@@ -91,6 +91,21 @@ Engineering-review findings F3 + F4.
   holding them to this rule would fire on correct code. Mutation-checked: reverting F3
   turns the new guard red on `core.py:626`.
 
+### Fixed: gitignore coverage artefacts (F7), drop stale numbers from the CI comment (F8)
+
+Engineering-review findings F7 + F8. Neither ships; both are the "prose nothing guards"
+class convention 5 warns about.
+
+- **F7:** `.gitignore` matched only the bare `.coverage`, but `[tool.coverage.run]
+  parallel = true` (pyproject) GUARANTEES per-process `.coverage.<host>.<pid>.<rand>`
+  files, and the CI coverage step writes `coverage.xml`. Both appear as untracked after a
+  coverage run, and `git add -A` would have committed them (against convention 3). Added
+  `.coverage.*` and `coverage.xml`. Verified with `git check-ignore`.
+- **F8:** the comment on the coverage step claimed "the same suite reads 51% instead of
+  77%". 77 was the PREVIOUS gate value (it has since moved 75 -> 77 -> 80), and the real
+  measured split lives in pyproject (45% vs 83.03% when measured). The comment no longer
+  restates any number - it points at pyproject, the single source, so it cannot drift again.
+
 ### PROJECT_NOTES audit, part 2: measured numbers, and the coverage gate to 80
 
 Every "costs N ms" in the audit's blast radius was re-measured instead of trusted. Conditions
