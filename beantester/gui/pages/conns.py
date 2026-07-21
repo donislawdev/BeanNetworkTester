@@ -309,11 +309,16 @@ class ConnsPage:
             return
         self._last_build = now
         self._model.request({
-            # The ENGINE goes to the worker, not a snapshot of it: taking the
-            # snapshot is itself O(n) (a 500 000-row copy costs ~70 ms), and doing
-            # that here would put back on the UI thread most of what moving the
-            # sort off it just saved. connections_snapshot() takes its own lock, so
-            # the worker can call it safely.
+            # The ENGINE goes to the worker, not a snapshot of it - but NOT because
+            # the copy is expensive. It is not: measured 2026-07-21 (Win11 AMD64,
+            # CPython 3.14.6, median of 7) a pointer copy is 0.7 ms at the 200k cap
+            # and 2.4 ms at 500k. This comment used to claim ~70 ms, which is wrong
+            # by a factor of ~30 and would justify moving the call back here.
+            # The real reason is the LOCK: connections_snapshot() acquires the
+            # engine's _clock, the same lock the capture thread takes on every
+            # logged packet. Taking the snapshot here would make the UI THREAD queue
+            # behind the capture thread. On the worker that wait costs nobody a
+            # frame, and the worker may call it safely for exactly that reason.
             "engine": app.engine,
             "query": app.conn_query,
             "sort": dict(self.table.sort),

@@ -157,10 +157,25 @@ def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
 
     ``limit`` (0 = none) caps the result AND is used to pick the cheaper strategy:
     a partial selection (``heapq``) beats a full sort only when the limit is small
-    next to the input. Measured on 200 000 rows: taking the top 400 costs 28 ms
-    with ``nlargest`` against 107 ms with a sort, but taking the top 50 000 costs
-    371 ms with ``nlargest`` against 123 ms with a sort. Hence the ratio test
-    rather than "always use the heap".
+    next to the input. Hence the ratio test rather than "always use the heap".
+
+    Re-measured 2026-07-21 (Win11 AMD64, CPython 3.14.6, 200 000 synthetic rows with
+    well-spread keys, median of 7):
+
+    ======  ==========  ==============
+    top N   nlargest    sort + slice
+    ======  ==========  ==============
+       400  12.6 ms     27.7 ms
+     5 000  23.4 ms     26.7 ms
+    50 000  130.6 ms    28.0 ms
+    ======  ==========  ==============
+
+    The crossover is what this function encodes; the absolute figures move with the
+    machine and the Python build, so compare the two COLUMNS, never a number here
+    against a number you measured. (A previous revision quoted 28/107 and 371/123 ms
+    with no conditions attached - same shape, roughly 2-4x slower hardware. Beware
+    also of benchmarking this with keys drawn from a tiny range: Timsort exploits
+    the resulting runs and the sort column comes out artificially fast.)
     """
     out = _filter_connections(conns, query, proc_map)
     numeric = sort_col in ("remote_port", "local_port", "packets", "bytes",

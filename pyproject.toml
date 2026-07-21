@@ -50,16 +50,18 @@ concurrency = ["thread", "multiprocessing"]
 omit = ["*/__main__.py"]
 
 [tool.coverage.report]
-# The gate. Re-measured at 79% after the engineering-review test pass (pass-through
-# invariant, jsonfile, views, clilog, crashlog, scenario_runner, processes). Set two
-# points below the measurement so it blocks a real regression without failing on the
-# small run-to-run variance of the subprocess GUI coverage. Raise it as coverage
-# climbs - never lower it to make a red build go green.
+# The gate. Set a few points below the measured total so it blocks a real regression
+# without failing on the small run-to-run variance of the subprocess GUI coverage.
+# Raise it as coverage climbs - never lower it to make a red build go green.
 #
-# NOTE: it only means anything with COVERAGE_PROCESS_START set, because the GUI
-# tests run in subprocesses. Without it the same suite reports 51%, and a gate at
-# 75 would fail on a codebase that is actually fine.
-fail_under = 77
+# Measured 2026-07-21 (Win11 AMD64, CPython 3.14.6, full `pytest tests`):
+#   COVERAGE_PROCESS_START set  -> 83.03%   <- the real number
+#   COVERAGE_PROCESS_START unset -> 45%     <- meaningless, see below
+#
+# NOTE: it only means anything with COVERAGE_PROCESS_START set, because the GUI tests
+# run in subprocesses whose coverage is otherwise never collected. Unset, the same
+# suite reports 45%, so ANY sane gate would fail on a codebase that is actually fine.
+fail_under = 80
 show_missing = true
 skip_covered = false
 exclude_lines = [
