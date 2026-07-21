@@ -67,6 +67,30 @@ to raise after N workers and inspected the engine state), not by reading.
   the engine is not left running, the divert is closed, it is gone from `_LIVE_ENGINES`, and a
   later `start()` succeeds (no longer wedged).
 
+### Fixed: corrupt_packet() records its failures (F3); a core-scoped guard so it cannot swallow again (F4)
+
+Engineering-review findings F3 + F4.
+
+- **F3:** `BeanCore.corrupt_packet`'s `except Exception: return False` swallowed a REAL
+  failure (a raising `packet.payload` setter, a foreign packet type) in a way
+  indistinguishable from its legitimate empty-payload `return False`. A broken corruptor
+  therefore read as `corrupted == 0` - "the traffic had no payloads" - and the tester
+  would blame their traffic, not the tool. It now calls `crashlog.once("core.corrupt",
+  exc)` before returning False. `crashlog` is imported LAZILY inside the handler, so
+  core.py still imports only utils/matchers at load (layering contract) and stays free of
+  logging/print in the hot path; `once()` caps the cost at one traceback. Verified by
+  experiment: a raising setter now lands one `core.corrupt` record and returns False,
+  while the empty-payload path stays a quiet False (no crash-log spam).
+- **F4:** `test_no_silently_swallowed_exceptions` only recognises a `pass`/`...` body, so
+  the `return False` swallow above passed it for as long as it existed. New guard
+  `tests/test_code_hygiene.py::test_the_decision_core_never_swallows_an_exception_silently`
+  asserts the stronger property for core.py ALONE: every broad `except` must reach
+  `crashlog` (quiet/once/note/record) or re-raise. Scoped to the decision core on purpose
+  - the wider package's 50-odd broad handlers are legitimate control-flow fallbacks
+  (parse -> None, `matches()` -> False by hot-path contract, a DPI probe -> default), so
+  holding them to this rule would fire on correct code. Mutation-checked: reverting F3
+  turns the new guard red on `core.py:626`.
+
 ### PROJECT_NOTES audit, part 2: measured numbers, and the coverage gate to 80
 
 Every "costs N ms" in the audit's blast radius was re-measured instead of trusted. Conditions
