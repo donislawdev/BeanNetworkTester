@@ -15,6 +15,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   settings from the command line. If a script of yours relied on the old behaviour, delete
   `--gui` from it and it behaves exactly as before.
 
+### Changed
+
+- **Targeting a process no longer competes with the traffic it is measuring.** Working out which
+  connections belong to your target means asking Windows about its sockets, and that used to
+  happen on the same thread that handles your packets - dozens of times a second, because every
+  packet from every *other* application prompted another look. On a busy machine that stole time
+  from the capture itself, which is how a tester ends up measuring the tool instead of their
+  application. The lookup now runs on its own thread. Nothing changes in what you set or see;
+  a freshly opened connection still starts being impaired within tens of milliseconds, and STOP
+  stays immediate even while a lookup is in progress.
+
+### Docs
+
+- **The process field's exclusions are now documented properly.** Writing `!chrome` means "impair
+  everything except chrome" - and "everything" includes any connection whose owning process could
+  not be identified yet, which every brand-new connection passes through. If you want one
+  application left alone, name the one you *do* want broken instead; then anything unidentified
+  passes through untouched. Both READMEs say so next to the equivalent note for `!53` on ports.
+
 ### Fixed
 
 - **`--doctor` could report a WinDivert driver as "not loaded" when it simply was not allowed

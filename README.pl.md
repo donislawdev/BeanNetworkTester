@@ -834,7 +834,16 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   więc proces ustalamy z tabeli gniazd po **lokalnym porcie**. Tabela jest odświeżana ~3× na sekundę
   i **dodatkowo natychmiast, gdy pojawi się nieznany port**, więc świeżo otwarte połączenie zaczyna
   być psute po kilkudziesięciu ms. Pierwszy pakiet zupełnie nowego połączenia może się prześliznąć -
-  to ograniczenie metody, nie błąd.
+  to ograniczenie metody, nie błąd. Samo wyszukiwanie chodzi na osobnym wątku, nigdy na tym, który
+  obsługuje Twoje pakiety - więc wolny skan nie zamieni się w zgubiony ruch.
+- **Samo wykluczenie obejmuje też wszystko, czego narzędzie nie rozpozna.** `!chrome` w polu procesu
+  znaczy „psuj wszystko oprócz chrome" - a „wszystko" obejmuje każde połączenie, którego właściciela
+  nie udało się ustalić: pierwsze pakiety świeżo otwartego gniazda, procesy chronione, wszystko,
+  za czym tabela gniazd jeszcze nie nadążyła. „Nierozpoznany" nie jest tu przypadkiem rzadkim -
+  przechodzi przez niego **każde** nowe połączenie.
+  **Nie używaj więc wykluczenia do ochrony aplikacji.** Jeśli jedna ma zostać nietknięta, wskaż tę,
+  którą CHCESZ psuć (`--target tamtaaplikacja`) - wtedy wszystko nierozpoznane przechodzi
+  nietknięte, czyli w stronę bezpieczną. To ta sama zasada co `!53` przy portach, niżej.
 - **Celowanie, które nic nie łapie, nic nie psuje** - jeśli żaden działający proces nie pasuje do
   wyrażenia, ruch przechodzi nietknięty. Program mówi o tym wprost (czerwona notka pod polem
   i wpis w logu), bo „przebieg, w którym nic się nie zepsuło” wygląda identycznie jak „aplikacja
