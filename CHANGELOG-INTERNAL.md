@@ -42,6 +42,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: BeanEngine.start() is now atomic - a partial start fails OPEN (convention 20)
+
+Engineering-review finding F1, confirmed by experiment before the fix (forced `Thread.start()`
+to raise after N workers and inspected the engine state), not by reading.
+
+- **The hole:** `_start_locked` set `self._running = True` and opened the divert BEFORE spawning
+  the resolver + capture/inject/watchdog threads, and called `_LIVE_ENGINES.add(self)` only AFTER
+  all three were up. A failing `Thread.start()` (thread/memory exhaustion - most likely under the
+  load this tool is aimed at) therefore left a "running" engine with an OPEN divert, no capture
+  thread draining it, and **invisible to the `atexit` hook** - WinDivert queueing the user's
+  packets into a void while the UI said "running". Worse, `_running` stayed True, so every later
+  `start()` hit the `RuntimeError("already running")` guard: START was wedged for the process
+  lifetime. GUI `_finish_start(err)` only shows a dialog and resets the button; it never calls
+  `stop()`.
+- **The fix:** `_LIVE_ENGINES.add(self)` moved to BEFORE the worker-spawn block (the moment the
+  divert is open + `_running` is the moment atexit must be able to find it), and the spawn block
+  wrapped in `try/except BaseException` that logs the fault, calls `self.stop(reason="fault")`
+  (closes the divert, stops/joins whatever DID start, clears `_running`, discards from
+  `_LIVE_ENGINES`) and re-raises. `_stop_lock` is an `RLock`, so the nested `stop()` from inside
+  `start()` re-enters cleanly.
+- New test: `tests/test_failsafe.py::test_a_failed_start_never_leaves_an_open_divert` - monkeypatches
+  `threading.Thread.start` to fail after the resolver thread, then asserts: the error propagates,
+  the engine is not left running, the divert is closed, it is gone from `_LIVE_ENGINES`, and a
+  later `start()` succeeds (no longer wedged).
+
 ### PROJECT_NOTES audit, part 2: measured numbers, and the coverage gate to 80
 
 Every "costs N ms" in the audit's blast radius was re-measured instead of trusted. Conditions

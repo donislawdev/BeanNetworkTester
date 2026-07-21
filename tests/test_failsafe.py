@@ -198,6 +198,54 @@ def test_a_dead_capture_thread_fails_open():
           f"({kinds})")
 
 
+def test_a_failed_start_never_leaves_an_open_divert(monkeypatch):
+    """Regression (F1): start() was not atomic.
+
+    ``_running`` went True and the divert was opened BEFORE the worker threads were
+    spawned, and the engine was added to ``_LIVE_ENGINES`` only AFTER. So a failing
+    ``Thread.start()`` (out of threads/memory - most likely under the load this tool
+    is pointed at) left a 'running' engine with an open divert that nothing drained
+    and that atexit could not even see, and every later START was refused forever.
+    """
+    import threading
+
+    real_start = threading.Thread.start
+    calls = {"n": 0}
+
+    def flaky_start(self, *a, **k):
+        # let the resolver thread come up, then fail like a machine out of threads
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise RuntimeError("can't start new thread")
+        return real_start(self, *a, **k)
+
+    eng = BeanEngine()
+    divert = QuietDivert()
+    monkeypatch.setattr(threading.Thread, "start", flaky_start)
+    try:
+        eng.start("test", divert=divert)
+    except RuntimeError as exc:
+        raised = str(exc)
+    else:
+        raised = None
+    monkeypatch.undo()
+
+    check("failed start: the error propagates to the caller",
+          raised == "can't start new thread", f"({raised})")
+    check("failed start: the engine is NOT left running", eng.is_running() is False)
+    check("failed start: the divert is closed (network restored)",
+          divert.closed is True)
+    check("failed start: atexit is not left tracking a half-started engine",
+          eng not in set(_LIVE_ENGINES))
+    # the whole point: START works again instead of being wedged on "already running"
+    recover = QuietDivert()
+    eng.start("test", divert=recover)
+    check("failed start: a later START is not refused", eng.is_running() is True)
+    eng.stop()
+    check("failed start: the recovered session releases its divert too",
+          recover.closed is True)
+
+
 def test_stop_is_idempotent_and_keeps_the_first_reason():
     eng = BeanEngine()
     eng.start("test", divert=QuietDivert())

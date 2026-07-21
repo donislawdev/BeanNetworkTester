@@ -87,6 +87,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **`--cleanup-driver` explains a refusal instead of calling it "not installed".** Being told
   "access denied - the service exists but this account may not remove it" points somewhere;
   being told the service was never there does not.
+- **A session that fails to start now hands your network back and lets you try again.** Starting a
+  run sets up several background workers, and if your machine could not spare the resources for one
+  of them - most likely while you are already running the heavy load you are testing against - the
+  start failed halfway. The tool could be left holding your traffic without actually impairing it,
+  showing an error while quietly keeping its grip, and every later START was refused until you
+  killed the program. A failed start now releases your network immediately and leaves the tool
+  ready to start again, exactly as if you had never pressed START.
 
 ## [0.3.0] - 2026-07-20
 
