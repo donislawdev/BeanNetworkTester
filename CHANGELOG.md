@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **Targeting could follow a process ID after the process was gone - and Windows hands those
+  numbers out again.** Two things went wrong once that happened, both silently. Restart the
+  application you are targeting and it could come back with a number the tool still remembered
+  under the old name, so **it was no longer impaired** - the run looked like the app coping when
+  really nothing was being done to it. And in the other direction, a completely different program
+  that happened to inherit the number **was impaired instead**, so an application you never named
+  had its network broken. The tool now checks that the process behind a number is still the same
+  one before it trusts what it remembers, and forgets a process the moment it closes its last
+  connection.
+
 ### BREAKING
 
 - **BREAKING:** **`--gui` no longer accepts any other option.** Combining it with settings -

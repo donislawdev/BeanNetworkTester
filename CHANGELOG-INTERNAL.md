@@ -17,6 +17,52 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### portmap: a PID is a number, not an identity (audit item P2)
+
+- **The `pid -> (name, ppid)` cache could not expire, by any route.** `_expire_info` returned
+  early below 512 entries (a normal machine holds 26-343, so it never ran), and `info()` bumped
+  the timestamp on every cache HIT - which made the entry of a busily-read PID immortal, i.e.
+  exactly the entry decisions rest on. Both reproduced against the real table: a target
+  restarting onto a recycled PID was **not impaired**, and an innocent process inheriting the
+  target's old PID **was**. The second is the serious one: this tool breaks networking, and
+  breaking an application the user never named is the worst thing it can do quietly.
+- **Fixed by verifying identity, not by guessing at ages.** Each entry now carries the process
+  START TIME (`create_time`), and every cache hit checks it. The analysis had rejected this as
+  "costs as much as re-resolving" - **that was wrong by three orders of magnitude**, and measuring
+  it is what found the right design:
+
+      create_time() for 2 PIDs : 0.01 ms      full re-resolve: 9.8 ms
+      create_time() for 8 PIDs : 0.03 ms      full re-resolve: 38.9 ms
+
+  `name()` is expensive because it must open the process and read its image path; `create_time()`
+  does not. On this machine it succeeds for **24/24** socket-owning PIDs, including the protected
+  ones that make `name()` fall back to a full `process_iter()`.
+- **"Cannot tell" is not "recycled".** Treating a missing start time as proof of reuse looked like
+  the safe reading and was in fact a way to destroy the cache wholesale on every fallback path:
+  each lookup evicted, re-resolved, failed to stamp, and evicted again, so process names came back
+  empty. Caught by the suite going red on the psutil fake. `_looks_recycled` now returns True only
+  when both stamps are known AND differ; unverifiable environments fall back to the TTL exactly as
+  before. Hardening must not degrade what it cannot harden.
+- Two cheaper mechanisms kept as backstops: the TTL now counts from INSERTION and runs
+  unconditionally (2.2 us a sweep, measured), and a PID that loses every socket is forgotten at
+  once (2.5 us, measured) - a PID can only be reissued after its owner exits, and exiting closes
+  its sockets.
+- **Honest cost:** a warm resolve goes from 1.4 ms to 2.96 ms, because a rebuild verifies every
+  socket-owning PID and every ancestor it walks. At the resolver's measured 17 rebuilds/s that is
+  ~5% of one core - on the RESOLVER thread; the capture thread is untouched, which is what the
+  previous chunk bought. If it ever matters, the cheaper shape is a single batch verification in
+  `PortTable.refresh()` (0.13 ms per rebuild) with ancestors left to the TTL; it was not taken
+  because it splits one mechanism into two for a background thread that is not short of time.
+- Verified beyond the suite: a **real** child process with a **real** socket resolves to
+  `python.exe` while alive and to `""` the moment it exits - no stale name survives. A 10 s live
+  session with targeting: 9020 packets, 171 rebuilds, 23 targeted ports, STOP 18 ms, no thread
+  left behind.
+- New tests in `tests/test_processes.py`, on a controllable `_World` (ports, processes, start
+  times): the restarted target is impaired, the innocent inheritor is not, a living process keeps
+  its entry (verifying must not become re-resolving), an unverifiable environment still resolves
+  names, expiry works below the old 512 threshold and a busily-read entry no longer renews itself,
+  and a PID that loses every socket is forgotten at once.
+
 ### BREAKING
 
 - **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
