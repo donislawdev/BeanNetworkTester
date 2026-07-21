@@ -42,6 +42,41 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Chaos through the whole stack (audit item #11, part 2)
+
+New `tests/test_gui_stack_chaos.py`: the real `App` on the fake tkinter, a real engine on
+synthetic traffic, the real connections page and its `AsyncModel`, and the `_tick` loop running
+throughout - while a simulated user switches pages, types in the search box, flips sort columns,
+toggles "freeze", and stops and restarts the session mid-rebuild.
+
+The combination is what matters. The off-main-thread Tk call in the old target refresher survived
+every test precisely because nothing ran the pieces together, and the fake tkinter is single
+threaded so it could not have seen it.
+
+Three choices worth recording:
+
+- **The off-main-thread check watches the fake's widget base class**, not a handful of named
+  widgets. A named spy only catches the widget somebody already suspected; patching `W.configure`,
+  `W.pack`, `W.after` and friends covers every widget in the app, including ones added later.
+  Note `config = configure` in the fake binds the ORIGINAL function at class creation, so both
+  names need patching - patching one silently misses half the calls.
+- **A failed tick is detected through the LOG, not through the loop surviving.** `_tick` catches
+  everything by design (the loop must outlive a broken tick) and reports `log.ui_error`, so
+  "the loop kept running" is true even when every single tick failed. The test takes the literal
+  part of the translated template, ahead of the `{e}` placeholder, and asserts no line carries it.
+- **Scope is stated in the docstring:** this is about thread boundaries, not volume. The traffic
+  is `SyntheticDivert` on a twelve-row table; making the sort big enough to matter is part 1's
+  job. Saying so keeps the next session from reading it as a load test.
+
+Every assertion was verified by injecting the failure it exists for, and confirming the run goes
+red: a widget touched from a worker thread, a tick that raises (injected into `_sample`, which
+only `_tick` calls - the first attempt broke `conns.refresh`, which the test body also calls
+directly, so it blew up on the wrong line and proved nothing), and a wedged model worker whose
+`busy()` never clears.
+
+Stability, which is the risk with a test like this: run 10 times consecutively, 0 failures,
+median 3.4 s. Suite 591 -> 593 tests, +5.2 s (157.6 s -> 162.8 s).
+
 ### The model worker meets a live engine (audit item #11, part 1)
 
 `test_concurrency_chaos.py` was engine-only, and the seven `AsyncModel` tests all feed the worker
