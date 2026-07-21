@@ -42,6 +42,178 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### STOP no longer waits for a resolve, and the number that explains why
+
+- **Measured, because nobody here knew it: a COLD resolve costs 1.7 SECONDS.** On this desktop
+  25 PIDs own sockets but the process-info cache ends up with 346 entries - the expensive part is
+  one full `psutil.process_iter()`, triggered the moment a protected PID refuses `psutil.Process`.
+  Once warm the same resolve is **1.4 ms**. A thousandfold difference that every fake in the
+  suite hides, because fakes answer instantly.
+- **That made `stop()` slow, and STOP is the control this tool may never make slow.** The
+  resolver joined with a 2 s timeout, so pressing STOP while a cold scan was in flight blocked
+  for **1647 ms** (measured; with an artificially slow table it ate the full 2000 ms and still
+  left the thread running). The old GUI refresher was an unjoined daemon, so this was a
+  regression introduced by the rewrite.
+- Fixed with `TargetResolver.JOIN_S = 0.25`: long enough that an IDLE resolver is always joined
+  (it is parked in `wait()` and exits in microseconds), short enough that a scan in flight can
+  never hold STOP up. Not joining a straggler is safe - `stop()` has already cleared the target
+  and set the stop flag, so it finishes at most one more scan into an object nobody reads and
+  then exits; it is a daemon either way. Re-measured: **252 ms** with a 1.7 s scan in flight,
+  **265 ms** with a 5 s one, **100 ms** idle (and that 100 ms is the engine's other joins).
+- Guards: `test_stop_never_waits_for_a_scan_in_flight` (deliberately slow table, asserts under
+  900 ms) and `test_stop_does_join_an_idle_resolver` (the other half - the common case must be
+  clean, not merely fast).
+- **A full GUI session was driven end to end for the first time** - real engine, real resolver,
+  synthetic traffic, real GUI code - because everything until then had exercised the engine
+  directly and left `_tick`'s new wiring unverified. Verified: resolver up for a targetless
+  session, a non-matching target raises the banner, a matching one takes it down, clearing the
+  field drops targeting, traffic never stalls, STOP stays under 900 ms and leaks no thread.
+  Pinned as `test_gui_state.py::test_a_gui_session_keeps_the_target_banner_honest`, on a fake
+  table so it stays fast and deterministic.
+- Two false alarms during that work, recorded so they are not re-chased: `ProcessTargeting`
+  defines `__len__`, so an object with an empty port set is FALSY - a diagnostic printing
+  `"y" if tg else "N"` reported a live target as missing. And `python` owns no sockets on this
+  machine, so a test using it as a "should match" target was wrong, not the code. Production uses
+  `is None` throughout, which is why neither reached the program.
+
+### Review pass over the whole targeting diff (four more findings)
+
+Read line by line before merge, on the principle that a green suite had already missed three
+things in this branch. Each one below was verified by running it, not by reasoning about it.
+
+- **The watchdog's new port refresh could cancel the memory work.** `refresh_if_stale()` was put
+  FIRST inside the tick's existing `try`, so a socket-table failure aborted the block and
+  `_trim_conns()` plus `core.drain_retired()` never ran for that tick - the connection log would
+  grow unbounded because a NAME lookup failed. Now its own `try`: cosmetic work and memory safety
+  are different failure domains. Verified with a table that raises on every refresh: `_trim_conns`
+  still ran 6 times in 1.5 s and the row count stayed under the cap.
+- **A failed resolve in `apply_targeting` left the engine and the core disagreeing.** The
+  synchronous announce-path refresh sat inside the `try` whose `except Exception` returns without
+  calling `set_target`, so `engine._targeting` held a new object the core had never been pointed
+  at. Moved out and wrapped in `crashlog.quiet`: a stale announcement is a far smaller problem
+  than two halves disagreeing about what is being impaired, and the resolver corrects it within a
+  tick. Verified with a table that always raises: engine, core and resolver all end up on the
+  same object.
+- **`TargetResolver.stop()` signalled `_stopping` outside its lock**, leaving a window where a
+  concurrent `start()` could clear the flag, spawn a thread, and have the late `set()` kill it on
+  its first check. `BeanEngine` serialises start/stop under `_stop_lock` so it could not happen
+  today, but a threading primitive should not depend on its caller for safety. Verified with 200
+  lifecycle cycles plus 300 start-immediately-after-stop pairs: no thread killed on arrival, no
+  leak, no dangling `on_miss`.
+- **Dead knobs removed from `ProcessTargeting`.** `interval`, `miss_interval` and `_last` were
+  still written but no longer read by anything - pacing lives in `TargetResolver` now. Leaving
+  constructor parameters that control nothing invites somebody to tune them. Also fixed the fake
+  in `test_engine_records_a_broken_port_table_instead_of_going_quiet`, whose `process_for_port`
+  lacked the `allow_refresh` keyword: it was raising `TypeError` instead of the `RuntimeError` the
+  test meant to exercise, and passing for the wrong reason.
+
+### The connection log was a SECOND socket-table scan on the capture thread
+
+- **Moving targeting off the hot path did nothing for this one, and a green test suite said
+  otherwise.** `_log_conn` -> `_process_for` -> `PortTable.process_for_port` calls
+  `refresh_if_stale(miss=True)` whenever the port is unknown - four iphlpapi calls, sometimes a
+  psutil walk - **on the capture thread**, for the connection log's process column. Measured live
+  with a real port table and synthetic traffic: **47 rebuilds in 3 s from
+  `Thread-1 (_capture_loop)`**, alongside the resolver's own 48.
+- **The end-to-end test missed it because it watched the wrong object.** It injected a counting
+  table into the `ProcessTargeting` but left the engine on `portmap.default_table()`, so it
+  asserted on a table the capture thread never used and passed vacuously. The test now sets
+  `engine._ports` to the same table and the fake grew the engine-side surface
+  (`process_for_port`, `pid_for`, `refresh_if_stale`). Found by instrumenting a live run, not by
+  the suite - which is the lesson worth keeping.
+- Fix follows the pattern the project already uses for eviction and flow rotation: `_process_for`
+  reads with `allow_refresh=False` (a pure lookup), and the **watchdog** calls
+  `self._ports.refresh_if_stale()` on its 200 ms tick. Maintenance belongs on the maintenance
+  thread. Cost: a brand-new socket can read as `""` for up to one refresh interval, and
+  `_log_conn` already retries while packets keep coming, so the row fills itself in.
+- Re-measured after the fix: socket-table refreshes come from `bean-target-resolver` (48) and
+  `MainThread` (2). **Zero from the capture thread.**
+
+### Targeting resolves off the capture thread (new `target_resolver.py`)
+
+- **`ProcessTargeting.__contains__` used to call `refresh()` inline** - i.e. from
+  `BeanCore.decide()`, on the CAPTURE THREAD, holding `core._lock`. One rebuild is four
+  `iphlpapi` calls, an O(n) dict copy, a `psutil.Process()` per distinct PID and, whenever a
+  protected PID refuses to open, a whole `psutil.process_iter()`. **And it was the normal case,
+  not an edge one:** targeting exists to narrow traffic to one application, so every packet from
+  every OTHER application is a miss, and a miss triggered the rebuild - a steady ~20 Hz of
+  syscalls in the packet path whenever a target was set. A stalled capture thread is precisely
+  what fail-open (convention 20), the watchdog, the eviction move and the table-sort move all
+  exist to prevent: WinDivert keeps diverting into a queue nobody drains, so the user loses
+  connectivity while the UI says "running". Targeting was the last place still doing it.
+- **`__contains__` is now a frozenset lookup and nothing else.** A miss sets a plain bool
+  (atomic under the GIL, free) and, only on the FALSE -> TRUE transition, calls the resolver's
+  wake-up. That guard is the point: `Event.set()` takes a lock, so waking per packet would have
+  moved the problem rather than removed it. `refresh()` stays public and synchronous for
+  one-shot callers (`resolve_ports`, `make_targeting`) and tests.
+- **New `beantester/target_resolver.py`.** Deliberately the same shape as `scenario_runner.py`:
+  a small class owning one thread, lifecycle driven explicitly by `BeanEngine`. Two differences
+  on purpose: `stop()` JOINS (it holds OS handles), and it waits on an `Event` rather than
+  sleeping, so a miss is picked up in milliseconds instead of at the next tick. **One resolver
+  per engine with a swappable target** - retargeting is a reference swap, not a thread restart,
+  because the GUI applies settings repeatedly and `test_concurrency_chaos` does it hundreds of
+  times. Wake ordering is clear-then-refresh-then-wait, so a miss arriving DURING a rebuild
+  re-arms instead of being swallowed by it.
+- **`engine.set_target` is now the single place the resolver is pointed at a target.**
+  `self._targeting` was previously assigned only by `target_for`, so installing a live targeting
+  directly left the engine believing it had none while the core tested against it. `target_for`
+  keeps its memoisation (one live object per expression, so the port and process caches survive)
+  but no longer resolves; `start()` reconciles the two and does one synchronous pass so the first
+  packet meets a populated port set; `stop()` joins the thread.
+- **The resolver's life matches a SESSION's**, not a target's: configuring a target without
+  starting must not leave something scanning the socket table in the background.
+- **`apply_targeting` refreshes only when `announce=True`.** It has to, because the log line
+  reports what was matched and an unresolved target would always read as "matches nothing" - the
+  very message this project made loud on purpose. That is the explicit user-applied path; the
+  periodic path passes `announce=False` and never blocks. Strictly less work than before, where
+  `target_for` refreshed on every call including the GUI's 2 s loop.
+- **Found while re-reading, fixed by removal: the GUI refresher thread leaked on fast restart.**
+  `_finish_start` spawned `_target_thread` unconditionally and nothing ever joined or signalled
+  it, while `_target_refresher` looped on `while self.running` with a 2 s sleep. STOP followed by
+  START inside that sleep left the OLD thread looping as well - one extra permanent scanner, each
+  doing a full OS scan every 2 s, per fast restart cycle. Not reproduced live (driving the async
+  start/stop on the fake-tk harness is awkward); `test_repeated_start_stop_cycles_do_not_stack_resolver_threads`
+  is the guard that would have caught it.
+- **A FLOOR under miss-driven rebuilds, found by re-reading the design rather than by a test.**
+  Moving `miss_interval` out of `__contains__` removed the rate limit without putting it back
+  anywhere: targeting narrows traffic to one application, so every packet from every OTHER
+  application is a miss, misses arrive continuously, and the wake-up was re-armed as fast as it
+  was consumed. Measured with a 5 s routine tick: **63 rebuilds a second**, bounded only by the
+  GIL - with a real socket table that is a thread pegged at 100% scanning the OS. The resolver now
+  enforces `min_interval` (`portmap.MISS_REFRESH_S`, the same 0.05 s the old code used), in ONE
+  place instead of on the capture thread. Re-measured: 14 rebuilds/s with the floor, 33/s with it
+  disabled. The cost is the worst-case delay before a brand-new socket starts being impaired -
+  up to 50 ms, exactly the trade the old code made.
+- **Dynamic process trees verified, not assumed.** A child spawned mid-session opens its own
+  socket; the first packet slips through (the documented, unclosable race) and the miss wakes the
+  resolver, which matches the child through its ancestor chain. Measured pick-up: ~3 ms without
+  the floor, bounded by `min_interval` with it. Grandchildren (two levels) work the same way, and
+  `myapp, !myapp-helper` keeps excluding a respawning helper despite its matching parent.
+- **Caught in review, before merge: a target applied MID-SESSION got a frozen port set.** The
+  resolver was started only when a target already existed at `start()`. Press START, watch, then
+  type a process name - an ordinary workflow - and nobody was keeping the port set fresh: it
+  froze at whatever the first resolve produced and sockets opened afterwards were never picked
+  up. Precisely the failure live targeting exists to prevent, reintroduced by the fix for it.
+  The resolver's life is now the SESSION's, unconditionally; with nothing to resolve it blocks on
+  its event and costs nothing. Guarded by
+  `test_a_target_applied_mid_session_still_gets_a_live_port_set`.
+- **The GUI does not resolve on the UI thread while a session runs.** `_refresh_target` resolves
+  inline only when the engine is STOPPED (no resolver to do it, and no session to stall); while
+  running it lets the banner wait for the next 700 ms tick. Four syscalls and a psutil walk on
+  the UI thread would be a frozen window, and a frozen window here is the user unable to press
+  STOP on their own broken network.
+- `TargetResolver.stop()` detaches the old targeting's `on_miss`, so a late packet cannot poke
+  the event of a worker that is no longer listening.
+- New `tests/test_target_resolver.py`: miss wakes the resolver and the new port is picked up
+  (long interval, so only the WAKE can explain it), `stop()` joins rather than signals,
+  retargeting does not churn threads, an orphaned targeting is detached, a failing table leaves
+  the resolver alive, **the capture thread never touches the socket table** (end to end over
+  synthetic traffic, asserting on the THREAD NAMES that made it look), no thread outlives a
+  session, and five start/stop cycles stack nothing.
+  `tests/test_release_fixes.py::test_an_unknown_port_forces_an_early_refresh` is rewritten as
+  `..._asks_for_a_rebuild_without_scanning_inline`: it now asserts the socket table is NOT
+  touched from the packet path and that 50 misses wake the resolver exactly once.
+
 ### AsyncModel: a build returning None no longer wedges the worker for good
 
 - **`poll()` used `None` for two different things** - "no result arrived" and "the result". It

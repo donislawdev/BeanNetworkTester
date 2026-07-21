@@ -843,7 +843,8 @@ beantester/              the implementation package
                          range, form section, profile scope, CLI flag
   validators.py          number and range validation (shared by GUI, CLI and config file)
   portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback)
-  targeting.py           live target port set: refresh on miss + process tree
+  targeting.py           live target port set: process tree, asks for a rebuild on a miss
+  target_resolver.py     rebuilds that port set on its own thread, off the packet path
   jsonfile.py            atomic write + quarantine of corrupted user files
   crashlog.py            crash logger: quiet/note/once, quarantine, background report
   appinfo.py             app identity and version reader (one source: VERSION.txt)
@@ -927,9 +928,19 @@ seeded).
   explicit exclusion wins: `chrome, !chromedriver` will not pull in `chromedriver` via a parent.
 - **Process targeting is a race with the system (and stays one)** - WinDivert gives a packet, not a
   PID, so we resolve the process from the socket table by **local port**. The table is refreshed
-  ~3x per second and **additionally at once when an unknown port appears**, so a freshly opened
+  ~3x per second and **additionally as soon as an unknown port appears**, so a freshly opened
   connection starts being impaired within tens of ms. The very first packet of a brand-new
-  connection may slip through - that is a limit of the method, not a bug.
+  connection may slip through - that is a limit of the method, not a bug. The lookup itself runs
+  on its own thread, never on the one handling your packets, so a slow scan can never turn into
+  lost traffic.
+- **An exclusion on its own also covers everything the tool cannot identify.** `!chrome` in the
+  process field means "impair everything except chrome" - and "everything" includes any connection
+  whose owning process could not be determined: the first packets of a brand-new socket, protected
+  system processes, anything the socket table has not caught up with yet. Unidentified is not the
+  rare case here; every new connection passes through it.
+  **So do not use an exclusion to protect an application.** If you want one app left alone, name
+  the app you DO want broken (`--target thatapp`) - then anything unidentified passes through
+  untouched, which is the safe direction. This mirrors `!53` on ports, below.
 - **Targeting that catches nothing breaks nothing** - if no running process matches the expression,
   traffic passes untouched. The program says so explicitly (a red note under the field and a log
   entry), because "a run in which nothing broke" looks identical to "the app held up".

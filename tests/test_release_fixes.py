@@ -176,28 +176,38 @@ def test_an_explicit_exclusion_beats_an_inherited_match():
           targeting.ports() == {5001}, f"({targeting.ports()})")
 
 
-def test_an_unknown_port_forces_an_early_refresh():
-    """A brand-new connection must not run unimpaired until the next scan."""
-    clock = [100.0]
+def test_an_unknown_port_asks_for_a_rebuild_without_scanning_inline():
+    """A brand-new connection must not run unimpaired until the next scan - and the
+    scan must not happen on the packet path either.
+
+    This used to call ``refresh()`` straight from ``__contains__``, i.e. from
+    ``BeanCore.decide()``, i.e. on the CAPTURE THREAD holding the core lock: four
+    iphlpapi calls, an O(n) copy and a psutil walk per rebuild. And it was the
+    normal case, not an edge one - targeting narrows traffic to one application, so
+    every packet from every OTHER application is a miss.
+    """
     table = _FakeTable(ports={5001: 200}, info={200: ("chrome.exe", 1)})
-    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table,
-                                 clock=lambda: clock[0])
-    targeting.refresh(now=clock[0])
-    before = targeting.refreshes
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    before = table.refreshes
 
     # the app opens a socket right now; the cached set knows nothing about it
     table.ports[5002] = 200
-    clock[0] += 0.06                    # less than the routine interval (0.30 s)
-    check("the new port is picked up on the miss", 5002 in targeting)
-    check("which cost exactly one extra refresh",
-          targeting.refreshes == before + 1, f"({targeting.refreshes})")
+    check("the packet path answers without scanning", 5002 not in targeting)
+    check("it did NOT touch the socket table", table.refreshes == before,
+          f"({table.refreshes} vs {before})")
+    check("but it did ask for a rebuild", targeting.missed)
 
-    # ...but a miss storm cannot turn into a rebuild per packet
-    refreshes = targeting.refreshes
+    # ...and a miss storm asks ONCE, not once per packet: Event.set() takes a lock,
+    # so the flag transition is what guards the hot path
+    targeting.consume_miss()
+    wakes = []
+    targeting.on_miss(lambda: wakes.append(1))
     for _ in range(50):
         assert 9999 not in targeting
-    check("misses are rate limited", targeting.refreshes == refreshes,
-          f"({targeting.refreshes} vs {refreshes})")
+    check("50 misses wake the resolver exactly once", len(wakes) == 1, f"({len(wakes)})")
+    check("still no socket-table access from the packet path",
+          table.refreshes == before, f"({table.refreshes} vs {before})")
 
 
 def test_targeting_reports_when_it_matches_nothing():

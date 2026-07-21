@@ -199,8 +199,14 @@ def test_the_ui_notices_when_the_engine_stops_itself():
     """)
 
 
-def test_the_target_refresher_never_touches_tkinter():
-    """Tcl is not thread-safe: the worker thread may only see a main-thread snapshot."""
+def test_target_syncing_reads_only_the_main_thread_snapshot():
+    """``_refresh_target`` works off ``_target_expr``, never off the tk variable.
+
+    The background refresher that used to call this is gone (resolving moved to
+    ``target_resolver``), but the separation it forced is worth keeping: the
+    snapshot is taken on the main thread, and everything downstream consumes the
+    plain string. That is what makes it safe to call this from anywhere later.
+    """
     run_gui("""
         app.vars["target"].set("chrome.exe")
         assert app._snapshot_target() == "chrome.exe"
@@ -209,16 +215,16 @@ def test_the_target_refresher_never_touches_tkinter():
         app.vars["target"].set("   ")
         assert app._snapshot_target() == ""
 
-        # from now on every tk variable explodes if the worker thread touches it
+        # from now on the tk variable explodes if anything downstream reads it
         class Exploding:
             def get(self):
-                raise AssertionError("tk variable read from the refresher thread")
+                raise AssertionError("_refresh_target read the tk variable")
             def set(self, *a):
-                raise AssertionError("tk variable written from the refresher thread")
+                raise AssertionError("_refresh_target wrote the tk variable")
 
         app.vars["target"] = Exploding()
         app._target_expr = "chrome.exe"
-        app._refresh_target()          # this is what the worker thread runs
+        app._refresh_target()          # consumes the snapshot only
     """)
 
 

@@ -260,8 +260,8 @@ def test_dialogs_are_in_app_and_translated():
     """)
 
 
-def test_target_refresher_never_touches_widgets_from_its_thread():
-    """The refresher thread must not make Tcl calls (convention: Tk = main thread).
+def test_target_verdict_is_recorded_not_rendered_off_the_main_thread():
+    """``_refresh_target`` must leave its verdict in a field, never draw it itself.
 
     ``_refresh_target`` used to call ``set_target_warning`` directly, so
     ``.config()`` / ``.winfo_ismapped()`` / ``.pack()`` ran on a worker thread.
@@ -269,6 +269,12 @@ def test_target_refresher_never_touches_widgets_from_its_thread():
     open, which is the one thing FAIL-OPEN exists to prevent - or raises
     ``RuntimeError: main thread is not in main loop`` into a bare ``except``,
     silently swallowing the very banner that is supposed to shout.
+
+    The background refresher that made this urgent is gone (resolving moved to
+    ``target_resolver``), but the SHAPE is the guard: as long as the verdict goes
+    into ``_pending_target_warning`` and only ``_drain_target_warning`` renders it,
+    calling this from a thread again can never put a Tcl call on one. The test
+    still runs it on a worker thread, which is the hostile case.
     """
     run_gui("""
         import threading
@@ -311,4 +317,98 @@ def test_target_refresher_never_touches_widgets_from_its_thread():
         before = len(touched)
         app._drain_target_warning()
         assert len(touched) == before, "an unchanged banner must cost no widget work"
+    """)
+
+
+def test_a_gui_session_keeps_the_target_banner_honest():
+    """The tick loop end to end: apply on change, and report what was matched.
+
+    The GUI no longer runs a refresher thread - `_tick` applies a changed target
+    expression and the engine's resolver keeps the port set fresh. That rewiring
+    was verified against a real session (real engine, real resolver, synthetic
+    traffic) and this pins the behaviour it must keep:
+
+      * a target that matches nothing raises the banner - a run in which nothing
+        broke looks exactly like a run in which everything held up;
+      * a target that DOES match takes it back down;
+      * clearing the field drops targeting altogether;
+      * none of it stalls the capture.
+
+    The socket table is faked so the test is deterministic and fast. Against the
+    real one the first resolve costs about 1.7 s on a normal desktop, which is a
+    measurement worth knowing but not worth spending in every suite run.
+    """
+    run_gui("""
+        import time
+        from beantester import portmap
+        from beantester.synthetic import SyntheticDivert
+
+        class FakeTable:
+            def __init__(self):
+                self.ports = {5001: 200}
+                self.info = {200: ("realapp.exe", 1)}
+            def refresh(self, now=None, force=False): return True
+            def snapshot(self): return dict(self.ports)
+            def name_of(self, pid): return self.info.get(pid, ("", None))[0]
+            def ancestors(self, pid, depth=8): return []
+            def refresh_if_stale(self, now=None, miss=False): return True
+            def process_for_port(self, port, now=None, allow_refresh=True): return ""
+            def pid_for(self, port): return self.ports.get(port)
+
+        table = FakeTable()
+        portmap.default_table = lambda: table
+
+        real_start = app.engine.start
+        app.engine.start = (lambda filt, divert=None, duration=0:
+                            real_start(filt, divert=SyntheticDivert(seed=21),
+                                       duration=duration))
+
+        def settle(seconds=1.0):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                app._tick()
+                time.sleep(0.02)
+
+        app._start(); app._settle_transition()
+        assert app.running is True, "the GUI did not start"
+        settle(0.3)
+        assert app.engine.resolver().is_running(), "no resolver for the session"
+        assert app._pending_target_warning == "", repr(app._pending_target_warning)
+        seen1 = app.engine.stats_snapshot()["seen"]
+        assert seen1 > 0, "no traffic"
+
+        # a target nothing matches: the banner must shout
+        app.vars["target"].set("no_such_process_xyz")
+        settle(1.0)
+        tg = app.engine.targeting()
+        assert app._applied_target == "no_such_process_xyz", app._applied_target
+        assert tg is not None and tg.refreshes > 0, "the resolver never resolved it"
+        assert app._pending_target_warning == bnt.T("fields.target_no_match"), \
+            "banner should shout: %r" % app._pending_target_warning
+        assert app._shown_target_warning == app._pending_target_warning, "not rendered"
+
+        # a target that DOES own a socket: the banner must come back down
+        app.vars["target"].set("realapp")
+        settle(1.0)
+        tg = app.engine.targeting()
+        assert tg.expression == "realapp", tg.expression
+        assert tg.matched is True and len(tg.ports()) > 0, sorted(tg.ports())
+        assert app._pending_target_warning == "", \
+            "a matching target must clear the banner: %r" % app._pending_target_warning
+        assert app._shown_target_warning == "", "the banner was not taken down"
+
+        # clearing the field drops targeting entirely
+        app.vars["target"].set("")
+        settle(0.4)
+        assert app.engine.targeting() is None, "clearing must drop targeting"
+        assert app._pending_target_warning == "", "no target, no banner"
+
+        assert app.engine.stats_snapshot()["seen"] > seen1, "traffic stalled"
+
+        t0 = time.monotonic()
+        app._stop(); app._settle_transition()
+        stop_ms = (time.monotonic() - t0) * 1000
+        assert app.running is False, "the GUI did not stop"
+        assert stop_ms < 900, "STOP took %.0f ms" % stop_ms
+        assert not app.engine.resolver().is_running(), "resolver outlived the session"
     """)

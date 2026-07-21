@@ -6,6 +6,7 @@ settings dict and applies it to an engine.
 """
 import json
 
+from . import crashlog
 from . import fields as F
 from .jsonfile import write_json
 from .fields import FIELD_DEFS, FIELDS
@@ -161,6 +162,21 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
     except Exception as e:                                   # pragma: no cover
         log(f"{T('log.targeting_error')}: {e}")
         return None
+    if announce:
+        # ONE synchronous resolve, and only on the announcing path - the explicit
+        # "the user applied settings" one. It is needed because the log line below
+        # reports what was actually matched, and an unresolved target would always
+        # read as "matches nothing" - the very message this project made loud on
+        # purpose. The periodic path passes announce=False and never blocks:
+        # keeping the port set fresh is the resolver thread's job from then on.
+        #
+        # Outside the try above, and swallowed: a failed resolve must NOT abort the
+        # install. Aborting left the engine holding a new targeting object that the
+        # core had never been pointed at - two halves disagreeing about what is
+        # being impaired. A stale announcement is a far smaller problem, and the
+        # resolver corrects it within a tick.
+        with crashlog.quiet("settings.targeting"):
+            targeting.refresh()
     engine.set_target(True, targeting)
     if announce:
         if targeting.matched:
