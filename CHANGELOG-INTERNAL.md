@@ -42,6 +42,96 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The chaos test was measuring the machine, not the code
+
+CI failed `test_the_model_worker_survives_a_live_connection_table` with
+`traffic really flowed while it did (8342)`. The test asserted `seen > 10_000` after a fixed three
+seconds - a threshold read off a dev machine, where the same three seconds produce hundreds of
+thousands of packets. A CI runner under coverage managed 8342, about fifteen times less.
+
+The interesting part is that the test had already reached the state it exists for: the
+`rows > 1000` assertion, checked one line earlier, PASSED. The table was big enough for the sort to
+be real work. Only the packet count - a proxy for the same thing, and a worse one - was out of
+range. A green run on a fast machine and a red one on a slow machine, with identical behaviour
+under test.
+
+Fixed by asserting the CONDITION and waiting for it, instead of assuming a duration produces it:
+
+- the request/poll loop now runs for at least `STRESS_SECONDS` and then keeps going until
+  `MIN_BUILDS` rebuilds have completed over a table of at least `MIN_ROWS` rows, with a 30 s hard
+  cap so a broken run still ends;
+- the packet-count assertion is gone. The row count already implies traffic - a thousand distinct
+  flows cannot exist without it - and counting packets measured the runner;
+- `FastDivert`'s docstring now says its measured throughput is a dev-machine number and not a
+  promise, so nobody turns it back into a threshold.
+
+Verified by simulating the slow runner rather than by hoping: throttled to ~3000 packets/s (below
+what CI managed), the old assertions fail with the exact CI symptom
+(`traffic really flowed while it did (2429)`) and the new ones pass. Unthrottled, both pass.
+
+### A hot-path guard that watches the routes, not one object (audit item #8)
+
+The rule is one sentence: nothing on the capture or inject thread may ask the OS a question. It
+already had a guard - `test_target_resolver.py::test_the_capture_thread_never_touches_the_socket_table`
+- but a narrow one, and its first limitation has already bitten this project:
+
+- **it watches an object, so it can watch the WRONG object.** An earlier version gave the counting
+  table only to the targeting and left the engine on `portmap.default_table()`. It passed while
+  `_log_conn` -> `_process_for` -> `process_for_port` rebuilt the real table ~16 times a second on
+  the capture thread. A live run caught what the test could not.
+- **it only knows about the socket table.** Targeting is one route to the OS; `_log_conn` is a
+  second, independent one; a third would be invisible to it.
+
+New `tests/test_hot_path.py` watches the ROUTES instead. `portmap` is the only module in the
+package that touches `psutil` or `iphlpapi`, through five entry points (`_psutil_port_pid_map`,
+`_psutil_process_table`, `_psutil_created`, `_psutil_process_info`, `_Native._table`). Wrapping
+all five catches any caller, including one nobody has written yet. Threads are compared by
+IDENTITY against `engine._t_cap` / `_t_inj`, not by name substring, so it does not depend on how
+CPython happens to name a thread.
+
+The target expression deliberately matches nothing. With no matching port every packet is a miss,
+so the resolver is woken continuously and the surface gets hammered - and the test stops depending
+on which processes exist, so it means the same on a CI runner as here. Measured during a session
+with traffic and targeting active:
+
+| calls | function | thread |
+|---|---|---|
+| 5232 | `_psutil_created` | bean-target-resolver |
+| 1431 | `_psutil_process_info` | bean-target-resolver |
+| 448 | `_psutil_created` | watchdog |
+| 212 | `_Native._table` | bean-target-resolver |
+| 3 | `_psutil_process_table` | bean-target-resolver |
+| **0** | **anything** | **capture / inject** |
+
+The work is real and heavy, and none of it is where the user's packets wait. That is the design,
+now asserted.
+
+**Found no bug** - the invariant holds today. Verified by mutation, negative included:
+
+- **caught:** `_process_for` reopening the refresh (`allow_refresh=True`), the regression that has
+  already happened twice. The failure names both ends:
+  `[('_Native._table', 'Thread-1 (_capture_loop)')]`.
+- **not caught:** a name lookup on the capture thread that HITS the warm info cache. That is the
+  guard's boundary, not a hole - it watches trips to the OS and a cache hit is not one - but a
+  regression that only misses the cache occasionally will only be caught occasionally.
+
+A second test asserts the RECORDER records: a wrapper that silently failed to install would leave
+the guard permanently and invisibly green.
+
+**Deliberately not a wall-clock budget.** The suite's existing timing assertions
+(`test_failsafe`'s "start did not block the UI thread", `test_target_resolver`'s "stop did not wait
+for the scan") all separate outcomes differing by an order of magnitude. "The hot path costs under
+N microseconds" has no such separation: on a shared CI runner it measures the runner, and the first
+thing anybody does with such a test is widen the bound until it stops failing.
+
+**Not verified:** the Linux path. On this machine `_Native` initialises, so the `psutil` fallback
+for the socket table never runs; `_psutil_port_pid_map` is watched but was never seen to fire here.
+CI runs ubuntu too, where it is the main path. The assertions are written against the TOTAL over
+the surface rather than any single function so they hold either way, but the ubuntu behaviour is
+unverified locally.
+
+Stability: 10 consecutive runs, 0 failures, median 3.8 s.
+
 ### Chaos through the whole stack (audit item #11, part 2)
 
 New `tests/test_gui_stack_chaos.py`: the real `App` on the fake tkinter, a real engine on

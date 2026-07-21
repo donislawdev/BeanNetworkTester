@@ -42,6 +42,12 @@ from fakes import check
 STRESS_SECONDS = 3.0
 CYCLES = 25
 
+# What makes the model-worker test conclusive rather than decorative: enough
+# completed rebuilds to have raced anything, over a table big enough that the sort
+# is real work. Asserted as conditions the test WAITS for - see the loop.
+MIN_BUILDS = 10
+MIN_ROWS = 1000
+
 
 def _watch_worker_exceptions():
     """Collect anything a thread raises (threads swallow exceptions by default)."""
@@ -183,6 +189,12 @@ class FastDivert:
     worker was built for - a filter+sort big enough to take real time while the
     capture thread keeps writing to the very rows it is reading.
 
+    Those numbers are from a dev machine and are NOT a promise: the same three
+    seconds produced 8342 packets on a CI runner under coverage, about fifteen
+    times less. Nothing here may turn them into a threshold - see the loop in
+    the test, which waits for the table it needs instead of assuming a duration
+    produces one.
+
     It lives here rather than in ``beantester``: production has no use for an
     unthrottled generator, and widening ``SyntheticDivert`` to make a test look
     better would be changing the tool to suit the test.
@@ -310,10 +322,22 @@ def test_the_model_worker_survives_a_live_connection_table():
 
     # The "UI thread": ask, pick up, ask again - exactly the request/poll cycle
     # ConnectionsPage drives from _tick and _poll_soon.
-    deadline = time.monotonic() + STRESS_SECONDS
+    #
+    # It runs for at least STRESS_SECONDS and then KEEPS GOING until the table is
+    # big enough for the sort to be real work. A fixed wall-clock budget would let
+    # machine speed decide whether the test is conclusive, and that is not
+    # hypothetical: the first version asserted "> 10 000 packets seen" after three
+    # seconds, a threshold taken from this dev machine, and CI managed 8342 under
+    # coverage on a shared runner. Waiting for the CONDITION costs nothing where
+    # the machine is fast and stops the test being a speed test where it is not.
+    soft_deadline = time.monotonic() + STRESS_SECONDS
+    hard_deadline = time.monotonic() + 30.0
     i = 0
     try:
-        while time.monotonic() < deadline:
+        while time.monotonic() < hard_deadline:
+            if (time.monotonic() >= soft_deadline
+                    and builds["n"] > MIN_BUILDS and builds["rows"] > MIN_ROWS):
+                break
             i += 1
             model.request({"engine": engine, "query": queries[i % len(queries)],
                            "sort": columns[i % len(columns)],
@@ -349,10 +373,16 @@ def test_the_model_worker_survives_a_live_connection_table():
     check("no thread raised", not errors, f"({errors[:3]})")
     # Then the conclusiveness checks. A green run over twelve rows at 900 packets/s
     # would prove nothing, so the test asserts it ran in the regime it claims.
-    check("the worker was actually exercised", builds["n"] > 10, f"({builds['n']})")
+    # These are CONDITIONS, not speeds: the loop above waits for them rather than
+    # hoping a fixed number of seconds produced them. There is no packet-count
+    # assertion because the row count already implies one - a thousand distinct
+    # flows cannot exist without traffic - and counting packets instead measured
+    # how fast the machine was.
+    check("the worker was actually exercised", builds["n"] > MIN_BUILDS,
+          f"({builds['n']} builds; {seen} packets seen)")
     check("the table was big enough for the sort to mean something",
-          builds["rows"] > 1000, f"({builds['rows']} rows - the point is a real sort)")
-    check("traffic really flowed while it did", seen > 10_000, f"({seen})")
+          builds["rows"] > MIN_ROWS,
+          f"({builds['rows']} rows - the point is a real sort; {seen} packets seen)")
     check("nothing went wrong on the driving side", not problems, f"({problems[:3]})")
     check("the worker did not wedge", model.busy() is False)
     check("the engine did not fault", engine.fault is None, f"({engine.fault})")
