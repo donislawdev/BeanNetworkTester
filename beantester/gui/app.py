@@ -1308,9 +1308,16 @@ class App:
             self._pending_target_warning = T("fields.target_no_match")
             return
         if targeting.refreshes == 0:
-            # Just typed, never resolved: the resolver thread only runs during a
-            # session, and reporting "matches nothing" before anybody looked would
-            # be a lie. One resolve here - bounded to once per edit, not per tick.
+            if self.engine.is_running():
+                # The resolver will have looked by the next tick. Do NOT resolve
+                # here: it is four syscalls and a psutil walk, and this is the UI
+                # thread - a frozen window in this tool is not cosmetic, it is the
+                # user unable to press STOP on their own broken network. The banner
+                # can wait 700 ms; the window cannot wait at all.
+                return
+            # Stopped: there is no resolver running and no session to stall, so
+            # resolve inline rather than report "matches nothing" before anyone
+            # looked - which would be a lie.
             with crashlog.quiet("gui.app"):
                 targeting.refresh()
         # A target that matches nothing impairs nothing - and a run in which

@@ -124,6 +124,21 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   resolver, which matches the child through its ancestor chain. Measured pick-up: ~3 ms without
   the floor, bounded by `min_interval` with it. Grandchildren (two levels) work the same way, and
   `myapp, !myapp-helper` keeps excluding a respawning helper despite its matching parent.
+- **Caught in review, before merge: a target applied MID-SESSION got a frozen port set.** The
+  resolver was started only when a target already existed at `start()`. Press START, watch, then
+  type a process name - an ordinary workflow - and nobody was keeping the port set fresh: it
+  froze at whatever the first resolve produced and sockets opened afterwards were never picked
+  up. Precisely the failure live targeting exists to prevent, reintroduced by the fix for it.
+  The resolver's life is now the SESSION's, unconditionally; with nothing to resolve it blocks on
+  its event and costs nothing. Guarded by
+  `test_a_target_applied_mid_session_still_gets_a_live_port_set`.
+- **The GUI does not resolve on the UI thread while a session runs.** `_refresh_target` resolves
+  inline only when the engine is STOPPED (no resolver to do it, and no session to stall); while
+  running it lets the banner wait for the next 700 ms tick. Four syscalls and a psutil walk on
+  the UI thread would be a frozen window, and a frozen window here is the user unable to press
+  STOP on their own broken network.
+- `TargetResolver.stop()` detaches the old targeting's `on_miss`, so a late packet cannot poke
+  the event of a worker that is no longer listening.
 - New `tests/test_target_resolver.py`: miss wakes the resolver and the new port is picked up
   (long interval, so only the WAKE can explain it), `stop()` joins rather than signals,
   retargeting does not churn threads, an orphaned targeting is detached, a failing table leaves

@@ -332,6 +332,44 @@ def test_the_capture_thread_never_touches_the_socket_table():
           not engine.resolver().is_running())
 
 
+def test_a_target_applied_mid_session_still_gets_a_live_port_set():
+    """Start broad, then narrow it down - and the port set must not freeze.
+
+    A regression this rewrite introduced and very nearly shipped: the resolver was
+    started only when a target already existed at ``start()``. Press START, watch
+    for a while, then type a process name - a completely ordinary workflow - and
+    nobody was left keeping the port set fresh. It froze at whatever the first
+    resolve produced, so sockets the target opened afterwards were never picked up.
+    That is exactly the failure live targeting was built to prevent.
+
+    The resolver's life is the SESSION's now, target or no target; with nothing to
+    resolve it blocks on its event and costs nothing.
+    """
+    table = _CountingTable(ports={5001: 200}, info={200: ("chrome.exe", 1),
+                                                    201: ("chrome.exe", 1)})
+    engine = BeanEngine()
+    engine._ports = table
+
+    engine.start("true", divert=SyntheticDivert(seed=13))       # no target yet
+    try:
+        check("the resolver runs even with nothing to resolve",
+              engine.resolver().is_running())
+
+        # the user narrows it down while the session is running
+        targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+        engine.set_target(True, targeting)
+        targeting.refresh()                    # what apply_targeting(announce) does
+        check("the resolver is still up", engine.resolver().is_running())
+
+        # ...and the app opens a new socket, which is the whole point of a LIVE set
+        table.ports[6001] = 201
+        check("the new socket misses at first", 6001 not in targeting)
+        check("but the resolver picks it up", _wait(lambda: 6001 in targeting))
+    finally:
+        engine.stop()
+    check("and it stops with the session", not engine.resolver().is_running())
+
+
 def test_stopping_the_engine_leaves_no_resolver_thread_behind():
     before = {t.name for t in threading.enumerate()}
     targeting, _ = _targeting()

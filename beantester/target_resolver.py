@@ -79,7 +79,13 @@ class TargetResolver:
         """Stop the thread and WAIT for it: it holds OS handles."""
         with self._lock:
             thread, self._thread = self._thread, None
-            self._targeting = None
+            previous, self._targeting = self._targeting, None
+        if previous is not None:
+            # Detach, so a packet arriving late cannot poke the event of a resolver
+            # that is no longer listening. Harmless either way, but a dangling
+            # callback into a dead worker is the kind of thing that becomes a real
+            # bug the next time somebody touches this.
+            previous.on_miss(None)
         self._stopping.set()
         self._wake.set()                    # unblock an idle wait()
         if thread is not None and thread.is_alive() and thread is not threading.current_thread():

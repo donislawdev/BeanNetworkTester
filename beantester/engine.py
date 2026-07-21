@@ -508,7 +508,14 @@ class BeanEngine:
             # Reconcile: whichever path installed the target (target_for alone, or
             # set_target), the session starts with the resolver pointed at it.
             self._resolver.retarget(targeting)
-            self._resolver.start()
+        # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
+        # Starting it only when a target already exists meant that narrowing down
+        # mid-run - press START, watch, then type a process - left nobody keeping
+        # the port set fresh, so it froze at whatever the first resolve produced and
+        # new sockets were never picked up. That is precisely the failure live
+        # targeting exists to prevent. With no target it blocks on its event and
+        # costs nothing.
+        self._resolver.start()
         self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
         self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
         self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
