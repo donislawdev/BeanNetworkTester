@@ -245,10 +245,11 @@ def _psutil_created(pid):
     This is what tells a recycled PID from the process that used to own it, and it
     is the reason the cache can be trusted at all. Deliberately its OWN call rather
     than part of the full lookup: measured on Windows, ``create_time()`` costs
-    0.005 ms per PID (0.13 ms for every socket-owning PID on the machine, 0.2% of a
-    core at the resolver's rate), while ``name()`` costs 5 ms because it has to open
-    the process and read its image path. Verifying is a thousand times cheaper than
-    re-resolving, which is what makes checking on EVERY cache hit affordable.
+    ~0.005 ms per PID while ``name()`` costs ~5 ms, because only the latter has to
+    open the process and read its image path. Verifying is a thousand times cheaper
+    than re-resolving, which is what makes checking on EVERY cache hit affordable:
+    it adds 0.35 ms to a resolve that took 0.93 ms, i.e. 2.2% of a core at the
+    resolver's measured rate.
     """
     try:
         import psutil
@@ -283,7 +284,7 @@ class PortTable:
         self.clock = clock
         self._lock = threading.RLock()
         self._ports = {}                 # port -> pid
-        self._info = {}                  # pid -> (name, ppid, last_seen)
+        self._info = {}                  # pid -> (name, ppid, created, written_at)
         self._bulk_at = 0.0              # last full process_iter (fallback path)
         self._last = 0.0                 # last successful refresh
         self._native = _make_native()
@@ -370,8 +371,18 @@ class PortTable:
         self._info = {pid: entry for pid, entry in self._info.items()
                       if entry[3] > cutoff}
 
-    def info(self, pid):
+    def info(self, pid, cheap=False):
         """``(name, ppid)`` for a pid - cached, verified, never raises.
+
+        ``cheap=True`` means **never touch the OS from here**: answer from the cache
+        or not at all. That is the mode the CAPTURE THREAD uses, and it is not an
+        optimisation - it is the boundary the previous chunk established. Both the
+        identity check and the fall-back resolve are psutil calls, so leaving either
+        reachable from the packet path puts back exactly what was taken out of it.
+        The cost of being cheap is a connection-log row that may show a stale or
+        empty process name; ``_log_conn`` retries while packets keep coming, and the
+        name is display, not a decision. Targeting - which IS a decision - always
+        runs on the resolver thread and always verifies.
 
         Every cache hit is checked against the process's START TIME. A PID is only
         a number the OS hands out; the same number can belong to a different
@@ -392,7 +403,7 @@ class PortTable:
         with self._lock:
             entry = self._info.get(pid)
         if entry is not None:
-            if not _looks_recycled(_psutil_created(pid), entry[2]):
+            if cheap or not _looks_recycled(_psutil_created(pid), entry[2]):
                 # The timestamp is NOT bumped here. It marks when the entry was
                 # written, so the TTL means "this answer is at most N seconds old"
                 # rather than "nobody has asked lately". Bumping it made the entry
@@ -404,6 +415,11 @@ class PortTable:
             with self._lock:
                 if self._info.get(pid) is entry:
                     del self._info[pid]
+        if cheap:
+            # Nothing cached (or what was cached is provably wrong) and we may not
+            # ask the OS. "" is the honest answer; the resolver will have filled the
+            # cache by the time this row is looked at again.
+            return ("", None)
         resolved = _psutil_process_info(pid)
         if resolved is None:
             # psutil.Process is unavailable (or denied): fall back to one bulk
@@ -425,8 +441,25 @@ class PortTable:
             self._info[pid] = (resolved[0], resolved[1], resolved[2], now)
         return (resolved[0], resolved[1])
 
-    def name_of(self, pid):
-        return self.info(pid)[0]
+    def name_of(self, pid, cheap=False):
+        return self.info(pid, cheap=cheap)[0]
+
+    def warm_names(self):
+        """Resolve (and verify) the name of every PID that currently owns a socket.
+
+        Somebody on a background thread has to do this, because the capture thread
+        reads names CHEAPLY - cache or nothing - and would otherwise show an empty
+        process column. The resolver fills the cache for the PIDs it matches, but
+        only while a target is set; most sessions have none, and the connection
+        log's process column exists precisely so a tester can see who the traffic
+        belongs to before deciding what to target.
+
+        Cheap in the steady state: the names are already cached, so this is one
+        identity check per PID (~0.13 ms for the 25-odd PIDs a desktop has). The
+        first pass pays the real resolve (~124 ms) once.
+        """
+        for pid in set(self.snapshot().values()):
+            self.info(pid)
 
     def ancestors(self, pid, depth=8):
         """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe)."""
@@ -448,7 +481,11 @@ class PortTable:
         if pid is None and allow_refresh:
             self.refresh_if_stale(now, miss=True)
             pid = self.pid_for(port)
-        return self.name_of(pid) if pid else ""
+        # allow_refresh=False means "do not touch the OS", and that has to cover the
+        # NAME lookup too - not just the socket-table rebuild. Resolving a name and
+        # verifying an identity are both psutil calls; gating only one of them left
+        # the packet path making the other.
+        return self.name_of(pid, cheap=not allow_refresh) if pid else ""
 
 
 _DEFAULT = None

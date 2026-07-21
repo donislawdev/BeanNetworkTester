@@ -472,3 +472,65 @@ def test_a_pid_that_loses_every_socket_is_forgotten_at_once(monkeypatch):
     table.refresh(force=True)
     check("the departed pid was forgotten", 8001 not in table._info)
     check("the surviving pid kept its entry", 8000 in table._info)
+
+
+def test_the_capture_thread_never_reaches_psutil_for_a_name(monkeypatch):
+    """`allow_refresh=False` must mean "do not touch the OS", NAME lookup included.
+
+    Two separate leaks lived here. Verifying an identity is a psutil call, so
+    adding the reuse check put one back on the packet path (12 of them across a
+    short run, once per new flow - and this tool gets pointed at load generators,
+    where new flows arrive in thousands per second). And on a cache MISS the older
+    code resolved from whatever thread asked, so the capture thread could trigger a
+    5 ms lookup or even a 1.7 s `process_iter()`. Gating the socket-table rebuild
+    alone left both open.
+    """
+    from beantester import portmap
+    touched = []
+    monkeypatch.setattr(portmap, "_psutil_created",
+                        lambda pid: touched.append("verify"))
+    monkeypatch.setattr(portmap, "_psutil_process_info",
+                        lambda pid: touched.append("resolve"))
+    monkeypatch.setattr(portmap, "_psutil_process_table",
+                        lambda: touched.append("bulk") or {})
+
+    table = portmap.PortTable()
+    table._native = None
+    table._info = {4242: ("app.exe", 1, 1000.0, time.monotonic())}
+    table._ports = {5555: 4242}
+
+    check("a cached name comes back", table.name_of(4242, cheap=True) == "app.exe")
+    check("...without asking the OS", touched == [], f"({touched})")
+
+    table._info.clear()
+    check("an uncached name is blank rather than resolved",
+          table.name_of(4242, cheap=True) == "")
+    check("...still without asking the OS", touched == [], f"({touched})")
+
+    # and the verified path, which runs on the resolver, DOES ask
+    table._info = {4242: ("app.exe", 1, 1000.0, time.monotonic())}
+    table.name_of(4242)
+    check("the verified path checks identity", touched == ["verify"], f"({touched})")
+
+
+def test_names_are_warmed_for_the_connection_log_without_a_target(monkeypatch):
+    """The capture thread may only READ the name cache, so somebody must fill it.
+
+    The resolver fills it for the PIDs it matches - but only while a target is set,
+    and most sessions have none. Without this the connection log's process column
+    came back empty, which is the exact bug the column was added to fix.
+    """
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[8100] = ("app.exe", 1); world.created[8100] = 1000.0
+    world.ports[9100] = 8100
+    table.refresh(force=True)
+
+    check("nothing is cached until somebody warms it", 8100 not in table._info)
+    check("and a cheap read is honest about that",
+          table.name_of(8100, cheap=True) == "")
+
+    table.warm_names()
+    check("warming resolves every socket-owning pid", table._info.get(8100) is not None)
+    check("so the capture thread's cheap read now answers",
+          table.name_of(8100, cheap=True) == "app.exe")

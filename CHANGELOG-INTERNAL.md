@@ -17,6 +17,59 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### BREAKING
+
+- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
+  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
+  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
+  while `--help` advertised "force the GUI". On real WinDivert that meant
+  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
+  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
+  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
+  to stderr and stdout stays clean.
+- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
+  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
+  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
+  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
+  than widening it.
+- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
+  loss and getting zero without being told is the class of quiet lie this project removes), and
+  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
+  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
+  than declined.
+- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
+  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
+- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
+- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
+
+### The capture thread could still reach psutil - and the fix for that broke the process column
+
+Two findings from reviewing the PID-reuse diff, both verified by running them.
+
+- **Identity verification put a psutil call back on the capture thread.** `engine._process_for`
+  reads with `allow_refresh=False`, but that only gated the socket-table rebuild - the NAME lookup
+  underneath it went on to `info()`, which now verifies. Measured with a port table that actually
+  resolves: 12 `create_time()` calls from `Thread-1 (_capture_loop)`. Once per NEW FLOW rather
+  than per packet, so 3/s here - but this tool gets pointed at load generators and port scans,
+  where new flows arrive in thousands per second.
+- **Worse, the same hole predates this branch.** Checked against `master`: on a cache MISS the old
+  `info()` called `_psutil_process_info` from whatever thread asked, so the capture thread could
+  already trigger a resolve (~5 ms) and even a full `process_iter()` (~1.7 s). The previous chunk
+  stopped `process_for_port` from refreshing the socket table and left that path open.
+- Fixed with an explicit `cheap=True` mode on `info()` / `name_of()`, wired from
+  `process_for_port(allow_refresh=False)`: **answer from the cache or not at all.** Resolving a
+  name and verifying an identity are both psutil calls, and gating only one of them is what left
+  the packet path making the other. Re-measured warm and cold: zero psutil calls from the capture
+  thread in both.
+- **That fix then emptied the connection log's process column** - the regression is only visible
+  with no target set, which is most sessions: the capture thread no longer resolves, and the
+  resolver only fills the cache for PIDs it matches, so with no target nothing filled it at all.
+  Measured: 6 rows, 0 names. The column exists precisely because it used to read "?"; shipping
+  that back would have undone a fixed bug. `PortTable.warm_names()` now runs on the WATCHDOG next
+  to the socket-table refresh - cheap in the steady state (one identity check per PID, ~0.13 ms),
+  paying the real resolve once. Re-measured: 6 rows, 6 names, with and without targeting, and
+  still zero psutil from the capture thread.
+
 ### portmap: a PID is a number, not an identity (audit item P2)
 
 - **The `pid -> (name, ppid)` cache could not expire, by any route.** `_expire_info` returned
@@ -47,12 +100,26 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   unconditionally (2.2 us a sweep, measured), and a PID that loses every socket is forgotten at
   once (2.5 us, measured) - a PID can only be reissued after its owner exits, and exiting closes
   its sockets.
-- **Honest cost:** a warm resolve goes from 1.4 ms to 2.96 ms, because a rebuild verifies every
-  socket-owning PID and every ancestor it walks. At the resolver's measured 17 rebuilds/s that is
-  ~5% of one core - on the RESOLVER thread; the capture thread is untouched, which is what the
-  previous chunk bought. If it ever matters, the cheaper shape is a single batch verification in
-  `PortTable.refresh()` (0.13 ms per rebuild) with ancestors left to the TTL; it was not taken
-  because it splits one mechanism into two for a background thread that is not short of time.
+- **Cost, measured properly on a second pass.** The first figure recorded here (1.4 -> 2.96 ms,
+  ~5% of a core) was an AVERAGE polluted by a single outlier and roughly double the truth. Isolated
+  by stubbing `_psutil_created` and comparing medians over 40 runs each, with a control run to
+  confirm reproducibility:
+
+      with verification    1.29 ms   (control: 1.28 ms)
+      without              0.93 ms
+      delta                +0.35 ms  (+38%)
+
+  At the resolver's measured 17 rebuilds/s that is **22 ms/s, 2.2% of one core** - and 2.6% of the
+  0.05 s floor it has to fit inside. On the RESOLVER thread; the capture thread is untouched, which
+  is what the previous chunk bought. A batch verification in `PortTable.refresh()` would shave that
+  to ~0.2%, and is deliberately not taken: it splits one mechanism into two and leaves ancestors on
+  the TTL, to save two percent of a background thread that is not short of time.
+- Two more things checked rather than assumed. The 0.001 s tolerance in `_looks_recycled` is never
+  actually needed here - across 342 processes, `process_iter` and `Process.create_time()` agreed to
+  **0.000000000 s**, so there are no false "recycled" verdicts; the tolerance stays as defence on
+  platforms that are less exact. And PIDs that lose every socket and come back do exist (2 of them
+  oscillated 3-4 times in 10 s of observation), costing about 0.8 extra resolves a second - noise
+  against the numbers above.
 - Verified beyond the suite: a **real** child process with a **real** socket resolves to
   `python.exe` while alive and to `""` the moment it exits - no stale name survives. A 10 s live
   session with targeting: 9020 packets, 171 rebuilds, 23 targeted ports, STOP 18 ms, no thread
@@ -62,31 +129,6 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   its entry (verifying must not become re-resolving), an unverifiable environment still resolves
   names, expiry works below the old 512 threshold and a busily-read entry no longer renews itself,
   and a PID that loses every socket is forgotten at once.
-
-### BREAKING
-
-- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
-  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
-  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
-  while `--help` advertised "force the GUI". On real WinDivert that meant
-  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
-  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
-  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
-  to stderr and stdout stays clean.
-- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
-  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
-  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
-  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
-  than widening it.
-- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
-  loss and getting zero without being told is the class of quiet lie this project removes), and
-  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
-  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
-  than declined.
-- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
-  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
-- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
-- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
 ### STOP no longer waits for a resolve, and the number that explains why
 
