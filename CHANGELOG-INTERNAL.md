@@ -42,6 +42,59 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### stop() releases the divert before anything that can block
+
+CI caught `test_failsafe.py::test_engine_stops_itself_when_the_duration_elapses` failing on
+master. Not a flake to silence: measured, it failed **10 runs out of 30**, and the cause was a
+real ordering problem in the stop path.
+
+`stop()` sets `_running = False` first, which it must - `_capture_loop` runs `while self._running`
+and that flag is how it ends. But the divert was closed sixteen lines further down, after
+`stop_scenario()`, `_resolver.stop()`, `log_event()` and `notify_all()`. Between those two points
+the capture thread is already gone and the divert is still open, so WinDivert keeps diverting into
+a queue nobody drains - the exact failure FAIL-OPEN exists to prevent (convention 20). It is
+invisible on a synthetic divert, whose `recv()` blocks until close, and real on the live one,
+whose `recv()` returns immediately under traffic.
+
+The window was not theoretical. `_resolver.stop()` joins with a 0.25 s timeout and a resolve in
+flight uses it: an earlier session measured STOP at 252 ms with a scan running against ~100 ms
+idle, and recorded that as STOP latency. It was also a quarter of a second of the user's packets
+queued into a void.
+
+Measured here with a divert whose `recv()` returns immediately and a 200 ms resolver join - time
+the divert stayed OPEN after the capture thread had left:
+
+| | before | after |
+|---|---|---|
+| idle resolver | +0.04 ms | -0.36 ms |
+| resolver mid-scan (200 ms join) | **+200.06 ms** | -0.40 ms |
+
+Negative means the divert was closed before the capture thread finished leaving, which is the
+point - closing it is what ends that thread.
+
+- `engine.stop()`: the `_divert.close()` block moves up, directly after the stop bookkeeping and
+  ahead of `stop_scenario()` / `_resolver.stop()` / `log_event()`.
+- It deliberately does NOT move above `self._running = False`. Checked: `recv()` would then raise
+  while the session still looked live, so `_capture_loop` would take the `_fail_stop` path and
+  report a fault for an ordinary stop - which would also break `test_concurrency_chaos`'s
+  `engine.fault is None`. A microscopic window is unavoidable; the point is that no join sits
+  inside it.
+
+Two changes on the test side:
+
+- `test_engine_stops_itself_when_the_duration_elapses` stopped treating `not is_running()` as
+  "stop() has finished". It is not: the flag drops at the top of `stop()` and every promise (the
+  divert closed, the STOP event logged, the workers joined) lands afterwards, so waiting on the
+  flag and asserting a post-condition in the next statement is a race by construction. The test
+  now waits for the post-conditions themselves. Worth recording: reordering the close alone did
+  NOT make it green - the failure simply MOVED to the STOP-event assertion, which is how the
+  wider problem surfaced.
+- New `test_stop_releases_the_divert_before_anything_that_can_block` asserts the ORDER (close
+  before the resolver join) rather than elapsed time, so it cannot flake. Verified by mutation:
+  with the production change reverted it fails with `['resolver.stop', 'divert.close']`.
+
+Verified: `tests/test_failsafe.py` run 40 times consecutively, 0 failures (10/30 before).
+
 ### Property tests for the decision pipeline (audit item #9)
 
 `BeanCore.decide()` is a twelve-step pipeline over twenty-odd interacting fields, and every test
