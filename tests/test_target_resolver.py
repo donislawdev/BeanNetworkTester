@@ -46,6 +46,19 @@ class _CountingTable:
     def ancestors(self, pid, depth=8):
         return []
 
+    # the engine's side of the PortTable surface (see _process_for / _pid_for)
+    def refresh_if_stale(self, now=None, miss=False):
+        return self.refresh(now=now, force=True)
+
+    def process_for_port(self, port, now=None, allow_refresh=True):
+        if allow_refresh:
+            self.refresh_if_stale(now, miss=True)
+        pid = self.ports.get(port)
+        return self.name_of(pid) if pid else ""
+
+    def pid_for(self, port):
+        return self.ports.get(port)
+
 
 def _targeting(expr="chrome", table=None):
     table = table if table is not None else _CountingTable(
@@ -290,11 +303,20 @@ def test_the_capture_thread_never_touches_the_socket_table():
     Runs a real session over synthetic traffic with targeting active, then checks
     WHICH threads made the socket table look. The capture thread must not be
     among them.
+
+    The table is injected into BOTH the targeting AND the engine on purpose. An
+    earlier version of this test gave the counting table only to the targeting and
+    left the engine on ``portmap.default_table()`` - so it watched an object the
+    capture thread never used, passed, and missed the fact that ``_log_conn`` ->
+    ``_process_for`` -> ``process_for_port`` was still rebuilding the real table
+    about sixteen times a second on that very thread. A live run caught what the
+    test could not; the test now watches what the engine actually uses.
     """
     table = _CountingTable(ports={5001: 200}, info={200: ("chrome.exe", 1)})
     targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
 
     engine = BeanEngine()
+    engine._ports = table                       # the table the capture thread reads
     engine.set_target(True, targeting)
     engine.start("true", divert=SyntheticDivert(seed=7))
     try:

@@ -119,7 +119,7 @@ class App:
         self._log_lines = []
         self.engine = BeanEngine(self.log)
         self.running = False
-        self._target_thread = None
+        self._applied_target = None     # last expression pushed to the engine
         # Start/stop run their blocking parts (WinDivert driver load ~0.5-1 s, and
         # the worker-thread joins on stop) OFF the UI thread, so the window never
         # freezes. The worker leaves its result in _ui_queue and the main thread
@@ -1264,7 +1264,7 @@ class App:
                 self.engine_warning.pack_forget()
 
     def _drain_target_warning(self):
-        """Apply the refresher thread's verdict to the widget. Main thread only."""
+        """Render the current target verdict. Main thread only."""
         text = self._pending_target_warning
         if text == self._shown_target_warning:
             return                      # nothing changed: no widget work at all
@@ -1272,32 +1272,52 @@ class App:
         self.set_target_warning(text)
 
     def _refresh_target(self, force=False):
-        # One shared implementation (settings.apply_targeting) resolves the
-        # expression, sums the ports of every matching process and logs it, so the
-        # GUI and apply_settings can never drift apart. NO WIDGET IS TOUCHED HERE:
-        # this runs on the refresher thread, so it only reads the main thread's
-        # snapshot of the expression and leaves its verdict in a plain string for
-        # _tick() to render.
+        """Keep the engine's target in step with the field, and report what it caught.
+
+        This used to run on a 2 s background loop (``_target_refresher``, removed).
+        Every pass called ``apply_targeting``, which resolved the port set
+        SYNCHRONOUSLY - four syscalls and a psutil walk - on a thread nobody
+        watched. Worse, the loop was never joined while ``_finish_start`` spawned a
+        new one on every start, so a STOP followed by a START inside its sleep left
+        the old one running as well: one extra permanent scanner per fast restart.
+
+        Keeping the port set fresh is ``target_resolver``'s job now. What is left
+        here is cheap and runs on the main thread from ``_tick``: apply the
+        expression when the USER changed it, then read the verdict.
+
+        NO WIDGET IS TOUCHED HERE - the verdict goes into a plain field and
+        ``_drain_target_warning`` renders it. Deliberately kept that way: it is the
+        shape that stops a Tcl call ever leaving the main thread, whoever calls this
+        next (convention 26).
+        """
         expression = self._target_expr
+        if force or expression != self._applied_target:
+            self._applied_target = expression
+            if not expression:
+                self.engine.set_target(False)
+            else:
+                # One shared implementation (settings.apply_targeting) compiles the
+                # expression and points the engine at it, so the GUI and
+                # apply_settings can never drift apart.
+                apply_targeting(self.engine, expression, self.log, announce=force)
         if not expression:
-            self.engine.set_target(False)
             self._pending_target_warning = ""
             return
-        targeting = apply_targeting(self.engine, expression, self.log, announce=force)
+        targeting = self.engine.targeting()
+        if targeting is None:
+            self._pending_target_warning = T("fields.target_no_match")
+            return
+        if targeting.refreshes == 0:
+            # Just typed, never resolved: the resolver thread only runs during a
+            # session, and reporting "matches nothing" before anybody looked would
+            # be a lie. One resolve here - bounded to once per edit, not per tick.
+            with crashlog.quiet("gui.app"):
+                targeting.refresh()
         # A target that matches nothing impairs nothing - and a run in which
         # nothing broke looks exactly like a run in which everything held up.
         # Say so on the page, not only in the log.
-        if targeting is None or not targeting.matched:
-            self._pending_target_warning = T("fields.target_no_match")
-        else:
-            self._pending_target_warning = ""
-
-    def _target_refresher(self):
-        # Runs for the whole session so unticking "target process" (or clearing the
-        # field) takes effect within one cycle.
-        while self.running:
-            self._refresh_target()
-            time.sleep(2.0)
+        self._pending_target_warning = (
+            "" if targeting.matched else T("fields.target_no_match"))
 
     def toggle(self):
         self._stop() if self.running else self._start()
@@ -1353,8 +1373,9 @@ class App:
             self._scenario.loop = self.loop_var.get()
             self.engine.start_scenario(self._scenario, s, log=self.log)
         self._snapshot_target()
-        self._target_thread = threading.Thread(target=self._target_refresher, daemon=True)
-        self._target_thread.start()
+        # No refresher thread any more: _tick applies a changed expression and the
+        # engine's resolver keeps the port set fresh (see _refresh_target).
+        self._applied_target = None     # re-apply once, now that the engine is up
         self._sync_running_ui()
 
     def _stop(self):
@@ -1665,7 +1686,11 @@ class App:
             self._drain_target_warning()   # worker-thread verdict (main thread only)
             self._drain_engine_warning()   # "the tool itself is dropping packets"
             self._sample()
-            self._snapshot_target()     # main-thread read for the refresher thread
+            self._snapshot_target()     # main-thread read of the target field
+            if self.running:
+                # Cheap now: applies only when the expression changed, and the
+                # resolving happens on the engine's resolver thread.
+                self._refresh_target()
             if self._transition is None and self.running and not self.engine.is_running():
                 self._on_engine_stopped()      # deadline reached / worker fault
             if self._visible():

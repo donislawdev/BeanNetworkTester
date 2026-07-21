@@ -260,8 +260,8 @@ def test_dialogs_are_in_app_and_translated():
     """)
 
 
-def test_target_refresher_never_touches_widgets_from_its_thread():
-    """The refresher thread must not make Tcl calls (convention: Tk = main thread).
+def test_target_verdict_is_recorded_not_rendered_off_the_main_thread():
+    """``_refresh_target`` must leave its verdict in a field, never draw it itself.
 
     ``_refresh_target`` used to call ``set_target_warning`` directly, so
     ``.config()`` / ``.winfo_ismapped()`` / ``.pack()`` ran on a worker thread.
@@ -269,6 +269,12 @@ def test_target_refresher_never_touches_widgets_from_its_thread():
     open, which is the one thing FAIL-OPEN exists to prevent - or raises
     ``RuntimeError: main thread is not in main loop`` into a bare ``except``,
     silently swallowing the very banner that is supposed to shout.
+
+    The background refresher that made this urgent is gone (resolving moved to
+    ``target_resolver``), but the SHAPE is the guard: as long as the verdict goes
+    into ``_pending_target_warning`` and only ``_drain_target_warning`` renders it,
+    calling this from a thread again can never put a Tcl call on one. The test
+    still runs it on a worker thread, which is the hostile case.
     """
     run_gui("""
         import threading

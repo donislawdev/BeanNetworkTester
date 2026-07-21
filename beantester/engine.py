@@ -398,7 +398,18 @@ class BeanEngine:
         column was mostly "?" even when running as Administrator.
         """
         try:
-            return self._ports.process_for_port(local_port)
+            # allow_refresh=False is the whole point: process_for_port() otherwise
+            # calls refresh_if_stale(miss=True) when the port is unknown, which is
+            # four iphlpapi calls (and sometimes a psutil walk) ON THE CAPTURE
+            # THREAD - measured at ~16 a second against synthetic traffic. This is
+            # a SECOND path that did what targeting used to do; moving targeting off
+            # the hot path did nothing for it. The watchdog keeps the table fresh
+            # instead, exactly as it already does eviction and flow rotation.
+            #
+            # The cost is that a brand-new socket may read as "" for up to one
+            # refresh interval. _log_conn already retries while packets keep coming,
+            # so the row fills itself in rather than staying "?" for ever.
+            return self._ports.process_for_port(local_port, allow_refresh=False)
         except Exception as _exc:
             # once(), not note(): this is the capture thread. A port table that
             # started failing turns every row's process into "?" - worth one
@@ -576,6 +587,12 @@ class BeanEngine:
             # bounded memory is this thread's job now, so the capture thread never
             # pays for it (see _trim_conns)
             try:
+                # Keeping the socket table fresh is maintenance, so it belongs
+                # here for the same reason eviction does: the capture thread must
+                # not pay for it. _process_for() reads the table without ever
+                # rebuilding it, so this tick is what makes the connection log's
+                # process column work at all.
+                self._ports.refresh_if_stale()
                 self._trim_conns()
                 # Same principle: freeing a retired 200k flow generation costs
                 # ~7-22 ms (measured). The capture thread must not spend that in a

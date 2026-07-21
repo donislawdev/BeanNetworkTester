@@ -42,6 +42,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The connection log was a SECOND socket-table scan on the capture thread
+
+- **Moving targeting off the hot path did nothing for this one, and a green test suite said
+  otherwise.** `_log_conn` -> `_process_for` -> `PortTable.process_for_port` calls
+  `refresh_if_stale(miss=True)` whenever the port is unknown - four iphlpapi calls, sometimes a
+  psutil walk - **on the capture thread**, for the connection log's process column. Measured live
+  with a real port table and synthetic traffic: **47 rebuilds in 3 s from
+  `Thread-1 (_capture_loop)`**, alongside the resolver's own 48.
+- **The end-to-end test missed it because it watched the wrong object.** It injected a counting
+  table into the `ProcessTargeting` but left the engine on `portmap.default_table()`, so it
+  asserted on a table the capture thread never used and passed vacuously. The test now sets
+  `engine._ports` to the same table and the fake grew the engine-side surface
+  (`process_for_port`, `pid_for`, `refresh_if_stale`). Found by instrumenting a live run, not by
+  the suite - which is the lesson worth keeping.
+- Fix follows the pattern the project already uses for eviction and flow rotation: `_process_for`
+  reads with `allow_refresh=False` (a pure lookup), and the **watchdog** calls
+  `self._ports.refresh_if_stale()` on its 200 ms tick. Maintenance belongs on the maintenance
+  thread. Cost: a brand-new socket can read as `""` for up to one refresh interval, and
+  `_log_conn` already retries while packets keep coming, so the row fills itself in.
+- Re-measured after the fix: socket-table refreshes come from `bean-target-resolver` (48) and
+  `MainThread` (2). **Zero from the capture thread.**
+
 ### Targeting resolves off the capture thread (new `target_resolver.py`)
 
 - **`ProcessTargeting.__contains__` used to call `refresh()` inline** - i.e. from
