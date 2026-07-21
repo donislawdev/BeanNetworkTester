@@ -18,9 +18,8 @@ So targeting is a live object instead:
 
 * it rebuilds its port set every ``interval`` (300 ms by default, cheap thanks
   to :mod:`beantester.portmap`),
-* an **unknown port forces an early rebuild** (rate limited to ``miss_interval``),
-  which shrinks the "new socket slips through" window from seconds to tens of
-  milliseconds,
+* an **unknown port asks for an early rebuild**, which shrinks the "new socket
+  slips through" window from seconds to tens of milliseconds,
 * a socket belongs to the target when its owning process **or any of its
   ancestors** matches the expression - so a PID (or a name) covers the whole
   process tree. An explicitly EXCLUDED process (``!chromedriver``) is never
@@ -28,6 +27,27 @@ So targeting is a live object instead:
 
 ``BeanCore.decide()`` keeps its ``local_port not in target_ports`` test: this
 class simply *is* the container it tests against (``__contains__``).
+
+Who does the rebuilding, and where
+----------------------------------
+``__contains__`` runs in the PACKET PATH, inside ``BeanCore._lock``, at up to
+150 000 calls a second. It therefore does no work beyond a frozenset lookup.
+
+It used to call ``refresh()`` itself, which meant the capture thread paid for
+four ``iphlpapi`` calls, an O(n) dict copy and a ``psutil.Process()`` per distinct
+PID - occasionally a whole ``process_iter()`` - while holding the core lock. And
+that was not a rare path: targeting exists to narrow traffic to one application,
+so every packet from every OTHER application is a MISS, which made the rebuild a
+steady 20 Hz whenever a target was set. A stalled capture thread is exactly the
+failure WinDivert punishes: it keeps diverting into a queue nobody drains, so the
+user loses connectivity while the UI still says "running".
+
+Now a miss only sets a flag and wakes :class:`~beantester.target_resolver.TargetResolver`,
+which rebuilds on its own thread. The flag is the reason the wake-up is free:
+``Event.set()` takes a lock, so it is called only on the FALSE -> TRUE transition,
+at most once per resolver cycle, while the flag itself is a plain bool (atomic
+under the GIL). ``refresh()`` stays public and synchronous for one-shot callers
+(``resolve_ports``, ``make_targeting``) and for tests.
 
 Hard limit, documented on purpose: WinDivert hands us a packet, not a PID, so
 the port -> process mapping is inherently a race. It cannot be closed, only made
@@ -56,6 +76,11 @@ class ProcessTargeting:
         self._pids = frozenset()
         self._last = 0.0
         self._refreshes = 0
+        # Set by the packet path when it is asked about a port it does not know;
+        # cleared by the resolver before each rebuild. A plain bool on purpose -
+        # reads and writes are atomic under the GIL, so the hot path pays nothing.
+        self._miss = False
+        self._on_miss = None        # the resolver's wake-up, when one is attached
 
     # -- resolution ----------------------------------------------------------- #
     def _matches(self, pid, name):
@@ -95,21 +120,44 @@ class ProcessTargeting:
 
     # -- the container BeanCore tests against ---------------------------------- #
     def __contains__(self, port):
+        """A frozenset lookup and nothing else. See "Who does the rebuilding".
+
+        THE PACKET PATH CALLS THIS, inside ``BeanCore._lock``. It must not touch
+        the socket table, psutil, or any lock of its own.
+        """
         if port is None:
             return False
-        now = self.clock()
-        if (now - self._last) >= self.interval:
-            self.refresh(now)
         if port in self._ports:
             return True
-        # An unknown port is the interesting case: it is either traffic we do not
-        # care about, or a connection the target opened microseconds ago. Only a
-        # fresh look can tell - rate limited, so a busy link cannot turn this into
-        # a rebuild per packet.
-        if (now - self._last) >= self.miss_interval:
-            self.refresh(now)
-            return port in self._ports
+        # An unknown port is the interesting case: either traffic we do not care
+        # about, or a connection the target opened microseconds ago. Only a fresh
+        # scan can tell - so ask for one and get out of the way. The guard keeps
+        # Event.set() (which takes a lock) to one call per resolver cycle instead
+        # of one per packet.
+        if not self._miss:
+            self._miss = True
+            wake = self._on_miss
+            if wake is not None:
+                wake()
         return False
+
+    # -- resolver handshake ----------------------------------------------------- #
+    def on_miss(self, callback):
+        """Attach the resolver's wake-up (``None`` detaches it)."""
+        self._on_miss = callback
+
+    def consume_miss(self):
+        """Take and clear the "somebody asked about an unknown port" flag.
+
+        Called by the resolver BEFORE it rebuilds, so a miss that happens *during*
+        the rebuild re-arms instead of being swallowed by it.
+        """
+        missed, self._miss = self._miss, False
+        return missed
+
+    @property
+    def missed(self):
+        return self._miss
 
     def __iter__(self):
         return iter(self._ports)

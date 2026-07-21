@@ -843,7 +843,8 @@ beantester/              the implementation package
                          range, form section, profile scope, CLI flag
   validators.py          number and range validation (shared by GUI, CLI and config file)
   portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback)
-  targeting.py           live target port set: refresh on miss + process tree
+  targeting.py           live target port set: process tree, asks for a rebuild on a miss
+  target_resolver.py     rebuilds that port set on its own thread, off the packet path
   jsonfile.py            atomic write + quarantine of corrupted user files
   crashlog.py            crash logger: quiet/note/once, quarantine, background report
   appinfo.py             app identity and version reader (one source: VERSION.txt)

@@ -33,6 +33,7 @@ from . import portmap
 from .core import BeanCore
 from .i18n import T
 from .scenario_runner import ScenarioRunner
+from .target_resolver import TargetResolver
 from . import crashlog
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
@@ -95,6 +96,10 @@ class BeanEngine:
         self._stop_mono = None      # session clock, frozen at STOP (see now_ref)
         self._stop_wall = None
         self._targeting = None      # live ProcessTargeting, when a target is set
+        self._target_lock = threading.Lock()
+        # Resolves the targeted port set OFF the capture thread (see
+        # target_resolver.py). One per engine, retargeted rather than restarted.
+        self._resolver = TargetResolver()
         self._ports = portmap.default_table()   # local port -> process (capture time)
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
@@ -152,27 +157,62 @@ class BeanEngine:
         self.core.set_buffer(*a)
 
     def set_target(self, active, ports=None):
-        """Point the engine at a set of local ports (or a live port container)."""
+        """Point the engine at a set of local ports (or a live port container).
+
+        This is the ONE place the resolver is pointed at a target, whichever entry
+        point got here: ``self._targeting`` used to be assigned only by
+        ``target_for``, so installing a live targeting directly left the engine
+        believing it had none while the core happily tested against it.
+
+        Retarget only - the thread itself lives exactly as long as a SESSION does
+        (started in ``start()``, joined in ``stop()``). A configured-but-not-started
+        target must not have something scanning the socket table in the background.
+        """
         if not active:
-            self._targeting = None
+            with self._target_lock:
+                self._targeting = None
+            self._resolver.retarget(None)
+        elif hasattr(ports, "on_miss"):          # a live ProcessTargeting
+            with self._target_lock:
+                self._targeting = ports
+            self._resolver.retarget(ports)
+        else:                                    # a plain set: nothing to refresh
+            with self._target_lock:
+                self._targeting = None
+            self._resolver.retarget(None)
         self.core.set_target(active, ports)
 
     def targeting(self):
         """The live ``ProcessTargeting`` in use, if any."""
         return self._targeting
 
+    def resolver(self):
+        """The background resolver that keeps the port set fresh."""
+        return self._resolver
+
     def target_for(self, matcher):
         """Live targeting for a compiled matcher (reused while the expression holds).
 
-        Rebuilding it on every refresh would throw away the port cache and the
+        Rebuilding it on every apply would throw away the port cache and the
         process-info cache several times a second for nothing.
+
+        No rebuild happens here. Resolving costs syscalls and a psutil walk, and
+        this is called from whichever thread applied the settings - the UI thread
+        among them. The resolver does it (see ``target_resolver``); ``start()``
+        forces one synchronous pass so the very first packet already has a port
+        set to test against.
         """
         from .targeting import ProcessTargeting
-        current = self._targeting
-        if current is None or current.expression != getattr(matcher, "raw", str(matcher)):
-            current = ProcessTargeting(matcher)
-            self._targeting = current
-        current.refresh()
+        # Locked: a GUI apply and a scenario step can both land here, and two
+        # threads racing to build a ProcessTargeting would leave the resolver
+        # pointed at an orphan while the core tested against the other one.
+        with self._target_lock:
+            current = self._targeting
+            if current is None or current.expression != getattr(matcher, "raw", str(matcher)):
+                current = ProcessTargeting(matcher)
+                self._targeting = current
+        # Pointing the RESOLVER at it is set_target's job (one place, one
+        # responsibility) and start() reconciles the two either way.
         return current
 
     def set_flap(self, *a):
@@ -445,6 +485,19 @@ class BeanEngine:
         self._deadline = (self._start_mono + self._duration) if self._duration > 0 else None
         self.stop_reason = None
         self.fault = None
+        # One synchronous resolve before the capture thread exists, so the very
+        # first packet is tested against a populated port set instead of an empty
+        # one. Safe to block here: start() already runs off the UI thread (the GUI
+        # drives it through _begin_transition), and this is the only place the
+        # resolution is allowed to be synchronous.
+        targeting = self._targeting
+        if targeting is not None:
+            with crashlog.quiet("engine.target"):
+                targeting.refresh()
+            # Reconcile: whichever path installed the target (target_for alone, or
+            # set_target), the session starts with the resolver pointed at it.
+            self._resolver.retarget(targeting)
+            self._resolver.start()
         self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
         self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
         self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
@@ -469,6 +522,9 @@ class BeanEngine:
             self._stop_wall = time.time()
             self.stop_reason = reason
             self.stop_scenario()
+            # Joins: the resolver holds OS handles and must stop touching them when
+            # the session does, not "eventually".
+            self._resolver.stop()
             self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
             with self._cv:
                 self._cv.notify_all()

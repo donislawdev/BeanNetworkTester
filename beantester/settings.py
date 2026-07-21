@@ -154,6 +154,17 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
         return None
     try:
         targeting = engine.target_for(matcher)
+        if announce:
+            # ONE synchronous resolve, and only on the announcing path - which is
+            # the explicit "the user applied settings" one. It is needed because the
+            # log line below reports what was actually matched, and an unresolved
+            # target would always read as "matches nothing" (the very message this
+            # project made loud on purpose).
+            #
+            # The periodic path passes announce=False and never blocks: keeping the
+            # port set fresh from there on is the resolver thread's job, which is
+            # what took this cost off the packet path in the first place.
+            targeting.refresh()
     except ImportError:
         log(T("log.targeting_requires_psutil"))
         engine.set_target(False)

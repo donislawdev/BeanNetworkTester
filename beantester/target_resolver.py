@@ -1,0 +1,127 @@
+"""Keeps the targeted port set fresh - on its own thread, never on the capture one.
+
+Why this module exists
+----------------------
+``ProcessTargeting`` answers "does this local port belong to the targeted
+process?". Answering it means reading the OS socket table and resolving PIDs to
+process names, which costs four ``iphlpapi`` calls, an O(n) dict copy, a
+``psutil.Process()`` per distinct PID and - whenever a protected PID refuses to
+open - a whole ``psutil.process_iter()``.
+
+All of that used to happen inside ``ProcessTargeting.__contains__``, i.e. inside
+``BeanCore.decide()``, i.e. on the CAPTURE THREAD, while holding ``core._lock``.
+And it was the normal case rather than an edge one: targeting exists to narrow
+traffic to a single application, so every packet from every *other* application
+is a miss, and a miss is what triggered the rebuild. With a target set, that was
+a steady ~20 Hz of syscalls in the packet path.
+
+A stalled capture thread is the one failure this tool must not have. WinDivert
+keeps diverting packets into a queue nobody is draining, so the user quietly
+loses connectivity - while the UI cheerfully reports "running". The whole
+fail-open design (convention 20), the watchdog, and moving eviction and table
+sorting off the hot path all exist to prevent exactly that. Targeting was the
+last place still doing it.
+
+Shape
+-----
+Deliberately the same shape as :mod:`beantester.scenario_runner`: a small class
+that owns one background thread, with its lifecycle driven explicitly by
+``BeanEngine`` (``start`` / ``stop``), rather than a leaf object that
+self-starts a hidden daemon. Two differences, both on purpose:
+
+* **``stop()`` joins.** The resolver holds OS handles; it must stop touching them
+  the moment the session ends, not "eventually". (``ScenarioRunner.stop()`` only
+  sets a flag.)
+* **It waits on an ``Event``, not a ``sleep``.** A packet for an unknown port
+  wakes it immediately, so a brand-new connection starts being impaired within
+  tens of milliseconds instead of at the next tick.
+
+ONE resolver per engine, with a swappable target: retargeting is a reference
+swap, not a thread restart. Applying settings repeatedly - which the GUI does on
+every "Apply", and the concurrency tests do hundreds of times - must not churn
+threads.
+"""
+import threading
+
+from . import crashlog
+
+REFRESH_S = 0.30                # routine rebuild when nothing asks sooner
+
+
+class TargetResolver:
+    """Rebuilds one ``ProcessTargeting``'s port set on a background thread."""
+
+    def __init__(self, interval=REFRESH_S):
+        self.interval = float(interval)
+        self._targeting = None
+        self._thread = None
+        self._wake = threading.Event()
+        self._stopping = threading.Event()
+        self._lock = threading.Lock()
+        self._rebuilds = 0
+
+    # -- lifecycle (driven by BeanEngine) -------------------------------------- #
+    def start(self):
+        """Start the thread if it is not already running. Idempotent."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stopping.clear()
+            self._thread = threading.Thread(target=self._loop, name="bean-target-resolver",
+                                            daemon=True)
+            self._thread.start()
+
+    def stop(self, timeout=2.0):
+        """Stop the thread and WAIT for it: it holds OS handles."""
+        with self._lock:
+            thread, self._thread = self._thread, None
+            self._targeting = None
+        self._stopping.set()
+        self._wake.set()                    # unblock an idle wait()
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=timeout)
+
+    def retarget(self, targeting):
+        """Point the resolver at a new targeting (``None`` = nothing to resolve).
+
+        A reference swap, not a thread restart - see the module docstring.
+        """
+        with self._lock:
+            previous, self._targeting = self._targeting, targeting
+        if previous is not None and previous is not targeting:
+            previous.on_miss(None)          # an orphan must not keep waking us
+        if targeting is not None:
+            targeting.on_miss(self._wake.set)
+        self._wake.set()
+
+    # -- introspection (tests, diagnostics) ------------------------------------ #
+    def is_running(self):
+        thread = self._thread
+        return thread is not None and thread.is_alive()
+
+    @property
+    def rebuilds(self):
+        return self._rebuilds
+
+    # -- the worker ------------------------------------------------------------- #
+    def _loop(self):
+        while not self._stopping.is_set():
+            # Arm BEFORE reading the target and rebuilding: a miss that arrives
+            # while we are inside refresh() then sets the event again, the wait
+            # below returns at once and the next pass picks it up. Clearing after
+            # the rebuild would swallow exactly that wake-up.
+            self._wake.clear()
+            targeting = self._targeting
+            if targeting is None:
+                self._wake.wait()           # nothing to resolve: sleep for free
+                continue
+            targeting.consume_miss()
+            try:
+                targeting.refresh()
+                self._rebuilds += 1
+            except Exception as exc:
+                # The session must not die because a socket table hiccupped; the
+                # port set simply goes stale until the next pass. But it stops
+                # being invisible.
+                crashlog.once("targeting.resolver", exc)
+            self._wake.wait(timeout=self.interval)
