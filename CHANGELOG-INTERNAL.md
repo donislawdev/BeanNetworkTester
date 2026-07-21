@@ -102,14 +102,20 @@ Two more edges measured, neither a bug, both now covered so nobody has to re-der
   (it returns, with data or with a message) because `chmod` genuinely blocks reads on POSIX while
   on Windows it only toggles the read-only bit.
 
-Observation, not a change: an unreadable file is also QUARANTINED, because `quarantine()` renames
-and renaming needs no read access. For a transient lock (antivirus, a backup agent, an editor) that
-means the user's window state is moved aside and the run starts from defaults. Nothing is lost -
-the file survives as `.corrupt-<timestamp>` - and `read_json`'s contract does say "unreadable/broken
-(already quarantined)". Distinguishing `OSError` (do not quarantine, it may be readable next time)
-from `ValueError` (quarantine, the content is unusable) would be a small and principled change.
-Left alone deliberately: no evidence it has ever happened here, and the stability-first rule says
-speculative changes to a startup path wait for a reason.
+An unreadable file is also QUARANTINED, because `quarantine()` renames and renaming needs no read
+access. That first looked like a wart worth splitting - `OSError` (do not quarantine, it may be
+readable next time) versus `ValueError` (quarantine, the content is unusable) - and this file said
+so. **Checking it reversed the conclusion, so the suggestion is withdrawn rather than left as a
+trap.** `UiStateStore.persist()` runs unconditionally (on close, and on every window-state change)
+and `write_json` ends in `os.replace`. Leave an unreadable file in place and the first save of the
+session OVERWRITES it, destroying precisely the content nobody could read. The quarantine is what
+preserves it. Current behaviour is correct and must stay.
+
+CI is what forced the check: `test_an_unreadable_file_is_reported_not_crashed` passed on Windows,
+where `chmod` only toggles the read-only bit, and failed on Linux, where it genuinely denies the
+read - the test's cleanup chmod'd a fixed path that the quarantine had already renamed away. The
+test now restores whatever is actually in the directory, and asserts the preservation half only on
+platforms that really denied the read (root ignores `chmod` everywhere).
 
 Verified by mutation: with `or {}` restored the suite fails with the original
 `AttributeError: 'str' object has no attribute 'get'`.

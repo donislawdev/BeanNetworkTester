@@ -355,13 +355,21 @@ def test_a_directory_where_a_file_belongs_is_reported_not_crashed(tmp_path):
     check("and the caller is told why", bool(error), f"({error!r})")
 
 
-def test_an_unreadable_file_is_reported_not_crashed(tmp_path):
-    """The invariant is the same whatever the OS decides to allow.
+def test_an_unreadable_file_is_moved_aside_rather_than_left_to_be_overwritten(tmp_path):
+    """Unreadable is answered, not raised - and the file is preserved.
 
-    ``chmod`` genuinely blocks reads on POSIX; on Windows it only toggles the
-    read-only bit and the file stays readable. So this asserts what must hold
-    either way: the call returns, and it either produced data or said what went
-    wrong. Never an exception, which is the thing the callers cannot survive.
+    Quarantining a file we could not READ looks heavy-handed until you follow
+    what happens next: ``UiStateStore.persist()`` runs unconditionally (on close,
+    and whenever window state changes), and ``write_json`` ends in
+    ``os.replace``. Leave an unreadable file in place and the first save of the
+    session overwrites it - destroying exactly the content nobody could read.
+    Moving it to ``.corrupt-<timestamp>`` is what saves it.
+
+    The platforms disagree about whether this can even be provoked: ``chmod``
+    genuinely blocks reads on POSIX, while on Windows it only toggles the
+    read-only bit and the file stays readable (and root ignores it everywhere).
+    So the portable half is asserted always, and the quarantine half only when
+    the platform actually denied the read.
     """
     path = tmp_path / "state.json"
     path.write_text('{"page": "control"}', encoding="utf-8")
@@ -369,10 +377,22 @@ def test_an_unreadable_file_is_reported_not_crashed(tmp_path):
     try:
         data, error = read_json(str(path), expect=dict)
     finally:
-        os.chmod(path, 0o600)
+        # The read may have renamed it, so restore whatever is actually there -
+        # the first version of this chmod'd a fixed path and died with
+        # FileNotFoundError on Linux, where the quarantine had already happened.
+        for leftover in tmp_path.iterdir():
+            try:
+                os.chmod(leftover, 0o600)
+            except OSError:
+                pass
 
     check("an unreadable file is answered, not raised",
           (data is not None) or bool(error), f"(data={data!r}, error={error!r})")
+    if error:                     # the platform really did deny the read
+        moved = [p.name for p in tmp_path.iterdir() if ".corrupt-" in p.name]
+        check("a file that could not be read is preserved, not left to be "
+              "overwritten by the next save", moved,
+              f"(files: {sorted(p.name for p in tmp_path.iterdir())})")
 
 
 def test_a_ui_state_file_that_is_not_json_at_all_is_quarantined(tmp_path):
