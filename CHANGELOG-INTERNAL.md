@@ -42,6 +42,84 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The hot-path guard now covers the route Linux takes, on every machine
+
+`test_hot_path.py` shipped with an explicit "NOT verified" note: `PortTable` reads the socket table
+through `iphlpapi` when `_make_native()` succeeds and through `psutil.net_connections` when it does
+not, and on Windows the first always wins. So `_psutil_port_pid_map` was watched by the guard and
+had never once fired locally - the Linux behaviour was covered only by the ubuntu leg of CI, and
+only by accident of which platform happened to run.
+
+`_make_native` returning `None` IS what a non-Windows platform does, so substituting it exercises
+that route anywhere. New `test_the_psutil_socket_table_path_is_just_as_clean` does exactly that.
+Measured with the substitution in place, against the same session (traffic, targeting that matches
+nothing, five seconds):
+
+| | native path | forced fallback |
+|---|---|---|
+| `_Native._table` | 36 calls | **0** |
+| `_psutil_port_pid_map` | **0** | 12 calls |
+| from a packet thread | nothing | **nothing** |
+
+The test asserts its own conclusiveness before asserting the invariant - the table really took the
+psutil route (`table.native is False`), the fallback lookup really ran, and no native call leaked
+through - so a substitution that silently did nothing fails instead of passing quietly.
+
+Verified by mutation, and this is the part that makes it more than a duplicate: reopening
+`_process_for`'s refresh (`allow_refresh=True`) makes it fail naming the OTHER function -
+`[('_psutil_port_pid_map', 'Thread-1 (_capture_loop)')]` - where the Windows test names
+`_Native._table`. Same regression, second route, and now it is caught on both without waiting for
+a particular runner.
+
+The module docstring's "NOT verified" paragraph is replaced rather than left to rot; it now says
+what was measured.
+
+### One stray lang/*.json stopped the program from starting (audit item #10, the edges)
+
+`lang/*.json` is the one on-disk format with its own `json.load`, outside `jsonfile`, and it was
+left out of the first #10 pass as a shipped file rather than a user file. It is not only shipped:
+translations are meant to be added, and `load_languages` promises in its docstring that "a broken
+or unreadable file is skipped so it can never break app startup".
+
+`meta = data.pop("_meta", None) or {}` rescued a FALSY `_meta` - `null`, `0`, `""` - and nothing
+else. A non-empty one of the wrong type (`"_meta": "en"`, a list, a number, `true`) sailed past
+`or {}` and died on `meta.get()`, which sits OUTSIDE the per-file `try`. The AttributeError escaped
+`load_languages`, which runs at startup. Measured with one such file dropped into the real `lang/`:
+**`python -m beantester --version` exited 1 with a traceback.** One stray file, no program - CLI or
+GUI.
+
+Fixed with an `isinstance(meta, dict)` check. The file then behaves exactly like one carrying no
+`_meta` at all, which is a supported case: the filename supplies the language code and the
+translations are kept. That is deliberately NOT "skip the file" - discarding a translator's work
+over a typo in one metadata field would be the wrong trade, and the first draft of the test
+asserted the wrong thing here before the behaviour was thought through.
+
+Two more edges measured, neither a bug, both now covered so nobody has to re-derive them:
+
+- **a directory where a file belongs**: `open()` raises `IsADirectoryError` on Linux and
+  `PermissionError` on Windows; both are `OSError`, `read_json` reports it, nothing raises.
+- **a file that cannot be read**: reported the same way. The test asserts the portable invariant
+  (it returns, with data or with a message) because `chmod` genuinely blocks reads on POSIX while
+  on Windows it only toggles the read-only bit.
+
+An unreadable file is also QUARANTINED, because `quarantine()` renames and renaming needs no read
+access. That first looked like a wart worth splitting - `OSError` (do not quarantine, it may be
+readable next time) versus `ValueError` (quarantine, the content is unusable) - and this file said
+so. **Checking it reversed the conclusion, so the suggestion is withdrawn rather than left as a
+trap.** `UiStateStore.persist()` runs unconditionally (on close, and on every window-state change)
+and `write_json` ends in `os.replace`. Leave an unreadable file in place and the first save of the
+session OVERWRITES it, destroying precisely the content nobody could read. The quarantine is what
+preserves it. Current behaviour is correct and must stay.
+
+CI is what forced the check: `test_an_unreadable_file_is_reported_not_crashed` passed on Windows,
+where `chmod` only toggles the read-only bit, and failed on Linux, where it genuinely denies the
+read - the test's cleanup chmod'd a fixed path that the quarantine had already renamed away. The
+test now restores whatever is actually in the directory, and asserts the preservation half only on
+platforms that really denied the read (root ignores `chmod` everywhere).
+
+Verified by mutation: with `or {}` restored the suite fails with the original
+`AttributeError: 'str' object has no attribute 'get'`.
+
 ### --dry-run called a scenario valid without ever opening it (audit item #10)
 
 `--dry-run` is the gate a CI/CD pipeline runs before the real command. It returned `OK` for every

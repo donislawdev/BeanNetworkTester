@@ -36,6 +36,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **One bad translation file no longer stops the whole program.** Language files are plain JSON
+  next to the program, and you can add your own. If one of them had a malformed `_meta` header -
+  the little block naming the language - the program refused to start at all, with a technical
+  error and no hint that a language file was to blame. Even asking it for its version failed. A
+  header it cannot read is now simply ignored: the translations in that file are still used, and
+  the language is named after the file.
 - **`--dry-run` now checks your scenario file as well.** That option exists to tell you whether a
   run will work before you start it - but it never actually opened the scenario file, so a damaged,
   empty or half-written scenario passed the check with "Configuration is valid" and then failed the

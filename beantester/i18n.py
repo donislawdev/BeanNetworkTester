@@ -41,7 +41,16 @@ def load_languages(directory=None):
             continue
         if not isinstance(data, dict):
             continue
-        meta = data.pop("_meta", None) or {}
+        meta = data.pop("_meta", None)
+        if not isinstance(meta, dict):
+            # ``or {}`` only rescued a FALSY _meta (null, 0, ""). A non-empty one
+            # of the wrong type - "_meta": "en", a list, a number - sailed past it
+            # and then died on meta.get(), outside this loop's try. That
+            # AttributeError escaped load_languages(), which runs at startup, so a
+            # single stray file in lang/ stopped the whole program: measured, even
+            # ``--version`` exited 1 with a traceback. The docstring above promises
+            # the opposite - a broken file is SKIPPED.
+            meta = {}
         code = str(meta.get("code") or os.path.splitext(fname)[0]).strip().lower()
         if not code:
             continue
