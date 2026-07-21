@@ -42,6 +42,43 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### ui.json: a valid dict with the wrong types stopped the app from starting (audit item #10)
+
+`jsonfile.read_json` guarantees the file parses and is a dict. Nothing beyond that - and
+`UiStateStore` trusted the rest, while its own module docstring promises that corruption "must
+never break startup, so every failure degrades to the defaults". Measured, by building a real
+`App` over a poisoned `bean_network_tester_ui.json`, three keys broke that promise outright:
+
+| key | value | result |
+|---|---|---|
+| `page` | `[1, 2, 3]` | `TypeError: cannot use 'list' as a dict key (unhashable type: 'list')` |
+| `conn_sort` | `[1, 2]` | `TypeError: object is not iterable` |
+| `event_sort` | `"kb"` | `ValueError: dictionary update sequence element #0 has length 1; 2 is required` |
+
+The window never appeared, and the traceback named none of the files involved.
+
+`UiStateStore._clean` now drops values whose TYPE is not the one `DEFAULTS` promises, records
+which keys it ignored in `self.problem` (already surfaced by `App._report_storage_problems`
+through the existing `log.ui_state_problem` key, so no new i18n), and keeps everything else. It is
+deliberately the same shape as `ProfileStore._clean`, which has always done this for the other
+user file - the mechanism existed, it just was not applied here.
+
+**Only the TYPE is checked, and that is a measured decision, not caution.** Every wrong VALUE of
+the right type was tried first and already degrades gracefully: an unknown page id, an unknown
+stats sub-page, an unknown language code, a missing profile name, a nonsense geometry string, a
+negative or absurd sash position, a sort column that does not exist, `collapsed` holding ints or
+nested lists, `conn_sort` with a list under `col`. Validating further would add rules that catch
+nothing. Unknown keys are kept on purpose: `get` only reads keys it knows, and dropping them would
+silently discard state written by a newer version.
+
+New `tests/test_ondisk_formats.py` (4 tests, more coming for the config and scenario paths):
+per-key type fuzzing at the store level, the whole poison set driven through a real `App` in one
+subprocess, and the unparseable-file half - every shape in `BROKEN_JSON` must leave usable state,
+a reported problem and a `.corrupt-<timestamp>` file rather than a clobbered one.
+
+Verified by mutation: with `_clean` removed the suite fails with the original symptom,
+`the app did not start: page=[1, 2, 3]: TypeError: cannot use 'list' as a dict key`.
+
 ### The chaos test was measuring the machine, not the code
 
 CI failed `test_the_model_worker_survives_a_live_connection_table` with

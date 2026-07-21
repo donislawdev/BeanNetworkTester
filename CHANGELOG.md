@@ -36,6 +36,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A damaged window-layout file no longer stops the program from starting.** The program
+  remembers your window size, the page you were last on and which sections you had collapsed, in a
+  small file next to it. That file is yours to edit, and it also gets copied between machines - and
+  if an entry in it ended up the wrong shape, the program could fail to open at all, with an error
+  that gave no hint which file was to blame. Anything it cannot make sense of is now ignored, that
+  one setting goes back to its default, and the log tells you which entries were skipped. The rest
+  of your layout is kept.
 - **Ending a session now hands your network back at once, instead of a moment later.** When a run
   finished - whether you pressed STOP or its time ran out - the tool stopped looking at packets
   immediately, but kept its grip on your network traffic for a moment longer while it tidied up
