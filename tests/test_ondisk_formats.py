@@ -30,9 +30,10 @@ import io
 import json
 import os
 
-from beantester import exitcodes
+from beantester import exitcodes, i18n
 from beantester.cli import run_cli
 from beantester.gui.ui_state import DEFAULTS, UiStateStore
+from beantester.jsonfile import read_json
 from fakes import check
 from gui_harness import run_gui
 
@@ -252,6 +253,126 @@ def test_dry_run_and_a_real_run_agree_about_a_scenario(tmp_path):
                             "--simulate", "--dry-run"])
         check(f"shipped scenario {name} passes --dry-run", code == exitcodes.OK,
               f"(code={code}, stderr={err!r})")
+
+
+# --------------------------------------------------------------------------- #
+# lang/*.json - the one on-disk format with its own json.load
+# --------------------------------------------------------------------------- #
+def test_a_broken_language_file_is_skipped_not_fatal(tmp_path):
+    """``load_languages`` promises a broken file "is skipped so it can never
+    break app startup". A ``_meta`` of the wrong type broke exactly that.
+
+    ``meta = data.pop("_meta", None) or {}`` rescued a FALSY value - ``null``,
+    ``0``, ``""`` - and nothing else. ``"_meta": "en"``, a list or a number sailed
+    past it and died on ``meta.get()``, which sits outside the per-file ``try``.
+    The AttributeError escaped ``load_languages``, which runs at startup: measured
+    with one such file dropped into the real ``lang/``, even ``--version`` exited 1
+    with a traceback. One stray file, no program.
+    """
+    good = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "lang", "en.json")
+
+    # A file that does not parse into a dict has nothing usable in it: skip it.
+    unusable = {
+        "truncated": '{"a": ',
+        "a bare list": "[1, 2, 3]",
+        "empty file": "",
+        "not json at all": "<html>",
+    }
+    # A file that DOES parse but whose _meta is the wrong type is not a broken
+    # translation file - it is a translation file with unusable metadata, which is
+    # the same position as one carrying no ``_meta`` at all (it is optional, and
+    # then the filename supplies the code). Keep the translations, drop the
+    # metadata. Discarding the whole file would throw away a translator's work
+    # over a typo in one field.
+    bad_meta = {
+        "_meta is a string": '{"_meta": "en", "x": "y"}',
+        "_meta is a list": '{"_meta": [1, 2], "x": "y"}',
+        "_meta is a number": '{"_meta": 7, "x": "y"}',
+        "_meta is a bool": '{"_meta": true, "x": "y"}',
+    }
+
+    def load_with(label, text):
+        folder = tmp_path / label.replace(" ", "_").replace('"', "")
+        folder.mkdir()
+        (folder / "en.json").write_text(open(good, encoding="utf-8").read(),
+                                        encoding="utf-8")
+        (folder / "zz.json").write_text(text, encoding="utf-8")
+        return i18n.load_languages(str(folder))
+
+    for label, text in unusable.items():
+        codes = load_with(label, text)
+        check(f"{label}: the good language still loaded", "en" in codes,
+              f"(codes={sorted(codes)})")
+        check(f"{label}: the unusable one was skipped", "zz" not in codes,
+              f"(codes={sorted(codes)})")
+
+    for label, text in bad_meta.items():
+        codes = load_with(label, text)
+        check(f"{label}: it did not take the program down", "en" in codes,
+              f"(codes={sorted(codes)})")
+        check(f"{label}: the translations survive, keyed by the file name",
+              "zz" in codes, f"(codes={sorted(codes)})")
+        i18n.set_language("zz")
+        check(f"{label}: and they actually translate", i18n.translate("x") == "y",
+              f"({i18n.translate('x')!r})")
+
+
+def test_the_app_still_speaks_when_every_language_file_is_broken(tmp_path):
+    """Nothing loadable at all is still not a reason to fall over: the caller
+    gets an empty set and translation falls back to the built-in text."""
+    for name in ("en.json", "pl.json"):
+        (tmp_path / name).write_text("not json at all", encoding="utf-8")
+
+    codes = i18n.load_languages(str(tmp_path))
+    check("nothing loaded, and that is reported honestly", codes == set(),
+          f"({codes})")
+    check("a translation still returns usable text",
+          isinstance(i18n.translate("buttons.ok"), str)
+          and i18n.translate("buttons.ok") != "",
+          f"({i18n.translate('buttons.ok')!r})")
+
+
+def test_a_missing_language_directory_is_not_fatal(tmp_path):
+    codes = i18n.load_languages(str(tmp_path / "does-not-exist"))
+    check("a missing lang directory loads nothing and raises nothing",
+          codes == set(), f"({codes})")
+
+
+# --------------------------------------------------------------------------- #
+# the filesystem itself: not every failure is a parse failure
+# --------------------------------------------------------------------------- #
+def test_a_directory_where_a_file_belongs_is_reported_not_crashed(tmp_path):
+    """``read_json`` catches ``OSError``, and this is the case that produces one
+    without any content being involved: on Linux opening a directory raises
+    ``IsADirectoryError``, on Windows ``PermissionError``. Both are OSError, and
+    both must come back as a message rather than as an exception."""
+    path = tmp_path / "ui.json"
+    path.mkdir()
+    data, error = read_json(str(path), expect=dict)
+
+    check("a directory does not parse into data", data is None, f"({data!r})")
+    check("and the caller is told why", bool(error), f"({error!r})")
+
+
+def test_an_unreadable_file_is_reported_not_crashed(tmp_path):
+    """The invariant is the same whatever the OS decides to allow.
+
+    ``chmod`` genuinely blocks reads on POSIX; on Windows it only toggles the
+    read-only bit and the file stays readable. So this asserts what must hold
+    either way: the call returns, and it either produced data or said what went
+    wrong. Never an exception, which is the thing the callers cannot survive.
+    """
+    path = tmp_path / "state.json"
+    path.write_text('{"page": "control"}', encoding="utf-8")
+    os.chmod(path, 0)
+    try:
+        data, error = read_json(str(path), expect=dict)
+    finally:
+        os.chmod(path, 0o600)
+
+    check("an unreadable file is answered, not raised",
+          (data is not None) or bool(error), f"(data={data!r}, error={error!r})")
 
 
 def test_a_ui_state_file_that_is_not_json_at_all_is_quarantined(tmp_path):

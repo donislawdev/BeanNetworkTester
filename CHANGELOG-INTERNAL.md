@@ -42,6 +42,46 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### One stray lang/*.json stopped the program from starting (audit item #10, the edges)
+
+`lang/*.json` is the one on-disk format with its own `json.load`, outside `jsonfile`, and it was
+left out of the first #10 pass as a shipped file rather than a user file. It is not only shipped:
+translations are meant to be added, and `load_languages` promises in its docstring that "a broken
+or unreadable file is skipped so it can never break app startup".
+
+`meta = data.pop("_meta", None) or {}` rescued a FALSY `_meta` - `null`, `0`, `""` - and nothing
+else. A non-empty one of the wrong type (`"_meta": "en"`, a list, a number, `true`) sailed past
+`or {}` and died on `meta.get()`, which sits OUTSIDE the per-file `try`. The AttributeError escaped
+`load_languages`, which runs at startup. Measured with one such file dropped into the real `lang/`:
+**`python -m beantester --version` exited 1 with a traceback.** One stray file, no program - CLI or
+GUI.
+
+Fixed with an `isinstance(meta, dict)` check. The file then behaves exactly like one carrying no
+`_meta` at all, which is a supported case: the filename supplies the language code and the
+translations are kept. That is deliberately NOT "skip the file" - discarding a translator's work
+over a typo in one metadata field would be the wrong trade, and the first draft of the test
+asserted the wrong thing here before the behaviour was thought through.
+
+Two more edges measured, neither a bug, both now covered so nobody has to re-derive them:
+
+- **a directory where a file belongs**: `open()` raises `IsADirectoryError` on Linux and
+  `PermissionError` on Windows; both are `OSError`, `read_json` reports it, nothing raises.
+- **a file that cannot be read**: reported the same way. The test asserts the portable invariant
+  (it returns, with data or with a message) because `chmod` genuinely blocks reads on POSIX while
+  on Windows it only toggles the read-only bit.
+
+Observation, not a change: an unreadable file is also QUARANTINED, because `quarantine()` renames
+and renaming needs no read access. For a transient lock (antivirus, a backup agent, an editor) that
+means the user's window state is moved aside and the run starts from defaults. Nothing is lost -
+the file survives as `.corrupt-<timestamp>` - and `read_json`'s contract does say "unreadable/broken
+(already quarantined)". Distinguishing `OSError` (do not quarantine, it may be readable next time)
+from `ValueError` (quarantine, the content is unusable) would be a small and principled change.
+Left alone deliberately: no evidence it has ever happened here, and the stability-first rule says
+speculative changes to a startup path wait for a reason.
+
+Verified by mutation: with `or {}` restored the suite fails with the original
+`AttributeError: 'str' object has no attribute 'get'`.
+
 ### --dry-run called a scenario valid without ever opening it (audit item #10)
 
 `--dry-run` is the gate a CI/CD pipeline runs before the real command. It returned `OK` for every
