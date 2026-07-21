@@ -42,6 +42,39 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### PROJECT_NOTES audit, part 1: prose that would have made the next session write a bug
+
+A full claim-by-claim audit of `PROJECT_NOTES.md` against the code. Convention 5 ("every
+`because` is a claim - check it or do not write it") applied to the note itself. This part
+covers the findings that actively mis-instruct; numbers, stale lists and undocumented
+mechanisms follow in their own commits.
+
+- **Convention 16 was backwards about labels.** It told the next session to set
+  `state="disabled"` on field labels. The code deliberately does the opposite: a
+  state-disabled `ttk.Label` paints a FILLED BOX, so `ControlForm._apply_toggle_state` and
+  `apply_overrides` swap the style to `CardOff.TLabel` instead, and
+  `test_an_overridden_field_is_visibly_disabled` even asserts `state is None` on the label.
+  The convention also cited `test_gui_layout.py::test_disabled_fields_are_visibly_disabled`
+  as its guard - **that test has never existed**. Rewritten to separate the field rule
+  (state + a `disabled` map) from the label rule (style swap, never state).
+- **The same stale claim lived in `theme.py`**, five lines below the correct one: the comment
+  above the label `disabled` maps said field labels "are set to state=disabled together with
+  their entries". Nothing in the GUI sets `state` on a label. Comment corrected to say what
+  the maps actually are: defensive, and free.
+- Measured, so the note can stop guessing: removing the `disabled` foreground maps for EVERY
+  label style leaves the whole suite AND `smoke_gui.py` green. The convention now says it has
+  no guard instead of naming one.
+- **Convention 40's guard covered half of what it claimed.**
+  `test_shortcut_buttons_advertise_their_key` asserted on `btn_start` and `btn_apply` only, so
+  dropping `shortcut="Ctrl+S"` from the Save button kept the suite green - verified by
+  mutation. The test now drives a table of all four shortcut buttons and fails naming the
+  offender; re-run against the same mutation it goes red. "Save file" / "Load file" moved from
+  local variables to `App.btn_save` / `App.btn_load` so the guard can reach them.
+- **Convention 42 described a replaced implementation:** `icon.make_gear_icon` is an
+  anti-aliased RGBA PNG built with stdlib `zlib`/`struct`, not "plain `PhotoImage.put`". The
+  per-pixel `put` version had no alpha and rasterised jagged teeth; it survives only as a
+  fallback for a Tk build that cannot read PNG.
+
 ### The hot-path guard now covers the route Linux takes, on every machine
 
 `test_hot_path.py` shipped with an explicit "NOT verified" note: `PortTable` reads the socket table

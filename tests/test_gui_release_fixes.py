@@ -159,10 +159,19 @@ def test_scenario_dialog_defaults_to_the_bundled_scenarios_dir():
 
 
 def test_shortcut_buttons_advertise_their_key():
-    """A control with a keyboard shortcut must show it in its own tooltip (conv 40)."""
+    """A control with a keyboard shortcut must show it in its own tooltip (conv 40).
+
+    It used to assert on btn_start and btn_apply only, so dropping `shortcut=` from
+    "Save file" or "Load file" left the suite green (verified by mutation, 2026-07-21).
+    Every button that has a binding in `_bind_shortcuts` is listed here.
+    """
     run_gui("""
-        assert "F5" in app.btn_start._bnt_tooltip.text, app.btn_start._bnt_tooltip.text
-        assert "Ctrl+Enter" in app.btn_apply._bnt_tooltip.text, app.btn_apply._bnt_tooltip.text
+        for attr, key in (("btn_start", "F5"), ("btn_apply", "Ctrl+Enter"),
+                          ("btn_save", "Ctrl+S"), ("btn_load", "Ctrl+O")):
+            widget = getattr(app, attr)
+            tip = getattr(widget, "_bnt_tooltip", None)
+            assert tip is not None, attr + " lost its tooltip"
+            assert key in tip.text, attr + " does not advertise " + key + ": " + tip.text
     """)
 
 

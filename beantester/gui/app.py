@@ -424,12 +424,17 @@ class App:
                                     command=lambda: self.apply_if_running(announce=True))
         self.btn_apply.pack(side="left", padx=scaled(8))
         add_tooltip(self.btn_apply, "tips.apply", shortcut="Ctrl+Enter")
-        load = ttk.Button(bar, text=T("buttons.load_file"), command=self.load_config_file)
-        load.pack(side="right")
-        save = ttk.Button(bar, text=T("buttons.save_file"), command=self.save_config_file)
-        save.pack(side="right", padx=scaled(6))
-        add_tooltip(load, "tips.load_config", shortcut="Ctrl+O")
-        add_tooltip(save, "tips.save_config", shortcut="Ctrl+S")
+        # Kept on self (like btn_start/btn_apply) so the convention-40 guard can
+        # assert that every shortcut button advertises its key - it used to reach
+        # only the two buttons that happened to have attributes.
+        self.btn_load = ttk.Button(bar, text=T("buttons.load_file"),
+                                   command=self.load_config_file)
+        self.btn_load.pack(side="right")
+        self.btn_save = ttk.Button(bar, text=T("buttons.save_file"),
+                                   command=self.save_config_file)
+        self.btn_save.pack(side="right", padx=scaled(6))
+        add_tooltip(self.btn_load, "tips.load_config", shortcut="Ctrl+O")
+        add_tooltip(self.btn_save, "tips.save_config", shortcut="Ctrl+S")
         # "About" lives HERE, not in the header. The header is where the donate
         # button already gets clipped at 1366x768 (see _fit_header), and the one
         # window carrying our LGPL notice may not be the one that falls off the
