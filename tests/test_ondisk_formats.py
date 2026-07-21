@@ -194,6 +194,66 @@ def test_a_config_file_that_is_a_json_object_still_loads(tmp_path):
           f"(code={code}, stderr={err!r})")
 
 
+# --------------------------------------------------------------------------- #
+# the scenario file (--scenario), and what --dry-run is worth
+# --------------------------------------------------------------------------- #
+def test_dry_run_actually_opens_the_scenario_it_calls_valid(tmp_path):
+    """``--dry-run`` is the gate a pipeline runs before the real command.
+
+    It used to load the scenario only once the session had started, so every
+    broken scenario file - truncated, empty, a bare list - passed ``--dry-run``
+    with "Configuration is valid" and exit OK, then failed the real run with
+    SCENARIO(4). The check that exists to catch exactly this reported the
+    opposite of the truth.
+    """
+    for label, text in BROKEN_JSON.items():
+        path = tmp_path / f"scen_{label.replace(' ', '_')}.json"
+        path.write_text(text, encoding="utf-8")
+        code, out, err = cli(["--scenario", str(path), "--simulate", "--dry-run"])
+
+        check(f"{label}: --dry-run rejects it", code == exitcodes.SCENARIO,
+              f"(code={code}, stderr={err!r})")
+        check(f"{label}: it does NOT claim the configuration is valid",
+              "valid" not in out.lower(), f"({out!r})")
+
+
+def test_dry_run_and_a_real_run_agree_about_a_scenario(tmp_path):
+    """The property behind the fix: the gate and the gated must give the same
+    verdict, or the gate is worse than not having one."""
+    broken = tmp_path / "broken.json"
+    broken.write_text('{"steps": ', encoding="utf-8")
+    # The real schema: {"at": seconds, "settings": {...}}. Written out rather than
+    # guessed - the first draft of this test invented a shape, --dry-run rejected
+    # it correctly, and for a moment that looked like the fix rejecting good files.
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps({"steps": [{"at": 0, "settings": {"loss": 5}}]}),
+                    encoding="utf-8")
+
+    dry_broken, _, _ = cli(["--scenario", str(broken), "--simulate", "--dry-run"])
+    run_broken, _, _ = cli(["--scenario", str(broken), "--simulate", "--duration", "1"])
+    dry_good, _, _ = cli(["--scenario", str(good), "--simulate", "--dry-run"])
+
+    check("a broken scenario fails the dry run", dry_broken == exitcodes.SCENARIO,
+          f"({dry_broken})")
+    check("and it fails the real run the same way", run_broken == exitcodes.SCENARIO,
+          f"({run_broken})")
+    check("the two agree", dry_broken == run_broken,
+          f"(dry={dry_broken}, run={run_broken})")
+    check("a good scenario still passes the dry run", dry_good == exitcodes.OK,
+          f"({dry_good})")
+
+    # And the strongest form: the scenarios we ship must survive their own gate.
+    shipped = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "scenarios")
+    for name in sorted(os.listdir(shipped)):
+        if not name.endswith(".json"):
+            continue
+        code, _, err = cli(["--scenario", os.path.join(shipped, name),
+                            "--simulate", "--dry-run"])
+        check(f"shipped scenario {name} passes --dry-run", code == exitcodes.OK,
+              f"(code={code}, stderr={err!r})")
+
+
 def test_a_ui_state_file_that_is_not_json_at_all_is_quarantined(tmp_path):
     """The other half of the guarantee: unparseable content is moved aside, not
     overwritten, so the user can still get their window layout back."""

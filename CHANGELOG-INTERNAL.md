@@ -42,6 +42,37 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### --dry-run called a scenario valid without ever opening it (audit item #10)
+
+`--dry-run` is the gate a CI/CD pipeline runs before the real command. It returned `OK` for every
+broken scenario file tried - a bare list, a string, a number, truncated JSON, an empty file - and
+printed "Configuration is valid", because the scenario was loaded only inside `_run_session`,
+which `--dry-run` returns before reaching. The same files correctly gave `SCENARIO(4)` on a real
+run. A gate whose verdict disagrees with the thing it gates is worse than no gate.
+
+`run_cli` now loads and validates the scenario inside the `--dry-run` branch, failing with
+`SCENARIO(4)` and the parse error. `--print-config` and `--save-config` return early as before and
+are deliberately left alone: neither claims the configuration is valid, they report or store the
+SETTINGS, and a scenario is not part of those.
+
+**Owner's call: this is a fix, not a BREAKING change** (`--dry-run` on a broken scenario goes from
+`OK` to `SCENARIO(4)`). A script relying on the old outcome is relying on the gate lying to it. No
+`### BREAKING` section, no version bump.
+
+Tests: every shape in `BROKEN_JSON` must be rejected by `--dry-run` *and* the output must not
+contain the word "valid"; the dry run and the real run must return the SAME code for the same
+file; and all seven shipped `scenarios/*.json` must pass `--dry-run` - the check that the fix does
+not start rejecting real files.
+
+Worth recording, because it briefly looked like a regression: the first draft of that test invented
+a scenario shape (`{"duration": 1, "loss": 5}`) instead of using the documented one
+(`{"at": seconds, "settings": {...}}`). `--dry-run` rejected it, correctly, and for a moment that
+read as the fix rejecting good files. The shipped-scenario loop was added as the answer - it
+cannot be argued with.
+
+Verified by mutation: without the change the suite fails with the original symptom, `code=0` and
+`Configuration is valid` for a broken scenario.
+
 ### --config with valid JSON of the wrong shape was a traceback, not an exit code (audit item #10)
 
 `settings.load_config_file` does a raw `json.load` and goes straight to `data.items()`. For

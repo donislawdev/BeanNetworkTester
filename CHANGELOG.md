@@ -36,6 +36,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--dry-run` now checks your scenario file as well.** That option exists to tell you whether a
+  run will work before you start it - but it never actually opened the scenario file, so a damaged,
+  empty or half-written scenario passed the check with "Configuration is valid" and then failed the
+  real run moments later. It now reads the scenario too and tells you straight away what is wrong
+  with it. A check that passes everything is worse than no check at all.
 - **A settings file in the wrong form now gives a clear message instead of crashing.** If you
   pointed `--config` at a JSON file that was readable but not a set of settings - a list, say, or
   a single value, which is what some tools produce - the program stopped with a raw Python error

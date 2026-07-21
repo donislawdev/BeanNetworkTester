@@ -607,7 +607,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 
 | Flag | Description |
 |---|---|
-| `--dry-run` | check the config and exit (does not touch the driver, passes no traffic) - ideal for validating config files in a pipeline |
+| `--dry-run` | check the config and exit (does not touch the driver, passes no traffic) - ideal for validating config files in a pipeline. A `--scenario` is read and validated too, so the dry run and the real run agree |
 | `--print-config` | print the effective settings (after `defaults < file < preset < flags`) as JSON and exit |
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |

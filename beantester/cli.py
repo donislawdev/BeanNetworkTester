@@ -570,6 +570,21 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             log.info(f"Saved settings to {cfg['save_config']}")
             return exitcodes.OK
         if args.dry_run:
+            # The scenario is part of the configuration, and --dry-run is the
+            # "check it before I run it" gate - the one thing a CI/CD pipeline
+            # runs to find out whether the next command will work. It used to be
+            # loaded only once the session started, so --dry-run reported
+            # "Configuration is valid" about a file it had never opened: a
+            # truncated, empty or non-object scenario passed the check with exit
+            # OK and then failed the real run with SCENARIO(4).
+            if cfg["scenario"]:
+                try:
+                    scen = load_scenario_file(cfg["scenario"])
+                except Exception as e:
+                    _fail(exitcodes.SCENARIO,
+                          f"scenario error in {cfg['scenario']!r}: {e}")
+                log.debug(f"scenario: {len(scen.steps)} steps, "
+                          f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
             _log_effective_settings(log, cfg)
             log.info("Configuration is valid (--dry-run: nothing was started).")
             return exitcodes.OK
