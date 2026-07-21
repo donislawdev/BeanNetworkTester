@@ -606,6 +606,12 @@ class BeanEngine:
             # failed. Different jobs, different failure domains.
             try:
                 self._ports.refresh_if_stale()
+                # ...and put the NAMES in the cache too, because the capture thread
+                # is only allowed to read it, never to fill it. Without this the
+                # connection log's process column is empty for every session that
+                # has no target set - which is most of them, and which is the exact
+                # bug the column was added to fix.
+                self._ports.warm_names()
             except Exception as _exc:
                 crashlog.note(_exc, "engine.ports")
             try:

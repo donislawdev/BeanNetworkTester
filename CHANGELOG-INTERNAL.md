@@ -42,6 +42,94 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The capture thread could still reach psutil - and the fix for that broke the process column
+
+Two findings from reviewing the PID-reuse diff, both verified by running them.
+
+- **Identity verification put a psutil call back on the capture thread.** `engine._process_for`
+  reads with `allow_refresh=False`, but that only gated the socket-table rebuild - the NAME lookup
+  underneath it went on to `info()`, which now verifies. Measured with a port table that actually
+  resolves: 12 `create_time()` calls from `Thread-1 (_capture_loop)`. Once per NEW FLOW rather
+  than per packet, so 3/s here - but this tool gets pointed at load generators and port scans,
+  where new flows arrive in thousands per second.
+- **Worse, the same hole predates this branch.** Checked against `master`: on a cache MISS the old
+  `info()` called `_psutil_process_info` from whatever thread asked, so the capture thread could
+  already trigger a resolve (~5 ms) and even a full `process_iter()` (~1.7 s). The previous chunk
+  stopped `process_for_port` from refreshing the socket table and left that path open.
+- Fixed with an explicit `cheap=True` mode on `info()` / `name_of()`, wired from
+  `process_for_port(allow_refresh=False)`: **answer from the cache or not at all.** Resolving a
+  name and verifying an identity are both psutil calls, and gating only one of them is what left
+  the packet path making the other. Re-measured warm and cold: zero psutil calls from the capture
+  thread in both.
+- **That fix then emptied the connection log's process column** - the regression is only visible
+  with no target set, which is most sessions: the capture thread no longer resolves, and the
+  resolver only fills the cache for PIDs it matches, so with no target nothing filled it at all.
+  Measured: 6 rows, 0 names. The column exists precisely because it used to read "?"; shipping
+  that back would have undone a fixed bug. `PortTable.warm_names()` now runs on the WATCHDOG next
+  to the socket-table refresh - cheap in the steady state (one identity check per PID, ~0.13 ms),
+  paying the real resolve once. Re-measured: 6 rows, 6 names, with and without targeting, and
+  still zero psutil from the capture thread.
+
+### portmap: a PID is a number, not an identity (audit item P2)
+
+- **The `pid -> (name, ppid)` cache could not expire, by any route.** `_expire_info` returned
+  early below 512 entries (a normal machine holds 26-343, so it never ran), and `info()` bumped
+  the timestamp on every cache HIT - which made the entry of a busily-read PID immortal, i.e.
+  exactly the entry decisions rest on. Both reproduced against the real table: a target
+  restarting onto a recycled PID was **not impaired**, and an innocent process inheriting the
+  target's old PID **was**. The second is the serious one: this tool breaks networking, and
+  breaking an application the user never named is the worst thing it can do quietly.
+- **Fixed by verifying identity, not by guessing at ages.** Each entry now carries the process
+  START TIME (`create_time`), and every cache hit checks it. The analysis had rejected this as
+  "costs as much as re-resolving" - **that was wrong by three orders of magnitude**, and measuring
+  it is what found the right design:
+
+      create_time() for 2 PIDs : 0.01 ms      full re-resolve: 9.8 ms
+      create_time() for 8 PIDs : 0.03 ms      full re-resolve: 38.9 ms
+
+  `name()` is expensive because it must open the process and read its image path; `create_time()`
+  does not. On this machine it succeeds for **24/24** socket-owning PIDs, including the protected
+  ones that make `name()` fall back to a full `process_iter()`.
+- **"Cannot tell" is not "recycled".** Treating a missing start time as proof of reuse looked like
+  the safe reading and was in fact a way to destroy the cache wholesale on every fallback path:
+  each lookup evicted, re-resolved, failed to stamp, and evicted again, so process names came back
+  empty. Caught by the suite going red on the psutil fake. `_looks_recycled` now returns True only
+  when both stamps are known AND differ; unverifiable environments fall back to the TTL exactly as
+  before. Hardening must not degrade what it cannot harden.
+- Two cheaper mechanisms kept as backstops: the TTL now counts from INSERTION and runs
+  unconditionally (2.2 us a sweep, measured), and a PID that loses every socket is forgotten at
+  once (2.5 us, measured) - a PID can only be reissued after its owner exits, and exiting closes
+  its sockets.
+- **Cost, measured properly on a second pass.** The first figure recorded here (1.4 -> 2.96 ms,
+  ~5% of a core) was an AVERAGE polluted by a single outlier and roughly double the truth. Isolated
+  by stubbing `_psutil_created` and comparing medians over 40 runs each, with a control run to
+  confirm reproducibility:
+
+      with verification    1.29 ms   (control: 1.28 ms)
+      without              0.93 ms
+      delta                +0.35 ms  (+38%)
+
+  At the resolver's measured 17 rebuilds/s that is **22 ms/s, 2.2% of one core** - and 2.6% of the
+  0.05 s floor it has to fit inside. On the RESOLVER thread; the capture thread is untouched, which
+  is what the previous chunk bought. A batch verification in `PortTable.refresh()` would shave that
+  to ~0.2%, and is deliberately not taken: it splits one mechanism into two and leaves ancestors on
+  the TTL, to save two percent of a background thread that is not short of time.
+- Two more things checked rather than assumed. The 0.001 s tolerance in `_looks_recycled` is never
+  actually needed here - across 342 processes, `process_iter` and `Process.create_time()` agreed to
+  **0.000000000 s**, so there are no false "recycled" verdicts; the tolerance stays as defence on
+  platforms that are less exact. And PIDs that lose every socket and come back do exist (2 of them
+  oscillated 3-4 times in 10 s of observation), costing about 0.8 extra resolves a second - noise
+  against the numbers above.
+- Verified beyond the suite: a **real** child process with a **real** socket resolves to
+  `python.exe` while alive and to `""` the moment it exits - no stale name survives. A 10 s live
+  session with targeting: 9020 packets, 171 rebuilds, 23 targeted ports, STOP 18 ms, no thread
+  left behind.
+- New tests in `tests/test_processes.py`, on a controllable `_World` (ports, processes, start
+  times): the restarted target is impaired, the innocent inheritor is not, a living process keeps
+  its entry (verifying must not become re-resolving), an unverifiable environment still resolves
+  names, expiry works below the old 512 threshold and a busily-read entry no longer renews itself,
+  and a PID that loses every socket is forgotten at once.
+
 ### STOP no longer waits for a resolve, and the number that explains why
 
 - **Measured, because nobody here knew it: a COLD resolve costs 1.7 SECONDS.** On this desktop

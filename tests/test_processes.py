@@ -3,6 +3,7 @@
 psutil is faked, so the tests run anywhere (the real lookup needs a live system).
 """
 import sys
+import time
 import types
 
 import pytest
@@ -308,3 +309,228 @@ def test_engine_records_a_broken_port_table_instead_of_going_quiet(monkeypatch):
     check("both failures were recorded", len(recorded) == 2, f"({recorded})")
     check("recorded as hot-path, so they cost one traceback each",
           all(kw.get("source") == "hot-path" for kw in recorded), f"({recorded})")
+
+
+# -- PID reuse: a pid is a number the OS hands out, not an identity ---------- #
+#
+# Windows recycles PIDs, and targeting matches on the process NAME, so a cached
+# name that outlives its process is not a cosmetic problem. Both directions were
+# reproduced against the real port table before these guards existed:
+#   * the target restarts onto a recycled pid  -> it is NOT impaired
+#   * an innocent process inherits the old pid -> it IS impaired
+# The second one matters most: this tool breaks networking, and breaking an
+# application the user never named is the worst thing it can do quietly.
+
+
+class _World:
+    """A controllable OS: ports, processes, and each process's start time."""
+
+    def __init__(self):
+        self.ports = {}          # port -> pid
+        self.procs = {}          # pid  -> (name, ppid)
+        self.created = {}        # pid  -> start time (absent = "cannot tell")
+
+    def install(self, monkeypatch):
+        from beantester import portmap
+        monkeypatch.setattr(portmap, "_psutil_port_pid_map", lambda: dict(self.ports))
+        monkeypatch.setattr(portmap, "_psutil_created",
+                            lambda pid: self.created.get(int(pid)))
+        monkeypatch.setattr(portmap, "_psutil_process_info", lambda pid: (
+            (self.procs[int(pid)][0], self.procs[int(pid)][1], self.created.get(int(pid)))
+            if int(pid) in self.procs else None))
+        monkeypatch.setattr(portmap, "_psutil_process_table", lambda: {
+            p: (n, pp, self.created.get(p)) for p, (n, pp) in self.procs.items()})
+        table = portmap.PortTable()
+        table._native = None
+        return table
+
+
+def _targeting_on(table, expr="myapp"):
+    from beantester.targeting import ProcessTargeting
+    return ProcessTargeting(parse_target(expr), table=table)
+
+
+def test_a_target_restarting_onto_a_recycled_pid_is_still_impaired(monkeypatch):
+    world = _World()
+    table = world.install(monkeypatch)
+    targeting = _targeting_on(table)
+
+    world.procs[5000] = ("oldapp.exe", 1); world.created[5000] = 1000.0
+    world.ports[9001] = 5000
+    targeting.refresh()
+    check("an unrelated process is not targeted", targeting.ports() == set(),
+          f"({targeting.ports()})")
+
+    # same pid number, different process: the target has restarted into it
+    world.procs[5000] = ("myapp.exe", 1); world.created[5000] = 2000.0
+    world.ports.clear(); world.ports[9002] = 5000
+    targeting.refresh()
+    check("the tool sees the new name", table.name_of(5000) == "myapp.exe",
+          f"({table.name_of(5000)!r})")
+    check("the restarted target IS impaired", 9002 in targeting.ports(),
+          f"({sorted(targeting.ports())})")
+
+
+def test_an_innocent_process_inheriting_the_pid_is_not_impaired(monkeypatch):
+    world = _World()
+    table = world.install(monkeypatch)
+    targeting = _targeting_on(table)
+
+    world.procs[6000] = ("myapp.exe", 1); world.created[6000] = 1000.0
+    world.ports[9003] = 6000
+    targeting.refresh()
+    check("the target is impaired while it lives", 9003 in targeting.ports())
+
+    world.procs[6000] = ("innocent.exe", 1); world.created[6000] = 2000.0
+    world.ports.clear(); world.ports[9004] = 6000
+    targeting.refresh()
+    check("the tool sees the new name", table.name_of(6000) == "innocent.exe",
+          f"({table.name_of(6000)!r})")
+    check("a process the user never named is NOT impaired",
+          9004 not in targeting.ports(), f"({sorted(targeting.ports())})")
+
+
+def test_a_living_process_keeps_its_cached_entry(monkeypatch):
+    """The other direction: verifying must not turn into re-resolving."""
+    world = _World()
+    table = world.install(monkeypatch)
+    targeting = _targeting_on(table)
+    world.procs[7000] = ("myapp.exe", 1); world.created[7000] = 1000.0
+    world.ports[9005] = 7000
+    targeting.refresh()
+
+    entries = len(table._info)
+    for _ in range(30):
+        table.name_of(7000)
+    check("the entry survives repeated reads", table._info.get(7000) is not None)
+    check("and the cache does not churn", len(table._info) == entries,
+          f"({len(table._info)} vs {entries})")
+
+
+def test_an_unverifiable_environment_still_resolves_names(monkeypatch):
+    """No start times available (the psutil fallback) must DEGRADE, not break.
+
+    Treating "cannot tell" as "recycled" looked like the safe reading and was in
+    fact a way to destroy the cache wholesale: every lookup would evict,
+    re-resolve, fail to stamp, and evict again, so process names came back empty.
+    Hardening must not degrade the environments it cannot harden - there, the TTL
+    remains the only bound, exactly as before.
+    """
+    world = _World()
+    table = world.install(monkeypatch)
+    targeting = _targeting_on(table)
+    world.procs[7100] = ("myapp.exe", 1)          # note: no start time at all
+    world.ports[9006] = 7100
+    targeting.refresh()
+
+    check("names still resolve", table.name_of(7100) == "myapp.exe",
+          f"({table.name_of(7100)!r})")
+    check("the target is still impaired", 9006 in targeting.ports())
+    for _ in range(50):
+        table.name_of(7100)
+    check("an unverifiable entry is kept, not evicted on every read",
+          table._info.get(7100) is not None)
+
+
+def test_the_info_cache_expires_below_the_old_512_threshold(monkeypatch):
+    """`_expire_info` used to bail out under 512 entries - so on a normal machine
+    (26-343) it never ran at all, and `info()` bumped the timestamp on every HIT,
+    which made a busily-read entry immortal."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[7200] = ("myapp.exe", 1); world.created[7200] = 1000.0
+    world.ports[9007] = 7200
+    table.refresh(force=True)
+    table.name_of(7200)
+    stamp = table._info[7200][3]
+    for _ in range(20):
+        table.name_of(7200)
+    check("a busily-read entry does not renew its own timestamp",
+          table._info[7200][3] == stamp)
+
+    monkeypatch.setattr(portmap, "INFO_TTL_S", 0.05)
+    time.sleep(0.08)
+    table.refresh(force=True)
+    check("stale entries are swept even with a tiny cache",
+          7200 not in table._info, f"({len(table._info)} entries)")
+
+
+def test_a_pid_that_loses_every_socket_is_forgotten_at_once(monkeypatch):
+    """A pid can only be handed to somebody else after its owner exits, and exiting
+    closes its sockets - so this is the moment to forget the name, before the OS
+    can reissue the number."""
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[8000] = ("myapp.exe", 1); world.created[8000] = 1000.0
+    world.procs[8001] = ("other.exe", 1); world.created[8001] = 1000.0
+    world.ports[9008] = 8000; world.ports[9009] = 8001
+    table.refresh(force=True)
+    table.name_of(8000); table.name_of(8001)
+
+    del world.ports[9009]                      # 8001 exits; 8000 keeps its socket
+    table.refresh(force=True)
+    check("the departed pid was forgotten", 8001 not in table._info)
+    check("the surviving pid kept its entry", 8000 in table._info)
+
+
+def test_the_capture_thread_never_reaches_psutil_for_a_name(monkeypatch):
+    """`allow_refresh=False` must mean "do not touch the OS", NAME lookup included.
+
+    Two separate leaks lived here. Verifying an identity is a psutil call, so
+    adding the reuse check put one back on the packet path (12 of them across a
+    short run, once per new flow - and this tool gets pointed at load generators,
+    where new flows arrive in thousands per second). And on a cache MISS the older
+    code resolved from whatever thread asked, so the capture thread could trigger a
+    5 ms lookup or even a 1.7 s `process_iter()`. Gating the socket-table rebuild
+    alone left both open.
+    """
+    from beantester import portmap
+    touched = []
+    monkeypatch.setattr(portmap, "_psutil_created",
+                        lambda pid: touched.append("verify"))
+    monkeypatch.setattr(portmap, "_psutil_process_info",
+                        lambda pid: touched.append("resolve"))
+    monkeypatch.setattr(portmap, "_psutil_process_table",
+                        lambda: touched.append("bulk") or {})
+
+    table = portmap.PortTable()
+    table._native = None
+    table._info = {4242: ("app.exe", 1, 1000.0, time.monotonic())}
+    table._ports = {5555: 4242}
+
+    check("a cached name comes back", table.name_of(4242, cheap=True) == "app.exe")
+    check("...without asking the OS", touched == [], f"({touched})")
+
+    table._info.clear()
+    check("an uncached name is blank rather than resolved",
+          table.name_of(4242, cheap=True) == "")
+    check("...still without asking the OS", touched == [], f"({touched})")
+
+    # and the verified path, which runs on the resolver, DOES ask
+    table._info = {4242: ("app.exe", 1, 1000.0, time.monotonic())}
+    table.name_of(4242)
+    check("the verified path checks identity", touched == ["verify"], f"({touched})")
+
+
+def test_names_are_warmed_for_the_connection_log_without_a_target(monkeypatch):
+    """The capture thread may only READ the name cache, so somebody must fill it.
+
+    The resolver fills it for the PIDs it matches - but only while a target is set,
+    and most sessions have none. Without this the connection log's process column
+    came back empty, which is the exact bug the column was added to fix.
+    """
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[8100] = ("app.exe", 1); world.created[8100] = 1000.0
+    world.ports[9100] = 8100
+    table.refresh(force=True)
+
+    check("nothing is cached until somebody warms it", 8100 not in table._info)
+    check("and a cheap read is honest about that",
+          table.name_of(8100, cheap=True) == "")
+
+    table.warm_names()
+    check("warming resolves every socket-owning pid", table._info.get(8100) is not None)
+    check("so the capture thread's cheap read now answers",
+          table.name_of(8100, cheap=True) == "app.exe")
