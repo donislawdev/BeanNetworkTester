@@ -289,14 +289,21 @@ class BeanEngine:
         ``limit=<int>``  the ``limit`` most recently active flows, newest first.
                          Uses ``heapq.nlargest``: O(n log limit), not a full sort
                          of a table that may hold 200 000 rows.
-        ``limit=None``   every flow, UNSORTED - a pointer copy, ~25 ms at the cap.
+        ``limit=None``   every flow, UNSORTED - a pointer copy, cheap (see below).
                          This is what the virtualised tables ask for: they sort by
                          the column the user picked anyway, so sorting here as well
-                         was the same 100 ms of work done twice per refresh.
+                         was the same work done twice per refresh.
 
         The copy is taken under the lock; any sorting happens outside it. A sort
         under ``_clock`` would stall the CAPTURE thread, and a stalled capture
-        thread means WinDivert is queueing the user's packets into a void.
+        thread means WinDivert is queueing the user's packets into a void. THAT is
+        why the sort is outside - not the cost of the copy, which is small:
+
+        Measured 2026-07-21 (Win11 AMD64, CPython 3.14.6, synthetic rows, median of
+        7): the pointer copy is **0.7 ms at the 200k cap** and 2.4 ms at 500k, while
+        a full sort of the same 200k rows through ``views.filter_sort_connections``
+        is ~29 ms. An earlier revision of this docstring claimed ~25 ms for the copy
+        and ~100 ms for the sort; neither reproduced.
         """
         with self._clock:
             values = list(self._conns.values())

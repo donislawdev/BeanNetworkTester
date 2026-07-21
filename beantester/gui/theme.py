@@ -107,8 +107,11 @@ def init_style(root=None):
     s.configure("Unit.TLabel", background=BG2, foreground=MUT, font=(FONT, 9))
     # the "?" syntax help used to melt into the background
     s.configure("Help.TLabel", background=BG2, foreground=ACC, font=(FONT, 9, "bold"))
-    # a disabled label must grey out too (the field labels next to a switched-off
-    # section are set to state=disabled together with their entries)
+    # Defensive only: NOTHING in this tool switches a label with `state` today.
+    # A switched-off field label is greyed by swapping its style to CardOff.TLabel
+    # (see just above, and ControlForm._apply_toggle_state / apply_overrides),
+    # precisely because a state-disabled ttk.Label paints a filled box. These maps
+    # cost nothing and keep a label readable if some future code does set state.
     for label_style in ("TLabel", "Card.TLabel", "Unit.TLabel", "Hint.TLabel",
                         "Muted.TLabel", "Help.TLabel"):
         s.map(label_style, foreground=[("disabled", DIS_FG)])

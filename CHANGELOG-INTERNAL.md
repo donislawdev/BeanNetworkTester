@@ -42,6 +42,86 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### PROJECT_NOTES audit, part 2: measured numbers, and the coverage gate to 80
+
+Every "costs N ms" in the audit's blast radius was re-measured instead of trusted. Conditions
+are now attached to each figure (Win11 AMD64, CPython 3.14.6, median of 7), because a number
+without conditions cannot be re-verified and the next session cannot tell drift from hardware.
+
+- **`engine.connections_snapshot(limit=None)` was documented at ~25 ms "at the cap"; it is
+  0.7 ms** (2.4 ms at 500k). `conns.py` repeated the same claim as "~70 ms for a 500 000-row
+  copy" - wrong by ~30x under every interpretation (`list(values())` 2.3 ms, `dict()` 6.4 ms,
+  per-row copy 222 ms at 500k). Left as an argument for moving the snapshot back onto the UI
+  thread, which would have been a real regression.
+- The decision survives for a **different and verified** reason, now written down instead:
+  `connections_snapshot()` acquires the engine's `_clock`, the same lock the capture thread
+  takes on every logged packet, so taking it on the UI thread makes the UI queue behind the
+  capture thread. Cheap to copy, still wrong to copy there.
+- **`views.filter_sort_connections` kept its heap-vs-sort ratio test** - re-measurement confirms
+  the crossover (top 400: 12.6 ms heap vs 27.7 ms sort; top 50 000: 130.6 ms heap vs 28.0 ms
+  sort). Only the absolute figures were dated. The docstring now carries a table plus a warning
+  that first bit this audit: benchmark it with keys from a tiny range and Timsort exploits the
+  runs, making the sort column look artificially fast and the optimisation look pointless.
+- **Coverage gate raised 77 -> 80.** Measured with `COVERAGE_PROCESS_START`: **83.03%**
+  (83.07% on re-run), so the gate keeps its ~3-point margin for subprocess-coverage variance.
+  Also measured the counterfactual the comment asserted without evidence: **without** the env
+  var the same suite reports **45%**, not the 51% claimed. Both numbers, and their conditions,
+  now live in `pyproject.toml` only.
+- Notes-side fixes with no code change: the connection table's "max 400 rows" (stated twice)
+  is a limit removed when the tables were virtualised - `row_limit` defaults to 50 000, ranges
+  0-1 000 000 and 0 means no limit; the scroll cost now has one source (`sortable_tree.py`)
+  instead of two that disagreed (0.8 ms vs ~1 ms).
+
+### PROJECT_NOTES audit, part 3: a mechanical guard for the note itself
+
+`PROJECT_NOTES.md` is git-ignored (private Doc repo), so a pytest test would be skipped in CI
+forever and would name a private file inside the public suite. The guard is therefore a Stop
+hook, `.claude/hooks/check_notes.py`, next to the existing `check_changelog.py`; it exits
+silently when the file is absent. Neither the hook nor the note is part of this repository -
+this entry is the public record that they exist.
+
+It refuses to end a turn when the note drifts in a way a machine can see: a named `tests/*.py`
+that does not exist, a named `file.py::test_name` that does not exist, a package module the
+note never mentions (the rule `test_readme_guards.py` already applies to the READMEs, which is
+exactly why the README tree stayed right while the note's lost `crashlog.py`, `gui/labels.py`
+and `gui/rates.py`), and a registered window the note never mentions (`event_log` - the window
+whose docstring says "COPY THIS FILE to make a new one" - was undocumented, so the note pointed
+newcomers at a worse template). All four checks verified by mutation: green on the real note,
+red on each injected drift. It deliberately does not try to check prose.
+
+### PROJECT_NOTES audit, part 1: prose that would have made the next session write a bug
+
+A full claim-by-claim audit of `PROJECT_NOTES.md` against the code. Convention 5 ("every
+`because` is a claim - check it or do not write it") applied to the note itself. This part
+covers the findings that actively mis-instruct; numbers, stale lists and undocumented
+mechanisms follow in their own commits.
+
+- **Convention 16 was backwards about labels.** It told the next session to set
+  `state="disabled"` on field labels. The code deliberately does the opposite: a
+  state-disabled `ttk.Label` paints a FILLED BOX, so `ControlForm._apply_toggle_state` and
+  `apply_overrides` swap the style to `CardOff.TLabel` instead, and
+  `test_an_overridden_field_is_visibly_disabled` even asserts `state is None` on the label.
+  The convention also cited `test_gui_layout.py::test_disabled_fields_are_visibly_disabled`
+  as its guard - **that test has never existed**. Rewritten to separate the field rule
+  (state + a `disabled` map) from the label rule (style swap, never state).
+- **The same stale claim lived in `theme.py`**, five lines below the correct one: the comment
+  above the label `disabled` maps said field labels "are set to state=disabled together with
+  their entries". Nothing in the GUI sets `state` on a label. Comment corrected to say what
+  the maps actually are: defensive, and free.
+- Measured, so the note can stop guessing: removing the `disabled` foreground maps for EVERY
+  label style leaves the whole suite AND `smoke_gui.py` green. The convention now says it has
+  no guard instead of naming one.
+- **Convention 40's guard covered half of what it claimed.**
+  `test_shortcut_buttons_advertise_their_key` asserted on `btn_start` and `btn_apply` only, so
+  dropping `shortcut="Ctrl+S"` from the Save button kept the suite green - verified by
+  mutation. The test now drives a table of all four shortcut buttons and fails naming the
+  offender; re-run against the same mutation it goes red. "Save file" / "Load file" moved from
+  local variables to `App.btn_save` / `App.btn_load` so the guard can reach them.
+- **Convention 42 described a replaced implementation:** `icon.make_gear_icon` is an
+  anti-aliased RGBA PNG built with stdlib `zlib`/`struct`, not "plain `PhotoImage.put`". The
+  per-pixel `put` version had no alpha and rasterised jagged teeth; it survives only as a
+  fallback for a Tk build that cannot read PNG.
+
 ### The hot-path guard now covers the route Linux takes, on every machine
 
 `test_hot_path.py` shipped with an explicit "NOT verified" note: `PortTable` reads the socket table
