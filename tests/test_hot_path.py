@@ -58,12 +58,13 @@ Verified by mutation, with the negative recorded rather than glossed over:
   occasionally. If that ever matters, the way to close it is to run the session
   with the info cache expiring, not to widen this test.
 
-NOT verified: the Linux path. On this machine ``_Native`` initialises and the
-``psutil`` fallbacks for the socket table never run, so ``_psutil_port_pid_map``
-is watched but was never seen to fire here. CI runs ubuntu too, where it is the
-main path; the assertions are written against the TOTAL over the surface rather
-than any one function so they hold either way, but the ubuntu behaviour is
-unverified locally.
+The Linux route is covered too, and not by waiting for CI to run it. ``PortTable``
+reads the socket table through ``psutil`` whenever ``_make_native`` returns
+``None``, which is precisely what a non-Windows platform makes it do; substituting
+that exercises the fallback on any machine. Measured with the substitution in
+place: the native calls vanish, ``_psutil_port_pid_map`` fires about a dozen times
+in five seconds, and the packet threads still touch nothing. See
+``test_the_psutil_socket_table_path_is_just_as_clean``.
 
 Deliberately NOT a wall-clock budget. The suite's existing timing assertions
 (``test_failsafe``'s "start did not block the UI thread", ``test_target_resolver``'s
@@ -160,6 +161,63 @@ def test_no_packet_thread_ever_reaches_the_operating_system():
     # never called - a guard that only proves nothing happened proves nothing.
     check("the OS surface was actually exercised", len(calls) > 5,
           f"({len(calls)} calls - the resolver should be busy under a miss storm)")
+    check("no packet thread reached the operating system", not offenders,
+          f"({offenders})")
+
+
+def test_the_psutil_socket_table_path_is_just_as_clean():
+    """The same guarantee on the route Linux takes - forced, not waited for.
+
+    ``PortTable`` reads the socket table through ``iphlpapi`` when ``_make_native``
+    succeeds and through ``psutil.net_connections`` when it does not. On Windows
+    the first always wins, so ``_psutil_port_pid_map`` was watched by the test
+    above and never once fired: the Linux behaviour was covered only by the ubuntu
+    leg of CI, and only by accident of which platform ran it.
+
+    ``_make_native`` returning ``None`` is exactly what a non-Windows platform
+    does, so substituting it exercises that route on any machine. Measured here:
+    the native calls disappear entirely, ``_psutil_port_pid_map`` fires about a
+    dozen times in five seconds, and the packet threads still touch nothing.
+    """
+    real_make_native = portmap._make_native
+    portmap._make_native = lambda: None                  # what Linux looks like
+    portmap.reset_default_table()
+    try:
+        table = portmap.default_table()
+        engine = BeanEngine()
+        settings = dict(DEFAULT_SETTINGS)
+        settings.update(loss=10, target="no_such_process_anywhere_xyz")
+
+        with os_calls_recorded() as calls:
+            apply_settings(engine, settings, lambda *_: None)
+            engine.start("true", divert=SyntheticDivert(seed=7))
+            capture, inject = engine._t_cap, engine._t_inj
+            try:
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    if engine.stats_snapshot()["seen"] > 500:
+                        break
+                    time.sleep(0.02)
+            finally:
+                engine.stop()
+    finally:
+        portmap._make_native = real_make_native
+        portmap.reset_default_table()                    # leave no fallback table
+
+    packet_threads = {id(t) for t in (capture, inject) if t is not None}
+    offenders = sorted({(name, thread.name) for name, thread in calls
+                        if id(thread) in packet_threads})
+    fallback_calls = [name for name, _ in calls if name == "_psutil_port_pid_map"]
+    native_calls = [name for name, _ in calls if name == "_Native._table"]
+
+    # Conclusiveness first: without these the test would pass on a machine where
+    # the substitution silently did nothing, which is the whole point of it.
+    check("the table really took the psutil route", table.native is False,
+          f"(native={table.native})")
+    check("the psutil socket-table lookup actually ran", fallback_calls,
+          f"({len(calls)} calls, none of them _psutil_port_pid_map)")
+    check("and the native one did not", not native_calls,
+          f"({len(native_calls)} native calls leaked through)")
     check("no packet thread reached the operating system", not offenders,
           f"({offenders})")
 

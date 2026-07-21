@@ -42,6 +42,38 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### The hot-path guard now covers the route Linux takes, on every machine
+
+`test_hot_path.py` shipped with an explicit "NOT verified" note: `PortTable` reads the socket table
+through `iphlpapi` when `_make_native()` succeeds and through `psutil.net_connections` when it does
+not, and on Windows the first always wins. So `_psutil_port_pid_map` was watched by the guard and
+had never once fired locally - the Linux behaviour was covered only by the ubuntu leg of CI, and
+only by accident of which platform happened to run.
+
+`_make_native` returning `None` IS what a non-Windows platform does, so substituting it exercises
+that route anywhere. New `test_the_psutil_socket_table_path_is_just_as_clean` does exactly that.
+Measured with the substitution in place, against the same session (traffic, targeting that matches
+nothing, five seconds):
+
+| | native path | forced fallback |
+|---|---|---|
+| `_Native._table` | 36 calls | **0** |
+| `_psutil_port_pid_map` | **0** | 12 calls |
+| from a packet thread | nothing | **nothing** |
+
+The test asserts its own conclusiveness before asserting the invariant - the table really took the
+psutil route (`table.native is False`), the fallback lookup really ran, and no native call leaked
+through - so a substitution that silently did nothing fails instead of passing quietly.
+
+Verified by mutation, and this is the part that makes it more than a duplicate: reopening
+`_process_for`'s refresh (`allow_refresh=True`) makes it fail naming the OTHER function -
+`[('_psutil_port_pid_map', 'Thread-1 (_capture_loop)')]` - where the Windows test names
+`_Native._table`. Same regression, second route, and now it is caught on both without waiting for
+a particular runner.
+
+The module docstring's "NOT verified" paragraph is replaced rather than left to rot; it now says
+what was measured.
+
 ### One stray lang/*.json stopped the program from starting (audit item #10, the edges)
 
 `lang/*.json` is the one on-disk format with its own `json.load`, outside `jsonfile`, and it was
