@@ -153,6 +153,136 @@ def test_a_failing_refresh_does_not_kill_the_resolver():
         resolver.stop()
 
 
+def test_constant_misses_cannot_turn_into_a_continuous_scan():
+    """The floor, and why it is not optional.
+
+    Targeting narrows traffic to ONE application, so every packet from every other
+    application is a miss - misses arrive continuously, not occasionally. If a miss
+    simply woke the resolver, the wake would be re-armed as fast as it was consumed
+    and the socket table would be scanned without pause. Measured while this guard
+    was missing: 63 rebuilds a second against a 0.3 s routine tick, bounded only by
+    the GIL.
+    """
+    targeting, _ = _targeting()
+    targeting.refresh()
+
+    # routine tick far away, so anything that happens is miss-driven
+    resolver = TargetResolver(interval=5.0, min_interval=0.05)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver settled", _wait(lambda: resolver.rebuilds >= 1))
+        base = resolver.rebuilds
+
+        stop = threading.Event()
+
+        def storm():                      # unrelated traffic: a miss every time
+            while not stop.is_set():
+                9999 in targeting
+
+        noise = threading.Thread(target=storm, daemon=True)
+        noise.start()
+        time.sleep(0.6)
+        stop.set()
+        noise.join(timeout=2)
+
+        did = resolver.rebuilds - base
+        # 0.6 s at a 0.05 s floor allows about 12; anything approaching "continuous"
+        # is in the dozens-to-hundreds. The margin is deliberately generous - this
+        # asserts the ORDER of magnitude, not a stopwatch.
+        check("the rebuild rate stayed bounded by the floor", did <= 25,
+              f"({did} rebuilds in 0.6 s of constant misses)")
+    finally:
+        resolver.stop()
+
+
+# -- dynamic process trees ----------------------------------------------------- #
+class _TreeTable:
+    """A socket table whose process TREE can grow while the test runs."""
+
+    def __init__(self):
+        self.ports = {5001: 100}                    # the parent's own socket
+        self.info = {100: ("myapp.exe", 1)}         # pid -> (name, ppid)
+        self.refreshes = 0
+
+    def refresh(self, now=None, force=False):
+        self.refreshes += 1
+        return True
+
+    def snapshot(self):
+        return dict(self.ports)
+
+    def name_of(self, pid):
+        return self.info.get(pid, ("", None))[0]
+
+    def ancestors(self, pid, depth=8):
+        chain, current = [], self.info.get(pid, ("", None))[1]
+        while current and len(chain) < depth:
+            name, parent = self.info.get(current, ("", None))
+            chain.append((current, name))
+            current = parent
+        return chain
+
+
+def test_a_child_spawned_mid_session_starts_being_impaired():
+    """The targeted app spawns workers while the session runs - that is the norm.
+
+    A browser opens a network-service child; a game launcher spawns a downloader; a
+    test harness forks per case. Their sockets belong to the target as much as the
+    parent's, and they appear at a moment nobody can schedule for.
+    """
+    table = _TreeTable()
+    targeting = ProcessTargeting(bnt.parse_target("myapp"), table=table)
+    targeting.refresh()
+    check("only the parent's socket is targeted at first",
+          targeting.ports() == {5001}, f"({targeting.ports()})")
+
+    resolver = TargetResolver(interval=5.0, min_interval=0.02)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver settled", _wait(lambda: resolver.rebuilds >= 1))
+
+        # the app spawns a worker, which opens its own socket
+        table.info[200] = ("myapp-helper.exe", 100)
+        table.ports[7001] = 200
+        check("the child's FIRST packet slips through (the documented race)",
+              7001 not in targeting)
+        check("but the child is targeted moments later", _wait(lambda: 7001 in targeting))
+
+        # ...and a grandchild, two levels down
+        table.info[300] = ("renderer.exe", 200)
+        table.ports[7002] = 300
+        9999 in targeting                            # any packet re-arms the miss
+        check("a grandchild is targeted too", _wait(lambda: 7002 in targeting))
+
+        check("the whole tree is in scope", targeting.ports() == {5001, 7001, 7002},
+              f"({targeting.ports()})")
+    finally:
+        resolver.stop()
+
+
+def test_an_excluded_child_is_not_pulled_back_in_by_its_parent():
+    """`myapp, !myapp-helper` must keep excluding the helper as it respawns."""
+    table = _TreeTable()
+    targeting = ProcessTargeting(bnt.parse_target("myapp, !myapp-helper"), table=table)
+    resolver = TargetResolver(interval=5.0, min_interval=0.02)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver settled", _wait(lambda: resolver.rebuilds >= 1))
+        table.info[200] = ("myapp-helper.exe", 100)
+        table.ports[7001] = 200
+        9999 in targeting
+        check("a rebuild happened", _wait(lambda: resolver.rebuilds >= 2))
+        time.sleep(0.05)
+        check("the excluded child stays out despite its matching parent",
+              7001 not in targeting, f"({targeting.ports()})")
+        check("the parent itself is still targeted", 5001 in targeting)
+    finally:
+        resolver.stop()
+
+
 # -- wired into the engine ----------------------------------------------------- #
 def test_the_capture_thread_never_touches_the_socket_table():
     """The whole point, asserted end to end.

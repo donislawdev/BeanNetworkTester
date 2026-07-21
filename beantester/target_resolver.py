@@ -42,17 +42,21 @@ every "Apply", and the concurrency tests do hundreds of times - must not churn
 threads.
 """
 import threading
+import time
 
-from . import crashlog
+from . import crashlog, portmap
 
-REFRESH_S = 0.30                # routine rebuild when nothing asks sooner
+REFRESH_S = portmap.REFRESH_S            # routine rebuild when nothing asks sooner
+MIN_INTERVAL_S = portmap.MISS_REFRESH_S  # floor between miss-driven rebuilds
 
 
 class TargetResolver:
     """Rebuilds one ``ProcessTargeting``'s port set on a background thread."""
 
-    def __init__(self, interval=REFRESH_S):
+    def __init__(self, interval=REFRESH_S, min_interval=MIN_INTERVAL_S):
         self.interval = float(interval)
+        self.min_interval = float(min_interval)
+        self._last_rebuild = 0.0
         self._targeting = None
         self._thread = None
         self._wake = threading.Event()
@@ -106,15 +110,36 @@ class TargetResolver:
     # -- the worker ------------------------------------------------------------- #
     def _loop(self):
         while not self._stopping.is_set():
-            # Arm BEFORE reading the target and rebuilding: a miss that arrives
-            # while we are inside refresh() then sets the event again, the wait
-            # below returns at once and the next pass picks it up. Clearing after
-            # the rebuild would swallow exactly that wake-up.
-            self._wake.clear()
             targeting = self._targeting
             if targeting is None:
                 self._wake.wait()           # nothing to resolve: sleep for free
+                self._wake.clear()
                 continue
+
+            # THE FLOOR, and it is not optional. Targeting narrows traffic to one
+            # application, so every packet from every OTHER application is a miss:
+            # misses arrive CONTINUOUSLY, not occasionally. Without a minimum gap
+            # the wake-up is re-armed as fast as it is consumed and this thread
+            # scans the socket table without pause. Measured before this guard
+            # existed: 63 rebuilds a second against a 0.3 s routine tick, bounded
+            # only by the GIL. This is the ``miss_interval`` that used to live in
+            # ``__contains__`` - same 0.05 s, enforced in one place instead of on
+            # the capture thread.
+            #
+            # The cost of the floor is the worst-case delay before a brand-new
+            # socket (a freshly spawned child process, say) starts being impaired:
+            # up to min_interval. That is the trade the old code made too.
+            since = time.monotonic() - self._last_rebuild
+            if since < self.min_interval:
+                self._stopping.wait(timeout=self.min_interval - since)
+                continue
+
+            # Clear BEFORE consuming and rebuilding: a miss arriving while we are
+            # inside refresh() sets the flag again AND re-arms the event, so the
+            # wait below returns at once and the next pass picks it up. The FLAG is
+            # the durable signal; the event is only a doorbell, so losing one to a
+            # race costs nothing.
+            self._wake.clear()
             targeting.consume_miss()
             try:
                 targeting.refresh()
@@ -124,4 +149,5 @@ class TargetResolver:
                 # port set simply goes stale until the next pass. But it stops
                 # being invisible.
                 crashlog.once("targeting.resolver", exc)
+            self._last_rebuild = time.monotonic()
             self._wake.wait(timeout=self.interval)

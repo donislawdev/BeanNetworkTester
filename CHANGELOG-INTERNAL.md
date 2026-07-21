@@ -87,6 +87,21 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   doing a full OS scan every 2 s, per fast restart cycle. Not reproduced live (driving the async
   start/stop on the fake-tk harness is awkward); `test_repeated_start_stop_cycles_do_not_stack_resolver_threads`
   is the guard that would have caught it.
+- **A FLOOR under miss-driven rebuilds, found by re-reading the design rather than by a test.**
+  Moving `miss_interval` out of `__contains__` removed the rate limit without putting it back
+  anywhere: targeting narrows traffic to one application, so every packet from every OTHER
+  application is a miss, misses arrive continuously, and the wake-up was re-armed as fast as it
+  was consumed. Measured with a 5 s routine tick: **63 rebuilds a second**, bounded only by the
+  GIL - with a real socket table that is a thread pegged at 100% scanning the OS. The resolver now
+  enforces `min_interval` (`portmap.MISS_REFRESH_S`, the same 0.05 s the old code used), in ONE
+  place instead of on the capture thread. Re-measured: 14 rebuilds/s with the floor, 33/s with it
+  disabled. The cost is the worst-case delay before a brand-new socket starts being impaired -
+  up to 50 ms, exactly the trade the old code made.
+- **Dynamic process trees verified, not assumed.** A child spawned mid-session opens its own
+  socket; the first packet slips through (the documented, unclosable race) and the miss wakes the
+  resolver, which matches the child through its ancestor chain. Measured pick-up: ~3 ms without
+  the floor, bounded by `min_interval` with it. Grandchildren (two levels) work the same way, and
+  `myapp, !myapp-helper` keeps excluding a respawning helper despite its matching parent.
 - New `tests/test_target_resolver.py`: miss wakes the resolver and the new port is picked up
   (long interval, so only the WAKE can explain it), `stop()` joins rather than signals,
   retargeting does not churn threads, an orphaned targeting is detached, a failing table leaves
