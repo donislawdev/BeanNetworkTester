@@ -266,6 +266,47 @@ def test_a_running_engine_is_registered_for_the_exit_hook():
     check("atexit: the divert was released", divert.closed is True)
 
 
+def test_a_worker_stop_never_blocks_on_a_held_stop_lock():
+    """Regression (F2): STOP took 2.09 s when it raced the duration deadline.
+
+    An external stop() holds ``_stop_lock`` AND joins the worker threads (2 s timeout).
+    The watchdog firing the deadline - and ``_fail_stop`` on a dead worker - used to call
+    the same blocking ``stop()``: it waited for the lock the user's stop was holding,
+    while the user's stop waited to join the watchdog, so STOP hung for the full join
+    timeout. They now go through ``_worker_stop``, which takes the lock non-blockingly
+    and bows out when it cannot, so the join completes at once.
+
+    Asserted structurally (does the worker stop return while the lock is held?), not as
+    elapsed wall-clock, so it cannot flake - exactly like
+    test_stop_releases_the_divert_before_anything_that_can_block.
+    """
+    import threading
+
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    # Stand in for an external stop() already in flight: hold _stop_lock the way it does.
+    eng._stop_lock.acquire()
+    try:
+        returned = threading.Event()
+
+        def worker_stop():
+            eng._worker_stop(reason="duration")   # must NOT block on the held lock
+            returned.set()
+
+        threading.Thread(target=worker_stop, daemon=True).start()
+        check("F2: a worker-initiated stop does not block on a held _stop_lock",
+              returned.wait(timeout=2.0),
+              "(_worker_stop blocked - STOP would hang for the whole join timeout)")
+        # it bowed out WITHOUT stopping, because the (simulated) external stop owns the
+        # teardown - the fail-open close is that stop's job, not a second racing one
+        check("F2: while another stop holds the lock, the worker stop is a no-op",
+              eng.is_running() is True, f"(running={eng.is_running()})")
+    finally:
+        eng._stop_lock.release()
+    eng.stop()
+    check("F2: the ordinary stop still tears the session down", eng.is_running() is False)
+
+
 # --- the GUI ---------------------------------------------------------------- #
 
 
