@@ -90,6 +90,29 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   on the synthetic path, degrade-not-kill on a source that fails to open, and no watcher thread
   left after stop. Driven on an idle `FakeDivert` (the session stays up) with a fake port table.
 
+### Changed: process targeting resolves against the live socket map (chunk 2c)
+
+- `ProcessTargeting` gained `set_table()`, and the engine now points it at the `SocketWatcher`'s
+  live map when a session has one (`_targeting_table()` returns the watcher, else `portmap`),
+  rebinding in `_start_locked` (targeting is often built before start, against the poller).
+  `_start_locked` was reordered so the watcher is created BEFORE the initial synchronous resolve -
+  the very first resolve already reads the live map.
+- Effect (the point of chunk 2): a connection of the targeted process is in impairment scope the
+  instant its SOCKET_CONNECT event arrives, not at the next poll - and since SOCKET_CONNECT precedes
+  the SYN, before its first packet. Verified end to end on real WinDivert (elevated, narrow
+  pass-through filter): targeting bound to the watcher, and a fresh outbound connection read
+  `in_scope` in ~0 ms. The polling path stays as the fallback, unchanged, so short-lived
+  connections only still escape when there is no real WinDivert.
+- Only the LIVE path changed: `engine.target_for` now builds against `_targeting_table()`. The
+  one-shot reporting helpers (`processes.find_process_ports` -> `resolve_ports`, `make_targeting`)
+  keep resolving against `portmap` - they are display snapshots, not session targeting.
+- Prose corrected (rules 5/6): the `targeting.py` docstring claimed the race "cannot be closed,
+  only made small" - true for the poller, false for the watcher. It now names which table closes
+  it. PROJECT_NOTES targeting bullet + the targeting ADR moved from "Chunk 2 (planned)" to done.
+- New tests: `tests/test_targeting_socketwatch.py` - the set_table swap, an end-to-end resolve of a
+  CONNECT event through a watcher + resolver (no poll), and the engine binding targeting to the
+  watcher (present) vs the poller (synthetic path).
+
 ### Fixed: the connections "impaired?" column is a session record, not a live port lookup
 
 - **Symptom (reported from the field, Chrome):** targeting `chrome.exe` showed a connections

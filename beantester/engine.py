@@ -195,6 +195,13 @@ class BeanEngine:
         """The background resolver that keeps the port set fresh."""
         return self._resolver
 
+    def _targeting_table(self):
+        """The socket table targeting resolves against: the live SOCKET-event map
+        when this session has one, else the polling port table (no real WinDivert,
+        or the SOCKET handle could not open). Both expose the same read surface, so
+        this is the single place the choice is made."""
+        return self._socketwatch if self._socketwatch is not None else self._ports
+
     def target_for(self, matcher):
         """Live targeting for a compiled matcher (reused while the expression holds).
 
@@ -214,7 +221,11 @@ class BeanEngine:
         with self._target_lock:
             current = self._targeting
             if current is None or current.expression != getattr(matcher, "raw", str(matcher)):
-                current = ProcessTargeting(matcher)
+                # Resolve against the live socket-event map when this session has one,
+                # the poller otherwise (2c). If targeting is built before start(), the
+                # watcher does not exist yet -> poller now, rebound to the watcher in
+                # _start_locked.
+                current = ProcessTargeting(matcher, table=self._targeting_table())
                 self._targeting = current
         # Pointing the RESOLVER at it is set_target's job (one place, one
         # responsibility) and start() reconciles the two either way.
@@ -537,8 +548,20 @@ class BeanEngine:
         # that NOTHING would ever close: the exact fail-open hole convention 20 forbids.
         _LIVE_ENGINES.add(self)
         try:
+            # The live socket-event map (2b/2c): created FIRST, so the initial
+            # targeting resolve below already reads it instead of the poller.
+            # Session-length, like the resolver; its bootstrap is done before the
+            # first packet flows. Only on the real path (or an injected source) -
+            # otherwise None and the poller stands. A failure to open the SOCKET
+            # handle degrades, not kills.
+            self._start_socketwatch(real_windivert, socket_source)
             targeting = self._targeting
             if targeting is not None:
+                # Point targeting at the live map when we have one, at the poller
+                # otherwise (2c). Targeting may have been built before start() (the
+                # GUI applies it first), against the poller, so this is where it is
+                # (re)bound to whatever this session actually has.
+                targeting.set_table(self._targeting_table())
                 with crashlog.quiet("engine.target"):
                     targeting.refresh()
                 # Reconcile: whichever path installed the target (target_for alone, or
@@ -552,11 +575,6 @@ class BeanEngine:
             # targeting exists to prevent. With no target it blocks on its event and
             # costs nothing.
             self._resolver.start()
-            # The live socket-event map (2b). Session-length, like the resolver;
-            # started here so its bootstrap is done before the first packet flows.
-            # Only on the real path (or an injected source) - otherwise None and the
-            # poller stands. A failure to open the SOCKET handle degrades, not kills.
-            self._start_socketwatch(real_windivert, socket_source)
             self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
             self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
             self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)

@@ -50,9 +50,20 @@ at most once per resolver cycle, while the flag itself is a plain bool (atomic
 under the GIL). ``refresh()`` stays public and synchronous for one-shot callers
 (``resolve_ports``, ``make_targeting``) and for tests.
 
-Hard limit, documented on purpose: WinDivert hands us a packet, not a PID, so
-the port -> process mapping is inherently a race. It cannot be closed, only made
-small; the very first packet of a brand-new connection may still slip through.
+The race, and where it is (and is not) closed - documented on purpose, because a
+"prawdziwie brzmiaca" claim that it is unclosable lived here for a long time and
+was wrong (PROJECT_NOTES rule 6):
+
+* against the **polling** port table (:class:`~beantester.portmap.PortTable`, the
+  fallback when there is no real WinDivert), WinDivert hands us a packet, not a
+  PID, so the mapping is a snapshot race - it can be made small, not closed, and
+  the first packet of a brand-new connection may slip through;
+* against the **live SOCKET-event map** (:class:`beantester.socketwatch.SocketWatcher`,
+  the default in a real session since chunk 2c), the race is closed for outbound
+  connections: the SOCKET_CONNECT event is delivered before the SYN reaches the
+  NETWORK layer (measured ~0.1 ms ahead), so the port is already mapped when the
+  first packet arrives. ``set_table`` is how the engine points this at one or the
+  other.
 """
 import threading
 import time
@@ -117,6 +128,21 @@ class ProcessTargeting:
             self._names = tuple(sorted(n for n in names if n))
             self._refreshes += 1
             return self._ports
+
+    def set_table(self, table):
+        """Swap the socket table this resolves against (poller <-> live watcher).
+
+        The engine points targeting at the live SOCKET-event map
+        (:class:`beantester.socketwatch.SocketWatcher`) when a session has one, and
+        back at the polling :class:`~beantester.portmap.PortTable` otherwise (no real
+        WinDivert, or the SOCKET handle could not open). Both expose the same read
+        surface (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``), which is
+        why the swap is a one-line reference change. The resolved port set is left as
+        it is until the next ``refresh()`` (the resolver runs those continuously), so
+        the swap never blips the hot-path ``__contains__``.
+        """
+        with self._lock:
+            self.table = table if table is not None else portmap.default_table()
 
     # -- the container BeanCore tests against ---------------------------------- #
     def __contains__(self, port):
