@@ -61,6 +61,27 @@ user's live connection) - had example tests only. New file
   property, dropping the src/dst swap fails the endpoint invariant, and narrowing the `except`
   lets the hostile-packet case raise. No production code changed.
 
+### Tests: cover the driver STOP+DELETE path and the in-app dialogs (F5)
+
+Engineering-review finding F5: the two lowest-covered spots were both error/teardown
+code that only ever runs on a user's machine. No production code changed.
+
+- **`driver.stop_and_remove` was 0%** - it STOPS and DELETES a Windows service and runs on
+  the way out of every real-capture session (`release_on_exit`), so it must not be exercised
+  for the first time in the field. It is pure Service-Manager glue, so `tests/test_driver_windows.py`
+  now drives every branch through a fake advapi (`_FakeAdvapi` + a real `ctypes.Structure` so
+  `byref` has a target, `is_windows` forced True so it runs identically on the Linux CI): stop+
+  delete, a delete that will not take, no SCM handle, access-denied vs not-installed vs an
+  unexpected error, and the off-Windows no-op. Plus four `cleanup_driver` orchestration cases
+  (per-service loop, stale `_MEI*` temp dirs, the admin gate, nothing installed). driver.py
+  75% -> 88%; the stop_and_remove block (was fully uncovered) is now exercised. Mutation-checked:
+  forcing the delete to read as failed turns the success test red.
+- **`gui/dialogs.py` was 16%** - the dark in-app modals. New `tests/test_dialogs.py` drives them
+  on the fake tkinter (where `wait_window` is a no-op, so each modal builds and returns its
+  dismissal default) and exercises `_close` directly. 16% -> 85%; the remaining lines are the
+  `crashlog.note` except-branches that only fire when a real Tk call raises, which the fake
+  cannot provoke.
+
 ### Fixed: STOP no longer blocks for 2 s when it races the duration deadline (F2)
 
 Engineering-review finding F2, measured before and after: a user STOP colliding with the
