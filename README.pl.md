@@ -751,6 +751,7 @@ beantester/              pakiet z implementacją
   portmap.py             tabela gniazd: lokalny port -> PID (iphlpapi/ctypes; fallback psutil)
   targeting.py           żywy zbiór portów celu: drzewo procesów, prośba o przebudowę na chybieniu
   target_resolver.py     przebudowuje ten zbiór na własnym wątku, poza ścieżką pakietów
+  socketwatch.py         żywa mapa port lokalny -> PID ze zdarzeń SOCKET WinDivert (źródło zdarzeniowe)
   jsonfile.py            zapis atomowy + kwarantanna uszkodzonych plików użytkownika
   crashlog.py            logger awarii: quiet/note/once, kwarantanna, raport w tle
   appinfo.py             tożsamość aplikacji i odczyt wersji (jedno źródło: VERSION.txt)

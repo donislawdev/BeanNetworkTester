@@ -42,6 +42,32 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Added: socketwatch.py - live local_port->pid map from WinDivert SOCKET events (chunk 2a)
+
+- New module `beantester/socketwatch.py` (`SocketWatcher`): the event-driven replacement for
+  polling the socket table. WinDivert 2.2 SOCKET layer (sniff-only, `SNIFF|RECV_ONLY`) delivers
+  BIND/CONNECT/ACCEPT/LISTEN/CLOSE with the owning ProcessId; the map adds on the first four and
+  removes on CLOSE, pid-checked so a late CLOSE cannot evict a port the OS has recycled to a
+  different process. `reconcile()` seeds from a `portmap` snapshot and prunes a port absent for
+  TWO passes (grace against evicting a socket opened microseconds before the snapshot was taken).
+  Names/ancestors delegate to `portmap` (no duplication); the event source is injected, so the map
+  is unit-tested without WinDivert.
+- Why SOCKET, not FLOW (measured spike 2026-07-22, elevated, sniff-only): SOCKET_CONNECT arrives
+  ~0.1 ms BEFORE the outbound SYN reaches the NETWORK layer (closes the race); FLOW_ESTABLISHED
+  arrives ~28 ms AFTER (post-handshake, the SYN already slipped). Two sniff handles (NETWORK+SOCKET)
+  were confirmed to coexist. The real `_WinDivertSocketSource` was smoke-verified end to end: a
+  known outbound connection's local port mapped to `os.getpid()` and was removed on close.
+- Scope: chunk 2a is the module in ISOLATION. It is NOT wired into `BeanEngine` or
+  `ProcessTargeting` yet (2b wires the lifecycle + bootstrap + fallback; 2c makes targeting read
+  the live map). The polling path (`portmap` / `target_resolver`) is untouched and stays as the
+  fallback for `--simulate` / tests / non-Windows.
+- New tests: `tests/test_socketwatch.py` - map add/remove, pid-checked recycled-port removal, junk
+  rejection, the reconcile two-pass grace (both prune and reappear-resets-grace), name delegation,
+  the refresh no-op, the reader thread on an injected fake source, and the MSB-first IPv4 decode
+  the spike corrected.
+- `import beantester` still does not import pydivert: the real source constructs it lazily inside
+  `start()`, so the package import and every unit test stay WinDivert-free.
+
 ### Fixed: the connections "impaired?" column is a session record, not a live port lookup
 
 - **Symptom (reported from the field, Chrome):** targeting `chrome.exe` showed a connections
