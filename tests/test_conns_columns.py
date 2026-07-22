@@ -12,9 +12,13 @@ def test_connection_columns_tag_and_footer():
     run_gui('''
         page = app.pages["connections"]
         app.engine.now_ref = lambda: 100.0
-        # target the chrome flow's local port only. svchost carries a STALE
-        # scoped=True (it was in scope before the target was narrowed); the column
-        # and tag must follow the CURRENT target, not that stored flag.
+        # target the chrome flow's local port only. svchost carries scoped=True as
+        # a session record: it WAS in impairment scope earlier, before the target
+        # was narrowed to chrome. The two signals now differ on purpose:
+        #   * the COLUMN is that stored record  -> svchost still reads "yes"
+        #   * the ROW HIGHLIGHT is the live target -> svchost is NOT highlighted
+        # (before, a live column flipped every closed flow to "no", so a run that
+        #  impaired all of chrome looked like it had caught nothing.)
         app.engine.core.set_target(True, {5000})
         rows = [
             dict(local_port=5000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
@@ -41,10 +45,12 @@ def test_connection_columns_tag_and_footer():
         assert chrome_vals[7] == bnt.T("conns.yes"), chrome_vals     # impaired?
         assert str(chrome_vals[8]) == "3", chrome_vals               # dropped
         assert svc_vals[1] == "", svc_vals                           # pid None -> blank
-        # svchost is out of the CURRENT target: "no" despite its stale scoped=True
-        assert svc_vals[7] == bnt.T("conns.no"), svc_vals
+        # svchost was impaired earlier this session: the COLUMN keeps the record
+        # even though it is out of the CURRENT target.
+        assert svc_vals[7] == bnt.T("conns.yes"), svc_vals
 
-        # the in-scope row is tagged for the highlight; the out-of-scope row is not
+        # the HIGHLIGHT is live: only the row in the current target is tagged, so the
+        # out-of-scope svchost row keeps its record but loses the highlight.
         assert "impaired" in chrome_tags, chrome_tags
         assert svc_tags == (), svc_tags
 

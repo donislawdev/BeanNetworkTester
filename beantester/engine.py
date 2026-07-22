@@ -389,9 +389,18 @@ class BeanEngine:
                 c["bytes_in"] += size
             if dropped:
                 c["dropped"] += 1
-            # scoped tracks the LATEST packet: targeting can change mid-session,
-            # and the row should reflect whether the flow is in scope right now
-            c["scoped"] = bool(scoped)
+            # scoped is STICKY: once a flow has been in impairment scope it stays
+            # marked, for the life of the session's connection log. It is the audit
+            # answer to "was this connection impaired", not "is its port in the
+            # target set right now" - those differ the instant a socket closes, and
+            # a browser closes hundreds a minute. A live check flipped every
+            # finished flow to "not impaired" the moment it closed (its ephemeral
+            # port left the socket table), so a run that impaired all of chrome read
+            # as a table full of "no". The LIVE "in scope now" signal still exists -
+            # it is the row highlight (gui/pages/conns.py::_tag_of, via in_scope) -
+            # so narrowing chrome->firefox drops the highlight without erasing the
+            # record that the chrome flow WAS impaired.
+            c["scoped"] = c["scoped"] or bool(scoped)
             c["last"] = now
             c["dir"] = "out" if is_out else "in"
             c["proto"] = proto

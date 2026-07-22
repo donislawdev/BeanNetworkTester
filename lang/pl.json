@@ -385,7 +385,7 @@
   "tips.col_proto": "Protokół transportowy połączenia (TCP / UDP / IP).",
   "tips.col_remote_ip": "Adres, z którym rozmawia ta maszyna. Kliknij wiersz prawym przyciskiem, aby ograniczyć do niego zakłócenia.",
   "tips.col_remote_port": "Port po stronie zdalnej (443 = HTTPS, 53 = DNS, 80 = HTTP).",
-  "tips.col_scoped": "Czy to połączenie jest w zakresie celowania - czyli psute, a nie tylko obserwowane. Bez ustawionego celowania w zakresie jest każde połączenie.",
+  "tips.col_scoped": "Czy to połączenie było w zakresie psucia w tej sesji - psute, a nie tylko obserwowane. Zostaje „tak” po zamknięciu połączenia, jako zapis; wiersz jest podświetlony tylko póki pasuje do bieżącego celu. Bez ustawionego celowania w zakresie jest każde połączenie.",
   "tips.col_up": "Dane wysłane (upload) na tym połączeniu, w kilobajtach.",
   "tips.confirm_close": "Gdy włączone, zamknięcie okna w trakcie przechwytywania najpierw pyta o potwierdzenie. Wyłącz, by zamykać bez pytania.",
   "tips.conn_search": "Filtruj połączenia po adresie IP, porcie lub kierunku (np. '443', '10.0.0', 'out').",

@@ -284,6 +284,48 @@ def test_connection_records_scope_and_dropped():
           "pid" in targeted and "pid" in other)
 
 
+def test_scoped_is_a_sticky_session_record():
+    """The "impaired?" flag is a session-long record, not the last packet's scope.
+
+    Once a flow has been in impairment scope, its row must keep saying so after the
+    flow LEAVES scope - the target was narrowed, or the flow just went idle and its
+    socket closed. A browser closes hundreds of connections a minute; if the flag
+    tracked only the latest packet (or a live port lookup) every finished flow would
+    read "not impaired" the instant it closed, so a run that impaired all of chrome
+    looked like it had caught nothing. The LIVE "in scope now" signal is a separate
+    thing (the connections page highlights the row via BeanCore.in_scope).
+
+    Driven straight through ``_log_conn`` so the stickiness is asserted without any
+    thread timing: three packets on one flow (in scope, then twice out), plus a flow
+    that is never in scope at all.
+    """
+    eng = BeanEngine()
+
+    def row(port):
+        return {c["local_port"]: c for c in eng.connections_snapshot()}[port]
+
+    key = (5000, "1.1.1.1", 443)
+    # first packet arrives in scope (targeting matched, an impairment applied)
+    eng._log_conn(key, "1.1.1.1", 443, 5000, True, 100, 1.0, "TCP",
+                  dropped=True, scoped=True)
+    check("in scope on the first packet", row(5000)["scoped"] is True,
+          f"(scoped={row(5000)['scoped']})")
+
+    # later packets on the SAME flow arrive OUT of scope (target narrowed away):
+    # the record must not flip back to "not impaired"
+    for t in (2.0, 3.0):
+        eng._log_conn(key, "1.1.1.1", 443, 5000, True, 100, t, "TCP",
+                      dropped=False, scoped=False)
+    check("still recorded as impaired after leaving scope", row(5000)["scoped"] is True,
+          f"(scoped={row(5000)['scoped']})")
+
+    # a flow that is NEVER in scope stays out - stickiness only ever adds "yes"
+    eng._log_conn((5001, "2.2.2.2", 80), "2.2.2.2", 80, 5001, True, 100, 4.0, "TCP",
+                  dropped=False, scoped=False)
+    check("a never-scoped flow is not marked impaired", row(5001)["scoped"] is False,
+          f"(scoped={row(5001)['scoped']})")
+
+
 def test_set_seed_variants():
     sh = BeanEngine()
     for v in (None, "", -1):

@@ -244,9 +244,15 @@ class ConnsPage:
         idle = max(0.0, now - last)
         dur = max(0.0, last - c.get("first", now))
         packets = c.get("packets") or 0
-        # scope is asked of the engine NOW, not read from the flow's last packet:
-        # an idle flow kept a stale flag (chrome-only target, firefox still "yes")
-        scoped = T("conns.yes") if self._in_scope(c) else T("conns.no")
+        # The COLUMN is the session-long record "was this flow ever in impairment
+        # scope" (a sticky flag the engine keeps per flow), NOT a live lookup. A
+        # closed or idle flow's ephemeral port has left the socket table, so a live
+        # check flips every finished connection to "no" the instant it closes -
+        # which read as "the tool caught almost nothing" even when it had impaired
+        # them all while they were alive. The LIVE "in scope right now" signal is
+        # the row highlight (_tag_of), which still follows the CURRENT target, so
+        # narrowing chrome->firefox drops the highlight without erasing the record.
+        scoped = T("conns.yes") if c.get("scoped") else T("conns.no")
         return (connection_proc(c, self.app.proc_map) or "?",
                 c.get("pid") or "", c.get("proto", "IP"), c.get("remote_ip"),
                 c.get("remote_port"), c.get("local_port"), packets,
