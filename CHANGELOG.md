@@ -36,6 +36,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The "impaired?" column now reflects the whole session, not just this instant.** When you
+  targeted a process, the column asked "is this connection's port in the target *right now*" -
+  so the moment a connection closed (a browser closes hundreds a minute) its row flipped to
+  "no", and a run that was impairing all of Chrome looked like it was catching almost nothing.
+  The column now records whether a connection was in impairment scope at any point this session
+  and keeps saying "yes" after it closes. Which connections are being impaired *right now* is
+  still shown by the row highlight, which follows your current target. The connections CSV
+  export already worked this way, so the table and the export now agree.
+
 - **One bad translation file no longer stops the whole program.** Language files are plain JSON
   next to the program, and you can add your own. If one of them had a malformed `_meta` header -
   the little block naming the language - the program refused to start at all, with a technical

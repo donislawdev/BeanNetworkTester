@@ -42,6 +42,45 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the connections "impaired?" column is a session record, not a live port lookup
+
+- **Symptom (reported from the field, Chrome):** targeting `chrome.exe` showed a connections
+  table where the large majority of rows read "no" in the impaired? column, so the tool looked
+  like it was missing most of the traffic. It was not - the column was misreporting FINISHED
+  connections.
+- **Cause:** `gui/pages/conns.py::_render` computed the column LIVE via
+  `engine.in_scope_now` -> `BeanCore.in_scope` -> `local_port in target_ports`. A closed or idle
+  flow's ephemeral port has left the socket table, so the live test returns False for every
+  connection that is no longer open - which is most of them on a browser. Meanwhile the stored
+  per-flow `scoped` flag (`engine._log_conn`) tracked only the LATEST packet, and both the CSV
+  export (`gui/app.py`) and the column's sort key (`views.py::_SORT["scoped"]`) already read
+  that stored flag - so the on-screen cell, its sort order and the CSV disagreed (two semantics,
+  three call sites).
+- **Fix:** `engine._log_conn` now keeps `scoped` STICKY per flow
+  (`c["scoped"] = c["scoped"] or bool(scoped)`) - a session-long "was ever in impairment scope"
+  record - and `conns.py::_render` reads that stored flag instead of the live lookup. Cell, sort
+  key and CSV now all read the one stored flag. The LIVE "in scope now" signal is unchanged: it
+  is the row HIGHLIGHT (`_tag_of`, still via `in_scope`), so a chrome->firefox narrowing drops
+  the highlight without erasing the record.
+- **Reversed decision (recorded so it is not re-reversed):** the column was deliberately made
+  live once, to stop an idle flow keeping a stale "yes" after the target was narrowed. That
+  concern is now carried by the HIGHLIGHT (live), while the COLUMN is the audit trail (sticky) -
+  the two signals were conflated into one before.
+- New test: `tests/test_engine.py::test_scoped_is_a_sticky_session_record` - three packets on one
+  flow (in scope, then twice out) keep the flag True, and a never-scoped flow stays False, driven
+  straight through `_log_conn` (no thread timing).
+- Updated test: `tests/test_conns_columns.py::test_connection_columns_tag_and_footer` - the
+  out-of-current-target `svchost` row now asserts column "yes" (stored record) with NO highlight
+  tag (live), locking the two-signal split. `tests/test_conns_export.py` and
+  `tests/test_engine.py::test_connection_records_scope_and_dropped` were already consistent with
+  the stored flag and pass unchanged.
+- i18n: `tips.col_scoped` reworded in `lang/en.json` + `lang/pl.json` (values only; key set and
+  sort order unchanged, so `test_i18n.py` parity holds).
+- Scope: this is the display/coherence half (Chunk 1). The underlying port->PID resolution is
+  still a periodic socket-table snapshot, so short-lived connections that open and close inside a
+  refresh window can still escape impairment (`tests/test_target_resolver.py` documents the race);
+  closing that at the source with the WinDivert FLOW/SOCKET layer is tracked separately.
+
 ### Tests: property-based coverage for the two packet-mutating functions (F6)
 
 Engineering-review finding F6: the property suites covered matchers and `decide()`, but the

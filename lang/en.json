@@ -385,7 +385,7 @@
   "tips.col_proto": "Transport protocol of the connection (TCP / UDP / IP).",
   "tips.col_remote_ip": "Address this machine is talking to. Right-click a row to limit the impairments to it.",
   "tips.col_remote_port": "Port on the remote side (443 = HTTPS, 53 = DNS, 80 = HTTP).",
-  "tips.col_scoped": "Whether this connection is in targeting scope - i.e. being impaired, not merely observed. With no targeting set, every connection is in scope.",
+  "tips.col_scoped": "Whether this connection was in impairment scope this session - impaired, not just watched. It stays \"yes\" after the connection closes, as a record; the row is highlighted only while it still matches the current target. With no targeting set, every connection is in scope.",
   "tips.col_up": "Data sent (uploaded) on this connection, in kilobytes.",
   "tips.confirm_close": "When on, closing the window during a running capture asks for confirmation first. Turn off to close without being asked.",
   "tips.conn_search": "Filter connections by IP address, port or direction (e.g. '443', '10.0.0', 'out').",
