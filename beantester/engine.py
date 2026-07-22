@@ -554,72 +554,129 @@ class BeanEngine:
                        "fault": "events.fault"}
 
     def stop(self, reason="user"):
-        """Stop the session and release the divert. Safe to call twice / from any thread."""
-        with self._stop_lock:
-            if not self._running:
-                return
-            self._running = False
-            self._stop_mono = time.monotonic()
-            self._stop_wall = time.time()
-            self.stop_reason = reason
-            # FIRST, before anything that can block. Closing the divert unblocks a
-            # capture thread stuck in recv() AND releases the WinDivert driver
-            # (which otherwise keeps its .sys file locked - see driver.py).
-            #
-            # The order matters because ``_capture_loop`` runs ``while self._running``:
-            # the line above has already ended it, so from this point NOTHING is
-            # draining the divert while WinDivert keeps diverting into it. Every step
-            # that used to sit in between can block - ``_resolver.stop()`` joins with
-            # a 0.25 s timeout and a resolve in flight really does use it (measured:
-            # STOP took 252 ms with a scan running, against ~100 ms idle). That was up
-            # to a quarter of a second of the user's packets queued into a void, which
-            # is the exact failure FAIL-OPEN exists to prevent (convention 20). It is
-            # invisible on a synthetic divert, whose recv() blocks, and shows up on the
-            # real one, whose recv() returns immediately under traffic.
-            #
-            # It must NOT move above ``self._running = False``: recv() would then raise
-            # while the session still looked live, so ``_capture_loop`` would take the
-            # ``_fail_stop`` path and report a fault for an ordinary stop.
-            if self._divert is not None:
-                try:
-                    self._divert.close()
-                except Exception as _exc:
-                    crashlog.note(_exc, "engine")
-            self.stop_scenario()
-            # Joins: the resolver holds OS handles and must stop touching them when
-            # the session does, not "eventually".
-            self._resolver.stop()
-            self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
-            with self._cv:
-                self._cv.notify_all()
-            # join the worker threads before releasing self._divert: they read the
-            # attribute live, so a quick stop->start would otherwise leave an old
-            # capture thread consuming packets from the NEW session's divert
-            for t in (self._t_cap, self._t_inj, self._t_wd):
-                if t is not None and t.is_alive() and t is not threading.current_thread():
-                    t.join(timeout=2.0)
-            self._t_cap = self._t_inj = self._t_wd = None
-            self._divert = None
-            self._deadline = None
-            with self._cv:
-                discarded = len(self._heap)
-                self._heap.clear()
-            if discarded:
-                # Packets still queued for delayed injection when the session ended:
-                # counted at capture (seen / bytes_*_total) but never delivered. Record
-                # them instead of letting them vanish from the seen/delivered/dropped
-                # balance - they were dropped BY the shutdown, not lost in transit.
-                self._bump("drop_shutdown", discarded)
-            _LIVE_ENGINES.discard(self)
-            self.log(T("log.stop"))
+        """Stop the session and release the divert. Safe to call twice / from any thread.
 
-    def _fail_stop(self, error):
-        """A worker died: stop the session so the network is never left impaired."""
+        External callers (GUI, CLI, atexit, tests) come through here and BLOCK on
+        ``_stop_lock``, which serialises stop against ``start()``. A worker thread that
+        needs to stop the engine from the inside (the watchdog on a deadline, or
+        ``_fail_stop`` when a worker dies) must NOT use this - it goes through
+        ``_worker_stop``, which never blocks on the lock. See there for why.
+        """
+        with self._stop_lock:
+            self._stop_locked(reason)
+
+    def _worker_stop(self, reason):
+        """Stop initiated BY one of the engine's own worker threads.
+
+        It must not BLOCK on ``_stop_lock``. A concurrent external ``stop()`` holds
+        that lock AND joins this very thread (join timeout 2.0 s), so blocking here
+        would hang STOP for the whole timeout - measured at 2.09 s when the user
+        pressed STOP at the same instant the duration deadline fired: the watchdog's
+        ``stop()`` waited for the lock while the user's ``stop()`` waited to join the
+        watchdog. The user's ``stop()`` is already closing the divert, so the
+        fail-open guarantee holds without us. So: take the lock only if it is free
+        and do the stop ourselves (the uncontended deadline / fault case); if another
+        stop already holds it, return AT ONCE so its join of this thread completes and
+        this thread dies.
+        """
+        if not self._stop_lock.acquire(blocking=False):
+            return
+        try:
+            self._stop_locked(reason)
+        finally:
+            self._stop_lock.release()
+
+    def _stop_locked(self, reason):
+        """The stop body. The caller MUST hold ``_stop_lock`` - ``stop()`` blocks to
+        take it, ``_worker_stop`` takes it without blocking."""
+        if not self._running:
+            return
+        self._running = False
+        # Cleared EARLY (it used to be set near the end): once the deadline is gone,
+        # a watchdog that is just finishing a slow maintenance op sees nothing to fire
+        # and exits its loop instead of calling a second, racing stop.
+        self._deadline = None
+        self._stop_mono = time.monotonic()
+        self._stop_wall = time.time()
+        self.stop_reason = reason
+        # FIRST, before anything that can block. Closing the divert unblocks a
+        # capture thread stuck in recv() AND releases the WinDivert driver
+        # (which otherwise keeps its .sys file locked - see driver.py).
+        #
+        # The order matters because ``_capture_loop`` runs ``while self._running``:
+        # the line above has already ended it, so from this point NOTHING is
+        # draining the divert while WinDivert keeps diverting into it. Every step
+        # that used to sit in between can block - ``_resolver.stop()`` joins with
+        # a 0.25 s timeout and a resolve in flight really does use it (measured:
+        # STOP took 252 ms with a scan running, against ~100 ms idle). That was up
+        # to a quarter of a second of the user's packets queued into a void, which
+        # is the exact failure FAIL-OPEN exists to prevent (convention 20). It is
+        # invisible on a synthetic divert, whose recv() blocks, and shows up on the
+        # real one, whose recv() returns immediately under traffic.
+        #
+        # It must NOT move above ``self._running = False``: recv() would then raise
+        # while the session still looked live, so ``_capture_loop`` would take the
+        # ``_fail_stop`` path and report a fault for an ordinary stop.
+        if self._divert is not None:
+            try:
+                self._divert.close()
+            except Exception as _exc:
+                crashlog.note(_exc, "engine")
+        self.stop_scenario()
+        # Joins: the resolver holds OS handles and must stop touching them when
+        # the session does, not "eventually".
+        self._resolver.stop()
+        self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
+        with self._cv:
+            self._cv.notify_all()
+        # join the worker threads before releasing self._divert: they read the
+        # attribute live, so a quick stop->start would otherwise leave an old
+        # capture thread consuming packets from the NEW session's divert. The
+        # watchdog can be among them, and it is joined here too - safe now only
+        # because a watchdog-initiated stop goes through _worker_stop and never
+        # blocks on _stop_lock, so joining it cannot deadlock against this stop.
+        for t in (self._t_cap, self._t_inj, self._t_wd):
+            if t is not None and t.is_alive() and t is not threading.current_thread():
+                t.join(timeout=2.0)
+        self._t_cap = self._t_inj = self._t_wd = None
+        self._divert = None
+        with self._cv:
+            discarded = len(self._heap)
+            self._heap.clear()
+        if discarded:
+            # Packets still queued for delayed injection when the session ended:
+            # counted at capture (seen / bytes_*_total) but never delivered. Record
+            # them instead of letting them vanish from the seen/delivered/dropped
+            # balance - they were dropped BY the shutdown, not lost in transit.
+            self._bump("drop_shutdown", discarded)
+        _LIVE_ENGINES.discard(self)
+        self.log(T("log.stop"))
+
+    def _fail_stop(self, error, blocking=True):
+        """A worker died: stop the session so the network is never left impaired.
+
+        ``blocking`` picks HOW the stop is taken, and the two callers genuinely differ:
+
+        * The CAPTURE thread calls this on a real recv() fault (blocking=True). A plain
+          ``stop()`` is right, and necessary: the fault can arrive while ``start()``
+          still holds ``_stop_lock`` (a divert that fails on its very first reads,
+          before start() has returned) - blocking makes the capture thread wait for
+          start() to finish and then stop cleanly, keeping the REAL fault message. It
+          cannot deadlock against an external STOP: that path closes the divert first,
+          so the capture loop sees ``_running`` already False and never reaches here.
+        * The WATCHDOG calls this from its liveness check (blocking=False). It must NOT
+          block on ``_stop_lock``: an external ``stop()`` holds it while joining the
+          watchdog thread, so blocking would hang STOP for the join timeout (F2). It
+          goes through ``_worker_stop`` instead, which bows out under contention.
+        """
         if not self._running:
             return
         self.fault = str(error)
         self.log(T("log.engine_fault", e=self.fault))
-        self.stop(reason="fault")
+        if blocking:
+            self.stop(reason="fault")
+        else:
+            self._worker_stop(reason="fault")
 
     # -- watchdog -------------------------------------------------------------- #
     def _watchdog_loop(self):
@@ -663,12 +720,19 @@ class BeanEngine:
                 crashlog.note(_exc, "engine")
             if deadline_reached(self._deadline, time.monotonic()):
                 self.log(T("log.duration_reached", v=f"{self._duration:g}"))
-                self.stop(reason="duration")
+                # _worker_stop, not stop(): this runs on the watchdog thread, and a
+                # user pressing STOP at the same instant holds _stop_lock while joining
+                # this very thread. Blocking on the lock here would hang STOP for its
+                # 2 s join timeout (measured 2.09 s); the user's stop already closes
+                # the divert, so we can just bow out.
+                self._worker_stop(reason="duration")
                 return
             for t in (self._t_cap, self._t_inj):
                 if t is not None and not t.is_alive():
+                    # blocking=False: this is the watchdog thread, and an external
+                    # stop() joining it must never wait on a lock we are blocked on (F2).
                     self._fail_stop(RuntimeError(
-                        f"worker thread {t.name} died unexpectedly"))
+                        f"worker thread {t.name} died unexpectedly"), blocking=False)
                     return
 
     # -- worker threads -------------------------------------------------------- #

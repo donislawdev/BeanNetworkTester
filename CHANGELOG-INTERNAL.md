@@ -42,6 +42,34 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: STOP no longer blocks for 2 s when it races the duration deadline (F2)
+
+Engineering-review finding F2, measured before and after: a user STOP colliding with the
+session deadline took **2091 ms**; it is now **~160 ms** (40-trial worst case).
+
+- **The deadlock:** `stop()` holds `_stop_lock` and joins the worker threads with a 2.0 s
+  timeout. When the watchdog fired the duration deadline at the same instant, its
+  `stop(reason="duration")` blocked waiting for that same lock while the user's `stop()` was
+  blocked waiting to join the watchdog - a lock-ordering inversion broken only by the join
+  timeout. The capture thread's `_fail_stop` -> `stop()` had the same shape.
+- **The fix:** `stop()` is split into `stop()` (external callers - GUI/CLI/atexit/tests -
+  which BLOCK on `_stop_lock`, preserving start/stop serialisation), `_worker_stop()` (worker
+  threads, which take the lock NON-blocking and bow out under contention), and the shared
+  `_stop_locked()` body. The watchdog's deadline and liveness stops go through `_worker_stop`;
+  `_deadline` is now cleared at the TOP of the stop body so a watchdog finishing a slow op sees
+  nothing to fire.
+- **Subtlety that cost a round:** `_fail_stop` is called by BOTH the capture thread and the
+  watchdog. Routing both through `_worker_stop` regressed `test_a_dead_capture_thread_fails_open`
+  - a divert that faults on its first reads does so while `start()` still holds `_stop_lock`, so
+  the capture thread's non-blocking stop no-opped and the watchdog stopped it a tick later with a
+  generic "died unexpectedly" instead of the real "driver went away". So `_fail_stop` grew a
+  `blocking` flag: the capture thread blocks (safe - an external STOP closes the divert first, so
+  the capture loop sees `_running` False and never reaches `_fail_stop`), only the watchdog's
+  liveness path is non-blocking.
+- New test `tests/test_failsafe.py::test_a_worker_stop_never_blocks_on_a_held_stop_lock` - holds
+  `_stop_lock` and asserts `_worker_stop` returns anyway (structural, not wall-clock, so it cannot
+  flake). Mutation-checked: making `_worker_stop` blocking turns it red.
+
 ### Fixed: BeanEngine.start() is now atomic - a partial start fails OPEN (convention 20)
 
 Engineering-review finding F1, confirmed by experiment before the fix (forced `Thread.start()`

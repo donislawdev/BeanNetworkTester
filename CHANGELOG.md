@@ -94,6 +94,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   showing an error while quietly keeping its grip, and every later START was refused until you
   killed the program. A failed start now releases your network immediately and leaves the tool
   ready to start again, exactly as if you had never pressed START.
+- **STOP is immediate again when you press it just as a timed run ends.** If you hit STOP at the
+  same moment a run reached its set duration, the tool could sit on "stopping" for about two seconds
+  before the window went back to normal. Your network was already handed back at once - it was only
+  the button that lagged - but a STOP that looks stuck is exactly the wrong thing in a tool whose
+  whole job is undoing what you did to your own connection. It now finishes right away either way.
 
 ## [0.3.0] - 2026-07-20
 
