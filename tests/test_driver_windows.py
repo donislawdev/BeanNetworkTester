@@ -182,7 +182,12 @@ def _fake_scm(monkeypatch, fake, last_error=0):
     monkeypatch.setattr(driver, "is_windows", lambda: True)
     monkeypatch.setattr(driver, "_advapi", lambda: fake)
     monkeypatch.setattr(driver, "_status_type", lambda: _FakeStatus)
-    monkeypatch.setattr(ctypes, "get_last_error", lambda: last_error)
+    # ctypes.get_last_error is Windows-only (POSIX ctypes has get_errno instead), so
+    # on the Linux CI the attribute does not exist to replace. raising=False CREATES
+    # it for the duration of the test - which is exactly right, since we are forcing
+    # the Windows-only stop_and_remove path to run on every platform. monkeypatch
+    # removes it again on teardown.
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: last_error, raising=False)
 
 
 def test_stop_and_remove_stops_then_deletes_and_closes_every_handle(monkeypatch):
