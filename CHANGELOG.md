@@ -36,6 +36,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Targeting a process now catches its connections as they open, including short-lived ones.**
+  Working out which connections belong to your target used to mean scanning the system's socket
+  table a few times a second - so a connection that opened and closed between two scans (a browser
+  makes many) could slip through unimpaired, and pointing the tool at a busy app like Chrome caught
+  only some of its traffic. On Windows the tool now follows the system's socket events as they
+  happen, so a connection is impaired from the moment it opens - for outbound connections, before
+  its first packet even leaves. Without real WinDivert it falls back to the old scan. Nothing
+  changes in how you set a target.
+
 - **The "impaired?" column now reflects the whole session, not just this instant.** When you
   targeted a process, the column asked "is this connection's port in the target *right now*" -
   so the moment a connection closed (a browser closes hundreds a minute) its row flipped to

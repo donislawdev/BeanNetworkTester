@@ -349,8 +349,9 @@ firefox, 12345                 a name and a PID in one field
 ```
 
 All matching processes contribute their local ports - targeting covers the **union** of their
-ports. The list is refreshed during the session (every ~2 s), so newly opened connections of the
-process are caught.
+ports. The port set is kept current during the session from the system's socket events, so newly
+opened connections of the process are caught as they open (without real WinDivert it falls back to
+re-scanning the socket table a few times a second).
 
 ### The "IP" field
 
@@ -927,18 +928,18 @@ seeded).
   **that opened it, or any of its ancestors**, matches. That is why `chrome.exe` (or the browser
   window's PID) also catches its network process - which is the one holding all the connections. An
   explicit exclusion wins: `chrome, !chromedriver` will not pull in `chromedriver` via a parent.
-- **Process targeting is a race with the system (and stays one)** - WinDivert gives a packet, not a
-  PID, so we resolve the process from the socket table by **local port**. The table is refreshed
-  ~3x per second and **additionally as soon as an unknown port appears**, so a freshly opened
-  connection starts being impaired within tens of ms. The very first packet of a brand-new
-  connection may slip through - that is a limit of the method, not a bug. The lookup itself runs
-  on its own thread, never on the one handling your packets, so a slow scan can never turn into
-  lost traffic.
+- **Process targeting is driven by socket events, not a slow poll.** WinDivert hands us a packet,
+  not a PID, so we map a packet to its process by **local port**. On Windows the tool watches the
+  system's socket events (connect / bind / accept / close) as they happen, so a connection is in
+  scope the moment it opens - for an outbound connection, before its first packet even leaves.
+  Without real WinDivert (the test / simulation path) it falls back to scanning the socket table a
+  few times a second, where the first packet of a brand-new connection can slip through. Either way
+  the watching runs on its own thread, never on the one handling your packets, so it can never turn
+  into lost traffic.
 - **An exclusion on its own also covers everything the tool cannot identify.** `!chrome` in the
   process field means "impair everything except chrome" - and "everything" includes any connection
-  whose owning process could not be determined: the first packets of a brand-new socket, protected
-  system processes, anything the socket table has not caught up with yet. Unidentified is not the
-  rare case here; every new connection passes through it.
+  whose owning process could not be determined: protected system processes the tool cannot open,
+  and - on the polling fallback - the first packets of a brand-new socket.
   **So do not use an exclusion to protect an application.** If you want one app left alone, name
   the app you DO want broken (`--target thatapp`) - then anything unidentified passes through
   untouched, which is the safe direction. This mirrors `!53` on ports, below.
