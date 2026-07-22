@@ -101,6 +101,11 @@ class BeanEngine:
         # target_resolver.py). One per engine, retargeted rather than restarted.
         self._resolver = TargetResolver()
         self._ports = portmap.default_table()   # local port -> process (capture time)
+        # Live local_port -> pid map from WinDivert SOCKET events (2b). Created in
+        # start() only on the real-WinDivert path (or when a source is injected);
+        # None on the synthetic/simulate path, where targeting falls back to the
+        # poller. See _start_socketwatch. NOT read by targeting yet - that is 2c.
+        self._socketwatch = None
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
         self.reset_stats()
@@ -457,24 +462,31 @@ class BeanEngine:
             self.st[key] += n
 
     # -- lifecycle ------------------------------------------------------------ #
-    def start(self, filt, divert=None, duration=0):
+    def start(self, filt, divert=None, duration=0, socket_source=None):
         """Start a session.
 
-        ``divert``   - optional object with recv()/send()/close() (tests, --simulate),
-        ``duration`` - seconds after which the engine stops itself (0 = no limit).
+        ``divert``        - optional object with recv()/send()/close() (tests, --simulate),
+        ``duration``      - seconds after which the engine stops itself (0 = no limit),
+        ``socket_source`` - optional injected event source (or factory) for the
+                            SocketWatcher (tests); on the real path it is opened from
+                            WinDivert. See ``_start_socketwatch``.
         """
         # Held for the whole start: a worker can fail (and call stop()) before the
         # remaining threads are even spawned - stop() would then null out the
         # thread handles under our feet.
         with self._stop_lock:
-            return self._start_locked(filt, divert, duration)
+            return self._start_locked(filt, divert, duration, socket_source)
 
-    def _start_locked(self, filt, divert, duration):
+    def _start_locked(self, filt, divert, duration, socket_source=None):
         if self._running:
             # Internal/developer error: the GUI and CLI both guard against
             # this, but a second start would spawn duplicate worker threads
             # sharing one divert (double-processed packets, corrupt stats).
             raise RuntimeError("BeanEngine.start() called while already running")
+        # "Real WinDivert" == the engine is about to create the divert itself; only
+        # then can a second (SOCKET-layer) handle be opened. Captured before the line
+        # below reassigns ``divert``.
+        real_windivert = divert is None
         if divert is None:
             import pydivert
             from . import driver
@@ -540,6 +552,11 @@ class BeanEngine:
             # targeting exists to prevent. With no target it blocks on its event and
             # costs nothing.
             self._resolver.start()
+            # The live socket-event map (2b). Session-length, like the resolver;
+            # started here so its bootstrap is done before the first packet flows.
+            # Only on the real path (or an injected source) - otherwise None and the
+            # poller stands. A failure to open the SOCKET handle degrades, not kills.
+            self._start_socketwatch(real_windivert, socket_source)
             self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
             self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
             self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
@@ -558,6 +575,44 @@ class BeanEngine:
         self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
         self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
                                 + (f", duration={self._duration:g}s" if self._duration else ""))
+
+    def _start_socketwatch(self, real_windivert, socket_source):
+        """Start the live socket-event map for this session, when one is available.
+
+        Runs only on the REAL WinDivert path (or with an injected source, for
+        tests): the SOCKET-layer handle needs the same driver the NETWORK handle
+        does. On the synthetic/simulate path there is nothing to open, so the engine
+        keeps using the polling port table - the testable-without-WinDivert contract
+        holds. This method only keeps the map live; targeting does not read it yet
+        (that is 2c).
+
+        Failure to open the SOCKET handle DEGRADES to the poller; it does not fail
+        the session. A tester who cannot open a second handle still gets impairment
+        via the (racier) polling path, not a dead session - and it is recorded, not
+        swallowed.
+        """
+        factory = None
+        if socket_source is not None:
+            factory = socket_source if callable(socket_source) else (lambda: socket_source)
+        elif real_windivert:
+            from .socketwatch import windivert_socket_source
+            factory = windivert_socket_source
+        if factory is None:
+            self._socketwatch = None
+            return
+        from .socketwatch import SocketWatcher
+        watcher = SocketWatcher(names=self._ports, source_factory=factory)
+        # Bootstrap from the current socket table, so connections OPEN before this
+        # session are known from the first packet (events only announce NEW sockets).
+        with crashlog.quiet("engine.socketwatch.bootstrap"):
+            self._ports.refresh(force=True)
+            watcher.reconcile(self._ports.snapshot())
+        try:
+            watcher.start()
+            self._socketwatch = watcher
+        except Exception as exc:
+            crashlog.once("engine.socketwatch.start", exc)
+            self._socketwatch = None
 
     EVENT_BY_REASON = {"duration": "events.duration_reached",
                        "fault": "events.fault"}
@@ -635,6 +690,11 @@ class BeanEngine:
         # Joins: the resolver holds OS handles and must stop touching them when
         # the session does, not "eventually".
         self._resolver.stop()
+        # Same reasoning: the socket watcher holds a WinDivert handle. Stop it here,
+        # next to the resolver, so the session leaves nothing sniffing.
+        if self._socketwatch is not None:
+            self._socketwatch.stop()
+            self._socketwatch = None
         self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
         with self._cv:
             self._cv.notify_all()
@@ -716,6 +776,12 @@ class BeanEngine:
                 # has no target set - which is most of them, and which is the exact
                 # bug the column was added to fix.
                 self._ports.warm_names()
+                # Safety net for the socket map: fold the fresh snapshot in, so a
+                # missed CLOSE ages out and a connection open before the watcher (or
+                # dropped under load) is still picked up. The events are the live
+                # signal; this is the belt to their braces.
+                if self._socketwatch is not None:
+                    self._socketwatch.reconcile(self._ports.snapshot())
             except Exception as _exc:
                 crashlog.note(_exc, "engine.ports")
             try:

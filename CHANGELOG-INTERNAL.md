@@ -68,6 +68,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - `import beantester` still does not import pydivert: the real source constructs it lazily inside
   `start()`, so the package import and every unit test stay WinDivert-free.
 
+### Changed: BeanEngine drives the SocketWatcher lifecycle (chunk 2b)
+
+- `BeanEngine` now creates and starts a `SocketWatcher` in `_start_locked` and stops it in
+  `_stop_locked`, next to the `TargetResolver` (both hold OS handles; both are session-length). A
+  new `start(..., socket_source=None)` parameter injects the event source for tests. Bootstrap:
+  start reconciles the watcher from a forced `portmap` snapshot, so connections open BEFORE the
+  session are known from the first packet; the watchdog folds a fresh snapshot in each tick as the
+  safety net (a missed CLOSE ages out, a dropped event is recovered).
+- Started ONLY on the real-WinDivert path (`divert is None`) or with an injected source; on the
+  synthetic/simulate/test path `self._socketwatch` stays None and the poller stands - the
+  testable-without-WinDivert contract is intact. `_start_socketwatch` DEGRADES to the poller if the
+  SOCKET handle cannot open (recorded via `crashlog.once`) rather than failing the session
+  (convention 20 spirit: a second-handle failure must not take the user's network down).
+- NO behaviour change yet: targeting still reads the polling table; the watcher is kept live but
+  unused until 2c. Verified end to end by a real-path smoke (elevated, narrow pass-through filter):
+  the engine opened the NETWORK impairing handle AND the SOCKET watcher together - retiring the
+  coexistence risk flagged in the 2a design - and a known connection's local port mapped to
+  `os.getpid()` in the watcher, cleared on stop.
+- New tests: `tests/test_socketwatch_wiring.py` - bootstrap+run on an injected source, no watcher
+  on the synthetic path, degrade-not-kill on a source that fails to open, and no watcher thread
+  left after stop. Driven on an idle `FakeDivert` (the session stays up) with a fake port table.
+
 ### Fixed: the connections "impaired?" column is a session record, not a live port lookup
 
 - **Symptom (reported from the field, Chrome):** targeting `chrome.exe` showed a connections
