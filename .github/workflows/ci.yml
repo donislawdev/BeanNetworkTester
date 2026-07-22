@@ -78,8 +78,11 @@ jobs:
       # pytest names the failing file, so the extra checkmarks bought no diagnosis.
       #
       # COVERAGE_PROCESS_START is not optional: the GUI tests run in subprocesses,
-      # and without it every line they exercise is reported as uncovered (the same
-      # suite reads 51% instead of 77%). The gate lives in pyproject (fail_under).
+      # and without it every line they exercise is reported as uncovered, so the same
+      # suite reads far lower and a sane gate would fail on healthy code. The measured
+      # split (with/without it) and the gate itself live in ONE place - pyproject
+      # (fail_under, and the comment above it) - so they are not restated here, where a
+      # copied number only drifts out of date.
       - name: Test suite + coverage gate (engine, i18n, CLI, fail-safe, tables, chaos)
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml

@@ -16,6 +16,11 @@ bean_run.log
 debug.log
 .hypothesis/
 .coverage
+# coverage runs with parallel=true (pyproject), so each subprocess writes its own
+# .coverage.<host>.<pid>.<rand>; --cov-report=xml (CI) writes coverage.xml. Neither
+# is the bare ".coverage" above, so both must be listed or git add -A would grab them.
+.coverage.*
+coverage.xml
 # runtime crash artefacts (never commit or ship)
 crashes/
 SHA256SUMS.txt

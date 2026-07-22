@@ -42,6 +42,70 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: BeanEngine.start() is now atomic - a partial start fails OPEN (convention 20)
+
+Engineering-review finding F1, confirmed by experiment before the fix (forced `Thread.start()`
+to raise after N workers and inspected the engine state), not by reading.
+
+- **The hole:** `_start_locked` set `self._running = True` and opened the divert BEFORE spawning
+  the resolver + capture/inject/watchdog threads, and called `_LIVE_ENGINES.add(self)` only AFTER
+  all three were up. A failing `Thread.start()` (thread/memory exhaustion - most likely under the
+  load this tool is aimed at) therefore left a "running" engine with an OPEN divert, no capture
+  thread draining it, and **invisible to the `atexit` hook** - WinDivert queueing the user's
+  packets into a void while the UI said "running". Worse, `_running` stayed True, so every later
+  `start()` hit the `RuntimeError("already running")` guard: START was wedged for the process
+  lifetime. GUI `_finish_start(err)` only shows a dialog and resets the button; it never calls
+  `stop()`.
+- **The fix:** `_LIVE_ENGINES.add(self)` moved to BEFORE the worker-spawn block (the moment the
+  divert is open + `_running` is the moment atexit must be able to find it), and the spawn block
+  wrapped in `try/except BaseException` that logs the fault, calls `self.stop(reason="fault")`
+  (closes the divert, stops/joins whatever DID start, clears `_running`, discards from
+  `_LIVE_ENGINES`) and re-raises. `_stop_lock` is an `RLock`, so the nested `stop()` from inside
+  `start()` re-enters cleanly.
+- New test: `tests/test_failsafe.py::test_a_failed_start_never_leaves_an_open_divert` - monkeypatches
+  `threading.Thread.start` to fail after the resolver thread, then asserts: the error propagates,
+  the engine is not left running, the divert is closed, it is gone from `_LIVE_ENGINES`, and a
+  later `start()` succeeds (no longer wedged).
+
+### Fixed: corrupt_packet() records its failures (F3); a core-scoped guard so it cannot swallow again (F4)
+
+Engineering-review findings F3 + F4.
+
+- **F3:** `BeanCore.corrupt_packet`'s `except Exception: return False` swallowed a REAL
+  failure (a raising `packet.payload` setter, a foreign packet type) in a way
+  indistinguishable from its legitimate empty-payload `return False`. A broken corruptor
+  therefore read as `corrupted == 0` - "the traffic had no payloads" - and the tester
+  would blame their traffic, not the tool. It now calls `crashlog.once("core.corrupt",
+  exc)` before returning False. `crashlog` is imported LAZILY inside the handler, so
+  core.py still imports only utils/matchers at load (layering contract) and stays free of
+  logging/print in the hot path; `once()` caps the cost at one traceback. Verified by
+  experiment: a raising setter now lands one `core.corrupt` record and returns False,
+  while the empty-payload path stays a quiet False (no crash-log spam).
+- **F4:** `test_no_silently_swallowed_exceptions` only recognises a `pass`/`...` body, so
+  the `return False` swallow above passed it for as long as it existed. New guard
+  `tests/test_code_hygiene.py::test_the_decision_core_never_swallows_an_exception_silently`
+  asserts the stronger property for core.py ALONE: every broad `except` must reach
+  `crashlog` (quiet/once/note/record) or re-raise. Scoped to the decision core on purpose
+  - the wider package's 50-odd broad handlers are legitimate control-flow fallbacks
+  (parse -> None, `matches()` -> False by hot-path contract, a DPI probe -> default), so
+  holding them to this rule would fire on correct code. Mutation-checked: reverting F3
+  turns the new guard red on `core.py:626`.
+
+### Fixed: gitignore coverage artefacts (F7), drop stale numbers from the CI comment (F8)
+
+Engineering-review findings F7 + F8. Neither ships; both are the "prose nothing guards"
+class convention 5 warns about.
+
+- **F7:** `.gitignore` matched only the bare `.coverage`, but `[tool.coverage.run]
+  parallel = true` (pyproject) GUARANTEES per-process `.coverage.<host>.<pid>.<rand>`
+  files, and the CI coverage step writes `coverage.xml`. Both appear as untracked after a
+  coverage run, and `git add -A` would have committed them (against convention 3). Added
+  `.coverage.*` and `coverage.xml`. Verified with `git check-ignore`.
+- **F8:** the comment on the coverage step claimed "the same suite reads 51% instead of
+  77%". 77 was the PREVIOUS gate value (it has since moved 75 -> 77 -> 80), and the real
+  measured split lives in pyproject (45% vs 83.03% when measured). The comment no longer
+  restates any number - it points at pyproject, the single source, so it cannot drift again.
+
 ### PROJECT_NOTES audit, part 2: measured numbers, and the coverage gate to 80
 
 Every "costs N ms" in the audit's blast radius was re-measured instead of trusted. Conditions

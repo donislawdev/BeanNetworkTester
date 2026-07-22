@@ -508,28 +508,44 @@ class BeanEngine:
         # one. Safe to block here: start() already runs off the UI thread (the GUI
         # drives it through _begin_transition), and this is the only place the
         # resolution is allowed to be synchronous.
-        targeting = self._targeting
-        if targeting is not None:
-            with crashlog.quiet("engine.target"):
-                targeting.refresh()
-            # Reconcile: whichever path installed the target (target_for alone, or
-            # set_target), the session starts with the resolver pointed at it.
-            self._resolver.retarget(targeting)
-        # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
-        # Starting it only when a target already exists meant that narrowing down
-        # mid-run - press START, watch, then type a process - left nobody keeping
-        # the port set fresh, so it froze at whatever the first resolve produced and
-        # new sockets were never picked up. That is precisely the failure live
-        # targeting exists to prevent. With no target it blocks on its event and
-        # costs nothing.
-        self._resolver.start()
-        self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
-        self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
-        self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
-        self._t_cap.start()
-        self._t_inj.start()
-        self._t_wd.start()
+        # Registered BEFORE the workers are spawned, not after: from the moment the
+        # divert is open and _running is True, atexit and the watchdog must be able to
+        # find this engine. Adding it only once every thread was already up meant a
+        # failed Thread.start() (out of threads/memory - most likely in the very load
+        # tests this tool is aimed at) left a "running" engine holding an open divert
+        # that NOTHING would ever close: the exact fail-open hole convention 20 forbids.
         _LIVE_ENGINES.add(self)
+        try:
+            targeting = self._targeting
+            if targeting is not None:
+                with crashlog.quiet("engine.target"):
+                    targeting.refresh()
+                # Reconcile: whichever path installed the target (target_for alone, or
+                # set_target), the session starts with the resolver pointed at it.
+                self._resolver.retarget(targeting)
+            # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
+            # Starting it only when a target already exists meant that narrowing down
+            # mid-run - press START, watch, then type a process - left nobody keeping
+            # the port set fresh, so it froze at whatever the first resolve produced and
+            # new sockets were never picked up. That is precisely the failure live
+            # targeting exists to prevent. With no target it blocks on its event and
+            # costs nothing.
+            self._resolver.start()
+            self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
+            self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
+            self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
+            self._t_cap.start()
+            self._t_inj.start()
+            self._t_wd.start()
+        except BaseException as exc:
+            # A worker (or the resolver) could not be spawned. Do NOT leave a running
+            # engine with an open divert and no capture thread draining it - fail OPEN:
+            # stop() closes the divert, stops/joins whatever DID start, and clears
+            # _running. Then re-raise so the caller (GUI _finish_start, CLI) reports the
+            # failure instead of believing the session is live. Convention 20.
+            self.log(T("log.engine_fault", e=str(exc)))
+            self.stop(reason="fault")
+            raise
         self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
         self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
                                 + (f", duration={self._duration:g}s" if self._duration else ""))

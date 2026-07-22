@@ -623,5 +623,16 @@ class BeanCore:
             data[idx] ^= (1 << rng.randrange(8))
             packet.payload = bytes(data)
             return True
-        except Exception:
+        except Exception as exc:
+            # NOT silent (convention 30). This returns False on a REAL failure - a
+            # payload setter that started raising, an unexpected packet type - exactly
+            # as it does for the legitimate empty-payload case above. So a broken
+            # corruptor would read as "0 corrupted", indistinguishable from "no
+            # payloads to corrupt", and the tester would blame their traffic instead
+            # of the tool - the precise class of silent lie this project removes.
+            # once() keeps it free in the packet hot path (a traceback at most once).
+            # Imported lazily so core.py still imports only utils/matchers at load
+            # (layering contract: tests/test_layering.py::test_core_stays_pure).
+            from . import crashlog
+            crashlog.once("core.corrupt", exc)
             return False
