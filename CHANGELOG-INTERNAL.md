@@ -42,6 +42,25 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Tests: property-based coverage for the two packet-mutating functions (F6)
+
+Engineering-review finding F6: the property suites covered matchers and `decide()`, but the
+only two functions that reach into packet BYTES - `BeanCore.corrupt_packet` (flips a payload
+bit, on the capture thread) and `BeanCore.build_rst_fields` (forges the RST injected onto the
+user's live connection) - had example tests only. New file
+`tests/test_packet_mutation_properties.py` (Hypothesis, 7 properties):
+
+- **corrupt_packet:** flips EXACTLY one bit and preserves length; is deterministic for a seed
+  (reproducibility contract); touches no header field; an empty payload -> False untouched; and
+  is TOTAL - a packet whose payload cannot even be read comes back False, never an exception
+  (it runs on the capture thread, convention 20).
+- **build_rst_fields:** the endpoint/seq logic restated as ONE invariant across both directions
+  - the forged RST is always sent from the remote peer TO the local socket, marked inbound, with
+  the sequence the local end expects next; a non-TCP packet yields `None`.
+- Mutation-checked (all three substantive properties bite): an 8-bit flip fails the one-bit
+  property, dropping the src/dst swap fails the endpoint invariant, and narrowing the `except`
+  lets the hostile-packet case raise. No production code changed.
+
 ### Fixed: STOP no longer blocks for 2 s when it races the duration deadline (F2)
 
 Engineering-review finding F2, measured before and after: a user STOP colliding with the
