@@ -56,9 +56,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   so the moment a connection closed (a browser closes hundreds a minute) its row flipped to
   "no", and a run that was impairing all of Chrome looked like it was catching almost nothing.
   The column now records whether a connection was in impairment scope at any point this session
-  and keeps saying "yes" after it closes. Which connections are being impaired *right now* is
-  still shown by the row highlight, which follows your current target. The connections CSV
-  export already worked this way, so the table and the export now agree.
+  and keeps saying "yes" after it closes. The row highlight, the column, the sort and the CSV
+  export all read that one record, so they can never disagree - a row is coloured exactly when
+  its column says "yes".
 
 - **One bad translation file no longer stops the whole program.** Language files are plain JSON
   next to the program, and you can add your own. If one of them had a malformed `_meta` header -

@@ -42,6 +42,23 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the connections "impaired?" column and its row highlight now use ONE signal
+
+- Field report: rows showed orange with the column reading "no" (and "yes" rows with no colour) -
+  "something is wrong with the connections table". Cause: the column read the stored per-flow
+  `scoped` record (chunk 1) while `ConnsPage._tag_of` still asked the engine LIVE (`in_scope_now`
+  -> `local_port in target_ports`). For a closed or idle flow those answer differently - the live
+  check flips to False the instant the socket closes - so the colour and the column disagreed.
+  `_tag_of` now reads the SAME stored `c["scoped"]`; column, highlight, sort (`views.py`) and CSV
+  (`gui/app.py`) are one signal and can never diverge. `ConnsPage._in_scope` removed;
+  `engine.in_scope_now` / `core.in_scope` are now unused (flagged for a follow-up removal).
+- Updated `tests/test_conns_columns.py`: a flow with `scoped=True` whose port is OUT of the
+  current target is now both "yes" AND highlighted (it used to be "yes" with an empty tag).
+- Not fixed here (separate, measured, handed to a follow-up): a target LAUNCHED after START has
+  its first connections logged before the resolver matches it (the resolve costs ~180 ms, the
+  create_time recycle check - see PortTable.info), so they read a truthful "no". Shrinking that
+  window means speeding up the resolve, which touches the recycle logic; deliberately deferred.
+
 ### Fixed: SocketWatcher STOP crash + slow, unreliable target-by-name (native toolhelp snapshot)
 
 Follow-up to the chunk 2 rollout, from a field crash log + two reports: a "first target-start takes
