@@ -262,24 +262,23 @@ class ConnsPage:
                 f"{c.get('bytes', 0) / 1024.0:.1f}", f"{avg_packet_bytes(c)}",
                 f"{dur:.1f}", f"{idle:.1f}")
 
-    def _in_scope(self, c):
-        """Ask the engine whether this flow is in targeting scope RIGHT NOW.
-
-        Called for visible rows only (SortableTree.repaint renders the on-screen
-        slice), so the per-row engine call is bounded to a screenful.
-        """
-        return self.app.engine.in_scope_now(
-            c.get("local_port"), c.get("remote_ip"), c.get("remote_port"))
-
     def _tag_of(self, c):
-        """Colour a row that is in targeting scope (being impaired, not just seen).
+        """Colour a row EXACTLY when the "impaired?" column says "yes".
 
-        Only when targeting actually narrows the traffic (``_scope_active``): with
-        no target every flow is in scope, so tagging them all just turned the whole
-        table into an alarm that meant nothing. Scope is recomputed against the
-        CURRENT target, so an idle flow no longer keeps a stale highlight.
+        Both read the one stored per-flow ``scoped`` record, so the colour and the
+        column can never disagree. They used to differ: the column read the stored
+        record ("was this flow ever in impairment scope") while the highlight asked
+        the engine LIVE ("is its port in the target set right now"). For a closed or
+        idle flow those answer differently - the live check flips to "no" the moment
+        the socket closes - so a row could be orange while its column said "no", and
+        another could say "yes" with no colour. That mismatch is what read as "the
+        table is wrong". One signal now, for both.
+
+        Only when targeting actually narrows the traffic (``_scope_active``): with no
+        target every flow counts as in scope, and colouring all of them is an alarm
+        that means nothing.
         """
-        return "impaired" if (self._scope_active and self._in_scope(c)) else ""
+        return "impaired" if (self._scope_active and c.get("scoped")) else ""
 
     @staticmethod
     def _key_of(c):

@@ -42,6 +42,131 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the connections "impaired?" column and its row highlight now use ONE signal
+
+- Field report: rows showed orange with the column reading "no" (and "yes" rows with no colour) -
+  "something is wrong with the connections table". Cause: the column read the stored per-flow
+  `scoped` record (chunk 1) while `ConnsPage._tag_of` still asked the engine LIVE (`in_scope_now`
+  -> `local_port in target_ports`). For a closed or idle flow those answer differently - the live
+  check flips to False the instant the socket closes - so the colour and the column disagreed.
+  `_tag_of` now reads the SAME stored `c["scoped"]`; column, highlight, sort (`views.py`) and CSV
+  (`gui/app.py`) are one signal and can never diverge. `ConnsPage._in_scope` removed;
+  `engine.in_scope_now` / `core.in_scope` are now unused (flagged for a follow-up removal).
+- Updated `tests/test_conns_columns.py`: a flow with `scoped=True` whose port is OUT of the
+  current target is now both "yes" AND highlighted (it used to be "yes" with an empty tag).
+- Not fixed here (separate, measured, handed to a follow-up): a target LAUNCHED after START has
+  its first connections logged before the resolver matches it (the resolve costs ~180 ms, the
+  create_time recycle check - see PortTable.info), so they read a truthful "no". Shrinking that
+  window means speeding up the resolve, which touches the recycle logic; deliberately deferred.
+
+### Fixed: SocketWatcher STOP crash + slow, unreliable target-by-name (native toolhelp snapshot)
+
+Follow-up to the chunk 2 rollout, from a field crash log + two reports: a "first target-start takes
+seconds" pause AND targeting `chrome` BY NAME resolving to nothing (`BRAK pasującego procesu`) while
+targeting its PID worked. Both trace to one slow, fragile path: process-name resolution.
+
+- **SocketWatcher stop recorded a spurious crash.** `_loop` caught the `WinError 995` that `stop()`
+  induces - closing the SOCKET handle unblocks the parked `recv()` with "I/O aborted" - and wrote it
+  to crashes/ via `crashlog.once`, so every STOP left a `socketwatch.loop` entry. Now guarded by
+  `if not self._stopping.is_set()`, exactly like the capture loop's `if self._running`; a real
+  socket-stream failure while running is still recorded. Test:
+  `test_socketwatch.py::test_stop_does_not_record_the_close_induced_error_as_a_crash`.
+- **Root cause of both other symptoms: the process-name bulk fallback was `psutil.process_iter`
+  (measured ~2.6-2.9 s).** When `psutil.Process(pid)` cannot open a HARDENED process (Chrome's
+  network service and renderers refuse OpenProcess; the individual lookup also fetches ppid +
+  create_time, any of which can fail), `portmap.info` falls back to that scan. That is why (a) the
+  first synchronous start/apply resolve blocked for ~2 s, and (b) targeting BY NAME missed Chrome -
+  no openable name, no match - while BY PID worked (a PID match needs no name). New
+  `portmap._toolhelp_process_table()` reads every process's name+ppid via `CreateToolhelp32Snapshot`
+  WITHOUT opening any of them: **measured ~6 ms for 350 procs, and it names hardened processes.**
+  `_process_table()` prefers it (psutil fallback off Windows / in tests). Cold
+  `ProcessTargeting.refresh('chrome')` 2148 ms -> ~365 ms, and it now matches Chrome by name. This
+  also relieves the yes/no flicker: the resolver's periodic refreshes hit the same slow scan, so
+  targeting was effectively stale/empty for ~2 s and connections in that window slipped to "no".
+- The earlier `allow_bulk=False` attempt (previous commit) was REVERTED: it made the resolve fast by
+  SKIPPING the bulk, which is exactly what broke target-by-name for Chrome (skipping the only path
+  that can name a hardened process). Making the bulk fast is the correct fix; there is no `allow_bulk`
+  flag any more.
+- Docstring corrected (convention 5): `PortTable.info` claimed `create_time()` = 0.005 ms and
+  0.13 ms per rebuild; measured ~5 ms/PID (~180 ms/rebuild with a browser open), because it opens a
+  handle. The per-refresh recycle-verification cost is now stated honestly and flagged as a perf
+  follow-up (batch the create times, or verify by a cached snapshot) - it runs on the resolver
+  thread, not the capture one.
+- Tests: `test_processes.py`'s fake psutil now provides `Process` (individual resolution) to match
+  real psutil, and both `fake_psutil` + `_World` disable `_ALLOW_NATIVE_PROCESSES` so the bulk
+  fallback reads their fake table, not the real machine's toolhelp snapshot.
+
+### Added: socketwatch.py - live local_port->pid map from WinDivert SOCKET events (chunk 2a)
+
+- New module `beantester/socketwatch.py` (`SocketWatcher`): the event-driven replacement for
+  polling the socket table. WinDivert 2.2 SOCKET layer (sniff-only, `SNIFF|RECV_ONLY`) delivers
+  BIND/CONNECT/ACCEPT/LISTEN/CLOSE with the owning ProcessId; the map adds on the first four and
+  removes on CLOSE, pid-checked so a late CLOSE cannot evict a port the OS has recycled to a
+  different process. `reconcile()` seeds from a `portmap` snapshot and prunes a port absent for
+  TWO passes (grace against evicting a socket opened microseconds before the snapshot was taken).
+  Names/ancestors delegate to `portmap` (no duplication); the event source is injected, so the map
+  is unit-tested without WinDivert.
+- Why SOCKET, not FLOW (measured spike 2026-07-22, elevated, sniff-only): SOCKET_CONNECT arrives
+  ~0.1 ms BEFORE the outbound SYN reaches the NETWORK layer (closes the race); FLOW_ESTABLISHED
+  arrives ~28 ms AFTER (post-handshake, the SYN already slipped). Two sniff handles (NETWORK+SOCKET)
+  were confirmed to coexist. The real `_WinDivertSocketSource` was smoke-verified end to end: a
+  known outbound connection's local port mapped to `os.getpid()` and was removed on close.
+- Scope: chunk 2a is the module in ISOLATION. It is NOT wired into `BeanEngine` or
+  `ProcessTargeting` yet (2b wires the lifecycle + bootstrap + fallback; 2c makes targeting read
+  the live map). The polling path (`portmap` / `target_resolver`) is untouched and stays as the
+  fallback for `--simulate` / tests / non-Windows.
+- New tests: `tests/test_socketwatch.py` - map add/remove, pid-checked recycled-port removal, junk
+  rejection, the reconcile two-pass grace (both prune and reappear-resets-grace), name delegation,
+  the refresh no-op, the reader thread on an injected fake source, and the MSB-first IPv4 decode
+  the spike corrected.
+- `import beantester` still does not import pydivert: the real source constructs it lazily inside
+  `start()`, so the package import and every unit test stay WinDivert-free.
+
+### Changed: BeanEngine drives the SocketWatcher lifecycle (chunk 2b)
+
+- `BeanEngine` now creates and starts a `SocketWatcher` in `_start_locked` and stops it in
+  `_stop_locked`, next to the `TargetResolver` (both hold OS handles; both are session-length). A
+  new `start(..., socket_source=None)` parameter injects the event source for tests. Bootstrap:
+  start reconciles the watcher from a forced `portmap` snapshot, so connections open BEFORE the
+  session are known from the first packet; the watchdog folds a fresh snapshot in each tick as the
+  safety net (a missed CLOSE ages out, a dropped event is recovered).
+- Started ONLY on the real-WinDivert path (`divert is None`) or with an injected source; on the
+  synthetic/simulate/test path `self._socketwatch` stays None and the poller stands - the
+  testable-without-WinDivert contract is intact. `_start_socketwatch` DEGRADES to the poller if the
+  SOCKET handle cannot open (recorded via `crashlog.once`) rather than failing the session
+  (convention 20 spirit: a second-handle failure must not take the user's network down).
+- NO behaviour change yet: targeting still reads the polling table; the watcher is kept live but
+  unused until 2c. Verified end to end by a real-path smoke (elevated, narrow pass-through filter):
+  the engine opened the NETWORK impairing handle AND the SOCKET watcher together - retiring the
+  coexistence risk flagged in the 2a design - and a known connection's local port mapped to
+  `os.getpid()` in the watcher, cleared on stop.
+- New tests: `tests/test_socketwatch_wiring.py` - bootstrap+run on an injected source, no watcher
+  on the synthetic path, degrade-not-kill on a source that fails to open, and no watcher thread
+  left after stop. Driven on an idle `FakeDivert` (the session stays up) with a fake port table.
+
+### Changed: process targeting resolves against the live socket map (chunk 2c)
+
+- `ProcessTargeting` gained `set_table()`, and the engine now points it at the `SocketWatcher`'s
+  live map when a session has one (`_targeting_table()` returns the watcher, else `portmap`),
+  rebinding in `_start_locked` (targeting is often built before start, against the poller).
+  `_start_locked` was reordered so the watcher is created BEFORE the initial synchronous resolve -
+  the very first resolve already reads the live map.
+- Effect (the point of chunk 2): a connection of the targeted process is in impairment scope the
+  instant its SOCKET_CONNECT event arrives, not at the next poll - and since SOCKET_CONNECT precedes
+  the SYN, before its first packet. Verified end to end on real WinDivert (elevated, narrow
+  pass-through filter): targeting bound to the watcher, and a fresh outbound connection read
+  `in_scope` in ~0 ms. The polling path stays as the fallback, unchanged, so short-lived
+  connections only still escape when there is no real WinDivert.
+- Only the LIVE path changed: `engine.target_for` now builds against `_targeting_table()`. The
+  one-shot reporting helpers (`processes.find_process_ports` -> `resolve_ports`, `make_targeting`)
+  keep resolving against `portmap` - they are display snapshots, not session targeting.
+- Prose corrected (rules 5/6): the `targeting.py` docstring claimed the race "cannot be closed,
+  only made small" - true for the poller, false for the watcher. It now names which table closes
+  it. PROJECT_NOTES targeting bullet + the targeting ADR moved from "Chunk 2 (planned)" to done.
+- New tests: `tests/test_targeting_socketwatch.py` - the set_table swap, an end-to-end resolve of a
+  CONNECT event through a watcher + resolver (no poll), and the engine binding targeting to the
+  watcher (present) vs the poller (synthetic path).
+
 ### Fixed: the connections "impaired?" column is a session record, not a live port lookup
 
 - **Symptom (reported from the field, Chrome):** targeting `chrome.exe` showed a connections

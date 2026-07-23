@@ -277,7 +277,9 @@ firefox, 12345                 nazwa i PID w jednym polu
 ```
 
 Wszystkie pasujące procesy oddają swoje porty lokalne - celowanie obejmuje **sumę** ich portów.
-Lista jest odświeżana w trakcie sesji (co ~2 s), więc nowo otwarte połączenia procesu są łapane.
+Zbiór portów jest utrzymywany na bieżąco w trakcie sesji ze zdarzeń gniazd systemu, więc nowo
+otwarte połączenia procesu są łapane od razu (bez realnego WinDivert narzędzie wraca do skanowania
+tabeli gniazd kilka razy na sekundę).
 
 ### Pole „IP”
 
@@ -751,6 +753,7 @@ beantester/              pakiet z implementacją
   portmap.py             tabela gniazd: lokalny port -> PID (iphlpapi/ctypes; fallback psutil)
   targeting.py           żywy zbiór portów celu: drzewo procesów, prośba o przebudowę na chybieniu
   target_resolver.py     przebudowuje ten zbiór na własnym wątku, poza ścieżką pakietów
+  socketwatch.py         żywa mapa port lokalny -> PID ze zdarzeń SOCKET WinDivert (źródło zdarzeniowe)
   jsonfile.py            zapis atomowy + kwarantanna uszkodzonych plików użytkownika
   crashlog.py            logger awarii: quiet/note/once, kwarantanna, raport w tle
   appinfo.py             tożsamość aplikacji i odczyt wersji (jedno źródło: VERSION.txt)
@@ -830,17 +833,18 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   **który je otworzył, albo dowolny jego przodek**. Dlatego `chrome.exe` (albo PID okna przeglądarki)
   łapie też jej proces sieciowy - a on właśnie trzyma wszystkie połączenia. Jawne wykluczenie ma
   pierwszeństwo: `chrome, !chromedriver` nie wciągnie `chromedriver` przez rodzica.
-- **Celowanie w proces to wyścig z systemem (i tak zostanie)** - WinDivert daje pakiet, nie PID,
-  więc proces ustalamy z tabeli gniazd po **lokalnym porcie**. Tabela jest odświeżana ~3× na sekundę
-  i **dodatkowo natychmiast, gdy pojawi się nieznany port**, więc świeżo otwarte połączenie zaczyna
-  być psute po kilkudziesięciu ms. Pierwszy pakiet zupełnie nowego połączenia może się prześliznąć -
-  to ograniczenie metody, nie błąd. Samo wyszukiwanie chodzi na osobnym wątku, nigdy na tym, który
-  obsługuje Twoje pakiety - więc wolny skan nie zamieni się w zgubiony ruch.
+- **Celowanie w proces napędzają zdarzenia gniazd, nie wolny polling.** WinDivert daje pakiet, nie
+  PID, więc pakiet mapujemy na proces po **lokalnym porcie**. Na Windows narzędzie obserwuje
+  zdarzenia gniazd systemu (connect / bind / accept / close) na bieżąco, więc połączenie jest w
+  zasięgu w chwili otwarcia - a dla połączenia wychodzącego jeszcze przed jego pierwszym pakietem.
+  Bez realnego WinDivert (ścieżka testów / symulacji) narzędzie wraca do skanowania tabeli gniazd
+  kilka razy na sekundę, gdzie pierwszy pakiet zupełnie nowego połączenia może się prześliznąć.
+  Tak czy inaczej obserwacja chodzi na osobnym wątku, nigdy na tym, który obsługuje Twoje pakiety -
+  więc nie zamieni się w zgubiony ruch.
 - **Samo wykluczenie obejmuje też wszystko, czego narzędzie nie rozpozna.** `!chrome` w polu procesu
   znaczy „psuj wszystko oprócz chrome" - a „wszystko" obejmuje każde połączenie, którego właściciela
-  nie udało się ustalić: pierwsze pakiety świeżo otwartego gniazda, procesy chronione, wszystko,
-  za czym tabela gniazd jeszcze nie nadążyła. „Nierozpoznany" nie jest tu przypadkiem rzadkim -
-  przechodzi przez niego **każde** nowe połączenie.
+  nie udało się ustalić: procesy chronione, których nie da się otworzyć, oraz - na ścieżce
+  awaryjnej (polling) - pierwsze pakiety świeżo otwartego gniazda.
   **Nie używaj więc wykluczenia do ochrony aplikacji.** Jeśli jedna ma zostać nietknięta, wskaż tę,
   którą CHCESZ psuć (`--target tamtaaplikacja`) - wtedy wszystko nierozpoznane przechodzi
   nietknięte, czyli w stronę bezpieczną. To ta sama zasada co `!53` przy portach, niżej.

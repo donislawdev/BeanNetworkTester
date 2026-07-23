@@ -36,14 +36,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Setting a process target no longer makes the first start pause.** Working out which process
+  owns each connection could take a second or two the first time, because it fell back to scanning
+  every process on the system. It now resolves only what it needs, so starting - and typing a
+  target - is quick, and the connections it catches settle in almost immediately instead of after
+  that pause.
+
+- **Targeting a process now catches its connections as they open, including short-lived ones.**
+  Working out which connections belong to your target used to mean scanning the system's socket
+  table a few times a second - so a connection that opened and closed between two scans (a browser
+  makes many) could slip through unimpaired, and pointing the tool at a busy app like Chrome caught
+  only some of its traffic. On Windows the tool now follows the system's socket events as they
+  happen, so a connection is impaired from the moment it opens - for outbound connections, before
+  its first packet even leaves. Without real WinDivert it falls back to the old scan. Nothing
+  changes in how you set a target.
+
 - **The "impaired?" column now reflects the whole session, not just this instant.** When you
   targeted a process, the column asked "is this connection's port in the target *right now*" -
   so the moment a connection closed (a browser closes hundreds a minute) its row flipped to
   "no", and a run that was impairing all of Chrome looked like it was catching almost nothing.
   The column now records whether a connection was in impairment scope at any point this session
-  and keeps saying "yes" after it closes. Which connections are being impaired *right now* is
-  still shown by the row highlight, which follows your current target. The connections CSV
-  export already worked this way, so the table and the export now agree.
+  and keeps saying "yes" after it closes. The row highlight, the column, the sort and the CSV
+  export all read that one record, so they can never disagree - a row is coloured exactly when
+  its column says "yes".
 
 - **One bad translation file no longer stops the whole program.** Language files are plain JSON
   next to the program, and you can add your own. If one of them had a malformed `_meta` header -

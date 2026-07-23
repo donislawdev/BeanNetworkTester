@@ -54,18 +54,46 @@ def fake_psutil():
     module.process_iter = lambda attrs=None: [_Proc(p, n) for p, n in PROCESSES]
     module.net_connections = lambda kind="inet": [
         _Conn(pid, port) for pid, ports in CONNECTIONS.items() for port in ports]
+    # Real psutil resolves a name PER PID via psutil.Process(pid) (the individual
+    # path tried first); the fixture provides Process to match that. process_iter is
+    # the bulk fallback for PIDs that cannot be opened. Both are faked here.
+    _created = {p: 1000.0 + p for p, _ in PROCESSES}
+
+    class _Process:
+        def __init__(self, pid):
+            self._pid = int(pid)
+            self._name = next((n for p, n in PROCESSES if p == self._pid), None)
+            if self._name is None:
+                raise RuntimeError("no such process")     # like psutil.NoSuchProcess
+
+        def name(self):
+            return self._name
+
+        def ppid(self):
+            return 1
+
+        def create_time(self):
+            return _created[self._pid]
+
+    module.Process = _Process
     previous = sys.modules.get("psutil")
     sys.modules["psutil"] = module
 
-    # Force the psutil fallback everywhere the native (Windows) path would win.
+    # Force the psutil fallback everywhere the native (Windows) path would win: the
+    # socket table (_make_native) AND the process-name snapshot (_ALLOW_NATIVE_PROCESSES,
+    # the toolhelp path), or the bulk fallback would read the REAL machine's processes
+    # instead of the fake PROCESSES.
     native_factory = portmap._make_native
+    native_procs = portmap._ALLOW_NATIVE_PROCESSES
     portmap._make_native = lambda: None
+    portmap._ALLOW_NATIVE_PROCESSES = False
     portmap.reset_default_table()
 
     try:
         yield module
     finally:
         portmap._make_native = native_factory
+        portmap._ALLOW_NATIVE_PROCESSES = native_procs
         portmap.reset_default_table()
         if previous is None:
             sys.modules.pop("psutil", None)
@@ -207,6 +235,24 @@ def test_port_process_map_maps_ports_to_names(fake_psutil):
           mapping.get(6001) == "firefox.exe", f"(got {mapping.get(6001)!r})")
 
 
+# -- the native process-name snapshot (Windows only) ------------------------ #
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="toolhelp snapshot is Windows-only")
+def test_toolhelp_snapshot_names_this_process_without_opening_it():
+    """The whole point of the native path: name every process fast and WITHOUT an
+    OpenProcess, so it can name a hardened process (Chrome) that psutil.Process()
+    cannot. Here it must at least contain THIS process, named, with no start time."""
+    import os
+    from beantester.portmap import _toolhelp_process_table
+    table = _toolhelp_process_table()
+    check("the snapshot returned something", table is not None and len(table) > 5,
+          f"({None if table is None else len(table)})")
+    check("it contains this process", os.getpid() in table, f"(pid {os.getpid()})")
+    name, ppid, created = table[os.getpid()]
+    check("this process is named", name.lower().endswith(".exe"), f"({name!r})")
+    check("the snapshot carries no start time (TTL takes over)", created is None)
+
+
 # -- port resolution fails LOUDLY (for us), quietly (for the user) ---------- #
 #
 # All three of these used to swallow. An empty map, a blank process name and a
@@ -332,6 +378,8 @@ class _World:
 
     def install(self, monkeypatch):
         from beantester import portmap
+        # the bulk fallback must use this fake table, not the real toolhelp snapshot
+        monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", False)
         monkeypatch.setattr(portmap, "_psutil_port_pid_map", lambda: dict(self.ports))
         monkeypatch.setattr(portmap, "_psutil_created",
                             lambda pid: self.created.get(int(pid)))

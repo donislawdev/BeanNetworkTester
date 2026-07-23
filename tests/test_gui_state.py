@@ -357,6 +357,11 @@ def test_a_gui_session_keeps_the_target_banner_honest():
 
         table = FakeTable()
         portmap.default_table = lambda: table
+        # The engine bound portmap.default_table() at construction, BEFORE this
+        # monkeypatch, and targeting now resolves against that bound table
+        # (engine._ports = the one shared instance), so point it at the fake too -
+        # exactly as the resolver and socket-watcher tests inject their table.
+        app.engine._ports = table
 
         real_start = app.engine.start
         app.engine.start = (lambda filt, divert=None, duration=0:
