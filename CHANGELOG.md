@@ -36,6 +36,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A window you have moved now keeps its place when you switch language.** Changing the language
+  rebuilds the whole main window, and a smaller window open at the time - Settings, for example -
+  was torn down with it. It came back at the size and position it had the last time you closed it,
+  quietly throwing away wherever you had just dragged it. It now stays where you put it.
+
 - **Setting a process target no longer makes the first start pause.** Working out which process
   owns each connection could take a second or two the first time, because it fell back to scanning
   every process on the system. It now resolves only what it needs, so starting - and typing a
