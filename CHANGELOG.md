@@ -36,6 +36,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Setting a process target no longer makes the first start pause.** Working out which process
+  owns each connection could take a second or two the first time, because it fell back to scanning
+  every process on the system. It now resolves only what it needs, so starting - and typing a
+  target - is quick, and the connections it catches settle in almost immediately instead of after
+  that pause.
+
 - **Targeting a process now catches its connections as they open, including short-lived ones.**
   Working out which connections belong to your target used to mean scanning the system's socket
   table a few times a second - so a connection that opened and closed between two scans (a browser

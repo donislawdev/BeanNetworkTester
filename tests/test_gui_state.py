@@ -349,8 +349,8 @@ def test_a_gui_session_keeps_the_target_banner_honest():
                 self.info = {200: ("realapp.exe", 1)}
             def refresh(self, now=None, force=False): return True
             def snapshot(self): return dict(self.ports)
-            def name_of(self, pid): return self.info.get(pid, ("", None))[0]
-            def ancestors(self, pid, depth=8): return []
+            def name_of(self, pid, allow_bulk=True): return self.info.get(pid, ("", None))[0]
+            def ancestors(self, pid, depth=8, allow_bulk=True): return []
             def refresh_if_stale(self, now=None, miss=False): return True
             def process_for_port(self, port, now=None, allow_refresh=True): return ""
             def pid_for(self, port): return self.ports.get(port)

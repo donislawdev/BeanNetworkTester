@@ -42,6 +42,35 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: SocketWatcher STOP no longer logs a crash; targeting resolve no longer blocks on process_iter
+
+Follow-up to the chunk 2 rollout, from a field crash log + report (slow first target-start).
+
+- **SocketWatcher stop recorded a spurious crash.** `_loop` caught the `WinError 995` that `stop()`
+  induces - closing the SOCKET handle unblocks the parked `recv()` with "I/O aborted" - and wrote it
+  to crashes/ via `crashlog.once`, so every STOP left a `socketwatch.loop` entry. Now guarded by
+  `if not self._stopping.is_set()`, exactly like the capture loop's `if self._running`; a real
+  socket-stream failure while running is still recorded. Test:
+  `test_socketwatch.py::test_stop_does_not_record_the_close_induced_error_as_a_crash`.
+- **The first target-start blocked for ~2 s.** Resolving a target expression walks every
+  socket-owning PID and its process TREE; the first protected ANCESTOR (System, a protected service)
+  that could not be opened individually made `portmap.info` fall back to a whole-system
+  `psutil.process_iter()` - measured 2911 ms - and because the SYNCHRONOUS start/apply resolve runs
+  that walk, it blocked the session (measured cold `ProcessTargeting.refresh` 2148 ms -> 371 ms,
+  `apply_targeting` ~335 ms). New `allow_bulk` flag threaded through `PortTable.info` / `name_of` /
+  `ancestors` and `SocketWatcher.name_of` / `ancestors`; `ProcessTargeting.refresh` passes
+  `allow_bulk=False`. The bulk stays for `warm_names()` (the connection log's display column) on the
+  watchdog thread. This also relieves the yes/no flicker at start: the resolver's periodic refreshes
+  hit the SAME bulk, so targeting was effectively stale for ~2 s and connections opened in that
+  window slipped to "not impaired"; now it is live in ~350 ms.
+- Behaviour change: a PROTECTED process (one the tool cannot open individually) can no longer be
+  TARGETED by name - it will not match, where the bulk scan used to name it. The connection log still
+  shows its name. Targeting a system process was never a real use case; the trade is a ~6x faster
+  start.
+- Tests: `test_processes.py`'s fake psutil now provides `Process` (individual resolution) to match
+  real psutil - it exposed only `process_iter` (the bulk path) before, so targeting's individual path
+  had nothing to resolve against. Every targeting/watcher test fake gained the `allow_bulk` kwarg.
+
 ### Added: socketwatch.py - live local_port->pid map from WinDivert SOCKET events (chunk 2a)
 
 - New module `beantester/socketwatch.py` (`SocketWatcher`): the event-driven replacement for

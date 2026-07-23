@@ -36,10 +36,10 @@ class _Names:
     def __init__(self, names):
         self._names = dict(names)
 
-    def name_of(self, pid, cheap=False):
+    def name_of(self, pid, cheap=False, allow_bulk=True):
         return self._names.get(pid, "")
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         return []
 
 
@@ -77,10 +77,10 @@ class _FakePorts:
     def warm_names(self):
         pass
 
-    def name_of(self, pid, cheap=False):
+    def name_of(self, pid, cheap=False, allow_bulk=True):
         return {100: "chrome.exe"}.get(pid, "")
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         return []
 
     def process_for_port(self, port, now=None, allow_refresh=True):
@@ -102,10 +102,10 @@ def test_set_table_swaps_which_map_targeting_resolves_against():
         def snapshot(self):
             return dict(self.ports)
 
-        def name_of(self, pid, cheap=False):
+        def name_of(self, pid, cheap=False, allow_bulk=True):
             return self._n.get(pid, "")
 
-        def ancestors(self, pid, depth=8):
+        def ancestors(self, pid, depth=8, allow_bulk=True):
             return []
 
     a = _T({5000: 1}, {1: "chrome.exe"})

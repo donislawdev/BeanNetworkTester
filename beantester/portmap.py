@@ -371,7 +371,7 @@ class PortTable:
         self._info = {pid: entry for pid, entry in self._info.items()
                       if entry[3] > cutoff}
 
-    def info(self, pid, cheap=False):
+    def info(self, pid, cheap=False, allow_bulk=True):
         """``(name, ppid)`` for a pid - cached, verified, never raises.
 
         ``cheap=True`` means **never touch the OS from here**: answer from the cache
@@ -422,8 +422,22 @@ class PortTable:
             return ("", None)
         resolved = _psutil_process_info(pid)
         if resolved is None:
-            # psutil.Process is unavailable (or denied): fall back to one bulk
-            # scan, refreshed rarely - this is also the path the tests take.
+            # psutil.Process is unavailable (or denied). A full process_iter can then
+            # fill the name (protected processes, the test path) - but it is EXPENSIVE:
+            # ~2-3 s for a whole-system enumeration (measured 2911 ms for 327 procs).
+            #
+            # TARGETING passes allow_bulk=False, and that is the fix for a real
+            # regression: resolving a target expression walks every socket-owning PID
+            # AND its process TREE, and the first protected ANCESTOR (System, a
+            # protected service) that could not be opened individually used to trigger
+            # this bulk scan - synchronously, on the START path, blocking the whole
+            # session for ~2 s. A PID the tool cannot open is never one of the user's
+            # apps, so it will never match the expression; blocking on a process_iter
+            # to learn a name we would immediately discard is pure cost. The bulk stays
+            # for warm_names() (the connection log's display column), which runs on the
+            # watchdog thread where the cost is affordable.
+            if not allow_bulk:
+                return ("", None)
             with self._lock:
                 stale = (now - self._bulk_at) > 1.0
             if stale:
@@ -441,8 +455,8 @@ class PortTable:
             self._info[pid] = (resolved[0], resolved[1], resolved[2], now)
         return (resolved[0], resolved[1])
 
-    def name_of(self, pid, cheap=False):
-        return self.info(pid, cheap=cheap)[0]
+    def name_of(self, pid, cheap=False, allow_bulk=True):
+        return self.info(pid, cheap=cheap, allow_bulk=allow_bulk)[0]
 
     def warm_names(self):
         """Resolve (and verify) the name of every PID that currently owns a socket.
@@ -461,16 +475,20 @@ class PortTable:
         for pid in set(self.snapshot().values()):
             self.info(pid)
 
-    def ancestors(self, pid, depth=8):
-        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe)."""
+    def ancestors(self, pid, depth=8, allow_bulk=True):
+        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe).
+
+        ``allow_bulk=False`` (targeting) never triggers the expensive process_iter to
+        name a parent it cannot open - a protected ancestor is not the user's app.
+        """
         chain, seen = [], {int(pid)} if pid is not None else set()
-        current = self.info(pid)[1] if pid is not None else None
+        current = self.info(pid, allow_bulk=allow_bulk)[1] if pid is not None else None
         while current and len(chain) < depth:
             current = int(current)
             if current in seen or current <= 0:
                 break
             seen.add(current)
-            name, parent = self.info(current)
+            name, parent = self.info(current, allow_bulk=allow_bulk)
             chain.append((current, name))
             current = parent
         return chain

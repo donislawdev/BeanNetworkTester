@@ -54,6 +54,31 @@ def fake_psutil():
     module.process_iter = lambda attrs=None: [_Proc(p, n) for p, n in PROCESSES]
     module.net_connections = lambda kind="inet": [
         _Conn(pid, port) for pid, ports in CONNECTIONS.items() for port in ports]
+    # Real psutil resolves a name PER PID via psutil.Process(pid); targeting uses
+    # that individual path (allow_bulk=False) so it never triggers the ~2 s
+    # process_iter just to name a protected process it will not match anyway. The
+    # fake used to expose only process_iter, i.e. the bulk path, so the fixture now
+    # also provides Process to match reality - process_iter stays for warm_names and
+    # any allow_bulk=True caller.
+    _created = {p: 1000.0 + p for p, _ in PROCESSES}
+
+    class _Process:
+        def __init__(self, pid):
+            self._pid = int(pid)
+            self._name = next((n for p, n in PROCESSES if p == self._pid), None)
+            if self._name is None:
+                raise RuntimeError("no such process")     # like psutil.NoSuchProcess
+
+        def name(self):
+            return self._name
+
+        def ppid(self):
+            return 1
+
+        def create_time(self):
+            return _created[self._pid]
+
+    module.Process = _Process
     previous = sys.modules.get("psutil")
     sys.modules["psutil"] = module
 

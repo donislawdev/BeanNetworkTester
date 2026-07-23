@@ -135,10 +135,10 @@ class _FakeTable:
     def snapshot(self):
         return dict(self.ports)
 
-    def name_of(self, pid):
+    def name_of(self, pid, allow_bulk=True):
         return self._info.get(pid, ("", None))[0]
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         chain, current = [], self._info.get(pid, ("", None))[1]
         while current and len(chain) < depth:
             name, parent = self._info.get(current, ("", None))

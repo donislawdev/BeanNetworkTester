@@ -154,11 +154,11 @@ class SocketWatcher:
         """
         return False
 
-    def name_of(self, pid, cheap=False):
-        return self._names.name_of(pid, cheap=cheap)
+    def name_of(self, pid, cheap=False, allow_bulk=True):
+        return self._names.name_of(pid, cheap=cheap, allow_bulk=allow_bulk)
 
-    def ancestors(self, pid, depth=8):
-        return self._names.ancestors(pid, depth=depth)
+    def ancestors(self, pid, depth=8, allow_bulk=True):
+        return self._names.ancestors(pid, depth=depth, allow_bulk=allow_bulk)
 
     # -- lifecycle (driven by BeanEngine in 2b) -------------------------------- #
     def start(self):
@@ -208,10 +208,15 @@ class SocketWatcher:
                 with crashlog.quiet("socketwatch.apply"):
                     self.apply(ev)
         except Exception as exc:
-            # A source that starts raising leaves the map to go stale (the reconcile
-            # safety net still runs), but it must not be silent - a socket stream
-            # that stopped is traffic the tester asked to impair sailing through.
-            crashlog.once("socketwatch.loop", exc)
+            # stop() closes the source to end this loop, and on Windows a blocked
+            # recv() then raises (WinError 995, "I/O aborted"). That is the NORMAL
+            # shutdown path, not a fault - recording it made every STOP leave a
+            # spurious crash entry. Only an error while we are NOT stopping means the
+            # socket stream really died, which is traffic the tester asked to impair
+            # sailing through - worth one traceback. Mirrors the capture loop's
+            # ``if self._running`` guard.
+            if not self._stopping.is_set():
+                crashlog.once("socketwatch.loop", exc)
 
 
 # -- the real Windows source (smoke-tested, not unit-tested) ------------------- #

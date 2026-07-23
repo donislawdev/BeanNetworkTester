@@ -40,10 +40,10 @@ class _CountingTable:
     def snapshot(self):
         return dict(self.ports)
 
-    def name_of(self, pid):
+    def name_of(self, pid, allow_bulk=True):
         return self._info.get(pid, ("", None))[0]
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         return []
 
     # the engine's side of the PortTable surface (see _process_for / _pid_for)
@@ -137,10 +137,10 @@ def test_stop_never_waits_for_a_scan_in_flight():
         def snapshot(self):
             return {}
 
-        def name_of(self, pid):
+        def name_of(self, pid, allow_bulk=True):
             return ""
 
-        def ancestors(self, pid, depth=8):
+        def ancestors(self, pid, depth=8, allow_bulk=True):
             return []
 
     slow = _SlowTable(3.0)               # far longer than any sane join timeout
@@ -212,10 +212,10 @@ def test_a_failing_refresh_does_not_kill_the_resolver():
         def snapshot(self):
             return {}
 
-        def name_of(self, pid):
+        def name_of(self, pid, allow_bulk=True):
             return ""
 
-        def ancestors(self, pid, depth=8):
+        def ancestors(self, pid, depth=8, allow_bulk=True):
             return []
 
     targeting = ProcessTargeting(bnt.parse_target("chrome"), table=_Broken())
@@ -288,10 +288,10 @@ class _TreeTable:
     def snapshot(self):
         return dict(self.ports)
 
-    def name_of(self, pid):
+    def name_of(self, pid, allow_bulk=True):
         return self.info.get(pid, ("", None))[0]
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         chain, current = [], self.info.get(pid, ("", None))[1]
         while current and len(chain) < depth:
             name, parent = self.info.get(current, ("", None))

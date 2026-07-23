@@ -25,11 +25,11 @@ class _FakeNames:
     def __init__(self):
         self.calls = []
 
-    def name_of(self, pid, cheap=False):
+    def name_of(self, pid, cheap=False, allow_bulk=True):
         self.calls.append(("name_of", pid, cheap))
         return {100: "chrome.exe"}.get(pid, "")
 
-    def ancestors(self, pid, depth=8):
+    def ancestors(self, pid, depth=8, allow_bulk=True):
         self.calls.append(("ancestors", pid, depth))
         return [(1, "explorer.exe")]
 
@@ -180,6 +180,55 @@ def test_stop_is_safe_without_a_start():
     w = _watcher()
     w.stop()                                          # must not raise
     check("still not running", not w.is_running())
+
+
+def test_stop_does_not_record_the_close_induced_error_as_a_crash(monkeypatch):
+    """stop() closes the source, and on real WinDivert the parked recv() then raises
+    (WinError 995, "I/O aborted"). That is the NORMAL shutdown path, not a fault - it
+    must not land in the crash log, or every STOP leaves a spurious entry."""
+    from beantester import crashlog
+    recorded = []
+    monkeypatch.setattr(crashlog, "_once_seen", set())
+    monkeypatch.setattr(crashlog, "record", lambda exc, **kw: recorded.append(kw))
+
+    class _RaisingSource:
+        def __init__(self):
+            self._closed = threading.Event()
+
+        def __iter__(self):
+            self._closed.wait()                       # park like a blocking recv()
+            raise OSError("[WinError 995] aborted")   # ...then raise, as pydivert does
+
+        def close(self):
+            self._closed.set()
+
+    w = SocketWatcher(names=_FakeNames(), source_factory=_RaisingSource)
+    w.start()
+    _wait(w.is_running)
+    w.stop()
+    time.sleep(0.05)
+    check("the close-induced error was NOT recorded as a crash", recorded == [],
+          f"({recorded})")
+
+    # ...but an error while NOT stopping still is: a socket stream that dies mid-run
+    # is traffic sailing through unimpaired.
+    recorded.clear()
+    raised = threading.Event()
+
+    class _DiesWhileRunning:
+        def __iter__(self):
+            raised.set()
+            raise OSError("stream died")
+
+        def close(self):
+            pass
+
+    w2 = SocketWatcher(names=_FakeNames(), source_factory=_DiesWhileRunning)
+    w2.start()
+    check("the failing source ran", raised.wait(timeout=5))
+    time.sleep(0.05)
+    check("a mid-run failure IS recorded", len(recorded) == 1, f"({recorded})")
+    w2.stop()
 
 
 # -- the address decode locked by the spike ----------------------------------- #
