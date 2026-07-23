@@ -219,6 +219,73 @@ def _psutil_process_table():
         return {}
 
 
+# Off on non-Windows and in tests (which fake psutil); the fixtures flip it.
+_ALLOW_NATIVE_PROCESSES = sys.platform.startswith("win")
+
+
+def _toolhelp_process_table():
+    """``{pid: (name, ppid, None)}`` from a CreateToolhelp32Snapshot, or ``None``.
+
+    This reads the name and parent PID of EVERY process in one call WITHOUT opening
+    any of them. That is the whole point: it is fast (~6 ms for 350 processes,
+    measured, against ~2.6 s for ``psutil.process_iter``) AND it names HARDENED
+    processes - Chrome's network service, some services - that refuse the OpenProcess
+    a per-PID ``psutil.Process(pid)`` needs, and so had NO name at all before. That
+    gap is why targeting ``chrome`` by NAME resolved to nothing while targeting its
+    PID worked: PID matching needs no name, name matching does. It gives no start
+    time (the recycle check then falls back to the TTL, the unverifiable-env path).
+    """
+    if not _ALLOW_NATIVE_PROCESSES:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESSENTRY32(ctypes.Structure):
+            _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                        ("th32ProcessID", wintypes.DWORD),
+                        ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                        ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                        ("th32ParentProcessID", wintypes.DWORD),
+                        ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                        ("szExeFile", ctypes.c_char * 260)]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # restype/argtypes MATTER: the snapshot is a HANDLE (pointer-sized), and the
+        # default c_int return truncates it on 64-bit.
+        k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        k32.Process32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+        k32.Process32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        snap = k32.CreateToolhelp32Snapshot(0x2, 0)            # TH32CS_SNAPPROCESS
+        if not snap or snap == wintypes.HANDLE(-1).value:
+            return None
+        try:
+            out = {}
+            entry = PROCESSENTRY32()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+            ok = k32.Process32First(snap, ctypes.byref(entry))
+            while ok:
+                out[int(entry.th32ProcessID)] = (
+                    entry.szExeFile.decode("mbcs", "replace"),
+                    int(entry.th32ParentProcessID), None)
+                ok = k32.Process32Next(snap, ctypes.byref(entry))
+            return out or None
+        finally:
+            k32.CloseHandle(snap)
+    except Exception:
+        return None
+
+
+def _process_table():
+    """Every process as ``{pid: (name, ppid, created)}``: the fast native snapshot
+    when available, the psutil scan otherwise (and in tests, which disable native)."""
+    native = _toolhelp_process_table()
+    return native if native is not None else _psutil_process_table()
+
+
 def _looks_recycled(current, cached):
     """True only when we can PROVE the PID now belongs to a different process.
 
@@ -371,7 +438,7 @@ class PortTable:
         self._info = {pid: entry for pid, entry in self._info.items()
                       if entry[3] > cutoff}
 
-    def info(self, pid, cheap=False, allow_bulk=True):
+    def info(self, pid, cheap=False):
         """``(name, ppid)`` for a pid - cached, verified, never raises.
 
         ``cheap=True`` means **never touch the OS from here**: answer from the cache
@@ -391,10 +458,18 @@ class PortTable:
         impaired, or an innocent process that inherits the old PID is. Both were
         reproduced against the real table before this check existed.
 
-        Checking is affordable because verifying is not resolving: ``create_time()``
-        costs 0.005 ms per PID, ``name()`` costs 5 ms (it must open the process and
-        read its image path). Verifying every socket-owning PID on this machine is
-        0.13 ms per rebuild - 0.2% of a core at the resolver's rate.
+        Verifying is cheaper than a full resolve, but it is NOT free, and an earlier
+        version of this note badly understated it (claimed ``create_time()`` = 0.005 ms
+        and 0.13 ms per rebuild; neither reproduced - convention 5). MEASURED
+        2026-07-22: ``create_time()`` costs ~5 ms per PID when it must open a fresh
+        handle to a HARDENED process (Chrome's renderers, some services), so
+        re-verifying every socket-owning PID is ~180 ms per rebuild with a browser
+        open (26 PIDs) - against sub-millisecond on a quiet machine. It runs on the
+        RESOLVER thread, never the capture one, and it is the price of the recycle
+        check below (catching a PID whose process was replaced). Reducing it - batch
+        the create times in one syscall, or verify by name against a cached process
+        snapshot - is a known perf follow-up, deliberately not folded into the
+        socket-layer work.
         """
         if pid is None:
             return ("", None)
@@ -422,26 +497,18 @@ class PortTable:
             return ("", None)
         resolved = _psutil_process_info(pid)
         if resolved is None:
-            # psutil.Process is unavailable (or denied). A full process_iter can then
-            # fill the name (protected processes, the test path) - but it is EXPENSIVE:
-            # ~2-3 s for a whole-system enumeration (measured 2911 ms for 327 procs).
-            #
-            # TARGETING passes allow_bulk=False, and that is the fix for a real
-            # regression: resolving a target expression walks every socket-owning PID
-            # AND its process TREE, and the first protected ANCESTOR (System, a
-            # protected service) that could not be opened individually used to trigger
-            # this bulk scan - synchronously, on the START path, blocking the whole
-            # session for ~2 s. A PID the tool cannot open is never one of the user's
-            # apps, so it will never match the expression; blocking on a process_iter
-            # to learn a name we would immediately discard is pure cost. The bulk stays
-            # for warm_names() (the connection log's display column), which runs on the
-            # watchdog thread where the cost is affordable.
-            if not allow_bulk:
-                return ("", None)
+            # psutil.Process could not open the process (it is HARDENED - Chrome's
+            # network service, some services - or denied, or already gone). Fall back
+            # to a whole-system snapshot, which names it WITHOUT opening it. This used
+            # to be ``psutil.process_iter`` at ~2.6 s; it is now a native toolhelp
+            # snapshot at ~6 ms (see _process_table), so it is affordable on the
+            # SYNCHRONOUS start/apply resolve too - which is what makes targeting a
+            # hardened app like chrome BY NAME work fast. Throttled so a burst of
+            # misses shares one snapshot.
             with self._lock:
                 stale = (now - self._bulk_at) > 1.0
             if stale:
-                table = _psutil_process_table()
+                table = _process_table()
                 with self._lock:
                     self._bulk_at = now
                     for other, (name, ppid, created) in table.items():
@@ -455,8 +522,8 @@ class PortTable:
             self._info[pid] = (resolved[0], resolved[1], resolved[2], now)
         return (resolved[0], resolved[1])
 
-    def name_of(self, pid, cheap=False, allow_bulk=True):
-        return self.info(pid, cheap=cheap, allow_bulk=allow_bulk)[0]
+    def name_of(self, pid, cheap=False):
+        return self.info(pid, cheap=cheap)[0]
 
     def warm_names(self):
         """Resolve (and verify) the name of every PID that currently owns a socket.
@@ -475,20 +542,16 @@ class PortTable:
         for pid in set(self.snapshot().values()):
             self.info(pid)
 
-    def ancestors(self, pid, depth=8, allow_bulk=True):
-        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe).
-
-        ``allow_bulk=False`` (targeting) never triggers the expensive process_iter to
-        name a parent it cannot open - a protected ancestor is not the user's app.
-        """
+    def ancestors(self, pid, depth=8):
+        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe)."""
         chain, seen = [], {int(pid)} if pid is not None else set()
-        current = self.info(pid, allow_bulk=allow_bulk)[1] if pid is not None else None
+        current = self.info(pid)[1] if pid is not None else None
         while current and len(chain) < depth:
             current = int(current)
             if current in seen or current <= 0:
                 break
             seen.add(current)
-            name, parent = self.info(current, allow_bulk=allow_bulk)
+            name, parent = self.info(current)
             chain.append((current, name))
             current = parent
         return chain

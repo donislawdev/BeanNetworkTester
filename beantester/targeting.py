@@ -110,21 +110,20 @@ class ProcessTargeting:
             port_pid = self.table.snapshot()
             pids, names = set(), set()
             for pid in set(port_pid.values()):
-                # allow_bulk=False: a target expression matches on the NAME, and a PID
-                # the OS will not let us open is never one of the user's apps - so
-                # resolving it must NOT fall back to a whole-system process_iter. That
-                # fallback, reached through the ANCESTOR walk below on the first
-                # protected parent, is a ~2 s scan; on the synchronous start resolve it
-                # blocked the session for that long (measured). warm_names() still pays
-                # it, off the hot path, for the connection log's display.
-                name = self.table.name_of(pid, allow_bulk=False)
+                # Names must resolve even for HARDENED processes (Chrome's network
+                # service refuses OpenProcess), or targeting `chrome` by NAME matches
+                # nothing while targeting its PID works. That is why the name lookup is
+                # allowed its snapshot fallback - now a ~6 ms native toolhelp snapshot,
+                # not the ~2 s psutil.process_iter that used to make the first
+                # target-start crawl (see portmap._process_table).
+                name = self.table.name_of(pid)
                 if self._matches(pid, name):
                     pids.add(pid)
                     names.add(name or str(pid))
                     continue
                 if self._excluded(pid, name):
                     continue      # an explicit "!" wins over an inherited match
-                for ancestor_pid, ancestor_name in self.table.ancestors(pid, allow_bulk=False):
+                for ancestor_pid, ancestor_name in self.table.ancestors(pid):
                     if self._matches(ancestor_pid, ancestor_name):
                         pids.add(pid)
                         names.add(name or str(pid))

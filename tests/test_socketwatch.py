@@ -25,11 +25,11 @@ class _FakeNames:
     def __init__(self):
         self.calls = []
 
-    def name_of(self, pid, cheap=False, allow_bulk=True):
+    def name_of(self, pid, cheap=False):
         self.calls.append(("name_of", pid, cheap))
         return {100: "chrome.exe"}.get(pid, "")
 
-    def ancestors(self, pid, depth=8, allow_bulk=True):
+    def ancestors(self, pid, depth=8):
         self.calls.append(("ancestors", pid, depth))
         return [(1, "explorer.exe")]
 

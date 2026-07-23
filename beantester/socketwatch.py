@@ -154,11 +154,11 @@ class SocketWatcher:
         """
         return False
 
-    def name_of(self, pid, cheap=False, allow_bulk=True):
-        return self._names.name_of(pid, cheap=cheap, allow_bulk=allow_bulk)
+    def name_of(self, pid, cheap=False):
+        return self._names.name_of(pid, cheap=cheap)
 
-    def ancestors(self, pid, depth=8, allow_bulk=True):
-        return self._names.ancestors(pid, depth=depth, allow_bulk=allow_bulk)
+    def ancestors(self, pid, depth=8):
+        return self._names.ancestors(pid, depth=depth)
 
     # -- lifecycle (driven by BeanEngine in 2b) -------------------------------- #
     def start(self):

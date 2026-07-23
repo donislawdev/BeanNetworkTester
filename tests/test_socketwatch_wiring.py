@@ -66,10 +66,10 @@ class _FakePorts:
     def warm_names(self):
         pass
 
-    def name_of(self, pid, cheap=False, allow_bulk=True):
+    def name_of(self, pid, cheap=False):
         return {1: "svc.exe", 2: "svc.exe", 100: "chrome.exe"}.get(pid, "")
 
-    def ancestors(self, pid, depth=8, allow_bulk=True):
+    def ancestors(self, pid, depth=8):
         return []
 
     def process_for_port(self, port, now=None, allow_refresh=True):
