@@ -101,10 +101,11 @@ class BeanEngine:
         # target_resolver.py). One per engine, retargeted rather than restarted.
         self._resolver = TargetResolver()
         self._ports = portmap.default_table()   # local port -> process (capture time)
-        # Live local_port -> pid map from WinDivert SOCKET events (2b). Created in
+        # Live local_port -> pid map from WinDivert SOCKET events. Created in
         # start() only on the real-WinDivert path (or when a source is injected);
         # None on the synthetic/simulate path, where targeting falls back to the
-        # poller. See _start_socketwatch. NOT read by targeting yet - that is 2c.
+        # poller. See _start_socketwatch. Targeting resolves against it whenever a
+        # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
@@ -601,8 +602,8 @@ class BeanEngine:
         tests): the SOCKET-layer handle needs the same driver the NETWORK handle
         does. On the synthetic/simulate path there is nothing to open, so the engine
         keeps using the polling port table - the testable-without-WinDivert contract
-        holds. This method only keeps the map live; targeting does not read it yet
-        (that is 2c).
+        holds. This method only keeps the map LIVE; pointing targeting at it is
+        _start_locked's job (see _targeting_table).
 
         Failure to open the SOCKET handle DEGRADES to the poller; it does not fail
         the session. A tester who cannot open a second handle still gets impairment
