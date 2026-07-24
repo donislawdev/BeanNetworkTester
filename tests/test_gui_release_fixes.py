@@ -262,6 +262,42 @@ def test_long_notes_wrap_instead_of_being_cut():
     """)
 
 
+def test_the_ui_rebuild_does_not_pile_up_configure_handlers_on_the_root():
+    """`_build_ui` runs on every language switch, and the root window outlives it.
+
+    It used to bind `<Configure>` on the root each time - once for
+    `_on_root_configure`, and once more for every banner built with
+    `wrapping_label(root, ...)` - all with `add="+"` and nothing to remove them. So
+    the handlers multiplied one per rebuild: measured 2 after the first build, 8
+    after three language switches. Each is cheap, but it is O(rebuilds) work on
+    every resize, forever. The handler is now bound once in __init__, and the
+    banners wrap through it instead of self-binding, so the count is fixed at one.
+    """
+    run_gui("""
+        def configure_handlers():
+            return root.bindings.get("<Configure>", [])
+
+        assert len(configure_handlers()) == 1, configure_handlers()
+
+        for _ in range(4):                       # what four language switches do
+            app._lang = "en" if app._lang == "pl" else "pl"
+            app._build_ui()
+
+        assert len(configure_handlers()) == 1, (
+            "the rebuild leaked a <Configure> handler onto the root", configure_handlers())
+
+        # ...and the banner still wraps: the leak was closed by folding it into the
+        # single handler, not by dropping the wrapping. Assert the width-derived
+        # value, not just "truthy" - a banner keeps its initial build-time
+        # wraplength, so only checking for one would pass even if the fold were gone.
+        from beantester.gui.scaling import scaled
+        app.engine_warning.config(text="a long overflow warning that has to wrap")
+        app._on_root_configure()
+        assert app.engine_warning.kw.get("wraplength") == root.winfo_width() - scaled(28), (
+            app.engine_warning.kw.get("wraplength"), root.winfo_width())
+    """)
+
+
 def test_a_resize_after_the_label_is_gone_is_not_a_crash():
     """``wrapping_label`` binds <Configure> on the CONTAINER, not on the label.
 

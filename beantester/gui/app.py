@@ -54,7 +54,6 @@ from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
 from .pages import PAGES
 from .profiles import ProfileStore
 from .rates import PeakWindow
-from .labels import wrapping_label
 from .scaling import (geometry_fits, init_scaling, initial_geometry,
                       max_window_size, min_window_size, scaled)
 from .scrollable import WheelDispatcher
@@ -207,6 +206,12 @@ class App:
         self.admin_warning = None
         self._init_vars()
 
+        # Bind ONCE, for the App's lifetime - not inside _build_ui. The handler
+        # reads the widgets it wraps through self, so a single binding always sees
+        # the freshly rebuilt ones; re-adding it on every rebuild (with add="+", on
+        # the root, which outlives the rebuild) left one dead-weight copy per
+        # language switch. See _on_root_configure.
+        root.bind("<Configure>", self._on_root_configure, add="+")
         self._build_ui()
         self._restore_last_profile()      # one-time, only if the preference is on
         self._wheel = WheelDispatcher(root)
@@ -398,18 +403,27 @@ class App:
         # it up front, as a banner, instead of only a line in the log strip at the
         # bottom (easy to miss) and a dialog after the click. Same treatment as the
         # other "your run is not doing what you think" warnings.
+        # These two banners are the ONLY wrapping labels whose container is the
+        # persistent root, so - unlike a field note, whose container dies with it -
+        # wrapping_label's per-label <Configure> binding would pile up on the root,
+        # one per rebuild. They are plain labels instead, wrapped by the single
+        # _on_root_configure below (which already does exactly this for the
+        # summary). Same look as wrapping_label: left/anchored, an initial
+        # wraplength refined on the first resize.
         if not self._is_admin:
-            self.admin_warning = wrapping_label(root, T("warn.not_admin"),
-                                                style="Bad.TLabel")
+            self.admin_warning = ttk.Label(
+                root, text=T("warn.not_admin"), style="Bad.TLabel",
+                justify="left", anchor="w", wraplength=scaled(600))
             self.admin_warning.pack(side="top", fill="x", padx=pad,
                                     pady=(0, scaled(4)))
         # A queue overflow means the TOOL is dropping the user's packets - packets
         # they did not ask to lose - so their measured loss is partly ours. That was
         # a number in a table on a page they might never open. It is now a banner:
         # a run whose numbers are WRONG must not look like a run that went fine.
-        self.engine_warning = wrapping_label(root, "", style="Bad.TLabel")
+        self.engine_warning = ttk.Label(
+            root, text="", style="Bad.TLabel",
+            justify="left", anchor="w", wraplength=scaled(600))
         self._shown_engine_warning = None
-        root.bind("<Configure>", self._on_root_configure, add="+")
 
         # The bottom strip (START/STOP + log) is packed FIRST, against the bottom
         # edge, so the notebook can never take its space. It used to share a
@@ -511,11 +525,29 @@ class App:
                 crashlog.note(_exc, "gui.app")
 
     def _on_root_configure(self, event=None):
-        """Keep the summary wrapping to the real window width (not a fixed 620 px)."""
+        """Keep the root-level labels wrapping to the real window width.
+
+        Bound ONCE for the App's lifetime (in __init__), never inside _build_ui:
+        it reaches its widgets through self, so one binding always drives the
+        freshly rebuilt ones. Binding it per rebuild - on the root, which the
+        rebuild does not destroy - left a dead-weight copy behind on every language
+        switch. The two root banners wrap here for the same reason: as
+        wrapping_label they each bound their own <Configure> on that same
+        persistent root and multiplied identically.
+        """
         try:
             width = self.summary_holder.winfo_width()
             if width and width > scaled(80):
                 self.summary.config(wraplength=width - scaled(8))
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.app")
+        try:
+            root_width = self.root.winfo_width()
+            if root_width and root_width > scaled(80):
+                wrap = max(scaled(80), root_width - scaled(28))   # padx both sides + margin
+                for banner in (self.admin_warning, self.engine_warning):
+                    if banner is not None:
+                        banner.config(wraplength=wrap)
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 
