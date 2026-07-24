@@ -42,6 +42,36 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the UI rebuild no longer piles up `<Configure>` handlers on the root
+
+Follow-up to the teardown-crash fix. `App._build_ui` runs on every language switch, and the root
+window outlives it, so binding `<Configure>` on the root inside `_build_ui` (with `add="+"`, nothing
+removing it) accumulated one handler per rebuild. Measured on the fake tkinter: 2 after the first
+build, 8 after three switches, linear. Each is cheap - and after the teardown fix the dead ones are
+no-ops, not crash records - but it is O(rebuilds) work on every resize for the life of the process.
+
+- The earlier "not fixed here" note named only `_on_root_configure` and undercounted (convention 5):
+  the two banners built with `wrapping_label(root, ...)` (`engine_warning` always, `admin_warning`
+  when non-admin) each bound their OWN `<Configure>` on the same persistent root and multiplied
+  identically - half the handlers. A `wrapping_label` on a SHORT-LIVED container does not leak (its
+  binding dies with the container); only the two whose container is the root do.
+- `_on_root_configure` is now bound ONCE in `__init__`, before the first `_build_ui`, and the line is
+  gone from `_build_ui`. It reaches its widgets through `self`, so a single binding always drives the
+  freshly rebuilt ones - no unbind needed, and none was safe (`Misc.unbind(seq, funcid)` still clears
+  the whole sequence on the oldest Python in the CI matrix, and the root carries other `<Configure>`
+  bindings).
+- The two banners are now plain `ttk.Label`s wrapped by that same single handler, not `wrapping_label`.
+  Same look (left/anchored, an initial `wraplength` refined on the first resize). `gui/labels.py` and
+  its short-lived-container callers are untouched; `wrapping_label` is no longer imported by
+  `gui/app.py`.
+- Not user-visible (identical look and wrapping, no behaviour change), so CHANGELOG.md is deliberately
+  left alone - a user-facing line for an imperceptible change would be the filler convention 4 forbids.
+- New test: `tests/test_gui_release_fixes.py::test_the_ui_rebuild_does_not_pile_up_configure_handlers_on_the_root` -
+  asserts exactly one `<Configure>` handler on the root after several rebuilds, and that the banner
+  still wraps to the width-derived value (not just its build-time default, which would pass even with
+  the fold gone). Both halves verified by MUTATION: reintroducing the per-rebuild bind, and dropping
+  the banner wrap, each turns it red.
+
 ### Fixed: two swallowed GUI teardown crashes, and the window geometry they were losing
 
 From a field `crashes.ndjson`: two `swallowed`/`debug` records, `TclError: bad window path name
@@ -79,10 +109,9 @@ destroying every child of the root window, and a `Toplevel` is a child of the ro
   verified by MUTATION (convention 5): each guard was removed in turn and the test that claims to
   catch it went red. The `on_close` mutation is what showed the fourth test was originally guarding
   a duplicate call added in this chunk rather than the real one; the duplicate was removed.
-- Not fixed here: `App._build_ui` also adds a fresh `root.bind("<Configure>", self._on_root_configure,
-  add="+")` on every rebuild and never removes the old one, so that handler multiplies the same way.
-  It holds the App rather than a dead widget, so it costs duplicated work per resize, not crash
-  records. Left alone deliberately, not overlooked.
+- Left for a follow-up (now DONE, see the entry above): `App._build_ui` also re-bound `<Configure>`
+  on the root every rebuild, so that handler multiplied too - as did the banners, which this note
+  missed.
 
 ### Fixed: the connections "impaired?" column and its row highlight now use ONE signal
 
