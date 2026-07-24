@@ -311,12 +311,13 @@ def _psutil_created(pid):
 
     This is what tells a recycled PID from the process that used to own it, and it
     is the reason the cache can be trusted at all. Deliberately its OWN call rather
-    than part of the full lookup: measured on Windows, ``create_time()`` costs
-    ~0.005 ms per PID while ``name()`` costs ~5 ms, because only the latter has to
-    open the process and read its image path. Verifying is a thousand times cheaper
-    than re-resolving, which is what makes checking on EVERY cache hit affordable:
-    it adds 0.35 ms to a resolve that took 0.93 ms, i.e. 2.2% of a core at the
-    resolver's measured rate.
+    than part of the full lookup: it is the cheapest identity probe there is. Its
+    cost is decided by one thing - whether ``OpenProcess`` succeeds. MEASURED
+    2026-07-24 (Win11, CPython 3.14): ~0.005 ms per PID when the handle opens,
+    ~5.7 ms when it is DENIED, because psutil then falls back to a full-system scan
+    for that single PID. Whether it opens is an ELEVATION question, not a "hardened
+    process" one - see ``PortTable.info`` for what that means per refresh, and why
+    it is cheap in every real session.
     """
     try:
         import psutil
@@ -458,18 +459,23 @@ class PortTable:
         impaired, or an innocent process that inherits the old PID is. Both were
         reproduced against the real table before this check existed.
 
-        Verifying is cheaper than a full resolve, but it is NOT free, and an earlier
-        version of this note badly understated it (claimed ``create_time()`` = 0.005 ms
-        and 0.13 ms per rebuild; neither reproduced - convention 5). MEASURED
-        2026-07-22: ``create_time()`` costs ~5 ms per PID when it must open a fresh
-        handle to a HARDENED process (Chrome's renderers, some services), so
-        re-verifying every socket-owning PID is ~180 ms per rebuild with a browser
-        open (26 PIDs) - against sub-millisecond on a quiet machine. It runs on the
-        RESOLVER thread, never the capture one, and it is the price of the recycle
-        check below (catching a PID whose process was replaced). Reducing it - batch
-        the create times in one syscall, or verify by name against a cached process
-        snapshot - is a known perf follow-up, deliberately not folded into the
-        socket-layer work.
+        Verifying is cheaper than a full resolve, but its cost turns entirely on
+        whether ``OpenProcess`` succeeds - and that is an ELEVATION question, not the
+        "hardened process" one an earlier version of this note assumed. MEASURED
+        2026-07-24 (Win11, CPython 3.14, Chrome open): ``create_time()`` is ~0.005 ms
+        per PID when the handle opens and ~5.7 ms when it is DENIED (psutil then
+        scans the whole system for that one PID). An ADMIN opens every socket-owning
+        PID - 0 of 27 denied here - so a warm refresh's recycle check is ~0.16 ms; a
+        NON-admin is denied on system / other-user PIDs (16 of 27) and it climbs to
+        ~90-180 ms, with the cold resolve at ~380 ms against ~36 ms elevated. Real
+        impairment ALWAYS runs elevated (WinDivert will not open without admin), so
+        this is cheap in every real session; the slow figure appears only on the one
+        non-elevated path that runs the resolver at all, ``--simulate`` (synthetic
+        packets, and the cost sits on the RESOLVER thread, never the capture one).
+        Batching the denied PIDs in one ``NtQuerySystemInformation`` was measured and
+        REJECTED (2026-07-24): it speeds only the non-elevated warm check - a demo
+        mode - and does nothing for the elevated hot path or for the cold resolve,
+        which NAME resolution dominates.
         """
         if pid is None:
             return ("", None)
