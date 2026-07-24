@@ -42,6 +42,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: correct the resolver recycle-check cost - it is elevation-bound, not "~180 ms"
+
+Measured 2026-07-24 with Chrome open, elevated AND non-elevated (`runas /trustlevel:0x20000`),
+because the deferred "~180 ms per rebuild" perf follow-up from the socket-layer work did not
+reproduce elevated. It is real prose drift (convention 5): two docstrings disagreed - `_psutil_created`
+claimed 0.005 ms, `info` claimed ~5 ms - and both were right for a different elevation.
+
+- `create_time()` is ~0.005 ms per PID when `OpenProcess` succeeds and ~5.7 ms when it is DENIED
+  (psutil then scans the whole system for that one PID). Denial is an ELEVATION question, not the
+  "hardened process / Chrome renderer" one the older note assumed - renderers do not own sockets,
+  so they never reach this loop. ELEVATED: 0 of 27 socket-owning PIDs denied, warm recycle check
+  ~0.16 ms, cold `resolve('chrome')` ~36 ms. NON-ELEVATED: 16 of 27 denied, ~90-180 ms warm,
+  ~381 ms cold - which is where the handoff's ~365/180 ms came from.
+- Real impairment ALWAYS runs elevated (WinDivert will not open without admin; a non-admin START
+  fails), so the check is cheap in every real session. The only non-elevated path that runs the
+  resolver at all is `--simulate` (synthetic packets; the cost is on the resolver thread, never
+  the capture one).
+- DECISION, rejected: batching the denied PIDs in one `NtQuerySystemInformation`. It speeds only
+  the non-elevated `--simulate` warm check, does nothing for the elevated hot path, and nothing
+  for the cold resolve (name resolution dominates that, not create_time). Not worth the ctypes
+  surface for a demo mode. This closes the "known perf follow-up" / "handed to a follow-up" notes
+  in the entries below.
+- Corrected in `portmap.py` (`_psutil_created` and `PortTable.info` docstrings) and PROJECT_NOTES.
+  No code behaviour changed - nothing a user notices - so CHANGELOG.md is untouched.
+
 ### Fixed: the UI rebuild no longer piles up `<Configure>` handlers on the root
 
 Follow-up to the teardown-crash fix. `App._build_ui` runs on every language switch, and the root
