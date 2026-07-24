@@ -42,6 +42,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: de-stale the 2b/2c prose - targeting DOES resolve against the live socket map
+
+Prose drift of the kind convention 5 exists for, with a twist: every one of these sentences was
+TRUE when written and acquired an expiry date nobody enforced. Chunks 2b/2c/2d landed (PR #38),
+so "not wired yet" became a lie sitting next to correct code - and `check_notes.py` deliberately
+does not check prose, so nothing went red. Found during an engineering review; no behaviour
+change, comments and docstrings only.
+
+- `engine.py`: the `_socketwatch` attribute comment ("NOT read by targeting yet - that is 2c")
+  and the `_start_socketwatch` docstring ("targeting does not read it yet") now point at
+  `_targeting_table()` / `_start_locked`, which is where the poller-vs-watcher choice is actually
+  made.
+- `socketwatch.py`: the module docstring no longer claims the module is "in isolation... NOT
+  wired into the engine or targeting yet (2b/2c)"; the lifecycle section header drops "in 2b".
+- `tests/test_socketwatch_wiring.py`: the docstring kept the part that is still true (this file
+  covers the plumbing only) and lost the false framing; it now names
+  `tests/test_targeting_socketwatch.py` as the guard for the resolution contract.
+- Deliberately NOT touched: the `SocketEvent` comment saying `remote_ip`/`remote_port` are
+  "carried for the connection log later (2c)". Those fields are still unconsumed, and whether
+  they get used or cut is a separate decision - fixing the sentence now would only mean writing
+  prose that decision will rewrite.
+- Follow-up on its own branch: a mechanical guard for expiring prose (`PENDING(<id>)` markers
+  checked against one list of open stage ids), because discipline alone produced four stale
+  sites in a single transition.
+
 ### Docs: correct the resolver recycle-check cost - it is elevation-bound, not "~180 ms"
 
 Measured 2026-07-24 with Chrome open, elevated AND non-elevated (`runas /trustlevel:0x20000`),
