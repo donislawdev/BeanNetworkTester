@@ -102,6 +102,107 @@ def test_open_windows_survive_a_language_switch():
     """, lang="pl")
 
 
+def test_a_language_switch_keeps_the_window_alive_and_saves_its_geometry():
+    """A rebuild must not tear the registry's windows down behind its back.
+
+    ``App._build_ui`` rebuilds by destroying every child of the root window, and a
+    Toplevel is one of those children - so the open windows died there, and the
+    ``WindowManager.rebuild()`` that came next ran ``close()`` on windows that no
+    longer existed. Two things followed: the geometry was never saved (the window
+    reopened where it had been LAST closed, not where the user had just put it),
+    and reading it raised TclError into the crash log - the recorded
+    "bad window path name .!toplevel2", once per language switch.
+    """
+    run_gui("""
+        from beantester import crashlog
+        from beantester.gui.windows import PanelWindow, register_window
+
+        # Filtered by subsystem, not "nothing at all": a language switch logs a
+        # line, and the fake tkinter's log box answers index() with None, which
+        # records an unrelated gui.app entry on master too.
+        recorded = []
+        crashlog.record = lambda exc, **kw: recorded.append(
+            (type(exc).__name__, kw.get("subsystem")))
+
+        class Probe(PanelWindow):
+            ID = "probe_geo"
+            TITLE = "app.tabs.connections"
+            def build(self, body):
+                pass
+
+        register_window(Probe)
+        panel = app.open_window("probe_geo")
+        panel.win.geometry("640x480+11+22")          # the user moved it there
+
+        app.lang_var.set("English")
+        app._switch_language()
+
+        assert [r for r in recorded if r[1] == "gui.windows"] == [], recorded
+        assert app.ui.get("window.probe_geo") == "640x480+11+22", app.ui.get("window.probe_geo")
+        assert app.windows.open_ids() == ["probe_geo"], "the window must come back"
+    """, lang="pl")
+
+
+def test_closing_a_window_that_is_already_gone_is_not_a_crash():
+    """Defence in depth for the recorded "bad window path name .!toplevel2".
+
+    Nothing in the app should destroy a registry window behind its back now, but
+    the root window still takes every Toplevel with it whenever it goes - so
+    ``close()`` has to cope with a window that is already destroyed instead of
+    reading its geometry and recording the TclError.
+    """
+    run_gui("""
+        from beantester import crashlog
+        from beantester.gui.windows import PanelWindow, register_window
+
+        recorded = []
+        crashlog.record = lambda exc, **kw: recorded.append(
+            (type(exc).__name__, kw.get("subsystem")))
+
+        class Probe(PanelWindow):
+            ID = "probe_gone"
+            TITLE = "app.tabs.statistics"
+            def build(self, body):
+                pass
+
+        register_window(Probe)
+        panel = app.open_window("probe_gone")
+        panel.win.destroy()                 # destroyed from under the panel
+
+        panel.close()
+
+        assert [r for r in recorded if r[1] == "gui.windows"] == [], recorded
+        assert not panel.is_open()
+    """)
+
+
+def test_closing_the_app_saves_an_open_window_before_the_root_goes():
+    """Quitting destroys the root, and a destroyed root takes every Toplevel with
+    it - so a window still open at that moment has nowhere left to save from.
+
+    ``on_close`` closes them first for exactly that reason. It had no test, which
+    is how the ORDER (close the windows, then persist, then destroy) could have
+    been rearranged without anything noticing.
+    """
+    run_gui("""
+        from beantester.gui.windows import PanelWindow, register_window
+
+        class Probe(PanelWindow):
+            ID = "probe_quit"
+            TITLE = "app.tabs.statistics"
+            def build(self, body):
+                pass
+
+        register_window(Probe)
+        panel = app.open_window("probe_quit")
+        panel.win.geometry("500x400+7+8")
+
+        app.on_close()
+
+        assert app.ui.get("window.probe_quit") == "500x400+7+8", app.ui.get("window.probe_quit")
+    """)
+
+
 def test_a_broken_window_cannot_kill_the_tick():
     """The tick drains the log and moves the statistics. One bad window must not
     take it down - that was the whole point of wrapping _tick in try/finally."""

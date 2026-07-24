@@ -193,10 +193,21 @@ class PanelWindow:
             crashlog.note(_exc, "gui.windows")
 
     def _save_geometry(self):
-        if self.win is None:
+        """Remember where the user left this window - if it is still there to ask.
+
+        A Toplevel is a CHILD OF ROOT, so anything that destroys the root takes
+        this window with it while ``self.win`` still points at it. Asking a
+        destroyed window for its geometry raises TclError ("bad window path
+        name"), which was then caught and RECORDED - a crash-log entry per close,
+        for a window that was simply already gone.
+        """
+        win = self.win
+        if win is None:
             return
         try:
-            self.app.ui.set(self._state_key(), self.win.geometry())
+            if not win.winfo_exists():
+                return
+            self.app.ui.set(self._state_key(), win.geometry())
         except Exception as _exc:
             crashlog.note(_exc, "gui.windows")
 
@@ -255,3 +266,16 @@ class WindowManager:
 
     def open_ids(self):
         return [wid for wid, panel in self._open.items() if panel.is_open()]
+
+    def toplevels(self):
+        """The Toplevel widgets this registry currently owns.
+
+        ``App._build_ui`` rebuilds the main UI by destroying every child of the
+        root window - and a Toplevel is a child of the root. That tore the open
+        windows down behind the registry's back, so ``rebuild()`` then ran
+        ``close()`` on windows that no longer existed: their geometry was never
+        saved (after a language switch the window came back where it used to be,
+        not where the user had put it) and reading it raised into the crash log.
+        The rebuild skips these; closing them is the registry's job.
+        """
+        return {panel.win for panel in self._open.values() if panel.win is not None}

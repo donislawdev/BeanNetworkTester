@@ -46,13 +46,29 @@ class W:
         self.grid_info = None
         self.bindings = {}
         self.states = set()         # ttk widget state flags (active, focus, ...)
+        self.alive = True
         master = args[0] if args else kw.get("master")
         self.master = master if isinstance(master, W) else None
         if isinstance(master, W):
             master.children.append(self)
 
+    def _path(self):
+        return f".!{type(self).__name__.lower()}"
+
+    def _alive_or_raise(self, reason="invalid command name"):
+        """Real Tk deletes the widget's command: touching it afterwards raises.
+
+        Only the two calls that the real teardown crashes made - ``configure`` and
+        ``geometry`` - are modelled. The rest stay permissive on purpose: this is a
+        test double, not a second implementation of Tk, and every method that
+        starts raising is a way for an unrelated test to fail for a fake reason.
+        """
+        if not self.alive:
+            raise TclError(f'{reason} "{self._path()}"')
+
     # -- options ------------------------------------------------------------ #
     def configure(self, *a, **kw):
+        self._alive_or_raise()
         self.kw.update(kw)
 
     config = configure
@@ -123,9 +139,31 @@ class W:
     unbind_all = unbind
 
     def destroy(self):
+        """Destroy the widget AND its children, and leave it DEAD.
+
+        The old version only unlinked the widget from its parent, so a widget that
+        had been destroyed still answered every call - and a callback poking a dead
+        widget looked perfectly healthy here while raising TclError for the user.
+        Two shipped crashes hid behind exactly that (``gui/labels.py::_resize`` and
+        ``gui/windows.py::_save_geometry``): the handler lives on a CONTAINER that
+        outlives the widget it was given, so it keeps firing after the destroy.
+        """
+        for child in list(self.children):
+            child.destroy()
         if self.master is not None and self in self.master.children:
             self.master.children.remove(self)
         self.children = []
+        self.alive = False
+
+    def winfo_exists(self):
+        """1 while the widget lives, 0 once it is destroyed.
+
+        Explicit, because ``W.__getattr__`` answers any unknown attribute with a
+        no-op returning ``None``: a guard written as ``if not w.winfo_exists()``
+        would then be TRUE for every widget on the fake, and silently turn the
+        code it guards off in every GUI test.
+        """
+        return 1 if self.alive else 0
 
     def winfo_children(self):
         return list(self.children)
@@ -236,8 +274,12 @@ class Root(W):
         return "normal"
 
     def geometry(self, spec=None):
+        # Tk answers a wm call on a destroyed toplevel with "bad window path
+        # name", not "invalid command name" - and that is the exact message the
+        # recorded _save_geometry crash carried.
+        self._alive_or_raise("bad window path name")
         if spec is None:
-            return self.winfo_geometry()
+            return self.kw.get("geometry") or self.winfo_geometry()
         self.kw["geometry"] = spec
         return None
 

@@ -42,6 +42,48 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: two swallowed GUI teardown crashes, and the window geometry they were losing
+
+From a field `crashes.ndjson`: two `swallowed`/`debug` records, `TclError: bad window path name
+".!toplevel2"` at `gui/windows.py::_save_geometry` and `TclError: invalid command name ".!label"`
+at `gui/labels.py::_resize`. They share one cause: `App._build_ui` rebuilds the main UI by
+destroying every child of the root window, and a `Toplevel` is a child of the root.
+
+- `App._build_ui` now skips the Toplevels the registry owns (new `WindowManager.toplevels()`). It
+  used to tear the open panel windows down behind the registry's back, so the `windows.rebuild()`
+  that follows a language switch ran `close()` on windows that no longer existed. That cost two
+  things, not one: the TclError above, and the geometry was never saved - the window reopened where
+  it had last been CLOSED, not where the user had just put it.
+- `PanelWindow._save_geometry` returns early when the window is already gone (`winfo_exists`).
+  Nothing in the app should destroy a registry window behind its back now, but the root still takes
+  every Toplevel with it when the app quits.
+- `bind_wraplength._resize` returns early when the label is gone. The `<Configure>` binding lives on
+  the CONTAINER, which routinely outlives the label: the two banners built with
+  `wrapping_label(root, ...)` in `gui/app.py` hang off the root window itself, and every rebuild
+  destroys them and leaves their handler behind. Nothing unbinds it (it is added with `add="+"`, and
+  `Misc.unbind(seq, funcid)` still clears the WHOLE sequence on the oldest Python in the CI matrix -
+  verified only that 3.14 removes just the one binding). So this was never a one-off teardown race:
+  it is one dead handler per rebuild, each recording an entry on every resize from then on.
+- `on_close` already closed the windows before persisting the UI state, so their geometry survives a
+  quit. That ORDER had no test; it has one now.
+- `tests/fake_tk.py` made honest about destruction, or none of this could be caught: `destroy()` now
+  destroys children and leaves the widget DEAD, `winfo_exists()` is real, and `configure()` /
+  `geometry()` raise `TclError` afterwards, the way Tk does. `winfo_exists` HAD to be added rather
+  than inherited: `W.__getattr__` answers any unknown attribute with a no-op returning `None`, so a
+  `winfo_exists()` guard would have read as "destroyed" for every widget on the fake and silently
+  switched off the code it guards in every GUI test.
+- New tests: `tests/test_windows.py::test_a_language_switch_keeps_the_window_alive_and_saves_its_geometry`,
+  `tests/test_windows.py::test_closing_a_window_that_is_already_gone_is_not_a_crash`,
+  `tests/test_windows.py::test_closing_the_app_saves_an_open_window_before_the_root_goes`,
+  `tests/test_gui_release_fixes.py::test_a_resize_after_the_label_is_gone_is_not_a_crash`. All four
+  verified by MUTATION (convention 5): each guard was removed in turn and the test that claims to
+  catch it went red. The `on_close` mutation is what showed the fourth test was originally guarding
+  a duplicate call added in this chunk rather than the real one; the duplicate was removed.
+- Not fixed here: `App._build_ui` also adds a fresh `root.bind("<Configure>", self._on_root_configure,
+  add="+")` on every rebuild and never removes the old one, so that handler multiplies the same way.
+  It holds the App rather than a dead widget, so it costs duplicated work per resize, not crash
+  records. Left alone deliberately, not overlooked.
+
 ### Fixed: the connections "impaired?" column and its row highlight now use ONE signal
 
 - Field report: rows showed orange with the column reading "no" (and "yes" rows with no colour) -

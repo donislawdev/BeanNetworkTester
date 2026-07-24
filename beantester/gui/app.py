@@ -308,7 +308,14 @@ class App:
         """Build (or rebuild on a language change) the whole UI."""
         root = self.root
         set_language(self._lang)
+        # A rebuild owns the MAIN window's widgets - not the registry's windows.
+        # A Toplevel is a child of the root too, so destroying every child used to
+        # take the open panel windows with it, leaving WindowManager to close
+        # windows that were already gone (see WindowManager.toplevels).
+        owned = self.windows.toplevels()
         for widget in root.winfo_children():
+            if widget in owned:
+                continue
             widget.destroy()
 
         pad = scaled(14)

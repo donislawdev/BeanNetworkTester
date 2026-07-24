@@ -262,6 +262,40 @@ def test_long_notes_wrap_instead_of_being_cut():
     """)
 
 
+def test_a_resize_after_the_label_is_gone_is_not_a_crash():
+    """``wrapping_label`` binds <Configure> on the CONTAINER, not on the label.
+
+    The container routinely outlives the label - the two banners at app.py:395 and
+    :403 hang off the root window itself, and every ``_build_ui`` rebuild destroys
+    the labels and leaves their handlers behind. Nothing unbinds them, so the next
+    resize called ``configure`` on a destroyed widget: TclError("invalid command
+    name .!label"), recorded once per dead handler, and one more handler added per
+    rebuild.
+    """
+    run_gui("""
+        import tkinter as tk
+        from beantester import crashlog
+        from beantester.gui.labels import wrapping_label
+
+        recorded = []
+        crashlog.record = lambda exc, **kw: recorded.append(
+            (type(exc).__name__, kw.get("subsystem")))
+
+        holder = tk.Frame(app.root)
+        label = wrapping_label(holder, "a note long enough to wrap")
+        assert label.kw.get("wraplength"), "the label must wrap while it lives"
+
+        handlers = holder.bindings.get("<Configure>") or []
+        assert handlers, "wrapping_label must listen on its container"
+
+        label.destroy()
+        for handler in handlers:                    # the resize still arrives
+            handler(type("Event", (), {"width": 500})())
+
+        assert [r for r in recorded if r[1] == "gui.labels"] == [], recorded
+    """)
+
+
 def test_the_connection_table_has_no_stretch_columns():
     """A stretch column is recomputed by ttk and snaps back after a drag."""
     run_gui("""

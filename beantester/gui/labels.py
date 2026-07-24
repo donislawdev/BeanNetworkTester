@@ -20,6 +20,17 @@ def bind_wraplength(label, container=None, pad=16):
 
     def _resize(event=None):
         try:
+            # The binding lives on the CONTAINER, and the container routinely
+            # outlives the label: App._build_ui() destroys the labels on every
+            # rebuild while the root window they hang off stays. Nothing unbinds
+            # this (it is added with add="+", and unbinding by funcid still clears
+            # the whole sequence on the oldest Python in the CI matrix), so a dead
+            # label is not an edge case here - it is the steady state after the
+            # first language switch. Without this check every resize afterwards
+            # raised TclError("invalid command name") into the crash log, once per
+            # dead label, forever.
+            if not label.winfo_exists():
+                return
             width = int(getattr(event, "width", 0) or holder.winfo_width() or 0)
             if width > scaled(80):
                 label.config(wraplength=max(scaled(80), width - scaled(pad)))
