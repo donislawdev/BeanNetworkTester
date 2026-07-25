@@ -155,11 +155,10 @@ def test_no_em_or_en_dashes_in_repo_text():
 # This set is NOT a roadmap. It is the set of stage ids that PROSE currently points
 # at, which is why an id nothing references is a failure too: it means the marker is
 # gone and the entry was left behind.
-OPEN_PENDING = {
-    # SocketEvent carries remote_ip / remote_port / proto / outbound, but the map
-    # consumes only kind / pid / local_port. Use them or cut them - undecided.
-    "socket-event-fields",
-}
+# Empty is the HEALTHY state: it means no prose in the repo is currently waiting on a
+# stage. Add an id the moment you write a sentence with an expiry date, and delete it
+# when the stage lands - the second check below then points at whatever prose is left.
+OPEN_PENDING = set()
 
 PENDING_EXTS = (".py", ".md")
 
@@ -190,6 +189,13 @@ def test_no_stale_pending_markers():
                 continue
             if name == os.path.basename(__file__):
                 continue                 # the registry does not scan itself
+            if name.startswith("CHANGELOG"):
+                # A changelog records what HAPPENED and is dated by its nature: an
+                # entry saying "added a marker named X" stays TRUE after X closes, so
+                # it is history, not drift. Found the hard way - the first real
+                # closing (socket-event-fields) tripped over the very entry that
+                # announced the marker.
+                continue
             path = os.path.join(dirpath, name)
             text = open(path, encoding="utf-8", errors="replace").read()
             for lineno, line in enumerate(text.splitlines(), 1):

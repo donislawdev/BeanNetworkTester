@@ -27,7 +27,7 @@ def _wait(pred, timeout=5.0):
 
 
 def ev(kind, pid, port):
-    return SocketEvent(kind, pid, 6, port, "1.2.3.4", 443, True)
+    return SocketEvent(kind, pid, port)
 
 
 class _FakeSocketSource:
