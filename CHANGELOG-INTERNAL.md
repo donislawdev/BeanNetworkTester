@@ -42,6 +42,52 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Performance: PortTable.refresh collects the socket table outside its lock
+
+The capture thread takes `PortTable._lock` too - `name_of(cheap=True)` -> `info()` in
+`engine._process_for` - so whatever `refresh()` holds it for, the packet path can be made to wait
+for. It used to hold it across the four `iphlpapi` calls, the port->pid dict build AND the
+departed-pid diff, all O(number of sockets).
+
+MEASURED first, 2026-07-25 (Win11, CPython 3.14, elevated, medians with a control), because "the hot
+path waits N ms" is exactly the kind of claim convention 5 says to measure rather than estimate:
+
+- Lock hold with everything inside: **0.495 ms median at 119 sockets** (p99 0.843, max 0.950).
+  Python-side work scales linearly: 0.011 ms at 100 sockets, 0.303 at 10 000, **3.555 at 100 000**
+  (syscalls excluded, so a floor).
+- The capture thread's own `name_of(cheap=True)` is **0.4 us median** - and with a thread hammering
+  `refresh(force=True)` alongside, its median, p95 and p99 did not move at all. Only **2 calls in
+  20 000** waited, worst 1.5 ms. At the real rate the lock is held ~0.15% of the time.
+- So at desktop scale this was NOT an observable problem, and the honest conclusion could have been
+  "measured, rejected". What decided it was the scaling: a network tester is the thing that gets
+  pointed at 100 000 connections, and this project's history is a series of "it was fine until
+  someone ran a load test" (the flow table once settled at 3.2 million entries).
+- Also learned while checking WHO refreshes: since chunk 2c the resolver resolves against the
+  `SocketWatcher`, whose `refresh()` is a no-op - so in a real session only the watchdog refreshes
+  the `PortTable`, ~3-5x a second. The up-to-20x a second case is the poller FALLBACK
+  (`--simulate`, tests, non-Windows), which has no real capture thread to stall.
+
+After the change: **the hold is flat at ~0.018 ms** whatever the table size (188x shorter at 100 000
+sockets, and no longer a function of n). The whole call costs the same - the work left the lock
+rather than disappearing. Kept internal-only deliberately: nothing a tester can observe changes, and
+claiming a user-visible win would be unmeasured prose.
+
+- Collection and the departed diff now run unlocked; only the reference swap, `_last`, the
+  `_info` pops and `_expire_info` are taken under the lock.
+- **Overlapping refreshes cannot move the map backwards.** Two threads can now collect at once, so
+  each call takes a GENERATION under the lock before starting and installs only if nothing newer
+  landed. A counter, not a timestamp: `time.monotonic()` has ~15 ms granularity on Windows, so two
+  refreshes inside one tick would compare equal and both install. The hazard was real, not
+  theoretical - the mutation below installs the stale map without the guard.
+- The `native` handle is captured per call and the "it stopped answering" flip is re-checked under
+  the lock (`self._native is native`), so a concurrent refresh cannot have its own conclusion undone.
+- New tests in `tests/test_processes.py`, both mutation-checked:
+  `::test_the_socket_table_is_collected_without_holding_the_lock` - probes the lock from ANOTHER
+  thread, because `_lock` is an RLock and a same-thread acquire would succeed while held and prove
+  nothing; putting the collection back inside turns it red.
+  `::test_an_older_collection_does_not_overwrite_a_newer_map` - gate-driven rather than sleep-raced;
+  removing the generation guard turns it red with the stale map installed.
+
 ### Changed: start() binds the targeting under the lock that protects it
 
 `_start_locked` read `self._targeting` bare and then acted on that reference three times

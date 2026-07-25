@@ -3,6 +3,7 @@
 psutil is faked, so the tests run anywhere (the real lookup needs a live system).
 """
 import sys
+import threading
 import time
 import types
 
@@ -583,3 +584,83 @@ def test_names_are_warmed_for_the_connection_log_without_a_target(monkeypatch):
     check("warming resolves every socket-owning pid", table._info.get(8100) is not None)
     check("so the capture thread's cheap read now answers",
           table.name_of(8100, cheap=True) == "app.exe")
+
+
+# -- the refresh lock: the capture thread waits on exactly what it holds ------- #
+def test_the_socket_table_is_collected_without_holding_the_lock():
+    """The CAPTURE THREAD takes this lock too - ``name_of(cheap=True)`` -> ``info()``
+    in ``engine._process_for`` - so whatever ``refresh()`` holds it for, the packet
+    path can be made to wait for, and a stalled capture thread means WinDivert is
+    queueing the user's packets (convention 20).
+
+    MEASURED 2026-07-25 (Win11, CPython 3.14, elevated): with the collection inside the
+    lock the hold scaled with the socket table - 0.303 ms at 10 000 sockets, 3.555 ms at
+    100 000 - and a network tester is exactly what gets pointed at 100 000 connections.
+    With the collection and the departed-pid diff outside it, the hold is FLAT at
+    ~0.018 ms whatever the size, which is a 188x shorter hold at the top of that range.
+
+    Probed from ANOTHER thread on purpose: ``_lock`` is an RLock, so a same-thread
+    acquire would succeed even while the lock was held and would prove nothing.
+    """
+    from beantester import portmap
+
+    table = portmap.PortTable()
+    probed = {}
+
+    class _Native:
+        def port_pid_map(self):
+            def probe():
+                got = table._lock.acquire(timeout=1.0)
+                probed["free"] = got
+                if got:
+                    table._lock.release()
+
+            thread = threading.Thread(target=probe)
+            thread.start()
+            thread.join(timeout=3.0)
+            return {5000: 1234}
+
+    table._native = _Native()
+    table.native = True
+    check("the refresh installed the collected map", table.refresh(force=True) is True)
+    check("the lock was FREE while the socket table was being collected",
+          probed.get("free") is True, f"({probed})")
+
+
+def test_an_older_collection_does_not_overwrite_a_newer_map():
+    """Collecting outside the lock lets two refreshes overlap, so a slow one must not
+    move the map BACKWARDS when it finishes late.
+
+    Each call takes a generation before it starts and installs only if nothing newer
+    landed meanwhile. Driven by a gate rather than by sleeps, so it asserts the ordering
+    rule instead of racing the scheduler.
+    """
+    from beantester import portmap
+
+    table = portmap.PortTable()
+    gate = threading.Event()
+    stale, fresh = {1111: 11}, {2222: 22}
+
+    class _Slow:
+        def port_pid_map(self):
+            gate.wait(timeout=5.0)
+            return dict(stale)
+
+    class _Fast:
+        def port_pid_map(self):
+            return dict(fresh)
+
+    table._native = _Slow()
+    table.native = True
+    slow = threading.Thread(target=lambda: table.refresh(force=True))
+    slow.start()
+    time.sleep(0.05)                    # the slow call has taken its generation
+    table._native = _Fast()             # the slow one already captured its own native
+    check("the second refresh installed", table.refresh(force=True) is True)
+    check("...and its map is the one in place", table.snapshot() == fresh,
+          f"({table.snapshot()})")
+
+    gate.set()                          # now let the STALE collection finish
+    slow.join(timeout=5)
+    check("the stale collection did not move the map backwards",
+          table.snapshot() == fresh, f"({table.snapshot()})")
