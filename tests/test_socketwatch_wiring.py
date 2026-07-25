@@ -1,10 +1,10 @@
-"""BeanEngine drives the SocketWatcher's lifecycle (chunk 2b).
+"""BeanEngine drives the SocketWatcher's lifecycle.
 
-2b is pure plumbing: the engine creates, bootstraps, runs and stops the watcher,
-but targeting does NOT read it yet (that is 2c). So these tests assert the wiring
-- started on the real/injected path, absent on the synthetic path, bootstrapped
-from the port table, degrading (not killing) on failure, and leaving no thread
-behind - not any change in impairment behaviour.
+This file covers the PLUMBING only: the engine creates, bootstraps, runs and stops
+the watcher - started on the real/injected path, absent on the synthetic path,
+bootstrapped from the port table, degrading (not killing) on failure, and leaving
+no thread behind. That targeting actually RESOLVES against the watcher is a
+separate contract, guarded by tests/test_targeting_socketwatch.py.
 
 Driven on a fake divert (idle, so the session stays up) and an injected fake
 socket source, so no WinDivert is needed.

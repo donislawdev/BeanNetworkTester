@@ -21,10 +21,12 @@ shrink is closed at the source. (``FLOW_ESTABLISHED`` was measured ~28 ms LATER,
 i.e. after the handshake, which is why the SOCKET layer, not the FLOW layer, is
 the source here.)
 
-Scope of this module (chunk 2a): the map and its event handling, in isolation.
-It is NOT wired into the engine or targeting yet (2b/2c). The event SOURCE is
-injected, so the map is fully testable without WinDivert; the real Windows source
-lives here too but is exercised by the smoke, not the unit tests.
+Scope of this module: the map and its event handling. ``BeanEngine`` owns its
+lifecycle (created and stopped with the session) and points ``ProcessTargeting``
+at it, so in a real session this - not the poller - is what targeting resolves
+against. The event SOURCE is injected, so the map is fully testable without
+WinDivert; the real Windows source lives here too but is exercised by the smoke,
+not the unit tests.
 
 What it is NOT
 --------------
@@ -160,7 +162,7 @@ class SocketWatcher:
     def ancestors(self, pid, depth=8):
         return self._names.ancestors(pid, depth=depth)
 
-    # -- lifecycle (driven by BeanEngine in 2b) -------------------------------- #
+    # -- lifecycle (driven by BeanEngine) -------------------------------------- #
     def start(self):
         """Open the event source and start the reader thread. Idempotent."""
         with self._lock:
