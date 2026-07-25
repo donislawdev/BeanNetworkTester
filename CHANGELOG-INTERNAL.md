@@ -42,6 +42,33 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Changed: start() binds the targeting under the lock that protects it
+
+`_start_locked` read `self._targeting` bare and then acted on that reference three times
+(`set_table`, a synchronous `refresh`, `retarget`), while every other access to the field - in
+`set_target` and `target_for` - is under `_target_lock`. A concurrent `set_target()` landing in the
+middle would leave the resolver pointed at an ORPHAN while the core tested against the object that
+replaced it, which is the same class of mismatch `set_target()` itself was fixed for.
+
+- **This is consistency of access, NOT a fixed symptom, and the commit says so.** The race was not
+  reproduced: 25 start/stop cycles against a concurrent applier in `test_concurrency_chaos.py` stayed
+  green, and the window is narrow today because the CLI applies settings before start, so only a GUI
+  "Apply" landing inside start could hit it. Recorded this way deliberately, so a later session does
+  not read it as "we fixed a race we had seen".
+- Lock order checked before widening the hold, not after: `_stop_lock` -> `_target_lock` ->
+  `ProcessTargeting._lock` -> `PortTable._lock`, and nothing walks it the other way - the resolver
+  never calls back into the engine, and `retarget()` is only reached with `_target_lock` already
+  held. In this spot there is not even contention: `_resolver.start()` comes after the block and
+  `stop()` joins the resolver, so the synchronous `refresh()` has no contender. Cost is one cold
+  resolve (~36 ms elevated, per `portmap.info`) at session start.
+- Rejected: locking only the READ. It narrows the window without closing it, and the point is that
+  start binds ONE coherent object rather than that a mismatch becomes less likely.
+- New test: `tests/test_target_resolver.py::test_start_binds_the_targeting_under_the_lock_that_protects_it`
+  - a mechanical guard (an instrumented `_target_lock` that records acquisitions), not a timing test,
+  because a timing test for this window would be flaky and prove nothing either way. Mutation-checked:
+  reverting to the bare read turns it red. Its docstring states what it does not claim - that the
+  race was real.
+
 ### Tests: the concurrency chaos suite now includes the SocketWatcher
 
 The suite's own charter is "many threads hammering one engine" and it names the failure it exists to
