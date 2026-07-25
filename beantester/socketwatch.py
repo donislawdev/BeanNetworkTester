@@ -55,8 +55,10 @@ BIND, CONNECT, LISTEN, ACCEPT, CLOSE = 3, 4, 5, 6, 7
 _ADD = frozenset({BIND, CONNECT, LISTEN, ACCEPT})
 
 # One socket-layer event, normalised away from the ctypes struct so the map logic
-# (and its tests) never touch pydivert. remote_ip/remote_port are carried for the
-# connection log later (2c); the map itself keys on local_port only.
+# (and its tests) never touch pydivert. The map keys on local_port alone: proto,
+# remote_ip, remote_port and outbound are carried but NOT consumed anywhere yet,
+# and whether the connection log should use them or they should be cut is still
+# open - PENDING(socket-event-fields).
 SocketEvent = namedtuple(
     "SocketEvent", "kind pid proto local_port remote_ip remote_port outbound")
 
