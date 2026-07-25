@@ -11,12 +11,12 @@ import threading
 import time
 
 from beantester.socketwatch import (ACCEPT, BIND, CLOSE, CONNECT, LISTEN,
-                                     SocketEvent, SocketWatcher, _ipv4)
+                                     SocketEvent, SocketWatcher)
 from fakes import check
 
 
-def ev(kind, pid, port, proto=6, remote_ip="1.2.3.4", remote_port=443, outbound=True):
-    return SocketEvent(kind, pid, proto, port, remote_ip, remote_port, outbound)
+def ev(kind, pid, port):
+    return SocketEvent(kind, pid, port)
 
 
 class _FakeNames:
@@ -229,13 +229,3 @@ def test_stop_does_not_record_the_close_induced_error_as_a_crash(monkeypatch):
     time.sleep(0.05)
     check("a mid-run failure IS recorded", len(recorded) == 1, f"({recorded})")
     w2.stop()
-
-
-# -- the address decode locked by the spike ----------------------------------- #
-def test_ipv4_decodes_high_byte_first():
-    """The 2026-07-22 spike proved WinDivert stores the IPv4 addr MSB-first in
-    addr[0]; the naive low-byte-first decode printed 192.168.1.29 as
-    29.1.168.192. This locks the correct order."""
-    check("ipv4 reads MSB-first", _ipv4([0xC0A8011D, 0, 0, 0]) == "192.168.1.29",
-          f"({_ipv4([0xC0A8011D, 0, 0, 0])})")
-    check("a bad addr array is empty, not an exception", _ipv4(None) == "")

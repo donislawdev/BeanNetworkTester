@@ -42,6 +42,33 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Changed: SocketEvent carries only what the map is for (closes socket-event-fields)
+
+The SOCKET-layer event used to carry `proto`, `remote_ip`, `remote_port` and `outbound` "for the
+connection log later". Nothing ever read them, and an engineering review found out why that never
+became a problem worth solving: for all four, the NETWORK-layer packet the engine already holds is
+a strictly better source. The connection log takes `remote_ip` / `remote_port` / `proto` / direction
+straight off the packet, and the packet even distinguishes ICMP, which the SOCKET layer does not.
+The one thing a packet cannot tell us is the owning pid - which is precisely what is left.
+
+- `socketwatch.py`: `SocketEvent` is now `kind pid local_port`. `_ipv4()` goes with it, so the real
+  Windows source no longer decodes an address per event for nobody.
+- Dropping `_ipv4()` also removes a live TRAP. It decodes IPv4 only (`addr[0]` read as a 32-bit
+  int), so the first person to "just wire up the field we already have" would have shipped garbage
+  for IPv6 into a user-visible column, in a tool whose traffic filters all cover v4 AND v6.
+- PRESERVED from the deleted `test_ipv4_decodes_high_byte_first`, because the code is gone but the
+  knowledge should not be: the 2026-07-22 spike established that WinDivert stores the IPv4 address
+  MSB-first in `addr[0]`, and that the naive low-byte-first decode rendered 192.168.1.29 as
+  29.1.168.192. If remote addresses are ever wanted again, start there - and extend it to IPv6.
+- Helpers updated in `test_socketwatch.py`, `test_socketwatch_wiring.py` and
+  `test_targeting_socketwatch.py`. `OPEN_PENDING` is now empty, which is its healthy state.
+- Guard fix, found BY this closing: `test_no_stale_pending_markers` now skips `CHANGELOG*.md`. A
+  changelog records what HAPPENED and is dated by its nature, so the entry below that announced the
+  marker stays true after the marker is gone - flagging it was a false positive, and the first real
+  closing walked straight into it. Re-verified by mutation after the fix: a marker naming an
+  unlisted stage in an ordinary `.md` still turns the test red, so the scan was narrowed, not
+  broken.
+
 ### Tests: a mechanical guard for prose with an expiry date (convention 44)
 
 The 2b/2c drift fixed below was not a set of FALSE claims - it was four claims that were true when

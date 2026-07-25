@@ -55,26 +55,13 @@ BIND, CONNECT, LISTEN, ACCEPT, CLOSE = 3, 4, 5, 6, 7
 _ADD = frozenset({BIND, CONNECT, LISTEN, ACCEPT})
 
 # One socket-layer event, normalised away from the ctypes struct so the map logic
-# (and its tests) never touch pydivert. The map keys on local_port alone: proto,
-# remote_ip, remote_port and outbound are carried but NOT consumed anywhere yet,
-# and whether the connection log should use them or they should be cut is still
-# open - PENDING(socket-event-fields).
-SocketEvent = namedtuple(
-    "SocketEvent", "kind pid proto local_port remote_ip remote_port outbound")
-
-
-def _ipv4(addr):
-    """WinDivert stores the IPv4 address in ``addr[0]``, MSB = first octet.
-
-    Verified against a known local IP in the 2026-07-22 spike: the naive
-    low-byte-first decode produced ``192.168.1.29`` reversed as ``29.1.168.192``,
-    so the octets are read high-to-low here.
-    """
-    try:
-        v = int(addr[0]) & 0xFFFFFFFF
-    except Exception:
-        return ""
-    return ".".join(str((v >> s) & 0xFF) for s in (24, 16, 8, 0))
+# (and its tests) never touch pydivert. An event carries only what this map is for:
+# WHO owns a local port. It used to also carry proto / remote_ip / remote_port /
+# outbound "for the connection log later", and nothing ever read them - because the
+# NETWORK-layer packet the engine already holds is a strictly better source for all
+# four (it even distinguishes ICMP, which the SOCKET layer does not). The one thing
+# a packet cannot tell us is the owning pid, which is exactly what is left here.
+SocketEvent = namedtuple("SocketEvent", "kind pid local_port")
 
 
 class SocketWatcher:
@@ -247,11 +234,8 @@ class _WinDivertSocketSource:
             sock = pkt.socket
             if sock is None:
                 continue
-            yield SocketEvent(
-                kind=int(pkt.event), pid=int(sock.ProcessId),
-                proto=int(sock.Protocol), local_port=int(sock.LocalPort),
-                remote_ip=_ipv4(sock.RemoteAddr), remote_port=int(sock.RemotePort),
-                outbound=bool(pkt.is_outbound))
+            yield SocketEvent(kind=int(pkt.event), pid=int(sock.ProcessId),
+                              local_port=int(sock.LocalPort))
 
     def close(self):
         with crashlog.quiet("socketwatch.source.close"):
