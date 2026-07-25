@@ -36,6 +36,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Short-lived connections now show which program they belong to.** The Connections table works
+  out the owning program by asking Windows which application holds each socket, and that answer
+  used to come from a list refreshed a few times a second. A connection that opened and finished
+  in between two of those refreshes was never on the list, so its row stayed blank in the Process
+  and PID columns - and brief connections like that are exactly what you get when a browser, or an
+  app you are testing, opens hundreds of them a minute. The tool is now told who owns a connection
+  the moment it is created, so the row is filled in from its very first packet. The program's name
+  can still appear a moment after its process number, because names are looked up in the
+  background, but the row no longer stays empty.
+
 - **A window you have moved now keeps its place when you switch language.** Changing the language
   rebuilds the whole main window, and a smaller window open at the time - Settings, for example -
   was torn down with it. It came back at the size and position it had the last time you closed it,
