@@ -14,7 +14,7 @@ import time
 
 from beantester.engine import BeanEngine
 from beantester.socketwatch import BIND, CONNECT, SocketEvent
-from fakes import FakeDivert, check
+from fakes import FakeDivert, FakePacket, check
 
 
 def _wait(pred, timeout=5.0):
@@ -125,6 +125,74 @@ def test_a_watcher_that_cannot_open_degrades_instead_of_killing_the_session():
     try:
         check("the session survived the failed watcher", eng.is_running())
         check("and fell back to no watcher", eng._socketwatch is None)
+    finally:
+        eng.stop()
+
+
+class _GatedDivert:
+    """Hands over its packet only once the test opens the gate.
+
+    Without the gate the assertion would be a race against the watcher thread: the
+    packet could reach the capture loop before the CONNECT event was applied, and the
+    test would be measuring thread scheduling instead of whether the connection log
+    consults the live map at all.
+    """
+
+    def __init__(self, packets):
+        self.inbox = list(packets)
+        self.gate = threading.Event()
+        self.sent = []
+        self.closed = False
+
+    def open(self):
+        pass
+
+    def recv(self):
+        self.gate.wait()
+        if self.inbox:
+            return self.inbox.pop(0)
+        while not self.closed:
+            time.sleep(0.003)
+        raise OSError("closed")
+
+    def send(self, packet):
+        self.sent.append(packet)
+
+    def close(self):
+        self.closed = True
+        self.gate.set()              # release a parked recv() so stop() can join
+
+
+def _row_for(engine, local_port):
+    for row in engine.connections_snapshot(limit=None):
+        if row["local_port"] == local_port:
+            return row
+    return None
+
+
+def test_a_fresh_socket_stamps_the_connection_row_from_the_live_map():
+    """Why chunk 2 reaches the connection log at all.
+
+    The poller knows NOTHING about this port - that is the short-lived-connection
+    case, where a flow opens and finishes inside one refresh interval and the row used
+    to end up with no owner at all. The watcher was told the owner by its CONNECT
+    event, so the row gets both a pid and a process name.
+    """
+    ports = _FakePorts({})                       # the poller never sees this socket
+    eng = BeanEngine()
+    eng._ports = ports
+    divert = _GatedDivert([FakePacket(port=5000)])
+    eng.start("true", divert=divert, socket_source=_FakeSocketSource([ev(CONNECT, 100, 5000)]))
+    try:
+        check("the poller cannot answer for this port", ports.pid_for(5000) is None)
+        check("but the watcher was told the owner",
+              _wait(lambda: eng._socketwatch.pid_for(5000) == 100))
+        divert.gate.set()                        # only now let the packet through
+        check("the row was stamped from the live map",
+              _wait(lambda: (_row_for(eng, 5000) or {}).get("pid") == 100))
+        row = _row_for(eng, 5000)
+        check("...and named through the delegated name cache",
+              row["proc"] == "chrome.exe", f"({row})")
     finally:
         eng.stop()
 

@@ -112,16 +112,23 @@ class SocketWatcher:
         longer lists are pruned only after being absent for TWO reconciles running,
         which spares a socket opened microseconds before the snapshot was taken
         (present via its event, not yet in that snapshot) from being evicted by it.
+
+        The new state is built to the side and PUBLISHED BY REASSIGNMENT rather than
+        mutated in place, because ``pid_for`` reads this map WITHOUT a lock from the
+        capture thread: a reader has to see this pass either not at all or completely,
+        never with half the snapshot folded in and half the prunes applied.
         """
         with self._lock:
+            merged = dict(self._ports)
             for port, pid in port_pid.items():
                 if port and pid and pid > 0:
-                    self._ports[port] = pid
-            absent = set(self._ports) - set(port_pid)
+                    merged[port] = pid
+            absent = set(merged) - set(port_pid)
             doomed = absent & self._suspect          # absent twice running
             for port in doomed:
-                self._ports.pop(port, None)
+                merged.pop(port, None)
             self._suspect = absent - doomed          # first-time absentees wait one pass
+            self._ports = merged                     # atomic swap for lock-free readers
             self._reconciles += 1
 
     def snapshot(self):
@@ -129,10 +136,28 @@ class SocketWatcher:
             return dict(self._ports)
 
     def pid_for(self, port):
+        """Owning pid for a local port (``None`` when unknown). Takes NO LOCK.
+
+        The CAPTURE THREAD reads this (``engine._pid_for``), and a lock here would be
+        precisely the thing this module must not do: the watcher thread holds ``_lock``
+        on every socket event, and ``reconcile`` holds it across a whole snapshot
+        merge, so the packet path would queue behind maintenance. A stalled capture
+        thread means WinDivert is diverting into a queue nobody drains (convention 20).
+
+        Lock-free is safe for the same reason it is in
+        :meth:`beantester.portmap.PortTable.pid_for`, with one addition. The reference
+        is read ONCE into a local, and a dict lookup on INT keys is C code that neither
+        releases the GIL nor calls back into Python, so it cannot interleave with
+        another thread's insert or delete: a reader sees the map either before or after
+        that write, never mid-resize. ``reconcile`` then publishes a NEW dict by
+        reassignment, so its O(n) pass is atomic to a reader instead of being observed
+        halfway through. Verified under load, not assumed - see
+        ``test_socketwatch.py::test_a_lock_free_reader_survives_writes_in_flight``.
+        """
         if port is None:
             return None
-        with self._lock:
-            return self._ports.get(int(port))
+        ports = self._ports            # one atomic reference read, then a C-level get
+        return ports.get(int(port))
 
     # -- name resolution: delegated, never duplicated -------------------------- #
     def refresh(self, now=None, force=False):

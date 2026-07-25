@@ -42,6 +42,54 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the connection log resolves the owner from the live socket map, not the poller
+
+`_pid_for` / `_process_for` asked `portmap.PortTable` - a snapshot refreshed a few times a second -
+so a flow that opened AND finished inside one refresh interval left a row with no owner at all.
+Short-lived connections are what this tool gets pointed at, so that was the common case rather than
+an edge one. The engine now asks the SOCKET-event map first (`SocketWatcher.pid_for`) and falls back
+to the poller, so a row is stamped from its FIRST packet: the CONNECT event lands ~0.1 ms before the
+SYN reaches the NETWORK layer (measured 2026-07-22).
+
+- **The read had to become LOCK-FREE first, and that is the substance of this change.** `pid_for`
+  used to take `_lock` - which the watcher thread holds on every socket event, and which
+  `reconcile` holds across a whole snapshot merge. Calling that from `_log_conn` would have let the
+  CAPTURE THREAD queue behind maintenance, which is exactly the stall convention 20 exists to
+  prevent. `pid_for` now reads the reference once and does a C-level `get` on int keys (the same
+  idiom as `PortTable.pid_for`), and `reconcile` builds the new state to the side and publishes it
+  by REASSIGNMENT, so its O(n) pass is atomic to a reader instead of being observed half-applied.
+- Name resolution is unchanged and still `cheap=True` (cache or nothing), so a brand-new pid can
+  reach a row BEFORE its name does - names are warmed by the watchdog. That is written into the
+  docstring rather than glossed over: a PID with no name yet is still an answer, and `_log_conn`
+  keeps retrying the name while packets arrive.
+- Deliberately NOT done: warming names from the watcher's map as well. It would close the remaining
+  name lag, but it adds per-pid OS calls to the watchdog and deserves its own measurement first.
+- The shared lookup lives in `_live_pid`, which has NO handler of its own on purpose. The first
+  attempt had `_process_for` delegate to `_pid_for`, and because that one swallows and records under
+  `engine.ports.pid`, a broken port table reported ONE failure instead of two - the name domain
+  could no longer speak for itself. `test_processes.py::test_engine_records_a_broken_port_table_instead_of_going_quiet`
+  caught it. The two callers are two failure domains and each wraps the raising helper itself, which
+  is the same principle the watchdog already applies to refresh-vs-trim ("different jobs, different
+  failure domains").
+- `_Broken` in that test now models what the engine actually calls (`pid_for` + `name_of(cheap=)`)
+  instead of `process_for_port`, which the engine no longer touches. The insight in its comment -
+  that a fake missing the keyword raises TypeError and the test then passes while exercising the
+  wrong failure - still holds, so it moved to the keyword that now matters rather than being
+  deleted.
+- New tests, each MUTATION-CHECKED rather than trusted:
+  `test_socketwatch_wiring.py::test_a_fresh_socket_stamps_the_connection_row_from_the_live_map`
+  (reverting the engine to poller-only turns it red), plus in `test_socketwatch.py`
+  `::test_pid_for_takes_no_lock_because_the_capture_thread_calls_it` (restoring the lock turns it
+  red) and `::test_reconcile_publishes_a_new_map_instead_of_mutating_in_place` (mutating in place
+  turns it red).
+- `test_socketwatch.py::test_a_lock_free_reader_survives_writes_in_flight` RUNS the safety claim
+  instead of asserting it in prose: a reader hammering `pid_for` while another thread inserts,
+  deletes and republishes the whole map never raised and only ever saw the real pid.
+- The engine test drives a GATED divert, so it asserts that the live map is consulted rather than
+  that the capture thread happened to lose a race with the watcher thread.
+- `test_hot_path.py` (packet threads must never reach the OS) was run explicitly and stays green:
+  both lookups are dict reads.
+
 ### Changed: SocketEvent carries only what the map is for (closes socket-event-fields)
 
 The SOCKET-layer event used to carry `proto`, `remote_ip`, `remote_port` and `outbound` "for the

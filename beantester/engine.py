@@ -431,18 +431,25 @@ class BeanEngine:
         column was mostly "?" even when running as Administrator.
         """
         try:
-            # allow_refresh=False is the whole point: process_for_port() otherwise
-            # calls refresh_if_stale(miss=True) when the port is unknown, which is
-            # four iphlpapi calls (and sometimes a psutil walk) ON THE CAPTURE
-            # THREAD - measured at ~16 a second against synthetic traffic. This is
-            # a SECOND path that did what targeting used to do; moving targeting off
-            # the hot path did nothing for it. The watchdog keeps the table fresh
-            # instead, exactly as it already does eviction and flow rotation.
+            # NOTHING here may reach the OS - this is the capture thread. The pid comes
+            # from _pid_for (live socket map first, poller second) and the NAME comes
+            # from the cache with cheap=True: never a refresh, never a psutil call.
+            # process_for_port() used to be called instead, and its allow_refresh=False
+            # was load-bearing for the same reason - left on, it would call
+            # refresh_if_stale(miss=True) for every unknown port, i.e. four iphlpapi
+            # calls (sometimes a psutil walk) in the packet path, measured at ~16 a
+            # second against synthetic traffic. The watchdog keeps the table fresh and
+            # warms the names instead, exactly as it already does eviction and rotation.
             #
-            # The cost is that a brand-new socket may read as "" for up to one
-            # refresh interval. _log_conn already retries while packets keep coming,
-            # so the row fills itself in rather than staying "?" for ever.
-            return self._ports.process_for_port(local_port, allow_refresh=False)
+            # A brand-new pid can therefore reach the row BEFORE its name does: the
+            # watcher supplies the pid instantly, while the name waits for the
+            # watchdog's warm_names. That is the honest split - a PID with no name yet
+            # is still an answer, and _log_conn keeps retrying the name while packets
+            # arrive, so the row fills itself in rather than staying "?" for ever.
+            pid = self._live_pid(local_port)
+            if pid is None:
+                return ""
+            return self._ports.name_of(pid, cheap=True)
         except Exception as _exc:
             # once(), not note(): this is the capture thread. A port table that
             # started failing turns every row's process into "?" - worth one
@@ -453,14 +460,43 @@ class BeanEngine:
     def _pid_for(self, local_port):
         """PID owning ``local_port`` right now (None when unknown).
 
-        Same reasoning as ``_process_for``: resolved at capture time and stored,
-        because the socket is usually gone by the time the row is displayed.
+        Resolved at capture time and stored, because the socket is usually gone by the
+        time the row is displayed - and asked of the LIVE socket-event map first, the
+        poller second. That order is the point: the poller is a snapshot taken a few
+        times a second, so a flow that opens AND finishes inside one refresh interval
+        left a row with no owner at all, and short-lived connections are exactly what
+        this tool gets pointed at. The watcher is told the owner ~0.1 ms before the SYN
+        reaches the NETWORK layer (measured), so the row can be stamped from its first
+        packet.
+
+        Neither path may touch the OS from here - this is the capture thread. The
+        watcher lookup is a lock-free dict read (see ``SocketWatcher.pid_for``) and the
+        poller's is a plain ``get`` on an already-cached map. Guarded by
+        ``tests/test_hot_path.py``.
         """
         try:
-            return self._ports.pid_for(local_port)
+            return self._live_pid(local_port)
         except Exception as _exc:
             crashlog.once("engine.ports.pid", _exc)
             return None
+
+    def _live_pid(self, local_port):
+        """The owning pid: live socket map first, poller second. MAY RAISE.
+
+        Deliberately without a handler of its own, because its two callers are two
+        different FAILURE DOMAINS and each has to be able to report for itself: a
+        broken pid lookup is ``engine.ports.pid``, a broken name lookup is
+        ``engine.ports``. Wrapping it here collapsed both into one record and
+        ``tests/test_processes.py::test_engine_records_a_broken_port_table_instead_of_going_quiet``
+        caught exactly that - a port table that broke would have reported half of what
+        it does now.
+        """
+        watcher = self._socketwatch      # read ONCE: stop() clears it concurrently
+        if watcher is not None:
+            pid = watcher.pid_for(local_port)
+            if pid is not None:
+                return pid
+        return self._ports.pid_for(local_port)
 
     def stats_snapshot(self):
         with self._slock:

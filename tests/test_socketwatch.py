@@ -229,3 +229,72 @@ def test_stop_does_not_record_the_close_induced_error_as_a_crash(monkeypatch):
     time.sleep(0.05)
     check("a mid-run failure IS recorded", len(recorded) == 1, f"({recorded})")
     w2.stop()
+
+
+# -- the lock-free read the capture thread depends on ------------------------- #
+def test_pid_for_takes_no_lock_because_the_capture_thread_calls_it():
+    """A lock here would let the packet path queue behind the watcher thread or a
+    whole reconcile. Asserted mechanically rather than by reading the code: with a
+    lock that refuses to be taken, ``pid_for`` must still answer.
+    """
+    w = _watcher()
+    w.apply(ev(CONNECT, 100, 5000))              # while the real lock still works
+
+    class _Explodes:
+        def __enter__(self):
+            raise AssertionError("pid_for must not take the lock")
+
+        def __exit__(self, *exc):
+            return False
+
+    w._lock = _Explodes()
+    check("pid_for answers without taking the lock", w.pid_for(5000) == 100)
+    check("and still reports an unknown port as None", w.pid_for(9999) is None)
+
+
+def test_reconcile_publishes_a_new_map_instead_of_mutating_in_place():
+    """The identity swap is what makes the lock-free read safe across an O(n) pass:
+    mutating in place would let a reader observe half a reconcile."""
+    w = _watcher()
+    w.apply(ev(CONNECT, 100, 5000))
+    before = w._ports
+    w.reconcile({5000: 100, 80: 1})
+    check("reconcile published a NEW dict", w._ports is not before)
+    check("with the merged content", w.snapshot() == {5000: 100, 80: 1},
+          f"({w.snapshot()})")
+
+
+def test_a_lock_free_reader_survives_writes_in_flight():
+    """"Lock-free is safe here" is a SAFETY claim, so it is run in the conditions that
+    would break it instead of being asserted in a docstring: one thread reading a port
+    while another inserts, deletes and republishes the whole map underneath it. A torn
+    read would surface as an exception, or as a value that is neither the pid nor None.
+    """
+    w = _watcher()
+    w.apply(ev(CONNECT, 100, 5000))
+    errors, values, reads = [], set(), [0]
+    stop = threading.Event()
+
+    def reader():
+        try:
+            while not stop.is_set():
+                values.add(w.pid_for(5000))      # a set, so this stays tiny
+                reads[0] += 1
+        except Exception as exc:                  # a torn read would land here
+            errors.append(exc)
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+    try:
+        for i in range(300):
+            w.apply(ev(CONNECT, 100 + (i % 7), 6000 + i))     # inserts...
+            w.apply(ev(CLOSE, 100 + (i % 7), 6000 + i))       # ...and deletes
+            w.reconcile({5000: 100, 80: 1})                   # whole-map republish
+    finally:
+        stop.set()
+        t.join(timeout=5)
+
+    check("the lock-free reader never raised", not errors, f"({errors[:3]})")
+    check("it actually kept reading", reads[0] > 0)
+    check("and every value it saw was the real pid, never junk", values == {100},
+          f"({values})")
