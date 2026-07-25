@@ -42,6 +42,41 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Tests: a mechanical guard for prose with an expiry date (convention 44)
+
+The 2b/2c drift fixed below was not a set of FALSE claims - it was four claims that were true when
+written and were supposed to die when a stage landed, with nothing enforcing the expiry.
+Convention 5 covers claims that are wrong; `check_notes.py` deliberately does not check prose at
+all. So the sentences outlived the code they described by several PRs. This adds the missing
+mechanical step, because discipline alone produced four stale sites in a single transition.
+
+- New test: `tests/test_repo_conventions.py::test_no_stale_pending_markers` - scans every `.py`
+  and `.md` in the repo for `PENDING(<id>)` markers and checks BOTH directions. A marker whose id
+  is not in `OPEN_PENDING` fails (the stage closed, so the prose beside the marker is now a lie),
+  and an id in `OPEN_PENDING` that nothing references fails (a leftover entry). Closing a stage is
+  therefore ONE deletion from `OPEN_PENDING`, which turns the guard red on every marker still
+  pointing at it - so the prose gets corrected in the same commit as the code that outdated it.
+- `OPEN_PENDING` (same file) is the single source of open stage ids, and is deliberately NOT a
+  roadmap: it is the set of ids that PROSE points at, which is what makes the second check
+  meaningful rather than bureaucratic.
+- MUTATION-CHECKED both ways instead of asserted (convention 5): a probe file carrying a marker
+  for an unlisted stage, and an unreferenced id added to the set, were each confirmed to turn the
+  test red with the offending `file:line` in the message. The probe was then removed.
+- First real marker: the `SocketEvent` comment in `socketwatch.py`, which was itself a leftover
+  ("carried for the connection log later (2c)"). `proto` / `remote_ip` / `remote_port` /
+  `outbound` are still unconsumed - the comment now says so plainly and carries
+  `PENDING(socket-event-fields)`, so whichever way that decision goes, the guard forces the
+  sentence to be revisited rather than quietly kept.
+- The guard skips its own file (that file holds the ids rather than pointing at them), and the
+  `<id>` placeholder form used in prose does not match the pattern, so docs and changelogs can
+  name the token without registering it.
+- Rejected, MEASURED not guessed: scanning for the word "yet". 25 hits across `beantester/` and
+  `tests/`, of which roughly 21 are permanently true ("width 1 == not laid out yet", "no honest
+  answer yet"). A guard with that false-positive rate is switched off within a week.
+- Convention 44, a sub-rule under process rule 5, and a new definition-of-done step (grep for the
+  id when closing a stage) live in the private notes, which this test cannot see - the notes are
+  not in this repo, so that half stays manual on purpose.
+
 ### Docs: de-stale the 2b/2c prose - targeting DOES resolve against the live socket map
 
 Prose drift of the kind convention 5 exists for, with a twist: every one of these sentences was

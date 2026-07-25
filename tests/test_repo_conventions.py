@@ -135,3 +135,75 @@ def test_no_em_or_en_dashes_in_repo_text():
                     offenders.append(f"{os.path.relpath(path, ROOT)}: {label}")
     check("no em/en dashes outside licenses/ (use '-')", not offenders,
           f"({offenders[:8]}{'...' if len(offenders) > 8 else ''})")
+
+
+# -- prose with an expiry date -------------------------------------------------- #
+# Convention 5 guards claims that are FALSE. This guards the OTHER failure mode,
+# which cost four stale sites in a single transition: a claim that was TRUE when it
+# was written and was supposed to die when a stage landed. Chunks 2a->2d wired the
+# SocketWatcher into the engine and targeting, but comments went on saying "NOT read
+# by targeting yet - that is 2c" long after it was read, because nothing enforced
+# the expiry: check_notes.py deliberately does not check prose, and a comment cannot
+# fail a build by itself.
+#
+# So prose that is only true UNTIL a stage lands carries a marker naming that stage,
+# and the ids still open live here, in exactly one place. Closing a stage means
+# deleting its id from this set - which turns this test red on every marker still
+# pointing at it, so the prose is corrected in the same commit as the code that
+# outdated it.
+#
+# This set is NOT a roadmap. It is the set of stage ids that PROSE currently points
+# at, which is why an id nothing references is a failure too: it means the marker is
+# gone and the entry was left behind.
+OPEN_PENDING = {
+    # SocketEvent carries remote_ip / remote_port / proto / outbound, but the map
+    # consumes only kind / pid / local_port. Use them or cut them - undecided.
+    "socket-event-fields",
+}
+
+PENDING_EXTS = (".py", ".md")
+
+
+def test_no_stale_pending_markers():
+    """Every expiry-dated marker names an open stage, and every open stage is marked.
+
+    Both directions were MUTATION-CHECKED (2026-07-25) rather than assumed, because
+    a guard nobody has deliberately broken is a guard whose shape nobody knows: a
+    marker naming an id that is not in ``OPEN_PENDING`` fails, and deleting the last
+    marker for a listed id fails. Confirmed red for each.
+
+    The scan skips THIS file, which holds the ids rather than pointing at them, so a
+    future example in the text above cannot break the guard. Note that the
+    placeholder form used in prose and changelogs does not match the pattern (``<``
+    is not a valid id character), so documentation can name the token freely.
+    """
+    import re
+
+    marker = re.compile(r"PENDING\(([a-z0-9][a-z0-9-]*)\)")
+    seen = {}
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames
+                       if d not in (".git", "__pycache__", ".pytest_cache",
+                                    "licenses", "build", "dist", ".hypothesis")]
+        for name in filenames:
+            if not name.endswith(PENDING_EXTS):
+                continue
+            if name == os.path.basename(__file__):
+                continue                 # the registry does not scan itself
+            path = os.path.join(dirpath, name)
+            text = open(path, encoding="utf-8", errors="replace").read()
+            for lineno, line in enumerate(text.splitlines(), 1):
+                for found in marker.findall(line):
+                    seen.setdefault(found, []).append(
+                        f"{os.path.relpath(path, ROOT)}:{lineno}")
+
+    stale = sorted(f"{key} ({', '.join(where)})"
+                   for key, where in seen.items() if key not in OPEN_PENDING)
+    check("every PENDING marker names a stage still open in OPEN_PENDING "
+          "(a closed stage means the prose beside the marker is now a lie)",
+          not stale, f"({stale})")
+
+    unmarked = sorted(OPEN_PENDING - set(seen))
+    check("every id in OPEN_PENDING is still referenced by a marker "
+          "(an id nothing points at is a leftover entry, not an open stage)",
+          not unmarked, f"({unmarked})")
