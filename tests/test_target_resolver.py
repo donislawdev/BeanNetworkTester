@@ -468,3 +468,45 @@ def test_repeated_start_stop_cycles_do_not_stack_resolver_threads():
     time.sleep(0.2)
     leaked = {t.name for t in threading.enumerate()} - before
     check("five start/stop cycles leave no thread behind", not leaked, f"({leaked})")
+
+
+def test_start_binds_the_targeting_under_the_lock_that_protects_it():
+    """``_targeting`` is shared with every thread that can install a target, so the
+    start path must not read it bare and then act on that reference three times.
+
+    A mechanical guard rather than an attempt to reproduce the race: the window is
+    narrow (the CLI applies before start, so only a GUI "Apply" landing inside start
+    could hit it) and a timing test for it would be flaky and prove nothing either
+    way. What this pins down is that the access is CONSISTENT with every other one -
+    if a concurrent set_target() ever does land in the middle, the resolver cannot end
+    up pointed at an orphan while the core tests against its replacement.
+
+    This does NOT claim the race was real; it was not reproduced. It claims the field
+    is no longer touched without its lock.
+    """
+    targeting, _ = _targeting()
+    engine = BeanEngine()
+    engine.set_target(True, targeting)
+
+    real_lock = engine._target_lock
+    taken = []
+
+    class _Watched:
+        """Passes straight through to the real lock, recording every acquisition."""
+
+        def __enter__(self):
+            taken.append(True)
+            return real_lock.__enter__()
+
+        def __exit__(self, *exc):
+            return real_lock.__exit__(*exc)
+
+    engine._target_lock = _Watched()
+    try:
+        engine.start("true", divert=SyntheticDivert(seed=7))
+        engine.stop()
+    finally:
+        engine._target_lock = real_lock
+
+    check("start() took the targeting lock before binding the target", taken,
+          f"({taken})")

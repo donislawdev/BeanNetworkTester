@@ -592,18 +592,39 @@ class BeanEngine:
             # otherwise None and the poller stands. A failure to open the SOCKET
             # handle degrades, not kills.
             self._start_socketwatch(real_windivert, socket_source)
-            targeting = self._targeting
-            if targeting is not None:
-                # Point targeting at the live map when we have one, at the poller
-                # otherwise (2c). Targeting may have been built before start() (the
-                # GUI applies it first), against the poller, so this is where it is
-                # (re)bound to whatever this session actually has.
-                targeting.set_table(self._targeting_table())
-                with crashlog.quiet("engine.target"):
-                    targeting.refresh()
-                # Reconcile: whichever path installed the target (target_for alone, or
-                # set_target), the session starts with the resolver pointed at it.
-                self._resolver.retarget(targeting)
+            # Held across the whole binding, not just the read. ``_targeting`` is
+            # shared with every other thread that can install a target (a GUI
+            # "Apply", a scenario step), and this block reads it and then acts on
+            # that reference three times. Bare, a concurrent set_target() landing in
+            # the middle would leave the resolver pointed at an ORPHAN while the core
+            # tested against the object that replaced it - the same class of mismatch
+            # set_target() was fixed for (see its docstring). Consistency of access,
+            # not an observed symptom: the race was NOT reproduced (25 start/stop
+            # cycles against a concurrent applier in test_concurrency_chaos.py stayed
+            # green), and it is narrow today because the CLI applies before start.
+            #
+            # Safe to hold here. Lock order is _stop_lock -> _target_lock ->
+            # ProcessTargeting._lock -> PortTable._lock, and nothing walks it the
+            # other way: the resolver never calls back into the engine, and
+            # retarget() is only ever reached with _target_lock already held. In this
+            # spot there is not even contention - _resolver.start() is below, and
+            # stop() joins the resolver - so the synchronous refresh() has no
+            # contender; it costs a cold resolve (~36 ms elevated, see portmap.info)
+            # once, at session start.
+            with self._target_lock:
+                targeting = self._targeting
+                if targeting is not None:
+                    # Point targeting at the live map when we have one, at the poller
+                    # otherwise (2c). Targeting may have been built before start()
+                    # (the GUI applies it first), against the poller, so this is
+                    # where it is (re)bound to whatever this session actually has.
+                    targeting.set_table(self._targeting_table())
+                    with crashlog.quiet("engine.target"):
+                        targeting.refresh()
+                    # Reconcile: whichever path installed the target (target_for
+                    # alone, or set_target), the session starts with the resolver
+                    # pointed at it.
+                    self._resolver.retarget(targeting)
             # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
             # Starting it only when a target already exists meant that narrowing down
             # mid-run - press START, watch, then type a process - left nobody keeping
