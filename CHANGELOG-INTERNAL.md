@@ -42,6 +42,39 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Tests: the concurrency chaos suite now includes the SocketWatcher
+
+The suite's own charter is "many threads hammering one engine" and it names the failure it exists to
+catch - threads tested in isolation. Since the SOCKET-layer work the session runs a FOURTH thread
+and, since the connection-log fix, the capture thread reads the watcher's live map WITHOUT a lock -
+and no test in that file ever passed the engine a `socket_source`, so neither the watcher's lifecycle
+nor that lock-free read took part in any chaos.
+
+- `test_the_socket_watcher_survives_start_stop_cycles` - `CYCLES` start/stop rounds with a real
+  event stream running: fail-open (running implies a live capture thread AND a watcher), the watcher
+  cleared and its handle released on stop, and no `bean-socket-watcher` thread outliving its session.
+  Checked after a 0.3 s grace, because `SocketWatcher.stop()` only joins for 0.25 s.
+- `test_the_capture_thread_reads_the_live_socket_map_under_churn` - the real new surface: the capture
+  thread resolving pids from the map while the watcher thread mutates it, the watchdog republishes it
+  wholesale, and settings and targeting churn underneath. Runs on `FastDivert` and on the SAME ports
+  the event source announces, or `pid_for` would always miss and a green run would prove nothing.
+- **The crashlog watch is the test, not decoration.** `_pid_for` / `_process_for` swallow into
+  `crashlog.once` by design, so a read that started raising would leave every other assertion green.
+  Patching `once` also defeats its `_once_seen` dedupe, so repeated failures stay visible instead of
+  collapsing into one entry.
+- Conclusiveness is a CONDITION the test waits for (`MIN_STAMPED` rows carrying the event stream's
+  pid), never a duration - the same reasoning as `MIN_BUILDS`/`MIN_ROWS`, and for the same reason: a
+  wall-clock budget lets machine speed decide whether the test proved anything.
+- Both claims MUTATION-CONFIRMED: a `SocketWatcher.pid_for` that raises turns it red through the
+  crashlog watch, and an engine reverted to poller-only stamps 0 rows out of 2.8 million packets.
+  The first mutation also independently confirmed the failure-domain split below - it reported
+  `engine.ports` AND `engine.ports.pid`, not one collapsed entry.
+- Stated in the docstring, so nobody assumes otherwise: this does NOT catch putting the lock back
+  into `pid_for`. A lock contends, it does not raise, and this test does not measure contention -
+  that property has its own guard in `test_socketwatch.py`.
+- `_LiveSocketSource` is paced on purpose. Unpaced it saturates a core and starves the very threads
+  the test is about, which would make a green run meaningless.
+
 ### Fixed: the connection log resolves the owner from the live socket map, not the poller
 
 `_pid_for` / `_process_for` asked `portmap.PortTable` - a snapshot refreshed a few times a second -
