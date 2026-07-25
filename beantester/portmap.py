@@ -355,41 +355,99 @@ class PortTable:
         self._info = {}                  # pid -> (name, ppid, created, written_at)
         self._bulk_at = 0.0              # last full process_iter (fallback path)
         self._last = 0.0                 # last successful refresh
+        # Generation counter for concurrent refreshes: a collection takes a number
+        # before it starts and installs only if nothing NEWER landed meanwhile. See
+        # refresh() for why this is a counter and not a timestamp.
+        self._gen = 0
+        self._installed_gen = 0
         self._native = _make_native()
         self.native = self._native is not None
 
     # -- port table ------------------------------------------------------------ #
     def refresh(self, now=None, force=False):
-        """Rebuild the port map. Returns True when it actually ran."""
+        """Rebuild the port map. Returns True when THIS call installed a new map.
+
+        The COLLECTION - four ``iphlpapi`` calls (or the psutil walk) plus building
+        the ``port -> pid`` dict - runs OUTSIDE ``_lock``, and so does the departed-pid
+        diff. Only the reference swap and the name-cache pruning are taken under it.
+
+        That split matters because the CAPTURE THREAD holds this same lock, through
+        ``name_of(cheap=True)`` -> ``info()`` in ``engine._process_for``: whatever this
+        method holds the lock for, the packet path can be made to wait for, and a
+        stalled capture thread means WinDivert is queueing the user's packets into a
+        void (convention 20). MEASURED 2026-07-25 (Win11, CPython 3.14, elevated) with
+        the whole body under the lock: **0.495 ms median hold at 119 sockets**, and the
+        Python-side work alone scales linearly - 0.303 ms at 10 000 sockets and
+        **3.555 ms at 100 000** (syscalls excluded, so that last figure is a floor).
+        With the collection and the diff moved out, the hold is **FLAT at ~0.018 ms**
+        whatever the table size - 188x shorter at the top of that range, and no longer
+        a function of n at all. The whole CALL still costs the same; the work did not
+        vanish, it left the lock.
+
+        Worth being straight about the motive: at 119 sockets the effect on the capture
+        thread was NOT measurable above noise (median, p95 and p99 of the capture
+        thread's own lookup were identical with and without a refresher hammering
+        alongside). The top of the range is why this changed anyway, because a network
+        tester is precisely the thing that gets pointed at 100 000 connections.
+
+        Concurrency, and why this is NOT "last writer wins": two threads can now
+        collect at once (the watchdog, and on the poller fallback the resolver). Each
+        call takes a GENERATION under the lock before it starts and installs only if
+        no newer generation has landed meanwhile, so an older collection that happens
+        to finish late is DISCARDED rather than overwriting a fresher map. A counter
+        and not a timestamp on purpose: ``time.monotonic()`` has ~15 ms granularity on
+        Windows, so two refreshes inside one tick would compare equal and both install.
+
+        The contract callers rely on is unchanged: when this returns, the map is at
+        least as new as the moment the call started - either because this call
+        installed it, or because a newer one already had.
+        """
         now = self.clock() if now is None else now
         with self._lock:
             if not force and (now - self._last) < self.interval and self._ports:
                 return False
-            ports = None
-            if self._native is not None:
-                try:
-                    ports = self._native.port_pid_map()
-                except Exception:                        # pragma: no cover
-                    ports = None
-                if ports is None:                        # native path broke: stop using it
-                    self._native = None
-                    self.native = False
+            self._gen += 1
+            gen = self._gen
+            native = self._native
+            previous = self._ports          # O(1); the diff is computed below, unlocked
+
+        # ---- outside the lock: everything that is O(number of sockets) ---------- #
+        ports = None
+        native_broke = False
+        if native is not None:
+            try:
+                ports = native.port_pid_map()
+            except Exception:                        # pragma: no cover
+                ports = None
             if ports is None:
-                ports = _psutil_port_pid_map()
+                native_broke = True                  # it stopped answering
+        if ports is None:
+            ports = _psutil_port_pid_map()
+        # A PID that has just lost every socket is a PID whose process is probably
+        # gone - and a PID can only be handed to somebody else AFTER its owner exits.
+        # So this is the moment to forget its name, before the OS can hand the number
+        # to a process with a different one. It closes the dangerous window (impairing
+        # a process the user never targeted) from "the rest of the session" down to one
+        # refresh interval.
+        #
+        # Two set builds and a difference: 2.5 us at 119 sockets, but O(n), which is
+        # why it moved out here with the collection. The TTL still backstops PIDs that
+        # never owned a socket - ancestors, and whatever a bulk scan swept in - which
+        # cannot be caught this way.
+        departed = () if ports is None else set(previous.values()) - set(ports.values())
+
+        with self._lock:
+            if native_broke and self._native is native:
+                self._native = None                  # stop using the broken path
+                self.native = False
             if ports is None:
-                self._last = now                         # do not hammer a broken lookup
+                self._last = now                     # do not hammer a broken lookup
                 return False
-            # A PID that has just lost every socket is a PID whose process is
-            # probably gone - and a PID can only be handed to somebody else AFTER
-            # its owner exits. So this is the moment to forget its name, before the
-            # OS can hand the number to a process with a different one. It closes
-            # the dangerous window (impairing a process the user never targeted)
-            # from "the rest of the session" down to one refresh interval.
-            #
-            # Costs 2.5 us (measured): two set builds and a difference. The TTL
-            # above still backstops PIDs that never owned a socket - ancestors,
-            # and whatever a bulk scan swept in - which cannot be caught this way.
-            departed = set(self._ports.values()) - set(ports.values())
+            if gen < self._installed_gen:
+                # A newer collection already landed, so ours describes an older world.
+                # Installing it would move the map BACKWARDS.
+                return False
+            self._installed_gen = gen
             self._ports = ports
             self._last = now
             for pid in departed:
