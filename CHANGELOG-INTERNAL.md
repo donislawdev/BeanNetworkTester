@@ -42,6 +42,25 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: two tooltips that described counters they do not describe (audit F8)
+
+Both in `lang/en.json` and `lang/pl.json`, both user-visible, neither catchable by a test - this is
+the failure mode rule 5 is about: true-sounding prose next to correct code.
+
+* `tips.stat_loss` said "Packets dropped because of the configured Loss (or link outages)". Link
+  outages have had their own counter (`drop_flap`) since they stopped inflating "Dropped", and
+  `tips.stat_flap` says so in the next cell: "Counted separately from loss". Two tooltips
+  contradicting each other, with the wrong one attached to the number a tester reads first.
+* `tips.data_down` promised "Hovering also shows how much the app tried to download".
+  `add_tooltip(widget, key)` renders one static translated string (`gui/tooltip.py`); there is no
+  dynamic path and never was. The offered figure exists only as `metrics.offered_mb` in the repro
+  report - and note it is the SUM of both directions, so it is not "how much the app tried to
+  download" either. Replaced with something true and useful in its place: dropped packets are not
+  counted in this figure, which is the difference between it and the connections table's bytes.
+
+No code change, so no new test; `test_i18n_coverage` already pins key parity (465 keys, identical
+sets) and `test_no_em_or_en_dashes_in_repo_text` the punctuation.
+
 ### Fixed: an impairment no longer expires when its flow record does (audit F2, and F1's tail)
 
 `_reset_until` and `_flow_last` are `_FlowTable`s that retired a generation every `FLOW_ROTATE_S`

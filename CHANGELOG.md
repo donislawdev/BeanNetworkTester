@@ -36,6 +36,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Two tooltips were telling you things that were not true.** "Dropped" said it also counted
+  link outages - those have had their own counter for a while, so the tooltip was sending you to
+  the wrong number when working out where your packets went. "Downloaded (MB)" promised that
+  hovering would also show how much the app tried to download; nothing of the sort ever appeared.
+  Both now describe what the counter actually holds.
+
 - **Long connection cut-offs and NAT blackouts now last as long as you set them.** Two impairments
   quietly stopped early, because the tool forgets a connection it has not seen for a while and a
   forgotten connection looks brand new. "Reset connections" with a cooldown above about half a
