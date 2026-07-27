@@ -19,6 +19,61 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
+  and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
+  ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`
+  and `drop_lan`; the denominator was every captured packet, including traffic outside the
+  targeting scope. Measured on this branch, driven through `BeanEngine` with `FakeDivert`:
+  a 50 KB/s cap with **zero** configured loss went from **0.0% to 99.9%** (`drop_rate=999` of
+  1000 packets), and 50% loss with a third of the traffic in scope went from **17.7% to 53.0%**
+  (`seen=900`, `scoped_seen=300`, `drop_loss=159`). Both reproduce the audit's shape (0.0% against
+  a real 90%, and 16.7% against the target application's 50.1%). `metrics.effective_loss_pct` and
+  `metrics.effective_corruption_pct` therefore change meaning; reports across this line are not
+  comparable. Additive alongside them: `metrics.packets_in_scope`, the `scoped_seen` counter in
+  `st` (so it also appears in NDJSON `summary.counters`), and the CSV column `packets_in_scope`
+  (`App.CSV_COLUMNS`). `_sample_record` in `cli.py` was deliberately left alone - it is a curated
+  subset, and the summary already carries the full counter dict.
+- **New single source in `engine.py`.** `DROP_BY_REASON` (the reason -> counter map, lifted out of
+  the capture loop), `IMPAIRMENT_DROP_KEYS` **derived from it**, `TOOL_DROP_KEYS`, and two pure
+  functions `impairment_loss_pct(stats)` / `corruption_pct(stats)` used by both the GUI and the
+  repro report. They take a stats dict, not an engine, so the GUI computes from the snapshot it
+  already holds and the tests need no session. `repro.py` and `gui/pages/stats.py` import them;
+  no layering rule is touched (`engine` imports neither).
+- **Why the tool's own drops are excluded**, recorded here because it is a judgement call:
+  `README.md` defines the term around a congested link ("that is how a congested link behaves"),
+  and `tips.stat_shutdown` says of queued-at-stop packets "They were not lost in the network".
+  There is also a hard reason: the delay queue holds out-of-scope packets too, so counting
+  `drop_overflow` against a `scoped_seen` denominator could produce a figure above 100%. As
+  defined, every counted drop happened to a packet that is in the denominator, so the result
+  cannot exceed 100%.
+- **Hot path measured, not assumed** (Win11 AMD64, CPython 3.14.6, 150k 1500 B packets through
+  `FakeDivert`, median of 5, benchmarked back to back against a `git worktree` of master).
+  Nothing-impaired path 149.7k -> **157.1k pkt/s** (ranges 145.7-155.4 vs 150.6-163.3: overlapping,
+  so read as no regression while gaining a third counter). 100%-loss path 234.5k ->
+  **267.8k pkt/s** (188.2-238.2 vs 234.1-274.2: the new minimum sits at the old maximum), which is
+  the dict literal no longer being built for every dropped packet.
+- **Two deliberate rearrangements in the capture loop.** (1) `seen`, `bytes_*_total` and
+  `scoped_seen` now share ONE `_slock` acquisition, placed after `decide()` because scope is not
+  knowable before it - fewer acquisitions per packet than before the counter was added. If
+  `decide()` ever raised, the packet would go uncounted where it used to be counted; it does not
+  raise (`Matcher.matches()` is documented never to) and if it did, the capture thread dies and
+  the session fail-stops. (2) `DROP_BY_REASON` at module scope instead of a literal per drop.
+- New tests in `tests/test_engine.py`, all verified by mutation (four mutants, each caught with
+  the pre-fix number): `test_effective_loss_counts_every_impairment_not_just_the_loss_setting`
+  (reverting the numerator gives `pct=0.0` against `drop_rate=999`),
+  `test_effective_loss_measures_the_traffic_that_was_targeted` (reverting the denominator gives
+  `pct=17.7`; never bumping `scoped_seen` gives `scoped_seen=0`), and
+  `test_every_drop_counter_and_drop_reason_is_classified` - a mechanical guard that every
+  `drop_*` counter in `reset_stats()` is in `IMPAIRMENT_DROP_KEYS` or `TOOL_DROP_KEYS`, and that
+  every reason `Decision(True, ...)` can carry in `core.py` routes through `DROP_BY_REASON`. That
+  last one is the guard against F4's actual failure mode: a counter that exists, is correct, and
+  is simply not part of the sum.
+- i18n: new key `tips.eff_loss` in `lang/en.json` + `lang/pl.json` (the session row had **no**
+  tooltip at all, which is part of why the figure could lie unnoticed); `SESSION_ROWS` in
+  `gui/pages/stats.py` now names it. README EN + PL gained a bullet defining the figure; the
+  existing prose about a speed limit causing loss above the set percentage was left untouched -
+  it was already true, and now the number finally agrees with it.
+
 - **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
   parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
   empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session

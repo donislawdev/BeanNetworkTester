@@ -1014,7 +1014,8 @@ class App:
     # -- session actions ---------------------------------------------------------- #
     # Internal stat keys are engine-speak ("seen"); a CSV is read by people and
     # by spreadsheets, so it gets column names that mean something.
-    CSV_COLUMNS = {"seen": "packets_seen", "drop_loss": "dropped_loss",
+    CSV_COLUMNS = {"seen": "packets_seen", "scoped_seen": "packets_in_scope",
+                   "drop_loss": "dropped_loss",
                    "drop_overflow": "dropped_overflow", "drop_syn": "dropped_syn",
                    "drop_mtu": "dropped_mtu", "drop_nat": "dropped_nat",
                    "drop_rst": "dropped_rst", "drop_lan": "dropped_lan",

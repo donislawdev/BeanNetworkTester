@@ -401,6 +401,7 @@
   "tips.down_limit": "Max throughput of INCOMING traffic (download) in KB/s. 0 = unlimited. Note: ping uses tiny packets, so a speed limit barely affects it.",
   "tips.dup": "Percent of packets sent twice - a real symptom of a poor network.",
   "tips.duration": "Stop the session automatically after this many seconds. 0 = run until you press STOP. Applied at START only (like the traffic filter).",
+  "tips.eff_loss": "How much of the traffic you aimed at never arrived, counting every impairment: loss, speed-limit drops, blocking, link outages, connection resets and the rest. With a target set, only the target's traffic counts, so other applications cannot dilute the number. Packets the tool itself dropped are not in here - they have their own counters, \"Buffer overflow\" and \"Dropped at stop\".",
   "tips.eff_seed": "The exact seed used in this session. Put it in the Seed field and run again to get the same randomization - the key to reproducing a bug.",
   "tips.event_copy": "Copies the selected rows (with their headers) to the clipboard, tab-separated - paste straight into a bug report.",
   "tips.event_search": "Filter the events by direction, kind or description (e.g. 'bug', 'reset', 'out').",
