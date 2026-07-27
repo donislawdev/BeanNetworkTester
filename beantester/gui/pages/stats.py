@@ -13,6 +13,7 @@ window on a 4K screen no longer shows four narrow cells and a lot of nothing.
 import tkinter as tk
 from tkinter import ttk
 
+from ...engine import impairment_loss_pct
 from ...i18n import T, event_kind_label
 from ...views import sort_events
 from ..chart import draw_throughput_chart
@@ -53,7 +54,7 @@ SESSION_ROWS = (
     ("start", "session.start", ""),
     ("stop", "session.stop", ""),
     ("elapsed", "session.duration", ""),
-    ("eff_loss", "session.eff_loss", ""),
+    ("eff_loss", "session.eff_loss", "tips.eff_loss"),
     ("peak_queue", "session.peak_queue", ""),
     ("peak_rate", "session.peak_rate", "tips.peak_rate"),
     ("data_down", "session.down_mb", "tips.data_down"),
@@ -289,9 +290,7 @@ class StatsPage:
         elapsed = info["elapsed"]
         self.sess_labels["elapsed"].config(
             text=(human_duration(elapsed) if info["start"] else "-"))
-        seen = max(1, snap.get("seen", 0))
-        self.sess_labels["eff_loss"].config(
-            text=f"{100.0 * snap.get('drop_loss', 0) / seen:.1f}%")
+        self.sess_labels["eff_loss"].config(text=f"{impairment_loss_pct(snap):.1f}%")
         self.sess_labels["peak_queue"].config(text=str(snap.get("peak_queue", 0)))
         self.sess_labels["peak_rate"].config(
             text=f"{app.peak_down:.0f} / {app.peak_up:.0f} KB/s")

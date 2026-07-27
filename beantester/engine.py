@@ -39,6 +39,69 @@ from . import crashlog
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
 
+# Which counter a dropped packet lands in, by the reason BeanCore.decide() gave.
+# Module level on purpose: written as a literal inside the capture loop it was
+# rebuilt for every dropped packet, and a session set to 100% loss drops as often
+# as it sees. It is also the SINGLE SOURCE for what counts as damage below.
+DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
+                  "rst": "drop_rst", "lan": "drop_lan", "block": "drop_block",
+                  "flap": "drop_flap", "rate": "drop_rate"}
+
+# Damage the simulated link inflicted: every reason decide() can name, plus the
+# unnamed default (the configured Loss). Derived from the map above so that a new
+# impairment cannot quietly fall outside the figure - which is exactly how
+# "Effective loss" came to read 0.0% through a session losing 90% to a speed
+# limit. Guarded by test_engine.py::test_every_drop_counter_is_classified.
+IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
+
+# Losses the TOOL caused, not the link: its delay queue filled up, or the session
+# ended with packets still parked in it. Deliberately NOT part of the loss figure.
+# The README defines the term - traffic dropped above a speed limit is counted
+# "because that is how a congested link behaves" - and tips.stat_shutdown says of
+# these outright "They were not lost in the network". Both have their own tiles,
+# and overflow additionally raises a log warning and a banner. Counting them here
+# would also let the figure exceed 100%: the delay queue holds out-of-scope
+# packets too, so with a narrow target it can drop more than were ever in scope.
+TOOL_DROP_KEYS = ("drop_overflow", "drop_shutdown")
+
+
+def impairment_loss_pct(stats):
+    """Share of the traffic the tool was aiming at that the impairments killed.
+
+    Numerator: every drop ``decide()`` made. Denominator: packets that passed the
+    targeting gate (``scoped_seen``), not everything captured - with a target set,
+    other applications' traffic is watched but never impaired, so counting it only
+    dilutes the answer. Measured before this became one function: 50% loss with a
+    third of the traffic in scope reported 16.7% while the target application
+    itself saw 50.1%.
+
+    Both parts are per-packet and every drop counted here happened to a packet
+    that was in scope, so the result cannot exceed 100%. With no targeting set,
+    ``scoped_seen == seen`` and this is simply the loss the session inflicted.
+
+    Takes a stats dict rather than an engine so the GUI can compute it from the
+    snapshot it already holds. A snapshot without ``scoped_seen`` (an older file,
+    a partial fake) falls back to ``seen``.
+    """
+    scoped = stats.get("scoped_seen", stats.get("seen", 0))
+    if not scoped:
+        return 0.0
+    return 100.0 * sum(stats.get(k, 0) for k in IMPAIRMENT_DROP_KEYS) / scoped
+
+
+def corruption_pct(stats):
+    """Share of the targeted traffic whose payload was actually altered.
+
+    Same denominator as ``impairment_loss_pct``, for the same reason. ``corrupted``
+    counts successful payload flips only - a packet with no payload (a bare ACK)
+    has nothing to corrupt and is not counted.
+    """
+    scoped = stats.get("scoped_seen", stats.get("seen", 0))
+    if not scoped:
+        return 0.0
+    return 100.0 * stats.get("corrupted", 0) / scoped
+
+
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
 _LIVE_ENGINES = weakref.WeakSet()
@@ -292,7 +355,11 @@ class BeanEngine:
     # -- statistics / connection log ----------------------------------------- #
     def reset_stats(self):
         with self._slock:
-            self.st = dict(seen=0, drop_loss=0, drop_overflow=0, corrupted=0,
+            # scoped_seen sits next to seen because it is the same measurement
+            # narrowed to the traffic the tool was asked to impair - and because
+            # the stats CSV takes its column order from this dict.
+            self.st = dict(seen=0, scoped_seen=0,
+                           drop_loss=0, drop_overflow=0, corrupted=0,
                            duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_block=0, drop_flap=0,
                            drop_rate=0, drop_shutdown=0, rst_sent=0,
@@ -959,11 +1026,22 @@ class BeanEngine:
 
             key = BeanCore._flowkey(local_port, remote_ip, remote_port)
 
-            self._bump("seen")
-            self._bump("bytes_out_total" if is_out else "bytes_in_total", size)
             dec = self.core.decide(size, is_out, local_port, now, rng,
                                    remote_ip=remote_ip, remote_port=remote_port,
                                    is_syn=is_syn, is_tcp=is_tcp)
+            # One lock acquisition for all three counters instead of one each.
+            # This runs per packet, and scoped_seen - the denominator of the loss
+            # figure - is only knowable once decide() has ruled on targeting, so
+            # moving the two older bumps behind decide() is what pays for the
+            # third. decide() does not raise (Matcher.matches() is documented
+            # never to), and if it ever did, the capture thread dies and the
+            # session fail-stops; one uncounted packet would be the least of it.
+            with self._slock:
+                st = self.st
+                st["seen"] += 1
+                st["bytes_out_total" if is_out else "bytes_in_total"] += size
+                if dec.scoped:
+                    st["scoped_seen"] += 1
             # Log AFTER the decision (decide() reads none of the connection log, so
             # the order is free): the flow row then records whether THIS packet was
             # dropped and whether the flow is in targeting scope - impaired, not
@@ -973,9 +1051,7 @@ class BeanEngine:
             if dec.drop:
                 if dec.emit_rst:
                     self._send_rst(packet)
-                self._bump({"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
-                            "rst": "drop_rst", "lan": "drop_lan", "block": "drop_block",
-                            "flap": "drop_flap", "rate": "drop_rate"}.get(dec.reason, "drop_loss"))
+                self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
                 continue
             if dec.corrupt and self.core.corrupt_packet(packet, rng):
                 self._bump("corrupted")

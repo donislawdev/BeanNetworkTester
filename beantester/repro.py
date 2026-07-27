@@ -3,6 +3,7 @@ import json
 import time
 
 from .appinfo import TOOL_ID, command_name
+from .engine import corruption_pct, impairment_loss_pct
 from .i18n import translate
 from .settings import DEFAULT_SETTINGS, setting_expression
 from .utils import bytes_to_mb, number_string, to_number
@@ -68,16 +69,19 @@ def build_repro_report(engine, settings):
     info = engine.session_info()
     stats = engine.stats_snapshot()
     seed = engine.effective_seed()
-    seen = max(1, stats["seen"])
     metrics = dict(
         packets=stats["seen"],
+        packets_in_scope=stats.get("scoped_seen", stats["seen"]),
         downloaded_mb=bytes_to_mb(stats["bytes_in"]),
         uploaded_mb=bytes_to_mb(stats["bytes_out"]),
         total_mb=round(bytes_to_mb(stats["bytes_in"]) + bytes_to_mb(stats["bytes_out"]), 2),
         offered_mb=round(bytes_to_mb(stats.get("bytes_in_total", 0))
                          + bytes_to_mb(stats.get("bytes_out_total", 0)), 2),
-        effective_loss_pct=round(100.0 * stats["drop_loss"] / seen, 2),
-        effective_corruption_pct=round(100.0 * stats["corrupted"] / seen, 2),
+        # Every impairment drop over the traffic that was in scope, not the
+        # configured Loss over everything captured. Both parts moved; a report
+        # from before this change is not comparable with one from after.
+        effective_loss_pct=round(impairment_loss_pct(stats), 2),
+        effective_corruption_pct=round(corruption_pct(stats), 2),
         connections_reset=stats["drop_rst"],
         rst_sent=stats["rst_sent"],
         syn_dropped=stats["drop_syn"],

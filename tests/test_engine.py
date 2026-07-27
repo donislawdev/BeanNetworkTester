@@ -3,9 +3,13 @@
 Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
+import os
+import re
 import time
 
 from beantester import BeanEngine
+from beantester.engine import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
+                               impairment_loss_pct)
 from beantester.synthetic import SyntheticDivert
 from fakes import FakeDivert, FakePacket, check
 
@@ -447,6 +451,96 @@ def test_drop_shutdown_counts_packets_never_delivered_not_queue_entries():
     check("shutdown/dup: seen == delivered + drops",
           s["seen"] == len(fake.sent) + s["drop_shutdown"],
           f"(seen={s['seen']}, sent={len(fake.sent)}, shutdown={s['drop_shutdown']})")
+
+
+def test_effective_loss_counts_every_impairment_not_just_the_loss_setting():
+    """A speed limit destroying the traffic must show up as loss.
+
+    Reproduces the audit measurement: a session with a bandwidth cap and NO
+    configured Loss lost about 90% of what it was offered, while the figure built
+    from `drop_loss` alone said 0.0%. `drop_loss` holds the configured Loss only;
+    the excess a full link buffer throws away is `drop_rate`, and seven other
+    impairments have counters of their own.
+    """
+    n = 1000
+    pkts = [FakePacket(size=1500, is_outbound=False, port=7700) for _ in range(n)]
+    sh = BeanEngine()
+    sh.set_seed(4242)
+    sh.set_buffer(50)                            # small buffer: the excess is dropped
+    sh.set_params(0, 0, 0, 0, 0, 50, 0)          # 50 KB/s down, zero configured loss
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 20
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < n:
+        time.sleep(0.02)
+    s = sh.stats_snapshot()
+    sh.stop()
+
+    check("rate limit: the configured-loss counter stays at zero",
+          s["drop_loss"] == 0, f"(drop_loss={s['drop_loss']})")
+    check("rate limit: the damage lands in drop_rate",
+          s["drop_rate"] >= 900, f"(drop_rate={s['drop_rate']}, seen={s['seen']})")
+    check("rate limit: the loss figure reports the damage",
+          impairment_loss_pct(s) >= 90.0,
+          f"(pct={impairment_loss_pct(s):.1f}, drop_rate={s['drop_rate']})")
+
+
+def test_effective_loss_measures_the_traffic_that_was_targeted():
+    """With a target set, the figure is about the target, not the whole machine.
+
+    Second audit measurement: 50% loss with a third of the traffic in scope
+    reported 16.7% because the denominator was every captured packet, while the
+    target application itself saw 50.1%. Out-of-scope traffic is watched and
+    forwarded untouched, so it can only dilute the answer.
+    """
+    in_scope, out_of_scope = 300, 600
+    pkts = ([FakePacket(size=100, port=5000) for _ in range(in_scope)]
+            + [FakePacket(size=100, port=6000 + i) for i in range(out_of_scope)])
+    sh = BeanEngine()
+    sh.set_seed(4242)                            # loss is random: pin it
+    sh.set_target(True, {5000})
+    sh.set_params(50, 0, 0, 0, 0, 0, 0)          # 50% loss on the targeted port
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 20
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < in_scope + out_of_scope:
+        time.sleep(0.02)
+    s = sh.stats_snapshot()
+    sh.stop()
+
+    check("targeting: everything was captured", s["seen"] == in_scope + out_of_scope,
+          f"(seen={s['seen']})")
+    check("targeting: only the target's packets are in scope",
+          s["scoped_seen"] == in_scope, f"(scoped_seen={s['scoped_seen']})")
+    check("targeting: nothing out of scope was harmed",
+          s["drop_loss"] <= in_scope, f"(drop_loss={s['drop_loss']})")
+    pct = impairment_loss_pct(s)
+    check("targeting: the figure matches what the target application sees",
+          42.0 <= pct <= 58.0, f"(pct={pct:.1f}, drop_loss={s['drop_loss']})")
+    diluted = 100.0 * s["drop_loss"] / s["seen"]
+    check("targeting: and it is NOT the figure diluted by everything else",
+          14.0 <= diluted <= 19.0 and abs(pct - diluted) > 20.0,
+          f"(pct={pct:.1f}, diluted={diluted:.1f})")
+
+
+def test_every_drop_counter_and_drop_reason_is_classified():
+    """Nothing may drop out of the loss figure by being forgotten.
+
+    This is the failure mode the figure had: `drop_rate` existed, was correct, and
+    simply was not part of the sum. Both halves are mechanical - a new counter or
+    a new drop reason turns this red until somebody says which side it belongs on.
+    """
+    counters = {k for k in BeanEngine().stats_snapshot() if k.startswith("drop_")}
+    classified = set(IMPAIRMENT_DROP_KEYS) | set(TOOL_DROP_KEYS)
+    check("every drop counter is either impairment damage or a tool loss",
+          not (counters - classified), f"(unclassified: {sorted(counters - classified)})")
+    check("and nothing is classified that no longer exists",
+          not (classified - counters), f"(stale: {sorted(classified - counters)})")
+
+    core_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "beantester", "core.py"), encoding="utf-8").read()
+    reasons = set(re.findall(r'Decision\(True,\s*\w+,\s*\[\],\s*"(\w+)"', core_src))
+    check("every drop reason decide() can give routes to a counter",
+          not (reasons - set(DROP_BY_REASON)),
+          f"(unrouted: {sorted(reasons - set(DROP_BY_REASON))})")
 
 
 def test_event_log_trim():

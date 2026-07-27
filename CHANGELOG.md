@@ -7,6 +7,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **"Effective loss" now means what its name says, and your numbers will change.**
+  It used to be the configured Loss percentage divided by every packet the tool saw, and both
+  halves of that were wrong. It ignored every other way the tool destroys traffic - a speed limit,
+  blocking, LAN cut, a link outage, a connection reset, a dropped SYN, an expired NAT mapping - so
+  a session losing 90% of its traffic to a bandwidth cap reported **0.0%**. And when you targeted
+  one application it still divided by the whole machine's traffic, so impairing that application
+  by 50% showed as **16.7%** while the application itself measured 50.1%. The figure now counts
+  every impairment, over the traffic you aimed at. `effective_loss_pct` and
+  `effective_corruption_pct` in the reproduction report moved the same way, so a report from
+  before this release is not comparable with one from after; the report also gained
+  `packets_in_scope`, and the session's NDJSON summary carries the same count. Packets the tool
+  itself threw away stay out of the figure on purpose: "Buffer overflow" and "Dropped at stop" are
+  the tool failing, not the link behaving badly, and they have their own counters. The number in
+  the session panel now has a tooltip saying exactly this - it had none before, which is part of
+  why it could be wrong for so long without anyone noticing.
+- **BREAKING:** the statistics CSV gained a `packets_in_scope` column. An existing `stats.csv`
+  from an older version is moved aside automatically and a fresh one started, exactly as it
+  already is whenever the columns change, so no row is ever silently misaligned against the
+  wrong header.
+
 - **BREAKING:** **`--gui` no longer accepts any other option.** Combining it with settings -
   for example `--gui --loss 30 --duration 600` - used to open no window at all and quietly run
   the impairment in the background instead, with no STOP button anywhere and only Ctrl+C in a
