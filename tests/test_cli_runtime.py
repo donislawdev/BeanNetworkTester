@@ -13,7 +13,8 @@ import json
 import os
 
 from beantester import exitcodes
-from beantester.cli import _Terminated, build_arg_parser, config_from_args, run_cli
+from beantester.cli import (_Terminated, _print_conns, build_arg_parser,
+                            config_from_args, run_cli)
 from fakes import check
 
 
@@ -120,6 +121,36 @@ def test_exit_code_assertion_when_nothing_was_captured():
     check("exit: --min-packets not met -> ASSERTION(6)", code == exitcodes.ASSERTION,
           f"(code={code})")
     check("exit: the assertion says why", "expected at least" in err)
+
+
+def test_the_connection_listing_survives_a_row_with_no_ports():
+    """`--log-conns` must not die on a ping row.
+
+    The listing pads the ports with a width spec, and `format(None, '<6')` is a
+    TypeError, not a blank - it would take the whole run's output down. Rows
+    without ports could not occur until ICMP started reaching the connection log,
+    so this guard arrived with them.
+    """
+    lines = []
+
+    class _Log:
+        def info(self, msg):
+            lines.append(msg)
+
+    class _Engine:
+        def connections_snapshot(self, limit=30):
+            return [dict(remote_ip="8.8.8.8", remote_port=None, local_port=None,
+                         packets=7, bytes=686, dir="out", proto="ICMP"),
+                    dict(remote_ip="1.1.1.1", remote_port=443, local_port=5000,
+                         packets=2, bytes=200, dir="out", proto="TCP")]
+
+    _print_conns(_Engine(), _Log())
+    body = "\n".join(lines)
+    check("conns listing: both rows printed", len(lines) == 3, f"({lines})")
+    check("conns listing: the portless row shows a placeholder, not None",
+          "8.8.8.8:-" in body and "None" not in body, f"({body})")
+    check("conns listing: a normal row still shows its ports",
+          "1.1.1.1:443" in body and "local:5000" in body, f"({body})")
 
 
 def test_fail_on_no_traffic_is_shorthand_for_min_packets_one():

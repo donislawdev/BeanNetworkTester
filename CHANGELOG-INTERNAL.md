@@ -97,6 +97,60 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: portless traffic (ICMP) reaches the connection log (audit F9)
+
+- **Symptom.** `core._flowkey()` returns `None` when any of local port / peer address / peer port
+  is missing, and `_log_conn()` returns immediately on a `None` key. ICMP has no ports, so it was
+  counted in `seen` and in the byte totals and then dropped on the floor. Measured: 500 ICMP
+  packets -> `seen=500`, `bytes_out_total=49000`, **0 rows**. Confirmed on live WinDivert by the
+  owner (traffic filter "Ping (ICMP)", 30 s of pinging, empty tab) while `conns.scope_note` says
+  "All captured connections" and `README.md` says "Statistics and Connections show ALL captured
+  traffic". Both statements are now true; neither was edited, because neither was wrong about the
+  intent.
+- **Fix (`engine.py`, capture loop).** When the flow key is `None` but a peer address is known,
+  the row is keyed `(proto, remote_ip)`. Both directions land on the same key (`remote_ip` is
+  `dst_addr` outbound, `src_addr` inbound), so a ping is one row, not two. A 2-tuple cannot
+  collide with the 3-tuple flow keys. **`_flowkey` itself is deliberately untouched**: it is also
+  the key of `core`'s flow table, which drives NAT expiry, RST cooldown and flapping, so making
+  ICMP a flow there would change what gets IMPAIRED rather than what gets listed.
+- **The dependency was read before the design, not after** (convention 6). Installed pydivert,
+  `packet/__init__.py`: `src_port` (line 553) **returns None rather than raising** when there is
+  no TCP/UDP header - load-bearing, because the ports are assigned in the same statement BEFORE
+  `remote_ip`, so a raise would leave `remote_ip` at `None` and the fallback key would have
+  nothing to key on. Also `packet.icmp` (line 483) is `icmpv4 or icmpv6`, so the existing
+  `proto = "ICMP"` detection in the capture loop is right for real packets; had pydivert exposed
+  only `icmpv4`, ping rows would have been labelled "IP" and the fix would have looked like it
+  worked.
+- **Three consumers assumed ports always exist.** All three were fixed in the same change, and
+  the first was a crash: `cli.py::_print_conns` pads with `{...:<6}`, and `format(None, '<6')`
+  raises `TypeError: unsupported format string passed to NoneType.__format__` (verified), so
+  `--log-conns` in text mode would have died on the first ping row - a regression this fix would
+  have INTRODUCED. It now prints `-`. `gui/pages/conns.py::_render` passed the value straight to
+  Tk, where `None` renders as the literal string "None"; new `port_cell()` blanks it.
+  `views.py::_connection_blob` used `c.get('remote_port', '')`, but a portless row HAS the key
+  holding `None`, so the default never fired and the blob read `8.8.8.8:none` - every ping row a
+  hit for the search term "none". Now `or ''`.
+- **Checked and NOT broken** (verified rather than assumed): sorting by a port column -
+  `filter_sort_connections` casts inside `try/except (TypeError, ValueError)` -> 0.0, and the text
+  branch goes through `str()`; the connections CSV export - `csv.writer` writes `None` as an empty
+  cell; `ConnsPage._key_of` - yields `"None|8.8.8.8|None"`, unique per peer.
+- **Hot path:** one extra `key is None` comparison per packet. Measured against a `git worktree`
+  of master (150k 1500 B packets, median of 5): 153.4k -> 158.8k pkt/s, i.e. no measurable cost
+  (the difference is run-to-run spread, the two paths differ by one comparison).
+- New tests, all verified by mutation (five mutants, every one caught):
+  `tests/test_engine.py::test_portless_traffic_reaches_the_connection_log` (removing the fallback
+  gives `rows=0`) with an `IcmpPacket` double shaped after the pydivert reading above;
+  `::test_traffic_with_no_peer_address_still_gets_no_row` (dropping the `remote_ip is not None`
+  guard invents a row keyed on nothing);
+  `tests/test_cli_runtime.py::test_the_connection_listing_survives_a_row_with_no_ports` (reverting
+  it reproduces the `TypeError` above); and
+  `tests/test_conns_columns.py::test_a_portless_row_renders_empty_port_cells_and_is_not_searchable_as_none`,
+  which covers the render blanking and the search blob in one page-level run.
+- i18n: `tips.col_proto` gained ICMP to its protocol list; `tips.col_remote_port` and
+  `tips.col_local_port` now say the cell is empty for portless traffic (and why the process column
+  is empty with it). Values only in both lang files - **no new keys**. README EN + PL gained one
+  clause in the Connections description.
+
 ### Fixed: drop_overflow and drop_shutdown count packets, not queue entries (audit F6)
 
 - **Symptom.** `_enqueue()` runs once per element of `dec.releases`, and pipeline step 12 adds a

@@ -55,6 +55,16 @@ COLUMN_TIPS = {"proc": "tips.col_process", "pid": "tips.col_pid",
                "up": "tips.col_up", "kb": "tips.col_kb", "avg": "tips.col_avg",
                "dur": "tips.col_dur", "idle": "tips.col_idle"}
 
+def port_cell(port):
+    """Text for a port cell: empty for traffic that has no ports (ICMP).
+
+    Without this the value goes to Tk as ``None`` and renders as the literal
+    string "None" - the connection log carries portless rows since ping traffic
+    started reaching it.
+    """
+    return "" if port is None else port
+
+
 SEARCH_DEBOUNCE_MS = 250
 # The heavy part (filter + sort of the whole model) is throttled: the table is
 # virtualised, so SCROLLING is free and instant no matter how big the model is,
@@ -255,7 +265,7 @@ class ConnsPage:
         scoped = T("conns.yes") if c.get("scoped") else T("conns.no")
         return (connection_proc(c, self.app.proc_map) or "?",
                 c.get("pid") or "", c.get("proto", "IP"), c.get("remote_ip"),
-                c.get("remote_port"), c.get("local_port"), packets,
+                port_cell(c.get("remote_port")), port_cell(c.get("local_port")), packets,
                 scoped, c.get("dropped", 0),
                 f"{c.get('bytes_in', 0) / 1024.0:.1f}",
                 f"{c.get('bytes_out', 0) / 1024.0:.1f}",

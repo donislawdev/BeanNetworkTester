@@ -278,8 +278,15 @@ def _print_conns(engine, log):
         return
     log.info(f"Observed connections ({len(conns)}):")
     for c in conns:
-        log.info(f"  {c.get('dir', '?'):3} {c['remote_ip']}:{c['remote_port']:<6} "
-                 f"local:{c['local_port']:<6} packets={c['packets']:<6} bytes={c['bytes']}")
+        # "-" for traffic that has no ports (ICMP). Those rows exist in the log
+        # now, and formatting None with a width spec is a TypeError, not a blank:
+        # this line would take the whole --log-conns run down with it.
+        r_port = c.get("remote_port")
+        l_port = c.get("local_port")
+        r_port = "-" if r_port is None else r_port
+        l_port = "-" if l_port is None else l_port
+        log.info(f"  {c.get('dir', '?'):3} {c['remote_ip']}:{r_port:<6} "
+                 f"local:{l_port:<6} packets={c['packets']:<6} bytes={c['bytes']}")
 
 
 def _sample_record(elapsed, down, up, s):

@@ -133,7 +133,8 @@ current screen.
   - **Events** - the event log (START/STOP/CHANGE/SCENARIO/BUG/RESET).
 - **Connections** - a view of which IP:port the tested system talks to. Columns: **process**,
   **protocol**, remote IP, ports, packet count, **KB**, **duration** and **time since last
-  activity**. Plus a search box (debounced, so it does not churn the table on every keystroke),
+  activity**. Traffic that has no ports at all - ping (ICMP) - is listed too, one row per address
+  with the port cells left empty. Plus a search box (debounced, so it does not churn the table on every keystroke),
   click-to-sort headers, **"Freeze"** (rows stop escaping from under the cursor) and a
   **right-click menu**: copy row / IP, **"Target this process"**, **"Limit to this IP:port"** -
   fills the filter fields with one click.
