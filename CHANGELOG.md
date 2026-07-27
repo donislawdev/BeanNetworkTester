@@ -36,6 +36,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Two tooltips were telling you things that were not true.** "Dropped" said it also counted
+  link outages - those have had their own counter for a while, so the tooltip was sending you to
+  the wrong number when working out where your packets went. "Downloaded (MB)" promised that
+  hovering would also show how much the app tried to download; nothing of the sort ever appeared.
+  Both now describe what the counter actually holds.
+
+- **Long connection cut-offs and NAT blackouts now last as long as you set them.** Two impairments
+  quietly stopped early, because the tool forgets a connection it has not seen for a while and a
+  forgotten connection looks brand new. "Reset connections" with a cooldown above about half a
+  minute resumed traffic after roughly 30 seconds however long you had asked for - a scenario
+  written as "the connection is down for two minutes" simply did not happen. "NAT mapping expiry"
+  was worse: at a 30 second timeout it never blocked a single packet, because the connection was
+  forgotten just before the incoming traffic arrived. Both now hold for exactly as long as
+  configured - a 120 second cooldown resets every 120 seconds, and an expired NAT mapping stays
+  shut until the application sends something, which is the behaviour the setting describes. The
+  tool's memory limits are unchanged.
+
 - **The delay you set is the delay you get.** Every configured delay used to arrive with several
   milliseconds of padding on top, because of how Windows rounds up the wait the tool uses to hold
   a packet back. It was a fixed surcharge rather than a percentage, so it barely showed at 100 ms

@@ -73,6 +73,15 @@ class _FlowTable:
     Eviction can therefore cost a missed NAT-expiry drop (a false negative); it can
     never invent one (a false positive). Losing an impairment is acceptable; a
     frozen capture thread is not.
+
+    That trade is about the SIZE path. It used to apply to the AGE path as well,
+    and there it was not a trade at all but a silent cap: an impairment configured
+    to hold longer than the rotation window simply stopped early, with nothing said.
+    An ``rst_cooldown`` of 120 s resumed traffic after 30 s; a NAT blackhole ended at
+    the first rotation. The age window therefore follows the configuration now -
+    see :meth:`keep_for`, called from ``set_rst`` and ``set_nat``. The size ceiling
+    is unchanged and still checked on every write, so this can only make the table
+    older, never bigger.
     """
 
     __slots__ = ("_new", "_old", "_limit", "_half", "_rotate_s", "_next_rotate",
@@ -127,6 +136,23 @@ class _FlowTable:
         """
         if len(self._new) >= self._half:
             self._rotate()
+
+    def keep_for(self, seconds):
+        """Raise the AGE window so a record survives at least ``seconds``.
+
+        A record lives through one rotation and dies at the next, so the window is
+        the MINIMUM lifetime: with the default 30 s an entry survives 30-60 s. That
+        was fine while nothing configurable outlived it, and wrong the moment an
+        impairment could be set to hold longer than the table remembers - a
+        ``rst_cooldown`` of 120 s was measured resuming traffic after 30 s, because
+        the record that said "still cut" had been retired.
+
+        The SIZE ceiling is untouched and still enforced on every write, so a longer
+        window cannot make the table bigger, only older: under churn it rotates on
+        size long before the age window matters. That is why this is safe to raise
+        as far as the field bounds allow (``nat_timeout`` reaches 24 h).
+        """
+        self._rotate_s = max(FLOW_ROTATE_S, float(seconds or 0.0))
 
     def maybe_rotate(self, now):
         """Retire a generation on AGE. O(1): the old dict is handed to the watchdog."""
@@ -337,11 +363,33 @@ class BeanCore:
     def set_nat(self, timeout_s):
         with self._lock:
             self.nat_timeout_s = max(0.0, timeout_s)
+            # While NAT is on, the flow record IS the impairment: an expired mapping
+            # stays shut only for as long as its record survives, because a retired
+            # record reads back as "never seen" and the next inbound packet reopens
+            # the mapping with nothing sent. Ageing records out on a timer therefore
+            # cannot be right at any setting - the record has to outlive the timeout
+            # AND the blackhole that follows it, and the blackhole is meant to last
+            # until the application sends. Matching the window to the timeout is not
+            # enough and was measured failing: with keep_for(nat_timeout) a 30 s and
+            # a 120 s timeout dropped ZERO packets, because the record died at the
+            # rotation just before the first inbound packet arrived.
+            #
+            # So while NAT is on the age rotation is off for this table and records
+            # are kept until the SIZE ceiling needs the space - which is the real
+            # memory bound anyway (see _FlowTable), is enforced on every write, and
+            # arrives quickly under the flow churn that would otherwise be the
+            # argument for ageing.
+            self._flow_last.keep_for(float("inf") if self.nat_timeout_s > 0 else 0.0)
 
     def set_rst(self, prob_pct, cooldown_s):
         with self._lock:
             self.rst_prob = clamp01(prob_pct / 100.0)
             self.rst_cooldown_s = max(0.1, cooldown_s)
+            # The cooldown deadline lives in the flow table, so the table has to
+            # remember it for at least that long. The field accepts up to 3600 s
+            # while the table retired records after 30; measured before this line,
+            # a 120 s cooldown reset the flow again after 30.3 / 60.8 / 60.8 s.
+            self._reset_until.keep_for(self.rst_cooldown_s)
 
     def reset_now(self, duration_s=2.0, now=None):
         """Manual reset: cut all active connections for the next ``duration_s``."""
@@ -489,19 +537,19 @@ class BeanCore:
             # cost: `touch` was a get plus this same write (measured 160 ns/op both
             # ways, difference below the noise floor at 200k iterations).
             #
-            # Bounded honesty: the stamp lives in a _FlowTable, which retires a
-            # generation on age (FLOW_ROTATE_S) and on size, and a retired record
-            # reads back as "never seen" - so the direction CAN reopen with no
-            # outbound packet at all. How long the blackhole really holds turns on
-            # whether other flows are moving, because the drop path returns above the
-            # _prune() call and so never rotates anything itself. Measured (timeout
-            # 5 s, drops from t=10): with this flow alone the blackhole was still
-            # holding at t=200; with one other flow driving _prune it ended at t=30,
-            # the first rotation. So it lasts at least one rotation window, and holds
-            # indefinitely only when nothing else is on the wire. That is the table's
-            # documented safe direction (it can lose an impairment, never invent one)
-            # and it is NOT the resurrection above - there the dropped packet did the
-            # reopening itself, once per timeout, for as long as traffic kept coming.
+            # Bounded honesty: the stamp lives in a _FlowTable, and a retired record
+            # reads back as "never seen", so the direction CAN reopen with no
+            # outbound packet at all. While NAT is on the age rotation is therefore
+            # switched off for this table (set_nat -> _FlowTable.keep_for), so the
+            # blackhole lasts until the application sends instead of ending at the
+            # next 30 s rotation - measured before that: a 5 s timeout blackholed for
+            # 20 s and then let traffic through at t=30, and a 30 s one never
+            # blackholed at all. What remains is the SIZE path: under enough flow churn
+            # the record is evicted early and the direction reopens. That is the
+            # table's documented safe direction (it can lose an impairment, never
+            # invent one), and it is NOT the resurrection above - there the dropped
+            # packet did the reopening itself, once per timeout, for as long as
+            # traffic kept coming.
             if self.nat_timeout_s > 0 and key is not None:
                 last = self._flow_last.get(key)
                 expired = last is not None and (now - last) > self.nat_timeout_s
