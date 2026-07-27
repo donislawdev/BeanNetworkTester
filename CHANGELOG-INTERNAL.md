@@ -97,6 +97,53 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: a failed injection is counted, and stops flooding the log (audit F14)
+
+- **Symptom.** `_inject_loop`'s `except` around `self._divert.send(packet)` logged and moved on.
+  The packet is already off the heap at that point: `bytes_in`/`bytes_out` are not bumped, no drop
+  counter is bumped, and `seen` counted it at capture - so it left the seen/delivered/dropped
+  balance entirely. That balance is the only mechanism keeping these numbers honest, and
+  `drop_shutdown` was added for precisely this class of hole ("instead of letting them vanish from
+  the balance"); the send-failure path was missed at the time.
+- **Found by a question, not by a test.** The owner asked what happens to statistics if the
+  connection breaks mid-session. Answering it properly meant reading the path.
+- **Fix (`engine.py`).** New `drop_send` counter bumped in the `except`, classified into
+  `TOOL_DROP_KEYS` - the tool failing, not the simulated link, so it stays out of
+  `impairment_loss_pct` while entering the balance. `SEND_WARN_S = 5.0` and `_warn_send_failed()`
+  mirror `OVERFLOW_WARN_S` / `_warn_overflow()` exactly, including the first-occurrence
+  `log_event("WARN", ...)` so the repro report carries it.
+- **Why the rate limit is part of the same fix.** The comment above `OVERFLOW_WARN_S` already
+  states the rule - a per-packet line "becomes the second bug" - and this path had no limit at
+  all. `App._drain_log` drains the whole queue per tick and inserts EVERY line into the Tk widget
+  on the UI thread with no per-tick bound, so a burst of failures freezes the window on top of
+  losing the packets. Measured by mutation: 400 failures produced **400 log lines** before, at
+  most 2 after.
+- **The F4 classification guard did its job on the first new counter since it was written.**
+  `test_every_drop_counter_and_drop_reason_is_classified` goes red with
+  `unclassified: ['drop_send']` if the counter is added to `st` without being classified - checked
+  by mutation, not assumed.
+- **NOT verified:** no send failure was reproduced on a live WinDivert, so how often the real
+  driver refuses a packet, and whether it arrives in bursts, is unknown. The balance hole does not
+  depend on that number - it is a hole at one failure as much as at a thousand.
+- Surfaced additively: live tile `stats.send_failed` (`gui/pages/stats.py::CELLS`), CSV column
+  `dropped_send_failed` (`App.CSV_COLUMNS`), and `_drain_engine_warning` now also fires for it,
+  with overflow keeping precedence (that one the user can act on by lowering the latency or rate).
+  `drop_send` reaches NDJSON `summary.counters` and the repro report's `counters` for free.
+- i18n: `log.send_error` **retired** (its only caller is gone) and replaced by `log.send_failed`
+  carrying `{n}` and `{e}`; new `events.send_failed`, `warn.send_failed`, `stats.send_failed`,
+  `tips.stat_send_failed`. Net +4 keys in both lang files, key sets identical. Both READMEs list
+  the new counter and now state as a group that the three tool-loss counters are excluded from
+  "Effective loss" on purpose.
+- **Hot path:** every added line is inside the `except`, so it cannot execute on a successful send
+  - a structural argument, but measured anyway against a `git worktree` of master (150k 1500 B
+  packets, median of 5): 157.6k -> 162.6k pkt/s, no regression.
+- New tests, all mutation-verified (four mutants, every one caught):
+  `tests/test_engine.py::test_a_packet_the_tool_could_not_re_inject_is_counted_as_a_drop` (a
+  `RefusingDivert` whose `send` always raises; asserts the balance closes and that the figure stays
+  at 0.0% because this is not impairment damage),
+  `::test_failed_injections_do_not_flood_the_log`, and
+  `tests/test_gui_release_fixes.py::test_the_banner_also_fires_when_the_tool_cannot_re_inject`.
+
 ### Docs: the effective-loss figure names its boundary (prose only, no behaviour change)
 
 - **Where it came from.** The owner ran the F9 acceptance (ping 30, one reply lost out on the

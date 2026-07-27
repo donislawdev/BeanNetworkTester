@@ -1022,6 +1022,7 @@ class App:
                    "drop_block": "dropped_block",
                    "drop_flap": "dropped_link_outage", "drop_rate": "dropped_rate_limit",
                    "drop_shutdown": "dropped_at_stop",
+                   "drop_send": "dropped_send_failed",
                    "queue": "queue_len",
                    "peak_queue": "queue_peak"}
 
@@ -1288,8 +1289,15 @@ class App:
         """Show (or clear) "the tool is losing packets on its own". Main thread only."""
         text = ""
         with crashlog.quiet("gui.app"):
-            if self.engine.stats_snapshot().get("drop_overflow", 0) > 0:
+            snap = self.engine.stats_snapshot()
+            # Overflow first: it is the one the user can act on by lowering the
+            # latency or the rate. A failed injection means the tool cannot reach
+            # the wire at all, which is worth saying whenever it is the only thing
+            # wrong - both mean "the packets you are missing are on us".
+            if snap.get("drop_overflow", 0) > 0:
                 text = T("warn.queue_overflow")
+            elif snap.get("drop_send", 0) > 0:
+                text = T("warn.send_failed")
         if text == self._shown_engine_warning:
             return                      # unchanged: no widget work at all
         self._shown_engine_warning = text

@@ -375,9 +375,16 @@ powód (w języku interfejsu), a CLI kończy się czytelnym `error: ...` - nigdy
 
 Wykres przepustowości ma teraz oś Y z wartościami (KB/s), siatkę, „ładnie” zaokrągloną skalę oraz bieżące odczyty down/up w rogu. Pobieranie/Wysyłanie (KB/s na żywo), Pakiety (ile przeszło), W kolejce (czekające - rośnie przy
 opóźnieniu/limicie), Utracone, Uszkodzone, Zduplikowane, Bufor przepełn. (porzucone przy
-przeciążeniu narzędzia), Porzuc. przy stopie (czekały w kolejce, gdy nacisnięto STOP), Odrzuc. przez limit (porzucone przez pełny bufor limitu prędkości -
+przeciążeniu narzędzia), Porzuc. przy stopie (czekały w kolejce, gdy nacisnięto STOP), Nie odesłane
+(narzędzie je przechwyciło, ale nie zdołało odesłać do sieci - padło połączenie albo sterownik
+odrzucił pakiet), Odrzuc. przez limit (porzucone przez pełny bufor limitu prędkości -
 liczone osobno od strat i od „Bufor przepełn.”), SYN odrzucone, MTU odrzucone, NAT wygasło,
 RST zerwane, LAN: internet odcięty, RST wysłane.
+
+Trzy z nich - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” - to sytuacje, w których
+pakiety gubi samo narzędzie, a nie łącze, które kazałeś mu udawać. Są liczone i pilnują, żeby
+arytmetyka zaobserwowane/dostarczone/porzucone się spinała, ale świadomie **nie** wchodzą do
+„Efektywnych strat”. Niezerowa wartość którejkolwiek znaczy, że część mierzonej straty jest nasza.
 
 ### Reprodukcja błędu (panel „Sesja i reprodukcja”)
 
@@ -387,7 +394,7 @@ Zaprojektowane tak, by po wystąpieniu błędu odtworzyć dokładnie te same war
 - **Powtarzalny flapping** - wzorzec przerw łącza liczony jest względem startu sesji, więc przy tych samych ustawieniach powtarza się identycznie między uruchomieniami (a nie zależy od zegara systemowego).
 - **Co dokładnie odtwarza seed** - seed odtwarza **decyzje** silnika (które pakiety zostaną porzucone, uszkodzone, zduplikowane, o ile opóźnione), a nie **liczbę pakietów**. Ruch, który przechodzi przez łącze, zależy od tego, co w danej chwili robią aplikacje i system, więc dwa przebiegi z tym samym seedem dadzą te same *proporcje* (np. 15,8% strat w obu), ale nie identyczne liczniki co do sztuki. Do porównań w CI używaj wskaźników (%), nie surowych liczb pakietów.
 - **Start / Czas trwania / Efektywna utrata / Szczyt kolejki / Szczyt down-up** - szybki obraz przebiegu.
-- **Co liczą „Efektywne straty”** - jaką część ruchu, w który celujesz, zepsuło **to narzędzie**, licząc **każde** zakłócenie: ustawioną Utratę plus porzucenia z limitu prędkości, blokadę, odcięcie internetu w trybie LAN, przerwy w łączu, zrywanie połączeń, odrzucone SYN-y, odrzucenia z MTU i wygasanie NAT. Gdy ustawisz cel, liczy się wyłącznie jego ruch, więc inne aplikacje nie rozwadniają tej liczby. Pakiety porzucone przez samo **narzędzie** są świadomie pominięte - „Bufor przepełn.” i „Porzuc. przy stopie” to jego własne awarie, nie zachowanie łącza, i mają osobne liczniki. `effective_loss_pct` w raporcie to ta sama liczba, obok `packets_in_scope`.
+- **Co liczą „Efektywne straty”** - jaką część ruchu, w który celujesz, zepsuło **to narzędzie**, licząc **każde** zakłócenie: ustawioną Utratę plus porzucenia z limitu prędkości, blokadę, odcięcie internetu w trybie LAN, przerwy w łączu, zrywanie połączeń, odrzucone SYN-y, odrzucenia z MTU i wygasanie NAT. Gdy ustawisz cel, liczy się wyłącznie jego ruch, więc inne aplikacje nie rozwadniają tej liczby. Pakiety porzucone przez samo **narzędzie** są świadomie pominięte - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” to jego własne awarie, nie zachowanie łącza, i mają osobne liczniki. `effective_loss_pct` w raporcie to ta sama liczba, obok `packets_in_scope`.
 - **To miara tej maszyny, nie internetu.** Narzędzie widzi pakiety przechodzące przez stos sieciowy tego komputera, więc pakiet zgubiony w sieci - odpowiedź, która nie wróciła - nigdy tu nie dociera i nic go tu nie policzy. Czysty ping 30 pakietów, w którym zginie jedna odpowiedź, pokaże w wierszu połączenia **59** pakietów i **zero** porzuceń, i obie liczby są prawdziwe: wyszło 30 żądań, wróciło 29 odpowiedzi, a narzędzie nie zepsuło żadnego. Od straty end-to-end są liczniki samej aplikacji (albo „Lost” w wyniku `ping`).
 - **Zużycie danych** - Pobrano / Wysłano / Razem (MB) narastająco od startu oraz średnia przepustowość sesji; od razu wiesz, ile danych aplikacja zużyła. (W raporcie jest też „próbowano MB” - ile aplikacja chciała przesłać przed odjęciem strat/limitów.)
 - **Dziennik zdarzeń** ze znacznikami czasu: start, zmiany ustawień, kroki scenariusza, zerwania, oraz Twoje znaczniki błędu - z **sortowaniem** po kliknięciu w nagłówek kolumny.

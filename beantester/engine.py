@@ -54,15 +54,16 @@ DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
 # limit. Guarded by test_engine.py::test_every_drop_counter_is_classified.
 IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
 
-# Losses the TOOL caused, not the link: its delay queue filled up, or the session
-# ended with packets still parked in it. Deliberately NOT part of the loss figure.
+# Losses the TOOL caused, not the link: its delay queue filled up, the session
+# ended with packets still parked in it, or re-injecting one failed outright.
+# Deliberately NOT part of the loss figure.
 # The README defines the term - traffic dropped above a speed limit is counted
 # "because that is how a congested link behaves" - and tips.stat_shutdown says of
 # these outright "They were not lost in the network". Both have their own tiles,
 # and overflow additionally raises a log warning and a banner. Counting them here
 # would also let the figure exceed 100%: the delay queue holds out-of-scope
 # packets too, so with a narrow target it can drop more than were ever in scope.
-TOOL_DROP_KEYS = ("drop_overflow", "drop_shutdown")
+TOOL_DROP_KEYS = ("drop_overflow", "drop_shutdown", "drop_send")
 
 
 def impairment_loss_pct(stats):
@@ -142,6 +143,7 @@ class BeanEngine:
         # be trimmed - i.e. it would silently break reproducibility.
         self._rng_evict = random.Random(0)
         self._overflow_warned = 0.0     # rate-limit for the queue-overflow warning
+        self._send_warned = 0.0         # rate-limit for the failed-injection warning
         self._seed = None           # None => random; int => reproducible
         self._rng = random
         self._effective_seed = None  # actually used seed (always concrete after start)
@@ -362,13 +364,14 @@ class BeanEngine:
                            drop_loss=0, drop_overflow=0, corrupted=0,
                            duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_block=0, drop_flap=0,
-                           drop_rate=0, drop_shutdown=0, rst_sent=0,
+                           drop_rate=0, drop_shutdown=0, drop_send=0, rst_sent=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
                            queue=0, peak_queue=0)
         # counters back to zero means the warning should be able to fire again:
         # a fresh measurement window that overflows must say so afresh
         self._overflow_warned = 0.0
+        self._send_warned = 0.0
         with self._clock:
             self._conns.clear()
 
@@ -1153,6 +1156,30 @@ class BeanEngine:
             # numbers are wrong must say so in the artefact people read later
             self.log_event("WARN", "events.queue_overflow")
 
+    # A failed injection is the same kind of event as a queue overflow: the TOOL
+    # lost a packet the user did not ask to lose. It is rate-limited for the same
+    # reason, and the reason is written above OVERFLOW_WARN_S - a per-packet log
+    # line "becomes the second bug". This path had no limit at all, and the GUI
+    # applies EVERY queued line to the text widget on the UI thread
+    # (App._drain_log), so a burst of failures froze the window on top of losing
+    # the packets.
+    SEND_WARN_S = 5.0
+
+    def _warn_send_failed(self, exc):
+        """Say - once every SEND_WARN_S - that injection is failing, and how often."""
+        now = time.monotonic()
+        if now - self._send_warned < self.SEND_WARN_S:
+            return
+        first = self._send_warned == 0.0
+        self._send_warned = now
+        with self._slock:
+            failed = self.st["drop_send"]
+        self.log(T("log.send_failed", n=failed, e=exc))
+        if first:
+            # into the event log too, so it reaches the repro report: a session
+            # whose delivered counts are short must say why in the artefact
+            self.log_event("WARN", "events.send_failed")
+
     def _enqueue(self, release, packet, copy=False):
         """Queue one release of ``packet`` for delayed injection.
 
@@ -1213,5 +1240,11 @@ class BeanEngine:
                     else:
                         self._bump("bytes_in", len(packet.raw))
             except Exception as e:
+                # The packet is already off the heap: not delivered, and until this
+                # counter existed, not recorded either - it simply left the
+                # seen/delivered/dropped balance, which is the one thing keeping
+                # these numbers honest. Every other way a packet can die has a
+                # counter; this one only had a log line.
+                self._bump("drop_send")
                 if self._running:
-                    self.log(f"{T('log.send_error')}: {e}")
+                    self._warn_send_failed(e)

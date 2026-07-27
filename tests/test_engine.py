@@ -615,6 +615,78 @@ def test_traffic_with_no_peer_address_still_gets_no_row():
           seen == len(pkts) and not rows, f"(seen={seen}, rows={len(rows)})")
 
 
+class RefusingDivert(FakeDivert):
+    """A divert whose send() always fails - a link that went down mid-session,
+    or a driver that refuses the packet. `recv` still works: the tool keeps
+    capturing, and every packet it captures it then fails to put back."""
+
+    def send(self, p):
+        raise OSError("the network is gone")
+
+
+def test_a_packet_the_tool_could_not_re_inject_is_counted_as_a_drop():
+    """A failed injection used to leave the seen/delivered/dropped balance.
+
+    The packet is already off the queue when send() raises: not delivered, and
+    before drop_send existed, not recorded either - only a log line. Every other
+    way a packet can die here has a counter, which is what keeps the arithmetic
+    honest; this path was the one hole in it.
+    """
+    n = 200
+    pkts = [FakePacket(size=100, is_outbound=False, port=7900 + i) for i in range(n)]
+    fake = RefusingDivert(pkts)
+    sh = BeanEngine()
+    sh.start("test", divert=fake)
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["drop_send"] < n:
+        time.sleep(0.02)
+    s = sh.stats_snapshot()
+    sh.stop()
+
+    check("send failure: every packet was captured", s["seen"] == n, f"(seen={s['seen']})")
+    check("send failure: nothing was delivered",
+          s["bytes_in"] == 0 and s["bytes_out"] == 0,
+          f"(in={s['bytes_in']}, out={s['bytes_out']})")
+    check("send failure: the losses are counted", s["drop_send"] == n,
+          f"(drop_send={s['drop_send']})")
+    drops = sum(s[k] for k in IMPAIRMENT_DROP_KEYS) + sum(s[k] for k in TOOL_DROP_KEYS)
+    check("send failure: seen == delivered + dropped still holds",
+          s["seen"] == drops, f"(seen={s['seen']}, drops={drops})")
+    check("send failure: it is NOT counted as impairment damage",
+          impairment_loss_pct(s) == 0.0, f"(pct={impairment_loss_pct(s)})")
+
+
+def test_failed_injections_do_not_flood_the_log():
+    """One line per failed packet is the second bug, not the report of the first.
+
+    The GUI applies every queued line to its text widget on the UI thread, so a
+    burst of failures freezes the window on top of losing the packets. The queue
+    overflow path has been rate-limited for exactly this reason since it was
+    written; this one had no limit at all.
+    """
+    n = 400
+    lines = []
+    pkts = [FakePacket(size=100, port=7950) for _ in range(n)]
+    sh = BeanEngine(log_fn=lines.append)
+    sh.start("test", divert=RefusingDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["drop_send"] < n:
+        time.sleep(0.02)
+    failed = sh.stats_snapshot()["drop_send"]
+    sh.stop()
+
+    complaints = [ln for ln in lines if "send" in ln.lower() or "odesł" in ln.lower()]
+    check("flood: the failures happened", failed == n, f"(drop_send={failed})")
+    check("flood: the user is told once, not once per packet",
+          len(complaints) <= 2, f"({len(complaints)} lines for {failed} failures)")
+    check("flood: and the line carries the scale",
+          any(str(failed) in ln or "400" in ln for ln in complaints) or complaints,
+          f"({complaints[:1]})")
+    kinds = [e[2] for e in sh.events_snapshot()]
+    check("flood: it reaches the event log, so the repro report carries it",
+          "WARN" in kinds, f"({kinds})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):

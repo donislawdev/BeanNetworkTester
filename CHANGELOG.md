@@ -56,6 +56,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Packets the tool failed to put back on the wire vanished from the numbers.** When re-injecting
+  a packet fails - the connection went down mid-session, the driver refused it - the packet is
+  gone. It had been counted as seen, it was never delivered, and nothing recorded it as lost, so
+  it simply left the arithmetic: a session could show packets climbing while the delivered total
+  stood still, with no counter explaining the gap. Every other way a packet can die here has had a
+  counter for a while; this one only had a line in the log. There is now a **"Send failed"**
+  counter next to "Buffer overflow" and "Dropped at stop", a warning banner when it happens, and
+  an entry in the event log so the reproduction report carries it too. Like the other two, it is
+  the tool failing rather than the link you asked it to simulate, so it stays out of "Effective
+  loss" - but it is in the seen/delivered/dropped arithmetic, where it belongs.
+
+- **A run of send failures no longer floods the log (and freezes the window with it).** The
+  message was written once per failed packet, and the window applies every queued line to the log
+  strip on the interface thread, so a burst of failures could lock up the window on top of losing
+  the packets. It is now written at most once every five seconds, carrying the running count and
+  the last error, exactly like the queue-overflow warning that has worked this way for a while.
+
 - **"Effective loss" now says whose loss it is.** The number counts what this tool broke, and the
   tooltip said "how much of the traffic you aimed at never arrived" - which reads as "never
   reached the far end". Those are different things, and the difference shows up the first time you

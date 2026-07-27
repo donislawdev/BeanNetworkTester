@@ -452,9 +452,16 @@ beneath it (in the UI language), and the CLI ends with a readable `error: ...` -
 The throughput chart has a Y axis with values (KB/s), a grid, a "nicely" rounded scale and current
 down/up readouts in the corner. Download/Upload (KB/s live), Packets (how many passed), Queued
 (waiting - grows with delay/limit), Lost, Corrupted, Duplicated, Buffer overflow (dropped when the
-tool is overloaded), Dropped at stop (were still queued when STOP was pressed), Rate-limit drop (dropped by a full speed-limit buffer - counted separately from
+tool is overloaded), Dropped at stop (were still queued when STOP was pressed), Send failed (the
+tool captured them but could not put them back on the wire - the connection went down, or the driver
+refused), Rate-limit drop (dropped by a full speed-limit buffer - counted separately from
 loss and from "Buffer overflow"), SYN dropped, MTU dropped, NAT expired, RST torn, LAN: internet cut
 off, RST sent.
+
+The last three of those - "Buffer overflow", "Dropped at stop" and "Send failed" - are the tool
+losing your packets rather than the link you asked it to simulate. They are counted, they keep the
+seen/delivered/dropped arithmetic honest, and they are deliberately **not** part of "Effective
+loss". Any of them being non-zero means part of the loss you are measuring is ours.
 
 ### Reproducing a bug (the "Session and reproduction" panel)
 
@@ -474,8 +481,8 @@ Designed so that after a bug you can recreate exactly the same conditions:
   broke, across **every** impairment: the configured Loss plus rate-limit drops, blocking, LAN cut,
   link outages, connection resets, SYN drops, MTU drops and NAT expiry. With a target set, only
   the target's traffic counts, so other applications cannot dilute it. Packets the **tool** threw
-  away are deliberately excluded - "Buffer overflow" and "Dropped at stop" are its own failures,
-  not the link's, and they have their own counters. The report's `effective_loss_pct` is the same
+  away are deliberately excluded - "Buffer overflow", "Dropped at stop" and "Send failed" are its
+  own failures, not the link's, and they have their own counters. The report's `effective_loss_pct` is the same
   number, next to `packets_in_scope`.
 - **It measures this machine, not the internet.** The tool sees packets crossing this computer's
   network stack, so a packet lost out on the network - the reply that never came back - never
