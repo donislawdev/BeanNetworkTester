@@ -42,6 +42,49 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: an impairment no longer expires when its flow record does (audit F2, and F1's tail)
+
+`_reset_until` and `_flow_last` are `_FlowTable`s that retired a generation every `FLOW_ROTATE_S`
+(30 s), so a record survived 30-60 s - and both tables hold the state that IS an impairment. Two
+settings were therefore capped by a constant nobody had connected them to:
+
+* **`rst_cooldown`** accepts up to 3600 s. Measured at 120 s, the same flow was reset again after
+  30.3, then 60.8, then 60.8 s.
+* **NAT expiry** was worse than capped. A retired record reads back as "never seen", so the next
+  inbound packet reopens the mapping with nothing sent. Measured: a 5 s timeout blackholed for 20 s
+  and then passed traffic; **a 30 s and a 120 s timeout dropped ZERO packets**, because the record
+  died at the rotation just before the first inbound packet arrived.
+
+`_FlowTable.keep_for(seconds)` raises the age window; `set_rst` passes the cooldown, and `set_nat`
+switches ageing OFF for `_flow_last` (`float("inf")`) while NAT is on. Matching the window to the
+timeout is not enough for NAT and was measured failing exactly as above - the record has to outlive
+the timeout AND the blackhole after it, and that blackhole is meant to last until the application
+sends. The RST cooldown is a fixed span, so there the window is simply the cooldown.
+
+**Why raising the window is safe, and the property that says so:** the SIZE ceiling is enforced on
+every write, independently of the age window, so a longer window makes the table older and never
+bigger. Measured through the real setter: 250k flows with `nat_timeout=3600` peaked at 199,999
+against the 200,000 ceiling.
+
+After: cooldowns of 60 / 120 / 300 s reset at exactly those intervals; a NAT blackhole held for the
+full 900 s of the probe at 5, 30 and 120 s timeouts (1800 packets dropped) and ended on the first
+outbound packet, which is the documented contract.
+
+New tests in `tests/test_core.py`:
+`test_a_long_rst_cooldown_is_honoured_not_truncated_by_the_flow_table`,
+`test_an_expired_nat_mapping_stays_shut_until_the_application_sends` and
+`test_the_size_ceiling_holds_even_with_the_age_rotation_switched_off` - the last one drives the
+table through `set_nat` on purpose, because the existing churn test assigns `nat_timeout_s`
+directly and so never exercises the ageing-off path. The first two were verified by mutation:
+making `keep_for` a no-op reproduces the audit's numbers exactly (`gaps=[30.3, 60.8, 60.8, ...]`
+and `dropped=0, passed=720`).
+
+Prose corrected in the same commit (convention: a behaviour change updates the sentence that
+justified the old one): the `_FlowTable` docstring said eviction "can lose an impairment, never
+invent one" as if that covered both paths. It covers the SIZE path; on the AGE path it was not a
+trade but a silent cap. The step-3 comment added by the F1 fix said the blackhole ends at the first
+rotation - that is now what the fix prevents.
+
 ### Fixed: the injector asks Windows for a fine timer tick, and for it to be honoured (audit F3)
 
 `_inject_loop` holds a delayed packet with `Condition.wait(timeout=...)`, and Windows rounds that

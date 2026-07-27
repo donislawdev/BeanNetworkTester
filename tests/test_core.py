@@ -6,6 +6,7 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 import random
 
 from beantester import BeanCore, Decision
+from beantester.core import MAX_FLOWS
 from fakes import FakePacket, check
 
 
@@ -433,6 +434,92 @@ def test_a_dropped_packet_does_not_revive_an_expired_nat_mapping():
     back = core.decide(100, False, 5000, 14.5, rng, **kw)
     check("NAT: outbound reopens the mapping", out.drop is False)
     check("NAT: inbound flows again once the app has sent", back.drop is False)
+
+
+def test_a_long_rst_cooldown_is_honoured_not_truncated_by_the_flow_table():
+    """The cooldown deadline lives in a table that used to retire records on a
+    30 s timer, so any cooldown longer than that quietly became ~30-60 s.
+
+    The field accepts up to 3600 s. Measured before the fix, a 120 s cooldown reset
+    the same flow after 30.3, then 60.8, then 60.8 s - a scenario written as "the
+    connection is down for two minutes" simply did not happen, and nothing said so.
+    """
+    cooldown = 120.0
+    core = BeanCore()
+    core.set_rst(100, cooldown)              # every TCP flow resets on its first packet
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+    resets, now = [], 0.0
+    while now < 400.0:
+        d = core.decide(500, True, 4321, now, rng, remote_ip="9.9.9.9",
+                        remote_port=443, is_tcp=True)
+        if d.emit_rst:
+            resets.append(now)
+        now += 0.05
+    gaps = [round(b - a, 1) for a, b in zip(resets, resets[1:])]
+    check("RST: the cooldown between resets is the one that was configured",
+          gaps and all(abs(g - cooldown) < 0.5 for g in gaps),
+          f"(cooldown={cooldown}, gaps={gaps})")
+
+
+def test_an_expired_nat_mapping_stays_shut_until_the_application_sends():
+    """The blackhole must outlive the table that implements it.
+
+    A retired flow record reads back as "never seen", so the next inbound packet
+    reopens the mapping with nothing sent. While NAT is on the age rotation is off
+    for this table, which is what makes the impairment last as long as it says.
+    Measured before: a 5 s timeout blackholed for 20 s and then let traffic through;
+    a 30 s and a 120 s timeout dropped ZERO packets, because the record died at the
+    rotation just before the first inbound packet arrived.
+    """
+    core = BeanCore()
+    core.set_nat(30.0)
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+    flow = dict(remote_ip="1.2.3.4", remote_port=80)
+    core.decide(100, True, 5000, 0.0, rng, **flow)          # mapping created
+    # a long silence, then the peer keeps sending. Other traffic drives _prune(),
+    # exactly as it does in a real session.
+    now, drops, passed = 40.0, 0, 0
+    while now < 400.0:
+        core.decide(100, True, 6000, now, rng, remote_ip="9.9.9.9", remote_port=80)
+        if core.decide(100, False, 5000, now, rng, **flow).drop:
+            drops += 1
+        else:
+            passed += 1
+        now += 0.5
+    check("NAT: an expired mapping does not reopen by itself", passed == 0,
+          f"(dropped={drops}, passed={passed})")
+    # ...and the application sending is what brings it back
+    out = core.decide(100, True, 5000, 401.0, rng, **flow)
+    back = core.decide(100, False, 5000, 401.5, rng, **flow)
+    check("NAT: an outbound packet reopens the mapping", out.drop is False)
+    check("NAT: inbound flows again afterwards", back.drop is False)
+
+
+def test_the_size_ceiling_holds_even_with_the_age_rotation_switched_off():
+    """The safety property behind the two tests above.
+
+    Keeping records for longer is only safe because the SIZE ceiling is enforced on
+    every write, independently of the age window. This drives the table through the
+    REAL setter (``set_nat``), which is what switches ageing off - the existing churn
+    test assigns ``nat_timeout_s`` directly and so never exercises this path.
+    """
+    core = BeanCore()
+    core.set_nat(3600.0)                     # ageing off for the whole run
+    core.reset_buckets(0.0)
+    rng = random.Random(2)
+    now, peak = 0.0, 0
+    for i in range(250_000):
+        now += 0.000002
+        core.decide(100, True, 1024 + (i % 60000), now, rng,
+                    remote_ip=f"10.{i // 65536 % 256}.{i // 256 % 256}.{i % 256}",
+                    remote_port=443)
+        if i % 10000 == 0:
+            peak = max(peak, len(core._flow_last))
+    peak = max(peak, len(core._flow_last))
+    check("the size ceiling still bounds the table with no age rotation",
+          peak <= MAX_FLOWS, f"(peak={peak:,} vs ceiling {MAX_FLOWS:,})")
 
 
 def test_reset_buckets_clears_flow_state():
