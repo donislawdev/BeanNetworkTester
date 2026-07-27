@@ -78,6 +78,24 @@ costs ~1.3 us (measured), so nothing needs to hold a finer tick while the tool s
 Result through the engine, eight sessions in one process (sparse traffic, the case the audit
 measured at +8.3 ms): overshoot **+0.22 to +0.55 ms**, worst case down from ~25 ms to ~11 ms.
 
+**Accepted on the real capture path** (ping, 40 packets per setting, live WinDivert):
+
+    krok            nominal   min   p50   p90   max      nadwyzka p50   (przed)
+    latency 10           45    45    46    50    61            +1 ms    +12.6 ms
+    latency 50          125   125   126   130   135            +1 ms    +12.6 ms
+    baseline             25    24    25    28   112
+
+Same +1 ms at both settings, so the surcharge is gone rather than scaled; p90 is +5 ms at both.
+Two measurement lessons worth keeping, because the first acceptance run (10 packets per setting)
+read as a HALF fix at +6.3 / +9.5 ms:
+
+* **Average over ten pings is the wrong statistic here.** About 1% of packets sit in a tail, a ping
+  carries two impaired packets, and one outlier moves a ten-sample mean by 4-8 ms. The median was
+  right all along - the ten-sample run's own minima were already exactly nominal (45 and 125).
+* **The tail is the LINK, not us.** In the 40-packet run the untouched baseline produced the worst
+  outlier of the whole session (max 112 ms, against 61 and 135 with the tool in the path). An
+  earlier reading that blamed a "worse tail" on this change did not survive a bigger sample.
+
 New tests in `tests/test_failsafe.py`:
 `test_the_fine_timer_request_is_balanced_on_every_session_path` (clean stop, double stop, second
 session and a start that raises - an unbalanced pair is invisible from inside the program, it just

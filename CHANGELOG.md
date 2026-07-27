@@ -42,10 +42,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   and swamped the small settings: with the tool asked for 10 ms, a ping measured about 12.6 ms of
   extra round trip on top of the expected amount, and asking for 1 ms produced roughly seven times
   that. Simulating a fast LAN, a game server or a VoIP hop is exactly where that hurt. The tool now
-  asks Windows for a fine-grained timer while a session runs, and gives it back at STOP: the same
-  measurement lands within about half a millisecond of what you asked for, and the worst case
-  dropped from ~25 ms to ~11 ms. Jitter benefits the same way - variation below ~15 ms used to
-  disappear into the noise.
+  asks Windows for a fine-grained timer while a session runs, and gives it back at STOP. Measured
+  with a plain `ping`, 40 packets per setting: asking for 10 ms of delay now costs 1 ms more than
+  it should instead of 12.6 ms, and asking for 50 ms costs the same 1 ms more - the surcharge is
+  gone rather than merely smaller. Jitter benefits the same way: variation below about 15 ms used
+  to disappear into the timer's own noise.
 
 - **"NAT mapping expiry" now really cuts the incoming direction, instead of losing one packet
   every few seconds.** This impairment is there to answer one question: does the application
