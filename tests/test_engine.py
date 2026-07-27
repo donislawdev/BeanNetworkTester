@@ -543,6 +543,78 @@ def test_every_drop_counter_and_drop_reason_is_classified():
           f"(unrouted: {sorted(reasons - set(DROP_BY_REASON))})")
 
 
+class IcmpPacket:
+    """A ping packet shaped the way pydivert presents one.
+
+    No transport header, so both ports read ``None`` - verified in the installed
+    pydivert (``packet/__init__.py``: ``src_port`` returns None rather than
+    raising when there is no TCP/UDP header) - while the IP layer still carries
+    both addresses, and ``icmp`` is set (it is ``icmpv4 or icmpv6`` there).
+    """
+
+    def __init__(self, size=98, is_outbound=True, peer="8.8.8.8"):
+        self.raw = b"\x00" * size
+        self.is_outbound = is_outbound
+        self.src_port = self.dst_port = None
+        self.dst_addr = peer if is_outbound else "10.0.0.2"
+        self.src_addr = "10.0.0.2" if is_outbound else peer
+        self.tcp = self.udp = None
+        self.icmp = object()
+        self.payload = b""
+
+
+def test_portless_traffic_reaches_the_connection_log():
+    """Ping traffic must appear in a tab that says it lists every connection.
+
+    Measured before the fix: 500 ICMP packets gave seen=500 with bytes counted
+    and ZERO rows, because the flow key needs ports and the log drops a None key.
+    Confirmed on live WinDivert too (the "Ping (ICMP)" filter, an empty tab).
+    Both directions share one row: remote_ip is dst_addr going out and src_addr
+    coming back, which is the same host either way.
+    """
+    out_n, in_n = 30, 20
+    pkts = ([IcmpPacket(is_outbound=True) for _ in range(out_n)]
+            + [IcmpPacket(is_outbound=False) for _ in range(in_n)])
+    sh = BeanEngine()
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < out_n + in_n:
+        time.sleep(0.02)
+    rows = sh.connections_snapshot(limit=None)
+    seen = sh.stats_snapshot()["seen"]
+    sh.stop()
+
+    check("icmp: every packet was captured", seen == out_n + in_n, f"(seen={seen})")
+    check("icmp: it is ONE row, not none and not one per packet",
+          len(rows) == 1, f"(rows={len(rows)})")
+    row = rows[0]
+    check("icmp: labelled ICMP", row["proto"] == "ICMP", f"(proto={row['proto']})")
+    check("icmp: the peer is the address, and the ports stay empty",
+          row["remote_ip"] == "8.8.8.8" and row["remote_port"] is None
+          and row["local_port"] is None, f"({row['remote_ip']}, {row['remote_port']})")
+    check("icmp: both directions land in the same row",
+          row["packets"] == out_n + in_n and row["bytes_out"] > 0 and row["bytes_in"] > 0,
+          f"(packets={row['packets']}, in={row['bytes_in']}, out={row['bytes_out']})")
+
+
+def test_traffic_with_no_peer_address_still_gets_no_row():
+    """The fallback key needs an address. Without one there is nothing to name,
+    and inventing a row keyed on None would merge unrelated traffic into it."""
+    pkts = [IcmpPacket() for _ in range(5)]
+    for p in pkts:                      # a packet whose addresses could not be read
+        p.dst_addr = p.src_addr = None
+    sh = BeanEngine()
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < len(pkts):
+        time.sleep(0.02)
+    rows = sh.connections_snapshot(limit=None)
+    seen = sh.stats_snapshot()["seen"]
+    sh.stop()
+    check("no address: counted but not logged as a connection",
+          seen == len(pkts) and not rows, f"(seen={seen}, rows={len(rows)})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):

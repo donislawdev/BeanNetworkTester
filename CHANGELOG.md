@@ -56,6 +56,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Ping traffic never appeared in the Connections tab, which claims to list all of them.** The
+  note under the tab says "All captured connections" and the README says the same, but anything
+  without ports was silently left out - and ping (ICMP) has none. Thirty seconds of pinging with
+  the "Ping (ICMP)" traffic filter selected left the tab completely empty while the packet
+  counters ticked up beside it, which reads as a broken tool. Portless traffic is now listed as
+  one row per address, with the two port cells left empty. The process column usually stays empty
+  on those rows as well: a ping has no socket to trace back to an application, which is how ICMP
+  works rather than something missing here. In the command line, `--log-conns` prints `-` where
+  such a row has no port.
+
 - **"Buffer overflow" and "Dropped at stop" counted up to twice the packets they lost.** With
   "Duplicate packets" switched on, the tool puts a second copy of the packet in its delay queue,
   and both counters were charging for the copy as well as for the packet. A run that duplicated

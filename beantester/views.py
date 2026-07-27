@@ -122,9 +122,12 @@ DERIVED = {
 def _connection_blob(c, proc_map=None):
     """The lowercase text a search matches against - one place, so the table filter
     and the footer totals agree on what "matches" means."""
-    return (f"{connection_proc(c, proc_map)} {c.get('proto', '')} {c.get('dir', '')} "
-            f"{c.get('remote_ip', '')}:{c.get('remote_port', '')} "
-            f"{c.get('local_port', '')}").lower()
+    # `or ''` rather than a dict default: a portless row (ICMP) HAS the port keys,
+    # they just hold None, so the default never fires and the blob would read
+    # "8.8.8.8:none" - making every ping row a hit for the search term "none".
+    return (f"{connection_proc(c, proc_map)} {c.get('proto') or ''} {c.get('dir') or ''} "
+            f"{c.get('remote_ip') or ''}:{c.get('remote_port') or ''} "
+            f"{c.get('local_port') or ''}").lower()
 
 
 def _filter_connections(conns, query, proc_map):

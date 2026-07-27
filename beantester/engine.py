@@ -1025,6 +1025,22 @@ class BeanEngine:
                 crashlog.once("engine.packet", _exc)
 
             key = BeanCore._flowkey(local_port, remote_ip, remote_port)
+            if key is None and remote_ip is not None:
+                # Portless traffic - ICMP, and anything else the IP layer carries
+                # without a transport header - has no flow key, and the connection
+                # log used to drop it on the floor: 500 ping packets counted in
+                # `seen`, bytes counted, ZERO rows, under a tab that says it lists
+                # every captured connection. A ping is still a conversation with a
+                # host, so it gets a row keyed by peer instead. Both directions
+                # land on the same key (remote_ip is dst_addr going out, src_addr
+                # coming in), so a ping is one row, not two.
+                #
+                # Deliberately NOT done inside _flowkey: that key also drives
+                # core's flow table (NAT expiry, RST cooldown, flapping), and
+                # making ICMP a flow there would change what gets IMPAIRED, not
+                # just what gets listed. A tuple of a different shape cannot
+                # collide with the 3-tuple flow keys.
+                key = (proto, remote_ip)
 
             dec = self.core.decide(size, is_out, local_port, now, rng,
                                    remote_ip=remote_ip, remote_port=remote_port,
