@@ -97,6 +97,22 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: the effective-loss figure names its boundary (prose only, no behaviour change)
+
+- **Where it came from.** The owner ran the F9 acceptance (ping 30, one reply lost out on the
+  network) and asked why the tool showed 59 packets and zero loss. Both numbers are correct - 30
+  requests out, 29 replies back, nothing broken here - but `tips.eff_loss`, added one commit
+  earlier, opened with "how much of the traffic you aimed at never arrived", which reads as "never
+  reached the far end". That is the wrong quantity, and it is the second reading of the same
+  sentence, so the sentence is at fault, not the reader.
+- `tips.eff_loss` (both lang files) now leads with "how much of the traffic you aimed at THIS TOOL
+  broke" and states outright that a packet lost out in the network never arrives here, so nothing
+  here can count it. Same for the README bullet in EN and PL, which gained the worked ping example
+  (59 packets, zero drops, and why both are right). Values only - no new keys, no code touched.
+- **No test guards this**, and none can: it is prose. What can be said is that nothing else in the
+  repo repeats the claim - `tips.stat_loss`, `tips.col_dropped` and `conns.scope_note` all already
+  scope themselves to the configured impairments, checked before writing this.
+
 ### Fixed: portless traffic (ICMP) reaches the connection log (audit F9)
 
 - **Symptom.** `core._flowkey()` returns `None` when any of local port / peer address / peer port
