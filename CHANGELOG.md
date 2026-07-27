@@ -36,6 +36,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Buffer overflow" and "Dropped at stop" counted up to twice the packets they lost.** With
+  "Duplicate packets" switched on, the tool puts a second copy of the packet in its delay queue,
+  and both counters were charging for the copy as well as for the packet. A run that duplicated
+  everything reported nearly twice as many dropped as it ever captured, so the "Buffer overflow"
+  tile could show a bigger number than the "Packets" tile right beside it, and the overload
+  warning in the log quoted that inflated figure back at you. Both now count packets that never
+  arrived. A dropped copy is not one of them: your application receives one packet instead of
+  two, and one packet is what it would have received without the tool, so a copy that does not
+  fit no longer counts and no longer raises the overload warning on its own. Runs without
+  duplication are unaffected; figures from earlier runs with duplication are not comparable with
+  these, because the old ones were too high.
+
 - **Two tooltips were telling you things that were not true.** "Dropped" said it also counted
   link outages - those have had their own counter for a while, so the tooltip was sending you to
   the wrong number when working out where your packets went. "Downloaded (MB)" promised that

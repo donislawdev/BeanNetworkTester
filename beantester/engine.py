@@ -808,7 +808,13 @@ class BeanEngine:
             self._fine_timers = False
             winenv.release_fine_timers()
         with self._cv:
-            discarded = len(self._heap)
+            # PACKETS still queued, not queue entries: a duplicate copy left in the
+            # queue means the application got one packet instead of two, and one
+            # packet is what it asked for. An original still sitting here is the
+            # only entry that means something never arrived. Counting entries made
+            # a duplicating session overstate the loss (see _enqueue). The scan is
+            # O(queue) but runs once, at STOP, off the capture thread.
+            discarded = sum(1 for entry in self._heap if not entry[3])
             self._heap.clear()
         if discarded:
             # Packets still queued for delayed injection when the session ended:
@@ -973,9 +979,15 @@ class BeanEngine:
                 continue
             if dec.corrupt and self.core.corrupt_packet(packet, rng):
                 self._bump("corrupted")
-            for rel in dec.releases:
-                self._enqueue(rel, packet)
-            if len(dec.releases) > 1:
+            # releases[0] is the packet itself; anything after it is a duplicate
+            # copy (step 12). Kept as an explicit first call plus a branch rather
+            # than a loop over an enumerate: all but the duplicating sessions have
+            # exactly one release, and this is the per-packet path.
+            rels = dec.releases
+            self._enqueue(rels[0], packet)
+            if len(rels) > 1:
+                for rel in rels[1:]:
+                    self._enqueue(rel, packet, copy=True)
                 self._bump("duplicated")
 
     def _send_rst(self, packet):
@@ -1049,14 +1061,37 @@ class BeanEngine:
             # numbers are wrong must say so in the artefact people read later
             self.log_event("WARN", "events.queue_overflow")
 
-    def _enqueue(self, release, packet):
+    def _enqueue(self, release, packet, copy=False):
+        """Queue one release of ``packet`` for delayed injection.
+
+        ``copy=True`` marks a DUPLICATE release (pipeline step 12): the same
+        packet already has an earlier entry in this queue. Overflow and shutdown
+        then count - and warn about - the ORIGINAL only, so both counters stay in
+        PACKETS, which is what their tooltips promise ("Packets dropped because
+        the queue overflowed"). Charging every release made a session with 100%
+        duplication report nearly twice the damage it did: measured seen=1000,
+        duplicated=1000 -> drop_overflow=1900, drop_shutdown=100, so the overflow
+        tile could read HIGHER than the packet tile beside it.
+
+        A refused copy is not a loss to the application either: it receives one
+        packet instead of two, which is one packet. And it must not warn, because
+        the warning quotes the counter ("...you did not ask to lose (N so far)") -
+        firing it with N unchanged would put a false number in the user's log.
+
+        Known, deliberate edge: if the original is refused and the injector then
+        frees a slot so the duplicate fits, the packet IS delivered (up to 20 ms
+        late) yet counted once as lost. Closing that would mean tracking
+        copy/original pairs through the heap; the window is not worth it.
+        """
         with self._cv:
             if len(self._heap) >= self.max_queue:
-                self._bump("drop_overflow")
-                overflowed = True
+                overflowed = not copy
+                if overflowed:
+                    self._bump("drop_overflow")
             else:
                 overflowed = False
-                heapq.heappush(self._heap, (release, next(self._counter), packet))
+                heapq.heappush(self._heap,
+                               (release, next(self._counter), packet, copy))
                 q = len(self._heap)
                 with self._slock:
                     if q > self.st["peak_queue"]:
@@ -1072,7 +1107,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not self._running:
                     break
-                release, _, packet = self._heap[0]
+                release, _, packet, _ = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))

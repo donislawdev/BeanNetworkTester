@@ -42,6 +42,42 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: drop_overflow and drop_shutdown count packets, not queue entries (audit F6)
+
+- **Symptom.** `_enqueue()` runs once per element of `dec.releases`, and pipeline step 12 adds a
+  second element for a duplicate. Both `drop_overflow` (in `_enqueue`) and `drop_shutdown` (in
+  `stop()`, from `len(self._heap)`) therefore counted queue ENTRIES while `tips.stat_overflow` and
+  `tips.stat_shutdown` both promise "Packets". Measured before the fix: `seen=1000`,
+  `duplicated=1000` -> `drop_overflow=1900`, `drop_shutdown=100`, so the "Buffer overflow" tile
+  could read higher than the "Packets" tile in the same session.
+- **Fix (`engine.py` only).** `_enqueue(release, packet, copy=False)`; heap entries carry the flag
+  as a fourth element `(release, counter, packet, copy)` (ordering unaffected, `counter` is unique
+  so comparison never reaches index 2 or 3); `_inject_loop` unpacks four; `stop()` uses
+  `sum(1 for entry in self._heap if not entry[3])`. The capture loop enqueues `releases[0]`
+  directly and only branches into a loop for the duplicates, so the single-release path (every
+  session without duplication) does not pay for an `enumerate`.
+- **The warning follows the counter.** A refused copy no longer warns either, because
+  `log.queue_overflow` interpolates the counter: firing it for a copy would print "the TOOL is now
+  dropping packets you did not ask to lose (0 so far)". Only originals count and warn, which keeps
+  the counter, the log line and the GUI banner (`_drain_engine_warning`, which reads
+  `st["drop_overflow"]`) telling the same story. A queue that refuses only copies is losing the
+  user nothing, so silence is correct.
+- **Known, deliberate gap** (recorded in `_enqueue`'s docstring rather than engineered away): if
+  the original is refused and the injector then frees a slot so the duplicate fits, the packet is
+  delivered up to 20 ms late but counted once as lost. Closing it needs copy/original pairing
+  through the heap.
+- **Hot path measured, not assumed** (Win11 AMD64, CPython 3.14.6, 150k pre-built 1500 B packets
+  through `FakeDivert`, median of 5, both trees benchmarked back to back from a `git worktree` of
+  master): no duplication 153.8k -> 156.0k pkt/s, 100% duplication 100.9k -> 102.4k pkt/s. The
+  medians moved about 1.4% in the new code's favour, but the per-run ranges overlap
+  (147.8-155.5 vs 149.3-157.7), so the honest reading is NO MEASURABLE REGRESSION, not a speedup.
+- New tests, both verified by mutation (reverting each half of the fix turns them red with exactly
+  the pre-fix numbers): `tests/test_engine.py::test_overflow_counts_packets_lost_not_queue_entries`
+  (100% duplication into a 10-slot queue: `drop_overflow == 390` before, `195` after, against
+  `seen=200`) and `::test_drop_shutdown_counts_packets_never_delivered_not_queue_entries`
+  (`drop_shutdown == 400` before, `200` after). Both are deterministic, not statistical:
+  `dup=100%` fires on every packet and the 60 s latency releases nothing before STOP.
+
 ### Fixed: two tooltips that described counters they do not describe (audit F8)
 
 Both in `lang/en.json` and `lang/pl.json`, both user-visible, neither catchable by a test - this is
