@@ -105,13 +105,6 @@ class _FlowTable:
         self._new[key] = value
         self._enforce_ceiling()
 
-    def touch(self, key, value):
-        """Read the previous value and write the new one in a single lookup pass."""
-        previous = self.get(key)
-        self._new[key] = value
-        self._enforce_ceiling()
-        return previous
-
     def _rotate(self):
         """Retire a generation. Truly O(1): nothing is freed on this thread."""
         if self._old:
@@ -479,11 +472,42 @@ class BeanCore:
             # NAT check is its only reader, and NAT is off by default. So the common
             # configuration paid for a table it never looked at: 50 000 packets left
             # 50 000 entries behind, for nothing.
+            #
+            # A DROPPED packet must not refresh the mapping. This used to be a
+            # single `touch()` (read the old stamp, write the new one), so the very
+            # packet being dropped for "your mapping is gone" wrote the stamp that
+            # brought it back: after the first drop, inbound traffic flowed again for
+            # a whole further timeout window with nothing outbound in between.
+            # Measured before the split (timeout 5 s, one outbound at t=0, inbound
+            # only): drop at t=10, then PASS at t=11, t=12, t=13, drop at t=20 - i.e.
+            # one lost packet per timeout instead of a direction that stays shut
+            # until the application sends something. That "does the app send its
+            # keep-alives" test is the entire point of this impairment, and it could
+            # not fail.
+            #
+            # Split into get + set so the write is skipped on the drop path. Same
+            # cost: `touch` was a get plus this same write (measured 160 ns/op both
+            # ways, difference below the noise floor at 200k iterations).
+            #
+            # Bounded honesty: the stamp lives in a _FlowTable, which retires a
+            # generation on age (FLOW_ROTATE_S) and on size, and a retired record
+            # reads back as "never seen" - so the direction CAN reopen with no
+            # outbound packet at all. How long the blackhole really holds turns on
+            # whether other flows are moving, because the drop path returns above the
+            # _prune() call and so never rotates anything itself. Measured (timeout
+            # 5 s, drops from t=10): with this flow alone the blackhole was still
+            # holding at t=200; with one other flow driving _prune it ended at t=30,
+            # the first rotation. So it lasts at least one rotation window, and holds
+            # indefinitely only when nothing else is on the wire. That is the table's
+            # documented safe direction (it can lose an impairment, never invent one)
+            # and it is NOT the resurrection above - there the dropped packet did the
+            # reopening itself, once per timeout, for as long as traffic kept coming.
             if self.nat_timeout_s > 0 and key is not None:
-                last = self._flow_last.touch(key, now)
+                last = self._flow_last.get(key)
                 expired = last is not None and (now - last) > self.nat_timeout_s
                 if expired and not is_outbound:
                     return Decision(True, False, [], "nat")
+                self._flow_last.set(key, now)
 
             # Rotate the bounded tables. O(1) (see _FlowTable) and throttled, so it
             # is safe to call from the hot path - which is the point: the tables must
