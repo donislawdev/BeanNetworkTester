@@ -98,6 +98,17 @@ def test_rst_cooldown_sends_once_then_drops_silently():
 
     assert s["drop_rst"] == 50, s["drop_rst"]
     assert s["rst_sent"] == 1, s["rst_sent"]        # exactly one RST for the flow
+    # ONE connection was reset, and it then swallowed 50 packets for its cooldown.
+    assert s["rst_reset"] == 1, s["rst_reset"]
+
+    # This is the session that tells the three numbers apart, so the repro report's
+    # naming is asserted HERE rather than in a run where they all happen to be 0:
+    # `connections_reset` used to be drop_rst, and would read 50 for one reset.
+    from beantester import DEFAULT_SETTINGS, build_repro_report
+    m = build_repro_report(eng, dict(DEFAULT_SETTINGS))["metrics"]
+    assert m["connections_reset"] == 1, m["connections_reset"]
+    assert m["rst_packets_dropped"] == 50, m["rst_packets_dropped"]
+    assert m["rst_sent"] == 1, m["rst_sent"]
 
 
 def test_simulate_mode_exercises_rst():

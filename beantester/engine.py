@@ -375,7 +375,13 @@ class BeanEngine:
                            drop_loss=0, drop_overflow=0, corrupted=0,
                            duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_block=0, drop_flap=0,
-                           drop_rate=0, drop_shutdown=0, drop_send=0, rst_sent=0,
+                           drop_rate=0, drop_shutdown=0, drop_send=0,
+                           # rst_reset counts CONNECTIONS torn down; drop_rst counts
+                           # the packets each one then swallows for its cooldown, and
+                           # rst_sent the RSTs that actually reached the stack. Three
+                           # different questions - the repro report used to answer the
+                           # first one with the second one's number.
+                           rst_reset=0, rst_sent=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
                            queue=0, peak_queue=0)
@@ -1175,6 +1181,11 @@ class BeanEngine:
                     st["scoped_seen"] += 1
             if dec.drop:
                 if dec.emit_rst:
+                    # Counted HERE, not in _send_rst: the connection is torn down
+                    # (put in cooldown, its traffic dropped) whether or not an RST
+                    # can be built and injected for it. rst_sent answers the other
+                    # question, and the gap between them is worth seeing.
+                    self._bump("rst_reset")
                     self._send_rst(packet)
                 self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
                 self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,

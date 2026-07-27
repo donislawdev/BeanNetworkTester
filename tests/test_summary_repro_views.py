@@ -101,6 +101,12 @@ def test_build_repro_report():
           and any(e["type"] == "START" for e in rep["events"]))
     check("repro report: complete data + CLI command", ok,
           f"(seed={rep['seed']}, cli={rep['cli_command']})")
+    # The three RST numbers are separate keys now. Their VALUES are told apart in
+    # test_rst_local.py, in the one session where they actually differ - asserting
+    # it here would pass on three zeroes and guard nothing.
+    check("repro report: the three RST numbers are three keys",
+          {"connections_reset", "rst_packets_dropped", "rst_sent"} <= set(rep["metrics"]),
+          f"({sorted(rep['metrics'])})")
 
 
 def test_bytes_to_mb():
