@@ -383,6 +383,72 @@ def test_queue_overflow_counted():
           s["peak_queue"] <= 10, f"(peak={s['peak_queue']})")
 
 
+def test_overflow_counts_packets_lost_not_queue_entries():
+    """A duplicating session must not report more overflow drops than packets.
+
+    ``_enqueue`` runs once per release and duplication adds a second one, so
+    charging every release counted the SAME packet twice. The tooltip says
+    "Packets dropped because the queue overflowed", and the "Buffer overflow"
+    tile could read higher than the "Packets" tile next to it.
+
+    Deterministic, not statistical: dup=100% fires on every packet
+    (``random() < 1.0`` always holds), the 60 s latency releases nothing before
+    STOP, so the queue fills once and stays full. Five packets fit (two entries
+    each), every later original is refused.
+    """
+    n, queue = 200, 10
+    pkts = [FakePacket(size=100, port=7300 + i) for i in range(n)]
+    sh = BeanEngine()
+    sh.max_queue = queue
+    sh.set_seed(4242)
+    sh.set_params(0, 0, 100, 60000, 0, 0, 0)     # 100% duplication, 60 s latency
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < n:
+        time.sleep(0.02)
+    s = sh.stats_snapshot()
+    sh.stop()
+
+    check("overflow/dup: every packet was duplicated",
+          s["duplicated"] == n, f"(duplicated={s['duplicated']}, seen={s['seen']})")
+    check("overflow/dup: drops never exceed the packets they are drops OF",
+          s["drop_overflow"] <= s["seen"],
+          f"(overflow={s['drop_overflow']}, seen={s['seen']})")
+    check("overflow/dup: originals refused are counted, copies are not",
+          s["drop_overflow"] == n - queue // 2,
+          f"(overflow={s['drop_overflow']}, expected={n - queue // 2})")
+
+
+def test_drop_shutdown_counts_packets_never_delivered_not_queue_entries():
+    """The same unit mix-up at STOP: a queued duplicate is not a lost packet.
+
+    A copy still waiting when the session ends means the application received one
+    packet instead of two - and one is what it would have received without the
+    tool. Only an ORIGINAL left in the queue is something that never arrived.
+    Counting entries made ``drop_shutdown`` twice ``seen`` here.
+    """
+    n = 200
+    pkts = [FakePacket(size=100, is_outbound=False, port=7500 + i) for i in range(n)]
+    fake = FakeDivert(pkts)
+    sh = BeanEngine()
+    sh.set_seed(4242)
+    sh.set_params(0, 0, 100, 60000, 0, 0, 0)     # 100% duplication, 60 s latency
+    sh.start("test", divert=fake)
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["queue"] < 2 * n:
+        time.sleep(0.02)
+    sh.stop()
+
+    s = sh.stats_snapshot()
+    check("shutdown/dup: nothing was delivered", len(fake.sent) == 0,
+          f"(sent={len(fake.sent)})")
+    check("shutdown/dup: queued copies are not counted as lost packets",
+          s["drop_shutdown"] == n, f"(drop_shutdown={s['drop_shutdown']}, seen={s['seen']})")
+    check("shutdown/dup: seen == delivered + drops",
+          s["seen"] == len(fake.sent) + s["drop_shutdown"],
+          f"(seen={s['seen']}, sent={len(fake.sent)}, shutdown={s['drop_shutdown']})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):
