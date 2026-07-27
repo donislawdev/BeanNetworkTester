@@ -53,6 +53,36 @@ def test_export_connections_csv_writes_the_current_view():
     ''')
 
 
+def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
+    """A ping row reaches the export with both ports None. The columns must come
+    out EMPTY, not "None" and not shifted - a misaligned row here is silent."""
+    run_gui('''
+        import os, tempfile, csv
+        import beantester.gui.app as m
+        path = os.path.join(tempfile.mkdtemp(), "conns.csv")
+        m.CONNECTIONS_CSV_FILE = path
+
+        app.engine.now_ref = lambda: 10.0
+        app.engine.connections_snapshot = lambda limit=None: [
+            dict(local_port=None, remote_ip="8.8.8.8", remote_port=None, proto="ICMP",
+                 packets=6, bytes=588, bytes_in=294, bytes_out=294, dropped=0,
+                 scoped=True, pid=None, first=2.0, last=9.0, dir="out", proc=""),
+        ]
+        app.conn_query = ""
+        app.conn_sort = {"col": "packets", "reverse": True}
+        app.export_connections_csv()
+
+        rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
+        assert len(rows) == 2, rows
+        row = rows[1]
+        assert len(row) == len(rows[0]), ("row is misaligned against the header", row)
+        assert row[2] == "ICMP", row
+        assert row[4] == "" and row[5] == "", ("port cells must be empty", row)
+        assert "None" not in row, row
+        assert row[6] == "6", row                    # packets still line up after them
+    ''')
+
+
 def test_export_connections_csv_honours_the_search():
     run_gui('''
         import os, tempfile, csv

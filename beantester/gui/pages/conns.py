@@ -55,6 +55,7 @@ COLUMN_TIPS = {"proc": "tips.col_process", "pid": "tips.col_pid",
                "up": "tips.col_up", "kb": "tips.col_kb", "avg": "tips.col_avg",
                "dur": "tips.col_dur", "idle": "tips.col_idle"}
 
+
 def port_cell(port):
     """Text for a port cell: empty for traffic that has no ports (ICMP).
 
@@ -292,7 +293,16 @@ class ConnsPage:
 
     @staticmethod
     def _key_of(c):
-        return f"{c.get('local_port')}|{c.get('remote_ip')}|{c.get('remote_port')}"
+        """Identity of a row, stable across sorts. MUST be unique per row.
+
+        The protocol is part of it because portless rows (ICMP) have no ports to
+        tell them apart: without it, ping and any other portless protocol to the
+        same address - ESP or GRE to a VPN gateway, say - collapse to the same
+        key, and the widget's key index is a dict, so selecting one would land on
+        the other.
+        """
+        return (f"{c.get('proto')}|{c.get('local_port')}|"
+                f"{c.get('remote_ip')}|{c.get('remote_port')}")
 
     def refresh(self, force=False):
         """Repaint always (cheap); rebuild off-thread (never blocks the UI).

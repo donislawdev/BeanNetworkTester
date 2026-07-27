@@ -133,7 +133,19 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - **Checked and NOT broken** (verified rather than assumed): sorting by a port column -
   `filter_sort_connections` casts inside `try/except (TypeError, ValueError)` -> 0.0, and the text
   branch goes through `str()`; the connections CSV export - `csv.writer` writes `None` as an empty
-  cell; `ConnsPage._key_of` - yields `"None|8.8.8.8|None"`, unique per peer.
+  cell, now pinned by `test_conns_export.py::test_export_connections_csv_writes_a_portless_row_with_empty_port_cells`;
+  the context menu - `_selected()` reads the DISPLAYED cells, so "Limit to this IP:port" on a ping
+  row fills the address and leaves the port blank, and "Target this process" is already disabled
+  for a row with no process.
+- **A fourth consumer, found by re-reading this change rather than by a test failing.**
+  `ConnsPage._key_of` joined local port, address and remote port - unique for every row while
+  every row had ports, and no longer: two portless rows to the SAME address (ping plus, say, ESP
+  or GRE to a VPN gateway) both stringify to `"None|10.8.0.1|None"`. `SortableTree._ensure_index`
+  builds `{key: position}` as a **dict**, so one of the two rows becomes unselectable and
+  unscrollable-to. The protocol is now part of the identity. This is a defect this change would
+  have INTRODUCED, like the `--log-conns` crash; guarded by
+  `test_conns_columns.py::test_two_portless_rows_to_one_address_keep_separate_identities`
+  (mutation: restoring the old key collapses the index to one entry).
 - **Hot path:** one extra `key is None` comparison per packet. Measured against a `git worktree`
   of master (150k 1500 B packets, median of 5): 153.4k -> 158.8k pkt/s, i.e. no measurable cost
   (the difference is run-to-run spread, the two paths differ by one comparison).

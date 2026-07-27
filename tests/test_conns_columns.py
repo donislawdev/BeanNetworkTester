@@ -85,3 +85,29 @@ def test_a_portless_row_renders_empty_port_cells_and_is_not_searchable_as_none()
         assert filter_sort_connections(rows, query="none") == [], "searching 'none' matched a ping row"
         assert len(filter_sort_connections(rows, query="8.8.8.8")) == 1, "the address must still match"
     ''')
+
+
+def test_two_portless_rows_to_one_address_keep_separate_identities():
+    """The widget's key index is a dict, so two rows sharing a key means one of
+    them cannot be selected or scrolled to. Portless rows have no ports to tell
+    them apart, so the protocol has to be part of the identity - ping and, say,
+    ESP to the same VPN gateway are two rows."""
+    run_gui('''
+        page = app.pages["connections"]
+        app.engine.now_ref = lambda: 100.0
+        rows = [dict(local_port=None, remote_ip="10.8.0.1", remote_port=None, proto="ICMP",
+                     packets=5, bytes=490, bytes_in=245, bytes_out=245, dropped=0,
+                     scoped=True, pid=None, first=90.0, last=99.0, dir="out", proc=""),
+                dict(local_port=None, remote_ip="10.8.0.1", remote_port=None, proto="IP",
+                     packets=9, bytes=900, bytes_in=400, bytes_out=500, dropped=0,
+                     scoped=True, pid=None, first=91.0, last=99.0, dir="out", proc="")]
+        app.engine.connections_snapshot = lambda limit=None: rows
+        req = {"engine": app.engine, "query": "", "sort": {"col": "packets", "reverse": True},
+               "limit": app.row_limit(), "now": 100.0, "proc_map": {}}
+        page._apply(page._build_model(req))
+
+        keys = [key for key, _vals, _tags in page.table.rows]
+        assert len(set(keys)) == 2, ("both rows must have their own identity", keys)
+        index = page.table._ensure_index()
+        assert len(index) == 2, ("the key index collapsed a row", index)
+    ''')
