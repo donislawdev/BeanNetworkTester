@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **The Connections table now tells you what arrived AND what was offered.** The
+  "down", "up" and "total" columns held the bytes the tool *captured* - under headings the session
+  panel uses for what actually arrived. Those are the same number only while you are impairing
+  nothing: with a speed limit in place a row could read 5 MB received while its application had
+  received 0.4 MB. Those three columns are now the **delivered** bytes, agreeing with "Downloaded
+  (MB)" in the session panel, and two new columns - **"down seen"** and **"up seen"** - hold what
+  was captured. The gap between the pairs is the damage done to that connection, which is the
+  number you were probably trying to read off this table in the first place. Every one of them has
+  a tooltip saying which is which, because the headings alone cannot carry it. The footer sums the
+  delivered columns, and says so. **The connections CSV changed shape**: `download_bytes`,
+  `upload_bytes` and `total_bytes` are replaced by `delivered_down_bytes`, `delivered_up_bytes`,
+  `delivered_total_bytes`, `captured_down_bytes`, `captured_up_bytes` and `captured_total_bytes` -
+  renamed rather than reused, because a column that quietly changes meaning is worse than one that
+  disappears.
+
 - **BREAKING:** **"Effective loss" now means what its name says, and your numbers will change.**
   It used to be the configured Loss percentage divided by every packet the tool saw, and both
   halves of that were wrong. It ignored every other way the tool destroys traffic - a speed limit,
@@ -55,6 +70,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   passes through untouched. Both READMEs say so next to the equivalent note for `!53` on ports.
 
 ### Fixed
+
+- **A connection's "dropped" count ignored the packets the tool's own queue threw away.** The
+  figure was recorded a step too early - before the packet was even queued - so a session that
+  dropped 5 500 packets to a full delay queue could show `dropped = 0` on the very row it happened
+  to, and packets still waiting when you pressed STOP were never counted against their connection
+  at all. Both now land on the row they belong to.
 
 - **A failed "Export connections CSV" left a stray `.tmp` file next to the real one.** The export
   writes to a temporary file and renames it, which is what makes it safe to overwrite the previous

@@ -19,11 +19,15 @@ def test_export_connections_csv_writes_the_current_view():
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
+            # chrome was impaired: it offered 2048 down and only 1024 arrived
             dict(local_port=51000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
-                 packets=4, bytes=3072, bytes_in=2048, bytes_out=1024, dropped=3,
+                 packets=4, bytes=3072, bytes_in=2048, bytes_out=1024,
+                 sent=2048, sent_in=1024, sent_out=1024, dropped=3,
                  scoped=True, pid=1234, first=2.0, last=9.0, dir="in", proc="chrome.exe"),
+            # svchost was untouched: delivered == captured
             dict(local_port=51001, remote_ip="8.8.8.8", remote_port=53, proto="UDP",
-                 packets=2, bytes=600, bytes_in=100, bytes_out=500, dropped=0,
+                 packets=2, bytes=600, bytes_in=100, bytes_out=500,
+                 sent=600, sent_in=100, sent_out=500, dropped=0,
                  scoped=False, pid=None, first=5.0, last=8.0, dir="out", proc="svchost.exe"),
         ]
         app.conn_query = ""
@@ -34,20 +38,27 @@ def test_export_connections_csv_writes_the_current_view():
         # the header mirrors the table's columns
         assert rows[0] == ["process", "pid", "proto", "remote_ip", "remote_port",
                            "local_port", "packets", "impaired", "dropped",
-                           "download_bytes", "upload_bytes", "total_bytes",
+                           "delivered_down_bytes", "delivered_up_bytes",
+                           "delivered_total_bytes",
+                           "captured_down_bytes", "captured_up_bytes",
+                           "captured_total_bytes",
                            "avg_bytes", "duration_s", "idle_s"], rows[0]
-        # sorted by upload desc: chrome (1024) before svchost (500)
+        # sorted by delivered upload desc: chrome (1024) before svchost (500)
         assert rows[1][0] == "chrome.exe" and rows[2][0] == "svchost.exe", rows
         chrome, svc = rows[1], rows[2]
         assert chrome[1] == "1234", chrome            # pid
         assert chrome[7] == "yes" and chrome[8] == "3", chrome   # impaired, dropped
         assert svc[1] == "" and svc[7] == "no" and svc[8] == "0", svc
-        # download / upload / total are the raw bytes_in / bytes_out / bytes
-        assert chrome[9:12] == ["2048", "1024", "3072"], chrome
+        # delivered first, then captured - and for chrome they DIFFER, which is
+        # the whole point: 2048 B were offered downstream, 1024 B arrived
+        assert chrome[9:12] == ["1024", "1024", "2048"], chrome
+        assert chrome[12:15] == ["2048", "1024", "3072"], chrome
+        # an untouched flow has the two pairs equal
         assert svc[9:12] == ["100", "500", "600"], svc
-        # avg_bytes = total // packets (3072 // 4 = 768), duration, idle
-        assert chrome[12] == "768", chrome
-        assert chrome[13] == "7.0" and chrome[14] == "1.0", chrome
+        assert svc[12:15] == ["100", "500", "600"], svc
+        # avg_bytes is CAPTURED bytes per captured packet (3072 / 4 = 768)
+        assert chrome[15] == "768", chrome
+        assert chrome[16] == "7.0" and chrome[17] == "1.0", chrome
         # atomic overwrite leaves no temp file behind
         assert not os.path.exists(path + ".tmp")
     ''')
@@ -166,8 +177,9 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
         app.export_connections_csv()
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
-        assert rows[1][12] == "768", rows[1]                 # rounded, not floored 767
-        assert rows[1][12] == str(avg_packet_bytes(row)), rows[1]
+        avg = rows[0].index("avg_bytes")
+        assert rows[1][avg] == "768", rows[1]                 # rounded, not floored 767
+        assert rows[1][avg] == str(avg_packet_bytes(row)), rows[1]
     ''')
 
 

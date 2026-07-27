@@ -38,11 +38,13 @@ COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "local_port": "conns.local_port", "packets": "conns.packets",
            "scoped": "conns.scoped", "dropped": "conns.dropped",
            "down": "conns.down", "up": "conns.up", "kb": "conns.kb",
+           "down_seen": "conns.down_seen", "up_seen": "conns.up_seen",
            "avg": "conns.avg", "dur": "conns.time", "idle": "conns.idle"}
 
 MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6,
              "local_port": 6, "packets": 7, "scoped": 7, "dropped": 8, "down": 8,
-             "up": 8, "kb": 8, "avg": 7, "dur": 6, "idle": 6}
+             "up": 8, "kb": 8, "down_seen": 11, "up_seen": 11,
+             "avg": 7, "dur": 6, "idle": 6}
 
 # One tooltip per COLUMN, shown next to its header. The old single tooltip hung
 # on the whole tree, so it popped up over the rows and explained nothing about
@@ -52,7 +54,9 @@ COLUMN_TIPS = {"proc": "tips.col_process", "pid": "tips.col_pid",
                "remote_port": "tips.col_remote_port", "local_port": "tips.col_local_port",
                "packets": "tips.col_packets", "scoped": "tips.col_scoped",
                "dropped": "tips.col_dropped", "down": "tips.col_down",
-               "up": "tips.col_up", "kb": "tips.col_kb", "avg": "tips.col_avg",
+               "up": "tips.col_up", "kb": "tips.col_kb",
+               "down_seen": "tips.col_down_seen", "up_seen": "tips.col_up_seen",
+               "avg": "tips.col_avg",
                "dur": "tips.col_dur", "idle": "tips.col_idle"}
 
 
@@ -268,9 +272,14 @@ class ConnsPage:
                 c.get("pid") or "", c.get("proto", "IP"), c.get("remote_ip"),
                 port_cell(c.get("remote_port")), port_cell(c.get("local_port")), packets,
                 scoped, c.get("dropped", 0),
+                # delivered first (what the application got), captured after it -
+                # the gap between the two pairs IS the damage this row suffered
+                f"{c.get('sent_in', 0) / 1024.0:.1f}",
+                f"{c.get('sent_out', 0) / 1024.0:.1f}",
+                f"{c.get('sent', 0) / 1024.0:.1f}",
                 f"{c.get('bytes_in', 0) / 1024.0:.1f}",
                 f"{c.get('bytes_out', 0) / 1024.0:.1f}",
-                f"{c.get('bytes', 0) / 1024.0:.1f}", f"{avg_packet_bytes(c)}",
+                f"{avg_packet_bytes(c)}",
                 f"{dur:.1f}", f"{idle:.1f}")
 
     def _tag_of(self, c):

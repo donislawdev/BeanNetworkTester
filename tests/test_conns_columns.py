@@ -22,10 +22,12 @@ def test_connection_columns_tag_and_footer():
         app.engine.core.set_target(True, {5000})
         rows = [
             dict(local_port=5000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
-                 packets=10, bytes=10240, bytes_in=8192, bytes_out=2048, dropped=3,
+                 packets=10, bytes=10240, bytes_in=8192, bytes_out=2048,
+                 sent=10240, sent_in=8192, sent_out=2048, dropped=3,
                  scoped=True, pid=1234, first=90.0, last=99.0, dir="out", proc="chrome.exe"),
             dict(local_port=5001, remote_ip="192.168.0.5", remote_port=80, proto="TCP",
-                 packets=4, bytes=4096, bytes_in=0, bytes_out=4096, dropped=0,
+                 packets=4, bytes=4096, bytes_in=0, bytes_out=4096,
+                 sent=4096, sent_in=0, sent_out=4096, dropped=0,
                  scoped=True, pid=None, first=95.0, last=98.0, dir="out", proc="svchost.exe"),
         ]
         app.engine.connections_snapshot = lambda limit=None: rows
@@ -33,8 +35,8 @@ def test_connection_columns_tag_and_footer():
                "limit": app.row_limit(), "now": 100.0, "proc_map": {}}
         page._apply(page._build_model(req))
 
-        # the render tuple must line up with the 15 columns
-        assert len(page.table.columns) == 15, page.table.columns
+        # the render tuple must line up with the 17 columns
+        assert len(page.table.columns) == 17, page.table.columns
         model = {vals[0]: (vals, tags) for _key, vals, tags in page.table.rows}
 
         chrome_vals, chrome_tags = model["chrome.exe"]

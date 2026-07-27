@@ -1054,9 +1054,17 @@ class App:
     # not KB: a CSV is read by a spreadsheet or a script, where exact, summable
     # integers beat the one-decimal KB the table shows for people. `impaired` is
     # "yes"/"no" in English, like the headers - the CSV is language-independent.
+    # delivered_* is what reached the application; captured_* is what the tool
+    # saw offered. The old download_bytes/upload_bytes/total_bytes held CAPTURED
+    # under names every other surface uses for delivered, so they are renamed
+    # rather than reused - a column that quietly changes meaning is worse than one
+    # that disappears.
     CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
                        "local_port", "packets", "impaired", "dropped",
-                       "download_bytes", "upload_bytes", "total_bytes",
+                       "delivered_down_bytes", "delivered_up_bytes",
+                       "delivered_total_bytes",
+                       "captured_down_bytes", "captured_up_bytes",
+                       "captured_total_bytes",
                        "avg_bytes", "duration_s", "idle_s"]
 
     def export_connections_csv(self):
@@ -1089,6 +1097,7 @@ class App:
                         c.get("remote_port", ""), c.get("local_port", ""),
                         packets, "yes" if c.get("scoped") else "no",
                         c.get("dropped", 0),
+                        c.get("sent_in", 0), c.get("sent_out", 0), c.get("sent", 0),
                         c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
                         avg_packet_bytes(c),
                         f"{max(0.0, last - c.get('first', now)):.1f}",

@@ -97,6 +97,63 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### BREAKING: connection rows separate captured from delivered, and count the queue's drops (audit F5)
+
+Two independent divergences in one table, fixed together because both need the same missing
+mechanism: per-flow attribution of what happens AFTER the capture thread has moved on.
+
+- **(a) `dropped` was recorded a step too early.** `_log_conn(dropped=dec.drop)` ran before
+  `_enqueue`, so a packet the QUEUE refused counted nowhere in its row: measured
+  `drop_overflow=5500` against `dropped=0` on the row it happened to, and `drop_shutdown=4000` with
+  `dropped=0` and `bytes_in=4.8 MB` on a row that received nothing. `_enqueue` now returns whether
+  it refused, and `stop()` charges every stranded ORIGINAL to the row that was expecting it.
+- **(b) `bytes`/`bytes_in`/`bytes_out` were CAPTURED bytes under headings every other surface uses
+  for DELIVERED** (session panel "Downloaded (MB)", repro report). Measured: a row reading
+  `bytes_in = 5 122 600 B` whose application received `409 600 B`, a factor of 12.5. Rows now carry
+  both: `bytes*` (captured, unchanged) and `sent`/`sent_in`/`sent_out` (delivered, new). The GUI's
+  `down`/`up`/`kb` columns are the DELIVERED pair - so they finally agree with the session panel -
+  and `down_seen`/`up_seen` are new columns for captured. `traffic_totals` (the footer) follows the
+  columns above it and sums delivered; `conns.totals` says "Delivered" outright.
+- **The mechanism.** Queue entries gained the flow key as a fifth element
+  `(release, counter, packet, copy, key)`; the injector credits delivered bytes with it, `stop()`
+  charges stranded packets with it, and the send-failure path charges the row too (F14's counter
+  gets its per-flow half here).
+- **Ordering is load-bearing, and the first version got it wrong.** Moving `_log_conn` AFTER
+  `_enqueue` (so it could log the refusal in one call) opens a race: with no latency set the
+  injector can deliver a packet before the row exists, and `_log_delivered` then has nowhere to
+  credit it. It usually loses that race - it must wake on `_cv` first - which is exactly the
+  "usually" that becomes a flake later. The row is created first; a refusal is charged afterwards
+  through `_charge_flow`, off the common path.
+- **`_log_delivered` runs WITHOUT `_clock`**, on the same reasoning as `SocketWatcher.pid_for`
+  (convention 20): `sent`/`sent_in`/`sent_out` have exactly one writer, the inject thread, because
+  the capture thread only ever initialises them at row creation. Readers only read, and an int
+  rebind is atomic. `_charge_flow` (used for `dropped`, which the capture thread also writes) does
+  take the lock. Guarded by
+  `tests/test_engine.py::test_only_the_injector_writes_the_delivered_counters`, a source scan -
+  nothing else can enforce a single-writer invariant, and a future edit crediting delivered bytes
+  from another thread would drop updates silently and only under load.
+- **Hot path measured, and it costs something** (Win11 AMD64, CPython 3.14.6, 150k 1500 B packets,
+  median of 5, three repetitions against a worktree of the parent branch): parent 157.4 / 161.4 /
+  160.9k pkt/s, this branch 153.8 / 153.5 / 153.8k - about **4% down**, consistently, on the
+  synthetic path. Dropping the lock recovered roughly 1 point of the 5 the locked version cost
+  (160.4 -> 152.0k with it); the rest is the dict lookup and the adds themselves, i.e. the price of
+  the feature. Note the synthetic `send()` is a list append, so a real WinDivert syscall dilutes
+  this - unmeasured, and not claimed.
+- New tests: `tests/test_engine.py::test_a_connection_row_records_the_drops_the_queue_made`
+  (asserts the row before AND after STOP: 190 refused, then 200 once the stranded ten are charged),
+  `::test_an_undisturbed_row_has_delivered_equal_to_captured` (so the new columns are not a
+  permanent discrepancy), and `tests/test_views.py::test_delivered_and_captured_are_different_columns`.
+  Five mutants, every one caught **after one repair**: the first version of the views test only
+  compared sort ORDER, and the mutant that put captured back under `down` kept the same order, so
+  it passed. It now reads the `DERIVED` cells directly and uses a row pair that leads on opposite
+  columns.
+- Existing tests updated to the new contract rather than to green: `_conn()` in `test_views.py`
+  defaults `sent_* == bytes_*` (an undisturbed flow), and the export test now asserts an impaired
+  row where the two pairs genuinely differ.
+- i18n: new `conns.down_seen` / `conns.up_seen` / `tips.col_down_seen` / `tips.col_up_seen`;
+  `tips.col_down` / `col_up` / `col_kb` and `conns.totals` reworded to say which quantity they hold
+  and to point at the other pair. Both READMEs describe the split with the measured example.
+
 ### Fixed: three small ones - stray .tmp, orphaned scenario runner, STOP racing a capture fault (audit F11, F12, F13)
 
 **F11 - `export_connections_csv` left its temp file on failure.** It writes `path + ".tmp"` and

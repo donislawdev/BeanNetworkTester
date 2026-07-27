@@ -108,9 +108,16 @@ def avg_packet_bytes(c):
 # pointless work at 200 000. Now they are computed inside the sort key, i.e.
 # once per row per sort, and rendered only for the rows actually on screen.
 DERIVED = {
-    "down": lambda c, now: c.get("bytes_in", 0) / 1024.0,
-    "up": lambda c, now: c.get("bytes_out", 0) / 1024.0,
-    "kb": lambda c, now: c.get("bytes", 0) / 1024.0,
+    # down/up/kb are DELIVERED - what the application actually got, the same
+    # quantity the session panel and the repro report call "Downloaded". They used
+    # to be the CAPTURED bytes under those headings, which is a different number
+    # whenever the tool is doing its job: measured 5 122 600 B in a row whose
+    # application received 409 600 B. Captured is still here, as down_seen/up_seen.
+    "down": lambda c, now: c.get("sent_in", 0) / 1024.0,
+    "up": lambda c, now: c.get("sent_out", 0) / 1024.0,
+    "kb": lambda c, now: c.get("sent", 0) / 1024.0,
+    "down_seen": lambda c, now: c.get("bytes_in", 0) / 1024.0,
+    "up_seen": lambda c, now: c.get("bytes_out", 0) / 1024.0,
     "avg": lambda c, now: c.get("bytes", 0) / max(1, c.get("packets", 0)),
     "scoped": lambda c, now: 1 if c.get("scoped") else 0,
     "dur": lambda c, now: max(0.0, c.get("last", now) - c.get("first", now)),
@@ -145,9 +152,13 @@ def traffic_totals(conns, query="", proc_map=None):
     search selects - which is exactly the number the display cap hides."""
     down = up = total = 0
     for c in _filter_connections(conns, query, proc_map):
-        down += c.get("bytes_in", 0)
-        up += c.get("bytes_out", 0)
-        total += c.get("bytes", 0)
+        # DELIVERED, because the footer uses the same three words as the columns
+        # above it ("down / up / total") and those are delivered now. A footer
+        # summing captured under headings that mean delivered is the same mismatch
+        # this split exists to remove, one row lower down.
+        down += c.get("sent_in", 0)
+        up += c.get("sent_out", 0)
+        total += c.get("sent", 0)
     return {"down": down, "up": up, "total": total}
 
 
@@ -182,7 +193,8 @@ def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
     """
     out = _filter_connections(conns, query, proc_map)
     numeric = sort_col in ("remote_port", "local_port", "packets", "bytes",
-                           "bytes_in", "bytes_out", "down", "up", "kb", "avg",
+                           "bytes_in", "bytes_out", "sent", "sent_in", "sent_out",
+                           "down", "up", "kb", "down_seen", "up_seen", "avg",
                            "dropped", "pid", "dur", "idle", "first", "last")
     derived = DERIVED.get(sort_col)
     clock = now if now is not None else 0.0

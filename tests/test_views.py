@@ -13,7 +13,7 @@ that carry real risk:
 * ``SearchIndex`` - the per-keystroke search cache, whose correctness hinges on
   rebuilding when a row's stamp changes and on never mutating the rows it caches.
 """
-from beantester.views import (SearchIndex, avg_packet_bytes, connection_proc,
+from beantester.views import (DERIVED, SearchIndex, avg_packet_bytes, connection_proc,
                               filter_sort_connections, traffic_totals)
 from fakes import check
 
@@ -34,9 +34,19 @@ def test_avg_packet_bytes_rounds_like_the_table():
     check("avg: missing fields count as zero", avg_packet_bytes({}) == 0)
 
 
-def _conn(port, ip, proc, bin_, bout, packets=1, proto="TCP"):
+def _conn(port, ip, proc, bin_, bout, packets=1, proto="TCP",
+          sent_in=None, sent_out=None):
+    """One connection row.
+
+    ``bytes_*`` are CAPTURED and ``sent_*`` are DELIVERED. They default to equal,
+    i.e. an undisturbed flow - which is what every test that does not say
+    otherwise means by "a connection with this much traffic".
+    """
+    sent_in = bin_ if sent_in is None else sent_in
+    sent_out = bout if sent_out is None else sent_out
     return dict(local_port=port, remote_ip=ip, remote_port=443, proto=proto,
                 packets=packets, bytes=bin_ + bout, bytes_in=bin_, bytes_out=bout,
+                sent=sent_in + sent_out, sent_in=sent_in, sent_out=sent_out,
                 dir="out", proc=proc)
 
 
@@ -67,8 +77,56 @@ def test_sort_by_every_new_numeric_column():
 
     check("sort by down: most-downloaded first", top("down") == 1, f"({top('down')})")
     check("sort by up: most-uploaded first", top("up") == 2, f"({top('up')})")
+    check("sort by down seen: most-captured first", top("down_seen") == 1,
+          f"({top('down_seen')})")
+    check("sort by up seen: most-captured first", top("up_seen") == 2,
+          f"({top('up_seen')})")
     check("sort by dropped: most-dropped first", top("dropped") == 1, f"({top('dropped')})")
     check("sort by pid: highest pid first", top("pid") == 2, f"({top('pid')})")
+
+
+def test_delivered_and_captured_are_different_columns():
+    """The whole point of the split: an impaired flow shows the two apart, and
+    the delivered pair is the one the footer and the session panel agree with.
+
+    Measured before the split: a row read bytes_in = 5 122 600 B under a heading
+    the session panel used for delivered, while the application received 409 600 B.
+    """
+    hurt = _conn(1, "1.1.1.1", "chrome.exe", 5_122_600, 0, sent_in=409_600, sent_out=0)
+    clean = _conn(2, "2.2.2.2", "svchost.exe", 1000, 500)
+
+    down = {c["local_port"]: c for c in filter_sort_connections([hurt, clean])}
+    check("split: captured is what the flow offered",
+          down[1]["bytes_in"] == 5_122_600)
+    check("split: delivered is what it got", down[1]["sent_in"] == 409_600)
+    check("split: an undisturbed flow has them equal",
+          down[2]["sent_in"] == down[2]["bytes_in"] == 1000)
+
+    totals = traffic_totals([hurt, clean])
+    check("split: the footer sums DELIVERED, like the columns above it",
+          totals["down"] == 409_600 + 1000, f"({totals})")
+
+    # the cells themselves, not just their order: sorting alone cannot tell the
+    # two apart when one row happens to lead on both (it did not, and the mutant
+    # that put captured back under "down" went unnoticed until this was added)
+    check("split: the down column reads DELIVERED",
+          DERIVED["down"](hurt, 0.0) == 409_600 / 1024.0,
+          f"({DERIVED['down'](hurt, 0.0)})")
+    check("split: the down seen column reads CAPTURED",
+          DERIVED["down_seen"](hurt, 0.0) == 5_122_600 / 1024.0,
+          f"({DERIVED['down_seen'](hurt, 0.0)})")
+
+    # and they order the table independently: this pair leads on opposite columns
+    starved = _conn(3, "3.3.3.3", "a", 9_000, 0, sent_in=10)      # huge offer, nothing through
+    modest = _conn(4, "4.4.4.4", "b", 1_000, 0, sent_in=1_000)    # small offer, all through
+    by_down = [c["local_port"] for c in
+               filter_sort_connections([starved, modest], sort_col="down", reverse=True)]
+    by_seen = [c["local_port"] for c in
+               filter_sort_connections([starved, modest], sort_col="down_seen", reverse=True)]
+    check("split: delivered ranks the flow that actually got its data first",
+          by_down[0] == 4, f"({by_down})")
+    check("split: captured ranks the flow that offered the most first",
+          by_seen[0] == 3, f"({by_seen})")
 
 
 def test_derived_avg_and_scoped():
@@ -87,7 +145,8 @@ def test_derived_avg_and_scoped():
 def make_conns(n):
     """n connection rows with strictly increasing, distinct sortable fields."""
     return [{
-        "bytes": i * 1000, "packets": i, "remote_ip": f"10.0.0.{i % 256}",
+        "bytes": i * 1000, "sent": i * 1000, "packets": i,
+        "remote_ip": f"10.0.0.{i % 256}",
         "remote_port": 1000 + i, "local_port": 40000 + i, "proto": "TCP",
         "dir": "out", "first": float(i), "last": float(i) + 5.0, "proc": "",
     } for i in range(n)]
@@ -133,8 +192,8 @@ def test_limit_zero_returns_everything():
 def test_sort_by_derived_kb_matches_bytes_order():
     conns = make_conns(20)
     out = filter_sort_connections(conns, sort_col="kb", reverse=True, limit=0)
-    check("kb sorts by bytes/1024, i.e. by bytes",
-          [c["bytes"] for c in out] == sorted((c["bytes"] for c in conns), reverse=True))
+    check("kb sorts by delivered/1024, i.e. by the delivered total",
+          [c["sent"] for c in out] == sorted((c["sent"] for c in conns), reverse=True))
 
 
 def test_sort_by_derived_idle_uses_now():
