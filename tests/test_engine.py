@@ -687,6 +687,39 @@ def test_failed_injections_do_not_flood_the_log():
           "WARN" in kinds, f"({kinds})")
 
 
+def test_a_second_scenario_stops_the_first_instead_of_orphaning_it():
+    """Overwriting `_scenario_runner` left the old thread alive and unreachable.
+
+    `stop_scenario()` only ever knew about the CURRENT object, so the orphan kept
+    applying its own steps to the same engine: two scenarios fighting over the
+    settings with nothing on screen to say why. Found by reading - today's callers
+    (GUI and CLI) start one scenario per session - but "nobody calls it twice" is
+    not a property of the engine.
+    """
+    from beantester.scenario import Scenario
+
+    sh = BeanEngine()
+    sh.start("test", divert=FakeDivert([FakePacket(size=100, port=8100)]))
+    try:
+        scenario = Scenario(steps=[{"at": 30.0, "settings": {"loss": 1}}], loop=True)
+        sh.start_scenario(scenario, dict(loss=0))
+        first = sh._scenario_runner
+        sh.start_scenario(scenario, dict(loss=0))
+        second = sh._scenario_runner
+
+        check("scenario: the second start really replaced the runner",
+              second is not first)
+        check("scenario: the first runner was stopped, not orphaned",
+              first._stop is True, f"(_stop={first._stop})")
+        deadline = time.time() + 5
+        while time.time() < deadline and first._thread.is_alive():
+            time.sleep(0.02)
+        check("scenario: and its thread is gone",
+              not first._thread.is_alive())
+    finally:
+        sh.stop()
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):

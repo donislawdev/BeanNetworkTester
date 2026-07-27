@@ -346,7 +346,18 @@ class BeanEngine:
         return self._running
 
     def start_scenario(self, scenario, base_settings, log=lambda *_: None):
-        """Start a background runner that applies scenario steps over time."""
+        """Start a background runner that applies scenario steps over time.
+
+        Any previous runner is stopped FIRST. Overwriting the attribute without
+        stopping it left the old thread alive and unreachable: ``stop_scenario``
+        only ever knew about the current object, so the orphan kept applying its
+        own steps to the same engine, and two scenarios fought over the settings
+        with nothing on screen to say why. Today's callers start once per session
+        (GUI and CLI both), so this was found by reading, NOT reproduced in the
+        running program - the guard is here because "nobody calls it twice today"
+        is not a property of the engine.
+        """
+        self.stop_scenario()
         self._scenario_runner = ScenarioRunner(self)
         self._scenario_runner.start(scenario, base_settings, log)
 
@@ -895,31 +906,72 @@ class BeanEngine:
         _LIVE_ENGINES.discard(self)
         self.log(T("log.stop"))
 
+    # How long the capture thread waits on _stop_lock before re-checking WHO holds
+    # it. Short enough that a racing external STOP is never delayed noticeably,
+    # long enough not to spin. See _fault_stop_blocking.
+    FAULT_LOCK_POLL_S = 0.05
+
     def _fail_stop(self, error, blocking=True):
         """A worker died: stop the session so the network is never left impaired.
 
         ``blocking`` picks HOW the stop is taken, and the two callers genuinely differ:
 
-        * The CAPTURE thread calls this on a real recv() fault (blocking=True). A plain
-          ``stop()`` is right, and necessary: the fault can arrive while ``start()``
-          still holds ``_stop_lock`` (a divert that fails on its very first reads,
-          before start() has returned) - blocking makes the capture thread wait for
-          start() to finish and then stop cleanly, keeping the REAL fault message. It
-          cannot deadlock against an external STOP: that path closes the divert first,
-          so the capture loop sees ``_running`` already False and never reaches here.
+        * The CAPTURE thread calls this on a real recv() fault (blocking=True). It has
+          to be able to WAIT: the fault can arrive while ``start()`` still holds
+          ``_stop_lock`` (a divert that fails on its very first reads, before start()
+          has returned), and that is not a corner case - it is what
+          ``test_a_dead_capture_thread_fails_open`` exercises. Bowing out there would
+          hand the teardown to the watchdog a tick later for no reason.
         * The WATCHDOG calls this from its liveness check (blocking=False). It must NOT
           block on ``_stop_lock``: an external ``stop()`` holds it while joining the
           watchdog thread, so blocking would hang STOP for the join timeout (F2). It
-          goes through ``_worker_stop`` instead, which bows out under contention.
+          goes through ``_worker_stop``, which bows out under contention.
+
+        What changed (F13): the capture path waits for ``start()`` but never for
+        another STOP - see ``_fault_stop_blocking``. The docstring here used to claim
+        it "cannot deadlock against an external STOP: that path closes the divert
+        first, so the capture loop sees _running already False and never reaches
+        here". True when the fault IS that stop closing the divert; it does not cover
+        a ``recv()`` failing for its own reason in the few instructions between the
+        ``_running`` check below and the stop call. The capture thread then waited on
+        the lock while the external stop waited to join it, and STOP took the full
+        2 s join timeout. Never a deadlock - but "cannot" was too strong, and a
+        sentence like that is what stops the next session from looking. NOT
+        reproduced: found by reading, and the window is a few instructions wide.
         """
         if not self._running:
             return
-        self.fault = str(error)
-        self.log(T("log.engine_fault", e=self.fault))
+        # First fault wins. The watchdog's "worker thread died unexpectedly" is a
+        # SYMPTOM of the real error - if the capture thread recorded the cause a
+        # moment earlier, overwriting it here would throw away the only useful half
+        # of the report. Both are still LOGGED: two failures are two events.
+        if not self.fault:
+            self.fault = str(error)
+        self.log(T("log.engine_fault", e=str(error)))
         if blocking:
-            self.stop(reason="fault")
+            self._fault_stop_blocking()
         else:
             self._worker_stop(reason="fault")
+
+    def _fault_stop_blocking(self):
+        """Take ``_stop_lock`` for a capture-thread fault: wait for a start, never
+        for another stop.
+
+        The difference is visible without any extra state. ``_stop_locked`` clears
+        ``_running`` as its second statement, so while the lock is held: still
+        running means ``start()`` owns it and is about to release it (wait - that is
+        the case the blocking path exists for), and no longer running means a stop
+        already owns the teardown, is closing the divert, and is joining THIS thread
+        with a 2.0 s timeout. Waiting on that one buys nothing and costs the user a
+        two-second STOP.
+        """
+        while not self._stop_lock.acquire(timeout=self.FAULT_LOCK_POLL_S):
+            if not self._running:
+                return
+        try:
+            self._stop_locked("fault")
+        finally:
+            self._stop_lock.release()
 
     # -- watchdog -------------------------------------------------------------- #
     def _watchdog_loop(self):

@@ -1096,6 +1096,17 @@ class App:
             os.replace(tmp, path)
             self.log(f"{T('log.conns_saved_to')} {os.path.basename(path)} ({len(rows)})")
         except Exception as e:
+            # Clean up the half-written temp file, the way jsonfile.write_json
+            # already does. Without this a failed export left a `.csv.tmp` next to
+            # the real file for the user to find and wonder about - and the next
+            # export silently overwrote it, so the litter was never even stable.
+            # A failure here must leave the previous export untouched and nothing
+            # else behind.
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError as _exc:
+                crashlog.note(_exc, "gui.app")
             self.log(f"{T('log.csv_error')}: {e}")
 
     def mark_bug(self):

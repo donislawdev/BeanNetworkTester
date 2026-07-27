@@ -97,6 +97,58 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: three small ones - stray .tmp, orphaned scenario runner, STOP racing a capture fault (audit F11, F12, F13)
+
+**F11 - `export_connections_csv` left its temp file on failure.** It writes `path + ".tmp"` and
+`os.replace`s it, but the `except` only logged: the half-written temp file stayed next to the real
+one, and the next export silently overwrote it. `jsonfile.write_json` has had the cleanup (and a
+test asserting no `*.tmp` after a failed write) for a while; this is the same guarantee.
+New test: `tests/test_conns_export.py::test_a_failed_connections_export_leaves_no_tmp_file_behind`,
+forcing the failure from inside the row loop (unsubtractable timestamps) so the temp file
+definitely exists when it blows up. NOT changed: the stats CSV appends without an atomic write, so
+a process death mid-flush can still truncate a line. Rewriting an append log through a temp file
+costs the whole file per export; the exposure is a partial final line, and it is recorded here
+rather than engineered away.
+
+**F12 - `start_scenario()` orphaned the previous runner.** It overwrote `self._scenario_runner`
+without stopping it, and `stop_scenario()` only ever knew about the current object, so the old
+thread kept applying its own steps to the same engine. `self.stop_scenario()` first. Found by
+reading; NOT reproduced in the running program, because the GUI and CLI both start one scenario per
+session - which is a property of today's callers, not of the engine. New test:
+`tests/test_engine.py::test_a_second_scenario_stops_the_first_instead_of_orphaning_it`.
+
+**F13 - the capture-fault path waited on a stop that was joining it.** `_fail_stop(blocking=True)`
+called `stop()`, which blocks on `_stop_lock`. When a `recv()` failed for its own reason in the few
+instructions between the `_running` check and that call, an external STOP already held the lock and
+was joining this very thread with a 2.0 s timeout: no deadlock, but STOP took the full 2 s. The
+docstring claimed it "cannot deadlock against an external STOP: that path closes the divert first,
+so the capture loop sees `_running` already False and never reaches here" - true when the fault IS
+that stop closing the divert, and that sentence is why nobody looked further.
+
+- **First attempt was wrong and the suite caught it.** Routing the capture path through
+  `_worker_stop` (the audit's first suggestion, one line) broke
+  `test_a_dead_capture_thread_fails_open`: a divert that fails on its very first reads faults while
+  `start()` still holds the lock, which is not a corner case but the case the blocking path exists
+  for. It would have handed every such teardown to the watchdog a tick later.
+- **What landed:** `_fault_stop_blocking()` polls `acquire(timeout=FAULT_LOCK_POLL_S)` (0.05 s) and
+  bails only when `_running` has gone False. No new state is needed to tell the two holders apart:
+  `_stop_locked` clears `_running` as its second statement, so "held and still running" is a start
+  and "held and not running" is a stop that already owns the teardown.
+- `_fail_stop` now keeps the FIRST fault (`if not self.fault`). The watchdog's "worker thread died
+  unexpectedly" is a symptom; letting it overwrite the cause blanks out the only useful half of the
+  report. Both are still logged.
+- New tests in `tests/test_failsafe.py`, all structural rather than wall-clock so they cannot
+  flake: `::test_a_capture_fault_racing_an_external_stop_does_not_wait_for_it`,
+  `::test_a_capture_fault_still_waits_for_a_start_that_holds_the_lock` (the other half - a mutant
+  that bows out on a start is caught too), and `::test_the_first_fault_is_the_one_kept_for_the_report`.
+- **One of those tests was itself wrong, and mutation is what found it.** The fault test held
+  `_stop_lock` and called `_fail_stop` on the SAME thread - `_stop_lock` is an `RLock`, so the
+  nested `_worker_stop` re-entered, the stop completed, `_running` went False and the second fault
+  returned at the guard. It passed for the wrong reason and guarded nothing. Driving the faults
+  from another thread fixed it. Worth remembering when writing anything that leans on this lock.
+
+Five mutants across the three, every one caught after that repair.
+
 ### Fixed: a failed injection is counted, and stops flooding the log (audit F14)
 
 - **Symptom.** `_inject_loop`'s `except` around `self._divert.send(packet)` logged and moved on.
