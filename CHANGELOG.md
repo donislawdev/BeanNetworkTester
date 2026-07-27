@@ -56,6 +56,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Effective loss" now says whose loss it is.** The number counts what this tool broke, and the
+  tooltip said "how much of the traffic you aimed at never arrived" - which reads as "never
+  reached the far end". Those are different things, and the difference shows up the first time you
+  compare the tool against a real run: ping 30 packets, lose one reply out on the network, and the
+  connection row reads 59 packets with zero drops. Both numbers are right - 30 requests went out,
+  29 replies came back, and the tool broke none of them - but nothing on screen said so. The
+  tooltip and both READMEs now spell out that the figure measures damage done on this machine, and
+  that loss happening somewhere out in the network never reaches this machine, so nothing here can
+  count it. No numbers changed.
+
 - **Ping traffic never appeared in the Connections tab, which claims to list all of them.** The
   note under the tab says "All captured connections" and the README says the same, but anything
   without ports was silently left out - and ping (ICMP) has none. Thirty seconds of pinging with

@@ -470,13 +470,19 @@ Designed so that after a bug you can recreate exactly the same conditions:
   seed give the same *proportions* (e.g. 15.8% loss in both) but not identical counters to the
   packet. For CI comparisons use rates (%), not raw packet counts.
 - **Start / Duration / Effective loss / Queue peak / Down-up peak** - a quick picture of the run.
-- **What "Effective loss" counts** - the share of the traffic you aimed at that never arrived,
-  across **every** impairment: the configured Loss plus rate-limit drops, blocking, LAN cut,
+- **What "Effective loss" counts** - the share of the traffic you aimed at that **this tool**
+  broke, across **every** impairment: the configured Loss plus rate-limit drops, blocking, LAN cut,
   link outages, connection resets, SYN drops, MTU drops and NAT expiry. With a target set, only
   the target's traffic counts, so other applications cannot dilute it. Packets the **tool** threw
   away are deliberately excluded - "Buffer overflow" and "Dropped at stop" are its own failures,
   not the link's, and they have their own counters. The report's `effective_loss_pct` is the same
   number, next to `packets_in_scope`.
+- **It measures this machine, not the internet.** The tool sees packets crossing this computer's
+  network stack, so a packet lost out on the network - the reply that never came back - never
+  arrives here and nothing here can count it. A clean 30-packet ping that loses one reply shows
+  **59** packets on the connection row and **zero** drops, and both numbers are right: 30 requests
+  went out, 29 replies came back, and the tool broke none of them. End-to-end loss is what your
+  application's own figures (or `ping`'s "Lost") are for.
 - **Data used** - Downloaded / Uploaded / Total (MB) cumulatively from start plus the session's
   average throughput; you know at once how much data the app used. (The report also has "attempted
   MB" - how much the app wanted to send before loss/limits are subtracted.)
