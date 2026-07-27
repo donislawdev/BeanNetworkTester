@@ -30,6 +30,7 @@ import time
 import weakref
 
 from . import portmap
+from . import winenv
 from .core import BeanCore
 from .i18n import T
 from .scenario_runner import ScenarioRunner
@@ -107,6 +108,10 @@ class BeanEngine:
         # poller. See _start_socketwatch. Targeting resolves against it whenever a
         # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
+        # True while this session holds a fine Windows timer tick (see start()).
+        # Tracked rather than released blindly: the OS refcounts the requests per
+        # process, so releasing one we were never granted unbalances the count.
+        self._fine_timers = False
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
         self.reset_stats()
@@ -584,6 +589,16 @@ class BeanEngine:
         # tests this tool is aimed at) left a "running" engine holding an open divert
         # that NOTHING would ever close: the exact fail-open hole convention 20 forbids.
         _LIVE_ENGINES.add(self)
+        # Ask Windows for a fine timer tick, for the life of the SESSION. The
+        # injector releases a delayed packet by waiting on a Condition with a
+        # timeout, and Windows rounds such a timeout up to the system tick, so
+        # without this the tool overshoots every configured delay by up to a tick
+        # (measured: a 10 ms setting delivered at a median of 18.3 ms). Taken here
+        # rather than at import so an idle program holds nothing; released in
+        # _stop_locked, AFTER the injector thread has been joined. See
+        # winenv.request_fine_timers for why querying the system-wide resolution
+        # instead would be reading the wrong number.
+        self._fine_timers = winenv.request_fine_timers()
         try:
             # The live socket-event map (2b/2c): created FIRST, so the initial
             # targeting resolve below already reads it instead of the poller.
@@ -785,6 +800,13 @@ class BeanEngine:
                 t.join(timeout=2.0)
         self._t_cap = self._t_inj = self._t_wd = None
         self._divert = None
+        # After the join, because the injector is what the fine tick is for. Only
+        # when this session was actually granted one: these are refcounted per
+        # process, so a release we never took would let a later, real request be
+        # cancelled by somebody else's stop.
+        if self._fine_timers:
+            self._fine_timers = False
+            winenv.release_fine_timers()
         with self._cv:
             discarded = len(self._heap)
             self._heap.clear()

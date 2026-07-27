@@ -105,6 +105,118 @@ def detach_console():
     return ok
 
 
+# The finest tick the timeBeginPeriod API accepts, and the one the injector wants.
+TIMER_PERIOD_MS = 1
+
+# Windows 11 throttles a BACKGROUND process's timer resolution request unless the
+# process opts out (see _allow_fine_timers_in_background). Done once per process.
+_TIMER_OPT_OUT = [None]
+
+_PROCESS_POWER_THROTTLING = 4        # PROCESS_INFORMATION_CLASS
+_IGNORE_TIMER_RESOLUTION = 0x4       # PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+
+
+def _allow_fine_timers_in_background():
+    """Tell Windows to honour our timer request even when we are not in front.
+
+    Without this, ``timeBeginPeriod`` on Windows 11 is a fix that WORKS ON THE
+    DEVELOPER'S MACHINE AND THEN STOPS. Measured here: the request kept being
+    granted (return code 0, request/release perfectly balanced) while the effect
+    quietly went away after roughly ten seconds - ``Condition.wait(10 ms)`` went
+    10.1, 10.3, then back to 15.6 ms for every later session in the same process.
+    That is the OS declining to honour a background process's request, and this
+    tool spends its whole working life in the background: the tester starts a
+    session and switches to the application under test.
+
+    With the opt-out the same wait stayed at 10.1-10.7 ms across 40 s of sampling.
+
+    Called once per process; the policy costs nothing while we are not asking for
+    a fine tick, so there is nothing to undo. Fails harmlessly on Windows older
+    than 10 1709, which had no such throttling to opt out of.
+    """
+    if _TIMER_OPT_OUT[0] is not None:
+        return _TIMER_OPT_OUT[0]
+    _TIMER_OPT_OUT[0] = False
+    if not is_windows():
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _PowerThrottlingState(ctypes.Structure):
+            _fields_ = [("Version", wintypes.ULONG),
+                        ("ControlMask", wintypes.ULONG),
+                        ("StateMask", wintypes.ULONG)]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.SetProcessInformation.argtypes = [wintypes.HANDLE, ctypes.c_int,
+                                                   ctypes.c_void_p, wintypes.DWORD]
+        kernel32.SetProcessInformation.restype = wintypes.BOOL
+        # ControlMask says which policy we are setting, StateMask=0 says "do NOT
+        # ignore my timer resolution" - i.e. honour it in the background too.
+        state = _PowerThrottlingState(1, _IGNORE_TIMER_RESOLUTION, 0)
+        _TIMER_OPT_OUT[0] = bool(kernel32.SetProcessInformation(
+            kernel32.GetCurrentProcess(), _PROCESS_POWER_THROTTLING,
+            ctypes.byref(state), ctypes.sizeof(state)))
+    except Exception as _exc:
+        crashlog.note(_exc, "winenv")
+    return _TIMER_OPT_OUT[0]
+
+
+def request_fine_timers(period_ms=TIMER_PERIOD_MS):
+    """Ask Windows for a fine timer tick. True when granted (Windows only).
+
+    ``BeanEngine`` holds a delayed packet by waiting on a Condition with a
+    timeout, and on Windows such a timeout is rounded UP to the system timer
+    tick - 15.6 ms unless THIS process asks for better. That rounding is the
+    whole of the added-latency error: measured on Win11 / CPython 3.14,
+    ``Condition.wait(1 ms)`` took a median of 15.56 ms, and the engine overshot a
+    configured 10 ms of latency by a median of 8.30 ms.
+
+    **Reading the system-wide resolution proves nothing here.** Since Windows 10
+    2004 the tick is per-process: this machine was already running a 1.0 ms tick
+    (``NtQueryTimerResolution`` said so - something else had asked for it) while
+    our waits were still being rounded to 15.6 ms. A future session that queries
+    the global value and concludes "the timer is already fine" would be reading a
+    number that does not apply to us. Only asking changes anything: after
+    ``timeBeginPeriod(1)`` the same wait took 1.51 ms and the engine's overshoot
+    fell to 0.54 ms.
+
+    The OS refcounts these per process, so every request MUST be matched by a
+    :func:`release_fine_timers`. The call costs ~1.3 us for the pair (measured),
+    so it belongs to the session, not to the process: nothing holds a finer tick
+    while the tool sits idle.
+    """
+    if not is_windows():
+        return False
+    # Order matters only in that the opt-out has to be in place for the request to
+    # be honoured; it is a process-wide policy, so it is set once and left alone.
+    _allow_fine_timers_in_background()
+    try:
+        import ctypes
+        return ctypes.WinDLL("winmm").timeBeginPeriod(int(period_ms)) == 0
+    except Exception as _exc:
+        crashlog.note(_exc, "winenv")
+        return False
+
+
+def release_fine_timers(period_ms=TIMER_PERIOD_MS):
+    """Give back one :func:`request_fine_timers`. Call ONLY for a granted request.
+
+    Unbalanced calls are how a process ends up holding a fine tick for its whole
+    life (or giving back one it never took), so the caller tracks whether the
+    request was granted rather than releasing blindly.
+    """
+    if not is_windows():
+        return False
+    try:
+        import ctypes
+        return ctypes.WinDLL("winmm").timeEndPeriod(int(period_ms)) == 0
+    except Exception as _exc:
+        crashlog.note(_exc, "winenv")
+        return False
+
+
 def set_dpi_awareness():
     """Mark the process DPI-aware BEFORE the Tk root exists.
 

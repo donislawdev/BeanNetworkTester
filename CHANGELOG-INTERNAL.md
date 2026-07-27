@@ -42,6 +42,52 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the injector asks Windows for a fine timer tick, and for it to be honoured (audit F3)
+
+`_inject_loop` holds a delayed packet with `Condition.wait(timeout=...)`, and Windows rounds that
+timeout UP to the system timer tick - 15.6 ms unless the process asks for better. That rounding
+was the entire added-latency error. Measured on the REAL capture path (ping through live
+WinDivert, `--dst-ip 8.8.8.8`, two independent runs): a **constant +12.6 ms of round-trip
+overshoot, independent of the setting** - +12.2 ms at `--latency 10` and +12.8 ms at `--latency
+50`, where a proportional error would have been ~62 ms at the higher setting. The control run at
+`--latency 0` measured +0.4 and -0.3 ms, so it was not the capture path, the driver or the link.
+
+`BeanEngine.start()` now takes a fine tick for the life of the SESSION and `_stop_locked` gives it
+back after the injector thread is joined; `winenv.request_fine_timers` / `release_fine_timers` are
+the (Windows-only, no-op elsewhere) wrappers. Session-scoped rather than process-scoped: the pair
+costs ~1.3 us (measured), so nothing needs to hold a finer tick while the tool sits idle.
+
+**Two things this cost, both found by measuring rather than by reading docs:**
+
+* **`timeBeginPeriod` alone is a fix that works and then stops.** Windows 11 throttles a
+  BACKGROUND process's timer resolution: the request kept returning success with a perfectly
+  balanced request/release log, while the effect vanished after roughly ten seconds - in one
+  process, `Condition.wait(10 ms)` went 10.1, 10.3, then 15.6 ms for every later session. This
+  tool lives in the background (start a session, switch to the app under test), so shipping only
+  the obvious call would have regressed silently on users while measuring clean here.
+  `winenv._allow_fine_timers_in_background()` opts out via `SetProcessInformation`
+  (`ProcessPowerThrottling` + `PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION`, state 0), once
+  per process. With it, the same wait held 10.1-10.7 ms across 40 s of sampling and across eight
+  back-to-back sessions.
+* **Querying the system-wide resolution proves nothing.** `NtQueryTimerResolution` reported a
+  current tick of 1.0 ms - something else on the machine was holding it - while our own waits were
+  still being rounded to 15.6 ms, because since Windows 10 2004 the tick is per-process. A session
+  that checks the global number and concludes "the timer is already fine" is reading a number that
+  does not apply to it. That is written into the `request_fine_timers` docstring.
+
+Result through the engine, eight sessions in one process (sparse traffic, the case the audit
+measured at +8.3 ms): overshoot **+0.22 to +0.55 ms**, worst case down from ~25 ms to ~11 ms.
+
+New tests in `tests/test_failsafe.py`:
+`test_the_fine_timer_request_is_balanced_on_every_session_path` (clean stop, double stop, second
+session and a start that raises - an unbalanced pair is invisible from inside the program, it just
+means the process keeps a finer system timer for life), `test_a_refused_fine_timer_request_is_never
+_released` (releasing one we never took decrements somebody else's refcount),
+`test_the_background_timer_opt_out_is_asked_for_once_per_process` and
+`test_the_fine_timer_calls_are_safe_to_make_anywhere`. The first two were verified by mutation:
+dropping the release turns the first red with `['request']`, releasing unconditionally turns the
+second red with `['request', 'release']`.
+
 ### Fixed: a dropped packet no longer revives the NAT mapping it was dropped for (audit F1)
 
 `BeanCore.decide()` step 3 read and wrote the activity stamp in one `_FlowTable.touch()`, so the

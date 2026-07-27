@@ -246,6 +246,108 @@ def test_a_failed_start_never_leaves_an_open_divert(monkeypatch):
           recover.closed is True)
 
 
+def _count_timer_calls(monkeypatch, granted=True):
+    """Replace the winenv timer calls with counters; returns the call log."""
+    from beantester import engine as engine_mod
+
+    calls = []
+    monkeypatch.setattr(engine_mod.winenv, "request_fine_timers",
+                        lambda *a, **k: calls.append("request") or granted)
+    monkeypatch.setattr(engine_mod.winenv, "release_fine_timers",
+                        lambda *a, **k: calls.append("release") or True)
+    return calls
+
+
+def test_the_fine_timer_request_is_balanced_on_every_session_path(monkeypatch):
+    """A granted fine timer tick MUST be given back - clean stop, double stop and
+    failed start alike.
+
+    ``timeBeginPeriod`` is refcounted BY THE OS, per process, and an unbalanced pair
+    is invisible from inside the program: it just means this process keeps a finer
+    system timer for the rest of its life. Nothing would ever report that, which is
+    why the balance gets a test rather than a comment.
+    """
+    import threading
+
+    calls = _count_timer_calls(monkeypatch)
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    eng.stop()
+    eng.stop()                          # idempotent: the second stop releases nothing
+    check("fine timers: one request and one release per session",
+          calls == ["request", "release"], f"({calls})")
+
+    eng.start("test", divert=QuietDivert())
+    eng.stop()
+    check("fine timers: the next session is balanced too",
+          calls == ["request", "release"] * 2, f"({calls})")
+
+    # ...and a start that blows up half way must not walk off with the tick either
+    real_start = threading.Thread.start
+    attempts = {"n": 0}
+
+    def flaky_start(self, *a, **k):
+        attempts["n"] += 1
+        if attempts["n"] > 1:
+            raise RuntimeError("can't start new thread")
+        return real_start(self, *a, **k)
+
+    monkeypatch.setattr(threading.Thread, "start", flaky_start)
+    try:
+        eng.start("test", divert=QuietDivert())
+    except RuntimeError:
+        pass
+    monkeypatch.undo()
+    check("fine timers: a failed start gives the tick back",
+          calls == ["request", "release"] * 3, f"({calls})")
+
+
+def test_a_refused_fine_timer_request_is_never_released(monkeypatch):
+    """Off Windows (or with winmm missing) the request is refused - and then there
+    is nothing to give back. Releasing one we never took decrements a refcount that
+    belongs to somebody else, which would cancel THEIR fine timer."""
+    calls = _count_timer_calls(monkeypatch, granted=False)
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    eng.stop()
+    check("fine timers: a refused request is not released",
+          calls == ["request"], f"({calls})")
+
+
+def test_the_background_timer_opt_out_is_asked_for_once_per_process(monkeypatch):
+    """The opt-out is a process-wide POLICY, not a per-session request.
+
+    It is also the part that makes the fine timer survive: without it Windows 11
+    keeps granting ``timeBeginPeriod`` while quietly ceasing to honour it once the
+    process is no longer in front - which is where this tool lives, since the
+    tester starts a session and switches to the application under test. Measured
+    before it was added: the third and every later session in one process was back
+    to a 15.6 ms tick with a perfectly balanced request/release log.
+    """
+    from beantester import winenv
+
+    monkeypatch.setattr(winenv, "_TIMER_OPT_OUT", [None])
+    winenv._allow_fine_timers_in_background()
+    winenv._TIMER_OPT_OUT[0] = "already answered"
+    again = winenv._allow_fine_timers_in_background()
+    check("timer opt-out: the answer is memoised, not asked for again",
+          again == "already answered", f"({again!r})")
+
+
+def test_the_fine_timer_calls_are_safe_to_make_anywhere():
+    """They run on every session start/stop, on every platform, so they may never
+    raise - and off Windows there is nothing to ask for."""
+    from beantester import winenv
+
+    granted = winenv.request_fine_timers()
+    if granted:
+        winenv.release_fine_timers()        # never leave the test run holding one
+    if not winenv.is_windows():
+        check("fine timers: a no-op off Windows", granted is False)
+    check("fine timers: releasing without holding does not raise",
+          winenv.release_fine_timers() in (True, False))
+
+
 def test_stop_is_idempotent_and_keeps_the_first_reason():
     eng = BeanEngine()
     eng.start("test", divert=QuietDivert())
