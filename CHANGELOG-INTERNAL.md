@@ -42,6 +42,35 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: a dropped packet no longer revives the NAT mapping it was dropped for (audit F1)
+
+`BeanCore.decide()` step 3 read and wrote the activity stamp in one `_FlowTable.touch()`, so the
+write happened BEFORE the expiry verdict and applied to the drop path too. The packet rejected
+with reason `nat` therefore stamped the flow as active, and the mapping was back: the direction
+lost exactly one packet per `nat_timeout_s` and carried traffic in between, with nothing outbound
+involved. Measured before the fix (timeout 5 s, one outbound at t=0, inbound only afterwards):
+`t=10 DROP, t=11 pass, t=12 pass, t=13 pass, t=20 DROP`. The impairment exists to test whether an
+application sends keep-alives, and in that shape the test could not fail.
+
+Split into `get()` + a `set()` placed after the verdict, so the drop path skips the write. Same
+cost - `touch()` was a `get` plus this same write - measured 160 ns/op both ways at 200k
+iterations, difference below the noise floor. `_FlowTable.touch()` had exactly one caller and is
+removed with it.
+
+How long the blackhole holds is bounded by the flow table, and the comment in `core.py` now says
+so with numbers instead of a general claim: the drop path returns above the `_prune()` call, so it
+never rotates anything itself. Measured with the same setup - this flow alone: still blackholed at
+t=200; one other flow driving `_prune`: reopened at t=30, the first rotation. That is the table's
+documented safe direction (it can lose an impairment, never invent one) and is a different thing
+from the resurrection above, where the dropped packet did the reopening itself.
+
+New test: `tests/test_core.py::test_a_dropped_packet_does_not_revive_an_expired_nat_mapping` -
+asserts every inbound packet after expiry is dropped (not just the first) and that an OUTBOUND
+packet is what brings the mapping back. Verified by mutation, not assumed: restoring the
+write-before-verdict order turns it red with `drops=[True, False, False, False]`, the exact
+symptom above. The two existing NAT tests (`test_nat_expiry`, `test_nat_outbound_refreshes`) pass
+unchanged - neither of them pinned the buggy behaviour, which is why it survived.
+
 ### Performance: PortTable.refresh collects the socket table outside its lock
 
 The capture thread takes `PortTable._lock` too - `name_of(cheap=True)` -> `info()` in

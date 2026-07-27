@@ -36,6 +36,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"NAT mapping expiry" now really cuts the incoming direction, instead of losing one packet
+  every few seconds.** This impairment is there to answer one question: does the application
+  notice its mapping is gone and send something to re-open it? It could not answer that. The
+  packet the tool rejected for "the mapping has expired" was itself counted as activity on that
+  connection, so the mapping came back on the spot and traffic flowed again for another whole
+  timeout - then one more packet was dropped, and so on. With `--nat-timeout 5` an app that never
+  sent a keep-alive lost about one packet every five seconds and otherwise carried on working, so
+  it passed a test it should have failed. Now incoming traffic stays cut until the application
+  actually sends something outbound, which is what re-opens the mapping on a real NAT. Nothing
+  changes when you leave the setting at 0 (off, the default).
+
 - **Short-lived connections now show which program they belong to.** The Connections table works
   out the owning program by asking Windows which application holds each socket, and that answer
   used to come from a list refreshed a few times a second. A connection that opened and finished

@@ -409,6 +409,32 @@ def test_nat_outbound_refreshes():
     check("NAT: outbound refreshes the mapping (inbound passes)", inn.drop is False)
 
 
+def test_a_dropped_packet_does_not_revive_an_expired_nat_mapping():
+    """An expired mapping stays expired until the application sends something.
+
+    The drop used to write the activity stamp itself (one `touch()` did the read
+    and the write), so the packet rejected for "the mapping is gone" reopened it:
+    the direction lost exactly ONE packet per timeout and then carried traffic
+    again, with nothing outbound in between. A keep-alive test that cannot fail is
+    worse than no test, because it reads as a pass.
+    """
+    core = BeanCore()
+    core.set_nat(5.0)
+    rng = random.Random(1)
+    kw = dict(remote_ip="1.2.3.4", remote_port=443, is_tcp=True)
+    core.decide(100, True, 5000, 0.0, rng, **kw)                  # mapping created
+    # inbound only from here on - nothing may reopen the mapping
+    verdicts = [core.decide(100, False, 5000, t, rng, **kw).drop
+                for t in (10.0, 11.0, 12.0, 13.0)]
+    check("NAT: every inbound packet after expiry is dropped, not just the first",
+          all(verdicts), f"(drops={verdicts})")
+    # ...and an OUTBOUND packet is what brings it back
+    out = core.decide(100, True, 5000, 14.0, rng, **kw)
+    back = core.decide(100, False, 5000, 14.5, rng, **kw)
+    check("NAT: outbound reopens the mapping", out.drop is False)
+    check("NAT: inbound flows again once the app has sent", back.drop is False)
+
+
 def test_reset_buckets_clears_flow_state():
     core = BeanCore()
     core.set_rst(100, 30.0)                  # long cooldown to make state persistent
