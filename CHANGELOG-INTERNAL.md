@@ -97,6 +97,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Tests: the GUI target banner is pinned to the PROCESS, not to the field (audit F17)
+
+- **The gap.** `test_gui_state.py::test_a_gui_session_keeps_the_target_banner_honest` only ever
+  moves the EXPRESSION - the user types something that matches nothing, then something that does.
+  The case a tester actually hits moves the other end: the field is left alone and the targeted
+  program exits, or a harness restarts it onto a new pid. Nothing covered that, and a handoff note
+  had concluded from reading the code that the verdict was taken only at session start. It is not:
+  `App._refresh_target` re-reads `targeting.matched` on every tick and only the APPLY half is
+  gated on the expression having changed.
+- New guard: `::test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped`. Real
+  engine, real resolver, `SyntheticDivert`, injected `FakeTable`; the test empties the socket table
+  under a running session and asserts `_applied_target` did NOT move (otherwise it is the old test
+  again), then that the banner rises, then that it comes back DOWN when the process reappears under
+  a NEW pid with the same name - the recovery measured against a real capture the same day.
+- **Three mutants, all caught, each on its intended assertion.** The one worth recording is the
+  first: `_refresh_target` made to read the verdict ONLY when the expression changed, i.e. exactly
+  the "banner appears at session start" behaviour the note had assumed already existed. It goes
+  red, so the guard really does pin the live re-read. The other two: `ProcessTargeting.matched`
+  forced to `True`, and the banner never taken back down.
+- Test-only chunk, so no `CHANGELOG.md` entry (convention 39): nothing on screen changed, this
+  fixes the fact that nothing was watching it.
+
 ### Added: the CLI reports a target that stops matching, and what share was in scope (audit F17)
 
 - **Symptom, measured before writing anything** (2026-07-28, elevated, real WinDivert, probe
