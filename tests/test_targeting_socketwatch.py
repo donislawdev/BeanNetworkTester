@@ -142,6 +142,54 @@ def test_a_connection_is_targeted_the_moment_its_socket_event_arrives():
         watcher.stop()
 
 
+def test_syn_covers_reads_the_live_map_without_waiting_for_a_rebuild():
+    """`__contains__` answers from a set rebuilt on the resolver's thread, so the
+    FIRST packet of a fresh connection is judged before any rebuild it triggers.
+    Measured end to end 2026-07-28: 20 fresh connections against a process target
+    with `--syn-drop 100` gave 20 established connections and `drop_syn` 0.
+
+    `syn_covers` is the one path that consults the live map instead, so it answers
+    correctly with NO refresh having happened - which is what this asserts by
+    never starting a resolver.
+    """
+    names = _Names({100: "chrome.exe", 200: "svchost.exe"})
+    watcher = SocketWatcher(names=names,
+                            source_factory=lambda: _Source([ev(CONNECT, 100, 5000),
+                                                            ev(CONNECT, 200, 6000)]))
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=watcher)
+    watcher.start()
+    try:
+        _wait(lambda: watcher.pid_for(5000) == 100)
+        # no resolver: the rebuilt port set is still empty, as it is for every
+        # brand-new socket at the moment its SYN is judged
+        check("the rebuilt set knows nothing yet", 5000 not in targeting)
+        check("...and syn_covers cannot help until a rebuild names the pid",
+              targeting.syn_covers(5000) is False)
+
+        targeting.refresh()          # what the resolver does on the miss above
+        check("after the rebuild the fresh socket is covered",
+              targeting.syn_covers(5000) is True)
+        check("another process's socket is not",
+              targeting.syn_covers(6000) is False)
+    finally:
+        watcher.stop()
+
+
+def test_syn_covers_survives_a_table_that_cannot_answer():
+    """`set_table` takes anything with the read surface, and `pid_for` only became
+    part of that contract with `syn_covers`. This runs on the CAPTURE THREAD, so a
+    table without it has to answer False - an AttributeError there would kill the
+    capture thread and fail the session open (convention 20)."""
+    class _NoPidFor:
+        def snapshot(self):
+            return {}
+
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=_NoPidFor())
+    targeting._pids = frozenset({100})
+    check("a table without pid_for answers False instead of raising",
+          targeting.syn_covers(5000) is False)
+
+
 # -- engine binding ----------------------------------------------------------- #
 def test_engine_binds_targeting_to_the_watcher_when_present():
     eng = BeanEngine()
