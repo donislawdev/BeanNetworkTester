@@ -387,6 +387,21 @@ def _run_cleanup(log):
 
 
 # -- the session ---------------------------------------------------------------- #
+def _targeting_state(engine):
+    """``(matched, description)`` of the live process target, or ``None``.
+
+    ``matched`` is a plain bool on the live ``ProcessTargeting`` - no lock, no
+    syscall, no socket table - so the report loop can afford to ask on every
+    pass. ``getattr`` because ``run_cli(engine=...)`` is a public seam and an
+    injected engine need not carry targeting at all.
+    """
+    getter = getattr(engine, "targeting", None)
+    targeting = getter() if callable(getter) else None
+    if targeting is None:
+        return None
+    return bool(targeting.matched), targeting.describe()
+
+
 def _report_loop(engine, cfg, log, sleep, clock, t0):
     """Report every ``interval`` and stop exactly at the deadline.
 
@@ -398,6 +413,16 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
     deadline = (t0 + duration) if duration > 0 else None
     next_report = t0 + interval
     prev, prev_t = engine.stats_snapshot(), t0
+    # The verdict as it stands at the start; apply_settings has already logged
+    # it. From here only CHANGES are reported. A target that dies mid-run was
+    # invisible from the CLI: the run kept going, impaired nothing and exited 0,
+    # which is exactly the "nothing broke" / "everything held up" confusion this
+    # tool shouts about in the GUI. MEASURED 2026-07-28: targeting a PID, then
+    # restarting that process, left 5 of 5 fresh connections untouched and the
+    # only targeting line in the whole run was the one printed at start.
+    # Sampled, not continuous: a verdict that flips and flips back between two
+    # passes is not seen, and that is the honest limit of polling here.
+    verdict = _targeting_state(engine)
     while True:
         now = clock()
         wake = next_report if deadline is None else min(next_report, deadline)
@@ -417,6 +442,14 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
             prev, prev_t = s, now
             while next_report <= now:
                 next_report += interval
+        state = _targeting_state(engine)
+        if state is not None and verdict is not None and state[0] != verdict[0]:
+            if state[0]:
+                log.info(f"the process target matches again: {state[1]}")
+            else:
+                log.warn("the process target no longer matches any process - "
+                         "nothing is being impaired from here on")
+        verdict = state
         if deadline is not None and now >= deadline - 1e-9:
             return "duration"
         if not engine.is_running():         # the engine's own watchdog stopped it
@@ -513,6 +546,21 @@ def _run_session(args, cfg, log, sleep, clock, engine):
                   f"{cfg['min_packets']} - the traffic filter matched nothing?")
         code = exitcodes.ASSERTION
 
+    # --min-packets guards the CAPTURE FILTER (`seen`); this guards the TARGET.
+    # They are different failures: traffic can flow all run while the targeted
+    # process never matches, and the run then impairs nothing and still exits 0.
+    # Only when there WAS traffic - with `seen` at 0 the filter is the story and
+    # --min-packets is the flag that tells it, so saying both would point at the
+    # wrong thing. Not an assertion: a target with no traffic of its own is a
+    # legitimate run, and turning that into a failure would break the exit-code
+    # contract for everyone already running one.
+    target = str(cfg["settings"].get("target") or "").strip()
+    scoped = stats.get("scoped_seen", 0)
+    if target and stats["seen"] and not scoped:
+        log.warn(f"the process target {target!r} caught nothing: 0 of "
+                 f"{stats['seen']} captured packets were in scope, so this run "
+                 f"impaired nothing")
+
     down_mb, up_mb = bytes_to_mb(stats["bytes_in"]), bytes_to_mb(stats["bytes_out"])
     record = dict(event="summary", exit_code=code, exit_name=exitcodes.name_of(code),
                   stop_reason=stop_reason, seed=eff, elapsed_s=elapsed,
@@ -524,6 +572,13 @@ def _run_session(args, cfg, log, sleep, clock, engine):
         record["connections"] = _conn_records(engine)
     lines = [f"Data usage: downloaded {down_mb} MB, uploaded {up_mb} MB, "
              f"total {round(down_mb + up_mb, 2)} MB."]
+    if target:
+        # Text channel only: the JSON summary already carries `scoped_seen` in
+        # `counters`, and the NDJSON schema is a frozen contract (see "Public
+        # contracts"). A human reading the text run had no way to see how much
+        # of the captured traffic the target actually accounted for.
+        lines.append(f"In scope: {scoped} of {stats['seen']} captured packets "
+                     f"(process target {target!r}).")
     if eff is not None:
         lines += [f"Session seed: {eff}", f"Reproduce: {repro}"]
     lines.append(f"Finished: {exitcodes.name_of(code).lower()} "
