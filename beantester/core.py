@@ -509,6 +509,15 @@ class BeanCore:
                 # QUIC - meant every one of them escaped. Portless traffic (ICMP)
                 # also lands here and exits on `port is None` inside the callback.
                 #
+                # ACCEPTED end to end 2026-07-28, a master worktree against this
+                # tree on the same machine: 8 DNS queries from fresh sockets, the
+                # probe holding one socket open so `_pids` cannot be the variable,
+                # against `--target <probe> --dst-ip 8.8.8.8 --dst-port 53
+                # --loss 100 --filter out`. Before: **8 of 8 replied**, with
+                # `scoped_seen` 0 of 1944 packets captured - with a process target
+                # set, NOTHING was ever in scope. After: **0 of 8 replied**,
+                # `scoped_seen` 8, `drop_loss` 8.
+                #
                 # Ordinary TCP data is deliberately NOT asked, and that is a
                 # MEASURED choice, not a guess: asking on every miss costs +209 to
                 # +266 ns per packet on a TCP-heavy mix (~26% of this function),

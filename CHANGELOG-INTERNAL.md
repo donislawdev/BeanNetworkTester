@@ -156,6 +156,20 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   today - while (a) costs ~26% of `decide()`. **Map SIZE barely matters** (400 -> 100 000 ports is
   ~35 ns), so this is about how often each variant asks, not about the lookup. The lesson went into
   PROJECT_NOTES rule 5: measuring a COMPONENT is not measuring the DIFFERENCE BETWEEN VARIANTS.
+- **Acceptance, master worktree against this tree on the same machine.** 8 DNS queries from FRESH
+  sockets (the realistic shape: a new ephemeral port each), the probe holding one socket open so
+  `_pids` cannot be the hidden variable, `--target <probe> --dst-ip 8.8.8.8 --dst-port 53
+  --loss 100 --filter out` (outbound only, so the reply comes back untouched and the result stays
+  binary):
+
+  | tree | queries answered | `scoped_seen` | `drop_loss` |
+  |---|---|---|---|
+  | master | **8 of 8** | **0** of 1944 captured | 0 |
+  | this branch | **0 of 8** | 8 | 8 |
+
+  The master column is the finding in its purest form: with a process target set, **not one packet
+  of 1944 was ever considered in scope**. The branch column cross-checks exactly - 8 queries,
+  8 scoped, 8 dropped.
 - **The price, named rather than implied:** covering UDP widens the recycled-PID false positive
   from one SYN per connection to every UDP datagram of such a socket until the next rebuild (<=0.30 s).
   Ordinary TCP data is still never asked, so an established connection cannot be dragged in.
