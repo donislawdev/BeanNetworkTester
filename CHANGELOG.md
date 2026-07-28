@@ -106,6 +106,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Reset connections" did nothing to local (loopback) connections - it just made them go
+  quiet.** Aim the tool at `127.0.0.1` traffic with resets switched on and the connection was not
+  reset: it stopped carrying anything for the length of the cooldown, so the application sat there
+  until its own timeout expired, while the tool reported an RST as sent. Anything talking to a
+  service on your own machine - a local server, a database, a dev proxy - was affected. It now
+  resets for real, which for a test that expects a broken connection is the difference between
+  "failed as designed" and "hung". Connections to other machines were never affected, and are
+  unchanged: that path was measured working (a connection reset 6.6 s after the tool was pointed
+  at it).
+
 - **A connection's "dropped" count ignored the packets the tool's own queue threw away.** The
   figure was recorded a step too early - before the packet was even queued - so a session that
   dropped 5 500 packets to a full delay queue could show `dropped = 0` on the very row it happened
