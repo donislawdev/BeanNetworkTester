@@ -121,9 +121,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   connection opened at full speed and only then started suffering. If a test of yours measured
   "time to first byte" under impairment, expect it to move.
 
-  Two limits worth knowing. The **first connection of a freshly started program** still slips
-  through - until it has one socket, the tool has no way to know the process exists. And a program
-  using UDP has no SYN, so its first packet is not covered by this.
+  Two limits worth knowing, both measured rather than guessed. The tool recognises your target by
+  the connections it currently has open, so **a program that has none open at the moment the tool
+  looks is invisible again**: over 20 fresh connections with "Drop SYN", a program keeping its
+  connections open was caught **19 times out of 20** (only the very first escaped, before it had
+  opened anything), while the same program closing each connection before starting the next was
+  caught **6 times out of 20**. So a browser or an app under test is covered; a script that opens
+  one connection, closes it and pauses will keep slipping through. And a program using UDP has no
+  SYN, so its first packet is not covered by any of this.
 
 - **"Reset connections" no longer fires on a connection that is still opening.** It could not have
   worked there anyway: the reset packet the tool forges from a connection request carries no

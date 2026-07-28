@@ -176,10 +176,16 @@ class ProcessTargeting:
 
         Two limits, both deliberate, both measured rather than assumed:
 
-        * a process with NO socket yet is not in ``_pids`` at all, so the FIRST
-          connection of a freshly started target still slips through. Covering
-          that needs the matcher and a name lookup in the packet path, which is
-          what convention 20 forbids.
+        * ``_pids`` is rebuilt from the pids owning CURRENTLY OPEN sockets, so a
+          target that has none when a rebuild runs drops out of it and its next
+          connection is uncovered again. Measured with ``--syn-drop 100`` over 20
+          fresh connections: a probe holding its sockets open was caught **19 of
+          20** (only its first, before it had any socket, escaped), while the same
+          probe closing each connection before the next was caught **6 of 20**.
+          So this covers a target that keeps sockets - a browser, an app under
+          test - and keeps missing one that opens a connection, closes it and
+          pauses. Covering that needs the matcher and a name lookup in the packet
+          path, which is what convention 20 forbids.
         * ``_pids`` is up to one resolver cycle stale (0.30 s). If the target
           exits and Windows recycles its PID inside that window, one packet of an
           unrelated new socket can be pulled into scope. That is a DIFFERENT false
