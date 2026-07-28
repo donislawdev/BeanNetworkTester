@@ -417,3 +417,87 @@ def test_a_gui_session_keeps_the_target_banner_honest():
         assert stop_ms < 900, "STOP took %.0f ms" % stop_ms
         assert not app.engine.resolver().is_running(), "resolver outlived the session"
     """)
+
+
+def test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped():
+    """The banner must follow the PROCESS, not just the text in the field.
+
+    The test above only ever moves the expression: the user types something that
+    matches nothing, then something that does. The case that actually happens to a
+    tester moves the other end - the field is left alone and the targeted program
+    exits, or the harness restarts it and Windows hands it a new pid. Nothing
+    covered that, and a handoff note had already concluded from reading the code
+    that the verdict was only taken at session start. It is not: ``_refresh_target``
+    re-reads it on every tick. This pins that, because prose is what the project
+    keeps getting wrong here, and prose is what nothing tests.
+
+    The recovery half mirrors what was MEASURED against a real capture
+    (2026-07-28): targeting BY NAME picks the restarted program up by itself,
+    while targeting by pid cannot, since the pid is gone. So the banner has to
+    come back DOWN on its own too - a warning that stays up after the program is
+    back is the same lie in the other direction.
+    """
+    run_gui("""
+        import time
+        from beantester import portmap
+        from beantester.synthetic import SyntheticDivert
+
+        class FakeTable:
+            def __init__(self):
+                self.ports = {5001: 200}
+                self.info = {200: ("realapp.exe", 1)}
+            def refresh(self, now=None, force=False): return True
+            def snapshot(self): return dict(self.ports)
+            def name_of(self, pid, cheap=False): return self.info.get(pid, ("", None))[0]
+            def ancestors(self, pid, depth=8): return []
+            def refresh_if_stale(self, now=None, miss=False): return True
+            def process_for_port(self, port, now=None, allow_refresh=True): return ""
+            def pid_for(self, port): return self.ports.get(port)
+
+        table = FakeTable()
+        portmap.default_table = lambda: table
+        app.engine._ports = table
+
+        real_start = app.engine.start
+        app.engine.start = (lambda filt, divert=None, duration=0:
+                            real_start(filt, divert=SyntheticDivert(seed=21),
+                                       duration=duration))
+
+        def settle(seconds=1.0):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                app._tick()
+                time.sleep(0.02)
+
+        app._start(); app._settle_transition()
+        app.vars["target"].set("realapp")
+        settle(1.0)
+        assert app.engine.targeting().matched is True, "the target never matched"
+        assert app._pending_target_warning == "", app._pending_target_warning
+
+        # The program exits. NOBODY touches the field.
+        typed = app._applied_target
+        table.ports.clear()
+        table.info.clear()
+        settle(1.0)
+        assert app._applied_target == typed, \\
+            "the expression moved, so this is the old test again: %r" % app._applied_target
+        assert app.engine.targeting().matched is False, "the target still matches nothing"
+        assert app._pending_target_warning == bnt.T("fields.target_no_match"), \\
+            "a target that died must raise the banner: %r" % app._pending_target_warning
+        assert app._shown_target_warning == app._pending_target_warning, \\
+            "the verdict was recorded but never rendered"
+
+        # It comes back under a NEW pid, same name - the measured NAME behaviour.
+        table.ports[5002] = 201
+        table.info[201] = ("realapp.exe", 1)
+        settle(1.0)
+        tg = app.engine.targeting()
+        assert tg.matched is True, "the restarted process was not picked up"
+        assert 5002 in tg.ports(), sorted(tg.ports())
+        assert app._pending_target_warning == "", \\
+            "the banner outlived the problem: %r" % app._pending_target_warning
+        assert app._shown_target_warning == "", "the banner was not taken down"
+
+        app._stop(); app._settle_transition()
+    """)
