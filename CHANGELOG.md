@@ -56,6 +56,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A failed "Export connections CSV" left a stray `.tmp` file next to the real one.** The export
+  writes to a temporary file and renames it, which is what makes it safe to overwrite the previous
+  export - but when the write failed, the half-written temp file stayed on disk. Nothing cleaned
+  it up, and the next export silently overwrote it, so it was litter you could find but not
+  explain. It is now removed on failure, exactly as the profile and config files already do, and a
+  failed export leaves the previous one untouched.
+
+- **STOP could take two seconds if a capture error happened to land at the same moment.** If the
+  capture side failed for its own reason a fraction of a second before you pressed STOP, the two
+  waited on each other until a two-second safety timeout expired. Nothing was lost or stuck - the
+  session did stop - but the button felt broken. The capture side now waits only for a session
+  that is still starting up, never for a stop that is already under way. Related: when two
+  failures land together, the report keeps the first one, which is the actual cause; it used to be
+  overwritten by the follow-up "a worker thread died", which says nothing useful on its own.
+
+- **Starting a second scenario without stopping the first is no longer possible.** The engine
+  replaced the running scenario with the new one and left the old one running in the background,
+  unreachable: two scenarios then fought over the same settings with nothing on screen to say why.
+  Nothing in the program did this today - it starts one scenario per session - so this is a guard
+  rather than a bug you could have hit.
+
 - **Packets the tool failed to put back on the wire vanished from the numbers.** When re-injecting
   a packet fails - the connection went down mid-session, the driver refused it - the packet is
   gone. It had been counted as seen, it was never delivered, and nothing recorded it as lost, so

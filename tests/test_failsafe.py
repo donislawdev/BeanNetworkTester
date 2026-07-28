@@ -409,6 +409,109 @@ def test_a_worker_stop_never_blocks_on_a_held_stop_lock():
     check("F2: the ordinary stop still tears the session down", eng.is_running() is False)
 
 
+def test_a_capture_fault_racing_an_external_stop_does_not_wait_for_it():
+    """F13: the CAPTURE thread waits for a start, never for another stop.
+
+    A recv() that fails for its own reason a moment before the user presses STOP
+    used to block on ``_stop_lock`` while that stop was joining this very thread
+    with a 2.0 s timeout. No deadlock, but STOP took the whole timeout. The
+    docstring said it "cannot deadlock against an external STOP", which is true
+    only when the fault IS that stop closing the divert.
+
+    Structural, not wall-clock, so it cannot flake: hold the lock the way an
+    external stop does, with ``_running`` already cleared as ``_stop_locked``
+    clears it, and assert the fault path returns instead of waiting.
+    """
+    import threading
+
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    eng._stop_lock.acquire()
+    try:
+        # exactly the state an external stop is in while it joins the workers
+        eng._running = False
+        returned = threading.Event()
+
+        def capture_fault():
+            eng._fault_stop_blocking()
+            returned.set()
+
+        threading.Thread(target=capture_fault, daemon=True).start()
+        check("F13: the capture fault does not wait on a stop that owns the teardown",
+              returned.wait(timeout=2.0),
+              "(it blocked - STOP would take the whole 2 s join timeout)")
+    finally:
+        eng._running = True
+        eng._stop_lock.release()
+    eng.stop()
+    check("F13: the session still tears down normally", eng.is_running() is False)
+
+
+def test_a_capture_fault_still_waits_for_a_start_that_holds_the_lock():
+    """The other half: while ``start()`` holds the lock the session IS still
+    running, and that is the case the blocking path exists for - a divert failing
+    on its very first reads. Bowing out there would hand the teardown to the
+    watchdog a tick later for nothing."""
+    import threading
+
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    eng._stop_lock.acquire()            # stand in for start() still finishing
+    try:
+        returned = threading.Event()
+
+        def capture_fault():
+            eng._fault_stop_blocking()
+            returned.set()
+
+        threading.Thread(target=capture_fault, daemon=True).start()
+        check("F13: it does NOT bow out while a start holds the lock",
+              not returned.wait(timeout=0.4),
+              "(it gave up on a start - the real fault would be lost to the watchdog)")
+        check("F13: and the session is still up while it waits",
+              eng.is_running() is True)
+    finally:
+        eng._stop_lock.release()
+    check("F13: once the lock is free it completes the fail-open stop",
+          _wait_until(lambda: not eng.is_running()), f"(running={eng.is_running()})")
+
+
+def test_the_first_fault_is_the_one_kept_for_the_report():
+    """The watchdog's "worker thread died unexpectedly" is a SYMPTOM of the real
+    error. When both land, the cause has to survive - it is the only half of the
+    report worth reading."""
+    import threading
+
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    # Both faults have to land while the engine is STILL RUNNING - that is the only
+    # state in which the second one reaches `self.fault` at all. So the lock is held
+    # here, which makes `_worker_stop` bow out and leaves the session up.
+    #
+    # From ANOTHER thread, deliberately: `_stop_lock` is an RLock, so calling this
+    # on the thread holding it re-enters, the stop completes, `_running` goes False
+    # and the second fault returns at the guard - the test then passes while
+    # guarding nothing. Which is what it did, until the mutation caught the TEST.
+    eng._stop_lock.acquire()
+    try:
+        def two_faults():
+            eng._fail_stop(RuntimeError("the driver went away"), blocking=False)
+            eng._fail_stop(RuntimeError("worker thread Thread-1 died unexpectedly"),
+                           blocking=False)
+
+        t = threading.Thread(target=two_faults, daemon=True)
+        t.start()
+        t.join(timeout=5.0)
+        check("fault: the faulting thread did not block", not t.is_alive())
+        check("fault: the session is still up, so both faults were recorded",
+              eng.is_running() is True)
+        check("fault: the cause survives the symptom",
+              "driver went away" in str(eng.fault), f"({eng.fault})")
+    finally:
+        eng._stop_lock.release()
+    eng.stop()
+
+
 # --- the GUI ---------------------------------------------------------------- #
 
 

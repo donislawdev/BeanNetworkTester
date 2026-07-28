@@ -53,6 +53,40 @@ def test_export_connections_csv_writes_the_current_view():
     ''')
 
 
+def test_a_failed_connections_export_leaves_no_tmp_file_behind():
+    """The export writes `<file>.tmp` and renames it. When the write blew up, the
+    temp file stayed on disk next to the real one for the user to find and wonder
+    about - and the next export silently overwrote it, so the litter was not even
+    stable. `jsonfile.write_json` has cleaned up after itself for a while; this is
+    the same guarantee for the same reason.
+
+    The failure is forced from inside the row loop (a row whose timestamps cannot
+    be subtracted), so the temp file definitely exists by the time it happens.
+    """
+    run_gui('''
+        import os, tempfile
+        import beantester.gui.app as m
+        path = os.path.join(tempfile.mkdtemp(), "conns.csv")
+        m.CONNECTIONS_CSV_FILE = path
+
+        app.engine.now_ref = lambda: 10.0
+        app.engine.connections_snapshot = lambda limit=None: [
+            dict(local_port=51000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
+                 packets=4, bytes=3072, bytes_in=2048, bytes_out=1024, dropped=0,
+                 scoped=False, pid=None, first="not a number", last="boom",
+                 dir="in", proc="chrome.exe"),
+        ]
+        app.conn_query = ""
+        app.conn_sort = {"col": "packets", "reverse": True}
+        app.export_connections_csv()
+
+        assert not os.path.exists(path + ".tmp"), "a half-written .tmp was left behind"
+        assert not os.path.exists(path), "a failed export must not create the real file"
+        assert any("csv" in line.lower() or "błąd" in line.lower()
+                   for line in app._log_lines), app._log_lines[-3:]
+    ''')
+
+
 def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
     """A ping row reaches the export with both ports None. The columns must come
     out EMPTY, not "None" and not shifted - a misaligned row here is silent."""
