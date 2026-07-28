@@ -290,7 +290,7 @@ class _FakePorts:
         self.owners = dict(owners or {})
         self.pids = set(pids)
         self.misses = 0
-        if not with_pid_for:                 # a table that predates syn_covers
+        if not with_pid_for:                 # a table that predates owner_targeted
             del self.__dict__["owners"]
 
     def __contains__(self, port):
@@ -299,7 +299,7 @@ class _FakePorts:
         self.misses += 1
         return False
 
-    def syn_covers(self, port):
+    def owner_targeted(self, port):
         owners = getattr(self, "owners", None)
         if owners is None:
             return False
@@ -344,6 +344,58 @@ def test_a_syn_from_a_fresh_socket_of_a_targeted_process_is_in_scope():
           f"(misses={ports.misses})")
 
 
+def test_a_fresh_udp_flow_of_a_targeted_process_is_in_scope():
+    """UDP has no SYN, so it was not covered at all - and that is where it hurts.
+
+    A TCP connection has exactly one SYN, so before this at most one packet per
+    connection escaped and the next rebuild adopted the rest. UDP has no such
+    marker, and the traffic that matters takes a FRESH ephemeral port per
+    exchange: a DNS query, a QUIC connection. Every one of them was judged
+    against a port set that had never seen the port, so every one of them walked
+    past the target untouched.
+
+    This also pins the SHAPE of the fix, which was chosen by measurement rather
+    than taste: ask for a SYN or for anything that is not TCP - never for
+    ordinary TCP data. Asking on every miss costs +209 to +266 ns per packet on a
+    TCP-heavy mix (~26% of ``decide()``, measured across three mixes and three map
+    sizes), while this form is free there, and it would widen the recycled-PID
+    window from one SYN to every packet. The last assertion here is what keeps
+    somebody from "simplifying" it into the expensive form.
+    """
+    core = BeanCore()
+    rng = random.Random(0)
+    # 5000 is a brand-new UDP socket of pid 42 (the target); 6000 belongs to
+    # somebody else; 4000 is what the last rebuild already knew about.
+    ports = _FakePorts(ports={4000}, owners={5000: 42, 6000: 99, 7000: 42},
+                       pids={42})
+    core.set_target(True, ports)
+    kw = dict(remote_ip="8.8.8.8", remote_port=53)
+
+    fresh = core.decide(100, True, 5000, 0.0, rng, is_tcp=False, **kw)
+    check("a fresh UDP flow of the target is in scope", fresh.scoped is True,
+          f"(scoped={fresh.scoped})")
+
+    stranger = core.decide(100, True, 6000, 0.0, rng, is_tcp=False, **kw)
+    check("a fresh UDP flow of ANOTHER process stays out",
+          stranger.scoped is False, f"(scoped={stranger.scoped})")
+
+    # This one pins DECIDE's half only - that it hands a missing port through
+    # without crashing. The `port is None` guard inside the real
+    # ProcessTargeting is guarded separately, because _FakePorts has its own
+    # implementation and a mutation of the real one sails past here (checked).
+    # See test_targeting_socketwatch.py::test_owner_targeted_says_no_for_portless_traffic.
+    portless = core.decide(100, True, None, 0.0, rng, is_tcp=False,
+                           remote_ip="8.8.8.8", remote_port=None)
+    check("portless traffic (ICMP) neither crashes nor lands in scope",
+          portless.scoped is False, f"(scoped={portless.scoped})")
+
+    # The measured half of the decision: ordinary TCP data is NOT asked about.
+    tcp_data = core.decide(100, True, 7000, 0.0, rng, is_tcp=True, is_syn=False,
+                           **kw)
+    check("ordinary TCP data on an unknown port is still not asked about",
+          tcp_data.scoped is False, f"(scoped={tcp_data.scoped})")
+
+
 def test_a_port_container_without_pid_for_does_not_break_the_packet_path():
     """``set_table`` accepts anything with the read surface, and ``pid_for`` was
     not part of it until now. A container that cannot answer must fall back to the
@@ -366,7 +418,7 @@ def test_a_plain_port_set_keeps_the_behaviour_it_always_had():
     d = core.decide(100, True, 5000, 0.0, rng, remote_ip="1.1.1.1", remote_port=80,
                     is_tcp=True, is_syn=True)
     check("plain set: a SYN on an unknown port is out of scope", d.scoped is False)
-    check("and the fast path was not even bound", core._syn_covers is None)
+    check("and the fast path was not even bound", core._owner_targeted is None)
 
 
 def test_a_reset_is_never_armed_from_a_syn():

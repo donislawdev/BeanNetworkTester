@@ -142,13 +142,13 @@ def test_a_connection_is_targeted_the_moment_its_socket_event_arrives():
         watcher.stop()
 
 
-def test_syn_covers_reads_the_live_map_without_waiting_for_a_rebuild():
+def test_owner_targeted_reads_the_live_map_without_waiting_for_a_rebuild():
     """`__contains__` answers from a set rebuilt on the resolver's thread, so the
     FIRST packet of a fresh connection is judged before any rebuild it triggers.
     Measured end to end 2026-07-28: 20 fresh connections against a process target
     with `--syn-drop 100` gave 20 established connections and `drop_syn` 0.
 
-    `syn_covers` is the one path that consults the live map instead, so it answers
+    `owner_targeted` is the one path that consults the live map instead, so it answers
     correctly with NO refresh having happened - which is what this asserts by
     never starting a resolver.
     """
@@ -163,21 +163,21 @@ def test_syn_covers_reads_the_live_map_without_waiting_for_a_rebuild():
         # no resolver: the rebuilt port set is still empty, as it is for every
         # brand-new socket at the moment its SYN is judged
         check("the rebuilt set knows nothing yet", 5000 not in targeting)
-        check("...and syn_covers cannot help until a rebuild names the pid",
-              targeting.syn_covers(5000) is False)
+        check("...and owner_targeted cannot help until a rebuild names the pid",
+              targeting.owner_targeted(5000) is False)
 
         targeting.refresh()          # what the resolver does on the miss above
         check("after the rebuild the fresh socket is covered",
-              targeting.syn_covers(5000) is True)
+              targeting.owner_targeted(5000) is True)
         check("another process's socket is not",
-              targeting.syn_covers(6000) is False)
+              targeting.owner_targeted(6000) is False)
     finally:
         watcher.stop()
 
 
-def test_syn_covers_survives_a_table_that_cannot_answer():
+def test_owner_targeted_survives_a_table_that_cannot_answer():
     """`set_table` takes anything with the read surface, and `pid_for` only became
-    part of that contract with `syn_covers`. This runs on the CAPTURE THREAD, so a
+    part of that contract with `owner_targeted`. This runs on the CAPTURE THREAD, so a
     table without it has to answer False - an AttributeError there would kill the
     capture thread and fail the session open (convention 20)."""
     class _NoPidFor:
@@ -187,7 +187,35 @@ def test_syn_covers_survives_a_table_that_cannot_answer():
     targeting = ProcessTargeting(bnt.parse_target("chrome"), table=_NoPidFor())
     targeting._pids = frozenset({100})
     check("a table without pid_for answers False instead of raising",
-          targeting.syn_covers(5000) is False)
+          targeting.owner_targeted(5000) is False)
+
+
+def test_owner_targeted_says_no_for_portless_traffic():
+    """ICMP reaches this now, and it did not before UDP was covered.
+
+    Step 1 asks for a TCP SYN or for anything that is NOT TCP, and ICMP is not
+    TCP - so every ping packet calls ``owner_targeted(None)`` on the CAPTURE
+    THREAD. Previously only a TCP SYN could get here, so the ``port is None``
+    guard sat on a path nothing ever took.
+
+    It needs its own guard against the REAL class: mutating that line to
+    ``return True`` was caught by NOTHING (checked 2026-07-28), because the core
+    test drives a ``_FakePorts`` double with its own implementation. A portless
+    packet answering True would drag every ping on the machine into scope while a
+    process target is set - the exact false positive targeting exists to avoid.
+    """
+    class _Table:
+        def snapshot(self):
+            return {5000: 100}
+
+        def pid_for(self, port):
+            return {5000: 100}.get(port)
+
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=_Table())
+    targeting._pids = frozenset({100})
+    check("a port we have is still covered", targeting.owner_targeted(5000) is True)
+    check("portless traffic answers False, it does not fall through",
+          targeting.owner_targeted(None) is False)
 
 
 # -- engine binding ----------------------------------------------------------- #

@@ -214,7 +214,7 @@ class BeanCore:
         # None whenever the port container cannot answer for a fresh socket - a
         # plain set (tests, one-shot resolution), which is the behaviour that
         # existed before this check did.
-        self._syn_covers = None
+        self._owner_targeted = None
         self.dst_active = False
         self.dst_ip = ""            # raw expression text (for summaries/reports)
         self.dst_port = ""          # raw expression text
@@ -304,7 +304,7 @@ class BeanCore:
                 self.target_ports = set(ports)
             else:
                 self.target_ports = ports
-            self._syn_covers = getattr(self.target_ports, "syn_covers", None)
+            self._owner_targeted = getattr(self.target_ports, "owner_targeted", None)
 
     def set_dest(self, active, ip=None, port=None):
         """Destination targeting. ``ip``/``port`` are filter expressions (see
@@ -497,14 +497,29 @@ class BeanCore:
             if self.target_active and local_port not in self.target_ports:
                 # The port set is rebuilt on another thread, so a socket opened
                 # microseconds ago is unknown HERE even when the live SOCKET map
-                # already knows its owner - and the first packet of every fresh
-                # connection was therefore judged out of scope. Measured end to
-                # end: 20 of 20 SYNs walked past a process target. For a SYN, and
-                # only a SYN (once per connection, not once per packet), ask that
-                # map. `not in` above has already flagged the miss and woken the
-                # resolver, so the rest of the connection takes the usual path.
-                if not (is_syn and self._syn_covers is not None
-                        and self._syn_covers(local_port)):
+                # already knows its owner - and the first packet of a fresh flow
+                # was therefore judged out of scope. Measured end to end: 20 of 20
+                # SYNs walked past a process target. So ask the live map - but not
+                # for every packet: `not in` above has already flagged the miss and
+                # woken the resolver, so an established flow takes the usual path.
+                #
+                # A TCP SYN (once per connection) and anything that is NOT TCP.
+                # UDP is the reason for the second half: it has no SYN, so it was
+                # not covered at all, and a fresh ephemeral port per datagram - DNS,
+                # QUIC - meant every one of them escaped. Portless traffic (ICMP)
+                # also lands here and exits on `port is None` inside the callback.
+                #
+                # Ordinary TCP data is deliberately NOT asked, and that is a
+                # MEASURED choice, not a guess: asking on every miss costs +209 to
+                # +266 ns per packet on a TCP-heavy mix (~26% of this function),
+                # while this form is free there - identical to not asking at all,
+                # within noise. It also keeps the recycled-PID exposure where it
+                # already was instead of widening it to every packet (see
+                # ``targeting.owner_targeted``). What it gives up is a TCP flow
+                # whose SYN predates the target being set; the resolver adopts that
+                # socket by itself at the next rebuild, within 0.30 s.
+                if not ((is_syn or not is_tcp) and self._owner_targeted is not None
+                        and self._owner_targeted(local_port)):
                     return Decision(False, False, [now], scoped=False)
             # 2) destination targeting (remote IP/port) - filter expressions
             if self.dst_active:
