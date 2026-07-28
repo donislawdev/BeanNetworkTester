@@ -846,7 +846,8 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
 - **Celowanie w proces napędzają zdarzenia gniazd, nie wolny polling.** WinDivert daje pakiet, nie
   PID, więc pakiet mapujemy na proces po **lokalnym porcie**. Na Windows narzędzie obserwuje
   zdarzenia gniazd systemu (connect / bind / accept / close) na bieżąco, więc nowe połączenie
-  programu, który **już** jest w zasięgu, jest psute od pierwszego pakietu. Wyjątkiem jest
+  **albo przepływ UDP** programu, który **już** jest w zasięgu, jest psute od pierwszego pakietu -
+  obejmuje to zapytania DNS i QUIC, z których każde bierze świeży port. Wyjątkiem jest
   *pierwsze* połączenie tego programu: dopóki nie ma ani jednego gniazda, nie ma po czym go poznać,
   więc to jedno połączenie przechodzi nietknięte. Bez realnego WinDivert (ścieżka testów /
   symulacji) narzędzie wraca do skanowania tabeli gniazd kilka razy na sekundę, gdzie pierwszy

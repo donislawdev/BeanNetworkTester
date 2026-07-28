@@ -133,6 +133,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Aiming at a process did not touch the first packet of a UDP exchange - and for DNS and QUIC
+  that meant it did not touch them at all.** Working out which connections belong to your target
+  means keeping a set of its ports, rebuilt in the background, and a brand-new port is not in it
+  yet. TCP had a way around this: a connection starts with a SYN, so one packet per connection was
+  checked against the live socket map. UDP has no SYN, so nothing was checked - and the traffic
+  where it matters takes a **fresh port every time**: every DNS query, every QUIC connection. Those
+  went past your target untouched, every one of them. They no longer do. If you have tested a game,
+  a video call or a browser over QUIC and the impairment seemed weaker than you configured, this is
+  why. Ordinary TCP data is deliberately still not re-checked - it does not need to be, and
+  measuring showed it would cost real throughput for nothing.
+
 - **The "the driver held a packet" warning told you about lost accuracy when what you were losing
   was traffic.** It said the wait lands on the delay you are measuring - true, and not the half
   that matters. Measured here on a deliberately overloaded run: with 138,000 packets a second

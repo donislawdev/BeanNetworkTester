@@ -150,7 +150,7 @@ class ProcessTargeting:
         back at the polling :class:`~beantester.portmap.PortTable` otherwise (no real
         WinDivert, or the SOCKET handle could not open). Both expose the same read
         surface (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``, plus
-        ``pid_for`` since ``syn_covers`` exists - both real tables have always had
+        ``pid_for`` since ``owner_targeted`` exists - both real tables have always had
         it, but it is part of the contract now), which is why the swap is a
         one-line reference change. The resolved port set is left as
         it is until the next ``refresh()`` (the resolver runs those continuously), so
@@ -159,20 +159,31 @@ class ProcessTargeting:
         with self._lock:
             self.table = table if table is not None else portmap.default_table()
 
-    def syn_covers(self, port):
+    def owner_targeted(self, port):
         """Is this port a brand-new socket of a process we ALREADY target?
 
+        Named ``syn_covers`` until UDP was covered too, which made the old name a
+        lie about when it runs - see ``BeanCore.decide`` step 1 for the callers.
+
         ``__contains__`` answers from ``_ports``, a frozenset rebuilt on another
-        thread, so the first packet of a fresh connection is judged BEFORE any
-        rebuild it triggers - it was never in scope, however early the SOCKET
-        event arrived. MEASURED end to end 2026-07-28: 20 fresh connections
-        against a process target with ``--syn-drop 100``, 20 SYNs straight
-        through, ``drop_syn`` 0. The live map knew each owner 0.02 ms before its
-        SYN; nothing consumed that.
+        thread, so the first packet of a fresh flow is judged BEFORE any rebuild
+        it triggers - it was never in scope, however early the SOCKET event
+        arrived. MEASURED end to end 2026-07-28: 20 fresh connections against a
+        process target with ``--syn-drop 100``, 20 SYNs straight through,
+        ``drop_syn`` 0. The live map knew each owner 0.02 ms before its SYN;
+        nothing consumed that.
 
         This is the one place that does. ``BeanCore.decide`` calls it for a TCP
-        SYN only - once per connection, not once per packet - and it costs a
-        lock-free dict read plus a frozenset lookup, no lock of its own.
+        SYN (once per connection) and for anything that is not TCP, and it costs
+        a lock-free dict read plus a frozenset lookup, no lock of its own.
+
+        **Why not on every miss.** Asking for ordinary TCP data as well was
+        measured on the real code across three traffic mixes and three map sizes
+        (400 / 10 000 / 100 000 ports, median of 5): it costs **+209 to +266 ns
+        per packet** on a TCP-heavy mix, about 26% of ``decide()``, while the form
+        above is free there - within noise of not asking at all. The map's SIZE
+        barely matters (400 -> 100 000 ports moved ``decide()`` by ~35 ns), so
+        this is about how OFTEN each variant asks, not about the lookup.
 
         ``_pids`` is what the last rebuild concluded, so every expression form
         (name, PID, list, range, ``!`` exclusion, ancestor match) is already
@@ -210,11 +221,27 @@ class ProcessTargeting:
           watcher thread does not help - the window is the same. The only design
           that closes it holds the SYN until the answer is in, i.e. adds delay
           inside a tool whose job is to inject a PRECISE amount of it.
-        * ``_pids`` is up to one resolver cycle stale (0.30 s). If the target
-          exits and Windows recycles its PID inside that window, one packet of an
-          unrelated new socket can be pulled into scope. That is a DIFFERENT false
-          positive from the stale ``_ports`` this code already lived with - named
-          here rather than implied.
+        * ``_pids`` goes stale when the target exits, and until the next rebuild a
+          socket Windows hands that pid number is treated as the target's.
+          **MEASURED against the real socket table 2026-07-28** (seven rounds per
+          transport, no traffic, so every rebuild is the routine tick and this is
+          the UPPER bound): a dead process leaves ``_pids`` after a median of
+          **309 ms** (TCP, 271-327) and **315 ms** (UDP, 290-325) - the 0.30 s
+          tick, and no more. TIME_WAIT does not stretch it, which was worth
+          checking rather than assuming, since a TCP socket can outlive its owner.
+          A live session misses constantly, which wakes the resolver and only
+          shortens this toward the 0.05 s floor. This used to be a design claim
+          ("up to one resolver cycle") with nothing behind it.
+
+          **Covering UDP widened what fits in that window, and that is the price
+          of it:** it used to be one SYN per connection, and it is now every UDP
+          datagram of such a socket. Ordinary TCP data is still never asked, so an
+          established TCP connection cannot be dragged in this way. That is a
+          DIFFERENT false positive from the stale ``_ports`` this code already
+          lived with - named here rather than implied. Nothing narrows the bound
+          further: verifying identity means ``create_time()`` in the packet path,
+          which convention 20 forbids. Guarded both ways by
+          ``test_targeting_socketwatch.py::test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer``.
         """
         if port is None:
             return False

@@ -968,8 +968,9 @@ seeded).
   explicit exclusion wins: `chrome, !chromedriver` will not pull in `chromedriver` via a parent.
 - **Process targeting is driven by socket events, not a slow poll.** WinDivert hands us a packet,
   not a PID, so we map a packet to its process by **local port**. On Windows the tool watches the
-  system's socket events (connect / bind / accept / close) as they happen, so a new connection of a
-  program that is **already** in scope is impaired from its very first packet. The exception is the
+  system's socket events (connect / bind / accept / close) as they happen, so a new connection **or
+  UDP flow** of a program that is **already** in scope is impaired from its very first packet - that
+  covers DNS queries and QUIC, each of which takes a fresh port. The exception is the
   program's *first* connection: until it owns at least one socket there is nothing to recognise it
   by, so that one connection goes through untouched. Without real WinDivert (the test / simulation
   path) it falls back to scanning the socket table a few times a second, where the first packet of
