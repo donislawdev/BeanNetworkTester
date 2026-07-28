@@ -32,7 +32,11 @@ class simply *is* the container it tests against (``__contains__``).
 Who does the rebuilding, and where
 ----------------------------------
 ``__contains__`` runs in the PACKET PATH, inside ``BeanCore._lock``, at up to
-150 000 calls a second. It therefore does no work beyond a frozenset lookup.
+150 000 calls a second on the synthetic path (a real WinDivert session was
+measured an order of magnitude below that - see "What this actually sustains" in
+``engine.py``, the one place that number lives). It therefore does no work beyond
+a frozenset lookup: the reason below is about what a MISS used to cost, and four
+syscalls in the packet path are unaffordable at either rate.
 
 It used to call ``refresh()`` itself, which meant the capture thread paid for
 four ``iphlpapi`` calls, an O(n) dict copy and a ``psutil.Process()`` per distinct

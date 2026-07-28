@@ -97,6 +97,96 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### ADR 2026-07-28: batched WinDivert I/O MEASURED and REJECTED (audit F18, part c)
+
+- **The question.** The engine does one `recv()` and one `send()` syscall per packet, and WinDivert
+  exposes `WinDivertRecvEx`/`SendEx`, which can carry many packets per call. `pydivert` binds both
+  (its own wrapper uses them only for overlapped IO, single packet), so raw ctypes could batch -
+  the project already writes raw ctypes in `portmap.py`. Rule 6 says price the primitive before
+  building anything around it.
+- **The bar was set BEFORE the run**, so the result could not be argued into: below 2x, do not touch
+  the capture loop (the most safety-critical code here, convention 20); 3x or better, worth a real
+  design; between the two, record and leave open.
+- **Measured** (elevated, sniff-only `SNIFF|RECV_ONLY` handle on `loopback and udp and
+  udp.DstPort == 39999`, same 64 B flood for all three, median of 5):
+
+  | how the same traffic is read | pkt/s | vs today | packets per call |
+  |---|---|---|---|
+  | `handle.recv()` - syscall + `pydivert` Packet object | 92 944 | 1.00x | 1.0 |
+  | raw `WinDivertRecv` - syscall, no Packet object | 120 356 | 1.29x | 1.0 |
+  | raw `WinDivertRecvEx` - up to 64 packets per call | 130 528 | **1.40x** | **1.4** |
+
+- **Rejected, and the reason is not the wrapper:** the driver hands back ~1.4 packets per call even
+  under a saturating flood against a full queue. There is no batch there to exploit, so the syscall
+  count is not what to attack. **Do not reopen this without new evidence that the driver will
+  actually fill a batch.**
+- **What the run redirected the question to.** A sniff-only reader sustains 92 944 packets/s while
+  the whole engine manages ~14k - **6.6x**. Reading is not the ceiling; roughly five sixths of the
+  per-packet budget goes to `decide()`, the connection log, the release heap and the inject
+  thread's `send()`. Which of those dominates is NOT measured, and saying so is the point: the
+  evidence supports "the inject side trails" (the heap grows under zero configured delay) and
+  nothing finer.
+- **Anomaly recorded rather than smoothed over:** runs 4 and 5 of the RecvEx strategy collapsed to
+  29 010 / 29 769 pkt/s against 130-132k in runs 1-3. Unexplained. The median absorbs it and the
+  conclusion does not turn on it (even the best RecvEx run is 1.42x), but a future session
+  re-running this should expect it rather than treat it as a new discovery.
+- Prediction log: `recv()` was predicted at 30-80k and came in at 93k; the ordering 3 > 2 > 1 held,
+  the magnitudes did not.
+
+### Docs: "150 000 packets a second" is a SYNTHETIC number, and now says so (audit F18, part b)
+
+- The figure appears in five places (`core.py`, `crashlog.py` x2, `engine.py`, `targeting.py`) as
+  the working assumption for hot-path cost. All of it came from benchmarks against
+  `SyntheticDivert`, where a packet costs no syscall and no `pydivert` parsing. A real session was
+  measured at **~13.8-15.6k packets/s** end to end (capture + re-injection, nothing configured to
+  impair) - an order of magnitude lower, with nothing in the text distinguishing the two.
+- The number now lives in ONE place: a "What this actually sustains" section in `engine.py`'s module
+  docstring, with the measurement conditions and, deliberately, what was NOT measured (idle machine,
+  real NIC, full-size frames - 14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B; the
+  limit is packets, not bits).
+- **The ceiling is FLAT**, which is its own control: three times the offered load moved throughput
+  by 13%. The load generators share the machine, so CPU contention is a confound - but if it were
+  the binding one, MORE senders would push the tool's rate down, and it went slightly up.
+- **The bottleneck is INJECTION, not `decide()`.** With no impairment configured the release heap
+  still grew ~1100 entries/s (`peak_queue` 4080 -> 7020), which can only happen if the inject thread
+  trails the capture thread. Every hot-path optimisation recorded in this package targets `decide()`
+  and the capture thread; the measured constraint is the `send()` side.
+- **Deliberately NOT rewritten:** `core.py::_enforce_ceiling` ("measured at 150 000 new flows/s")
+  describes a benchmark's INPUT rate, not a claim about production throughput, and `crashlog.quiet`
+  / `engine.OVERFLOW_WARN_S` use the figure as a conditional cost bound ("would be a lot at that
+  rate"), which holds either way. Rule 5 cuts both directions: prose that is still true for a
+  different reason than the one being corrected does not get deleted along with it.
+
+### Fixed: the driver-wait warning names the LOSS, not just the delay (audit F18, part a)
+
+- **Measured first** (2026-07-28, elevated, real WinDivert, `--filter loopback` so nothing but
+  loopback is ever diverted, 64 B UDP flood, no impairment configured). Control passes with no tool
+  at all lost **0.00%** at both 138k and 303k packets/s, so the socket path itself is not the story:
+
+  | offered | arrived | lost | `seen` | `driver_wait_peak_ms` | `peak_queue` |
+  |---|---|---|---|---|---|
+  | 666 000 | 54 957 | **91.75%** | 55 201 | 198.3 | 4 080 |
+  | 1 263 600 | 60 677 | **95.20%** | 60 977 | 345.6 | 4 722 |
+  | 1 767 600 | 58 706 | **96.68%** | 62 315 | 220.5 | 7 020 |
+
+  `drop_overflow` / `drop_shutdown` / `drop_send` / `drop_loss` were **0 in every row**. The tool
+  reported a healthy session while over nine tenths of the user's traffic was destroyed.
+- **No counter can exist for it, and that is now checked rather than assumed** (rule 6):
+  `WinDivert64.dll` exports `WinDivertGetParam`/`SetParam` and no statistics call; params 0-4 answer
+  (queue length / time / size, version major / minor) and 5-7 are refused. So the driver-wait
+  warning is the ONLY signal the tool has for this state - which is why its wording is load-bearing.
+- Changed `log.driver_wait`, `events.driver_wait` and `log.driver_queue` in `lang/en.json` +
+  `lang/pl.json`: a full queue means DROPPED packets, not just late ones, and the advice is to
+  narrow the traffic filter. `_warn_driver_wait`'s docstring carries the measurement.
+- **Why the threshold is where it is, now written down:** under saturation the queue sits at its
+  limit, so the wait converges on `QUEUE_LEN / service rate`; at 4096 and ~14k/s that is ~290 ms,
+  and the run measured 198-346 ms. `DRIVER_WAIT_WARN_MS = 50` is therefore crossed whenever the
+  tool serves below ~82k packets/s. Recorded so nobody raises it without redoing that arithmetic.
+- Prediction log, since being wrong is the useful part: two of four predictions failed. Loopback
+  was expected to be counted TWICE (`seen` ~ 2x arrived) - measured `seen` ~ arrived, one capture
+  event per datagram. And the warning was predicted NOT to fire (wait pinned under 50 ms) - it
+  fired in all three runs, because the service rate put into that formula was 10x too high.
+
 ### Docs: what a target restart actually costs, and one README claim it falsifies (audit F17)
 
 - `targeting.py::syn_covers` documented the `_pids` limit with 19/20 (holding sockets) and 6/20

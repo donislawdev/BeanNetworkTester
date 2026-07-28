@@ -20,6 +20,47 @@ UI still says "running". ``_watchdog_loop`` therefore stops the engine (which
 closes the divert = fail-open) as soon as a worker thread dies, and an
 ``atexit`` hook guarantees the handle is released even on an abrupt shutdown.
 The same watchdog enforces the session deadline (``duration``).
+
+What this actually sustains (the one place that number lives)
+-------------------------------------------------------------
+"150 000 packets a second" appears in several cost arguments around this
+package. It is a SYNTHETIC-path figure: benchmarks against ``SyntheticDivert``,
+where a "packet" costs no syscall and no ``pydivert`` parsing. Treating it as
+what a real session sustains was wrong by an order of magnitude.
+
+MEASURED 2026-07-28 (Win11, elevated, real WinDivert, ``--filter loopback``,
+64 B UDP flood, NO impairment configured - so this is the cost of capture plus
+re-injection alone):
+
+    offered 138k/s  ->  the tool moved ~13.8k/s, 91.75% destroyed by the driver
+    offered 316k/s  ->  ~15.2k/s
+    offered 442k/s  ->  ~15.6k/s
+
+The ceiling is FLAT: three times the offered load moved the throughput by 13%,
+which is what a saturated service rate looks like. That flatness is also the
+control for the obvious objection - the load generators share this machine, so
+CPU contention is a confound, but if it were the binding one then MORE senders
+would push the tool's rate DOWN, and it went slightly up. What is NOT measured:
+the same figure on an idle machine, on a real NIC, or with full-size frames
+(14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B - the limit is
+packets, not bits).
+
+Reading packets is NOT where that ceiling comes from, and this is measured, not
+reasoned. A sniff-only loop doing nothing but reading the same flood sustains
+**92 944 packets/s** through ``pydivert``'s ``recv()`` - 6.6x what the whole
+engine manages. So roughly five sixths of the per-packet budget is spent after
+the read: ``decide()``, the connection log, the release heap and the inject
+thread's ``send()``. Which of those dominates is NOT measured; the release heap
+growing under zero configured delay (``peak_queue`` 4080 -> 7020 across the three
+loads) says the inject side trails the capture side, and that is as far as the
+evidence goes.
+
+Batched driver I/O was measured and REJECTED as the lever (2026-07-28). Bypassing
+``pydivert``'s ``Packet`` object with a raw ``WinDivertRecv`` gives 120 356
+packets/s (1.29x), and a raw ``WinDivertRecvEx`` asking for 64 packets per call
+gives 130 528 (1.40x) - because the driver returns **1.4 packets per call** even
+under a saturating flood with a full queue. There is no batch there to exploit,
+so the syscall count is not the thing to attack. Both figures are medians of 5.
 """
 import atexit
 import heapq
@@ -1445,12 +1486,27 @@ class BeanEngine:
             self._warn_driver_wait(waited_ms)
 
     def _warn_driver_wait(self, waited_ms):
-        """Say - once every DRIVER_WAIT_WARN_S - that the DRIVER is holding packets.
+        """Say - once every DRIVER_WAIT_WARN_S - that the DRIVER is backing up.
 
-        Rate-limited for the reason written above OVERFLOW_WARN_S, and worth
-        saying at all because this delay appears in no counter: it is added
-        before the tool's own queue, so a tester measuring latency attributes it
-        to their application or to the network.
+        Rate-limited for the reason written above OVERFLOW_WARN_S. It used to be
+        worded as a LATENCY problem ("this wait lands on the delay you are
+        measuring"), which is true and is not the half that matters. MEASURED
+        2026-07-28 (real WinDivert, --filter loopback, 64 B UDP flood, control
+        run without the tool losing 0.00%): at 138k packets/s offered, the tool
+        moved ~14k/s and **91.75% of the traffic was destroyed by the driver**,
+        with driver_wait_peak at 198 ms - while drop_overflow, drop_shutdown,
+        drop_send and drop_loss all read ZERO. A full driver queue is not slow
+        delivery, it is silent loss, and WinDivert exposes no counter for it
+        (checked: the DLL exports Get/SetParam only, and params 0-4 are the
+        queue triple plus the version). This warning is therefore the ONLY
+        signal the tool has for that state, so it has to name the loss.
+
+        Why the numbers land where they do: under saturation the queue sits at
+        its limit, so the wait converges on QUEUE_LEN / service rate. At 4096
+        and ~14k/s that is ~290 ms, and the run measured 198-346 ms across three
+        loads. The 50 ms threshold is therefore crossed whenever the tool serves
+        below ~82k packets/s - do not "tune" it upwards without redoing that
+        arithmetic, because it is what makes the state visible at all.
         """
         now = time.monotonic()
         if now - self._driver_wait_warned < self.DRIVER_WAIT_WARN_S:
