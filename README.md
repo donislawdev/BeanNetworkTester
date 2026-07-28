@@ -490,6 +490,12 @@ Designed so that after a bug you can recreate exactly the same conditions:
   away are deliberately excluded - "Buffer overflow", "Dropped at stop" and "Send failed" are its
   own failures, not the link's, and they have their own counters. The report's `effective_loss_pct` is the same
   number, next to `packets_in_scope`.
+- **Driver queue wait (peak)** - the longest a packet had **already** been waiting inside WinDivert
+  when this tool received it. It is measured, not estimated: the driver stamps every packet with a
+  capture time, and the tool samples that 20 times a second. On an idle machine it is a fraction of
+  a millisecond (measured here: 0.05-0.16 ms). If it grows, the tool is adding delay that shows up
+  in no other counter, because it happens in the driver's queue ahead of its own - and above 50 ms
+  it says so in the log and the event list. Blank on `--simulate`, which has no driver.
 - **It measures this machine, not the internet.** The tool sees packets crossing this computer's
   network stack, so a packet lost out on the network - the reply that never came back - never
   arrives here and nothing here can count it. A clean 30-packet ping that loses one reply shows

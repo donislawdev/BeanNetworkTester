@@ -82,6 +82,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **The session panel now shows how long packets waited inside the driver before the tool saw
+  them.** This is the one delay the tool adds and counted nowhere: it happens in WinDivert's queue,
+  ahead of the tool's own, so a tester measuring latency puts it down to their application or to
+  the network. It is not an estimate - the driver stamps every packet with a capture time, and the
+  tool now reads it 20 times a second. **"Driver queue wait (peak)"** in the Session tab holds the
+  worst one, and it goes into the reproduction report with everything else. On an idle machine
+  expect a fraction of a millisecond (measured here: 0.05-0.16 ms). Above 50 ms the log and the
+  event list say so, at most once every five seconds. It stays blank under `--simulate`, which has
+  no driver to wait in.
+
 - **A session now records the WinDivert queue it is running behind.** WinDivert has its own buffer,
   ahead of this tool's, and nothing here ever read it - so a packet could sit in the driver for up
   to two seconds (the default queue time), land on your measured latency, and appear in no counter
