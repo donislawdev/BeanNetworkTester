@@ -184,6 +184,43 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Added: expressions compile down into the DRIVER's filter (chunk 1 of the narrowing work)
+
+- **Why.** With a destination target set the tool captures everything and re-injects almost all of
+  it untouched - measured 1944 packets diverted with 0 impairable, and 1632 with 8. Each cost a
+  recv plus a send for nothing. The WinDivert filter runs in the driver, so whatever can be pushed
+  into it never reaches this process.
+- `matchers.windivert_fragment(matcher)` emits a filter fragment or `None`. Every `_Term` now
+  carries a `shape` - what the parser concluded (`("eq", 443)`, `("ip_range", 4, lo, hi)`, `None`
+  for glob / `re:` / process name). The parsers return `(predicate, shape)` instead of throwing the
+  parse away, so the compiler **reads the parse result rather than parsing the text again**
+  (convention 10: a second reader of the same syntax drifts at the first edit). The hot path is
+  untouched - `matches()` still calls the closure.
+- **The invariant is the whole design: the fragment must be a SUPERSET of the matcher.**
+  Over-capture is free, under-capture is the silent regression. So: only POSITIVES are compiled
+  (dropping negatives can only widen), one shapeless term voids the whole expression (an unbounded
+  member makes the OR unbounded), and no address-dependent term (`outbound`, `loopback`) is emitted
+  - those live in `WINDIVERT_ADDRESS`, so keeping them out is what lets the guard evaluate a
+  synthetic packet and still mean something.
+- 🔴 **A real bug caught while tracing writes, not while reading names.** `engine._capture_loop`
+  reads the remote endpoint as the packet's DESTINATION when outbound and as its SOURCE when
+  inbound. A fragment testing only `DstAddr`/`DstPort` would have kept every INBOUND packet away
+  from the tool - impairing one direction, silently dropping the other, all counters healthy.
+  Both directions are emitted, and `test_both_directions_are_covered_because_the_remote_end_swaps`
+  exists so it cannot come back.
+- **Verified against the driver's own evaluator, not against my reading of it.**
+  `WinDivertHelperEvalFilter` was first checked for fidelity on **40 real captured packets across 9
+  filters, zero disagreements**, including the address-dependent terms that a blank address struct
+  would have got wrong (sniff-only handle - it cannot touch traffic). Then every emitted fragment
+  was compile-tested and swept: **27 648 packet views over 16 expressions, zero superset
+  violations**.
+- New guards in `tests/test_matchers_windivert.py`. The oracle test needs `pydivert` and is skipped
+  where it is missing - **half the CI matrix**, so a green Linux run has not checked the invariant.
+- **Five mutants. Four caught; the fifth green ON PURPOSE:** emitting only a range's lower bound is
+  a WIDENING, and the tests must not reject it. That one is the check that the suite encodes the
+  asymmetry rather than just "any change is bad". The four caught: dst-only fields, negatives
+  compiled, a shapeless term no longer voiding the expression, and an `outbound` term leaking in.
+
 ### Docs: the throughput rig is not reproducible, and the prose now says so (audit F18, follow-up)
 
 - Re-measuring the same bare `recv`+`send` loop over the same loopback flood, same machine, three
