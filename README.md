@@ -505,6 +505,11 @@ Designed so that after a bug you can recreate exactly the same conditions:
   into the log.
 - **Save reproduction report** - a single JSON file with the lot: seed, all settings, counters,
   metrics, event log, connections and a **ready CLI command** that recreates the conditions.
+  It also records **the WinDivert queue the session ran behind** (`session.driver_queue`: length,
+  time and size). That is the driver's own buffer, ahead of this tool's: with the default 2000 ms
+  queue time a packet can wait in it, and that wait lands on your latency without appearing in any
+  counter here. A report from a machine you do not have in front of you now says which queue
+  produced its numbers. The same three values go into the log at START.
 - **Copy CLI command** - straight to the clipboard: `BeanNetworkTester.exe --seed ... --loss ...
   --duration ...` (the command adapts to the build: from the repository you get
   `python bean_network_tester.py ...`).

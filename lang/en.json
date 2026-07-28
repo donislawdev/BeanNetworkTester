@@ -229,6 +229,7 @@
   "log.dest_set": "Destination set from the connection table",
   "log.donate_opened": "Support page opened",
   "log.driver": "WinDivert driver",
+  "log.driver_queue": "WinDivert queue: {n} packets / {t} ms / {kb} KB. This is the driver's own buffer, before this tool's - packets can wait in it, and that wait is added to your latency without appearing in any counter here.",
   "log.duration_reached": "Time limit reached ({v} s) - session stopped.",
   "log.engine_fault": "Engine fault: {e} - the session was stopped, your network is back to normal.",
   "log.error": "Error",

@@ -80,6 +80,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   application left alone, name the one you *do* want broken instead; then anything unidentified
   passes through untouched. Both READMEs say so next to the equivalent note for `!53` on ports.
 
+### Added
+
+- **A session now records the WinDivert queue it is running behind.** WinDivert has its own buffer,
+  ahead of this tool's, and nothing here ever read it - so a packet could sit in the driver for up
+  to two seconds (the default queue time), land on your measured latency, and appear in no counter
+  at all. The three values (length, time, size) are read when a session starts, written to the log,
+  and stored in the reproduction report as `session.driver_queue`, so a report from a machine you
+  do not have in front of you says which queue produced its numbers. Read on this machine:
+  4096 packets / 2000 ms / 4 MiB - and note the size limit binds first for full-size packets,
+  4 MiB / 1500 B = 2796 packets, not 4096. Nothing is changed about how the queue behaves; this is
+  about being able to see it. `--doctor` deliberately does not read them: the values need an open
+  handle, and opening one loads the driver, which would falsify the "windivert driver" line printed
+  in the same report.
+
 ### Fixed
 
 - **A connection's "dropped" count ignored the packets the tool's own queue threw away.** The
