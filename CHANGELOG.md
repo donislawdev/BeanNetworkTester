@@ -74,6 +74,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
+- **Both READMEs claimed slightly more than the tool does about brand-new connections.** They said
+  a connection is in scope "the moment it opens", which holds for a program the tool already
+  recognises but not for that program's *first* connection: until it owns at least one socket there
+  is nothing to recognise it by, so that one connection goes through untouched. Measured, so the
+  exception is now stated rather than implied, next to a new note on what to do about it - if the
+  program under test restarts, aim by **name** rather than by process id.
+
 - **The process field's exclusions are now documented properly.** Writing `!chrome` means "impair
   everything except chrome" - and "everything" includes any connection whose owning process could
   not be identified yet, which every brand-new connection passes through. If you want one

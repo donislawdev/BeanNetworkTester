@@ -968,12 +968,19 @@ seeded).
   explicit exclusion wins: `chrome, !chromedriver` will not pull in `chromedriver` via a parent.
 - **Process targeting is driven by socket events, not a slow poll.** WinDivert hands us a packet,
   not a PID, so we map a packet to its process by **local port**. On Windows the tool watches the
-  system's socket events (connect / bind / accept / close) as they happen, so a connection is in
-  scope the moment it opens - for an outbound connection, before its first packet even leaves.
-  Without real WinDivert (the test / simulation path) it falls back to scanning the socket table a
-  few times a second, where the first packet of a brand-new connection can slip through. Either way
-  the watching runs on its own thread, never on the one handling your packets, so it can never turn
-  into lost traffic.
+  system's socket events (connect / bind / accept / close) as they happen, so a new connection of a
+  program that is **already** in scope is impaired from its very first packet. The exception is the
+  program's *first* connection: until it owns at least one socket there is nothing to recognise it
+  by, so that one connection goes through untouched. Without real WinDivert (the test / simulation
+  path) it falls back to scanning the socket table a few times a second, where the first packet of
+  any brand-new connection can slip through. Either way the watching runs on its own thread, never
+  on the one handling your packets, so it can never turn into lost traffic.
+- **If the program under test restarts, aim by NAME, not by process id.** Measured: a target that
+  exits and comes back under a new process id is picked up again by itself, and the restart costs
+  exactly one connection - the one it opens before it owns any socket. Aiming at a **process id**
+  never recovers, because that id no longer exists: everything after the restart is left untouched.
+  From the command line the run says so when it happens, and ends with how much of the captured
+  traffic was actually in scope; in the window it is the red note under the process field.
 - **An exclusion on its own also covers everything the tool cannot identify.** `!chrome` in the
   process field means "impair everything except chrome" - and "everything" includes any connection
   whose owning process could not be determined: protected system processes the tool cannot open,

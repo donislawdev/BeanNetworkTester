@@ -845,12 +845,19 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   pierwszeństwo: `chrome, !chromedriver` nie wciągnie `chromedriver` przez rodzica.
 - **Celowanie w proces napędzają zdarzenia gniazd, nie wolny polling.** WinDivert daje pakiet, nie
   PID, więc pakiet mapujemy na proces po **lokalnym porcie**. Na Windows narzędzie obserwuje
-  zdarzenia gniazd systemu (connect / bind / accept / close) na bieżąco, więc połączenie jest w
-  zasięgu w chwili otwarcia - a dla połączenia wychodzącego jeszcze przed jego pierwszym pakietem.
-  Bez realnego WinDivert (ścieżka testów / symulacji) narzędzie wraca do skanowania tabeli gniazd
-  kilka razy na sekundę, gdzie pierwszy pakiet zupełnie nowego połączenia może się prześliznąć.
-  Tak czy inaczej obserwacja chodzi na osobnym wątku, nigdy na tym, który obsługuje Twoje pakiety -
-  więc nie zamieni się w zgubiony ruch.
+  zdarzenia gniazd systemu (connect / bind / accept / close) na bieżąco, więc nowe połączenie
+  programu, który **już** jest w zasięgu, jest psute od pierwszego pakietu. Wyjątkiem jest
+  *pierwsze* połączenie tego programu: dopóki nie ma ani jednego gniazda, nie ma po czym go poznać,
+  więc to jedno połączenie przechodzi nietknięte. Bez realnego WinDivert (ścieżka testów /
+  symulacji) narzędzie wraca do skanowania tabeli gniazd kilka razy na sekundę, gdzie pierwszy
+  pakiet każdego nowego połączenia może się prześliznąć. Tak czy inaczej obserwacja chodzi na
+  osobnym wątku, nigdy na tym, który obsługuje Twoje pakiety - więc nie zamieni się w zgubiony ruch.
+- **Jeśli testowany program się restartuje, celuj po NAZWIE, nie po PID.** Zmierzone: cel, który
+  znika i wraca z nowym PID-em, zostaje podchwycony sam, a restart kosztuje dokładnie jedno
+  połączenie - to, które program otwiera, zanim ma jakiekolwiek gniazdo. Celowanie po **PID** nie
+  wraca nigdy, bo tego numeru już nie ma: wszystko po restarcie zostaje nietknięte. W wierszu
+  poleceń przebieg mówi o tym w chwili, gdy to zauważy, i na koniec podaje, ile przechwyconego
+  ruchu naprawdę było w zasięgu; w oknie jest to czerwona notka pod polem procesu.
 - **Samo wykluczenie obejmuje też wszystko, czego narzędzie nie rozpozna.** `!chrome` w polu procesu
   znaczy „psuj wszystko oprócz chrome" - a „wszystko" obejmuje każde połączenie, którego właściciela
   nie udało się ustalić: procesy chronione, których nie da się otworzyć, oraz - na ścieżce
