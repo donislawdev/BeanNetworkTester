@@ -133,6 +133,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The "the driver held a packet" warning told you about lost accuracy when what you were losing
+  was traffic.** It said the wait lands on the delay you are measuring - true, and not the half
+  that matters. Measured here on a deliberately overloaded run: with 138,000 packets a second
+  offered, the tool moved about 14,000 of them and **91.75% of the traffic was thrown away by the
+  driver before this tool ever saw it** - while every drop counter on screen still read zero,
+  because the tool cannot count what never reaches it. (The same load with the tool switched off
+  lost nothing at all, so that loss is the tool's presence, not the machine.) The warning now says
+  that a full driver queue means dropped packets, not just late ones, and tells you to narrow the
+  traffic filter. The session-start line about the queue says the same. If you have ever run a test
+  through this tool at a high packet rate and trusted the counters, this is the entry to read
+  twice.
+
 - **Aiming at a process missed the first packet of every new connection - and your test results
   will change because of it.** Working out which connections belong to your target means keeping a
   set of its ports, and that set is rebuilt in the background. A connection opened a moment ago was

@@ -97,6 +97,36 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the driver-wait warning names the LOSS, not just the delay (audit F18, part a)
+
+- **Measured first** (2026-07-28, elevated, real WinDivert, `--filter loopback` so nothing but
+  loopback is ever diverted, 64 B UDP flood, no impairment configured). Control passes with no tool
+  at all lost **0.00%** at both 138k and 303k packets/s, so the socket path itself is not the story:
+
+  | offered | arrived | lost | `seen` | `driver_wait_peak_ms` | `peak_queue` |
+  |---|---|---|---|---|---|
+  | 666 000 | 54 957 | **91.75%** | 55 201 | 198.3 | 4 080 |
+  | 1 263 600 | 60 677 | **95.20%** | 60 977 | 345.6 | 4 722 |
+  | 1 767 600 | 58 706 | **96.68%** | 62 315 | 220.5 | 7 020 |
+
+  `drop_overflow` / `drop_shutdown` / `drop_send` / `drop_loss` were **0 in every row**. The tool
+  reported a healthy session while over nine tenths of the user's traffic was destroyed.
+- **No counter can exist for it, and that is now checked rather than assumed** (rule 6):
+  `WinDivert64.dll` exports `WinDivertGetParam`/`SetParam` and no statistics call; params 0-4 answer
+  (queue length / time / size, version major / minor) and 5-7 are refused. So the driver-wait
+  warning is the ONLY signal the tool has for this state - which is why its wording is load-bearing.
+- Changed `log.driver_wait`, `events.driver_wait` and `log.driver_queue` in `lang/en.json` +
+  `lang/pl.json`: a full queue means DROPPED packets, not just late ones, and the advice is to
+  narrow the traffic filter. `_warn_driver_wait`'s docstring carries the measurement.
+- **Why the threshold is where it is, now written down:** under saturation the queue sits at its
+  limit, so the wait converges on `QUEUE_LEN / service rate`; at 4096 and ~14k/s that is ~290 ms,
+  and the run measured 198-346 ms. `DRIVER_WAIT_WARN_MS = 50` is therefore crossed whenever the
+  tool serves below ~82k packets/s. Recorded so nobody raises it without redoing that arithmetic.
+- Prediction log, since being wrong is the useful part: two of four predictions failed. Loopback
+  was expected to be counted TWICE (`seen` ~ 2x arrived) - measured `seen` ~ arrived, one capture
+  event per datagram. And the warning was predicted NOT to fire (wait pinned under 50 ms) - it
+  fired in all three runs, because the service rate put into that formula was 10x too high.
+
 ### Docs: what a target restart actually costs, and one README claim it falsifies (audit F17)
 
 - `targeting.py::syn_covers` documented the `_pids` limit with 19/20 (holding sockets) and 6/20

@@ -1445,12 +1445,27 @@ class BeanEngine:
             self._warn_driver_wait(waited_ms)
 
     def _warn_driver_wait(self, waited_ms):
-        """Say - once every DRIVER_WAIT_WARN_S - that the DRIVER is holding packets.
+        """Say - once every DRIVER_WAIT_WARN_S - that the DRIVER is backing up.
 
-        Rate-limited for the reason written above OVERFLOW_WARN_S, and worth
-        saying at all because this delay appears in no counter: it is added
-        before the tool's own queue, so a tester measuring latency attributes it
-        to their application or to the network.
+        Rate-limited for the reason written above OVERFLOW_WARN_S. It used to be
+        worded as a LATENCY problem ("this wait lands on the delay you are
+        measuring"), which is true and is not the half that matters. MEASURED
+        2026-07-28 (real WinDivert, --filter loopback, 64 B UDP flood, control
+        run without the tool losing 0.00%): at 138k packets/s offered, the tool
+        moved ~14k/s and **91.75% of the traffic was destroyed by the driver**,
+        with driver_wait_peak at 198 ms - while drop_overflow, drop_shutdown,
+        drop_send and drop_loss all read ZERO. A full driver queue is not slow
+        delivery, it is silent loss, and WinDivert exposes no counter for it
+        (checked: the DLL exports Get/SetParam only, and params 0-4 are the
+        queue triple plus the version). This warning is therefore the ONLY
+        signal the tool has for that state, so it has to name the loss.
+
+        Why the numbers land where they do: under saturation the queue sits at
+        its limit, so the wait converges on QUEUE_LEN / service rate. At 4096
+        and ~14k/s that is ~290 ms, and the run measured 198-346 ms across three
+        loads. The 50 ms threshold is therefore crossed whenever the tool serves
+        below ~82k packets/s - do not "tune" it upwards without redoing that
+        arithmetic, because it is what makes the state visible at all.
         """
         now = time.monotonic()
         if now - self._driver_wait_warned < self.DRIVER_WAIT_WARN_S:
