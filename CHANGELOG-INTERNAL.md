@@ -184,6 +184,26 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Measured (no code): WinDivertSendEx rejects a bad batch ATOMICALLY
+
+- Open question left over from the batching work, and the thing that decided whether `drop_send`
+  could stay honest under a batched injector: does `SendEx` send a PREFIX of the batch before it
+  hits a bad entry, or nothing at all?
+- Measured 2026-07-29 by calling the DLL directly (pydivert's wrapper raises before `pSendLen` can
+  be read), with a deliberately truncated packet placed in the MIDDLE of a batch of four:
+
+  | batch | rc | `pSendLen` | last error |
+  |---|---|---|---|
+  | four good packets | 1 | 240 of 240 | 0 |
+  | one truncated entry in the middle | 0 | **0** of 190 | 122 (`ERROR_INSUFFICIENT_BUFFER`) |
+
+  120 bytes of perfectly good packets sat before the bad one and **none of them went out**. So the
+  call is all-or-nothing: on failure a batched injector charges every packet in the batch to
+  `drop_send` and there is no partial-send ambiguity to account for. That removes the one blocker
+  named against chunk 5.
+- Recorded here rather than in code because no code changed yet - the next session should not have
+  to re-derive it.
+
 ### Added: `--narrow-filter` folds the destination into the driver's filter (chunk 2)
 
 - `filters.narrowed_filter(base, ip_matcher, port_matcher)` -> `(text, narrowed)`, and

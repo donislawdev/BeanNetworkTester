@@ -167,7 +167,7 @@
   "fields.loss": "Utrata",
   "fields.match_help": "?",
   "fields.max_size": "Maks. rozmiar (MTU):",
-  "fields.narrow_filter": "Zaweź filtr sterownika do celu",
+  "fields.narrow_filter": "Zawęź filtr sterownika do celu",
   "fields.narrow_filter_hint": "Stosowane przy starcie sesji. Adres/port celu trafia do samego WinDiverta, więc sterownik przestaje podawać ruch, którego i tak nie dałoby się popsuć - dużo szybciej przy dużej liczbie pakietów. Gdy to działa, Statystyki i Połączenia obejmują tylko ten ruch, a pól celu nie da się zmienić do zatrzymania sesji.",
   "fields.nat_timeout": "NAT timeout:",
   "fields.period": "Okres:",
