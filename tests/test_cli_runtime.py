@@ -12,6 +12,7 @@ import io
 import json
 import os
 
+from beantester import cli as cli_module
 from beantester import exitcodes
 from beantester.cli import (_Terminated, _print_conns, build_arg_parser,
                             config_from_args, run_cli)
@@ -151,6 +152,174 @@ def test_the_connection_listing_survives_a_row_with_no_ports():
           "8.8.8.8:-" in body and "None" not in body, f"({body})")
     check("conns listing: a normal row still shows its ports",
           "1.1.1.1:443" in body and "local:5000" in body, f"({body})")
+
+
+# --- targeting: a target that stops matching must not be silent ------------- #
+
+
+def _engine_stats(**over):
+    """A stats dict with the ENGINE's own key set.
+
+    Copied from a real ``BeanEngine`` rather than written out here, so a counter
+    added to the engine cannot leave this fake answering with a key the CLI
+    reads. Constructing one starts no threads (they belong to ``start()``).
+    """
+    from beantester.engine import BeanEngine
+    stats = dict(BeanEngine().st)
+    stats["queue"] = 0
+    stats.update(over)
+    return stats
+
+
+class _ScriptedTargeting:
+    """A ``ProcessTargeting`` stand-in whose verdict can move mid-run."""
+
+    def __init__(self, description="probe.exe"):
+        self.matched = True
+        self.description = description
+
+    def refresh(self, *_a, **_k):
+        return frozenset()
+
+    def describe(self):
+        return self.description if self.matched else "(none)"
+
+    def pids(self):
+        return {4242} if self.matched else set()
+
+    def __len__(self):
+        return 1 if self.matched else 0
+
+
+class _TargetedEngine:
+    """Enough engine to run a session that HAS a live process target.
+
+    A real engine cannot play this part: ``--target`` is stripped in
+    ``--simulate`` (synthetic ports belong to nobody), and a real capture needs
+    WinDivert and an elevated token - the environment dependence this file
+    already pays for twice over. ``flip_at`` is which poll of ``targeting()``
+    the target stops matching on, i.e. the moment the targeted process exits.
+    """
+
+    fault = False
+
+    def __init__(self, flip_at=None, **stats):
+        self.target = _ScriptedTargeting()
+        self.flip_at = flip_at
+        self.polls = 0
+        self.stats = _engine_stats(**stats)
+
+    def set_seed(self, *_a, **_k): pass
+    def set_params(self, *_a, **_k): pass
+    def set_buffer(self, *_a, **_k): pass
+    def set_dest(self, *_a, **_k): pass
+    def set_lan(self, *_a, **_k): pass
+    def set_block(self, *_a, **_k): pass
+    def set_advanced(self, *_a, **_k): pass
+    def set_spike(self, *_a, **_k): pass
+    def set_nat(self, *_a, **_k): pass
+    def set_rst(self, *_a, **_k): pass
+    def set_flap(self, *_a, **_k): pass
+    def set_schedule(self, *_a, **_k): pass
+    def set_target(self, *_a, **_k): pass
+    def start(self, *_a, **_k): pass
+    def stop(self, *_a, **_k): pass
+    def is_running(self): return True
+    def effective_seed(self): return 7
+    def connections_snapshot(self, limit=None): return []
+    def stats_snapshot(self): return dict(self.stats)
+
+    def target_for(self, _matcher):
+        return self.target
+
+    def targeting(self):
+        self.polls += 1
+        if self.flip_at is not None and self.polls >= self.flip_at:
+            self.target.matched = False
+        return self.target
+
+
+def _targeted_run(monkeypatch, engine, argv):
+    """One CLI run with a process target, on virtual time.
+
+    ``is_admin`` is forced because a targeted run is by definition not
+    ``--simulate``: without this the test would pass on an elevated shell and on
+    Linux CI, and fail on a plain Windows shell - a third environment-dependent
+    result in a file that already documents two.
+    """
+    monkeypatch.setattr(cli_module.winenv, "is_admin", lambda: True)
+    clock = FakeClock()
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(argv, sleep=clock.sleep, clock=clock, engine=engine,
+                   out=out, err=err)
+    return code, out.getvalue(), err.getvalue()
+
+
+def test_the_run_says_when_the_process_target_stops_matching(monkeypatch):
+    """A targeted process that exits mid-run used to be invisible from the CLI.
+
+    MEASURED 2026-07-28 against a real capture (elevated, real WinDivert):
+    targeting a PID and then restarting that process left 5 of 5 fresh
+    connections untouched, and the only targeting line in the entire run was the
+    one printed at start - exit code OK, nothing else said. The GUI re-reads that
+    verdict on every tick and raises a banner; the CLI, which is the CI/CD
+    interface, said nothing at all.
+
+    Also pins the other half: the message belongs to the CHANGE. Reporting the
+    verdict every interval would bury it in the sample stream.
+    """
+    lost = _TargetedEngine(flip_at=3, seen=500, scoped_seen=40)
+    code, _, err = _targeted_run(monkeypatch, lost,
+                                 ["--target", "probe.exe", "--duration", "5",
+                                  "--interval", "1"])
+    check("target: a target that dies does not end the run", code == exitcodes.OK,
+          f"(code={code})")
+    check("target: losing the target is reported", "no longer matches" in err,
+          f"({err!r})")
+    check("target: it is said once, not every interval",
+          err.count("no longer matches") == 1, f"({err!r})")
+
+    kept = _TargetedEngine(seen=500, scoped_seen=40)
+    _, _, quiet = _targeted_run(monkeypatch, kept,
+                                ["--target", "probe.exe", "--duration", "5",
+                                 "--interval", "1"])
+    check("target: a target that keeps matching says nothing new",
+          "no longer matches" not in quiet, f"({quiet!r})")
+
+
+def test_a_target_that_caught_nothing_is_called_out_at_the_end(monkeypatch):
+    """`--min-packets` guards the capture FILTER; this guards the TARGET.
+
+    They fail differently: traffic can flow for the whole run while the targeted
+    process never matches, and that run impairs nothing and still exits 0. The
+    engine has always counted it (`scoped_seen`) - it just never left the JSON
+    summary's `counters`.
+    """
+    caught_nothing = _TargetedEngine(seen=500, scoped_seen=0)
+    _, _, err = _targeted_run(monkeypatch, caught_nothing,
+                              ["--target", "probe.exe", "--duration", "2"])
+    check("scope: a target that caught nothing is called out",
+          "caught nothing" in err, f"({err!r})")
+    # In text mode the summary goes down the LOG channel (_emit_summary); in
+    # --format json it is the counters of the summary record instead.
+    check("scope: the summary says how much was in scope",
+          "In scope: 0 of 500" in err, f"({err!r})")
+
+    worked = _TargetedEngine(seen=500, scoped_seen=40)
+    _, _, err = _targeted_run(monkeypatch, worked,
+                              ["--target", "probe.exe", "--duration", "2"])
+    check("scope: a target that DID catch traffic is not accused",
+          "caught nothing" not in err, f"({err!r})")
+    check("scope: and its share is still reported", "In scope: 40 of 500" in err,
+          f"({err!r})")
+
+    # Nothing captured at all is the FILTER's story, and --min-packets is the
+    # flag that tells it. Saying both would point the user at the wrong thing.
+    silent = _TargetedEngine(seen=0, scoped_seen=0)
+    _, _, err = _targeted_run(monkeypatch, silent,
+                              ["--target", "probe.exe", "--duration", "2"])
+    check("scope: no traffic at all is not blamed on the target",
+          "caught nothing" not in err, f"({err!r})")
 
 
 def test_fail_on_no_traffic_is_shorthand_for_min_packets_one():

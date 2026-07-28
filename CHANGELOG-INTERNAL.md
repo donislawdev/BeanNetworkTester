@@ -97,6 +97,52 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Added: the CLI reports a target that stops matching, and what share was in scope (audit F17)
+
+- **Symptom, measured before writing anything** (2026-07-28, elevated, real WinDivert, probe
+  narrowed to `--target <pid> --dst-ip 8.8.8.8 --dst-port 53 --syn-drop 100`). A process was
+  targeted BY PID, impaired correctly (1 of 6 connections slipped, the rest timed out), then killed
+  and restarted under a new pid: **5 of 5 fresh connections untouched**, `scoped_seen` flat, and the
+  only targeting line in the whole run was the one `apply_targeting` prints at start. `exit=OK`.
+- **Same probe, targeting BY NAME**, 3 lives x 4 held connections: `OK FAIL FAIL FAIL` in **3 of 3**
+  lives. So the name path recovers by itself and the restart costs exactly one connection - the one
+  opened before the process owns any socket, which is the `_pids` limitation F16 already documents,
+  not a new one. `drop_syn` cross-checks at exactly 2 per caught connection (SYN + one retransmit
+  inside the 2.5 s connect timeout).
+- **The asymmetry this exposes.** `gui/app.py::_refresh_target` re-reads `targeting.matched` on
+  every tick and raises `fields.target_no_match`, so the GUI has always shouted about this. The CLI
+  - the CI/CD interface (convention 18) - resolved once in `apply_targeting(announce=True)` and
+  never looked again; `_report_loop` did not mention targeting at all.
+- **Fix, all in `cli.py`.** `_targeting_state(engine)` returns `(matched, describe())` or `None`,
+  and `_report_loop` logs only the TRANSITION: `warn` when the target stops matching, `info` when it
+  comes back. Reading `matched` is a plain bool on the live `ProcessTargeting` - no lock, no
+  syscall, no socket table - so the loop can ask on every pass. `getattr` on `engine.targeting`
+  because `run_cli(engine=...)` is a public seam. Sampled, not continuous: a verdict that flips and
+  flips back between two passes is not seen, and the comment says so rather than implying otherwise.
+- **End of run:** a `warn` when a target was set, traffic WAS captured and `scoped_seen` is 0, plus
+  an `In scope: X of Y captured packets` line in the text summary. Guarded by `stats["seen"]` on
+  purpose - with nothing captured at all the capture filter is the story and `--min-packets` is the
+  flag that tells it, so saying both would point at the wrong thing.
+- **Deliberately NOT done:** no new exit code and no `--min-scoped` flag. A target with no traffic
+  of its own is a legitimate run, and making it an assertion would change the exit-code contract
+  under everyone already running one. The number is in the JSON summary's `counters.scoped_seen` for
+  a pipeline that wants to assert on it itself. The NDJSON `sample` schema is untouched (the frozen
+  contract); the new line goes down the TEXT channel only.
+- Two new guards in `tests/test_cli_runtime.py`:
+  `::test_the_run_says_when_the_process_target_stops_matching` (transition reported, reported ONCE,
+  and silent while the target keeps matching) and
+  `::test_a_target_that_caught_nothing_is_called_out_at_the_end` (zero scope called out, non-zero
+  scope not accused, no-traffic-at-all not blamed on the target). Both drive a `_TargetedEngine`
+  fake: a real engine cannot play this part, since `--target` is stripped under `--simulate` and a
+  real capture needs WinDivert plus elevation. `winenv.is_admin` is monkeypatched so the pair cannot
+  become a THIRD environment-dependent result in this file.
+- The fake's stats dict is copied from a real `BeanEngine().st`, so a counter added to the engine
+  cannot leave it answering with a key the CLI reads.
+- **Five mutants, all caught** (source rewritten as BYTES - `write_text` would flip the file to CRLF
+  and trip the changelog hook): transition logging removed; transition logging fired every pass
+  instead of on change; the zero-scope warning removed; its `stats["seen"]` guard removed; the
+  `In scope` line removed. Each went red on its intended assertion.
+
 ### Fixed: the first packet of a fresh connection can be in targeting scope (audit F16)
 
 - **Symptom, measured end to end before writing anything.** `ProcessTargeting.__contains__` answers

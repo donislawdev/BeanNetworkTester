@@ -82,6 +82,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **The command line now says when the process you aimed at stops matching, instead of running on
+  in silence.** If your target exits - it crashed, or your test harness restarted it and Windows
+  gave it a new process id - everything from that moment on is left untouched. The run used to
+  carry on and finish green, with the only mention of your target being one line printed at the
+  start. Measured here against a real capture: aiming at a process id and then restarting that
+  program left five out of five of its new connections completely untouched, and nothing in the
+  output said so. The run now says it the moment it notices, and says so again if the target comes
+  back. Worth knowing which form to use: aiming by **name** recovers on its own within about half a
+  second of the restarted program opening its first connection, and only that first connection
+  escapes; aiming by **process id** never recovers, because that id no longer exists. If the
+  program under test restarts, aim by name.
+
+- **Every run with a process target now ends by saying how much of the captured traffic was
+  actually yours** - "In scope: 40 of 500 captured packets" - and calls it out when that number is
+  zero. A run in which your target caught nothing looks exactly like a run in which your
+  application coped, and those are opposite results. The existing `--min-packets` check cannot see
+  this: it catches a traffic filter that matched nothing, which is a different mistake. This is a
+  warning rather than a failure, because aiming at a program that happens to be quiet is a
+  perfectly ordinary thing to do.
+
 - **The session panel now shows how long packets waited inside the driver before the tool saw
   them.** This is the one delay the tool adds and counted nowhere: it happens in WinDivert's queue,
   ahead of the tool's own, so a tester measuring latency puts it down to their application or to
