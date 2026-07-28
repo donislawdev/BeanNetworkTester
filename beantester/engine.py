@@ -173,6 +173,7 @@ class BeanEngine:
         # poller. See _start_socketwatch. Targeting resolves against it whenever a
         # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
+        self._driver_queue = None   # WinDivert's queue settings, read at start()
         # True while this session holds a fine Windows timer tick (see start()).
         # Tracked rather than released blindly: the OS refcounts the requests per
         # process, so releasing one we were never granted unbalances the count.
@@ -217,7 +218,41 @@ class BeanEngine:
                     start=stamp(self._start_wall), start_wall=self._start_wall,
                     stop=stamp(self._stop_wall), stop_wall=self._stop_wall,
                     running=self._running, elapsed=round(elapsed, 1),
-                    duration=self._duration, stop_reason=self.stop_reason)
+                    duration=self._duration, stop_reason=self.stop_reason,
+                    # None on the simulate path, which has no driver queue
+                    driver_queue=self._driver_queue)
+
+    # WinDivert's own queue, the one BEFORE ours. Nothing in this program used to
+    # read it, so a session's numbers could not be interpreted: with QUEUE_TIME at
+    # its default the driver may hold a packet for up to two seconds, and that
+    # delay is added by this tool while being invisible to it. Measured on the
+    # owner's machine (2026-07-28, elevated): LEN 4096, TIME 2000 ms, SIZE 4 MiB -
+    # and note SIZE binds first for full frames, 4 MiB / 1500 B = 2796 packets, not
+    # 4096. Reading them costs one call each, once per session.
+    # The WinDivert ABI numbers, spelled out rather than imported from
+    # ``pydivert.consts.Param``. The import is the problem: pydivert is a win32-only
+    # dependency, so on the Linux half of the CI matrix it is absent, and reaching
+    # for it here would make this return None on that runner while passing on
+    # Windows. They cannot drift silently -
+    # ``tests/test_engine.py::test_the_driver_queue_param_numbers_match_pydivert``
+    # compares them with the real enum wherever pydivert IS importable.
+    DRIVER_QUEUE_PARAMS = (("queue_len", 0), ("queue_time", 1), ("queue_size", 2))
+
+    def _read_driver_queue(self):
+        """The driver's queue settings, or ``None`` when there is nothing to ask.
+
+        Only a real WinDivert handle answers this. ``SyntheticDivert`` and the test
+        doubles have no ``get_param``, and that is not a failure - it is the
+        simulate path, which has no driver queue to describe. ``None`` says exactly
+        that; zeroes would read as "a queue of nothing", a different and false claim.
+        """
+        divert = self._divert
+        if not hasattr(divert, "get_param"):
+            return None
+        with crashlog.quiet("engine.driver_queue"):
+            return {name: divert.get_param(number)
+                    for name, number in self.DRIVER_QUEUE_PARAMS}
+        return None
 
     def time_left(self, now=None):
         """Seconds until the deadline (``None`` when the session has no limit)."""
@@ -699,6 +734,7 @@ class BeanEngine:
             except Exception as _exc:
                 crashlog.note(_exc, "engine")
         self._running = True
+        self._driver_queue = self._read_driver_queue()
         # always establish a concrete seed - this makes EVERY session reproducible
         self._effective_seed = self._seed if self._seed is not None else random.randrange(1, 2**31 - 1)
         self._rng = random.Random(self._effective_seed)
@@ -804,6 +840,12 @@ class BeanEngine:
             self.stop(reason="fault")
             raise
         self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
+        if self._driver_queue:
+            # Said once, at START, because it frames every number that follows: a
+            # queue this deep is latency the tool can add without owning up to it.
+            q = self._driver_queue
+            self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
+                       kb=q["queue_size"] // 1024))
         self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
                                 + (f", duration={self._duration:g}s" if self._duration else ""))
 

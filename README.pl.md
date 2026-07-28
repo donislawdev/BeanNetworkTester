@@ -399,7 +399,7 @@ Zaprojektowane tak, by po wystąpieniu błędu odtworzyć dokładnie te same war
 - **Zużycie danych** - Pobrano / Wysłano / Razem (MB) narastająco od startu oraz średnia przepustowość sesji; od razu wiesz, ile danych aplikacja zużyła. (W raporcie jest też „próbowano MB” - ile aplikacja chciała przesłać przed odjęciem strat/limitów.)
 - **Dziennik zdarzeń** ze znacznikami czasu: start, zmiany ustawień, kroki scenariusza, zerwania, oraz Twoje znaczniki błędu - z **sortowaniem** po kliknięciu w nagłówek kolumny.
 - **Zaznacz moment błędu** - kliknij dokładnie gdy zobaczysz błąd; wstawia znacznik z czasem do dziennika.
-- **Zapisz raport reprodukcji** - jeden plik JSON z kompletem: seed, wszystkie ustawienia, liczniki, metryki, dziennik zdarzeń, połączenia oraz **gotową komendę CLI**, która odtwarza warunki.
+- **Zapisz raport reprodukcji** - jeden plik JSON z kompletem: seed, wszystkie ustawienia, liczniki, metryki, dziennik zdarzeń, połączenia oraz **gotową komendę CLI**, która odtwarza warunki. Zapisuje też **kolejkę WinDiverta, za którą działała sesja** (`session.driver_queue`: długość, czas i rozmiar). To bufor samego sterownika, przed buforem tego narzędzia: przy domyślnych 2000 ms pakiet może w nim poczekać, a to czekanie dokłada się do Twojego opóźnienia, nie pojawiając się w żadnym tutejszym liczniku. Raport z maszyny, której nie masz przed sobą, mówi teraz, za jaką kolejką powstały jego liczby. Te same trzy wartości trafiają do logu przy STARCIE.
 - **Kopiuj komendę CLI** - od razu do schowka: `BeanNetworkTester.exe --seed … --loss … --duration …`
   (komenda dopasowuje się do builda: z repozytorium dostaniesz `python bean_network_tester.py …`).
 

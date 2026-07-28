@@ -97,6 +97,38 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Added: the driver's own queue is read and reported (audit F10, part a)
+
+- **Symptom.** `pydivert.WinDivert(filt)` never received a `set_param()`, and the package contained
+  no `get_param()` at all, so WinDivert's queue was invisible: with `QUEUE_TIME` at its default a
+  packet may be held for up to **two seconds**, which is latency this tool adds while being blind
+  to it, and no session artefact said what queue produced its numbers.
+- **Measured on the owner's machine before designing anything** (2026-07-28, elevated, real driver,
+  throwaway ICMP handle): `QUEUE_LEN=4096`, `QUEUE_TIME=2000`, `QUEUE_SIZE=4194304`, QPC frequency
+  10 MHz. `QUEUE_SIZE` binds before `QUEUE_LEN` for full frames - 4 MiB / 1500 B = **2796 packets**
+  - so at a saturated gigabit (83k pkt/s of 1500 B) a frozen capture thread has roughly 34 ms
+  before the driver starts discarding.
+- **Deliberately NOT retuned.** The trade is real in both directions and both are invisible today:
+  a large `QUEUE_TIME` is latency the tool hides, a small one is LOSS the tool cannot even count,
+  because a packet the driver drops never reaches us. Picking values before measuring the actual
+  queue delay would be the "machinery around the wrong primitive" convention 6 warns about. The
+  measurement is part b.
+- `BeanEngine._read_driver_queue()` reads the three params after the handle opens (guarded by
+  `crashlog.quiet`), stores them, and `session_info()` carries them into the repro report as
+  `session.driver_queue`; one `log.driver_queue` line at START. `None` - not zeroes - on the
+  simulate path, because "no driver" and "a queue of nothing" are different claims.
+- **The param numbers are spelled out, not imported, and that is the interesting bit.** Reaching
+  for `pydivert.consts.Param` here would import a **win32-only** dependency: the read would return
+  None on the Linux half of the CI matrix while passing on Windows - the exact bug shape that only
+  appears on the runner you did not run. `DRIVER_QUEUE_PARAMS` holds the ABI numbers, and
+  `tests/test_engine.py::test_the_driver_queue_param_numbers_match_pydivert` compares them with the
+  real enum wherever pydivert IS importable, so they cannot drift in silence.
+- `--doctor` gains a line that says where the values live and why it does not read them itself:
+  they need an open handle, and opening one loads the driver, falsifying the "windivert driver"
+  check printed two lines above it in the same report.
+- Three new tests, three mutants, every one caught (including the ABI numbers being swapped).
+  No hot-path change: this is three calls, once per session.
+
 ### BREAKING: metrics.connections_reset counts connections, not packets (audit F7)
 
 - **Symptom.** `repro.py` had `connections_reset=stats["drop_rst"]`, and `drop_rst` counts every

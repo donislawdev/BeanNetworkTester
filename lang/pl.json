@@ -229,6 +229,7 @@
   "log.dest_set": "Cel ustawiony z tabeli połączeń",
   "log.donate_opened": "Otwarto stronę wsparcia",
   "log.driver": "Sterownik WinDivert",
+  "log.driver_queue": "Kolejka WinDivert: {n} pakietów / {t} ms / {kb} KB. To bufor samego sterownika, przed buforem tego narzędzia - pakiety mogą w nim czekać, a to czekanie dokłada się do Twojego opóźnienia, nie pojawiając się w żadnym tutejszym liczniku.",
   "log.duration_reached": "Osiągnięto limit czasu ({v} s) - sesja zatrzymana.",
   "log.engine_fault": "Awaria silnika: {e} - sesja została zatrzymana, sieć działa normalnie.",
   "log.error": "Błąd",

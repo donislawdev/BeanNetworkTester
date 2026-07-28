@@ -341,6 +341,15 @@ def doctor():
         leftovers = stale_temp_dirs()
         checks.append(("temp leftovers", "warn" if leftovers else "ok",
                        ", ".join(leftovers) if leftovers else "none"))
+        # Deliberately NOT read here. The values live behind an open WinDivert
+        # handle, and opening one loads the driver - which would falsify the
+        # "windivert driver" line printed two checks above, in the same report. A
+        # session reads them at START and puts them in its log and its repro
+        # report, where they cost nothing extra.
+        checks.append(("driver queue", "ok",
+                       "read at session start (log line + repro report "
+                       "'session.driver_queue'); needs an open handle, so --doctor "
+                       "does not load the driver just to look"))
     else:
         checks.append(("pydivert", "warn" if not pydivert_available() else "ok",
                        "not required outside Windows (--simulate works)"))

@@ -798,6 +798,75 @@ def test_only_the_injector_writes_the_delivered_counters():
           body.count('c["sent') == 3, f"({body.count(chr(99) + chr(91))})")
 
 
+class ParamDivert(FakeDivert):
+    """A divert that answers get_param, the way a real WinDivert handle does.
+
+    The values are the ones measured on the owner's machine (2026-07-28, elevated,
+    real driver): QUEUE_LEN 4096, QUEUE_TIME 2000 ms, QUEUE_SIZE 4 MiB.
+    """
+
+    QUEUE = {0: 4096, 1: 2000, 2: 4194304}      # Param.QUEUE_LEN / _TIME / _SIZE
+
+    def get_param(self, name):
+        return self.QUEUE[int(name)]
+
+
+def test_a_session_records_the_driver_queue_it_is_running_behind():
+    """Nothing in the program used to read WinDivert's own queue settings.
+
+    With QUEUE_TIME at its default the driver may hold a packet for up to two
+    seconds - latency this tool adds while being blind to it - and a session's
+    numbers could not be interpreted without knowing that. The values now travel
+    with the session, so a repro report from a machine you do not have still says
+    what queue it was running behind.
+    """
+    sh = BeanEngine()
+    sh.start("test", divert=ParamDivert([FakePacket(size=100, port=8400)]))
+    info = sh.session_info()
+    sh.stop()
+
+    q = info["driver_queue"]
+    check("driver queue: it is recorded", q is not None, f"({q})")
+    check("driver queue: all three values, under their own names",
+          q == {"queue_len": 4096, "queue_time": 2000, "queue_size": 4194304}, f"({q})")
+    check("driver queue: it survives into the stopped session's info",
+          sh.session_info()["driver_queue"] == q)
+
+
+def test_the_driver_queue_param_numbers_match_pydivert():
+    """The engine spells the WinDivert param numbers out instead of importing them.
+
+    It has to: pydivert is win32-only, so importing it there would make the read
+    return None on the Linux half of the CI matrix while passing on Windows - the
+    exact shape of bug that only shows up on the runner you did not run. This is
+    the other half of that trade: wherever pydivert IS importable, the numbers are
+    checked against its own enum, so they cannot drift in silence.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("pydivert") is None:
+        return                      # not this machine's job (see the docstring)
+    from pydivert.consts import Param
+    for name, number in BeanEngine.DRIVER_QUEUE_PARAMS:
+        expected = int(getattr(Param, name.upper()))
+        check(f"driver queue: {name} is {expected} in pydivert",
+              number == expected, f"(engine says {number})")
+
+
+def test_a_simulated_session_reports_no_driver_queue_rather_than_a_made_up_one():
+    """There is no driver on the --simulate path, so there is nothing to report.
+
+    `None` says that; zeroes would read as "a queue of nothing", which is a
+    different and false claim.
+    """
+    sh = BeanEngine()
+    sh.start("test", divert=FakeDivert([FakePacket(size=100, port=8401)]))
+    info = sh.session_info()
+    sh.stop()
+    check("driver queue: absent, not invented", info["driver_queue"] is None,
+          f"({info['driver_queue']})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):
