@@ -59,11 +59,14 @@ was wrong (PROJECT_NOTES rule 6):
   PID, so the mapping is a snapshot race - it can be made small, not closed, and
   the first packet of a brand-new connection may slip through;
 * against the **live SOCKET-event map** (:class:`beantester.socketwatch.SocketWatcher`,
-  the default in a real session since chunk 2c), the race is closed for outbound
-  connections: the SOCKET_CONNECT event is delivered before the SYN reaches the
-  NETWORK layer (measured ~0.1 ms ahead), so the port is already mapped when the
-  first packet arrives. ``set_table`` is how the engine points this at one or the
-  other.
+  the default in a real session since chunk 2c), the ORDER is in our favour rather
+  than left to chance: the SOCKET_CONNECT event is delivered before the SYN reaches
+  the NETWORK layer, measured 2026-07-28 in 10 runs out of 10, by 0.018-0.027 ms.
+  So the port can be mapped before the first packet is judged - but note the size
+  of that margin: it is the gap at the DRIVER, and whether the watcher's own
+  handling fits inside a few tens of microseconds is NOT measured. This used to say
+  "the race is closed", which claimed more than the number supports.
+  ``set_table`` is how the engine points this at one or the other.
 """
 import threading
 import time

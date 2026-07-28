@@ -658,9 +658,11 @@ class BeanEngine:
         poller second. That order is the point: the poller is a snapshot taken a few
         times a second, so a flow that opens AND finishes inside one refresh interval
         left a row with no owner at all, and short-lived connections are exactly what
-        this tool gets pointed at. The watcher is told the owner ~0.1 ms before the SYN
-        reaches the NETWORK layer (measured), so the row can be stamped from its first
-        packet.
+        this tool gets pointed at. The watcher is told the owner BEFORE the SYN reaches
+        the NETWORK layer - measured 2026-07-28 at 0.018-0.027 ms ahead, 10 runs out of
+        10 - so the row can usually be stamped from its first packet. "Usually": that
+        margin is the gap at the DRIVER, and whether the watcher's own handling fits
+        inside a few tens of microseconds is not measured (see socketwatch.py).
 
         Neither path may touch the OS from here - this is the capture thread. The
         watcher lookup is a lock-free dict read (see ``SocketWatcher.pid_for``) and the

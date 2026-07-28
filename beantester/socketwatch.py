@@ -14,12 +14,27 @@ WinDivert 2.2 exposes a SOCKET layer that delivers an event the moment a socket
 is bound / connected / accepted / closed, carrying the owning ``ProcessId``. A
 **sniff-only** handle (``SNIFF | RECV_ONLY`` - it cannot drop or modify anything)
 turns "guess the owner from a stale snapshot" into "be told the owner as it
-happens". Measured (spike, 2026-07-22): ``SOCKET_CONNECT`` arrives ~0.1 ms
-*before* the outbound SYN reaches the NETWORK layer, so the mapping is ready
-before the connection's first packet - the race the polling design could only
-shrink is closed at the source. (``FLOW_ESTABLISHED`` was measured ~28 ms LATER,
-i.e. after the handshake, which is why the SOCKET layer, not the FLOW layer, is
-the source here.)
+happens".
+
+**Re-measured 2026-07-28** (Win11, elevated, three sniff-only handles compared on
+one clock - the QPC stamp WinDivert puts on every event - across 10 outbound TCP
+connections to 8.8.8.8:53):
+
+* ``SOCKET_CONNECT`` came before the outbound SYN in **10 runs out of 10**, by
+  **0.018-0.027 ms, median 0.020**. The ORDER is what this design rests on, and it
+  holds. The margin does not: an earlier note here said "~0.1 ms", five times what
+  this machine shows.
+* ``FLOW_ESTABLISHED`` came **37.7-41.3 ms after** the SYN, median 38.7 - i.e.
+  after the handshake, which is why the SOCKET layer and not the FLOW layer is the
+  source here. That number is **the round trip to the peer, not a property of the
+  FLOW layer**: ping to the same host measured 23-47 ms on this link, and an
+  earlier note quoting "~28 ms" was quoting somebody's network.
+
+What this does NOT establish, and used to be claimed here: that "the race is
+closed at the source". The tens of microseconds above are the gap between the two
+events AT THE DRIVER. Whether this module's own handling - thread wake, parse,
+dict insert - finishes inside that gap has not been measured. Ordering is
+guaranteed; comfortable slack is not.
 
 Scope of this module: the map and its event handling. ``BeanEngine`` owns its
 lifecycle (created and stopped with the session) and points ``ProcessTargeting``

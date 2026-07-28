@@ -97,6 +97,43 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: the SOCKET-layer timing now says what was measured (prose only, no behaviour change)
+
+The whole SOCKET-layer targeting design (PR #38) is justified by two numbers that came from a
+2026-07-22 spike note and were never re-measured. Both are wrong, in different ways, and the
+conclusion drawn from the first claimed more than it supports.
+
+**Re-measured 2026-07-28** (Win11, elevated, three sniff-only handles opened SEQUENTIALLY and
+compared on one clock - the QPC stamp WinDivert puts on every event - across 10 outbound TCP
+connections to 8.8.8.8:53):
+
+| claim in the code | measured |
+|---|---|
+| `SOCKET_CONNECT` ~0.1 ms before the SYN | before in **10/10**, by **0.018-0.027 ms** (median 0.020) |
+| `FLOW_ESTABLISHED` ~28 ms after | **37.7-41.3 ms** after (median 38.7) |
+
+- **The ORDER holds, the margin does not.** `SOCKET_CONNECT` really does precede the SYN every
+  time, so choosing the SOCKET layer over polling stands. But the margin is **five times smaller**
+  than the docstring said.
+- **"The race is closed at the source" is now cut.** Those tens of microseconds are the gap between
+  the two events AT THE DRIVER. Whether `socketwatch`'s own handling - thread wake, parse, dict
+  insert - finishes inside that gap has **not** been measured, and at 20 us it is no longer
+  self-evident the way it looked at 100 us. The prose now guarantees ordering and explicitly does
+  not guarantee slack.
+- **The FLOW number was a property of somebody's network, not of the FLOW layer.** 38.7 ms tracks
+  the round trip to the peer (ping to the same host on this link: 23-47 ms), because the flow is
+  established once the handshake completes. Recorded as such, so nobody reads it as a constant.
+  The reason for rejecting FLOW is unchanged: it lands after the handshake either way.
+
+Corrected in `socketwatch.py` (module docstring), `engine.py::_pid_for`, `targeting.py` (module
+docstring) and PROJECT_NOTES in three places. **Deliberately NOT touched:** the `~0.1 ms` in
+`model_worker.py`, `gui/panels/event_log.py` and `gui/pages/conns.py` - that is the virtualised
+table's repaint cost, a different measurement that happens to share a number. Historical changelog
+entries are left as written; they record what was believed at the time.
+
+No test guards this and none can - it is prose. What can be done was done: the numbers now carry
+their conditions, so the next session can tell whether they still apply to its machine.
+
 ### Fixed: the forged RST now lands on loopback connections too (audit F15)
 
 Measured on the owner's machine (2026-07-28, elevated, real driver) by watching what the
