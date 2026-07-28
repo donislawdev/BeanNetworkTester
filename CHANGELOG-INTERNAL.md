@@ -184,6 +184,29 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Docs: the throughput rig is not reproducible, and the prose now says so (audit F18, follow-up)
+
+- Re-measuring the same bare `recv`+`send` loop over the same loopback flood, same machine, three
+  times, gave **14 488 -> 30 189 -> 15 004 pkt/s**. A factor of two, unexplained. Ratios moved too:
+  batched-vs-unbatched ran from 1.23x to 3.65x, and "real NIC vs loopback" **changed sign** between
+  runs (0.67x -> 1.32x). One run produced a physically impossible ordering - a strategy doing
+  strictly LESS work measured slower - which is itself a reading of the noise floor.
+- `engine.py`'s "What this actually sustains" section now carries a **HOW MUCH OF THIS TO TRUST**
+  paragraph: a number from this rig is evidence only against another number from the SAME run.
+- **Withdrew a derived claim that was never sound:** the section previously divided a sniff-only
+  reader's 92 944 pkt/s by the engine's ~14k, concluded "five sixths of the per-packet budget is
+  spent after the read", and pointed at the inject side. Those two figures come from different
+  runs. What remains is the release heap growing under ZERO configured delay within one run
+  (`peak_queue` 4080 -> 7020) - a direction, not a proportion.
+- **Kept, with the distinction made explicit:** direct OBSERVATIONS survive where timings do not -
+  a loss percentage against a control that lost 0.00%, a queue depth, `scoped_seen`, and the 1.4
+  packets per `RecvEx` call that carries the batching ADR. The ADR is amended in place rather than
+  reversed, because its argument never rested on the timing.
+- The measurement-method lesson went into PROJECT_NOTES rule 5 (third variant of the same trap):
+  repeat the WHOLE run before believing a number; interleave strategies instead of running each in
+  a block; carry a drift canary that makes the script REFUSE a conclusion rather than print a
+  median; report spread, not just the median.
+
 ### ADR 2026-07-28: batched WinDivert I/O MEASURED and REJECTED (audit F18, part c)
 
 - **The question.** The engine does one `recv()` and one `send()` syscall per packet, and WinDivert
@@ -207,6 +230,11 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   under a saturating flood against a full queue. There is no batch there to exploit, so the syscall
   count is not what to attack. **Do not reopen this without new evidence that the driver will
   actually fill a batch.**
+- **AMENDED 2026-07-28 (same day):** the packets-per-call figure is a direct observation and
+  stands; the 1.29x / 1.30x TIMINGS in the table came from a rig later shown to be unreliable -
+  the same bare loop re-measured 14 488 / 30 189 / 15 004 pkt/s across three runs. The conclusion
+  does not depend on them (1.4 packets per call is the whole argument), but do not quote those
+  ratios. See the "HOW MUCH OF THIS TO TRUST" paragraph in `engine.py`.
 - **What the run redirected the question to.** A sniff-only reader sustains 92 944 packets/s while
   the whole engine manages ~14k - **6.6x**. Reading is not the ceiling; roughly five sixths of the
   per-packet budget goes to `decide()`, the connection log, the release heap and the inject
