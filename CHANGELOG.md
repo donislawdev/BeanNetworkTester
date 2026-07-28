@@ -99,6 +99,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   cover only the narrowed traffic. It does nothing for a **process** target (Windows does not offer
   the tool a process name at that level) and falls back silently-but-loudly to capturing everything
   if your destination uses a wildcard or a `re:` pattern - the run says which of the two happened.
+  **It turned out to be more than a speed option, and this is the part worth reading twice.**
+  Measured on a real run with other traffic on the machine: without it, the driver was so busy
+  handing over traffic the tool was never going to touch that it **threw away 43% of the traffic
+  you actually aimed at, before the tool could see it** - so the session impaired less than it
+  reported, and worked out its percentages from what survived. With the option on, all of it
+  arrived and nothing was lost. If you test at high packet rates against a specific address or
+  port, this is the setting that makes your numbers mean what they say.
 
 - **The command line now says when the process you aimed at stops matching, instead of running on
   in silence.** If your target exits - it crashed, or your test harness restarted it and Windows

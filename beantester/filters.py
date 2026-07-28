@@ -103,6 +103,25 @@ def narrowed_filter(base, dst_ip_matcher=None, dst_port_matcher=None):
     every recv/send pair the tool performed was for traffic it was never going to
     touch.
 
+    ACCEPTED 2026-07-29 on a real capture, and it turned out to be a CORRECTNESS
+    fix rather than only a speed one. A flood to the targeted destination plus a
+    decoy flood the target does not cover:
+
+        wide    28 050 sent to the target -> 15 768 in scope, 15 768 delivered
+        narrow  27 950 sent to the target -> 27 950 in scope, 27 950 delivered
+
+    Without narrowing the driver was overloaded by traffic the tool was never
+    going to touch and **discarded 43% of the TARGETED traffic before the tool
+    saw it** - so the session both impaired less than it claimed and reported
+    numbers computed over the survivors. Narrowed, nothing was lost. The
+    driver-wait warning fired in the wide runs (52 and 184 ms) and in neither
+    narrowed one, which is the same overload seen from the other end.
+
+    The impairment itself is unchanged: with ``--loss 100`` the narrowed run
+    dropped 27 900 of 27 900 and the receiver got nothing, exactly as the wide run
+    did. That was the regression worth fearing - a narrowing that also stopped the
+    impairing would have looked like a win in every counter.
+
     Three gates, and each one falls back rather than guessing:
 
     1. ``matchers.windivert_fragment`` returns ``None`` unless the fragment is a

@@ -221,6 +221,24 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   doubles across `test_failsafe.py`, `test_gui_stack_chaos.py` and `test_gui_state.py`. They took
   `**kw` afterwards. The "who consumes this" sweep in PROJECT_NOTES rule 2 should have listed test
   doubles, and now it does by example.
+- 🔴 **ACCEPTANCE on a real capture (2026-07-29), and it is a CORRECTNESS result, not a speed one.**
+  A flood to the targeted destination plus a decoy flood outside it:
+
+  | run | `capture_narrowed` | `seen` | `scoped_seen` | `drop_loss` | sent to target | receiver got |
+  |---|---|---|---|---|---|---|
+  | wide, no impairment | False | 75 056 | 15 768 | 0 | 28 050 | **15 768** |
+  | narrow, no impairment | True | 27 950 | 27 950 | 0 | 27 950 | **27 950** |
+  | wide, `--loss 100` | False | 88 943 | 21 540 | 21 540 | 28 050 | 0 |
+  | narrow, `--loss 100` | True | 27 900 | 27 900 | 27 900 | 27 900 | 0 |
+
+  Without narrowing the driver was overloaded by traffic the tool was never going to touch and
+  **discarded 43% of the TARGETED traffic before the tool saw it** - the session impaired less than
+  it claimed AND computed its numbers over the survivors. Narrowed: nothing lost, `seen` equals
+  `scoped_seen`. The driver-wait warning fired in both wide runs (52 / 184 ms) and in neither
+  narrowed one, which is the F18 overload seen from the other side.
+- **The regression worth fearing did not happen:** with `--loss 100` the narrowed run dropped
+  27 900 of 27 900 and the receiver got nothing, exactly as the wide run did. A narrowing that also
+  stopped the impairing would have read as a win in every counter.
 
 ### Added: expressions compile down into the DRIVER's filter (chunk 1 of the narrowing work)
 
