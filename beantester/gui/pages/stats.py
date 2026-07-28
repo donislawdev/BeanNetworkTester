@@ -35,6 +35,7 @@ CELLS = (
     ("duplicated", "stats.duplicated", "", "tips.stat_duplicated"),
     ("drop_overflow", "stats.overflow", "", "tips.stat_overflow"),
     ("drop_shutdown", "stats.shutdown_dropped", "", "tips.stat_shutdown"),
+    ("drop_send", "stats.send_failed", "", "tips.stat_send_failed"),
     ("drop_rate", "stats.rate_dropped", "", "tips.stat_rate"),
     ("drop_syn", "stats.syn_dropped", "", "tips.stat_syn"),
     ("drop_mtu", "stats.mtu_dropped", "", "tips.stat_mtu"),
@@ -269,7 +270,8 @@ class StatsPage:
         self.stat_labels["down"].config(text=f"{rates[0]:.0f}")
         self.stat_labels["up"].config(text=f"{rates[1]:.0f}")
         for key in ("seen", "queue", "drop_loss", "corrupted", "duplicated",
-                    "drop_overflow", "drop_shutdown", "drop_rate", "drop_syn", "drop_mtu",
+                    "drop_overflow", "drop_shutdown", "drop_send",
+                    "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_block", "drop_flap", "rst_sent"):
             self.stat_labels[key].config(text=str(snap.get(key, 0)))
 

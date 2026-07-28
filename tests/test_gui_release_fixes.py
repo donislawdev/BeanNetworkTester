@@ -402,3 +402,26 @@ def test_the_queue_overflow_banner_is_actually_in_the_layout():
         assert app.engine_warning not in app.root.pack_slaves()
         assert app.engine_warning.kw.get("text") == ""
     """)
+
+
+def test_the_banner_also_fires_when_the_tool_cannot_re_inject():
+    """A failed injection loses the user's packets exactly as an overflow does,
+    so it has to be as loud. Overflow keeps precedence: it is the one the user
+    can act on by lowering the latency or the rate."""
+    run_gui("""
+        app.engine.st["drop_send"] = 12
+        app._drain_engine_warning()
+        assert app.engine_warning.kw.get("text") == bnt.T("warn.send_failed")
+        assert app.engine_warning in app.root.pack_slaves(), (
+            "the banner is not in the layout - it will render as nothing")
+
+        # both at once: the overflow message wins, and neither is silent
+        app.engine.st["drop_overflow"] = 3
+        app._drain_engine_warning()
+        assert app.engine_warning.kw.get("text") == bnt.T("warn.queue_overflow")
+
+        app.engine.st["drop_overflow"] = 0
+        app.engine.st["drop_send"] = 0
+        app._drain_engine_warning()
+        assert app.engine_warning.kw.get("text") == ""
+    """)
