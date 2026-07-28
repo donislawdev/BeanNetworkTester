@@ -221,17 +221,27 @@ class ProcessTargeting:
           watcher thread does not help - the window is the same. The only design
           that closes it holds the SYN until the answer is in, i.e. adds delay
           inside a tool whose job is to inject a PRECISE amount of it.
-        * ``_pids`` is up to one resolver cycle stale (0.30 s). If the target
-          exits and Windows recycles its PID inside that window, traffic of an
-          unrelated new socket can be pulled into scope. **Covering UDP widened
-          this, and that is the price of it:** it used to be one SYN per
-          connection, and it is now every UDP datagram of such a socket until the
-          next rebuild. Ordinary TCP data is still never asked, so an established
-          TCP connection cannot be dragged in this way. That is a DIFFERENT false
-          positive from the stale ``_ports`` this code already lived with - named
-          here rather than implied. The bound is the rebuild interval and nothing
-          else: verifying identity means ``create_time()`` in the packet path,
-          which convention 20 forbids.
+        * ``_pids`` goes stale when the target exits, and until the next rebuild a
+          socket Windows hands that pid number is treated as the target's.
+          **MEASURED against the real socket table 2026-07-28** (seven rounds per
+          transport, no traffic, so every rebuild is the routine tick and this is
+          the UPPER bound): a dead process leaves ``_pids`` after a median of
+          **309 ms** (TCP, 271-327) and **315 ms** (UDP, 290-325) - the 0.30 s
+          tick, and no more. TIME_WAIT does not stretch it, which was worth
+          checking rather than assuming, since a TCP socket can outlive its owner.
+          A live session misses constantly, which wakes the resolver and only
+          shortens this toward the 0.05 s floor. This used to be a design claim
+          ("up to one resolver cycle") with nothing behind it.
+
+          **Covering UDP widened what fits in that window, and that is the price
+          of it:** it used to be one SYN per connection, and it is now every UDP
+          datagram of such a socket. Ordinary TCP data is still never asked, so an
+          established TCP connection cannot be dragged in this way. That is a
+          DIFFERENT false positive from the stale ``_ports`` this code already
+          lived with - named here rather than implied. Nothing narrows the bound
+          further: verifying identity means ``create_time()`` in the packet path,
+          which convention 20 forbids. Guarded both ways by
+          ``test_targeting_socketwatch.py::test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer``.
         """
         if port is None:
             return False

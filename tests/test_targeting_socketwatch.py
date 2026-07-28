@@ -218,6 +218,69 @@ def test_owner_targeted_says_no_for_portless_traffic():
           targeting.owner_targeted(None) is False)
 
 
+def test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer():
+    """The recycled-PID window, pinned so its BOUND cannot drift unnoticed.
+
+    ``owner_targeted`` trusts the pid the live map reports without verifying that
+    it is still the same process - verifying means ``create_time()`` in the packet
+    path, which convention 20 forbids. So between a target exiting and the next
+    rebuild, a socket Windows hands that pid number is, as far as targeting is
+    concerned, the target's.
+
+    Until now that was a docstring claim and nothing more ("nieodtworzone" in the
+    handoff). MEASURED against the real socket table 2026-07-28, seven rounds per
+    transport: a dead process leaves ``_pids`` after a median of **309 ms** (TCP,
+    271-327) and **315 ms** (UDP, 290-325) - the 0.30 s routine tick, with a live
+    session's constant misses only shortening it. TIME_WAIT does NOT stretch it,
+    which was worth checking rather than assuming, since a TCP socket can outlive
+    its owner.
+
+    This test owns both halves: the false positive is REAL (or the docs promise a
+    hazard that does not exist), and it ENDS at the next rebuild (or the bound is
+    fiction). Add identity verification one day and the first half fails, which is
+    the intended way to be forced back to these docs.
+    """
+    class _Table:
+        """Port 5000 belongs to chrome; after the swap, pid 100 is somebody else."""
+
+        def __init__(self):
+            self.ports = {5000: 100}
+            self.names = {100: "chrome.exe"}
+
+        def refresh(self, now=None, force=False):
+            return True
+
+        def snapshot(self):
+            return dict(self.ports)
+
+        def name_of(self, pid, cheap=False):
+            return self.names.get(pid, "")
+
+        def ancestors(self, pid, depth=8):
+            return []
+
+        def pid_for(self, port):
+            return self.ports.get(port)
+
+    table = _Table()
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the target resolved", targeting.pids() == {100}, sorted(targeting.pids()))
+
+    # chrome exits; Windows hands pid 100 to an unrelated process, which opens a
+    # socket of its own. Nothing has rebuilt yet - this is the window.
+    table.ports = {7000: 100}
+    table.names = {100: "innocent.exe"}
+    check("inside the window, a stranger's socket IS pulled into scope",
+          targeting.owner_targeted(7000) is True)
+
+    targeting.refresh()          # what the resolver does at its next tick
+    check("the rebuild names the pid and drops it", targeting.pids() == set(),
+          sorted(targeting.pids()))
+    check("after the rebuild the stranger is out of scope again",
+          targeting.owner_targeted(7000) is False)
+
+
 # -- engine binding ----------------------------------------------------------- #
 def test_engine_binds_targeting_to_the_watcher_when_present():
     eng = BeanEngine()

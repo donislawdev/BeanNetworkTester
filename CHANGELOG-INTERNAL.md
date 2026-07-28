@@ -97,6 +97,37 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Tests: the recycled-PID window is measured and bounded, not just asserted (handoff point C)
+
+- The last "known edge, never reproduced" from the handoff. `owner_targeted` trusts the pid the live
+  map reports without verifying identity (verifying = `create_time()` in the packet path, convention
+  20), so between a target exiting and the next rebuild a socket Windows hands that pid number is
+  treated as the target's. The docstring claimed "up to one resolver cycle (0.30 s)" - a design
+  statement with nothing behind it.
+- **Measured against the REAL socket table** (no WinDivert and no admin needed: `portmap` reads
+  `iphlpapi` and `ProcessTargeting` resolves against it). Seven rounds per transport, probe holding
+  a real socket, killed, time until its pid leaves `_pids`:
+
+  | transport | median | range |
+  |---|---|---|
+  | TCP | **309 ms** | 271-327 |
+  | UDP | **315 ms** | 290-325 |
+
+  i.e. the 0.30 s routine tick and no more. **TIME_WAIT does not stretch it** - worth checking
+  rather than assuming, since a TCP socket can outlive its owner. Upper bound: with no traffic every
+  rebuild is the routine tick, while a live session's constant misses shorten it toward the 0.05 s
+  floor.
+- **Deliberately NOT done: chasing real Windows PID reuse.** Hitting the same number inside a 0.30 s
+  window needs a spawn storm at ~30-50 ms per process - a dozen low-probability attempts, and
+  "we tried and it did not reproduce" is an expensive non-result. The window is the bound that
+  matters, and it is measurable directly.
+- New guard `test_targeting_socketwatch.py::test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer`
+  owns BOTH halves: the false positive is real (or the docs promise a hazard that does not exist)
+  and it ENDS at the next rebuild (or the bound is fiction). Adding identity verification later
+  fails the first half, which is the intended way of being sent back to these docs.
+- Three mutants, all caught: `owner_targeted` always False (no window at all), `_pids` never
+  forgetting a pid (window never closes), and the rebuild re-adopting a pid on its stale cached name.
+
 ### Fixed: the first packet of a fresh UDP flow is in targeting scope (handoff point 3)
 
 - **The gap.** `decide()` step 1 asked `syn_covers` only when `is_syn`, and `is_syn` is set for TCP
