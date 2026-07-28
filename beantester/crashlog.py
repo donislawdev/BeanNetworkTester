@@ -326,8 +326,12 @@ def once(subsystem, exc):
 
     ``note()`` builds a traceback and takes a lock - about a microsecond. That is
     nothing sixty times a second, and about 15% of a core at 150 000 packets a
-    second, which is what the capture loop actually runs at. This is a set lookup on
-    a short string (~40 ns): a malformed packet reports itself once and then costs
+    second. That rate is the SYNTHETIC path (``--simulate``); a real WinDivert
+    session was measured at ~14 000 packets/s end to end, an order of magnitude
+    lower - see the "What this actually sustains" section of ``engine.py``, which
+    is where that number lives. The argument survives the correction, because the
+    cheap version costs nothing at either rate: this is a set lookup on a short
+    string (~40 ns), so a malformed packet reports itself once and then costs
     nothing at all.
     """
     if subsystem in _once_seen:

@@ -20,6 +20,38 @@ UI still says "running". ``_watchdog_loop`` therefore stops the engine (which
 closes the divert = fail-open) as soon as a worker thread dies, and an
 ``atexit`` hook guarantees the handle is released even on an abrupt shutdown.
 The same watchdog enforces the session deadline (``duration``).
+
+What this actually sustains (the one place that number lives)
+-------------------------------------------------------------
+"150 000 packets a second" appears in several cost arguments around this
+package. It is a SYNTHETIC-path figure: benchmarks against ``SyntheticDivert``,
+where a "packet" costs no syscall and no ``pydivert`` parsing. Treating it as
+what a real session sustains was wrong by an order of magnitude.
+
+MEASURED 2026-07-28 (Win11, elevated, real WinDivert, ``--filter loopback``,
+64 B UDP flood, NO impairment configured - so this is the cost of capture plus
+re-injection alone):
+
+    offered 138k/s  ->  the tool moved ~13.8k/s, 91.75% destroyed by the driver
+    offered 316k/s  ->  ~15.2k/s
+    offered 442k/s  ->  ~15.6k/s
+
+The ceiling is FLAT: three times the offered load moved the throughput by 13%,
+which is what a saturated service rate looks like. That flatness is also the
+control for the obvious objection - the load generators share this machine, so
+CPU contention is a confound, but if it were the binding one then MORE senders
+would push the tool's rate DOWN, and it went slightly up. What is NOT measured:
+the same figure on an idle machine, on a real NIC, or with full-size frames
+(14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B - the limit is
+packets, not bits).
+
+The bottleneck is INJECTION, not ``decide()``. With nothing configured to delay,
+the release heap still grew ~1100 entries a second (``peak_queue`` 4080 -> 7020
+across the three loads), which can only happen if the inject thread trails the
+capture thread. Every hot-path optimisation recorded in this package targets
+``decide()`` and the capture thread; the measured constraint is the ``send()``
+side. One syscall per packet each way, and WinDivert's own ``RecvEx``/``SendEx``
+can carry many packets per call - unexplored, see CHANGELOG-INTERNAL.
 """
 import atexit
 import heapq

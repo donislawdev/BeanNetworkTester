@@ -97,6 +97,30 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: "150 000 packets a second" is a SYNTHETIC number, and now says so (audit F18, part b)
+
+- The figure appears in five places (`core.py`, `crashlog.py` x2, `engine.py`, `targeting.py`) as
+  the working assumption for hot-path cost. All of it came from benchmarks against
+  `SyntheticDivert`, where a packet costs no syscall and no `pydivert` parsing. A real session was
+  measured at **~13.8-15.6k packets/s** end to end (capture + re-injection, nothing configured to
+  impair) - an order of magnitude lower, with nothing in the text distinguishing the two.
+- The number now lives in ONE place: a "What this actually sustains" section in `engine.py`'s module
+  docstring, with the measurement conditions and, deliberately, what was NOT measured (idle machine,
+  real NIC, full-size frames - 14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B; the
+  limit is packets, not bits).
+- **The ceiling is FLAT**, which is its own control: three times the offered load moved throughput
+  by 13%. The load generators share the machine, so CPU contention is a confound - but if it were
+  the binding one, MORE senders would push the tool's rate down, and it went slightly up.
+- **The bottleneck is INJECTION, not `decide()`.** With no impairment configured the release heap
+  still grew ~1100 entries/s (`peak_queue` 4080 -> 7020), which can only happen if the inject thread
+  trails the capture thread. Every hot-path optimisation recorded in this package targets `decide()`
+  and the capture thread; the measured constraint is the `send()` side.
+- **Deliberately NOT rewritten:** `core.py::_enforce_ceiling` ("measured at 150 000 new flows/s")
+  describes a benchmark's INPUT rate, not a claim about production throughput, and `crashlog.quiet`
+  / `engine.OVERFLOW_WARN_S` use the figure as a conditional cost bound ("would be a lot at that
+  rate"), which holds either way. Rule 5 cuts both directions: prose that is still true for a
+  different reason than the one being corrected does not get deleted along with it.
+
 ### Fixed: the driver-wait warning names the LOSS, not just the delay (audit F18, part a)
 
 - **Measured first** (2026-07-28, elevated, real WinDivert, `--filter loopback` so nothing but
