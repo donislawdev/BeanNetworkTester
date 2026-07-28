@@ -593,6 +593,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
+| `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only; while it is on, statistics and connections cover the narrowed traffic only |
 
 **Targeting** (all three accept the full [filter syntax](#filter-syntax-process--ip--port): lists,
 ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally CIDR)

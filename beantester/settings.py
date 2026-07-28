@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = dict(
     flap_period=0, flap_down=0, rate_schedule="", seed=-1,
     duration=0,          # session length in seconds, 0 = until stopped (START-time only)
     row_limit=50000,     # most rows a table will show (0 = no limit); see fields.py
+    narrow_filter=False, # fold the destination into the DRIVER's filter (START-time only)
 )
 
 # Filter-expression fields: a VIEW over the field registry, not a second list.
@@ -191,6 +192,29 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
     return targeting
 
 
+def _destination_is_frozen(engine, dst_ip, dst_port):
+    """Is this a MID-SESSION destination change against a narrowed driver filter?
+
+    Only then - and only when the value actually differs from what the engine is
+    running with. Re-applying the SAME destination is what every "Apply changes"
+    does, and refusing that would spam the log and block unrelated edits.
+
+    ``getattr`` throughout because ``apply_settings`` is handed engine doubles in
+    the tests and by ``ScenarioRunner``; an object without these attributes simply
+    is not running a narrowed capture.
+    """
+    if not getattr(engine, "is_running", lambda: False)():
+        return False
+    info = getattr(engine, "session_info", None)
+    if not callable(info) or not info().get("narrowed"):
+        return False
+    core = getattr(engine, "core", None)
+    if core is None:                                        # pragma: no cover
+        return False
+    return (str(getattr(core, "dst_ip", "")) != str(dst_ip)
+            or str(getattr(core, "dst_port", "")) != str(dst_port))
+
+
 def apply_settings(engine, s, log=lambda *_: None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
 
@@ -205,14 +229,24 @@ def apply_settings(engine, s, log=lambda *_: None):
     engine.set_buffer(g("buffer"))
     dst_ip = setting_expression("dst_ip", g("dst_ip"))
     dst_port = setting_expression("dst_port", g("dst_port"))
-    try:
-        engine.set_dest(bool(dst_ip or dst_port), dst_ip, dst_port)
-    except ValueError as e:
-        # Tolerant like the schedule below: a bad expression disables destination
-        # targeting instead of killing a scenario thread. The GUI and the CLI
-        # validate up front (validate_settings), so a user never reaches this.
-        log(f"{T('log.filter_skipped')}: {e}")
-        engine.set_dest(False)
+    # With the driver filter narrowed, the destination fields are START-ONLY, and
+    # this is the one place that can enforce it. The handle's filter is fixed when
+    # it opens, so accepting a new destination here would leave the DRIVER holding
+    # the old, narrower filter while decide() judged by the new one: traffic the
+    # user just asked to impair would never arrive, and every counter would read
+    # healthy. Refusing out loud is the only honest option - silently applying half
+    # of it is the failure mode this whole audit exists to remove.
+    if _destination_is_frozen(engine, dst_ip, dst_port):
+        log(T("log.dest_frozen_while_narrowed"))
+    else:
+        try:
+            engine.set_dest(bool(dst_ip or dst_port), dst_ip, dst_port)
+        except ValueError as e:
+            # Tolerant like the schedule below: a bad expression disables destination
+            # targeting instead of killing a scenario thread. The GUI and the CLI
+            # validate up front (validate_settings), so a user never reaches this.
+            log(f"{T('log.filter_skipped')}: {e}")
+            engine.set_dest(False)
     engine.set_lan(bool(g("lan_mode")))
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))

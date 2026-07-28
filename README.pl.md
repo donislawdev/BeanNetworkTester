@@ -477,6 +477,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cykliczne zrywanie łącza: co ile i na jaki ułamek okresu |
 | `--rate-schedule` | - | zmienna przepustowość: `"czas:pobieranie:wysyłanie,..."` w KB/s, w pętli |
 | `--lan-mode` | - | tryb LAN: odetnij internet (adresy publiczne), zostaw sieć lokalną |
+| `--narrow-filter` | - | wepchnij `--dst-ip`/`--dst-port` do filtra WinDiverta, żeby sterownik w ogóle nie podawał ruchu, którego nie dałoby się popsuć (dużo szybciej przy dużej liczbie pakietów). Tylko przy STARCIE; gdy działa, statystyki i połączenia obejmują wyłącznie zawężony ruch |
 
 **Celowanie** (wszystkie trzy przyjmują pełną [składnię filtrów](#składnia-filtrów-proces--ip--port): listy, zakresy, `!`, `>`, `<`, `>=`, `<=`, wildcardy, `re:`, a `--dst-ip` dodatkowo CIDR)
 

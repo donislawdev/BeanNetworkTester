@@ -184,6 +184,44 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Added: `--narrow-filter` folds the destination into the driver's filter (chunk 2)
+
+- `filters.narrowed_filter(base, ip_matcher, port_matcher)` -> `(text, narrowed)`, and
+  `filters.filter_compiles(text)` asking `WinDivertHelperCompileFilter` (lazy `pydivert` import -
+  win32-only dependency, and `False` when it cannot be asked, because "cannot prove" must mean
+  "keep the wide filter").
+- Registry field `narrow_filter` (BOOL, `start_only`, `surface="settings"`), so the CLI flag, the
+  widget, validation and the config file all fall out of one entry (convention 11). Wired through
+  `engine.start(..., narrow=)` for the same reason `duration` is a `start()` parameter: a handle's
+  filter is fixed when it opens.
+- **Only on the REAL path.** An injected divert (`--simulate`, tests) never reads the filter
+  string, so narrowing there would move `session.narrowed` in the report without changing a single
+  packet - a cosmetic lie, which is the class of thing this audit has been removing.
+- 🔴 **The mid-session trap, and the guard for it.** `dst_ip`/`dst_port` are live-appliable while
+  the handle's filter is not. Accepting a destination change during a narrowed session would leave
+  the DRIVER filtering by the old expression while `decide()` judged by the new one - traffic the
+  user just asked to impair would never arrive, every counter healthy. `apply_settings` now refuses
+  a CHANGED destination while narrowed and says so (`log.dest_frozen_while_narrowed`); re-applying
+  the same value is untouched, because that is what every "Apply changes" does.
+- **Reported, not just done.** `session_info()["narrowed"]` (so the repro report carries it - it
+  embeds the whole session dict) and a new `capture_narrowed` key in the NDJSON summary. Additive
+  to a frozen contract, and load-bearing: with narrowing on, `packets` no longer counts every
+  packet on the machine, so two reports with the same key describe two different worlds. The CLI
+  also says at START whether the narrowing took effect - a user who asked for the throughput and
+  silently got the wide filter would otherwise believe they had it.
+- **A mutant survived and found a real hole in the tests.** Removing the compile check went GREEN:
+  nothing in the file produced a fragment the driver would refuse. It exists - the grammar has a
+  length limit, and a plausible expression hits it. Measured here: a 50-port list (4 698 chars)
+  compiles, a 100-port list (9 398) does not. Without the check the tool would hand WinDivert an
+  unparseable filter and fail to open the handle at START. Now guarded by
+  `test_a_fragment_the_driver_refuses_falls_back_instead_of_being_used`.
+- Six mutants: five caught, one green ON PURPOSE (the `filter_compiles` exception path is
+  unreachable where pydivert exists, which is where the suite runs).
+- **Consumers found the slow way, worth recording:** `engine.start`'s signature has five test
+  doubles across `test_failsafe.py`, `test_gui_stack_chaos.py` and `test_gui_state.py`. They took
+  `**kw` afterwards. The "who consumes this" sweep in PROJECT_NOTES rule 2 should have listed test
+  doubles, and now it does by example.
+
 ### Added: expressions compile down into the DRIVER's filter (chunk 1 of the narrowing work)
 
 - **Why.** With a destination target set the tool captures everything and re-injects almost all of

@@ -1426,7 +1426,10 @@ class App:
             # duration is a START-time setting (like the traffic filter): the
             # engine owns the deadline and stops itself when it is reached.
             apply_settings(self.engine, s, self.log)
-            self.engine.start(filt, duration=duration)
+            # Start-only, like `filter` and `duration`: it decides what the DRIVER
+            # hands over, and a handle's filter is fixed when it opens.
+            self.engine.start(filt, duration=duration,
+                              narrow=bool(s.get("narrow_filter")))
 
         self._begin_transition("starting", work)
 

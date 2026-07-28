@@ -89,6 +89,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **A new option lets the driver do the filtering, for when you are testing at high packet rates.**
+  Normally the tool receives every packet on the machine and hands almost all of them straight
+  back - measured on a real run, 1944 packets taken in and none of them even eligible to be
+  impaired. With **"Narrow the driver filter to the target"** (`--narrow-filter`) the destination
+  IP and port are pushed into WinDivert itself, so traffic that could never be impaired is not
+  handed over at all. Worth knowing before you switch it on: it takes effect **when a session
+  starts**, the destination fields are then fixed until you stop, and Statistics and Connections
+  cover only the narrowed traffic. It does nothing for a **process** target (Windows does not offer
+  the tool a process name at that level) and falls back silently-but-loudly to capturing everything
+  if your destination uses a wildcard or a `re:` pattern - the run says which of the two happened.
+
 - **The command line now says when the process you aimed at stops matching, instead of running on
   in silence.** If your target exits - it crashed, or your test harness restarted it and Windows
   gave it a new process id - everything from that moment on is left untouched. The run used to

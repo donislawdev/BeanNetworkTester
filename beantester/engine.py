@@ -87,6 +87,7 @@ import threading
 import time
 import weakref
 
+from . import filters
 from . import portmap
 from . import winenv
 from .core import BeanCore
@@ -232,6 +233,9 @@ class BeanEngine:
         # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
         self._driver_queue = None   # WinDivert's queue settings, read at start()
+        # Set at start(); an explicit attribute so session_info() can report it
+        # before the first session as well as after one.
+        self._narrowed = False
         # QPC seams: bound here so a test can drive the driver-wait measurement
         # without Windows. _qpc_freq is read at start() (0/None = no QPC here).
         self._qpc = winenv.qpc_now
@@ -284,7 +288,14 @@ class BeanEngine:
                     running=self._running, elapsed=round(elapsed, 1),
                     duration=self._duration, stop_reason=self.stop_reason,
                     # None on the simulate path, which has no driver queue
-                    driver_queue=self._driver_queue)
+                    driver_queue=self._driver_queue,
+                    # True when the destination expressions were folded into the
+                    # handle's filter. It has to be REPORTED, not just done: with it
+                    # on, `filter` above is not the filter the user chose and `seen`
+                    # no longer counts every packet on the machine. A report from a
+                    # machine you do not have in front of you must say which of the
+                    # two worlds produced its numbers.
+                    narrowed=bool(getattr(self, "_narrowed", False)))
 
     # WinDivert's own queue, the one BEFORE ours. Nothing in this program used to
     # read it, so a session's numbers could not be interpreted: with QUEUE_TIME at
@@ -763,7 +774,7 @@ class BeanEngine:
             self.st[key] += n
 
     # -- lifecycle ------------------------------------------------------------ #
-    def start(self, filt, divert=None, duration=0, socket_source=None):
+    def start(self, filt, divert=None, duration=0, socket_source=None, narrow=False):
         """Start a session.
 
         ``divert``        - optional object with recv()/send()/close() (tests, --simulate),
@@ -771,14 +782,19 @@ class BeanEngine:
         ``socket_source`` - optional injected event source (or factory) for the
                             SocketWatcher (tests); on the real path it is opened from
                             WinDivert. See ``_start_socketwatch``.
+        ``narrow``        - fold the destination expressions into the DRIVER's filter
+                            when that can be proven safe, so traffic that could never
+                            be impaired is not handed to this process at all. Start-only
+                            for the same reason ``filter`` is: the handle's filter is
+                            fixed when it opens.
         """
         # Held for the whole start: a worker can fail (and call stop()) before the
         # remaining threads are even spawned - stop() would then null out the
         # thread handles under our feet.
         with self._stop_lock:
-            return self._start_locked(filt, divert, duration, socket_source)
+            return self._start_locked(filt, divert, duration, socket_source, narrow)
 
-    def _start_locked(self, filt, divert, duration, socket_source=None):
+    def _start_locked(self, filt, divert, duration, socket_source=None, narrow=False):
         if self._running:
             # Internal/developer error: the GUI and CLI both guard against
             # this, but a second start would spawn duplicate worker threads
@@ -788,6 +804,13 @@ class BeanEngine:
         # then can a second (SOCKET-layer) handle be opened. Captured before the line
         # below reassigns ``divert``.
         real_windivert = divert is None
+        # Only on the real path: an injected divert (tests, --simulate) never reads
+        # this string, so narrowing it would change a number in the report without
+        # changing a single packet - the kind of cosmetic lie this project hunts.
+        self._narrowed = False
+        if real_windivert and narrow and self.core.dst_active:
+            filt, self._narrowed = filters.narrowed_filter(
+                filt, self.core.dst_ip_matcher, self.core.dst_port_matcher)
         if divert is None:
             import pydivert
             from . import driver
