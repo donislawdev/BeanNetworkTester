@@ -174,6 +174,12 @@ class BeanEngine:
         # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
         self._driver_queue = None   # WinDivert's queue settings, read at start()
+        # QPC seams: bound here so a test can drive the driver-wait measurement
+        # without Windows. _qpc_freq is read at start() (0/None = no QPC here).
+        self._qpc = winenv.qpc_now
+        self._qpc_freq = None
+        self._driver_wait_warned = 0.0
+        self._wait_sample_at = 0.0
         # True while this session holds a fine Windows timer tick (see start()).
         # Tracked rather than released blindly: the OS refcounts the requests per
         # process, so releasing one we were never granted unbalances the count.
@@ -419,11 +425,18 @@ class BeanEngine:
                            rst_reset=0, rst_sent=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
-                           queue=0, peak_queue=0)
+                           queue=0, peak_queue=0,
+                           # The worst wait a packet had ALREADY served inside
+                           # WinDivert before this tool even saw it. Milliseconds,
+                           # not a count - the only float in here, and the only
+                           # number that describes the queue in front of ours.
+                           driver_wait_peak_ms=0.0)
         # counters back to zero means the warning should be able to fire again:
         # a fresh measurement window that overflows must say so afresh
         self._overflow_warned = 0.0
         self._send_warned = 0.0
+        self._driver_wait_warned = 0.0
+        self._wait_sample_at = 0.0
         with self._clock:
             self._conns.clear()
 
@@ -735,6 +748,14 @@ class BeanEngine:
                 crashlog.note(_exc, "engine")
         self._running = True
         self._driver_queue = self._read_driver_queue()
+        # Only asked for when nobody has supplied one. The QPC pair is an injected
+        # dependency, like the clock and sleep `run_cli` takes: a test that wants
+        # the capture loop to measure a known wait sets both BEFORE start(), and
+        # this must not overwrite that. Reading it here otherwise, because the
+        # frequency cannot change and one call per session is the right price.
+        if self._qpc_freq is None:
+            self._qpc_freq = winenv.qpc_frequency()
+        self._wait_sample_at = 0.0      # sample the first packet, then on the tick
         # always establish a concrete seed - this makes EVERY session reproducible
         self._effective_seed = self._seed if self._seed is not None else random.randrange(1, 2**31 - 1)
         self._rng = random.Random(self._effective_seed)
@@ -1159,6 +1180,14 @@ class BeanEngine:
                     self._fail_stop(e)
                 break
             now = time.monotonic()
+            # Sampled on TIME, not on a packet count. A count-based sample never
+            # fires on a quiet link - 24 packets in 12 seconds would never reach
+            # a 1-in-256 - and quiet links are exactly where a 2-second driver
+            # queue would go unnoticed. The cost on the common path is this float
+            # compare; `now` was already read on the line above.
+            if now >= self._wait_sample_at:
+                self._wait_sample_at = now + self.DRIVER_WAIT_SAMPLE_S
+                self._sample_driver_wait(packet)
             size = len(packet.raw)
             is_out = bool(getattr(packet, "is_outbound", True))
             local_port = remote_port = remote_ip = None
@@ -1355,6 +1384,63 @@ class BeanEngine:
             # into the event log too, so it reaches the repro report: a session
             # whose delivered counts are short must say why in the artefact
             self.log_event("WARN", "events.send_failed")
+
+    # How long a packet had already been sitting in WinDivert's queue when we got
+    # it. WinDivert stamps every packet with a QueryPerformanceCounter value
+    # (pydivert `Packet.timestamp`), so this is a MEASUREMENT, not a heuristic -
+    # which is why no heuristic was written. Measured idle on the owner's machine
+    # (2026-07-28, real driver): 0.049-0.163 ms, median ~0.08 ms. The warning
+    # threshold is therefore several hundred times the normal value, not a guess
+    # at one: below it there is nothing to say, above it the tool is adding delay
+    # it does not otherwise account for anywhere.
+    DRIVER_WAIT_SAMPLE_S = 0.05         # 20 samples a second, whatever the rate
+    DRIVER_WAIT_WARN_MS = 50.0
+    DRIVER_WAIT_WARN_S = 5.0            # rate limit, as for the other two warnings
+
+    def _sample_driver_wait(self, packet):
+        """Record how long this packet waited inside the driver before we saw it.
+
+        Silent when there is nothing to measure: a synthetic packet has no
+        timestamp, and there is no QPC outside Windows. Both are the simulate
+        path, which has no driver queue - the same reason ``_read_driver_queue``
+        returns None there.
+        """
+        stamp = getattr(packet, "timestamp", 0)
+        freq = self._qpc_freq
+        if not stamp or not freq:
+            return
+        ticks = self._qpc()
+        if ticks is None:
+            return
+        waited_ms = (ticks - stamp) / freq * 1000.0
+        if waited_ms <= 0:
+            # Clock skew, or a stamp this tool did not write. NOT load-bearing for
+            # the result - the two comparisons below already reject a negative, and
+            # mutating this line away changes nothing observable (checked). It is
+            # here to skip taking the stats lock for a sample that cannot matter.
+            return
+        with self._slock:
+            if waited_ms > self.st["driver_wait_peak_ms"]:
+                self.st["driver_wait_peak_ms"] = round(waited_ms, 3)
+        if waited_ms >= self.DRIVER_WAIT_WARN_MS:
+            self._warn_driver_wait(waited_ms)
+
+    def _warn_driver_wait(self, waited_ms):
+        """Say - once every DRIVER_WAIT_WARN_S - that the DRIVER is holding packets.
+
+        Rate-limited for the reason written above OVERFLOW_WARN_S, and worth
+        saying at all because this delay appears in no counter: it is added
+        before the tool's own queue, so a tester measuring latency attributes it
+        to their application or to the network.
+        """
+        now = time.monotonic()
+        if now - self._driver_wait_warned < self.DRIVER_WAIT_WARN_S:
+            return
+        first = self._driver_wait_warned == 0.0
+        self._driver_wait_warned = now
+        self.log(T("log.driver_wait", ms=f"{waited_ms:.0f}"))
+        if first:
+            self.log_event("WARN", "events.driver_wait")
 
     def _enqueue(self, release, packet, copy=False, key=None):
         """Queue one release of ``packet`` for delayed injection.

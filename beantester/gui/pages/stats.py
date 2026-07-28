@@ -57,6 +57,7 @@ SESSION_ROWS = (
     ("elapsed", "session.duration", ""),
     ("eff_loss", "session.eff_loss", "tips.eff_loss"),
     ("peak_queue", "session.peak_queue", ""),
+    ("driver_wait", "session.driver_wait", "tips.driver_wait"),
     ("peak_rate", "session.peak_rate", "tips.peak_rate"),
     ("data_down", "session.down_mb", "tips.data_down"),
     ("data_up", "session.up_mb", "tips.data_up"),
@@ -294,6 +295,12 @@ class StatsPage:
             text=(human_duration(elapsed) if info["start"] else "-"))
         self.sess_labels["eff_loss"].config(text=f"{impairment_loss_pct(snap):.1f}%")
         self.sess_labels["peak_queue"].config(text=str(snap.get("peak_queue", 0)))
+        # "-" rather than "0.0 ms" when there is nothing to measure: on the
+        # simulate path there is no driver queue at all, and a zero would read as
+        # "measured, and it was nothing"
+        waited = snap.get("driver_wait_peak_ms", 0.0)
+        self.sess_labels["driver_wait"].config(
+            text=f"{waited:.2f} ms" if waited else "-")
         self.sess_labels["peak_rate"].config(
             text=f"{app.peak_down:.0f} / {app.peak_up:.0f} KB/s")
         down_mb = bytes_to_mb(snap.get("bytes_in", 0))

@@ -867,6 +867,127 @@ def test_a_simulated_session_reports_no_driver_queue_rather_than_a_made_up_one()
           f"({info['driver_queue']})")
 
 
+class StampedPacket(FakePacket):
+    """A packet carrying a WinDivert-style capture timestamp (raw QPC ticks)."""
+
+    def __init__(self, timestamp, **kw):
+        super().__init__(**kw)
+        self.timestamp = timestamp
+
+
+def _engine_with_qpc(ticks, freq=10_000_000, log_fn=None):
+    """An engine whose QPC always reads `ticks`, with NO session started.
+
+    Deliberately not started: `_sample_driver_wait` needs only the stats dict and
+    the lock, and a live capture thread would race the test - it samples the first
+    packet with the REAL clock before the seam can be installed, which is exactly
+    what happened when this was written the other way round. 10 MHz is the
+    frequency measured on the owner's machine, so one tick is 100 ns.
+    """
+    eng = BeanEngine(log_fn=log_fn) if log_fn else BeanEngine()
+    eng._qpc = lambda: ticks
+    eng._qpc_freq = freq
+    return eng
+
+
+def test_the_wait_inside_the_driver_is_measured_and_kept():
+    """WinDivert stamps every packet, so the wait BEFORE we saw it is measurable.
+
+    It is the one delay this tool adds and counts nowhere: it happens in the
+    driver's queue, ahead of ours, so a tester measuring latency attributes it to
+    their application or to the network. 10 MHz clock, packet stamped 2 000 000
+    ticks ago = 200 ms.
+    """
+    now_ticks = 50_000_000
+    sh = _engine_with_qpc(now_ticks)
+    sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8500))
+    peak = sh.stats_snapshot()["driver_wait_peak_ms"]
+    check("driver wait: measured in milliseconds", abs(peak - 200.0) < 0.001, f"({peak})")
+
+
+def test_the_capture_loop_actually_takes_the_sample():
+    """The measurement is only worth anything if the packet path calls it.
+
+    The other tests here drive `_sample_driver_wait` directly, so they say nothing
+    about whether the capture loop ever reaches it - mutation proved exactly that
+    by deleting the call site without turning any of them red. This one runs a
+    real session, with the QPC pair injected BEFORE start() so the loop measures a
+    known 200 ms rather than whatever the machine's clock says.
+    """
+    # 1 MHz on purpose, NOT this machine's real 10 MHz: if start() overwrote the
+    # injected frequency with the machine's own, the same stamp would read 20 ms
+    # instead of 200 and this would fail. With a matching frequency the overwrite
+    # is invisible on Windows and only breaks on the Linux runner, which is the
+    # kind of mutant that gets waved through.
+    now_ticks, freq = 50_000_000, 1_000_000
+    pkts = [StampedPacket(now_ticks - 200_000, size=100, port=8504)
+            for _ in range(3)]
+    sh = BeanEngine()
+    sh._qpc = lambda: now_ticks
+    sh._qpc_freq = freq
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < len(pkts):
+        time.sleep(0.02)
+    peak = sh.stats_snapshot()["driver_wait_peak_ms"]
+    sh.stop()
+    check("driver wait: the capture loop sampled it", abs(peak - 200.0) < 0.001,
+          f"({peak})")
+
+
+def test_a_shorter_wait_never_lowers_the_recorded_peak():
+    """It is a PEAK. A later, healthier packet must not erase the worst moment -
+    that is the moment worth knowing about."""
+    now_ticks = 50_000_000
+    sh = _engine_with_qpc(now_ticks)
+    sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8501))
+    sh._sample_driver_wait(StampedPacket(now_ticks - 1_000, size=100, port=8501))
+    peak = sh.stats_snapshot()["driver_wait_peak_ms"]
+    check("driver wait: the peak survives a healthy sample",
+          abs(peak - 200.0) < 0.001, f"({peak})")
+
+
+def test_nothing_to_measure_is_reported_as_nothing():
+    """No timestamp (synthetic packet) and no QPC (not Windows) are the simulate
+    path, which has no driver queue. A zero peak says "nothing measured"; a made-up
+    number would be worse than silence. A stamp from the future - clock skew - is
+    dropped rather than reported as a negative wait."""
+    sh = _engine_with_qpc(50_000_000)
+
+    sh._sample_driver_wait(FakePacket(size=100, port=8502))          # no timestamp
+    check("driver wait: no timestamp -> nothing recorded",
+          sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0)
+
+    sh._qpc_freq = None                                              # no QPC here
+    sh._sample_driver_wait(StampedPacket(1, size=100, port=8502))
+    check("driver wait: no QPC -> nothing recorded",
+          sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0)
+
+    sh._qpc_freq = 10_000_000
+    sh._sample_driver_wait(StampedPacket(50_000_001, size=100, port=8502))
+    check("driver wait: a stamp from the future is dropped, not negated",
+          sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0,
+          f"({sh.stats_snapshot()['driver_wait_peak_ms']})")
+
+
+def test_a_long_driver_wait_warns_once_not_per_packet():
+    """Same rule as the queue-overflow warning: a per-packet line becomes the
+    second bug. And it has to reach the event log, so the repro report carries it."""
+    now_ticks = 50_000_000
+    lines = []
+    sh = _engine_with_qpc(now_ticks, log_fn=lines.append)
+    for _ in range(200):
+        sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8503))
+    kinds = [e[2] for e in sh.events_snapshot()]
+
+    complaints = [ln for ln in lines if "WinDivert" in ln or "sterownik" in ln.lower()]
+    check("driver wait: warned once, not 200 times",
+          len(complaints) == 1, f"({len(complaints)} lines)")
+    check("driver wait: the line carries the number", "200" in complaints[0],
+          f"({complaints[0][:90]})")
+    check("driver wait: and it reaches the event log", "WARN" in kinds, f"({kinds})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):

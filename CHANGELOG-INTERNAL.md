@@ -97,6 +97,45 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Added: the wait inside the driver is measured, not guessed (audit F10, part b)
+
+- **The audit asked for an "overload heuristic". None was written, because the dependency already
+  answers the question.** `pydivert.Packet.timestamp` is the raw QueryPerformanceCounter value
+  WinDivert stamps each packet with (`packet/__init__.py:216`), so `QPC_now - stamp` IS the time
+  that packet spent in the driver's queue. Reading the capability surface first (convention 6)
+  turned a heuristic into a measurement.
+- `winenv.qpc_now()` / `qpc_frequency()` (Windows-only, `None` elsewhere). Deliberately not
+  `time.perf_counter()`: it is derived from QPC but carries an arbitrary epoch offset, so
+  subtracting a raw stamp from it is meaningless.
+- **Sampled on TIME, not on a packet count.** A 1-in-N sample never fires on a quiet link - 24
+  packets in 12 seconds would never reach 1-in-256 - and a quiet link is exactly where a 2 s driver
+  queue would go unnoticed. `DRIVER_WAIT_SAMPLE_S = 0.05` gives 20 samples a second at any rate,
+  and the per-packet cost is one float compare against a `now` the loop had already read.
+- `driver_wait_peak_ms` in `st` (the only float in there), a Session-tab row, the repro report, the
+  stats CSV. `DRIVER_WAIT_WARN_MS = 50.0` - chosen against the MEASURED idle value on the owner's
+  machine (0.049-0.163 ms, median ~0.08), so the threshold is several hundred times normal rather
+  than a guess at one. Warning rate-limited at 5 s like the other two, with the first occurrence in
+  the event log so the repro report carries it.
+- **The QPC pair is an injected dependency**, like the clock and sleep `run_cli` takes: `start()`
+  reads the frequency only `if self._qpc_freq is None`, so a test can drive the capture loop with a
+  known clock.
+- **Hot path measured** against a worktree of the F10a branch (150k packets, median of 5, twice
+  each): 148.4 / 149.6k -> 154.1 / 154.4k pkt/s. A float compare cannot make anything faster, so
+  that spread is noise and the honest reading is **no measurable cost**. NOT covered by this
+  benchmark: the QPC call itself - synthetic packets have no `timestamp`, so the sampler returns at
+  the `getattr`. On the real path that call happens 20 times a second regardless of traffic.
+- Five new tests; **five mutants, four caught, and the fifth is recorded rather than papered over**:
+  - mutating away `if waited_ms <= 0` changes nothing observable, because the peak comparison and
+    the warn comparison both already reject a negative. The branch is a cheap skip of the stats
+    lock, not a guard, and its comment now says exactly that instead of claiming it prevents a
+    negative reading.
+  - two mutants were caught only after repairs. The direct-call tests said nothing about whether
+    the capture loop ever REACHES the sampler - deleting the call site left them all green - so
+    `test_the_capture_loop_actually_takes_the_sample` runs a real session with the QPC injected.
+    And it injects **1 MHz, not this machine's real 10 MHz**: with a matching frequency, a mutant
+    that lets `start()` overwrite the injected value is invisible on Windows and only breaks on the
+    Linux runner. Same trap as the pydivert import in part a, from the other side.
+
 ### Added: the driver's own queue is read and reported (audit F10, part a)
 
 - **Symptom.** `pydivert.WinDivert(filt)` never received a `set_param()`, and the package contained

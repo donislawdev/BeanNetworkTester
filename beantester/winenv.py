@@ -50,6 +50,48 @@ def elevation_disabled():
     return str(os.environ.get("BEAN_NO_ELEVATE", "")).strip() not in ("", "0")
 
 
+# QueryPerformanceCounter, because that is the clock WinDivert stamps its packets
+# with: ``Packet.timestamp`` is a raw QPC value, so the ONLY way to turn it into
+# "how long did this packet wait in the driver" is to read the same counter. Not
+# time.perf_counter(): it is derived from QPC but carries an arbitrary epoch
+# offset, so subtracting a raw stamp from it is meaningless.
+_QPC_FREQ = [None]      # ticks per second; read once, it cannot change
+
+
+def qpc_frequency():
+    """QPC ticks per second, or ``None`` where there is no QPC (non-Windows)."""
+    if _QPC_FREQ[0] is None:
+        if not is_windows():
+            _QPC_FREQ[0] = 0
+        else:
+            with crashlog.quiet("winenv.qpc"):
+                import ctypes
+                freq = ctypes.c_int64()
+                if ctypes.windll.kernel32.QueryPerformanceFrequency(ctypes.byref(freq)):
+                    _QPC_FREQ[0] = int(freq.value)
+            if _QPC_FREQ[0] is None:
+                _QPC_FREQ[0] = 0
+    return _QPC_FREQ[0] or None
+
+
+def qpc_now():
+    """The current QPC tick count, or ``None`` where there is no QPC.
+
+    Costs one syscall-ish call, so the caller decides how often to ask - this is
+    not something to do per packet (see ``BeanEngine._sample_driver_wait``).
+    """
+    if not is_windows():
+        return None
+    try:
+        import ctypes
+        counter = ctypes.c_int64()
+        if ctypes.windll.kernel32.QueryPerformanceCounter(ctypes.byref(counter)):
+            return int(counter.value)
+    except Exception as _exc:
+        crashlog.once("winenv.qpc", _exc)
+    return None
+
+
 def _quote(arg):
     return '"%s"' % str(arg).replace('"', r"\"")
 
