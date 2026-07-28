@@ -210,6 +210,11 @@ class BeanCore:
         # targeting
         self.target_active = False
         self.target_ports = set()
+        # Bound in set_target, so the packet path does not even do a getattr.
+        # None whenever the port container cannot answer for a fresh socket - a
+        # plain set (tests, one-shot resolution), which is the behaviour that
+        # existed before this check did.
+        self._syn_covers = None
         self.dst_active = False
         self.dst_ip = ""            # raw expression text (for summaries/reports)
         self.dst_port = ""          # raw expression text
@@ -299,6 +304,7 @@ class BeanCore:
                 self.target_ports = set(ports)
             else:
                 self.target_ports = ports
+            self._syn_covers = getattr(self.target_ports, "syn_covers", None)
 
     def set_dest(self, active, ip=None, port=None):
         """Destination targeting. ``ip``/``port`` are filter expressions (see
@@ -489,7 +495,17 @@ class BeanCore:
         with self._lock:
             # 1) process targeting
             if self.target_active and local_port not in self.target_ports:
-                return Decision(False, False, [now], scoped=False)
+                # The port set is rebuilt on another thread, so a socket opened
+                # microseconds ago is unknown HERE even when the live SOCKET map
+                # already knows its owner - and the first packet of every fresh
+                # connection was therefore judged out of scope. Measured end to
+                # end: 20 of 20 SYNs walked past a process target. For a SYN, and
+                # only a SYN (once per connection, not once per packet), ask that
+                # map. `not in` above has already flagged the miss and woken the
+                # resolver, so the rest of the connection takes the usual path.
+                if not (is_syn and self._syn_covers is not None
+                        and self._syn_covers(local_port)):
+                    return Decision(False, False, [now], scoped=False)
             # 2) destination targeting (remote IP/port) - filter expressions
             if self.dst_active:
                 if self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip):
@@ -568,8 +584,19 @@ class BeanCore:
                 until = self._reset_until.get(key, 0.0)
                 if now < until:
                     return Decision(True, False, [], "rst")
-                trigger = (now < self._reset_now_deadline) or \
-                          (self.rst_prob > 0 and rng.random() < self.rst_prob)
+                # NOT armed from a SYN. The RST we would forge copies the packet's
+                # ack_num as its sequence, and a SYN has none - so the reset goes
+                # out with seq=0 and no ACK, which a stack in SYN_SENT is entitled
+                # to ignore (RFC 793). MEASURED 2026-07-28: exactly that left the
+                # client hanging until its own timeout instead of resetting it,
+                # while rst_sent reported 1. This was unreachable until a SYN could
+                # be in targeting scope; now it is the FIRST packet a reset would
+                # fire on, so arming here would trade a working reset for a hang.
+                # The cooldown check above still applies to a SYN: a retransmit of
+                # a connection already being held down stays held down.
+                trigger = not is_syn and (
+                    (now < self._reset_now_deadline)
+                    or (self.rst_prob > 0 and rng.random() < self.rst_prob))
                 if trigger:
                     self._reset_until.set(key, now + self.rst_cooldown_s)
                     return Decision(True, False, [], "rst", True)

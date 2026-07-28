@@ -276,6 +276,126 @@ def test_lan_mode_gate():
     check("LAN: disabled = internet passes", not off.drop, f"(drop={off.drop})")
 
 
+class _FakePorts:
+    """A live port container the way ``ProcessTargeting`` presents itself.
+
+    ``ports`` is what the asynchronous rebuild has caught up with; ``owners`` is
+    what the live socket map knows RIGHT NOW; ``pids`` is the set the last rebuild
+    concluded. A brand-new socket is in ``owners`` but not yet in ``ports`` - the
+    exact state every fresh connection is judged in.
+    """
+
+    def __init__(self, ports=(), owners=None, pids=(), with_pid_for=True):
+        self._ports = set(ports)
+        self.owners = dict(owners or {})
+        self.pids = set(pids)
+        self.misses = 0
+        if not with_pid_for:                 # a table that predates syn_covers
+            del self.__dict__["owners"]
+
+    def __contains__(self, port):
+        if port in self._ports:
+            return True
+        self.misses += 1
+        return False
+
+    def syn_covers(self, port):
+        owners = getattr(self, "owners", None)
+        if owners is None:
+            return False
+        pid = owners.get(port)
+        return pid is not None and pid in self.pids
+
+
+def test_a_syn_from_a_fresh_socket_of_a_targeted_process_is_in_scope():
+    """The first packet of a fresh connection used to walk past targeting.
+
+    ``__contains__`` answers from a set rebuilt on another thread, so a socket
+    opened microseconds ago is unknown there even when the live SOCKET map already
+    has its owner. MEASURED end to end 2026-07-28: 20 fresh connections against a
+    process target with ``--syn-drop 100`` produced 20 established connections and
+    ``drop_syn`` 0. The SYN - and only the SYN - now asks that map.
+    """
+    core = BeanCore()
+    rng = random.Random(0)
+    # port 5000 is a brand new socket of pid 42, which IS the target; the rebuilt
+    # port set has not caught up with it yet
+    ports = _FakePorts(ports={4000}, owners={5000: 42, 6000: 99}, pids={42})
+    core.set_target(True, ports)
+
+    kw = dict(remote_ip="1.1.1.1", remote_port=80, is_tcp=True)
+    syn = core.decide(100, True, 5000, 0.0, rng, is_syn=True, **kw)
+    check("fresh SYN of the target is in scope", syn.scoped is True,
+          f"(scoped={syn.scoped})")
+
+    other = core.decide(100, True, 6000, 0.0, rng, is_syn=True, **kw)
+    check("a SYN of ANOTHER process stays out of scope", other.scoped is False,
+          f"(scoped={other.scoped})")
+
+    data = core.decide(100, True, 5000, 0.0, rng, is_syn=False, **kw)
+    check("a non-SYN on the same unknown port is unchanged - still out of scope",
+          data.scoped is False, f"(scoped={data.scoped})")
+
+    known = core.decide(100, True, 4000, 0.0, rng, is_syn=False, **kw)
+    check("a port the rebuild already knows needs none of this",
+          known.scoped is True, f"(scoped={known.scoped})")
+
+    check("the miss still wakes the resolver, as before", ports.misses >= 3,
+          f"(misses={ports.misses})")
+
+
+def test_a_port_container_without_pid_for_does_not_break_the_packet_path():
+    """``set_table`` accepts anything with the read surface, and ``pid_for`` was
+    not part of it until now. A container that cannot answer must fall back to the
+    old behaviour, not raise AttributeError on the CAPTURE THREAD."""
+    core = BeanCore()
+    rng = random.Random(0)
+    core.set_target(True, _FakePorts(ports={4000}, pids={42}, with_pid_for=False))
+    d = core.decide(100, True, 5000, 0.0, rng, remote_ip="1.1.1.1", remote_port=80,
+                    is_tcp=True, is_syn=True)
+    check("no owner map -> out of scope, and no exception", d.scoped is False)
+
+
+def test_a_plain_port_set_keeps_the_behaviour_it_always_had():
+    """`set_target(True, {9999})` - tests and one-shot resolution - hands over a
+    plain set, which cannot answer for a fresh socket. The SYN check must simply
+    not exist for it."""
+    core = BeanCore()
+    rng = random.Random(0)
+    core.set_target(True, {9999})
+    d = core.decide(100, True, 5000, 0.0, rng, remote_ip="1.1.1.1", remote_port=80,
+                    is_tcp=True, is_syn=True)
+    check("plain set: a SYN on an unknown port is out of scope", d.scoped is False)
+    check("and the fast path was not even bound", core._syn_covers is None)
+
+
+def test_a_reset_is_never_armed_from_a_syn():
+    """The RST forged from a SYN copies its ack_num as the sequence - and a SYN has
+    none, so it goes out with seq=0 and no ACK, which SYN_SENT is entitled to
+    ignore (RFC 793). MEASURED 2026-07-28: it left the client hanging until its own
+    timeout instead of resetting it. Unreachable until a SYN could be in targeting
+    scope; now it would be the FIRST packet a reset fires on."""
+    core = BeanCore()
+    rng = random.Random(0)
+    core.set_rst(100, 5.0)          # every eligible packet arms a reset
+    kw = dict(remote_ip="1.1.1.1", remote_port=80, is_tcp=True)
+
+    syn = core.decide(100, True, 5000, 0.0, rng, is_syn=True, **kw)
+    check("a SYN does not arm a reset", not (syn.drop and syn.reason == "rst"),
+          f"(drop={syn.drop}, reason={syn.reason})")
+
+    data = core.decide(100, True, 5001, 0.0, rng, is_syn=False, **kw)
+    check("an ordinary packet still does",
+          data.drop and data.reason == "rst" and data.emit_rst is True,
+          f"(drop={data.drop}, reason={data.reason}, emit={data.emit_rst})")
+
+    # ...and a SYN retransmitted into an ALREADY armed cooldown stays held down
+    held = core.decide(100, True, 5001, 1.0, rng, is_syn=True, **kw)
+    check("a SYN inside an existing cooldown is still dropped",
+          held.drop and held.reason == "rst" and held.emit_rst is False,
+          f"(drop={held.drop}, reason={held.reason})")
+
+
 def test_decision_scoped_reflects_targeting():
     """`scoped` says whether a packet passed the targeting gate (steps 1-2), i.e.
     whether the flow is in scope for impairment - the signal behind the "impaired?"

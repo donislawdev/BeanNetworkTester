@@ -145,13 +145,63 @@ class ProcessTargeting:
         (:class:`beantester.socketwatch.SocketWatcher`) when a session has one, and
         back at the polling :class:`~beantester.portmap.PortTable` otherwise (no real
         WinDivert, or the SOCKET handle could not open). Both expose the same read
-        surface (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``), which is
-        why the swap is a one-line reference change. The resolved port set is left as
+        surface (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``, plus
+        ``pid_for`` since ``syn_covers`` exists - both real tables have always had
+        it, but it is part of the contract now), which is why the swap is a
+        one-line reference change. The resolved port set is left as
         it is until the next ``refresh()`` (the resolver runs those continuously), so
         the swap never blips the hot-path ``__contains__``.
         """
         with self._lock:
             self.table = table if table is not None else portmap.default_table()
+
+    def syn_covers(self, port):
+        """Is this port a brand-new socket of a process we ALREADY target?
+
+        ``__contains__`` answers from ``_ports``, a frozenset rebuilt on another
+        thread, so the first packet of a fresh connection is judged BEFORE any
+        rebuild it triggers - it was never in scope, however early the SOCKET
+        event arrived. MEASURED end to end 2026-07-28: 20 fresh connections
+        against a process target with ``--syn-drop 100``, 20 SYNs straight
+        through, ``drop_syn`` 0. The live map knew each owner 0.02 ms before its
+        SYN; nothing consumed that.
+
+        This is the one place that does. ``BeanCore.decide`` calls it for a TCP
+        SYN only - once per connection, not once per packet - and it costs a
+        lock-free dict read plus a frozenset lookup, no lock of its own.
+
+        ``_pids`` is what the last rebuild concluded, so every expression form
+        (name, PID, list, range, ``!`` exclusion, ancestor match) is already
+        resolved into it. This does not re-run the matcher.
+
+        Two limits, both deliberate, both measured rather than assumed:
+
+        * ``_pids`` is rebuilt from the pids owning CURRENTLY OPEN sockets, so a
+          target that has none when a rebuild runs drops out of it and its next
+          connection is uncovered again. Measured with ``--syn-drop 100`` over 20
+          fresh connections: a probe holding its sockets open was caught **19 of
+          20** (only its first, before it had any socket, escaped), while the same
+          probe closing each connection before the next was caught **6 of 20**.
+          So this covers a target that keeps sockets - a browser, an app under
+          test - and keeps missing one that opens a connection, closes it and
+          pauses. Covering that needs the matcher and a name lookup in the packet
+          path, which is what convention 20 forbids.
+        * ``_pids`` is up to one resolver cycle stale (0.30 s). If the target
+          exits and Windows recycles its PID inside that window, one packet of an
+          unrelated new socket can be pulled into scope. That is a DIFFERENT false
+          positive from the stale ``_ports`` this code already lived with - named
+          here rather than implied.
+        """
+        if port is None:
+            return False
+        # `pid_for` is asked of the table by getattr because `set_table` accepts
+        # anything with the read surface, and a table that predates this (or a
+        # test double) would otherwise raise AttributeError ON THE CAPTURE THREAD.
+        pid_for = getattr(self.table, "pid_for", None)
+        if pid_for is None:
+            return False
+        pid = pid_for(port)
+        return pid is not None and pid in self._pids
 
     # -- the container BeanCore tests against ---------------------------------- #
     def __contains__(self, port):

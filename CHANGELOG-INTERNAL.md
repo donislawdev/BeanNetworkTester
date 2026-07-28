@@ -97,6 +97,60 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the first packet of a fresh connection can be in targeting scope (audit F16)
+
+- **Symptom, measured end to end before writing anything.** `ProcessTargeting.__contains__` answers
+  from `_ports`, a frozenset rebuilt on the resolver's thread, so a socket opened microseconds ago
+  is unknown there - and the first packet of a connection is judged BEFORE any rebuild it triggers.
+  20 fresh connections against a process target with `--syn-drop 100`: **20 established, `drop_syn`
+  0**. `--syn-drop` combined with `--target` was a complete no-op, and every other impairment missed
+  one packet per connection.
+- **This is NOT the 0.02 ms.** The SOCKET-layer margin measured the same day is real, but nothing
+  consumed it: the live map fed the REBUILD, not the packet-path test. The order being in our favour
+  is worth nothing until something reads it at the right moment.
+- **Fix.** `ProcessTargeting.syn_covers(port)` - a lock-free `pid_for` read checked against `_pids`,
+  the set the last rebuild concluded - and `BeanCore.decide` step 1 calls it **for a TCP SYN only**,
+  i.e. once per connection rather than once per packet. `_syn_covers` is bound in `set_target`, so
+  the packet path does not even do a `getattr`, and a plain port set (tests, one-shot resolution)
+  binds `None` and keeps exactly the behaviour it had.
+- **It drags a second fix with it, and this is the part that would have been missed.** Step 4 arms a
+  reset on the first in-scope TCP packet. With SYNs now in scope that becomes the SYN - and the RST
+  forged from a SYN copies its `ack_num` as the sequence, which a SYN does not have, so it goes out
+  with `seq=0` and no ACK. RFC 793 lets a stack in SYN_SENT ignore that, and **it was measured doing
+  exactly that** (2026-07-28: the client hung until its own timeout, `rst_sent` reported 1). So a
+  reset is no longer ARMED from a SYN, while a SYN arriving inside an existing cooldown is still
+  held down. Without this, F16 would have traded a working reset for a hang.
+- **Acceptance, and it corrected the limitation as written.** Predicted 19 of 20 blocked; the first
+  run gave **6**. The gap is not the 0.02 ms: `_pids` is rebuilt from pids owning CURRENTLY OPEN
+  sockets, and the probe connected, closed at once and idled 0.2 s, so a rebuild landing in that
+  gap dropped the process out again. A second probe **holding its sockets open** was blocked **19
+  of 20** (`drop_syn` 38 - each connection's SYN plus its retransmit), the single escape being
+  attempt 0, before the process had any socket at all. Two candidate causes existed and this
+  separated them: it is `_pids` churn, not the watcher failing to process the event in time.
+- **So the documented limit was too narrow and is now precise:** not "the first connection of a
+  freshly started target" but "any target with no open socket when a rebuild runs". A browser or an
+  app under test is covered; a script opening one connection, closing it and pausing keeps slipping
+  through. Both measured numbers (6/20 closing, 19/20 holding) are in the docstring, because the
+  difference between them IS the limitation.
+- Also: `_pids` is up to one resolver cycle stale, so a recycled PID can pull one packet of an
+  unrelated socket into scope - a DIFFERENT false positive from the stale `_ports` this code already
+  lived with. UDP has no SYN and is not covered.
+- **Contract widened on purpose:** `set_table` documented `snapshot`/`name_of`/`ancestors`/`refresh`;
+  `pid_for` is now part of it. Both real tables always had it, but `syn_covers` reads it through
+  `getattr` so a table that does not - a test double, an older implementation - answers False
+  instead of raising `AttributeError` **on the capture thread**.
+- **Hot path measured** against a worktree of master (150k 1500 B packets, median of 5). No
+  targeting: 135.9k -> 140.3k pkt/s. **Targeting on with every packet missing** - the common path
+  when a target is set, and where the new test lives: 164.0/164.7k -> 164.5/170.4k. No regression
+  either way; the added cost is one boolean that short-circuits on `is_syn`, below the noise floor.
+- Six new guards across `tests/test_core.py` and `tests/test_targeting_socketwatch.py`; **six
+  mutants, every one caught after a repair worth recording** - two of them first pointed at
+  `test_core.py`, which drives a local fake rather than `ProcessTargeting`, so the real `getattr`
+  guard was not covered by anything. It has its own test now.
+- `test_core_properties.py::test_an_armed_gate_wins_over_every_later_step` drove every gate with
+  `is_syn=True`; the rst gate now needs an ordinary packet. The test states why, rather than being
+  quietly relaxed.
+
 ### Docs: the SOCKET-layer timing now says what was measured (prose only, no behaviour change)
 
 The whole SOCKET-layer targeting design (PR #38) is justified by two numbers that came from a

@@ -106,6 +106,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Aiming at a process missed the first packet of every new connection - and your test results
+  will change because of it.** Working out which connections belong to your target means keeping a
+  set of its ports, and that set is rebuilt in the background. A connection opened a moment ago was
+  not in it yet, so its very first packet was waved through untouched, every time. Measured here:
+  20 fresh connections against a targeted process with "Drop SYN" at 100% produced 20 successful
+  connections and not one dropped SYN. **"Drop SYN" combined with process targeting therefore did
+  nothing at all** - the SYN is by definition the first packet, so it always escaped. The first
+  packet is now checked against the live socket map, so it is caught like any other.
+
+  What changes for you: with loss (or blocking, or a link outage) aimed at a process, **connections
+  will now take noticeably longer to open**, because the SYN can be lost and TCP has to retransmit
+  it - and a minority will fail to open at all, which is what a bad network does. Before, every
+  connection opened at full speed and only then started suffering. If a test of yours measured
+  "time to first byte" under impairment, expect it to move.
+
+  Two limits worth knowing, both measured rather than guessed. The tool recognises your target by
+  the connections it currently has open, so **a program that has none open at the moment the tool
+  looks is invisible again**: over 20 fresh connections with "Drop SYN", a program keeping its
+  connections open was caught **19 times out of 20** (only the very first escaped, before it had
+  opened anything), while the same program closing each connection before starting the next was
+  caught **6 times out of 20**. So a browser or an app under test is covered; a script that opens
+  one connection, closes it and pauses will keep slipping through. And a program using UDP has no
+  SYN, so its first packet is not covered by any of this.
+
+- **"Reset connections" no longer fires on a connection that is still opening.** It could not have
+  worked there anyway: the reset packet the tool forges from a connection request carries no
+  acknowledgement number, and Windows is entitled to ignore exactly that - measured, the connection
+  hung until its own timeout instead of being reset. That combination was unreachable before the
+  change above; it would have become the normal case. Resets now fire on established connections,
+  where they were measured to work.
+
 - **"Reset connections" did nothing to local (loopback) connections - it just made them go
   quiet.** Aim the tool at `127.0.0.1` traffic with resets switched on and the connection was not
   reset: it stopped carrying anything for the length of the cooldown, so the application sat there

@@ -255,7 +255,14 @@ def test_an_armed_gate_wins_over_every_later_step(gate, seed, size,
     """
     core = _armed(gate, rst_cooldown, flap_period)
     rng = random.Random(seed)
-    kw = dict(remote_ip="8.8.8.8", remote_port=443, is_tcp=True, is_syn=True)
+    # A SYN can no longer ARM the RST gate, deliberately: the reset forged from a
+    # SYN copies its ack_num as the sequence, and a SYN has none, so it goes out
+    # with seq=0 and no ACK - which SYN_SENT is entitled to ignore (RFC 793).
+    # Measured 2026-07-28: such a reset left the client hanging until its own
+    # timeout instead of resetting it. So the rst gate is armed with an ordinary
+    # packet here; the syn gate needs a SYN by definition, and the rest do not care.
+    kw = dict(remote_ip="8.8.8.8", remote_port=443, is_tcp=True,
+              is_syn=(gate != "rst"))
     now = 0.0
     if gate == "nat":
         core.decide(100, True, 5000, 0.0, rng, **kw)     # create the mapping...
