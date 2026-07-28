@@ -97,6 +97,42 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### ADR 2026-07-28: batched WinDivert I/O MEASURED and REJECTED (audit F18, part c)
+
+- **The question.** The engine does one `recv()` and one `send()` syscall per packet, and WinDivert
+  exposes `WinDivertRecvEx`/`SendEx`, which can carry many packets per call. `pydivert` binds both
+  (its own wrapper uses them only for overlapped IO, single packet), so raw ctypes could batch -
+  the project already writes raw ctypes in `portmap.py`. Rule 6 says price the primitive before
+  building anything around it.
+- **The bar was set BEFORE the run**, so the result could not be argued into: below 2x, do not touch
+  the capture loop (the most safety-critical code here, convention 20); 3x or better, worth a real
+  design; between the two, record and leave open.
+- **Measured** (elevated, sniff-only `SNIFF|RECV_ONLY` handle on `loopback and udp and
+  udp.DstPort == 39999`, same 64 B flood for all three, median of 5):
+
+  | how the same traffic is read | pkt/s | vs today | packets per call |
+  |---|---|---|---|
+  | `handle.recv()` - syscall + `pydivert` Packet object | 92 944 | 1.00x | 1.0 |
+  | raw `WinDivertRecv` - syscall, no Packet object | 120 356 | 1.29x | 1.0 |
+  | raw `WinDivertRecvEx` - up to 64 packets per call | 130 528 | **1.40x** | **1.4** |
+
+- **Rejected, and the reason is not the wrapper:** the driver hands back ~1.4 packets per call even
+  under a saturating flood against a full queue. There is no batch there to exploit, so the syscall
+  count is not what to attack. **Do not reopen this without new evidence that the driver will
+  actually fill a batch.**
+- **What the run redirected the question to.** A sniff-only reader sustains 92 944 packets/s while
+  the whole engine manages ~14k - **6.6x**. Reading is not the ceiling; roughly five sixths of the
+  per-packet budget goes to `decide()`, the connection log, the release heap and the inject
+  thread's `send()`. Which of those dominates is NOT measured, and saying so is the point: the
+  evidence supports "the inject side trails" (the heap grows under zero configured delay) and
+  nothing finer.
+- **Anomaly recorded rather than smoothed over:** runs 4 and 5 of the RecvEx strategy collapsed to
+  29 010 / 29 769 pkt/s against 130-132k in runs 1-3. Unexplained. The median absorbs it and the
+  conclusion does not turn on it (even the best RecvEx run is 1.42x), but a future session
+  re-running this should expect it rather than treat it as a new discovery.
+- Prediction log: `recv()` was predicted at 30-80k and came in at 93k; the ordering 3 > 2 > 1 held,
+  the magnitudes did not.
+
 ### Docs: "150 000 packets a second" is a SYNTHETIC number, and now says so (audit F18, part b)
 
 - The figure appears in five places (`core.py`, `crashlog.py` x2, `engine.py`, `targeting.py`) as

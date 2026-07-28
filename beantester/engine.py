@@ -45,13 +45,22 @@ the same figure on an idle machine, on a real NIC, or with full-size frames
 (14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B - the limit is
 packets, not bits).
 
-The bottleneck is INJECTION, not ``decide()``. With nothing configured to delay,
-the release heap still grew ~1100 entries a second (``peak_queue`` 4080 -> 7020
-across the three loads), which can only happen if the inject thread trails the
-capture thread. Every hot-path optimisation recorded in this package targets
-``decide()`` and the capture thread; the measured constraint is the ``send()``
-side. One syscall per packet each way, and WinDivert's own ``RecvEx``/``SendEx``
-can carry many packets per call - unexplored, see CHANGELOG-INTERNAL.
+Reading packets is NOT where that ceiling comes from, and this is measured, not
+reasoned. A sniff-only loop doing nothing but reading the same flood sustains
+**92 944 packets/s** through ``pydivert``'s ``recv()`` - 6.6x what the whole
+engine manages. So roughly five sixths of the per-packet budget is spent after
+the read: ``decide()``, the connection log, the release heap and the inject
+thread's ``send()``. Which of those dominates is NOT measured; the release heap
+growing under zero configured delay (``peak_queue`` 4080 -> 7020 across the three
+loads) says the inject side trails the capture side, and that is as far as the
+evidence goes.
+
+Batched driver I/O was measured and REJECTED as the lever (2026-07-28). Bypassing
+``pydivert``'s ``Packet`` object with a raw ``WinDivertRecv`` gives 120 356
+packets/s (1.29x), and a raw ``WinDivertRecvEx`` asking for 64 packets per call
+gives 130 528 (1.40x) - because the driver returns **1.4 packets per call** even
+under a saturating flood with a full queue. There is no batch there to exploit,
+so the syscall count is not the thing to attack. Both figures are medians of 5.
 """
 import atexit
 import heapq
