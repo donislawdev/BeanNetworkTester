@@ -111,6 +111,58 @@ def test_rst_cooldown_sends_once_then_drops_silently():
     assert m["rst_sent"] == 1, m["rst_sent"]
 
 
+def _raw_tcp_ack(sport=54321, dport=39854, seq=1000, ack=2000):
+    """A minimal, valid IPv4+TCP ACK - enough for _build_rst_packet to work on."""
+    import struct
+
+    ip = struct.pack(">BBHHHBBH4s4s", 0x45, 0, 40, 1, 0, 64, 6, 0,
+                     bytes([127, 0, 0, 1]), bytes([127, 0, 0, 1]))
+    tcp = struct.pack(">HHIIBBHHH", sport, dport, seq, ack, 0x50, 0x10, 8192, 0, 0)
+    return bytearray(ip + tcp)
+
+
+def test_a_loopback_rst_is_injected_the_way_loopback_packets_travel():
+    """Loopback has no inbound path to aim an RST at.
+
+    MEASURED (2026-07-28, real driver, own echo server): sniffing 127.0.0.1 TCP
+    showed every packet presented exactly once as `outbound=1, loopback=1` - both
+    directions of the conversation, the server's replies included. An RST injected
+    as INBOUND there goes onto a path the stack never reads, and the connection
+    just went silent for the cooldown: `TIMED OUT after 26 exchanges`, twice, with
+    `rst=5/1`. Injected the way real loopback packets travel it resets in 6.5 s
+    with WinError 10054 and `rst=1/1`.
+
+    An ordinary connection keeps INBOUND, which is measured to work (DNS over TCP
+    to 8.8.8.8:53, reset at 6.6 s). Conditional on pydivert, a win32-only
+    dependency - the same shape as the driver-queue ABI check.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("pydivert") is None:
+        return
+    import pydivert
+    from beantester.core import BeanCore
+
+    eng = BeanEngine()                    # no divert: takes the real pydivert path
+    src = pydivert.Packet(memoryview(_raw_tcp_ack()), (0, 0),
+                          pydivert.Direction.OUTBOUND)
+    fields = BeanCore.build_rst_fields(src)
+    assert fields, "the probe packet is not usable as an RST source"
+
+    src.is_loopback = True
+    rst = eng._build_rst_packet(src, fields)
+    assert rst is not None, "no RST was built for a loopback packet"
+    assert rst.is_loopback is True, "the RST is not marked as loopback"
+    assert rst.direction == pydivert.Direction.OUTBOUND, (
+        "a loopback RST must travel the way loopback packets do", rst.direction)
+
+    src.is_loopback = False
+    plain = eng._build_rst_packet(src, fields)
+    assert plain.is_loopback is False, plain.is_loopback
+    assert plain.direction == pydivert.Direction.INBOUND, (
+        "an ordinary RST must still be aimed at the local end", plain.direction)
+
+
 def test_simulate_mode_exercises_rst():
     eng = BeanEngine()
     eng.set_rst(80, 3.0)

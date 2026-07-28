@@ -97,6 +97,49 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed: the forged RST now lands on loopback connections too (audit F15)
+
+Measured on the owner's machine (2026-07-28, elevated, real driver) by watching what the
+APPLICATION sees rather than what a counter says:
+
+- **Non-loopback: the RST works.** DNS over TCP to 8.8.8.8:53, connection established and
+  exchanging, tool started after 6 s -> the client got `ConnectionResetError` (WinError 10054) at
+  **6.6 s** after 26 answered queries, with `rst=1/1`. This closes the audit's oldest unverified
+  claim, that `rst_sent` only proves `send()` did not raise. It proves more than that: Windows
+  accepts the packet `_build_rst_packet` forges, and the application's connection really dies.
+- **Loopback: it does not.** The same shape against an own echo server on 127.0.0.1 gave 26
+  exchanges, then silence, then the client's own 3 s timeout - `TIMED OUT`, never a reset, while
+  `rst=5/1` (five packets blackholed during the cooldown, one RST "sent"). So with the `loopback`
+  traffic filter - which the GUI offers - "Reset connections" silently degrades to a blackhole and
+  still reports an RST as sent.
+- **A measurement trap worth keeping.** The first attempt fired on the SYN, because `--rst-prob 100`
+  catches the first packet of a flow, and a bare RST with `seq=0` and no ACK is ignored in SYN_SENT
+  (RFC 793). That run measured the SYN case, not the established one. When testing behaviour ON a
+  connection: establish it, pass some traffic, and only then switch the impairment on.
+
+**Two hypotheses, one measurement each, and the first was wrong.**
+
+1. `_build_rst_packet` builds a fresh `pydivert.Packet`, whose address starts with `Loopback=0`, so
+   the flag was carried over from the provoking packet. **One line on purpose** - changing the
+   direction at the same time would have made a success ambiguous. Re-ran the probe:
+   `TIMED OUT at 9.5s after 26 exchanges`, byte for byte the baseline. **Falsified.**
+2. Rather than guess again, the mechanism was measured: a sniff-only handle on `loopback and tcp`
+   printed every packet of a real 127.0.0.1 conversation as **`outbound=1, loopback=1`, exactly
+   once each - the server's replies included.** Loopback has no inbound presentation at all, so an
+   RST injected as `Direction.INBOUND` was put on a path the stack never reads. The RST is now
+   built to look exactly like those captured rows: OUTBOUND, loopback flag set, for loopback
+   packets only. Ordinary traffic keeps INBOUND, which is measured to work.
+
+**Result:** `CONNECTION RESET at 6.5s after 26 exchanges` (WinError 10054), and the tool's own
+counters moved from `rst=5/1` to `rst=1/1` - independent confirmation, since a connection that dies
+at once has no further packets to swallow during the cooldown.
+
+New test: `tests/test_rst_local.py::test_a_loopback_rst_is_injected_the_way_loopback_packets_travel`,
+asserting direction and flag for both cases against a hand-built IPv4+TCP ACK. Conditional on
+pydivert (win32-only), the same shape as `test_the_driver_queue_param_numbers_match_pydivert`.
+Three mutants, every one caught - including "every RST becomes a loopback one", which would have
+broken the ordinary path this fix must not touch.
+
 ### Added: the wait inside the driver is measured, not guessed (audit F10, part b)
 
 - **The audit asked for an "overload heuristic". None was written, because the dependency already

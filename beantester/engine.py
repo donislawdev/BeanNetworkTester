@@ -1325,14 +1325,31 @@ class BeanEngine:
         try:
             import pydivert
             raw = bytearray(packet.raw)
+            # INBOUND aims the RST at the local end, and that is MEASURED to work
+            # on an ordinary connection (2026-07-28: DNS over TCP to 8.8.8.8:53,
+            # established, tool started after 6 s -> the client got WinError 10054
+            # at 6.6 s). LOOPBACK has no inbound path to aim at: sniffing
+            # 127.0.0.1 traffic showed every packet presented exactly once with
+            # `outbound=1, loopback=1` - BOTH directions of the conversation, the
+            # server's replies included. An RST injected as INBOUND there is put
+            # on a path the stack never reads, which is why a loopback connection
+            # went silent for the cooldown instead of being reset.
+            loopback = bool(getattr(packet, "is_loopback", False))
             rst = pydivert.Packet(memoryview(raw), packet.interface,
-                                  pydivert.Direction.INBOUND)
+                                  pydivert.Direction.OUTBOUND if loopback
+                                  else pydivert.Direction.INBOUND)
             rst.src_addr, rst.dst_addr = fields["src_ip"], fields["dst_ip"]
             rst.src_port, rst.dst_port = fields["src_port"], fields["dst_port"]
             rst.tcp.rst = True
             rst.tcp.syn = rst.tcp.fin = rst.tcp.psh = rst.tcp.ack = False
             rst.tcp.seq_num = fields["seq_num"]
             rst.payload = b""
+            # ...and marked as loopback, like every real packet on that path. The
+            # flag alone was tried first and measured to change nothing (the
+            # client still timed out), which is what sent the question back to the
+            # direction above. Both are needed: the forged RST has to look exactly
+            # like the server's own replies did in the capture.
+            rst.is_loopback = loopback
             return rst
         except Exception as e:
             if self._running:
