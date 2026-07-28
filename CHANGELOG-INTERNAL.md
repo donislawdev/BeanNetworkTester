@@ -97,6 +97,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Docs: what a target restart actually costs, and one README claim it falsifies (audit F17)
+
+- `targeting.py::syn_covers` documented the `_pids` limit with 19/20 (holding sockets) and 6/20
+  (closing them), but said nothing about a RESTART, which is the same mechanism from the other
+  side. Measured 2026-07-28 (elevated, real WinDivert, `--target beanprobe.exe --dst-ip 8.8.8.8
+  --dst-port 53 --syn-drop 100`, three lives of four held connections): `OK FAIL FAIL FAIL` in
+  **3 of 3** lives, so a restart costs exactly ONE connection and then recovers by itself. Same
+  probe by PID, killed and restarted: **5 of 5** untouched, because the number no longer exists.
+  The recovery belongs to the EXPRESSION, not to `syn_covers`, and the docstring now says which.
+- **The "cannot be closed" claim is now argued rather than asserted** (rule 6): the SOCKET event
+  leads the SYN by 0.018-0.027 ms, covering a brand-new process needs pid -> name plus the matcher
+  inside that window, and a COLD name resolve is milliseconds. Moving it to the watcher thread does
+  not change the window. The only design that closes it holds the SYN until the answer is in, which
+  is added delay in a tool that exists to inject a precise amount of it. Named so the next session
+  does not re-derive it - and so the alternative that WOULD work is on record.
+- **A README sentence measured false and fixed in both languages.** "A connection is in scope the
+  moment it opens - for an outbound connection, before its first packet even leaves" is true for a
+  process already in `_pids` and false for that process's first connection, which is precisely the
+  case the measurement isolates. Both READMEs now state the exception and carry a new bullet on
+  name-vs-pid under restart. `test_readme_guards.py` / `test_cli_docs.py` green (this touches
+  neither the pipeline order nor the flag tables).
+
 ### Tests: the GUI target banner is pinned to the PROCESS, not to the field (audit F17)
 
 - **The gap.** `test_gui_state.py::test_a_gui_session_keeps_the_target_banner_honest` only ever

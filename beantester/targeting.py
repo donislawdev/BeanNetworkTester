@@ -186,6 +186,26 @@ class ProcessTargeting:
           test - and keeps missing one that opens a connection, closes it and
           pauses. Covering that needs the matcher and a name lookup in the packet
           path, which is what convention 20 forbids.
+
+          A RESTARTING target is the same mechanism from the other side, and it
+          was measured separately (2026-07-28, same probe, three lives of four
+          held connections each, ``--syn-drop 100``): ``OK FAIL FAIL FAIL`` in
+          **3 lives out of 3**. A target that dies and comes back under a new pid
+          therefore costs exactly ONE connection - the one it opens before it
+          owns any socket - and then recovers on its own, with no restart of the
+          session. That recovery belongs to the EXPRESSION, not to this code: by
+          NAME the new pid is matched by the next rebuild, by PID nothing can
+          match again, because the number the user typed no longer exists. Same
+          probe, targeting the pid, killed and restarted: **5 of 5** fresh
+          connections untouched.
+
+          Closing the one-connection gap is not a tuning question. The SOCKET
+          event beats the SYN by 0.018-0.027 ms; covering a brand-new process
+          would mean resolving pid -> name and running the matcher inside that
+          window, and a COLD name resolve is milliseconds. Moving it to the
+          watcher thread does not help - the window is the same. The only design
+          that closes it holds the SYN until the answer is in, i.e. adds delay
+          inside a tool whose job is to inject a PRECISE amount of it.
         * ``_pids`` is up to one resolver cycle stale (0.30 s). If the target
           exits and Windows recycles its PID inside that window, one packet of an
           unrelated new socket can be pulled into scope. That is a DIFFERENT false
