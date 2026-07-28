@@ -82,7 +82,12 @@ def build_repro_report(engine, settings):
         # from before this change is not comparable with one from after.
         effective_loss_pct=round(impairment_loss_pct(stats), 2),
         effective_corruption_pct=round(corruption_pct(stats), 2),
-        connections_reset=stats["drop_rst"],
+        # connections_reset held drop_rst - the PACKETS a reset connection swallows
+        # during its cooldown, which for a 30 s cooldown on a busy flow is thousands
+        # against a handful of actual resets. The three RST numbers answer three
+        # different questions and are now reported as three.
+        connections_reset=stats.get("rst_reset", 0),
+        rst_packets_dropped=stats["drop_rst"],
         rst_sent=stats["rst_sent"],
         syn_dropped=stats["drop_syn"],
         nat_expired=stats["drop_nat"],

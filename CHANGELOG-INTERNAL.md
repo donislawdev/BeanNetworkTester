@@ -97,6 +97,38 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### BREAKING: metrics.connections_reset counts connections, not packets (audit F7)
+
+- **Symptom.** `repro.py` had `connections_reset=stats["drop_rst"]`, and `drop_rst` counts every
+  PACKET dropped while a connection sits in its RST cooldown. With `--rst-cooldown 30` on a busy
+  flow that is thousands against a handful of resets; the guard test now pins the smallest possible
+  case - one reset connection reported itself as **50**.
+- **Verified before designing the fix**, because the same lie could have been on screen: it is not.
+  `tips.stat_rst` already reads "Packets of reset connections (RST)", so the live tile has always
+  been honest. The repro report was the only surface claiming connections. Nothing in either README
+  mentions the key.
+- **Fix.** New engine counter `rst_reset`, bumped in the capture loop when `dec.emit_rst` is set -
+  i.e. when a connection is actually torn down. Counted there rather than inside `_send_rst`
+  deliberately: the flow is put into cooldown and its traffic dropped whether or not an RST can be
+  built and injected for it, so `rst_reset >= rst_sent`, and the gap means "held down without an
+  RST going out". The report now carries three keys for the three questions: `connections_reset`,
+  `rst_packets_dropped` (the old value of the misnamed key) and `rst_sent`. CSV column
+  `connections_reset` (`App.CSV_COLUMNS`); NDJSON `summary.counters` gets it for free.
+- **No GUI tile added.** `drop_rst` and `rst_sent` already have tiles with correct tooltips, and
+  `rst_reset` differs from `rst_sent` only when an injection could not be built or sent - a third
+  tile for that is noise on a grid that is already 18 wide. The precise accounting belongs in the
+  report, which is where the wrong number was.
+- **Hot path:** one `_bump` behind `if dec.emit_rst`, which is per RESET, not per packet. Nothing
+  on the common path, so not benchmarked.
+- Two mutants, both caught - **after two repairs to the tests, both worth recording.** The first
+  run reported "CAUGHT" on a pytest **exit code 4**, which is a usage error (I had guessed the test
+  id), not a failing assertion. The second attempt put the report assertion in
+  `test_summary_repro_views.py::test_build_repro_report`, whose session never resets anything: the
+  mutant left `connections_reset` and `rst_reset` both at 0 and the test passed while guarding
+  nothing. It lives in `tests/test_rst_local.py::test_rst_cooldown_sends_once_then_drops_silently`
+  now, the one session where the three numbers genuinely differ, and the mutant fails there with
+  `assert 50 == 1`.
+
 ### BREAKING: connection rows separate captured from delivered, and count the queue's drops (audit F5)
 
 Two independent divergences in one table, fixed together because both need the same missing

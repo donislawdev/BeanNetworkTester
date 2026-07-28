@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **The reproduction report's "connections reset" counted packets, not connections.**
+  It held the number of packets a reset connection swallows while it is held down, which for a
+  30 second cooldown on a busy connection is thousands against a handful of actual resets - one
+  reset connection could report itself as 50. The report now carries the three RST numbers as three
+  keys, because they answer three different questions: `connections_reset` (how many connections
+  were torn down), `rst_packets_dropped` (how much traffic that cost while they were held down) and
+  `rst_sent` (how many RST packets actually reached the network stack). The last two can differ
+  from the first - a connection is held down whether or not an RST could be built for it - and that
+  gap is worth seeing. The statistics CSV gained a `connections_reset` column to match. Nothing on
+  screen changed: the live "RST reset" tile always said "packets" in its tooltip and was right.
+
 - **BREAKING:** **The Connections table now tells you what arrived AND what was offered.** The
   "down", "up" and "total" columns held the bytes the tool *captured* - under headings the session
   panel uses for what actually arrived. Those are the same number only while you are impairing
