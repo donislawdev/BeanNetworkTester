@@ -45,22 +45,39 @@ the same figure on an idle machine, on a real NIC, or with full-size frames
 (14k packets/s is ~7 Mbit/s at 64 B but ~170 Mbit/s at 1500 B - the limit is
 packets, not bits).
 
-Reading packets is NOT where that ceiling comes from, and this is measured, not
-reasoned. A sniff-only loop doing nothing but reading the same flood sustains
-**92 944 packets/s** through ``pydivert``'s ``recv()`` - 6.6x what the whole
-engine manages. So roughly five sixths of the per-packet budget is spent after
-the read: ``decide()``, the connection log, the release heap and the inject
-thread's ``send()``. Which of those dominates is NOT measured; the release heap
-growing under zero configured delay (``peak_queue`` 4080 -> 7020 across the three
-loads) says the inject side trails the capture side, and that is as far as the
-evidence goes.
+🔴 **HOW MUCH OF THIS TO TRUST, and it is less than the digits suggest.** The
+figures above are internally consistent - three loads inside ONE run - and that
+is the only kind of comparison this rig supports. Absolute throughput on it is
+NOT reproducible: a bare ``recv``+``send`` loop over the same loopback flood was
+re-measured three times on this machine and gave **14 488, then 30 189, then
+15 004 packets/s**. Same code, same machine, a factor of two apart, unexplained.
+Ratios are not safe either - the batched-versus-unbatched ratio moved between
+1.23x and 3.65x across those runs.
 
-Batched driver I/O was measured and REJECTED as the lever (2026-07-28). Bypassing
-``pydivert``'s ``Packet`` object with a raw ``WinDivertRecv`` gives 120 356
-packets/s (1.29x), and a raw ``WinDivertRecvEx`` asking for 64 packets per call
-gives 130 528 (1.40x) - because the driver returns **1.4 packets per call** even
-under a saturating flood with a full queue. There is no batch there to exploit,
-so the syscall count is not the thing to attack. Both figures are medians of 5.
+So: **a number from this rig is evidence only against another number taken in
+the SAME run.** Do not quote the absolutes as the tool's ceiling, do not derive
+a budget breakdown by dividing one run's figure by another's, and do not tune
+anything on a difference smaller than the spread above. What survives is what
+was DIRECTLY OBSERVED rather than timed - a loss percentage against a control
+that lost 0.00%, a queue depth, a packets-per-call count.
+
+An earlier version of this section did exactly what that paragraph forbids: it
+divided a sniff-only reader's 92 944 packets/s by the engine's ~14k, concluded
+"five sixths of the budget is spent after the read", and named the inject side
+as the suspect. Those two numbers come from different runs, so the arithmetic
+was never sound. What is still on solid ground is the release heap growing under
+ZERO configured delay (``peak_queue`` 4080 -> 7020 within one run), which says
+the inject side trails the capture side - a direction, not a proportion.
+
+Batched driver I/O was REJECTED as the lever on the RECEIVE side (2026-07-28),
+and the reason that survives is a direct observation, not a timing: a raw
+``WinDivertRecvEx`` asking for 64 packets per call gets **1.4 packets per call**
+even under a saturating flood against a full queue. The driver simply does not
+fill a batch, so there is nothing there to amortise. (The accompanying 1.29x /
+1.40x timings came from this rig and carry the caveat above.) The SEND side is
+different in kind - there WE assemble the batch - and batching there was the
+fastest strategy in every run and on every path, though by anything from 1.2x to
+3.6x. Direction: real. Size: not established.
 """
 import atexit
 import heapq
