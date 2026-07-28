@@ -720,6 +720,84 @@ def test_a_second_scenario_stops_the_first_instead_of_orphaning_it():
         sh.stop()
 
 
+def test_a_connection_row_records_the_drops_the_queue_made():
+    """`dropped` used to be recorded one step too early.
+
+    `_log_conn(dropped=dec.drop)` ran BEFORE `_enqueue`, so a packet the QUEUE
+    threw away counted nowhere in its row: measured drop_overflow=5500 against
+    `dropped=0` in the row it happened to. Packets stranded at STOP had the same
+    problem - `bytes_in=4.8 MB` on a row that received nothing.
+    """
+    n, queue = 200, 10
+    pkts = [FakePacket(size=100, is_outbound=False, port=8200) for _ in range(n)]
+    sh = BeanEngine()
+    sh.max_queue = queue
+    sh.set_params(0, 0, 0, 60000, 0, 0, 0)      # 60 s latency: nothing is released
+    sh.start("test", divert=FakeDivert(pkts))
+    deadline = time.time() + 15
+    while time.time() < deadline and sh.stats_snapshot()["seen"] < n:
+        time.sleep(0.02)
+    live = sh.connections_snapshot(limit=None)[0]
+    refused = live["dropped"]
+    sh.stop()
+    final = sh.connections_snapshot(limit=None)[0]
+
+    check("row: the queue's refusals reach the row",
+          refused == n - queue, f"(dropped={refused}, expected={n - queue})")
+    check("row: and the packets stranded at STOP reach it too",
+          final["dropped"] == n, f"(dropped={final['dropped']})")
+    check("row: nothing was delivered, and the row says so",
+          final["sent"] == 0 and final["sent_in"] == 0, f"(sent={final['sent']})")
+    check("row: while the captured bytes are all there",
+          final["bytes_in"] == n * 100, f"(bytes_in={final['bytes_in']})")
+
+
+def test_an_undisturbed_row_has_delivered_equal_to_captured():
+    """The other half of the split: with nothing impaired the two pairs agree, so
+    the new columns are not a permanent discrepancy staring at the user."""
+    # one direction on purpose: FakePacket puts the peer in dst_addr going out and
+    # src_addr coming in, so alternating directions is TWO flows, not one row
+    n = 50
+    pkts = [FakePacket(size=100, is_outbound=False, port=8300) for _ in range(n)]
+    fake = FakeDivert(pkts)
+    sh = BeanEngine()
+    sh.start("test", divert=fake)
+    deadline = time.time() + 15
+    while time.time() < deadline and len(fake.sent) < n:
+        time.sleep(0.02)
+    sh.stop()
+    row = sh.connections_snapshot(limit=None)[0]
+
+    check("row: everything offered was delivered",
+          row["sent"] == row["bytes"] == n * 100,
+          f"(sent={row['sent']}, bytes={row['bytes']})")
+    check("row: per direction too",
+          row["sent_in"] == row["bytes_in"] and row["sent_out"] == row["bytes_out"],
+          f"(in {row['sent_in']}/{row['bytes_in']}, out {row['sent_out']}/{row['bytes_out']})")
+    check("row: and nothing is reported as dropped",
+          row["dropped"] == 0, f"(dropped={row['dropped']})")
+
+
+def test_only_the_injector_writes_the_delivered_counters():
+    """`_log_delivered` runs without the connection-log lock, and that is only safe
+    while `sent`/`sent_in`/`sent_out` have exactly ONE writer - the inject thread.
+
+    Nothing enforces that but this scan. A future edit that credits delivered bytes
+    from the capture thread (or the watchdog) would make the unlocked `+=` drop
+    updates against itself, silently and only under load. Source-level, like the
+    hot-path purity check in test_code_hygiene.py, because there is no runtime
+    symptom to assert on until it is already wrong.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "beantester", "engine.py"), encoding="utf-8").read()
+    writes = re.findall(r'^\s*c\[\"(sent(?:_in|_out)?)\"\]\s*\+?=', src, re.M)
+    check("delivered counters are incremented in exactly one place",
+          len(writes) == 3, f"({writes})")
+    body = src.split("def _log_delivered")[1].split("\n    def ")[0]
+    check("and that place is _log_delivered",
+          body.count('c["sent') == 3, f"({body.count(chr(99) + chr(91))})")
+
+
 def test_event_log_trim():
     sh = BeanEngine()
     for i in range(5100):

@@ -132,9 +132,15 @@ current screen.
     command" buttons.
   - **Events** - the event log (START/STOP/CHANGE/SCENARIO/BUG/RESET).
 - **Connections** - a view of which IP:port the tested system talks to. Columns: **process**,
-  **protocol**, remote IP, ports, packet count, **KB**, **duration** and **time since last
-  activity**. Traffic that has no ports at all - ping (ICMP) - is listed too, one row per address
-  with the port cells left empty. Plus a search box (debounced, so it does not churn the table on every keystroke),
+  **protocol**, remote IP, ports, packet count, **KB delivered**, **KB seen**, **duration** and
+  **time since last activity**. Traffic that has no ports at all - ping (ICMP) - is listed too, one
+  row per address with the port cells left empty.
+  - **"down"/"up"/"total" are what the application actually got**, the same quantity the session
+    panel calls "Downloaded (MB)". **"down seen"/"up seen" are what the tool captured** before
+    impairing anything. With nothing set they are equal; the moment you add loss or a speed limit
+    they part, and **the gap between them is the damage on that connection**. Hover any of them for
+    the full sentence. (Before this split there was one pair, holding the captured bytes under
+    headings that meant delivered: a row could read 5 MB received while its application got 0.4 MB.) Plus a search box (debounced, so it does not churn the table on every keystroke),
   click-to-sort headers, **"Freeze"** (rows stop escaping from under the cursor) and a
   **right-click menu**: copy row / IP, **"Target this process"**, **"Limit to this IP:port"** -
   fills the filter fields with one click.

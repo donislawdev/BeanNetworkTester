@@ -470,9 +470,15 @@ class BeanEngine:
                 # NO eviction here: trimming is the watchdog's job (_trim_conns).
                 # Doing it on the capture thread meant a new flow could pay for a
                 # full sort of the table while holding the lock.
+                # bytes/bytes_in/bytes_out are what this flow OFFERED (captured);
+                # sent/sent_in/sent_out are what actually went back on the wire.
+                # The two used to be one set of numbers under headings the session
+                # panel used for delivered - a row could read 5 122 600 B received
+                # while the application got 409 600 B.
                 c = dict(remote_ip=remote_ip, remote_port=remote_port,
                          local_port=local_port, proto=proto, packets=0, bytes=0,
-                         bytes_in=0, bytes_out=0, dropped=0, first=now, last=now,
+                         bytes_in=0, bytes_out=0, sent=0, sent_in=0, sent_out=0,
+                         dropped=0, first=now, last=now,
                          dir="", scoped=bool(scoped),
                          proc=self._process_for(local_port),
                          pid=self._pid_for(local_port))
@@ -507,6 +513,53 @@ class BeanEngine:
             c["last"] = now
             c["dir"] = "out" if is_out else "in"
             c["proto"] = proto
+
+    def _log_delivered(self, key, size, is_out):
+        """Credit bytes that actually went back on the wire to their flow's row.
+
+        Called from the INJECT thread, once per delivered packet, and deliberately
+        WITHOUT ``_clock`` - the same reasoning as ``SocketWatcher.pid_for`` (see
+        convention 20): taking a maintenance lock on a per-packet path puts that
+        path in the queue behind the watchdog's trimming. Measured with the lock:
+        160.4k -> 152.0k pkt/s on the synthetic path, a 5% regression bought for
+        nothing.
+
+        Safe because ``sent``/``sent_in``/``sent_out`` have exactly ONE writer -
+        this thread. The capture thread creates the row (with these at 0) BEFORE
+        the packet is queued, and never touches them again; readers only ever read
+        them, and an int rebind is atomic, so a reader sees the old value or the
+        new one, never a torn one. Any other counter shared with the capture thread
+        still goes through ``_charge_flow``, which does take the lock.
+
+        A row can be missing when the watchdog trimmed the flow while its packet
+        sat in the delay queue. Then there is nothing to credit, and the row is
+        gone from the table anyway.
+        """
+        if key is None:
+            return
+        c = self._conns.get(key)
+        if c is None:
+            return
+        c["sent"] += size
+        if is_out:
+            c["sent_out"] += size
+        else:
+            c["sent_in"] += size
+
+    def _charge_flow(self, key, field, n=1):
+        """Add to one counter on one flow's row (no row = nothing to charge).
+
+        For losses discovered AFTER the capture thread has moved on: a queue that
+        overflowed, a session that ended with packets still parked, an injection
+        that failed. Those never reached the row before, so a flow could show
+        `dropped=0` in a session that threw 5 500 of its packets away.
+        """
+        if key is None:
+            return
+        with self._clock:
+            c = self._conns.get(key)
+            if c is not None:
+                c[field] += n
 
     def _process_for(self, local_port):
         """Process name owning ``local_port`` right now ("" when unknown).
@@ -895,8 +948,15 @@ class BeanEngine:
             # only entry that means something never arrived. Counting entries made
             # a duplicating session overstate the loss (see _enqueue). The scan is
             # O(queue) but runs once, at STOP, off the capture thread.
-            discarded = sum(1 for entry in self._heap if not entry[3])
+            stranded = [entry[4] for entry in self._heap if not entry[3]]
+            discarded = len(stranded)
             self._heap.clear()
+        # Charge each stranded packet to the row that was expecting it, so a flow
+        # does not report "dropped 0" in a session that ended with thousands of its
+        # packets still queued. Outside the _cv block and off the capture thread:
+        # this runs once, at STOP, on whichever thread called it.
+        for key in stranded:
+            self._charge_flow(key, "dropped")
         if discarded:
             # Packets still queued for delayed injection when the session ended:
             # counted at capture (seen / bytes_*_total) but never delivered. Record
@@ -1113,16 +1173,12 @@ class BeanEngine:
                 st["bytes_out_total" if is_out else "bytes_in_total"] += size
                 if dec.scoped:
                     st["scoped_seen"] += 1
-            # Log AFTER the decision (decide() reads none of the connection log, so
-            # the order is free): the flow row then records whether THIS packet was
-            # dropped and whether the flow is in targeting scope - impaired, not
-            # merely observed.
-            self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
-                           now, proto, dropped=dec.drop, scoped=dec.scoped)
             if dec.drop:
                 if dec.emit_rst:
                     self._send_rst(packet)
                 self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
+                self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
+                               now, proto, dropped=True, scoped=dec.scoped)
                 continue
             if dec.corrupt and self.core.corrupt_packet(packet, rng):
                 self._bump("corrupted")
@@ -1130,12 +1186,27 @@ class BeanEngine:
             # copy (step 12). Kept as an explicit first call plus a branch rather
             # than a loop over an enumerate: all but the duplicating sessions have
             # exactly one release, and this is the per-packet path.
+            # The row is created BEFORE the packet is queued, and that order is
+            # load-bearing: with no latency set the injector can deliver a packet
+            # while the capture thread is still on this line, and _log_delivered
+            # has nowhere to credit it if the row does not exist yet. (It usually
+            # loses that race - it has to wake on _cv first - which is exactly the
+            # kind of "usually" that becomes a flake later.)
+            self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
+                           now, proto, scoped=dec.scoped)
             rels = dec.releases
-            self._enqueue(rels[0], packet)
+            refused = self._enqueue(rels[0], packet, key=key)
             if len(rels) > 1:
                 for rel in rels[1:]:
-                    self._enqueue(rel, packet, copy=True)
+                    self._enqueue(rel, packet, copy=True, key=key)
                 self._bump("duplicated")
+            if refused:
+                # A packet the QUEUE threw away used to count nowhere in its row:
+                # `dropped` was recorded from `dec.drop` alone, one step too early.
+                # Measured drop_overflow=5500 against `dropped=0` in the row it
+                # happened to. Charged here instead, off the common path - a queue
+                # that is not full costs nothing for this.
+                self._charge_flow(key, "dropped")
 
     def _send_rst(self, packet):
         """Inject a TCP RST to the local end to reset the connection."""
@@ -1232,8 +1303,14 @@ class BeanEngine:
             # whose delivered counts are short must say why in the artefact
             self.log_event("WARN", "events.send_failed")
 
-    def _enqueue(self, release, packet, copy=False):
+    def _enqueue(self, release, packet, copy=False, key=None):
         """Queue one release of ``packet`` for delayed injection.
+
+        Returns True when the queue refused it, so the caller can record the loss
+        against the flow's row. ``key`` rides along in the queue entry: the
+        injector needs it to credit the DELIVERED bytes to the right row, and
+        ``stop()`` needs it to charge whatever is still parked here to the rows
+        that will never receive it.
 
         ``copy=True`` marks a DUPLICATE release (pipeline step 12): the same
         packet already has an earlier entry in this queue. Overflow and shutdown
@@ -1262,7 +1339,7 @@ class BeanEngine:
             else:
                 overflowed = False
                 heapq.heappush(self._heap,
-                               (release, next(self._counter), packet, copy))
+                               (release, next(self._counter), packet, copy, key))
                 q = len(self._heap)
                 with self._slock:
                     if q > self.st["peak_queue"]:
@@ -1270,6 +1347,7 @@ class BeanEngine:
                 self._cv.notify()
         if overflowed:
             self._warn_overflow()       # outside the lock: it logs, and logging waits
+        return overflowed
 
     def _inject_loop(self):
         while self._running:
@@ -1278,7 +1356,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not self._running:
                     break
-                release, _, packet, _ = self._heap[0]
+                release, _, packet, _, key = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))
@@ -1287,10 +1365,15 @@ class BeanEngine:
             try:
                 if self._divert is not None:
                     self._divert.send(packet)
-                    if getattr(packet, "is_outbound", True):
-                        self._bump("bytes_out", len(packet.raw))
-                    else:
-                        self._bump("bytes_in", len(packet.raw))
+                    size = len(packet.raw)
+                    is_out = getattr(packet, "is_outbound", True)
+                    self._bump("bytes_out" if is_out else "bytes_in", size)
+                    # DELIVERED, per flow. The row already counts what was captured;
+                    # this is the other half, and the two differ by exactly the
+                    # damage done. Before, the row showed captured bytes under a
+                    # heading the session panel used for delivered: measured
+                    # bytes_in = 5 122 600 B in a row that received 409 600 B.
+                    self._log_delivered(key, size, is_out)
             except Exception as e:
                 # The packet is already off the heap: not delivered, and until this
                 # counter existed, not recorded either - it simply left the
@@ -1298,5 +1381,6 @@ class BeanEngine:
                 # these numbers honest. Every other way a packet can die has a
                 # counter; this one only had a log line.
                 self._bump("drop_send")
+                self._charge_flow(key, "dropped")
                 if self._running:
                     self._warn_send_failed(e)
