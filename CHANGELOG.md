@@ -63,6 +63,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **A packet you did not ask to change now goes back on the wire exactly as it arrived - and the
+  session moves about 12% more traffic because of it.** The tool used to recompute every packet's
+  checksums before re-injecting it, including packets it had not touched at all. That was wasted
+  work, and it also meant a session with nothing configured did not quite pass traffic through
+  unchanged: modern network cards leave the checksum for the hardware to finish, so recomputing it
+  put different bytes on the wire than the ones that came in. Checksums are now recomputed only
+  when the tool actually edited the packet - which today means corruption - and for the reset (RST)
+  packets it builds itself. Measured comparing both behaviours inside the same session:
+  **1.12x more packets a second, in 8 comparisons out of 8**. Verified over a real network card,
+  not just loopback: 24 MiB of TCP through the tool arrived byte for byte, with a matching SHA-256.
+
 - **A session now moves noticeably more traffic - about a third more packets a second.** The tool
   handles your packets on two threads: one takes them from the driver, the other puts them back on
   the wire. Python makes those two take turns, and by default a thread that is ready to work can be

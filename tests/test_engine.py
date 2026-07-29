@@ -620,7 +620,7 @@ class RefusingDivert(FakeDivert):
     or a driver that refuses the packet. `recv` still works: the tool keeps
     capturing, and every packet it captures it then fails to put back."""
 
-    def send(self, p):
+    def send(self, p, recalculate_checksum=True):
         raise OSError("the network is gone")
 
 
