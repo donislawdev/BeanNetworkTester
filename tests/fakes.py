@@ -18,12 +18,24 @@ class FakeTCP:
 
 
 class FakePacket:
+    """A stand-in packet.
+
+    ``src_port``/``dst_port`` default to ``port`` - the shape every existing test
+    was written against - but can be set apart, and sometimes they MUST be. The
+    engine reads the remote endpoint as the DESTINATION on an outbound packet and
+    as the SOURCE on an inbound one; with both ports equal, a test cannot tell the
+    two apart, so an assertion about direction is vacuous while looking sound.
+    Found by a mutant surviving: swapping the inbound branch's two ports changed
+    nothing anywhere in the suite (2026-07-29).
+    """
+
     def __init__(self, size=100, is_outbound=True, port=1000, payload=b"hello world",
-                 dst_addr="8.8.8.8", src_addr="10.0.0.2", syn=False):
+                 dst_addr="8.8.8.8", src_addr="10.0.0.2", syn=False,
+                 src_port=None, dst_port=None):
         self.raw = b"\x00" * size
         self.is_outbound = is_outbound
-        self.src_port = port
-        self.dst_port = port
+        self.src_port = port if src_port is None else src_port
+        self.dst_port = port if dst_port is None else dst_port
         self.dst_addr = dst_addr
         self.src_addr = src_addr
         self.tcp = FakeTCP(syn=syn) if syn else None

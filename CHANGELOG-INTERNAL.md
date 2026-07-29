@@ -184,6 +184,32 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Tests: every gate that judges the REMOTE end is pinned in BOTH directions
+
+- `engine._capture_loop` reads the remote endpoint as the packet's DESTINATION when outbound and
+  as its SOURCE when inbound. **Five** features consume it: destination IP, destination port, LAN
+  mode, block by IP, block by port.
+- 🔴 **Measured, not suspected: that rule was effectively unguarded.** Mutating the inbound branch
+  to read `dst_addr` - the tidy-up anyone would make while cleaning that block - was caught by
+  **three tests, all about the CONNECTION LOG**. Not one test about targeting, LAN mode or blocking
+  failed. The tool would have kept impairing outbound traffic and quietly stopped impairing
+  everything coming back, every counter healthy, with the only red in rows somebody could
+  plausibly have "fixed" by adjusting the expected output.
+- New `tests/test_remote_endpoint_directions.py`, table-driven on the CONSUMERS rather than on one
+  feature (same shape as `GATES` in `test_core_properties.py`): adding a sixth reader of the remote
+  endpoint and forgetting the inbound case now fails immediately. A mirror test keeps the first
+  honest - a gate that simply said "yes" would satisfy "fires in both directions".
+- 🔴 **The fixture was hiding an entire axis.** `FakePacket` set `src_port` and `dst_port` to the
+  SAME value, so swapping the inbound branch's two ports changed nothing anywhere in the suite -
+  the port half of the assertion looked sound and tested nothing. `FakePacket` now takes
+  `src_port`/`dst_port` separately (defaulting to `port`, so every existing test is unchanged), and
+  the new file uses a local port that differs from the peer's. Three direction mutants are caught
+  now: inbound address, inbound ports, outbound ports.
+- Also worth recording because it cost a run: `is_local_ip` counts the TEST-NET documentation
+  ranges (203.0.113.x, 198.51.100.x) as LOCAL - they are not globally routable - so reaching for
+  one of them, the obvious choice in a test, makes LAN mode do nothing and reads as a bug in the
+  gate. The file uses genuinely routable addresses and says why.
+
 ### Measured (no code): WinDivertSendEx rejects a bad batch ATOMICALLY
 
 - Open question left over from the batching work, and the thing that decided whether `drop_send`
