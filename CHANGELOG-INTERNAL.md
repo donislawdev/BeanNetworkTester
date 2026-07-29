@@ -184,6 +184,40 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### ADR 2026-07-29: Nuitka instead of PyInstaller - BUILT, measured and REJECTED
+
+- **Really built, twice**: Nuitka 4.1.3 on CPython 3.14.6 with MSVC (`cl 14.5`), `--standalone`,
+  once with defaults and once with `--lto=yes --python-flag=no_asserts`. Both executables WORK -
+  `--version`, `--license` (so bundled resources resolve), `--simulate` with correct NDJSON, and a
+  real WinDivert capture.
+- **And both are slower where this tool lives.** Real capture throughput, alternating windows with
+  the ratio taken inside each pair: **0.777x untuned, 0.824x tuned, 0 of 8 pairs across the two
+  builds**. Start-up goes the other way and is the one real win: `--version` in 71 ms against 112,
+  a repeatable **1.57x**. Build time 271 s cold / 159 s with ccache against ~9-16 s; the release
+  folder 46.7 MB in 982 files against 22.5 MB in 263; the exe 23.1 MB against 3.3 MB.
+- **The direction is settled (8/8), the magnitude is NOT**: the drift canary in the tuned run came
+  out at 0.82x, so "18% slower" is not a number to quote. `--lto` and `no_asserts` moved nothing,
+  which fits the bottleneck being the cross-thread handoff rather than generated-code quality -
+  but that is a hypothesis, not a finding.
+- **Three real defects found on the way**, listed because they are the work anyone returning would
+  have to do FIRST:
+  1. `--include-package-data=pydivert` **skips DLLs**, so `WinDivert64.dll` was missing and capture
+     was dead with `exit 1` (the spec collects it via `collect_dynamic_libs`). Fail-open behaved
+     exactly as designed: a loud `reason=fault`, not a silent zero.
+  2. **Nuitka sets neither `sys.frozen` nor `sys._MEIPASS`, and `sys.executable` points at a
+     `python.exe` that does not exist** (verified with a separately compiled probe). From that one
+     root: `winenv.elevate_self()` silently fails to raise the UAC prompt and the GUI carries on
+     unelevated; the reproduction command names `python bean_network_tester.py` instead of the exe;
+     and `paths.app_dir()` / `resource_path()` work only BY ACCIDENT, through `PROJECT_ROOT`
+     derived from a fabricated `__file__`. Nothing guards any of it - the suite runs from sources,
+     where `is_frozen()` is False and all of it is correct.
+  3. The `tk-inter` plugin ships **837 Tcl + 89 Tk data files** - the ~750 tzdata/msgs files the
+     spec deliberately trims.
+- **The one argument that survives is UNMEASURED**: antivirus false positives, which cannot be
+  tested on the build machine. If that ever becomes a real problem for users, it is the only reason
+  to come back - and the price is the three defects above plus the throughput. **Source protection
+  is NOT an argument**: the program is GPLv3 with public sources.
+
 ### Changed: checksums are recomputed only for packets this tool actually edited (handoff point 2)
 
 - **The rule:** `_inject_loop` now calls `send(packet, recalculate_checksum=modified)`, where
@@ -247,6 +281,19 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   faster (32.6 -> 25.2 us) once nothing competes with it, but one thread then has to do both jobs.
   The two threads genuinely overlap, and what looks like "handoff overhead" in the budget is the
   price of that overlap, not waste.
+- 🔴 **The list of performance levers is EXHAUSTED, and that is a result rather than a shrug.**
+  Everything measured is above; **every remaining candidate is <=1.02x**, and the strongest proof
+  is that removing the ENTIRE connection log - a feature nobody is going to remove - buys 1.012x.
+  That is the ceiling for optimising anything on the Python side; the rest of the budget is
+  syscalls (recv ~20 us + send ~32 us of ~70 us per packet) and the price of parallelism.
+- ⬜ **The one thing NOT explored: free-threaded CPython (3.14t).** This session established that
+  the pipeline is bound by GIL HANDOFFS rather than by work - shortening the switch interval bought
+  1.33-1.36x while nulling the locks bought 1.011x - and free-threading attacks exactly that
+  mechanism. **There is no measurement. That means "nobody checked", not "it does not work"** -
+  do not cite this either way. What would have to be settled first: whether `pydivert` and `psutil`
+  have free-threaded wheels or build, whether the win survives `recv`/`send` sitting in the kernel
+  anyway, and what happens to the lock-free assumptions in `socketwatch.pid_for` and
+  `targeting.__contains__`, which today rest on the GIL as an implicit lock.
 
 ### Fixed: the engine's ceiling was CPython's thread-switch interval, not any stage (handoff point 1)
 
