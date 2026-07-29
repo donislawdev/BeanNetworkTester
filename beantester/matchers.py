@@ -110,13 +110,27 @@ def _as_ip(value):
 
 # -- terms -------------------------------------------------------------------- #
 class _Term:
-    """A single parsed term: its predicate plus the text it came from."""
-    __slots__ = ("text", "negated", "_predicate")
+    """A single parsed term: its predicate, its SHAPE, and the text it came from.
 
-    def __init__(self, text, negated, predicate):
+    ``shape`` is what the parser concluded, kept instead of thrown away: a small
+    immutable descriptor like ``("eq", 443)`` or ``("ip_range", 4, lo, hi)``, and
+    ``None`` for the forms that have no closed description (glob, ``re:``, a
+    process name). It exists so a second consumer - compiling the expression down
+    into the DRIVER's own filter language, see :func:`windivert_fragment` - can
+    read what was parsed instead of parsing the text a second time. A second
+    parser of this mini-language is exactly what convention 10 forbids, and the
+    reason is drift: two readers of the same syntax stay in step only until one
+    of them is edited.
+
+    The hot path never touches this. ``matches()`` still calls the closure.
+    """
+    __slots__ = ("text", "negated", "_predicate", "shape")
+
+    def __init__(self, text, negated, predicate, shape=None):
         self.text = text
         self.negated = negated
         self._predicate = predicate
+        self.shape = shape
 
     def matches(self, ctx):
         # The predicate runs for every captured packet; a surprise here must
@@ -259,10 +273,11 @@ def _check_bounds(number, bounds, field, term):
 
 
 def _parse_int_atom(body, term, field, bounds):
-    """Predicate over an ``int`` context, or ``None`` when the atom is not numeric.
+    """``(predicate, shape)`` over an ``int`` context, or ``None`` when not numeric.
 
     ``None`` lets the caller fall back to the text atoms (the process field
-    accepts both PIDs and names in the same expression).
+    accepts both PIDs and names in the same expression). ``shape`` is the parsed
+    description kept for :func:`windivert_fragment` - see ``_Term``.
     """
     # comparison
     for op in OPERATORS:
@@ -272,7 +287,7 @@ def _parse_int_atom(body, term, field, bounds):
                 # ">chrome" is meaningless: comparisons need a number (a PID)
                 raise _err("errors.bad_filter_compare", field, term)
             number = _check_bounds(int(operand), bounds, field, term)
-            return _compare_predicate(op, number)
+            return _compare_predicate(op, number), ("cmp", op, number)
     # range  a-b  (inclusive)
     if "-" in body:
         lo_text, _, hi_text = body.partition("-")
@@ -282,11 +297,11 @@ def _parse_int_atom(body, term, field, bounds):
             hi = _check_bounds(int(hi_text), bounds, field, term)
             if lo > hi:
                 raise _err("errors.bad_filter_range", field, term)
-            return lambda c: c is not None and lo <= c <= hi
+            return (lambda c: c is not None and lo <= c <= hi), ("range", lo, hi)
     # literal number
     if body.isdigit():
         number = _check_bounds(int(body), bounds, field, term)
-        return lambda c: c == number
+        return (lambda c: c == number), ("eq", number)
     return None
 
 
@@ -324,24 +339,26 @@ def _is_glob(body):
 
 
 def _parse_int_term(body, term, field, bounds):
+    """``(predicate, shape)``; ``shape`` is ``None`` for the undescribable forms."""
     if body.lower().startswith(REGEX_PREFIX):
         rx = _compile_regex(body[len(REGEX_PREFIX):], field, term)
-        return lambda c: c is not None and rx.search(str(c)) is not None
-    predicate = _parse_int_atom(body, term, field, bounds)
-    if predicate is not None:
-        return predicate
+        return (lambda c: c is not None and rx.search(str(c)) is not None), None
+    atom = _parse_int_atom(body, term, field, bounds)
+    if atom is not None:
+        return atom
     if _is_glob(body):
         # glob over the decimal text: "8*" matches 8, 80, 8080 (see the docs -
         # a range is almost always what you actually want)
         pattern = body
-        return lambda c: c is not None and fnmatch.fnmatchcase(str(c), pattern)
+        return (lambda c: c is not None and fnmatch.fnmatchcase(str(c), pattern)), None
     raise _err("errors.bad_filter_number", field, term)
 
 
 def _parse_ip_term(body, term, field):
+    """``(predicate, shape)``; ``shape`` is ``None`` for the undescribable forms."""
     if body.lower().startswith(REGEX_PREFIX):
         rx = _compile_regex(body[len(REGEX_PREFIX):], field, term)
-        return lambda c: c is not None and rx.search(c.text) is not None
+        return (lambda c: c is not None and rx.search(c.text) is not None), None
     # comparison
     for op in OPERATORS:
         if body.startswith(op):
@@ -350,7 +367,8 @@ def _parse_ip_term(body, term, field):
                 raise _err("errors.bad_filter_ip", field, term)
             version, num = operand.version, operand.num
             base = _compare_predicate(op, num)
-            return lambda c: c is not None and c.version == version and base(c.num)
+            return ((lambda c: c is not None and c.version == version and base(c.num)),
+                    ("ip_cmp", version, op, num))
     # CIDR
     if "/" in body:
         try:
@@ -360,7 +378,8 @@ def _parse_ip_term(body, term, field):
         lo = int(net.network_address)
         hi = int(net.broadcast_address)
         version = net.version
-        return lambda c: c is not None and c.version == version and lo <= c.num <= hi
+        return ((lambda c: c is not None and c.version == version and lo <= c.num <= hi),
+                ("ip_range", version, lo, hi))
     # range a-b (IPv6 text never contains "-", so this is unambiguous)
     if "-" in body:
         lo_text, _, hi_text = body.partition("-")
@@ -372,23 +391,34 @@ def _parse_ip_term(body, term, field):
         if lo_ip.num > hi_ip.num:
             raise _err("errors.bad_filter_range", field, term)
         lo, hi, version = lo_ip.num, hi_ip.num, lo_ip.version
-        return lambda c: c is not None and c.version == version and lo <= c.num <= hi
+        return ((lambda c: c is not None and c.version == version and lo <= c.num <= hi),
+                ("ip_range", version, lo, hi))
     # wildcard over the canonical text (IPv6 canonical form is lower-case)
     if _is_glob(body):
         pattern = body.lower()
-        return lambda c: c is not None and fnmatch.fnmatchcase(c.text.lower(), pattern)
+        return ((lambda c: c is not None
+                 and fnmatch.fnmatchcase(c.text.lower(), pattern)), None)
     # plain address
     literal = _as_ip(body)
     if literal is None:
         raise _err("errors.bad_filter_ip", field, term)
     num, version = literal.num, literal.version
-    return lambda c: c is not None and c.version == version and c.num == num
+    return ((lambda c: c is not None and c.version == version and c.num == num),
+            ("ip_eq", version, num))
 
 
 def _parse_process_term(body, term, field):
+    """``(predicate, None)`` - a process term NEVER carries a shape.
+
+    Not an oversight and not laziness: the shape exists only to compile a term
+    into the driver's filter, and the NETWORK layer has no notion of a process.
+    ``processId == 1234`` is rejected by ``WinDivertHelperCompileFilter`` with
+    "bad token for layer" (checked 2026-07-28), so there is nothing a shape could
+    ever be turned into here.
+    """
     if body.lower().startswith(REGEX_PREFIX):
         rx = _compile_regex(body[len(REGEX_PREFIX):], field, term)
-        return lambda c: rx.search(c.name) is not None
+        return (lambda c: rx.search(c.name) is not None), None
     # comparison operators only make sense on a PID; on a name they are an error
     for op in OPERATORS:
         if body.startswith(op):
@@ -396,19 +426,20 @@ def _parse_process_term(body, term, field):
             if not operand.isdigit():
                 raise _err("errors.bad_filter_compare_name", field, term)
             base = _compare_predicate(op, int(operand))
-            return lambda c: c.pid is not None and base(c.pid)
+            return (lambda c: c.pid is not None and base(c.pid)), None
     # numeric atoms (literal PID / PID range) reuse the int parser
     numeric = _parse_int_atom(body, term, field, None)
     if numeric is not None:
-        return lambda c: numeric(c.pid)
+        predicate = numeric[0]
+        return (lambda c: predicate(c.pid)), None
     # wildcard over the process name
     if _is_glob(body):
         pattern = body.lower()
-        return lambda c: fnmatch.fnmatchcase(c.name, pattern)
+        return (lambda c: fnmatch.fnmatchcase(c.name, pattern)), None
     # plain name: case-insensitive substring (historical behaviour - "chrome"
     # still finds "chrome.exe"); use a wildcard or re: when you need precision
     needle = body.lower()
-    return lambda c: needle in c.name
+    return (lambda c: needle in c.name), None
 
 
 # -- public API ------------------------------------------------------------------ #
@@ -435,12 +466,12 @@ def parse_matcher(text, kind, field="fields.filter", bounds=None):
         if not body:
             raise _err("errors.bad_filter_term", field, raw_term)
         if kind == KIND_INT:
-            predicate = _parse_int_term(body, raw_term, field, bounds)
+            predicate, shape = _parse_int_term(body, raw_term, field, bounds)
         elif kind == KIND_IP:
-            predicate = _parse_ip_term(body, raw_term, field)
+            predicate, shape = _parse_ip_term(body, raw_term, field)
         else:
-            predicate = _parse_process_term(body, raw_term, field)
-        terms.append(_Term(raw_term, negated, predicate))
+            predicate, shape = _parse_process_term(body, raw_term, field)
+        terms.append(_Term(raw_term, negated, predicate, shape))
     return cls(text, terms)
 
 
@@ -448,6 +479,108 @@ def validate_matcher(text, kind, field="fields.filter", bounds=None):
     """Parse and discard - raises the translated ``ValueError`` on bad input."""
     parse_matcher(text, kind, field, bounds)
     return True
+
+
+# -- compiling an expression down into the DRIVER's own filter language ---------- #
+#
+# Why this is worth doing at all: with a destination target set, the tool still
+# captures EVERYTHING and re-injects almost all of it untouched. Measured
+# 2026-07-28: 1944 packets diverted, 0 of them impairable, and 1632 diverted with
+# 8 impairable. Every one of those cost a recv plus a send for nothing. The
+# WinDivert filter runs IN THE DRIVER, so an expression that can be compiled into
+# it is traffic that never reaches this process in the first place.
+#
+# THE ONLY invariant that matters: the fragment must match AT LEAST everything the
+# matcher matches. Over-capturing is free (decide() still filters); under-capturing
+# is a silent regression - traffic the user asked to impair would never arrive, and
+# every counter would read healthy. So anything that cannot be proven a superset
+# returns None, and the caller keeps the wide filter.
+#
+# Three things make that provable rather than hopeful:
+#   * only POSITIVE terms are compiled. Negatives are dropped, which only widens.
+#   * a term with no ``shape`` (glob, ``re:``) makes the whole expression give up:
+#     one unbounded member of an OR makes the OR unbounded.
+#   * BOTH directions are emitted. This is the trap that nearly got through:
+#     ``engine._capture_loop`` reads the remote endpoint as the DESTINATION on an
+#     outbound packet and as the SOURCE on an inbound one, so a fragment testing
+#     only ``DstAddr`` would have quietly stopped impairing everything coming back.
+
+_WD_PORT_FIELDS = ("tcp.DstPort", "tcp.SrcPort", "udp.DstPort", "udp.SrcPort")
+_WD_ADDR_FIELDS = {4: ("ip.DstAddr", "ip.SrcAddr"),
+                   6: ("ipv6.DstAddr", "ipv6.SrcAddr")}
+
+
+def _wd_address(version, num):
+    return str(ipaddress.IPv4Address(num) if version == 4
+               else ipaddress.IPv6Address(num))
+
+
+def _wd_int_term(shape):
+    kind = shape[0]
+    if kind == "eq":
+        return " or ".join("%s == %d" % (f, shape[1]) for f in _WD_PORT_FIELDS)
+    if kind == "range":
+        return " or ".join("(%s >= %d and %s <= %d)" % (f, shape[1], f, shape[2])
+                           for f in _WD_PORT_FIELDS)
+    if kind == "cmp":
+        return " or ".join("%s %s %d" % (f, shape[1], shape[2])
+                           for f in _WD_PORT_FIELDS)
+    return None
+
+
+def _wd_ip_term(shape):
+    kind = shape[0]
+    version = shape[1]
+    fields = _WD_ADDR_FIELDS.get(version)
+    if fields is None:                                   # pragma: no cover
+        return None
+    if kind == "ip_eq":
+        value = _wd_address(version, shape[2])
+        return " or ".join("%s == %s" % (f, value) for f in fields)
+    if kind == "ip_range":
+        lo, hi = _wd_address(version, shape[2]), _wd_address(version, shape[3])
+        return " or ".join("(%s >= %s and %s <= %s)" % (f, lo, f, hi) for f in fields)
+    if kind == "ip_cmp":
+        value = _wd_address(version, shape[3])
+        return " or ".join("%s %s %s" % (f, shape[2], value) for f in fields)
+    return None
+
+
+def windivert_fragment(matcher):
+    """A driver-filter fragment matching AT LEAST everything ``matcher`` does.
+
+    ``None`` when no narrowing can be proven - an empty expression, one made only
+    of exclusions ("everything except X" is not a narrowing), or one containing a
+    wildcard or ``re:`` pattern, which the driver's language cannot express.
+
+    The result is deliberately free of address-dependent terms (``outbound``,
+    ``loopback``): those live in ``WINDIVERT_ADDRESS`` rather than in the packet,
+    so keeping them out is what lets the guard test evaluate this against
+    synthetic packets and still mean something.
+
+    The caller must still COMPILE the result before trusting it - the driver's
+    parser has a length limit (200 ORed terms compile, 1000 do not, checked
+    2026-07-28), and a fragment that will not compile has to fall back the same
+    way an unprovable one does.
+    """
+    if matcher is None or getattr(matcher, "is_empty", True):
+        return None
+    positives = [t for t in matcher.terms if not t.negated]
+    if not positives:
+        return None
+    emit = _wd_int_term if matcher.kind == KIND_INT else (
+        _wd_ip_term if matcher.kind == KIND_IP else None)
+    if emit is None:
+        return None                     # process expressions: see _parse_process_term
+    parts = []
+    for term in positives:
+        if term.shape is None:
+            return None
+        piece = emit(term.shape)
+        if piece is None:               # pragma: no cover - shape kinds are closed
+            return None
+        parts.append("(%s)" % piece)
+    return "(%s)" % " or ".join(parts)
 
 
 def port_expression(value):

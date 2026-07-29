@@ -585,7 +585,7 @@ def test_target_syncing_reads_only_the_main_thread_snapshot():
 def test_the_gui_starts_the_session_with_its_duration():
     run_gui("""
         started = {}
-        app.engine.start = (lambda filt, divert=None, duration=0:
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
                             started.update(filter=filt, duration=duration))
         app.vars["duration"].set("12")
         app._start()
@@ -605,7 +605,7 @@ def test_start_and_stop_run_off_the_ui_thread():
     """
     run_gui("""
         import time
-        app.engine.start = lambda filt, divert=None, duration=0: time.sleep(0.4)
+        app.engine.start = lambda filt, divert=None, duration=0, **kw: time.sleep(0.4)
         app.engine.stop = lambda *a, **k: time.sleep(0.4)
 
         t0 = time.monotonic()

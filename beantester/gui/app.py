@@ -1025,7 +1025,15 @@ class App:
                    "drop_shutdown": "dropped_at_stop",
                    "drop_send": "dropped_send_failed",
                    "queue": "queue_len",
-                   "peak_queue": "queue_peak"}
+                   "peak_queue": "queue_peak",
+                   # The stats CSV deliberately does NOT follow the "show only the
+                   # targeted traffic" preference: it is an APPEND log, and a file
+                   # whose columns mean one thing in some rows and another in the
+                   # rest is worse than useless for the spreadsheet it exists for.
+                   # It gains both totals instead, so the reader can do the
+                   # narrowing themselves and see which is which.
+                   "bytes_in_scoped": "delivered_in_scope_bytes_down",
+                   "bytes_out_scoped": "delivered_in_scope_bytes_up"}
 
     def export_csv(self):
         snap = self.engine.stats_snapshot()
@@ -1078,8 +1086,14 @@ class App:
         like the stats CSV.
         """
         now = self.engine.now_ref()
+        snapshot = self.engine.connections_snapshot(limit=None)
+        # The export follows the view: what you exported and what you were looking
+        # at have to be the same set, or the file quietly disagrees with the screen
+        # that produced it.
+        if self.scoped_view():
+            snapshot = [c for c in snapshot if c.get("scoped")]
         rows = filter_sort_connections(
-            self.engine.connections_snapshot(limit=None), self.conn_query,
+            snapshot, self.conn_query,
             self.conn_sort["col"], self.conn_sort["reverse"],
             now=now, proc_map=self.proc_map, limit=0)
         path = CONNECTIONS_CSV_FILE
@@ -1426,7 +1440,10 @@ class App:
             # duration is a START-time setting (like the traffic filter): the
             # engine owns the deadline and stops itself when it is reached.
             apply_settings(self.engine, s, self.log)
-            self.engine.start(filt, duration=duration)
+            # Start-only, like `filter` and `duration`: it decides what the DRIVER
+            # hands over, and a handle's filter is fixed when it opens.
+            self.engine.start(filt, duration=duration,
+                              narrow=bool(s.get("narrow_filter")))
 
         self._begin_transition("starting", work)
 
@@ -1732,7 +1749,38 @@ class App:
         that made the window wide enough, so the session's peak read 0 / 0 KB/s for
         the entire life of the tool.
         """
-        return self._rate_window.add(now, snap["bytes_in"], snap["bytes_out"])
+        return self._rate_window.add(now, self.scoped_stat(snap, "bytes_in"),
+                                     self.scoped_stat(snap, "bytes_out"))
+
+    # Counters that have a "targeted traffic only" twin. Everything else is shown
+    # unchanged - and three of those are load-bearing omissions rather than gaps:
+    # drop_overflow / drop_shutdown / drop_send count packets THIS TOOL lost,
+    # including traffic the user never targeted, so narrowing them would hide the
+    # tool's own damage. Their tooltips say so (see tips.scope_view).
+    SCOPED_TWIN = {"seen": "scoped_seen",
+                   "bytes_in": "bytes_in_scoped",
+                   "bytes_out": "bytes_out_scoped"}
+
+    def scoped_view(self):
+        """Does the user want the VIEWS narrowed to the targeted traffic?
+
+        A view preference and nothing more: it never changes what is captured,
+        what is impaired, or what the reproduction report and the JSON output
+        carry - those always hold both totals, so a pipeline never has to guess
+        which world a file came from.
+        """
+        return bool(self.pref("scope_view_to_target"))
+
+    def scoped_stat(self, snap, key, default=0):
+        """One counter, honouring the view-scope preference. The single decider.
+
+        Every surface goes through here - the counter grid, the session panel, the
+        chart, the Connections footer and both CSV exports - so the preference
+        cannot end up meaning one thing on one tab and something else on the next.
+        """
+        if key in self.SCOPED_TWIN and self.scoped_view():
+            key = self.SCOPED_TWIN[key]
+        return snap.get(key, default)
 
     def _sample(self):
         """Snapshot the engine and keep the throughput history continuous."""
@@ -1740,8 +1788,10 @@ class App:
         snap = self.engine.stats_snapshot()
         if self.last_snapshot is not None:
             dt = max(1e-3, now - self._last_t)
-            down = (snap["bytes_in"] - self.last_snapshot["bytes_in"]) / 1024.0 / dt
-            up = (snap["bytes_out"] - self.last_snapshot["bytes_out"]) / 1024.0 / dt
+            down = (self.scoped_stat(snap, "bytes_in")
+                    - self.scoped_stat(self.last_snapshot, "bytes_in")) / 1024.0 / dt
+            up = (self.scoped_stat(snap, "bytes_out")
+                  - self.scoped_stat(self.last_snapshot, "bytes_out")) / 1024.0 / dt
             down, up = max(0.0, down), max(0.0, up)
             self._reconcile_chart_len()
             self.down_hist.append(down)

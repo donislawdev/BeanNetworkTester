@@ -106,6 +106,12 @@ def build_arg_parser():
                         "(e.g. '80,443,8000-8100' or '!53')")
     p.add_argument("--lan-mode", action="store_true",
                    help="LAN mode: cut the internet (public addresses), keep the local network")
+    p.add_argument("--narrow-filter", action="store_true",
+                   help="push --dst-ip/--dst-port into the WinDivert filter, so the "
+                        "driver never hands over traffic that could not be impaired "
+                        "(much faster at high packet rates). Applied at START only, "
+                        "and then statistics and connections cover the narrowed "
+                        "traffic only - the summary says when it took effect")
     p.add_argument("--block-ip",
                    help="block (drop) all traffic to these remote IPs: address, list, "
                         "range a-b, CIDR, wildcard, re: pattern, ! to exclude; IPv4 and IPv6")
@@ -479,12 +485,29 @@ def _run_session(args, cfg, log, sleep, clock, engine):
 
     try:
         log.debug("opening the divert...")
-        engine.start(cfg["filter"], divert=divert, duration=cfg["duration"])
+        engine.start(cfg["filter"], divert=divert, duration=cfg["duration"],
+                     narrow=bool(cfg["settings"].get("narrow_filter")))
     except ImportError:
         _fail(exitcodes.RUNTIME,
               "pydivert is missing. Install it:  pip install pydivert  (or use --simulate)")
     except Exception as e:
         _fail(exitcodes.RUNTIME, f"cannot start the capture: {e}")
+
+    # Asked for and got it, or asked for and did NOT: both have to be said. A user
+    # who turned this on wanted the throughput, and silently falling back to the
+    # wide filter would leave them believing they had it. The fallback is not a
+    # fault - a wildcard or re: destination simply cannot be expressed in the
+    # driver's language, and capturing everything is the safe answer.
+    if cfg["settings"].get("narrow_filter"):
+        info = engine.session_info()
+        if info.get("narrowed"):
+            log.info("Driver filter narrowed to the destination - statistics and "
+                     "connections now cover that traffic only.")
+            log.debug(f"effective driver filter: {info.get('filter')}")
+        else:
+            log.warn("--narrow-filter had no effect: the destination could not be "
+                     "expressed as a driver filter (a wildcard or re: pattern, or "
+                     "no destination set). Capturing everything, as usual.")
 
     scenario_failed = None
     if cfg["scenario"]:
@@ -562,8 +585,14 @@ def _run_session(args, cfg, log, sleep, clock, engine):
                  f"impaired nothing")
 
     down_mb, up_mb = bytes_to_mb(stats["bytes_in"]), bytes_to_mb(stats["bytes_out"])
+    # ADDITIVE to the NDJSON schema, and load-bearing: with the filter narrowed,
+    # `packets` below no longer counts every packet on the machine, so two reports
+    # with the same key can describe two different worlds. A consumer must be able
+    # to tell them apart without being told out of band.
+    session = engine.session_info() if hasattr(engine, "session_info") else {}
     record = dict(event="summary", exit_code=code, exit_name=exitcodes.name_of(code),
                   stop_reason=stop_reason, seed=eff, elapsed_s=elapsed,
+                  capture_narrowed=bool(session.get("narrowed")),
                   duration_s=cfg["duration"], packets=stats["seen"],
                   downloaded_mb=down_mb, uploaded_mb=up_mb,
                   total_mb=round(down_mb + up_mb, 2), counters=stats,

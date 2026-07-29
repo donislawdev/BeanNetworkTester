@@ -177,6 +177,17 @@ FIELD_DEFS = (
           tip="tips.row_limit", hint="fields.row_limit_hint", span=True,
           cli="row-limit", ui_only=True),
 
+    # start_only for the same reason `filter` is (convention 7): this folds the
+    # destination expressions INTO the handle's WinDivert filter, and a handle's
+    # filter is fixed when it opens. Changing the destination mid-session with
+    # this on would leave the driver holding the OLD, narrower filter while
+    # decide() judged by the new one - traffic the user just asked to impair
+    # would never arrive, with every counter reading healthy. apply_settings
+    # refuses that change out loud instead.
+    Field("narrow_filter", BOOL, "fields.narrow_filter", "capture",
+          tip="tips.narrow_filter", hint="fields.narrow_filter_hint", span=True,
+          cli="narrow-filter", start_only=True),
+
     # -- reproduction ------------------------------------------------------ #
     Field("seed", SEED, "fields.seed", "repro", width=12, tip="tips.seed",
           hint="fields.seed_hint", cli="seed"),
@@ -227,6 +238,11 @@ SECTIONS = (
     # Table row limit lives in the Settings window, not on the Control page: it is
     # a view preference (ui_only, applied live), not part of the traffic scenario.
     Section("tables", "frames.tables", ("row_limit",), columns=1, surface="settings"),
+    # Capture scope lives in the Settings window rather than on the Control page:
+    # it is a session-wide choice about what the DRIVER hands over, not one of the
+    # impairments being dialled in.
+    Section("capture", "frames.capture", ("narrow_filter",), columns=1,
+            surface="settings"),
     Section("repro", "frames.repro", ("seed",), columns=1, extra="repro"),
 )
 

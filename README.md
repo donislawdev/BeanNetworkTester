@@ -593,6 +593,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
+| `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only; while it is on, statistics and connections cover the narrowed traffic only |
 
 **Targeting** (all three accept the full [filter syntax](#filter-syntax-process--ip--port): lists,
 ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally CIDR)
@@ -995,9 +996,16 @@ seeded).
 - **A bare process name is a substring** - `chrome` also catches `chromedriver.exe`. This is kept on
   purpose (compatibility with old configs); for precision reach for `re:^chrome\.exe$` or the
   exclusion `chrome, !chromedriver`.
-- **Statistics and Connections show ALL captured traffic** - whatever the "Traffic to modify" filter
-  passes. Targeting (process / IP / port) decides only **what gets broken**, not what is visible in
-  the tables and counters.
+- **Statistics and Connections show ALL captured traffic by default** - whatever the "Traffic to
+  modify" filter passes. Targeting (process / IP / port) decides only **what gets broken**, not what
+  is visible in the tables and counters. Settings has a switch, **"Show only the targeted traffic"**,
+  that narrows the counters, the throughput chart, the Connections table and the connections CSV to
+  what your targeting selected. It changes what you SEE - never what is captured and never what is
+  impaired. **Three counters stay on the full traffic even then**: "Queue overflow", "Dropped at
+  stop" and "Send failed" count packets *this tool* lost, including traffic you never targeted, and
+  hiding those would hide the tool's own damage. The statistics CSV does not follow the switch
+  either - it is an append log, so it carries both totals in separate columns. The reproduction
+  report and `--format json` always carry both numbers.
 - **The speed limit shapes the AVERAGE** - the token bucket lets short bursts through, so the
   "Download/Upload peak" (averaged over a 1 s window) can be a touch higher than the set limit.
   Duplicates count against the limit (the second copy travels the link too).

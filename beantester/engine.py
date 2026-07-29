@@ -87,6 +87,7 @@ import threading
 import time
 import weakref
 
+from . import filters
 from . import portmap
 from . import winenv
 from .core import BeanCore
@@ -232,6 +233,9 @@ class BeanEngine:
         # session has one - the choice is made in _targeting_table().
         self._socketwatch = None
         self._driver_queue = None   # WinDivert's queue settings, read at start()
+        # Set at start(); an explicit attribute so session_info() can report it
+        # before the first session as well as after one.
+        self._narrowed = False
         # QPC seams: bound here so a test can drive the driver-wait measurement
         # without Windows. _qpc_freq is read at start() (0/None = no QPC here).
         self._qpc = winenv.qpc_now
@@ -284,7 +288,14 @@ class BeanEngine:
                     running=self._running, elapsed=round(elapsed, 1),
                     duration=self._duration, stop_reason=self.stop_reason,
                     # None on the simulate path, which has no driver queue
-                    driver_queue=self._driver_queue)
+                    driver_queue=self._driver_queue,
+                    # True when the destination expressions were folded into the
+                    # handle's filter. It has to be REPORTED, not just done: with it
+                    # on, `filter` above is not the filter the user chose and `seen`
+                    # no longer counts every packet on the machine. A report from a
+                    # machine you do not have in front of you must say which of the
+                    # two worlds produced its numbers.
+                    narrowed=bool(getattr(self, "_narrowed", False)))
 
     # WinDivert's own queue, the one BEFORE ours. Nothing in this program used to
     # read it, so a session's numbers could not be interpreted: with QUEUE_TIME at
@@ -483,6 +494,13 @@ class BeanEngine:
                            rst_reset=0, rst_sent=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
+                           # The same DELIVERED bytes as bytes_in/bytes_out, but
+                           # counting only flows that passed the targeting gate.
+                           # They exist so a view can answer "how much of this was
+                           # MINE?" without walking the connection table, which is
+                           # up to 200k rows. Written by the INJECT thread only -
+                           # see _log_delivered for why that is safe without a lock.
+                           bytes_in_scoped=0, bytes_out_scoped=0,
                            queue=0, peak_queue=0,
                            # The worst wait a packet had ALREADY served inside
                            # WinDivert before this tool even saw it. Milliseconds,
@@ -657,6 +675,24 @@ class BeanEngine:
             c["sent_out"] += size
         else:
             c["sent_in"] += size
+        # Session totals for the SCOPED half, from the row's own sticky flag. The
+        # flag is right here, which is why this needs no wider change: the capture
+        # thread sets it before the packet is queued, so by the time the injector
+        # reaches this line the answer is already on the row.
+        #
+        # Written WITHOUT the stats lock, and that is the same trade the docstring
+        # above justifies for sent/sent_in/sent_out: this thread is the only writer
+        # (reset_stats zeroes them before any worker exists), readers only read, and
+        # an int rebind is atomic - a reader sees the old value or the new one, never
+        # a torn one. Taking _slock here would put the per-packet inject path in the
+        # queue behind stats readers, which is the 5% regression measured for the
+        # sibling counters.
+        if c.get("scoped"):
+            st = self.st
+            if is_out:
+                st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
+            else:
+                st["bytes_in_scoped"] = st["bytes_in_scoped"] + size
 
     def _charge_flow(self, key, field, n=1):
         """Add to one counter on one flow's row (no row = nothing to charge).
@@ -763,7 +799,7 @@ class BeanEngine:
             self.st[key] += n
 
     # -- lifecycle ------------------------------------------------------------ #
-    def start(self, filt, divert=None, duration=0, socket_source=None):
+    def start(self, filt, divert=None, duration=0, socket_source=None, narrow=False):
         """Start a session.
 
         ``divert``        - optional object with recv()/send()/close() (tests, --simulate),
@@ -771,14 +807,19 @@ class BeanEngine:
         ``socket_source`` - optional injected event source (or factory) for the
                             SocketWatcher (tests); on the real path it is opened from
                             WinDivert. See ``_start_socketwatch``.
+        ``narrow``        - fold the destination expressions into the DRIVER's filter
+                            when that can be proven safe, so traffic that could never
+                            be impaired is not handed to this process at all. Start-only
+                            for the same reason ``filter`` is: the handle's filter is
+                            fixed when it opens.
         """
         # Held for the whole start: a worker can fail (and call stop()) before the
         # remaining threads are even spawned - stop() would then null out the
         # thread handles under our feet.
         with self._stop_lock:
-            return self._start_locked(filt, divert, duration, socket_source)
+            return self._start_locked(filt, divert, duration, socket_source, narrow)
 
-    def _start_locked(self, filt, divert, duration, socket_source=None):
+    def _start_locked(self, filt, divert, duration, socket_source=None, narrow=False):
         if self._running:
             # Internal/developer error: the GUI and CLI both guard against
             # this, but a second start would spawn duplicate worker threads
@@ -788,6 +829,13 @@ class BeanEngine:
         # then can a second (SOCKET-layer) handle be opened. Captured before the line
         # below reassigns ``divert``.
         real_windivert = divert is None
+        # Only on the real path: an injected divert (tests, --simulate) never reads
+        # this string, so narrowing it would change a number in the report without
+        # changing a single packet - the kind of cosmetic lie this project hunts.
+        self._narrowed = False
+        if real_windivert and narrow and self.core.dst_active:
+            filt, self._narrowed = filters.narrowed_filter(
+                filt, self.core.dst_ip_matcher, self.core.dst_port_matcher)
         if divert is None:
             import pydivert
             from . import driver
@@ -1594,7 +1642,18 @@ class BeanEngine:
                     continue
                 heapq.heappop(self._heap)
             try:
-                if self._divert is not None:
+                if self._divert is None:
+                    # STOP cleared the handle between the pop above and here. The
+                    # packet is already OFF the heap, so stop()'s stranded sweep
+                    # will never see it either - without this it just left the
+                    # seen/delivered/dropped balance, silently, which is the one
+                    # thing keeping these numbers honest. Found while measuring the
+                    # batched injector (rejected, see CHANGELOG-INTERNAL): the hole
+                    # was one packet wide already, and batching would have made it
+                    # a whole batch wide.
+                    self._bump("drop_shutdown")
+                    self._charge_flow(key, "dropped")
+                else:
                     self._divert.send(packet)
                     size = len(packet.raw)
                     is_out = getattr(packet, "is_outbound", True)

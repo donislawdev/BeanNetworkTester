@@ -71,7 +71,7 @@ def test_the_whole_stack_survives_a_user_being_a_nuisance():
 
         # --- 2) a real session on synthetic traffic
         real_start = app.engine.start
-        app.engine.start = (lambda filt, divert=None, duration=0:
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
                             real_start(filt, divert=SyntheticDivert(seed=5),
                                        duration=duration))
 

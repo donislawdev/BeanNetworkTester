@@ -117,9 +117,15 @@ class ConnsPage:
         self.count = ttk.Label(top, text="", style="Muted.TLabel")
         self.count.pack(side="right")
 
-        scope = wrapping_label(self.frame, T("conns.scope_note"))
+        # Same reasoning as on the Statistics page: the note says what the table
+        # COVERS, so it has to follow the view rather than describe the other one.
+        scoped = self.app.scoped_view()
+        scope = wrapping_label(self.frame, T("conns.scope_note_scoped" if scoped
+                                             else "conns.scope_note"))
         scope.pack(anchor="w", padx=scaled(10), pady=(0, scaled(4)))
-        add_tooltip(scope, "tips.scope_note")
+        add_tooltip(scope, "tips.scope_note_scoped" if scoped else "tips.scope_note")
+        self._scope_note = scope
+        self._scope_note_scoped = scoped
 
         holder = ttk.Frame(self.frame)
         holder.pack(fill="both", expand=True, padx=scaled(10), pady=(0, scaled(10)))
@@ -313,6 +319,24 @@ class ConnsPage:
         return (f"{c.get('proto')}|{c.get('local_port')}|"
                 f"{c.get('remote_ip')}|{c.get('remote_port')}")
 
+    def _sync_scope_note(self):
+        """Re-word the note when the view-scope preference has been toggled.
+
+        The note states what the table COVERS, and the preference can be flipped
+        while this page is already built. A note describing the other view is the
+        misleading sentence it exists to prevent.
+        """
+        note = getattr(self, "_scope_note", None)
+        if note is None:
+            return
+        scoped = self.app.scoped_view()
+        if scoped == getattr(self, "_scope_note_scoped", None):
+            return
+        self._scope_note_scoped = scoped
+        with crashlog.quiet("gui.pages.conns"):
+            note.config(text=T("conns.scope_note_scoped" if scoped
+                               else "conns.scope_note"))
+
     def refresh(self, force=False):
         """Repaint always (cheap); rebuild off-thread (never blocks the UI).
 
@@ -325,6 +349,7 @@ class ConnsPage:
         if self.pause_var.get():
             return
         app = self.app
+        self._sync_scope_note()
 
         # 1) pick up a finished rebuild, if there is one (main thread, ~0 ms)
         result = self._model.poll()
@@ -359,6 +384,9 @@ class ConnsPage:
             "limit": app.row_limit(),
             "now": self._now,
             "proc_map": dict(app.proc_map),
+            # Read on the UI thread and carried across, like every other input
+            # here: the worker must not reach back into App (convention 26).
+            "scoped_only": app.scoped_view(),
         })
         # The tick is 700 ms apart, and a user who just hit a header or typed a
         # search should not wait that long to see the answer they asked for. Poll
@@ -391,6 +419,15 @@ class ConnsPage:
         # limit=None: the raw rows, unsorted - the engine no longer sorts a table
         # this page is about to sort by the user's column anyway
         conns = request["engine"].connections_snapshot(limit=None)
+        # "Show only the targeted traffic": drop the rows the targeting never
+        # selected, BEFORE filtering, sorting and totalling, so the table, the
+        # "shown X of Y" counter and the footer all describe the same set. The
+        # flag is the row's own sticky `scoped` - once a flow has been in scope it
+        # stays listed, which is the same answer the "impaired?" column gives and
+        # deliberately NOT a live re-check (a finished flow would flip to "no" the
+        # moment its port left the socket table; see engine._log_conn).
+        if request.get("scoped_only"):
+            conns = [c for c in conns if c.get("scoped")]
         # the limit is passed IN, so it can bound the sort itself instead of only
         # trimming its result (see views.filter_sort_connections)
         shown = filter_sort_connections(

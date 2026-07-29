@@ -89,6 +89,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **You can now point Statistics, the chart and Connections at your target alone.** Settings gains
+  **"Show only the targeted traffic"** (off by default, so nothing changes unless you ask). With it
+  on, the counter grid, the throughput chart, the Connections table and the connections CSV export
+  all cover just the traffic your process / IP / port targeting selected - useful when the machine
+  is busy and the numbers you care about are buried in everything else. It changes what you **see**,
+  never what is captured and never what is impaired. Three things deliberately do not follow it, and
+  each says so where you would look:
+  - **"Queue overflow", "Dropped at stop" and "Send failed" always cover the full traffic**, because
+    they count packets *this tool* lost - including traffic you never targeted. Hiding those would
+    hide the tool's own damage, which is the opposite of the point.
+  - **The statistics CSV keeps both totals** in separate columns instead of following the switch: it
+    is an append log, and a column that means one thing in some rows and another in the rest cannot
+    be charted.
+  - **The reproduction report and `--format json` are unchanged** - they have always carried both
+    the captured and the in-scope numbers, so a saved run never depends on how the window was set
+    when it was made.
+  The note above the counters and above the Connections table re-words itself to say which of the
+  two you are looking at, and the chart caption names it too - so a screenshot cannot be misread.
+
+- **A new option lets the driver do the filtering, for when you are testing at high packet rates.**
+  Normally the tool receives every packet on the machine and hands almost all of them straight
+  back - measured on a real run, 1944 packets taken in and none of them even eligible to be
+  impaired. With **"Narrow the driver filter to the target"** (`--narrow-filter`) the destination
+  IP and port are pushed into WinDivert itself, so traffic that could never be impaired is not
+  handed over at all. Worth knowing before you switch it on: it takes effect **when a session
+  starts**, the destination fields are then fixed until you stop, and Statistics and Connections
+  cover only the narrowed traffic. It does nothing for a **process** target (Windows does not offer
+  the tool a process name at that level) and falls back silently-but-loudly to capturing everything
+  if your destination uses a wildcard or a `re:` pattern - the run says which of the two happened.
+  **It turned out to be more than a speed option, and this is the part worth reading twice.**
+  Measured on a real run with other traffic on the machine: without it, the driver was so busy
+  handing over traffic the tool was never going to touch that it **threw away 43% of the traffic
+  you actually aimed at, before the tool could see it** - so the session impaired less than it
+  reported, and worked out its percentages from what survived. With the option on, all of it
+  arrived and nothing was lost. If you test at high packet rates against a specific address or
+  port, this is the setting that makes your numbers mean what they say.
+
 - **The command line now says when the process you aimed at stops matching, instead of running on
   in silence.** If your target exits - it crashed, or your test harness restarted it and Windows
   gave it a new process id - everything from that moment on is left untouched. The run used to

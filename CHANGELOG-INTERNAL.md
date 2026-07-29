@@ -184,6 +184,209 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### ADR 2026-07-29: the batched injector was BUILT, measured and REVERTED
+
+- **What was built.** `_inject_loop` taking every already-due packet (cap 32) and sending them with
+  one `WinDivertSendEx`; per-packet accounting that walked `pSendLen` back over the batch rather
+  than assuming atomicity; a `batch_sender` seam on `start()`; six guards including a staggered
+  timing test. All of it worked and was green.
+- **Why it went anyway.** The bare-loop measurement promised 1.62-1.75x. The ENGINE measured
+  **1.00x** - 7 of 14 pairs, median 1.00, range 0.93-1.05, paired with alternating order. An earlier
+  6-pair run had said 1.60x; the longer one shows that was drift (the unbatched half sat in a slower
+  phase and "caught up" in the last two pairs). The decision rule was fixed BEFORE the run: below
+  1.2x end to end, revert rather than merge.
+- 🔴 **The mechanism, which is the part worth keeping.** Instrumenting the real engine under a
+  saturating flood: **mean 2.13 packets per batched call** (distribution 1:3966, 2:10658, 3:3889,
+  4:931, tail to 30) and `peak_queue` **30** against a 20 000 limit. The release heap barely
+  accumulates, because the inject thread keeps up with capture - so the batcher was handed pairs,
+  not batches. The earlier sweep already showed batch 8 giving only 1.27x and the full 1.6x needing
+  32. At 2 there is nothing to amortise, and assembling the blob costs what the syscall saves.
+- **Do not re-open this without first measuring the MEAN BATCH SIZE** under the workload in
+  question. If a configuration exists where the heap genuinely backs up (deep buffers, heavy rate
+  limiting), the number to check is that mean - not the throughput ratio, which drifts.
+- **Kept from the work:** a real accounting hole it exposed. A packet popped off the heap and then
+  found without a `_divert` - STOP cleared it in between - vanished with NO counter: gone from
+  `_heap`, so `stop()`'s stranded sweep could not see it either. One packet wide already, a whole
+  batch wide had this shipped. It is charged to `drop_shutdown` now, with
+  `tests/test_inject_batch.py` pinning it and the seen/delivered/dropped balance around it.
+- **Also kept, as a lesson rather than code:** the premature-release mutant (batching packets not
+  yet due) was caught by **zero tests in the whole suite** until a guard was written for it, and
+  that guard only worked once the arrivals were staggered AND the latency exceeded the stagger -
+  two conditions, each of which silently made the test vacuous. Recorded in PROJECT_NOTES rule 5.
+
+### Added: "show only the targeted traffic" - a VIEW preference (chunk 3)
+
+- `gui/prefs.py::scope_view_to_target` (BOOL, default False - convention 42's second kind: a
+  cross-restart GUI preference, so no CLI flag and never inside a traffic config file).
+- **One decider, not five.** `App.scoped_stat(snap, key)` + `App.SCOPED_TWIN` is the single place
+  that knows which counters have a narrowed twin; the counter grid, the session panel, the chart,
+  the rate window, the Connections model and the connections CSV all go through it, so the
+  preference cannot mean one thing on one tab and something else on the next.
+- **Engine side stays lock-free.** `bytes_in_scoped` / `bytes_out_scoped` are bumped in
+  `_log_delivered` from the row's own sticky `scoped` flag - the flag is already on the row by then,
+  so no change to the heap tuple was needed (its three positional consumers stay untouched). Written
+  without `_slock` on the same argument the sibling `sent`/`sent_in`/`sent_out` counters already
+  rest on: the inject thread is the only writer and an int rebind is atomic. Taking the lock there
+  was measured at a 5% regression when the sibling counters were added.
+- 🔴 **Three deliberate omissions, each with a test, because "we decided not to" is what gets tidied
+  away by somebody making things consistent:**
+  - `drop_overflow` / `drop_shutdown` / `drop_send` never narrow - they count what THIS TOOL lost,
+    including untargeted traffic, and hiding that is precisely the convention-20 failure. Their
+    tooltips now say so, in both languages.
+  - the stats CSV does not follow the preference (append log; it gains both totals as columns).
+  - NDJSON and the reproduction report are untouched - they already carry `seen` AND `scoped_seen`,
+    so a saved run never depends on how the window was set.
+- **The notes re-word themselves on the tick**, not only at build: the preference can be toggled
+  while a page is already built, and a note reading "ALL captured traffic" over narrowed numbers is
+  exactly the misleading sentence it exists to prevent. Same for the chart caption
+  (`frames.throughput_scoped`), which is redrawn every tick - a chart is what people screenshot, so
+  the scope has to be readable from the picture.
+- New `tests/test_view_scope.py`. **Five mutants, all caught**, and the two that matter are the
+  good-faith "let's be consistent" edits: giving a tool-loss counter a scoped twin, and counting
+  scoped bytes for every flow. Also caught: ignoring the preference, defaulting it ON, and building
+  the note once without re-wording it.
+- Both READMEs updated; the old flat claim "Statistics and Connections show ALL captured traffic"
+  now says "by default" and spells out what does not follow the switch.
+
+### Tests: every gate that judges the REMOTE end is pinned in BOTH directions
+
+- `engine._capture_loop` reads the remote endpoint as the packet's DESTINATION when outbound and
+  as its SOURCE when inbound. **Five** features consume it: destination IP, destination port, LAN
+  mode, block by IP, block by port.
+- 🔴 **Measured, not suspected: that rule was effectively unguarded.** Mutating the inbound branch
+  to read `dst_addr` - the tidy-up anyone would make while cleaning that block - was caught by
+  **three tests, all about the CONNECTION LOG**. Not one test about targeting, LAN mode or blocking
+  failed. The tool would have kept impairing outbound traffic and quietly stopped impairing
+  everything coming back, every counter healthy, with the only red in rows somebody could
+  plausibly have "fixed" by adjusting the expected output.
+- New `tests/test_remote_endpoint_directions.py`, table-driven on the CONSUMERS rather than on one
+  feature (same shape as `GATES` in `test_core_properties.py`): adding a sixth reader of the remote
+  endpoint and forgetting the inbound case now fails immediately. A mirror test keeps the first
+  honest - a gate that simply said "yes" would satisfy "fires in both directions".
+- 🔴 **The fixture was hiding an entire axis.** `FakePacket` set `src_port` and `dst_port` to the
+  SAME value, so swapping the inbound branch's two ports changed nothing anywhere in the suite -
+  the port half of the assertion looked sound and tested nothing. `FakePacket` now takes
+  `src_port`/`dst_port` separately (defaulting to `port`, so every existing test is unchanged), and
+  the new file uses a local port that differs from the peer's. Three direction mutants are caught
+  now: inbound address, inbound ports, outbound ports.
+- Also worth recording because it cost a run: `is_local_ip` counts the TEST-NET documentation
+  ranges (203.0.113.x, 198.51.100.x) as LOCAL - they are not globally routable - so reaching for
+  one of them, the obvious choice in a test, makes LAN mode do nothing and reads as a bug in the
+  gate. The file uses genuinely routable addresses and says why.
+
+### Measured (no code): WinDivertSendEx rejects a bad batch ATOMICALLY
+
+- Open question left over from the batching work, and the thing that decided whether `drop_send`
+  could stay honest under a batched injector: does `SendEx` send a PREFIX of the batch before it
+  hits a bad entry, or nothing at all?
+- Measured 2026-07-29 by calling the DLL directly (pydivert's wrapper raises before `pSendLen` can
+  be read), with a deliberately truncated packet placed in the MIDDLE of a batch of four:
+
+  | batch | rc | `pSendLen` | last error |
+  |---|---|---|---|
+  | four good packets | 1 | 240 of 240 | 0 |
+  | one truncated entry in the middle | 0 | **0** of 190 | 122 (`ERROR_INSUFFICIENT_BUFFER`) |
+
+  120 bytes of perfectly good packets sat before the bad one and **none of them went out**. So the
+  call is all-or-nothing: on failure a batched injector charges every packet in the batch to
+  `drop_send` and there is no partial-send ambiguity to account for. That removes the one blocker
+  named against chunk 5.
+- Recorded here rather than in code because no code changed yet - the next session should not have
+  to re-derive it.
+
+### Added: `--narrow-filter` folds the destination into the driver's filter (chunk 2)
+
+- `filters.narrowed_filter(base, ip_matcher, port_matcher)` -> `(text, narrowed)`, and
+  `filters.filter_compiles(text)` asking `WinDivertHelperCompileFilter` (lazy `pydivert` import -
+  win32-only dependency, and `False` when it cannot be asked, because "cannot prove" must mean
+  "keep the wide filter").
+- Registry field `narrow_filter` (BOOL, `start_only`, `surface="settings"`), so the CLI flag, the
+  widget, validation and the config file all fall out of one entry (convention 11). Wired through
+  `engine.start(..., narrow=)` for the same reason `duration` is a `start()` parameter: a handle's
+  filter is fixed when it opens.
+- **Only on the REAL path.** An injected divert (`--simulate`, tests) never reads the filter
+  string, so narrowing there would move `session.narrowed` in the report without changing a single
+  packet - a cosmetic lie, which is the class of thing this audit has been removing.
+- 🔴 **The mid-session trap, and the guard for it.** `dst_ip`/`dst_port` are live-appliable while
+  the handle's filter is not. Accepting a destination change during a narrowed session would leave
+  the DRIVER filtering by the old expression while `decide()` judged by the new one - traffic the
+  user just asked to impair would never arrive, every counter healthy. `apply_settings` now refuses
+  a CHANGED destination while narrowed and says so (`log.dest_frozen_while_narrowed`); re-applying
+  the same value is untouched, because that is what every "Apply changes" does.
+- **Reported, not just done.** `session_info()["narrowed"]` (so the repro report carries it - it
+  embeds the whole session dict) and a new `capture_narrowed` key in the NDJSON summary. Additive
+  to a frozen contract, and load-bearing: with narrowing on, `packets` no longer counts every
+  packet on the machine, so two reports with the same key describe two different worlds. The CLI
+  also says at START whether the narrowing took effect - a user who asked for the throughput and
+  silently got the wide filter would otherwise believe they had it.
+- **A mutant survived and found a real hole in the tests.** Removing the compile check went GREEN:
+  nothing in the file produced a fragment the driver would refuse. It exists - the grammar has a
+  length limit, and a plausible expression hits it. Measured here: a 50-port list (4 698 chars)
+  compiles, a 100-port list (9 398) does not. Without the check the tool would hand WinDivert an
+  unparseable filter and fail to open the handle at START. Now guarded by
+  `test_a_fragment_the_driver_refuses_falls_back_instead_of_being_used`.
+- Six mutants: five caught, one green ON PURPOSE (the `filter_compiles` exception path is
+  unreachable where pydivert exists, which is where the suite runs).
+- **Consumers found the slow way, worth recording:** `engine.start`'s signature has five test
+  doubles across `test_failsafe.py`, `test_gui_stack_chaos.py` and `test_gui_state.py`. They took
+  `**kw` afterwards. The "who consumes this" sweep in PROJECT_NOTES rule 2 should have listed test
+  doubles, and now it does by example.
+- 🔴 **ACCEPTANCE on a real capture (2026-07-29), and it is a CORRECTNESS result, not a speed one.**
+  A flood to the targeted destination plus a decoy flood outside it:
+
+  | run | `capture_narrowed` | `seen` | `scoped_seen` | `drop_loss` | sent to target | receiver got |
+  |---|---|---|---|---|---|---|
+  | wide, no impairment | False | 75 056 | 15 768 | 0 | 28 050 | **15 768** |
+  | narrow, no impairment | True | 27 950 | 27 950 | 0 | 27 950 | **27 950** |
+  | wide, `--loss 100` | False | 88 943 | 21 540 | 21 540 | 28 050 | 0 |
+  | narrow, `--loss 100` | True | 27 900 | 27 900 | 27 900 | 27 900 | 0 |
+
+  Without narrowing the driver was overloaded by traffic the tool was never going to touch and
+  **discarded 43% of the TARGETED traffic before the tool saw it** - the session impaired less than
+  it claimed AND computed its numbers over the survivors. Narrowed: nothing lost, `seen` equals
+  `scoped_seen`. The driver-wait warning fired in both wide runs (52 / 184 ms) and in neither
+  narrowed one, which is the F18 overload seen from the other side.
+- **The regression worth fearing did not happen:** with `--loss 100` the narrowed run dropped
+  27 900 of 27 900 and the receiver got nothing, exactly as the wide run did. A narrowing that also
+  stopped the impairing would have read as a win in every counter.
+
+### Added: expressions compile down into the DRIVER's filter (chunk 1 of the narrowing work)
+
+- **Why.** With a destination target set the tool captures everything and re-injects almost all of
+  it untouched - measured 1944 packets diverted with 0 impairable, and 1632 with 8. Each cost a
+  recv plus a send for nothing. The WinDivert filter runs in the driver, so whatever can be pushed
+  into it never reaches this process.
+- `matchers.windivert_fragment(matcher)` emits a filter fragment or `None`. Every `_Term` now
+  carries a `shape` - what the parser concluded (`("eq", 443)`, `("ip_range", 4, lo, hi)`, `None`
+  for glob / `re:` / process name). The parsers return `(predicate, shape)` instead of throwing the
+  parse away, so the compiler **reads the parse result rather than parsing the text again**
+  (convention 10: a second reader of the same syntax drifts at the first edit). The hot path is
+  untouched - `matches()` still calls the closure.
+- **The invariant is the whole design: the fragment must be a SUPERSET of the matcher.**
+  Over-capture is free, under-capture is the silent regression. So: only POSITIVES are compiled
+  (dropping negatives can only widen), one shapeless term voids the whole expression (an unbounded
+  member makes the OR unbounded), and no address-dependent term (`outbound`, `loopback`) is emitted
+  - those live in `WINDIVERT_ADDRESS`, so keeping them out is what lets the guard evaluate a
+  synthetic packet and still mean something.
+- 🔴 **A real bug caught while tracing writes, not while reading names.** `engine._capture_loop`
+  reads the remote endpoint as the packet's DESTINATION when outbound and as its SOURCE when
+  inbound. A fragment testing only `DstAddr`/`DstPort` would have kept every INBOUND packet away
+  from the tool - impairing one direction, silently dropping the other, all counters healthy.
+  Both directions are emitted, and `test_both_directions_are_covered_because_the_remote_end_swaps`
+  exists so it cannot come back.
+- **Verified against the driver's own evaluator, not against my reading of it.**
+  `WinDivertHelperEvalFilter` was first checked for fidelity on **40 real captured packets across 9
+  filters, zero disagreements**, including the address-dependent terms that a blank address struct
+  would have got wrong (sniff-only handle - it cannot touch traffic). Then every emitted fragment
+  was compile-tested and swept: **27 648 packet views over 16 expressions, zero superset
+  violations**.
+- New guards in `tests/test_matchers_windivert.py`. The oracle test needs `pydivert` and is skipped
+  where it is missing - **half the CI matrix**, so a green Linux run has not checked the invariant.
+- **Five mutants. Four caught; the fifth green ON PURPOSE:** emitting only a range's lower bound is
+  a WIDENING, and the tests must not reject it. That one is the check that the suite encodes the
+  asymmetry rather than just "any change is bad". The four caught: dst-only fields, negatives
+  compiled, a shapeless term no longer voiding the expression, and an `outbound` term leaking in.
+
 ### Docs: the throughput rig is not reproducible, and the prose now says so (audit F18, follow-up)
 
 - Re-measuring the same bare `recv`+`send` loop over the same loopback flood, same machine, three

@@ -364,7 +364,7 @@ def test_a_gui_session_keeps_the_target_banner_honest():
         app.engine._ports = table
 
         real_start = app.engine.start
-        app.engine.start = (lambda filt, divert=None, duration=0:
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
                             real_start(filt, divert=SyntheticDivert(seed=21),
                                        duration=duration))
 
@@ -459,7 +459,7 @@ def test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped(
         app.engine._ports = table
 
         real_start = app.engine.start
-        app.engine.start = (lambda filt, divert=None, duration=0:
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
                             real_start(filt, divert=SyntheticDivert(seed=21),
                                        duration=duration))
 

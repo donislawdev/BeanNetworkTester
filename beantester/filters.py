@@ -61,3 +61,89 @@ def windivert_for(cli_key):
 def i18n_keys():
     """Filter i18n keys in canonical order (drives the GUI combobox)."""
     return [name for _, name, _ in FILTER_DEFS]
+
+
+# -- narrowing the handle's filter to what could possibly be impaired ------------ #
+def filter_compiles(text):
+    """Would WinDivert accept this filter? ``False`` when it cannot be asked.
+
+    ``WinDivertHelperCompileFilter`` is a DLL helper - no handle, no admin - so
+    this is the driver's OWN parser, not a guess about its grammar. Off Windows
+    (or without ``pydivert``) there is nothing to ask, and ``False`` is the honest
+    answer: the caller then keeps the wide filter, which is the safe direction.
+
+    ``pydivert`` is imported lazily on purpose - it is a win32-only dependency and
+    importing this module must work on the whole CI matrix.
+    """
+    if not text:
+        return False
+    try:
+        import ctypes
+        from pydivert import windivert_dll as wd
+        err, pos = ctypes.c_char_p(), ctypes.c_uint(0)
+        buf = ctypes.create_string_buffer(64 * 1024)
+        return bool(wd.WinDivertHelperCompileFilter(
+            text.encode(), 0, buf, len(buf), ctypes.byref(err), ctypes.byref(pos)))
+    except Exception:
+        # A missing dll, a missing pydivert, a driver that will not answer: all of
+        # them mean "cannot prove this filter is usable", and the caller must not
+        # narrow on an unproven filter.
+        return False
+
+
+def narrowed_filter(base, dst_ip_matcher=None, dst_port_matcher=None):
+    """``base`` AND the destination expressions, when that can be PROVEN safe.
+
+    Returns ``(filter_text, narrowed)``. ``narrowed`` is False whenever anything
+    at all stood in the way, and then ``filter_text`` is ``base`` untouched.
+
+    Why this is worth doing: the filter runs IN THE DRIVER, so a packet the
+    destination target could never match need not be handed to this process at
+    all. Measured 2026-07-28 - 1944 packets diverted with 0 impairable - almost
+    every recv/send pair the tool performed was for traffic it was never going to
+    touch.
+
+    ACCEPTED 2026-07-29 on a real capture, and it turned out to be a CORRECTNESS
+    fix rather than only a speed one. A flood to the targeted destination plus a
+    decoy flood the target does not cover:
+
+        wide    28 050 sent to the target -> 15 768 in scope, 15 768 delivered
+        narrow  27 950 sent to the target -> 27 950 in scope, 27 950 delivered
+
+    Without narrowing the driver was overloaded by traffic the tool was never
+    going to touch and **discarded 43% of the TARGETED traffic before the tool
+    saw it** - so the session both impaired less than it claimed and reported
+    numbers computed over the survivors. Narrowed, nothing was lost. The
+    driver-wait warning fired in the wide runs (52 and 184 ms) and in neither
+    narrowed one, which is the same overload seen from the other end.
+
+    The impairment itself is unchanged: with ``--loss 100`` the narrowed run
+    dropped 27 900 of 27 900 and the receiver got nothing, exactly as the wide run
+    did. That was the regression worth fearing - a narrowing that also stopped the
+    impairing would have looked like a win in every counter.
+
+    Three gates, and each one falls back rather than guessing:
+
+    1. ``matchers.windivert_fragment`` returns ``None`` unless the fragment is a
+       provable SUPERSET of the matcher (see its docstring - under-capture is a
+       silent regression, over-capture is free).
+    2. The result must COMPILE, asked of the driver's own parser. The grammar has
+       a length limit - 200 ORed terms compile, 1000 do not (checked) - and an
+       expression can be perfectly valid here and too big for it.
+    3. Both destination fields are ANDed with ``base``, matching ``decide()``,
+       where an IP and a port expression both have to pass. Compiling only one of
+       them is still correct: one fewer conjunct is a WIDER filter.
+    """
+    from .matchers import windivert_fragment          # local: keeps imports flat
+
+    parts = []
+    for matcher in (dst_ip_matcher, dst_port_matcher):
+        fragment = windivert_fragment(matcher)
+        if fragment:
+            parts.append(fragment)
+    if not parts:
+        return base, False
+    candidate = "(%s) and %s" % (base, " and ".join(parts))
+    if not filter_compiles(candidate):
+        return base, False
+    return candidate, True

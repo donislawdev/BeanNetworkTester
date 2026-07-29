@@ -125,9 +125,20 @@ class StatsPage:
         # anchor, not fill: the wraplength follows the PARENT's width either way
         # (gui/labels.py), while filling would hand the note - and its tooltip -
         # the empty space to the right of the sentence.
-        scope = wrapping_label(parent, T("stats.scope_note"))
+        # Two variants, because the note is the one thing on this page that states
+        # what the numbers COVER. Leaving the "ALL captured traffic" wording up
+        # while the view is narrowed would be the tool telling the user the exact
+        # opposite of the truth, next to the numbers it applies to.
+        scoped = self.app.scoped_view()
+        scope = wrapping_label(parent, T("stats.scope_note_scoped" if scoped
+                                         else "stats.scope_note"))
         scope.pack(anchor="w", padx=scaled(10), pady=(scaled(2), 0))
-        add_tooltip(scope, "tips.scope_note")
+        add_tooltip(scope, "tips.scope_note_scoped" if scoped else "tips.scope_note")
+        # Kept so the tick can re-word it: the preference can be toggled while this
+        # page is already built, and a note describing the OTHER view is exactly
+        # the misleading sentence it exists to prevent.
+        self._scope_note = scope
+        self._scope_note_scoped = scoped
 
         self._chart_frame = ttk.LabelFrame(parent, text=self._throughput_title())
         frame = self._chart_frame
@@ -221,9 +232,18 @@ class StatsPage:
 
     def _throughput_title(self):
         """Frame caption reflecting the actual chart window (the ``chart_seconds``
-        preference), so it never drifts from the live X-axis label."""
+        preference), so it never drifts from the live X-axis label.
+
+        It also names the SCOPE. A throughput chart is the one number on this page
+        somebody screenshots and sends on, so "which traffic is this?" has to be
+        readable from the picture rather than from a tooltip nobody hovered - and
+        the caption is redrawn every tick, so it cannot go stale after the
+        preference is toggled.
+        """
         secs = self.app.pref("chart_seconds")
-        return T("frames.throughput", s=f"{secs:.0f}")
+        key = ("frames.throughput_scoped" if self.app.scoped_view()
+               else "frames.throughput")
+        return T(key, s=f"{secs:.0f}")
 
     def draw_chart(self):
         self._chart_job = None
@@ -264,17 +284,36 @@ class StatsPage:
         elif page == "events":
             self.refresh_events()
 
+    def _sync_scope_note(self):
+        """Re-word the note when the preference has been toggled since it was built."""
+        note = getattr(self, "_scope_note", None)
+        if note is None:
+            return
+        scoped = self.app.scoped_view()
+        if scoped == getattr(self, "_scope_note_scoped", None):
+            return
+        self._scope_note_scoped = scoped
+        with crashlog.quiet("gui.pages.stats"):
+            note.config(text=T("stats.scope_note_scoped" if scoped
+                               else "stats.scope_note"))
+
     def refresh_counters(self):
+        self._sync_scope_note()
         self._chart_frame.config(text=self._throughput_title())
         snap = self.app.last_snapshot or {}
         rates = self.app.last_rates
         self.stat_labels["down"].config(text=f"{rates[0]:.0f}")
         self.stat_labels["up"].config(text=f"{rates[1]:.0f}")
+        # `seen` is the only counter here with a scoped twin. The impairment
+        # counters are already scoped by construction (nothing outside the target
+        # can be impaired), and drop_overflow / drop_shutdown / drop_send stay on
+        # the FULL traffic on purpose - they are what the TOOL lost, including
+        # traffic the user never targeted, and narrowing them would hide it.
         for key in ("seen", "queue", "drop_loss", "corrupted", "duplicated",
                     "drop_overflow", "drop_shutdown", "drop_send",
                     "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_block", "drop_flap", "rst_sent"):
-            self.stat_labels[key].config(text=str(snap.get(key, 0)))
+            self.stat_labels[key].config(text=str(self.app.scoped_stat(snap, key)))
 
     def refresh_session(self):
         from ...utils import bytes_to_mb, human_duration, host_identity
@@ -303,14 +342,15 @@ class StatsPage:
             text=f"{waited:.2f} ms" if waited else "-")
         self.sess_labels["peak_rate"].config(
             text=f"{app.peak_down:.0f} / {app.peak_up:.0f} KB/s")
-        down_mb = bytes_to_mb(snap.get("bytes_in", 0))
-        up_mb = bytes_to_mb(snap.get("bytes_out", 0))
+        down_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_in"))
+        up_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_out"))
         total_mb = round(down_mb + up_mb, 2)
         self.sess_labels["data_down"].config(text=f"{down_mb:.2f}")
         self.sess_labels["data_up"].config(text=f"{up_mb:.2f}")
         self.sess_labels["data_total"].config(text=f"{total_mb:.2f}")
         elapsed = info["elapsed"] or 0.0
-        total_bytes = snap.get("bytes_in", 0) + snap.get("bytes_out", 0)
+        total_bytes = (app.scoped_stat(snap, "bytes_in")
+                       + app.scoped_stat(snap, "bytes_out"))
         avg = average_kbps(total_bytes, elapsed)
         self.sess_labels["avg_rate"].config(text=f"{avg:.0f} KB/s")
 
