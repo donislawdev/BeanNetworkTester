@@ -57,6 +57,35 @@ What it is NOT
   signal, the snapshot is the safety net. ``reconcile`` prunes a port the snapshot
   no longer lists only after it has been absent for TWO passes, so a socket opened
   microseconds before the snapshot was taken is not evicted by it.
+
+  **The snapshot is COMPLETE, not CURRENT, and the difference is load-bearing.**
+  It is collected up to ``portmap.REFRESH_S`` before it is handed over and applied
+  up to a watchdog tick later, so it always describes a slightly older world than
+  the event stream does. An earlier version of this module merged it
+  unconditionally and called it "authoritative", which read "complete" as "newest"
+  and let it undo work the events had already done.
+
+  MEASURED on a live session (2026-07-29, real SOCKET handle, 887 connections in
+  25 s, 123 reconciles): **919 writes the old rule would have made are refused by
+  this one**, each a snapshot entry for a port an event had touched 0-170 ms AFTER
+  that snapshot was walked. Some put back a port a CLOSE had removed, some named
+  the previous owner of a port that had changed hands (port 67 was seen going
+  ``3040 -> 4616`` and being reverted). Every one is a window in which
+  ``engine._pid_for`` and ``targeting.owner_targeted`` answer with a pid that is
+  not the owner - the second of those being the gate for a TCP SYN and for every
+  UDP datagram. The count is the difference between the two rules, taken directly;
+  an earlier attempt to count "resurrections" by watching ports come back was
+  discarded because it cannot tell a resurrected socket from the same process
+  reopening a recycled port, and it over-reported by roughly a third.
+
+  So every entry carries the time of the evidence behind it (``_evidence``), and a
+  snapshot entry is applied only when the snapshot was COLLECTED after that. The
+  three cases fall out of the one rule instead of being tuned: a newer event beats
+  an older snapshot, a CLOSE is not undone by an older snapshot, and a snapshot
+  taken *after* the last event still heals an entry whose CLOSE we missed - which
+  is the reason the simpler rule ("events always win") was rejected. ``_evidence``
+  also holds TOMBSTONES for closed ports, because "closed just now" and "never
+  seen" are only distinguishable if the close left a mark.
 """
 import threading
 import time
@@ -78,6 +107,12 @@ _ADD = frozenset({BIND, CONNECT, LISTEN, ACCEPT})
 # a packet cannot tell us is the owning pid, which is exactly what is left here.
 SocketEvent = namedtuple("SocketEvent", "kind pid local_port")
 
+# "no event has ever touched this port". Deliberately -inf and not 0.0: a
+# ``PortTable`` that has never refreshed reports a collection time of 0.0, and
+# with 0.0 as the default the bootstrap reconcile would compare 0.0 < 0.0, decide
+# its own snapshot was too old, and seed nothing at all.
+_NEVER = float("-inf")
+
 
 class SocketWatcher:
     """A live ``local_port -> pid`` map maintained from socket-layer events."""
@@ -94,6 +129,11 @@ class SocketWatcher:
         self.clock = clock
         self._lock = threading.RLock()
         self._ports = {}                 # local_port -> pid (the live map)
+        # local_port -> when an EVENT last said something about this port. Held for
+        # ports in the map AND for recently closed ones (tombstones), so reconcile
+        # can tell "closed since your snapshot" from "never seen". Read and written
+        # under _lock only - never by pid_for, so the packet path pays nothing.
+        self._evidence = {}
         self._suspect = set()            # ports absent from the last snapshot (grace)
         self._source = None
         self._thread = None
@@ -110,23 +150,57 @@ class SocketWatcher:
         with self._lock:
             if ev.kind in _ADD:
                 self._ports[port] = pid
+                self._evidence[port] = self.clock()
             elif ev.kind == CLOSE:
                 # pid-checked: a late CLOSE for a port the OS has already handed to
                 # a DIFFERENT process must not evict the new owner. Windows reuses
                 # both PIDs and ports, so "same port" is not "same socket".
                 if self._ports.get(port) == pid:
                     del self._ports[port]
+                # Stamped even when the pid did NOT match, and even though the map
+                # did not change: the driver still told us something current about
+                # this port, and the stamp is about how fresh our knowledge is, not
+                # about whether it moved. It is what stops an older snapshot from
+                # resurrecting the socket this event just closed - the tombstone.
+                self._evidence[port] = self.clock()
+            # An event kind this map does not model leaves no evidence: blocking a
+            # snapshot on the strength of something we did not act on would be
+            # claiming knowledge we do not have.
             self._events += 1
 
-    def reconcile(self, port_pid):
+    def reconcile(self, port_pid, collected_at):
         """Merge a socket-table snapshot in (bootstrap + safety net).
 
-        The snapshot (``portmap`` -> ``GetExtendedTcp/UdpTable``) is the complete,
-        current list of OPEN sockets, so it is authoritative for what should be in
-        the map; the events keep it live between snapshots. Ports the snapshot no
-        longer lists are pruned only after being absent for TWO reconciles running,
-        which spares a socket opened microseconds before the snapshot was taken
-        (present via its event, not yet in that snapshot) from being evicted by it.
+        ``collected_at`` is when the snapshot's DATA was gathered - not when this
+        call happens. Ask ``portmap.PortTable.collected()`` for the pair; the two
+        must come from one lock hold, or the stamp can run ahead of its own data.
+        There is deliberately NO default: a caller that forgets it must fail loudly
+        at the call, because both call sites sit inside exception handlers
+        (``crashlog.quiet`` at bootstrap, the watchdog's ``except`` per tick) that
+        would otherwise turn a missing argument into "the safety net silently
+        stopped running" - which looks exactly like a healthy session.
+
+        The snapshot (``portmap`` -> ``GetExtendedTcp/UdpTable``) is the COMPLETE
+        list of open sockets as of ``collected_at``. Complete is not current: see
+        the module docstring for what merging it unconditionally cost (1394
+        resurrections and 11 owner reverts in 25 s, measured on a live session). So
+        a snapshot entry is applied only when the snapshot was collected AFTER
+        whatever an event last told us about that port, and a port an event touched
+        since then does not count as "absent" either - the snapshot never had a
+        chance to see it, so its silence says nothing.
+
+        The two-pass grace SURVIVES that rule rather than being replaced by it. The
+        collection itself takes time, so a socket opened during it can be newer than
+        ``collected_at`` by microseconds and still be missing from the result; the
+        grace is the belt to the stamp's braces. Ports the snapshot no longer lists
+        are therefore pruned only after being absent - and legitimately absent - for
+        TWO reconciles running.
+
+        ``_evidence`` is rebuilt here rather than growing forever: a tombstone is
+        kept while it can still veto a snapshot (its stamp is newer than this one),
+        and dropped once a snapshot collected after the close has agreed the port is
+        gone. Its size is therefore (open sockets + the churn of one refresh
+        interval), not (every socket this session ever saw).
 
         The new state is built to the side and PUBLISHED BY REASSIGNMENT rather than
         mutated in place, because ``pid_for`` reads this map WITHOUT a lock from the
@@ -135,14 +209,22 @@ class SocketWatcher:
         """
         with self._lock:
             merged = dict(self._ports)
+            evidence = self._evidence
             for port, pid in port_pid.items():
-                if port and pid and pid > 0:
+                if (port and pid and pid > 0
+                        and evidence.get(port, _NEVER) < collected_at):
                     merged[port] = pid
-            absent = set(merged) - set(port_pid)
+            # Absent AND stale: a port an event touched after this snapshot was
+            # collected is not missing from it, it is younger than it.
+            absent = {port for port in merged
+                      if port not in port_pid
+                      and evidence.get(port, _NEVER) < collected_at}
             doomed = absent & self._suspect          # absent twice running
             for port in doomed:
                 merged.pop(port, None)
             self._suspect = absent - doomed          # first-time absentees wait one pass
+            self._evidence = {port: at for port, at in evidence.items()
+                              if port in merged or at >= collected_at}
             self._ports = merged                     # atomic swap for lock-free readers
             self._reconciles += 1
 

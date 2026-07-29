@@ -1032,7 +1032,10 @@ class BeanEngine:
         # session are known from the first packet (events only announce NEW sockets).
         with crashlog.quiet("engine.socketwatch.bootstrap"):
             self._ports.refresh(force=True)
-            watcher.reconcile(self._ports.snapshot())
+            # collected(), not snapshot(): the watcher weighs this data against what
+            # its own events say, so it needs to know WHEN the data was gathered.
+            ports, collected_at = self._ports.collected()
+            watcher.reconcile(ports, collected_at)
         try:
             watcher.start()
             self._socketwatch = watcher
@@ -1275,8 +1278,14 @@ class BeanEngine:
                 # missed CLOSE ages out and a connection open before the watcher (or
                 # dropped under load) is still picked up. The events are the live
                 # signal; this is the belt to their braces.
+                #
+                # Half of these ticks hand over a snapshot the PREVIOUS tick already
+                # applied (measured: 10 of 20, because refresh_if_stale rebuilds every
+                # 0.30 s while this loop runs every 0.20 s), so the collection time
+                # travels with the data - see SocketWatcher.reconcile.
                 if self._socketwatch is not None:
-                    self._socketwatch.reconcile(self._ports.snapshot())
+                    ports, collected_at = self._ports.collected()
+                    self._socketwatch.reconcile(ports, collected_at)
             except Exception as _exc:
                 crashlog.note(_exc, "engine.ports")
             try:

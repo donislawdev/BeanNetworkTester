@@ -63,6 +63,12 @@ class _FakePorts:
     def snapshot(self):
         return dict(self._ports)
 
+    def collected(self):
+        # This fake's map is a fixed dict, so it is always current - "collected
+        # now" is the honest stamp. The engine needs the pair because the watcher
+        # weighs a snapshot against its own events (see SocketWatcher.reconcile).
+        return dict(self._ports), time.monotonic()
+
     def warm_names(self):
         pass
 
@@ -125,6 +131,31 @@ def test_a_watcher_that_cannot_open_degrades_instead_of_killing_the_session():
     try:
         check("the session survived the failed watcher", eng.is_running())
         check("and fell back to no watcher", eng._socketwatch is None)
+    finally:
+        eng.stop()
+
+
+def test_the_watchdog_keeps_reconciling_the_live_map():
+    """The safety net has to be seen RUNNING, not assumed to be.
+
+    Both reconcile call sites sit inside exception handlers - ``crashlog.quiet`` at
+    bootstrap, the watchdog's own ``except`` per tick - so anything that makes the
+    call raise (a signature the caller did not follow, a table double missing a
+    method) turns "the snapshot no longer corrects the map" into a session that
+    looks perfectly healthy: same counters, same log, no warning. That is the one
+    failure mode this wiring cannot report on its own, so it gets a witness.
+    """
+    eng = BeanEngine()
+    eng._ports = _FakePorts({80: 1})
+    src = _FakeSocketSource([ev(CONNECT, 100, 5000)])
+    eng.start("true", divert=FakeDivert([]), socket_source=src)
+    try:
+        w = eng._socketwatch
+        check("a watcher was started", w is not None)
+        first = w.reconciles
+        check("the watchdog reconciles while the session runs",
+              _wait(lambda: w.reconciles > first, timeout=3.0),
+              f"(stuck at {w.reconciles})")
     finally:
         eng.stop()
 

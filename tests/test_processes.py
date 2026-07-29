@@ -627,6 +627,35 @@ def test_the_socket_table_is_collected_without_holding_the_lock():
           probed.get("free") is True, f"({probed})")
 
 
+def test_collected_hands_over_the_map_and_when_it_was_gathered_together():
+    """``collected()`` exists because ``SocketWatcher.reconcile`` has to weigh this
+    data against what its own SOCKET events say, and cannot do that without knowing
+    how old the data is.
+
+    Two properties, and the second is the one that matters: the stamp must be the
+    moment the collection STARTED, never later than that. A stamp that ran ahead of
+    its own data would let a stale walk out-rank a fresh event, which is exactly the
+    bug the caller uses this to avoid.
+    """
+    from beantester import portmap
+
+    table = portmap.PortTable(clock=time.monotonic)
+    before = time.monotonic()
+    table.refresh(force=True)
+    after = time.monotonic()
+
+    ports, at = table.collected()
+    check("the map is the same one snapshot() reports", ports == table.snapshot(),
+          f"({len(ports)} vs {len(table.snapshot())})")
+    check("the stamp is not newer than the moment the collection began",
+          before <= at <= after, f"(before={before} at={at} after={after})")
+
+    # ...and it does not drift on a call that decided not to refresh
+    again, at_again = table.collected()
+    check("a second call reports the same collection", at_again == at,
+          f"({at_again} vs {at})")
+
+
 def test_an_older_collection_does_not_overwrite_a_newer_map():
     """Collecting outside the lock lets two refreshes overlap, so a slow one must not
     move the map BACKWARDS when it finishes late.
