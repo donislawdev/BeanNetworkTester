@@ -246,6 +246,11 @@ class BeanEngine:
         # Tracked rather than released blindly: the OS refcounts the requests per
         # process, so releasing one we were never granted unbalances the count.
         self._fine_timers = False
+        # True while this session holds a shortened interpreter thread-switch
+        # interval (see start()). Tracked for the same reason as the tick above:
+        # the give-back is refcounted in winenv, and releasing one we never took
+        # would let another session's stop restore the wrong value.
+        self._fast_switch = False
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
         self.reset_stats()
@@ -904,6 +909,17 @@ class BeanEngine:
         # winenv.request_fine_timers for why querying the system-wide resolution
         # instead would be reading the wrong number.
         self._fine_timers = winenv.request_fine_timers()
+        # ...and ask the INTERPRETER for the same courtesy, also for the life of
+        # the session. The capture and inject threads hand every packet to each
+        # other and both leave the interpreter for a syscall, so each packet
+        # costs two waits for the interpreter lock - and CPython lets a waiter
+        # sleep up to sys.getswitchinterval() (5 ms) before it insists. That
+        # wait, not the driver, is what the syscalls were spending their time on:
+        # send measured 26.9 us with nobody to contend with and 56.7 us here.
+        # Paired, inside one session, this is worth a median 1.33-1.36x end to
+        # end (24 pairs of 24, loopback and a real interface) at LOWER CPU per
+        # packet. Full measurement in winenv.request_fast_thread_switch.
+        self._fast_switch = winenv.request_fast_thread_switch()
         try:
             # The live socket-event map (2b/2c): created FIRST, so the initial
             # targeting resolve below already reads it instead of the poller.
@@ -1118,6 +1134,14 @@ class BeanEngine:
         if self._fine_timers:
             self._fine_timers = False
             winenv.release_fine_timers()
+        # Same place, same reason: the workers are what the shorter switch
+        # interval is for, so it goes back once they are joined and not before.
+        # An unbalanced release here is invisible from inside the program - the
+        # process would simply keep a 0.5 ms interval (or somebody else's value)
+        # for the rest of its life - which is why the balance has a test.
+        if self._fast_switch:
+            self._fast_switch = False
+            winenv.release_fast_thread_switch()
         with self._cv:
             # PACKETS still queued, not queue entries: a duplicate copy left in the
             # queue means the application got one packet instead of two, and one

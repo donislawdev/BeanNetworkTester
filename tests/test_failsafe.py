@@ -348,6 +348,167 @@ def test_the_fine_timer_calls_are_safe_to_make_anywhere():
           winenv.release_fine_timers() in (True, False))
 
 
+# A value nothing else in this process would choose: not CPython's 5 ms default
+# and not winenv.THREAD_SWITCH_S. See _switch_baseline for why it must be neither.
+_SWITCH_SENTINEL = 0.004
+_SWITCH_ORIGINAL = []
+
+
+def _switch_baseline():
+    """Put the process at a KNOWN interval with no holders, and return it.
+
+    Two ways these tests can quietly stop testing anything, both hit during the
+    mutation run for this change:
+
+    1. They share one process-global holder count. A test that leaks a holder
+       leaves the next one's ``start()`` looking at a non-zero count, so it
+       changes nothing, restores nothing, and passes.
+    2. Asserting "the interval came back to whatever it was when I started" is a
+       TAUTOLOGY once anything has leaked - and with the release deleted, every
+       engine session in this file leaks, so by the time these tests run the
+       process is already sitting at the shortened value and "restored" is true
+       by accident. The deleted-release mutant survived exactly this way.
+
+    So the baseline is a value chosen HERE, distinct from both the default and
+    the one the engine installs, and the assertions compare against it.
+    """
+    import sys
+    from beantester import winenv
+
+    if not _SWITCH_ORIGINAL:
+        _SWITCH_ORIGINAL.append(sys.getswitchinterval())
+    winenv._SWITCH_STATE[0] = None
+    winenv._SWITCH_STATE[1] = 0
+    sys.setswitchinterval(_SWITCH_SENTINEL)
+    return _SWITCH_SENTINEL
+
+
+def _switch_restore():
+    """Leave the process as this file found it, holders included."""
+    import sys
+    from beantester import winenv
+
+    winenv._SWITCH_STATE[0] = None
+    winenv._SWITCH_STATE[1] = 0
+    if _SWITCH_ORIGINAL:
+        sys.setswitchinterval(_SWITCH_ORIGINAL[0])
+
+
+def test_the_shortened_switch_interval_is_in_force_only_while_a_session_runs():
+    """The engine shortens CPython's thread-switch interval for the SESSION.
+
+    Measured (2026-07-29, real WinDivert, paired inside one session, 24 pairs of
+    24): a median 1.33-1.36x more packets a second, because the two hot threads
+    hand every packet to each other and CPython lets a thread waiting for the
+    interpreter lock sleep up to 5 ms before it insists.
+
+    Asserted on the VALUE rather than on a call log: a call log stays green if
+    the pair is wired to the wrong knob, and this number is the only thing the
+    rest of the process can actually feel.
+    """
+    import sys
+    from beantester import winenv
+
+    before = _switch_baseline()
+    eng = BeanEngine()
+    try:
+        eng.start("test", divert=QuietDivert())
+        during = sys.getswitchinterval()
+        eng.stop()
+        after = sys.getswitchinterval()          # read BEFORE the cleanup below
+    finally:
+        _switch_restore()
+    check("switch interval: shortened while the session runs",
+          during == winenv.THREAD_SWITCH_S, f"({during})")
+    check("switch interval: the session gives it back",
+          after == before, f"({after})")
+
+
+def test_the_switch_interval_is_restored_on_every_session_path():
+    """Clean stop, double stop and a start that blows up half way - all give it
+    back. An unbalanced pair is invisible from inside the program: the process
+    simply keeps somebody else's interval for the rest of its life, and nothing
+    would ever report it. Same hazard as the fine timer tick, minus the OS
+    refcount that would at least catch it there.
+    """
+    import sys
+    import threading
+
+    before = _switch_baseline()
+    eng = BeanEngine()
+    try:
+        eng.start("test", divert=QuietDivert())
+        eng.stop()
+        eng.stop()                       # idempotent: the second stop gives nothing back
+        check("switch interval: restored after a clean (and doubled) stop",
+              sys.getswitchinterval() == before, f"({sys.getswitchinterval()})")
+
+        real_start = threading.Thread.start
+        attempts = {"n": 0}
+
+        def flaky_start(self, *a, **k):
+            attempts["n"] += 1
+            if attempts["n"] > 1:
+                raise RuntimeError("can't start new thread")
+            return real_start(self, *a, **k)
+
+        threading.Thread.start = flaky_start
+        try:
+            eng.start("test", divert=QuietDivert())
+        except RuntimeError:
+            pass
+        finally:
+            threading.Thread.start = real_start
+        check("switch interval: a failed start gives it back too",
+              sys.getswitchinterval() == before, f"({sys.getswitchinterval()})")
+    finally:
+        _switch_restore()
+
+
+def test_two_overlapping_sessions_do_not_restore_each_other_s_interval():
+    """Two engines in one process is a real shape here - the tests do it, and
+    nothing stops a caller. The second one to stop must restore the value that
+    was in force before the FIRST one asked, and the first one to stop must not
+    pull the shorter interval out from under a session that is still running.
+    """
+    import sys
+    from beantester import winenv
+
+    before = _switch_baseline()
+    a, b = BeanEngine(), BeanEngine()
+    try:
+        a.start("test", divert=QuietDivert())
+        b.start("test", divert=QuietDivert())
+        b.stop()
+        still_short = sys.getswitchinterval()
+        a.stop()
+        after = sys.getswitchinterval()          # read BEFORE the cleanup below
+    finally:
+        _switch_restore()
+    check("switch interval: one session stopping leaves the other one's in place",
+          still_short == winenv.THREAD_SWITCH_S, f"({still_short})")
+    check("switch interval: the last one out restores the original",
+          after == before, f"({after})")
+
+
+def test_releasing_a_switch_interval_nobody_took_changes_nothing():
+    """It runs on every stop, on every platform, so it may never raise - and a
+    release without a matching request must not install a saved value from some
+    earlier, already balanced session."""
+    import sys
+    from beantester import winenv
+
+    before = _switch_baseline()
+    try:
+        first = winenv.release_fast_thread_switch()
+        check("switch interval: releasing without holding is refused, not raised",
+              first is False, f"({first!r})")
+        check("switch interval: and it leaves the value alone",
+              sys.getswitchinterval() == before, f"({sys.getswitchinterval()})")
+    finally:
+        _switch_restore()
+
+
 def test_stop_is_idempotent_and_keeps_the_first_reason():
     eng = BeanEngine()
     eng.start("test", divert=QuietDivert())
