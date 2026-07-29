@@ -57,6 +57,10 @@ class FakeDivert:
         self.inbox = list(packets)
         self.i = 0
         self.sent = []
+        # What the engine asked for on each send: True only when it edited the
+        # packet. Recorded separately from `sent` so the existing readers of that
+        # list keep their (time, packet) shape.
+        self.recalc = []
         self.closed = False
 
     def open(self):
@@ -71,8 +75,9 @@ class FakeDivert:
             time.sleep(0.003)
         raise OSError("closed")
 
-    def send(self, p):
+    def send(self, p, recalculate_checksum=True):
         self.sent.append((time.monotonic(), p))
+        self.recalc.append(recalculate_checksum)
 
     def close(self):
         self.closed = True

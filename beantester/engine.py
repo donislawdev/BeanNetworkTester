@@ -54,6 +54,14 @@ re-measured three times on this machine and gave **14 488, then 30 189, then
 Ratios are not safe either - the batched-versus-unbatched ratio moved between
 1.23x and 3.65x across those runs.
 
+MEASURED SINCE, and deliberately NOT folded into the figures above: two changes
+moved this by paired ratios - a shorter interpreter thread-switch interval
+(median 1.33-1.36x, 24 pairs of 24) and skipping the checksum recomputation for
+packets this tool did not edit (1.122x, 8 pairs of 8). The absolute numbers here
+have NOT been re-taken, because on this rig they cannot be re-taken in a way that
+would mean anything; multiplying them by those ratios would produce a figure that
+looks measured and is not.
+
 So: **a number from this rig is evidence only against another number taken in
 the SAME run.** Do not quote the absolutes as the tool's ceiling, do not derive
 a budget breakdown by dividing one run's figure by another's, and do not tune
@@ -1394,8 +1402,15 @@ class BeanEngine:
                 self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
                                now, proto, dropped=True, scoped=dec.scoped)
                 continue
+            # Whether this packet's BYTES were changed decides whether the
+            # injector has to recompute its checksums - see _enqueue. Corruption
+            # is the only thing in this tool that edits a captured packet
+            # (core.corrupt_packet, via the payload setter); everything else
+            # either drops it, delays it or duplicates it unchanged.
+            modified = False
             if dec.corrupt and self.core.corrupt_packet(packet, rng):
                 self._bump("corrupted")
+                modified = True
             # releases[0] is the packet itself; anything after it is a duplicate
             # copy (step 12). Kept as an explicit first call plus a branch rather
             # than a loop over an enumerate: all but the duplicating sessions have
@@ -1409,10 +1424,11 @@ class BeanEngine:
             self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
                            now, proto, scoped=dec.scoped)
             rels = dec.releases
-            refused = self._enqueue(rels[0], packet, key=key)
+            refused = self._enqueue(rels[0], packet, key=key, modified=modified)
             if len(rels) > 1:
                 for rel in rels[1:]:
-                    self._enqueue(rel, packet, copy=True, key=key)
+                    self._enqueue(rel, packet, copy=True, key=key,
+                                  modified=modified)
                 self._bump("duplicated")
             if refused:
                 # A packet the QUEUE threw away used to count nowhere in its row:
@@ -1431,7 +1447,13 @@ class BeanEngine:
         if rst is None:
             return
         try:
-            self._divert.send(rst)
+            # ALWAYS recalculated, and explicitly so. Unlike everything on the
+            # injector's path this packet was never captured - it was BUILT here,
+            # header by header, so nothing has ever computed its checksums and no
+            # offload flag applies to it. Sending it as-is would produce a segment
+            # the local stack drops on arrival, and the failure would look like
+            # "RST does not reset anything" rather than like a checksum bug.
+            self._divert.send(rst, recalculate_checksum=True)
             self._bump("rst_sent")
         except Exception as e:
             if self._running:
@@ -1606,7 +1628,7 @@ class BeanEngine:
         if first:
             self.log_event("WARN", "events.driver_wait")
 
-    def _enqueue(self, release, packet, copy=False, key=None):
+    def _enqueue(self, release, packet, copy=False, key=None, modified=False):
         """Queue one release of ``packet`` for delayed injection.
 
         Returns True when the queue refused it, so the caller can record the loss
@@ -1614,6 +1636,15 @@ class BeanEngine:
         injector needs it to credit the DELIVERED bytes to the right row, and
         ``stop()`` needs it to charge whatever is still parked here to the rows
         that will never receive it.
+
+        ``modified`` says whether this tool edited the packet's BYTES, and it
+        rides along for the injector, which turns it into
+        ``send(recalculate_checksum=...)``. An untouched packet goes back exactly
+        as it arrived, pseudo-checksum and all - see _inject_loop for the
+        measurement and why that is the correct thing to do, not merely the fast
+        one. It is the LAST field of the queue entry on purpose: ``stop()``
+        indexes this tuple POSITIONALLY (entry[3], entry[4]), so appending is the
+        one shape that cannot silently move somebody else's field.
 
         ``copy=True`` marks a DUPLICATE release (pipeline step 12): the same
         packet already has an earlier entry in this queue. Overflow and shutdown
@@ -1642,7 +1673,8 @@ class BeanEngine:
             else:
                 overflowed = False
                 heapq.heappush(self._heap,
-                               (release, next(self._counter), packet, copy, key))
+                               (release, next(self._counter), packet, copy, key,
+                                modified))
                 q = len(self._heap)
                 with self._slock:
                     if q > self.st["peak_queue"]:
@@ -1659,7 +1691,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not self._running:
                     break
-                release, _, packet, _, key = self._heap[0]
+                release, _, packet, _, key, modified = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))
@@ -1678,7 +1710,27 @@ class BeanEngine:
                     self._bump("drop_shutdown")
                     self._charge_flow(key, "dropped")
                 else:
-                    self._divert.send(packet)
+                    # Recompute the checksums only when this tool actually edited
+                    # the bytes. An untouched packet goes back exactly as it
+                    # arrived - and that is the CORRECT thing, not just the cheap
+                    # one: WinDivert hands us the packet with its checksum-valid
+                    # flags in WINDIVERT_ADDRESS, and outbound traffic routinely
+                    # arrives with a PSEUDO checksum for the hardware to finish
+                    # (measured on this machine: udp_checksum was 0 on 120 of 120
+                    # packets, on loopback and over a real interface alike). We
+                    # re-inject the same bytes with the same address, so the flag
+                    # rides along and the stack does what it would have done.
+                    # Recomputing instead meant an unimpaired session did not
+                    # actually pass traffic through byte for byte.
+                    # Verified end to end over a real interface, not on loopback:
+                    # 24 MiB of TCP through the engine to a sink in a WSL guest,
+                    # 25 165 824 B received, SHA-256 match, drop_send 0. A wrong
+                    # checksum does not corrupt data quietly - the receiver
+                    # discards the segment - so the byte count is the guard.
+                    # Worth a median 1.122x end to end (8 of 8 paired windows
+                    # inside one session), because the work removed was competing
+                    # with the CAPTURE thread, which is what sets the rate.
+                    self._divert.send(packet, recalculate_checksum=modified)
                     size = len(packet.raw)
                     is_out = getattr(packet, "is_outbound", True)
                     self._bump("bytes_out" if is_out else "bytes_in", size)

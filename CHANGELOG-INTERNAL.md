@@ -184,6 +184,70 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Changed: checksums are recomputed only for packets this tool actually edited (handoff point 2)
+
+- **The rule:** `_inject_loop` now calls `send(packet, recalculate_checksum=modified)`, where
+  `modified` is set in `_capture_loop` when `core.corrupt_packet` reports it changed the bytes, and
+  rides through the release queue with the entry. `_send_rst` passes `recalculate_checksum=True`
+  explicitly - that packet was BUILT, never captured, so nothing has ever computed a checksum for it.
+- **Correctness first, because this one can fail silently.** WinDivert delivers each packet with
+  its checksum-valid flags in `WINDIVERT_ADDRESS`, and pydivert exposes them
+  (`packet.ip_checksum` / `.tcp_checksum` / `.udp_checksum`). MEASURED here, sniff-only:
+  `udp_checksum` was **0 on 120 of 120 packets** on loopback AND over a real interface - outbound
+  traffic carries a PSEUDO checksum for the hardware to finish. Re-injecting the same bytes with
+  the same address hands that flag back to the stack, which then does what it would have done
+  anyway. Verified end to end where it can actually differ (loopback is a special path and lenient
+  about checksums it never had to compute): 24 MiB of TCP through the engine to a sink inside a WSL
+  guest, over 192.168.48.1, **25 165 824 B received, SHA-256 match, `drop_send` 0**, with
+  recalculation on and off alike. A bad checksum does not corrupt data quietly - the receiver
+  discards the segment - so the byte count is the guard.
+- **Worth 1.122x end to end** (8 of 8 paired windows, spread 1.087-1.156, toggled mid-session with
+  the order swapped every pair), `send()` itself 54.5 -> 45.9 us.
+  🔴 **The prediction going in was ~1.00x and it was wrong, for a reason worth keeping.** The
+  release heap sits at depth 0-2 since PR #74, so the inject thread has slack, and making a thread
+  with slack faster should buy nothing. The gain does not come from the injector's throughput - it
+  comes from the work no longer competing with the CAPTURE thread, which is what sets the rate.
+  Same shape as the earlier "send() is slow" misreading: the unit that matters is the PAIR of
+  threads, not either one of them.
+- **A side effect that is really the point:** with nothing configured, the tool now passes traffic
+  through byte for byte in the literal sense. Recomputing meant an untouched packet went out with
+  different bytes than it came in - a pseudo checksum turned into a real one.
+- 🔴 **`send()` on the divert protocol gained a keyword, and that was the deliberate choice.**
+  It touches `SyntheticDivert` plus seven test doubles (`tests/fakes.py`,
+  `test_engine.py`, `test_failsafe.py` x2, `test_rst_local.py`, `test_concurrency_chaos.py`,
+  `test_socketwatch_wiring.py`). The smaller alternative - wrapping the real handle in
+  `_start_locked` so the protocol stays one-argument - was rejected: with it, `_send_rst` would
+  silently inherit "never recalculate" and inject RSTs the local stack drops, and the symptom
+  ("RST does not reset anything") points nowhere near the cause. The explicit keyword puts the
+  decision at the call site where the next reader meets it.
+- **Tests** (all verified by mutation - five mutants, five deaths):
+  `tests/test_checksums.py::test_an_untouched_packet_is_re_injected_without_recomputing_its_checksums`,
+  `::test_a_corrupted_packet_IS_recomputed`,
+  `::test_a_duplicate_of_a_corrupted_packet_is_recomputed_too` (the duplicate release is a separate
+  queue entry, and the mutant that dropped `modified` from it died here with `[True, False]`), and
+  `tests/test_rst_local.py::test_an_injected_rst_is_always_recomputed`. The RST guard lives with
+  the RST fixtures on purpose: a `FakePacket` has no TCP layer, so a "reset" test written next to
+  the others would have passed without ever building one.
+
+### Measured and NOT changed: the locks, the connection log and the address conversion
+
+- With the handoff cheap (PR #74), the three obvious remaining targets were re-measured the same
+  paired way, inside one session. **All three are noise:** nulling `_slock` 1.011x (6/6 pairs),
+  nulling `_clock` 1.002x (4/6 - a coin toss), both together 1.011x, and the watchdog's per-tick
+  work (`refresh_if_stale` + `warm_names`) 1.003x. The 1.71x / 1.25x those same ablations gave at
+  the 5 ms switch interval was the handoff showing up ON the locks, not the cost of the locks.
+- **Memoising pydivert's per-packet `inet_ntop`** (`packet/ip.py:43-66` converts the address to a
+  string on EVERY read and caches nothing): 1.017x, 6/6 pairs. Real but small, and the change would
+  either duplicate pydivert internals or make the engine read raw address bytes and reshape
+  `_flowkey`, whose string keys are consumed by the connection log, the CSV, the repro report and
+  the NDJSON schema. Not worth it at 1.7%.
+- **The whole connection log removed**: 1.012x. There is nothing to win by optimising it.
+- 🔴 **Sending inline on the capture thread (zero handoffs) is 0.72x - 28% SLOWER, 0 of 8 pairs.**
+  Worth recording because it is counter-intuitive and cheap to try again: `recv` really does get
+  faster (32.6 -> 25.2 us) once nothing competes with it, but one thread then has to do both jobs.
+  The two threads genuinely overlap, and what looks like "handoff overhead" in the budget is the
+  price of that overlap, not waste.
+
 ### Fixed: the engine's ceiling was CPython's thread-switch interval, not any stage (handoff point 1)
 
 - **The question.** The previous session narrowed the bottleneck by elimination - not the read

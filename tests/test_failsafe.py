@@ -38,7 +38,7 @@ class ExplodingDivert:
             return FakePacket(size=100, port=1000 + self.i)
         raise OSError("driver went away")
 
-    def send(self, packet):
+    def send(self, packet, recalculate_checksum=True):
         self.sent.append(packet)
 
     def close(self):
@@ -59,7 +59,7 @@ class QuietDivert:
             time.sleep(0.005)
         raise OSError("closed")
 
-    def send(self, packet):
+    def send(self, packet, recalculate_checksum=True):
         pass
 
     def close(self):

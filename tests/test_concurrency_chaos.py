@@ -233,7 +233,7 @@ class FastDivert:
                                 f"93.184.{i % 200}.{i % 251}",
                                 tcp=_SyntheticTCP(ack=True))
 
-    def send(self, packet):
+    def send(self, packet, recalculate_checksum=True):
         pass
 
     def close(self):

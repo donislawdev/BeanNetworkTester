@@ -136,8 +136,14 @@ class SyntheticDivert:
         """Build the RST packet the engine wants to inject (see build_synthetic_rst)."""
         return build_synthetic_rst(packet, fields)
 
-    def send(self, packet):
-        pass
+    def send(self, packet, recalculate_checksum=True):
+        """Accepted and ignored: there is no wire here and no checksum to fix.
+
+        The argument exists because the engine states it explicitly on every
+        send - it recomputes checksums only for packets this tool actually edited
+        (see BeanEngine._inject_loop) - and a divert that could not accept the
+        word would force the engine to guess which kind of handle it holds.
+        """
 
     def close(self):
         self.closed = True

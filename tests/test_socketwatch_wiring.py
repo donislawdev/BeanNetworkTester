@@ -155,7 +155,7 @@ class _GatedDivert:
             time.sleep(0.003)
         raise OSError("closed")
 
-    def send(self, packet):
+    def send(self, packet, recalculate_checksum=True):
         self.sent.append(packet)
 
     def close(self):

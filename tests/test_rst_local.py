@@ -42,8 +42,10 @@ class RecordingTcpDivert:
             time.sleep(0.003)
         raise OSError("closed")
 
-    def send(self, p):
+    def send(self, p, recalculate_checksum=True):
         self.sent.append(p)
+        self.recalc = getattr(self, "recalc", [])
+        self.recalc.append(recalculate_checksum)
 
     def make_rst(self, packet, fields):
         return build_synthetic_rst(packet, fields)
@@ -82,6 +84,32 @@ def test_rst_injection_counts_and_shape():
     assert rst.is_outbound is False                 # aimed at the local end
     # ports are swapped relative to the observed outbound packet
     assert (rst.src_port, rst.dst_port) == (6000, 5000)
+
+
+def test_an_injected_rst_is_always_recomputed():
+    """An RST is BUILT here, not captured, so nothing has ever computed its
+    checksums and no hardware-offload flag applies to it.
+
+    The engine skips the recomputation for packets it did not edit - that is
+    worth a measured 1.122x and is what makes an unimpaired session pass traffic
+    through byte for byte (see tests/test_checksums.py). This packet is the
+    exception, and the failure mode if it is ever folded into the same rule is
+    nasty to read: the local stack drops the segment on arrival, so the symptom
+    is "RST does not reset the connection", with `rst_sent` happily counting up.
+    """
+    pkts = [_tcp_packet(5100, 6100, is_outbound=True)]
+    div = RecordingTcpDivert(pkts)
+    eng = BeanEngine()
+    eng.set_rst(100, 3.0)
+    eng.start("test", divert=div)
+    _drain(eng, 1)
+    eng.stop()
+
+    assert div.sent, "no RST was injected"
+    assert getattr(div, "recalc", []), "nothing recorded the recalculation flag"
+    # the dropped packet never reaches send(), so every send here IS an RST
+    assert all(p.tcp is not None and p.tcp.rst for p in div.sent), div.sent
+    assert all(div.recalc), div.recalc
 
 
 def test_rst_cooldown_sends_once_then_drops_silently():
