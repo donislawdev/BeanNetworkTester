@@ -494,6 +494,13 @@ class BeanEngine:
                            rst_reset=0, rst_sent=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
+                           # The same DELIVERED bytes as bytes_in/bytes_out, but
+                           # counting only flows that passed the targeting gate.
+                           # They exist so a view can answer "how much of this was
+                           # MINE?" without walking the connection table, which is
+                           # up to 200k rows. Written by the INJECT thread only -
+                           # see _log_delivered for why that is safe without a lock.
+                           bytes_in_scoped=0, bytes_out_scoped=0,
                            queue=0, peak_queue=0,
                            # The worst wait a packet had ALREADY served inside
                            # WinDivert before this tool even saw it. Milliseconds,
@@ -668,6 +675,24 @@ class BeanEngine:
             c["sent_out"] += size
         else:
             c["sent_in"] += size
+        # Session totals for the SCOPED half, from the row's own sticky flag. The
+        # flag is right here, which is why this needs no wider change: the capture
+        # thread sets it before the packet is queued, so by the time the injector
+        # reaches this line the answer is already on the row.
+        #
+        # Written WITHOUT the stats lock, and that is the same trade the docstring
+        # above justifies for sent/sent_in/sent_out: this thread is the only writer
+        # (reset_stats zeroes them before any worker exists), readers only read, and
+        # an int rebind is atomic - a reader sees the old value or the new one, never
+        # a torn one. Taking _slock here would put the per-packet inject path in the
+        # queue behind stats readers, which is the 5% regression measured for the
+        # sibling counters.
+        if c.get("scoped"):
+            st = self.st
+            if is_out:
+                st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
+            else:
+                st["bytes_in_scoped"] = st["bytes_in_scoped"] + size
 
     def _charge_flow(self, key, field, n=1):
         """Add to one counter on one flow's row (no row = nothing to charge).

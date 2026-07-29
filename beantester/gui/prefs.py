@@ -45,6 +45,15 @@ PREFS = (
     Pref("log_lines", NUMBER, "prefs.log_lines", "tips.log_lines",
          default=500, bounds=(50.0, 100000.0), unit_key="prefs.unit_lines",
          hint="prefs.log_lines_hint", width=10),
+    # Default False = what the tool has always done: every captured packet is
+    # counted and listed, and targeting only decides what gets IMPAIRED. Turning
+    # it on narrows the VIEW, never the capture and never the impairment - the
+    # engine keeps both totals either way, which is also why the machine-readable
+    # outputs (NDJSON, the reproduction report) are untouched by this: they carry
+    # `seen` AND `scoped_seen` regardless, so a pipeline never has to guess which
+    # world a file came from.
+    Pref("scope_view_to_target", BOOL, "prefs.scope_view", "tips.scope_view",
+         default=False, hint="prefs.scope_view_hint"),
     # -- behaviour --------------------------------------------------------- #
     Pref("confirm_close", BOOL, "prefs.confirm_close", "tips.confirm_close",
          default=True),
@@ -58,7 +67,7 @@ PREFS_BY_KEY = {p.key: p for p in PREFS}
 
 # How the Settings window groups them (each is a card, like a Control section).
 PREF_GROUPS = (
-    ("prefs.group_view", ("chart_seconds", "log_lines")),
+    ("prefs.group_view", ("chart_seconds", "log_lines", "scope_view_to_target")),
     ("prefs.group_behaviour", ("confirm_close", "restore_profile", "reset_layout")),
 )
 

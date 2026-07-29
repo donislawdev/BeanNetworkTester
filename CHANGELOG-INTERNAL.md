@@ -184,6 +184,40 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Added: "show only the targeted traffic" - a VIEW preference (chunk 3)
+
+- `gui/prefs.py::scope_view_to_target` (BOOL, default False - convention 42's second kind: a
+  cross-restart GUI preference, so no CLI flag and never inside a traffic config file).
+- **One decider, not five.** `App.scoped_stat(snap, key)` + `App.SCOPED_TWIN` is the single place
+  that knows which counters have a narrowed twin; the counter grid, the session panel, the chart,
+  the rate window, the Connections model and the connections CSV all go through it, so the
+  preference cannot mean one thing on one tab and something else on the next.
+- **Engine side stays lock-free.** `bytes_in_scoped` / `bytes_out_scoped` are bumped in
+  `_log_delivered` from the row's own sticky `scoped` flag - the flag is already on the row by then,
+  so no change to the heap tuple was needed (its three positional consumers stay untouched). Written
+  without `_slock` on the same argument the sibling `sent`/`sent_in`/`sent_out` counters already
+  rest on: the inject thread is the only writer and an int rebind is atomic. Taking the lock there
+  was measured at a 5% regression when the sibling counters were added.
+- 🔴 **Three deliberate omissions, each with a test, because "we decided not to" is what gets tidied
+  away by somebody making things consistent:**
+  - `drop_overflow` / `drop_shutdown` / `drop_send` never narrow - they count what THIS TOOL lost,
+    including untargeted traffic, and hiding that is precisely the convention-20 failure. Their
+    tooltips now say so, in both languages.
+  - the stats CSV does not follow the preference (append log; it gains both totals as columns).
+  - NDJSON and the reproduction report are untouched - they already carry `seen` AND `scoped_seen`,
+    so a saved run never depends on how the window was set.
+- **The notes re-word themselves on the tick**, not only at build: the preference can be toggled
+  while a page is already built, and a note reading "ALL captured traffic" over narrowed numbers is
+  exactly the misleading sentence it exists to prevent. Same for the chart caption
+  (`frames.throughput_scoped`), which is redrawn every tick - a chart is what people screenshot, so
+  the scope has to be readable from the picture.
+- New `tests/test_view_scope.py`. **Five mutants, all caught**, and the two that matter are the
+  good-faith "let's be consistent" edits: giving a tool-loss counter a scoped twin, and counting
+  scoped bytes for every flow. Also caught: ignoring the preference, defaulting it ON, and building
+  the note once without re-wording it.
+- Both READMEs updated; the old flat claim "Statistics and Connections show ALL captured traffic"
+  now says "by default" and spells out what does not follow the switch.
+
 ### Tests: every gate that judges the REMOTE end is pinned in BOTH directions
 
 - `engine._capture_loop` reads the remote endpoint as the packet's DESTINATION when outbound and

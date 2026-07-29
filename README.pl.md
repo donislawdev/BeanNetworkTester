@@ -874,9 +874,16 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
 - **Goła nazwa procesu to podciąg** - `chrome` łapie też `chromedriver.exe`. To zachowanie
   zachowane celowo (zgodność ze starymi konfiguracjami); po precyzję sięgnij po `re:^chrome\.exe$`
   albo wykluczenie `chrome, !chromedriver`.
-- **Statystyki i Połączenia pokazują CAŁY przechwycony ruch** - to, co przepuszcza filtr „Ruch do
-  modyfikacji”. Celowanie (proces / IP / port) decyduje wyłącznie o tym, **co zostanie zepsute**,
-  a nie o tym, co jest widoczne w tabelach i licznikach.
+- **Statystyki i Połączenia domyślnie pokazują CAŁY przechwycony ruch** - to, co przepuszcza filtr
+  „Ruch do modyfikacji”. Celowanie (proces / IP / port) decyduje wyłącznie o tym, **co zostanie
+  zepsute**, a nie o tym, co jest widoczne w tabelach i licznikach. W Ustawieniach jest przełącznik
+  **„Pokazuj tylko ruch celu”**, który zawęża liczniki, wykres przepustowości, tabelę Połączeń i
+  eksport połączeń do tego, co wybrało Twoje celowanie. Zmienia to, co WIDZISZ - nigdy tego, co jest
+  przechwytywane, ani tego, co jest psute. **Trzy liczniki i tak zostają na całym ruchu**:
+  „Przepełnienie kolejki”, „Porzucone przy stopie” i „Błąd wysyłki” liczą pakiety zgubione przez
+  *to narzędzie*, także spoza celu, a ukrycie ich ukryłoby jego własne szkody. Eksport CSV statystyk
+  też nie idzie za przełącznikiem - to log dopisywany, więc niesie obie liczby w osobnych kolumnach.
+  Raport reprodukcji i `--format json` zawsze niosą obie.
 - **Limit prędkości kształtuje ŚREDNIĄ** - kubełek tokenów przepuszcza chwilowe skoki, więc
   „Szczyt pobierania/wysyłania” (uśredniany w oknie 1 s) potrafi być odrobinę wyższy niż ustawiony
   limit. Duplikaty są liczone do limitu (drugi egzemplarz też jedzie łączem).
