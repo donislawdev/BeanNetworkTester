@@ -63,6 +63,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **A session now moves noticeably more traffic - about a third more packets a second.** The tool
+  handles your packets on two threads: one takes them from the driver, the other puts them back on
+  the wire. Python makes those two take turns, and by default a thread that is ready to work can be
+  left waiting up to 5 milliseconds for its turn. That waiting, not the work itself, was the limit:
+  putting a packet back took 57 microseconds while the same call takes 27 with nothing else in the
+  way. A session now asks Python for shorter turns while it runs, and hands that setting back when
+  it stops. Measured on a real capture, comparing both settings inside the same session, on
+  loopback and over a real network card: **1.33x to 1.36x more packets a second, in 24 comparisons
+  out of 24** - and with slightly *less* processor time per packet, not more. The queue of packets
+  waiting to be re-injected stops backing up, which is what that number looks like from the other
+  side. **Nothing changes in what you configure or see**, and the delay you ask for is delivered
+  just as accurately as before: against a configured 10 ms, packets were late by 0.73 ms before
+  and 0.76 ms after, which is the same number twice.
+
 - **Targeting a process no longer competes with the traffic it is measuring.** Working out which
   connections belong to your target means asking Windows about its sockets, and that used to
   happen on the same thread that handles your packets - dozens of times a second, because every

@@ -1,7 +1,12 @@
 """Windows process environment: Administrator rights, console and DPI.
 
 Everything here is a no-op on other platforms so the engine, the CLI and the
-tests stay portable.
+tests stay portable - with ONE deliberate exception, marked as such where it
+lives: :func:`request_fast_thread_switch` tunes the CPython interpreter, not
+Windows, so it does its work everywhere. It sits here because this is where the
+process-global knobs live - the ones a SESSION takes and must give back
+(:func:`request_fine_timers` is the other one), and having them in one place is
+what keeps the give-back paths symmetrical.
 
 Why this module exists
 ----------------------
@@ -21,6 +26,7 @@ The tool now ships as ONE console-subsystem executable that serves both modes
 """
 import os
 import sys
+import threading
 
 from .paths import is_frozen
 from . import crashlog
@@ -254,6 +260,94 @@ def release_fine_timers(period_ms=TIMER_PERIOD_MS):
     try:
         import ctypes
         return ctypes.WinDLL("winmm").timeEndPeriod(int(period_ms)) == 0
+    except Exception as _exc:
+        crashlog.note(_exc, "winenv")
+        return False
+
+
+# How long a thread waiting for the interpreter lock sleeps before it insists.
+# CPython ships 5 ms. MEASURED as the engine's binding constraint - see
+# request_fast_thread_switch - and 0.5 ms is the KNEE, not the floor: 1 ms still
+# behaves like 5 ms, and 0.1 / 0.05 / 0.01 ms buy nothing more.
+THREAD_SWITCH_S = 0.0005
+
+# [saved original, holders]. Not the OS's refcount (there is none for this) -
+# ours, because two engines can live in one process and the second one to stop
+# must not restore a value the first one is still relying on. Guarded: two
+# engines starting at once would otherwise both read 0 holders, and the one that
+# saved SECOND would save the already-shortened interval and "restore" that for
+# the life of the process. Taken on start/stop only, never per packet.
+_SWITCH_STATE = [None, 0]
+_SWITCH_LOCK = threading.Lock()
+
+
+def request_fast_thread_switch(interval_s=THREAD_SWITCH_S):
+    """Shorten the interpreter's thread-switch interval for this SESSION.
+
+    NOT a Windows call - this one tunes CPython and works on every platform. It
+    lives beside :func:`request_fine_timers` because it is the same KIND of
+    thing: a process-global knob a session takes and must give back.
+
+    Why the engine wants it, MEASURED 2026-07-29 (Win11, elevated, real
+    WinDivert, 64 B UDP flood, no impairment configured). The engine runs two
+    threads that hand every packet to each other, and both leave the interpreter
+    for a syscall - capture in ``recv``, injector in ``send``. Whoever comes back
+    first has to re-acquire the interpreter lock, and with the default 5 ms
+    interval it can wait for a slice of that. The syscalls are not slow; the
+    waiting is:
+
+        one thread, no contender      recv 15.3 us   send 26.9 us
+        the engine, 5 ms   (default)  recv 41.7 us   send 56.7 us
+        the engine, 0.5 ms            recv 19.9 us   send 32.0 us
+
+    End to end, measured PAIRED inside one session (the interval flipped
+    mid-run, windows alternating, order swapped every pair, so machine drift
+    passes through both halves): **median 1.33-1.36x more packets a second, 24
+    pairs out of 24**, on loopback AND over a real interface to a WSL guest. The
+    release heap stops backing up with it (``peak_queue`` 253 -> 8-62), which is
+    the same finding read off a counter instead of a clock.
+
+    It is not bought with CPU - 103.1 -> 92.9 us of process CPU per packet - and
+    it does not cost delay accuracy, which is what this tool actually promises:
+    against a configured 10 ms, lateness stayed at a median of 0.73 vs 0.76 ms
+    and a p95 of 1.71 vs 1.65 ms, with the shorter interval ahead in 3 pairs of 6
+    (a coin toss, i.e. no effect either way).
+
+    Every request MUST be matched by a :func:`release_fast_thread_switch`.
+    """
+    try:
+        with _SWITCH_LOCK:
+            if _SWITCH_STATE[1] == 0:
+                # Saved, not assumed to be the CPython default: a test - or an
+                # embedding process - may have set its own, and that is what we
+                # owe them back.
+                _SWITCH_STATE[0] = sys.getswitchinterval()
+                sys.setswitchinterval(interval_s)
+            _SWITCH_STATE[1] += 1
+        return True
+    except Exception as _exc:
+        crashlog.note(_exc, "winenv")
+        return False
+
+
+def release_fast_thread_switch():
+    """Give back one :func:`request_fast_thread_switch`. Only for a granted one.
+
+    Restores the value that was in force before the FIRST holder asked, and only
+    once the last holder has let go. Releasing blindly would let one session's
+    stop pull the interval out from under another session that is still running -
+    the same unbalance hazard as the fine timer tick, minus the OS refcount to
+    catch it.
+    """
+    try:
+        with _SWITCH_LOCK:
+            if _SWITCH_STATE[1] <= 0:
+                return False
+            _SWITCH_STATE[1] -= 1
+            if _SWITCH_STATE[1] == 0 and _SWITCH_STATE[0] is not None:
+                sys.setswitchinterval(_SWITCH_STATE[0])
+                _SWITCH_STATE[0] = None
+        return True
     except Exception as _exc:
         crashlog.note(_exc, "winenv")
         return False

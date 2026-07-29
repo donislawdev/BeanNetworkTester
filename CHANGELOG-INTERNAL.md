@@ -184,6 +184,81 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### Fixed: the engine's ceiling was CPython's thread-switch interval, not any stage (handoff point 1)
+
+- **The question.** The previous session narrowed the bottleneck by elimination - not the read
+  (a sniff-only loop does 92 944 pkt/s), not `decide()` (~800 ns) - and asked for a PER-STAGE
+  budget rather than another throughput benchmark, because this rig's absolute numbers are not
+  reproducible (see "What this actually sustains" in `engine.py`).
+- **Method: measure in place, never re-implement the loop.** A proxy on the divert timed `recv`
+  and `send` (and the interval between them, which IS the loop body); a proxy on the packet timed
+  every attribute the loop reads BY NAME, so pydivert's parsing was measured where it happens; the
+  four engine methods were wrapped. `engine.start(divert=...)` is the only seam that needed to
+  exist, and it already did.
+- **What the split showed, in one run:** the Python stages are small and not where the time goes -
+  `decide()` 6.2 us, `src_port` (which pulls the whole transport header) 5.5 us, `dst_addr`
+  (an `inet_ntop` per packet, uncached) 2.8 us, `_log_conn` 1.8 us, `_enqueue` 2.4 us. The two
+  syscall-bracketed stages were 3x their uncontended cost, on BOTH threads at once.
+- 🔴 **The cause, isolated by ablation** (paired against a minimal 2-thread reference, drift canary
+  1.03x): not the shared handle - a separate `SEND_ONLY` injection handle made it WORSE (send
+  1.71x, recv 1.97x, rate 1.26x instead of 1.59x). Not the locks - nulling `_slock` bought 1.71x
+  and `_clock` 1.25x, both partial. **`sys.setswitchinterval` bought 2.38x at 0.5 ms and 2.68x at
+  0.05 ms**, and collapsed `peak_queue` from 253 to 8-62. The capture and inject threads hand every
+  packet to each other and both leave the interpreter for a syscall, so each packet costs two waits
+  for the interpreter lock - and CPython lets a waiter sleep up to the switch interval, 5 ms by
+  default, before it insists.
+- **The number that is trustworthy, and the one that is not.** A phase-to-phase throughput ratio is
+  worthless here: the 5 ms canary alone ranged 10 370 to 15 450 pkt/s inside one run. So the final
+  measurement flips the interval INSIDE one session, counts packets over alternating windows and
+  swaps the order every pair: **median 1.35x (loopback), 1.33x (loopback, repeat), 1.36x (real
+  interface to a WSL guest) - 24 of 24 pairs**. The per-call readings repeat exactly and are the
+  same finding without a stopwatch: recv 41.7 -> 19.9 us, send 56.7 -> 32.0 us.
+- **Priced, not assumed.** Process CPU per packet FELL, 103.1 -> 92.9 us. Delay accuracy (the thing
+  the tool actually promises) is unchanged: against a configured 10 ms, lateness held a median of
+  0.73 vs 0.76 ms and a p95 of 1.71 vs 1.65 ms, the shorter interval ahead in 3 pairs of 6. 0.5 ms
+  is the KNEE, not the floor - 1 ms still behaves like 5 ms, and 0.1 / 0.05 / 0.01 buy nothing.
+- **NOT measured:** GUI smoothness at 0.5 ms, TCP traffic (this was UDP), and machines with fewer
+  than 16 cores.
+- **Implementation:** `winenv.request_fast_thread_switch()` / `release_fast_thread_switch()` plus
+  `THREAD_SWITCH_S = 0.0005`, taken in `BeanEngine._start_locked` beside `request_fine_timers` and
+  given back in `_stop_locked` after the workers are joined - the same session-scoped shape, for
+  the same reason. It carries its OWN refcount and saved value: unlike `timeBeginPeriod` the OS
+  does not count these, so two overlapping sessions would otherwise let the first one to stop
+  restore a value out from under the second. Guarded by `_SWITCH_LOCK`, taken on start/stop only.
+  This is the one function in `winenv.py` that is not Windows-specific - it tunes CPython - and the
+  module docstring now says so.
+- **Tests** (`tests/test_failsafe.py`, all four verified by mutation):
+  `test_the_shortened_switch_interval_is_in_force_only_while_a_session_runs`,
+  `test_the_switch_interval_is_restored_on_every_session_path` (clean stop, double stop, failed
+  start), `test_two_overlapping_sessions_do_not_restore_each_other_s_interval` (the refcount), and
+  `test_releasing_a_switch_interval_nobody_took_changes_nothing`.
+- 🔴 **The mutation run found the hole in the TESTS, not in the code, and it is worth recording.**
+  The deleted-release mutant survived at first. Two reasons, both the same shape: the four tests
+  share one process-global holder count, so a leak in one made the next one's `start()` a no-op;
+  and "the interval came back to what it was when I started" is a TAUTOLOGY once anything leaks -
+  with the release deleted every engine session in the file leaks, so the process was already
+  sitting at the shortened value and "restored" was true by accident. The fix is `_switch_baseline`
+  / `_switch_restore`: assert against a sentinel value chosen by the test (0.004 - neither the
+  CPython default nor `THREAD_SWITCH_S`), and read the post-stop value INSIDE the try, before the
+  cleanup can paper over it. A second miss on the way: the first mutation run used `-k switch`,
+  which silently skipped the one test whose name says "interval" - the only guard on the refcount -
+  so that mutant came back green.
+
+### Corrected: "the bottleneck is INJECTION" and the batched injector's shallow-heap premise
+
+- **`PROJECT_NOTES` hot-paths section said the constraint was the `send()` side**, on the evidence
+  that the release heap grew ~1100 entries/s. The premise is right and the inference was wrong:
+  `send()` costs 26.9 us with nobody to contend with, and the 56.7 us it showed in the engine was
+  the wait for the interpreter lock. Both threads were inflated by the same factor, which is what
+  should have been the tell - a slow `send()` cannot slow down `recv()` on another thread.
+- **The batching ADR below records `peak_queue` 30 and a mean batch of 2.13** and forbids
+  re-opening the topic without re-measuring the mean batch size under the workload in question.
+  Re-measured: under a saturating flood the heap sits 15-320 deep and reaches `max_queue` (20 000)
+  over a real interface, so a `SendEx` call would have been handed tens of packets, not two. That
+  condition IS met - and the topic still should not be re-opened, because the switch interval takes
+  `peak_queue` back down to 8-62. The ADR's conclusion survives; the reason under it changes from
+  "the injector keeps up" to "the injector keeps up ONCE THE HANDOFF IS CHEAP".
+
 ### ADR 2026-07-29: the batched injector was BUILT, measured and REVERTED
 
 - **What was built.** `_inject_loop` taking every already-due packet (cap 32) and sending them with
