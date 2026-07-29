@@ -1642,7 +1642,18 @@ class BeanEngine:
                     continue
                 heapq.heappop(self._heap)
             try:
-                if self._divert is not None:
+                if self._divert is None:
+                    # STOP cleared the handle between the pop above and here. The
+                    # packet is already OFF the heap, so stop()'s stranded sweep
+                    # will never see it either - without this it just left the
+                    # seen/delivered/dropped balance, silently, which is the one
+                    # thing keeping these numbers honest. Found while measuring the
+                    # batched injector (rejected, see CHANGELOG-INTERNAL): the hole
+                    # was one packet wide already, and batching would have made it
+                    # a whole batch wide.
+                    self._bump("drop_shutdown")
+                    self._charge_flow(key, "dropped")
+                else:
                     self._divert.send(packet)
                     size = len(packet.raw)
                     is_out = getattr(packet, "is_outbound", True)

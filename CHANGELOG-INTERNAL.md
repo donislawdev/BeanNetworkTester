@@ -184,6 +184,36 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   is the same trap F16 recorded, hit again from a different direction; the portless guard above
   exists because of it, and the core test now says which half it actually pins.
 
+### ADR 2026-07-29: the batched injector was BUILT, measured and REVERTED
+
+- **What was built.** `_inject_loop` taking every already-due packet (cap 32) and sending them with
+  one `WinDivertSendEx`; per-packet accounting that walked `pSendLen` back over the batch rather
+  than assuming atomicity; a `batch_sender` seam on `start()`; six guards including a staggered
+  timing test. All of it worked and was green.
+- **Why it went anyway.** The bare-loop measurement promised 1.62-1.75x. The ENGINE measured
+  **1.00x** - 7 of 14 pairs, median 1.00, range 0.93-1.05, paired with alternating order. An earlier
+  6-pair run had said 1.60x; the longer one shows that was drift (the unbatched half sat in a slower
+  phase and "caught up" in the last two pairs). The decision rule was fixed BEFORE the run: below
+  1.2x end to end, revert rather than merge.
+- 🔴 **The mechanism, which is the part worth keeping.** Instrumenting the real engine under a
+  saturating flood: **mean 2.13 packets per batched call** (distribution 1:3966, 2:10658, 3:3889,
+  4:931, tail to 30) and `peak_queue` **30** against a 20 000 limit. The release heap barely
+  accumulates, because the inject thread keeps up with capture - so the batcher was handed pairs,
+  not batches. The earlier sweep already showed batch 8 giving only 1.27x and the full 1.6x needing
+  32. At 2 there is nothing to amortise, and assembling the blob costs what the syscall saves.
+- **Do not re-open this without first measuring the MEAN BATCH SIZE** under the workload in
+  question. If a configuration exists where the heap genuinely backs up (deep buffers, heavy rate
+  limiting), the number to check is that mean - not the throughput ratio, which drifts.
+- **Kept from the work:** a real accounting hole it exposed. A packet popped off the heap and then
+  found without a `_divert` - STOP cleared it in between - vanished with NO counter: gone from
+  `_heap`, so `stop()`'s stranded sweep could not see it either. One packet wide already, a whole
+  batch wide had this shipped. It is charged to `drop_shutdown` now, with
+  `tests/test_inject_batch.py` pinning it and the seen/delivered/dropped balance around it.
+- **Also kept, as a lesson rather than code:** the premature-release mutant (batching packets not
+  yet due) was caught by **zero tests in the whole suite** until a guard was written for it, and
+  that guard only worked once the arrivals were staggered AND the latency exceeded the stagger -
+  two conditions, each of which silently made the test vacuous. Recorded in PROJECT_NOTES rule 5.
+
 ### Added: "show only the targeted traffic" - a VIEW preference (chunk 3)
 
 - `gui/prefs.py::scope_view_to_target` (BOOL, default False - convention 42's second kind: a
