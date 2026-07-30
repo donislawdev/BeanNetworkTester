@@ -1283,9 +1283,15 @@ class BeanEngine:
                 # applied (measured: 10 of 20, because refresh_if_stale rebuilds every
                 # 0.30 s while this loop runs every 0.20 s), so the collection time
                 # travels with the data - see SocketWatcher.reconcile.
-                if self._socketwatch is not None:
+                #
+                # Read ONCE into a local, like _live_pid does: stop() clears this
+                # attribute from another thread, and reading it twice lets the
+                # second read be None. The AttributeError landed in the tick's
+                # except and left a crash record for an ORDINARY stop.
+                watcher = self._socketwatch
+                if watcher is not None:
                     ports, collected_at = self._ports.collected()
-                    self._socketwatch.reconcile(ports, collected_at)
+                    watcher.reconcile(ports, collected_at)
             except Exception as _exc:
                 crashlog.note(_exc, "engine.ports")
             try:

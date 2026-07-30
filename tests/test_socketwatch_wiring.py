@@ -12,7 +12,8 @@ socket source, so no WinDivert is needed.
 import threading
 import time
 
-from beantester.engine import BeanEngine
+from beantester import crashlog
+from beantester.engine import WATCHDOG_TICK_S, BeanEngine
 from beantester.socketwatch import BIND, CONNECT, SocketEvent
 from fakes import FakeDivert, FakePacket, check
 
@@ -158,6 +159,55 @@ def test_the_watchdog_keeps_reconciling_the_live_map():
               f"(stuck at {w.reconciles})")
     finally:
         eng.stop()
+
+
+def test_a_stop_landing_mid_tick_does_not_fault_the_watchdog():
+    """``stop()`` clears ``_socketwatch`` while the watchdog is inside a tick.
+
+    The tick used to read that attribute TWICE - once for the ``is not None``
+    guard, once to call ``reconcile`` - with a ``collected()`` call in between. A
+    stop landing in that gap turned an ordinary STOP into an ``AttributeError``,
+    swallowed by the tick's ``except`` and filed as a crash record. Nobody would
+    ever see it; it would just sit in ``crashes/`` making a clean shutdown look
+    like a fault.
+
+    The race is a few instructions wide, so it is not raced here - it is STAGED:
+    the port table clears the engine's reference from inside the very call that
+    sits between the two reads.
+    """
+    crashlog.reset()
+
+    class _ClearsTheWatcher(_FakePorts):
+        def __init__(self, ports, engine):
+            super().__init__(ports)
+            self._engine = engine
+            self.fired = False
+
+        def collected(self):
+            # Exactly where a concurrent stop() would land - but only once the
+            # WATCHDOG is the caller. _start_socketwatch bootstraps through this
+            # same method while _socketwatch is still None, and an earlier version
+            # of this test spent its one shot there: nothing was staged, and a
+            # mutant restoring the double read survived.
+            if not self.fired and self._engine._socketwatch is not None:
+                self.fired = True
+                self._engine._socketwatch = None
+            return super().collected()
+
+    eng = BeanEngine()
+    ports = _ClearsTheWatcher({80: 1}, eng)
+    eng._ports = ports
+    src = _FakeSocketSource([ev(CONNECT, 100, 5000)])
+    eng.start("true", divert=FakeDivert([]), socket_source=src)
+    try:
+        check("the staged stop was reached", _wait(lambda: ports.fired, timeout=3.0))
+        time.sleep(WATCHDOG_TICK_S * 2)     # let the tick finish and one more run
+    finally:
+        eng.stop()
+
+    torn = [r for r in crashlog.recent(50) if r.get("type") == "AttributeError"]
+    check("a stop landing mid-tick leaves no crash record", not torn,
+          f"({[r.get('message') for r in torn]})")
 
 
 class _GatedDivert:

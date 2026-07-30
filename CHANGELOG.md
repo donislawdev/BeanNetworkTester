@@ -210,6 +210,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
   from a socket event lost under heavy load.
 
+- **Stopping a session could file a crash report for nothing.** If STOP landed inside the
+  half-second housekeeping pass that keeps the socket map fresh, the tool tripped over its own
+  shutdown and wrote an entry into `crashes/`. Nothing was broken - the session stopped correctly
+  and traffic returned to normal - but anyone checking that folder after a run would find a report
+  for an ordinary STOP. It no longer happens.
+
 - **Aiming at a process did not touch the first packet of a UDP exchange - and for DNS and QUIC
   that meant it did not touch them at all.** Working out which connections belong to your target
   means keeping a set of its ports, rebuilt in the background, and a brand-new port is not in it

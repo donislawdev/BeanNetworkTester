@@ -164,6 +164,56 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
   the watchdog call removed, `owner_targeted` returning False) - all nine RED.
 - Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+- **`_watchdog_loop` read `self._socketwatch` TWICE per tick** - once for the `is not None` guard,
+  once to call `reconcile`, with `self._ports.collected()` in between. A concurrent `stop()`
+  landing in that gap made an ordinary STOP raise `AttributeError` into the tick's `except`,
+  filing a crash record for a clean shutdown. Now read ONCE into a local, the idiom `_live_pid`
+  already uses for the same attribute and the same reason.
+  Guard: `tests/test_socketwatch_wiring.py::test_a_stop_landing_mid_tick_does_not_fault_the_watchdog`
+  - the window is a few instructions wide, so it is STAGED rather than raced: the port-table double
+  clears the engine's reference from inside `collected()`. The first version of that test staged
+  nothing and a mutant restoring the double read SURVIVED, because `_start_socketwatch` bootstraps
+  through the same method while `_socketwatch` is still `None` and consumed the one shot; the
+  double now only fires once the watchdog is the caller. Mutation-checked RED afterwards.
+
+### Tests: the audit's coverage gaps, the ones whose subject already works
+
+Gaps T2/T4/T7 from the engine stability audit. T1/T5/T6/T8 are deliberately NOT here: their
+subjects (F1 swallowed `open()`, F3 `_FlowTable.keep_for`, F4 `_trim_conns` on tied stamps, F5 the
+`duplicated` counter) are still defective, and a test written now would either be red or would pin
+a bug as expected behaviour. They land with their fixes.
+
+- **T2 `tests/test_engine.py::test_every_captured_packet_is_accounted_for_under_every_impairment`**
+  (parametrised over 19 combinations). The only balance test was
+  `test_inject_batch.py::test_the_balance_holds_across_an_ordinary_session`, which drives a
+  PASS-THROUGH session and sums four of the twelve loss counters - the other eight being zero when
+  nothing is configured. So `seen == delivered + losses` was guarded exactly where it is hardest to
+  break. This arms every gate in turn (loss, corrupt, dup, latency+jitter, bandwidth,
+  bandwidth+dup, schedule, SYN, MTU, NAT, RST, flap, LAN, block, destination target) plus two
+  all-at-once runs, over mixed TCP/SYN/UDP/ICMP traffic in both directions. Delivered is counted as
+  DISTINCT packet objects, not sends, so duplication does not confuse the question; the test also
+  asserts `drop_overflow == 0`, because an overflowed original whose duplicate still got through is
+  a documented double-count (see `_enqueue`) and a different subject.
+- **T4 `::test_a_dropped_packet_is_always_in_impairment_scope`** - the premise
+  `impairment_loss_pct`'s docstring rests on ("cannot exceed 100%"), which nothing checked. Sweeps
+  400 randomised core configurations x 6 packets and asserts no `Decision` is ever
+  `drop=True, scoped=False`, plus that the sweep really armed several gates. A new impairment placed
+  ABOVE the targeting gates would break the FIGURE rather than the pipeline - silently, because the
+  number would still look like a percentage.
+  **`::test_the_loss_figure_stays_a_percentage_with_a_target_set`** is the end-to-end half, and its
+  docstring says plainly that it is the weaker of the two: mutation shows the unscoped-LAN-drop
+  mutant is caught by the structural test and NOT by this one.
+- **T7 `::test_nat_and_rst_survive_being_switched_off_and_on_mid_session`** - every GUI "Apply"
+  re-runs every setter, so a live session toggles these constantly, and nothing exercised the second
+  and third call. Covers NAT off->on (the flow table must not be stranded) and an RST cooldown
+  shortened mid-session (a flow reset after the change gets the SHORT hold; one already held keeps
+  the deadline it was given). An earlier version of the RST half could not tell "still held" from
+  "hit again", because `rst_prob=100` re-arms the flow the instant its cooldown lapses.
+- **Mutation-checked**: stranded packets uncounted at STOP -> RED (3 combos); a drop placed outside
+  targeting scope -> RED; `set_nat` made sticky -> RED; `set_rst` cooldown made sticky -> RED. One
+  mutant (removing the `drop_send` bump) survived the balance test because `FakeDivert` never fails
+  a send - checked, and it is already guarded by
+  `::test_a_packet_the_tool_could_not_re_inject_is_counted_as_a_drop`, so no gap.
 
 ### Tests: the recycled-PID window is measured and bounded, not just asserted (handoff point C)
 
