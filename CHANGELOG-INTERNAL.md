@@ -89,6 +89,22 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     reset points, the loop) is untouched - this was a recalculation, not a redesign.
     Covered by the existing `test_shipped_scenarios.py`, which drives every file through the real
     validator.
+  - **The profile picker was a hardcoded `width=24` characters** (`gui/pages/control.py`), against a
+    longest name of 34 (EN) and 35 (PL), so the popdown truncated in silence - ttk sizes a combobox
+    popdown from the widget and never from its contents. New `theme.popdown_width(values)` is the
+    other half of `popdown_height`: that one takes rows from how MANY values there are, this takes
+    characters from how LONG they are, capped at `POPDOWN_MAX_CHARS = 44` because a profile name is
+    whatever the user typed and the row also holds two buttons. Applied at build AND in
+    `App._sync_profile_widgets`, since saving a profile is how a long name enters the list.
+    Tests (`test_gui_layout.py`): `::test_the_profile_picker_fits_its_longest_name` and
+    `::test_the_profile_picker_regrows_when_a_long_profile_is_saved`.
+    **What each actually catches, measured rather than assumed.** Mutating ONE path leaves the
+    picker correct, because the other still sets the width - so the fit test only goes red when
+    BOTH are broken, which is the pre-fix state and exactly the reported bug: it fails with
+    `(24, 'Zapchane lacze domowe (bufferbloat)')`. The regrow test is the one that pins the sync
+    path on its own. The first version of the regrow test was also wrong and its own assertion said
+    so: it saved a profile SHORTER than the longest preset and expected the picker to grow
+    (`37 -> 37`), so the name in it is now deliberately longer than any built-in.
   - New guard `test_readme_guards.py::test_both_readmes_list_every_preset_id`: the `--preset` id
     list is typed by hand in both READMEs and nothing tied it to `PRESETS` - the same shape as the
     project-layout guard right above it. Checks BOTH directions, because a renamed-away id leaves a

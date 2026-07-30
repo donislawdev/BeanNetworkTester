@@ -59,7 +59,7 @@ from .scaling import (geometry_fits, init_scaling, initial_geometry,
 from .scrollable import WheelDispatcher
 from .theme import (BG, FIELD, FG, MONO_FONT, MUT, apply_dark_titlebar,
                     disable_maximize, init_style, popdown_height,
-                    unhighlight_combobox)
+                    popdown_width, unhighlight_combobox)
 from .tooltip import add_tooltip
 from .ui_state import DEFAULTS as UI_DEFAULTS, UiStateStore
 from . import prefs
@@ -904,7 +904,11 @@ class App:
             return
         try:
             names = self.profile_names()      # also refreshes the label<->key lookups
-            self.profile_cb.config(values=names, height=popdown_height(names))
+            # width too, not just the row count: saving a profile is how a LONG
+            # name gets into this list, and a picker that fits at build time can
+            # stop fitting a keystroke later
+            self.profile_cb.config(values=names, height=popdown_height(names),
+                                   width=popdown_width(names))
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         try:

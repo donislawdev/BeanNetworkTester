@@ -41,6 +41,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   - **In-flight Wi-Fi** - the satellite kind: about 750 ms of ping and 7% loss, which is a measured
     median rather than a worst case.
 
+### Fixed
+
+- **The profile picker cut long names off.** It was a fixed 24 characters wide, so
+  "Congested home link (bufferbloat)" showed up as "Congested home link (bufferb" with nothing on
+  screen saying the name went on - in both languages. It now sizes itself to its longest entry, and
+  regrows when you save a profile with a long name.
+
+### Changed
+
 - The Latency and Jitter tooltips now say the thing that was easy to get wrong: **ping rises by
   about twice the latency you set** (both the request and the reply are delayed), while jitter
   widens the wobble by about 1.4x rather than doubling it. Both READMEs explain it too.
