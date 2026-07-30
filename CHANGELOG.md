@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **Profiles now remember more of the link.** A profile used to store seven things
+  about a connection: loss, corruption, duplication, latency, jitter and the two speed limits. It
+  now also stores the latency spikes, the link outages (flapping) and the buffer. The outages are
+  the reason this was worth doing: they repeat on a fixed cadence, so a profile can finally describe
+  a link that cuts out every so often - a satellite handover, a flaky uplink - which none of the
+  other fields could say. Four things follow from it:
+  - **Profiles you saved with an earlier version load exactly as before.** The fields they never had
+    are simply off, and the buffer keeps its normal 1000 ms instead of quietly becoming unlimited.
+  - **Picking a preset or a profile now sets all of those fields at once.** None of the twelve
+    built-in presets mentions a spike, an outage or a buffer, so those go back to their defaults
+    rather than keeping whatever was left in the form: "Perfect network" now really does clear
+    everything. If you had dialled the buffer yourself, picking a preset resets it to 1000 ms.
+  - **`--preset` on the command line now does the same thing the window does.** It applied only the
+    original seven values, so the same preset name could produce different traffic depending on
+    which one you started it from.
+  - If you open a profile saved by this version in an older build, the new fields are ignored.
+
 - **BREAKING:** **The reproduction report's "connections reset" counted packets, not connections.**
   It held the number of packets a reset connection swallows while it is held down, which for a
   30 second cooldown on a busy connection is thousands against a handful of actual resets - one

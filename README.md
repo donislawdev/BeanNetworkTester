@@ -284,6 +284,14 @@ International roaming, Satellite link, 56k modem, Terrible network - plus your o
 name). The program **always starts on "Perfect network"** (nothing is impaired until you set
 something). Built-in presets cannot be deleted - the "Delete" button is disabled for them.
 
+A profile stores **what the link is like**: loss, corruption, duplication, latency, jitter, latency
+spikes, link outages (flapping), the speed limits and the buffer. Everything else - the target, the
+destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out of it; saving a
+profile warns you about the ones you currently have switched on. Use **"Save file..."** for the
+complete configuration. Picking a profile or a preset sets **all** of those fields at once,
+including the ones a given preset does not mention - those go back to their default, so "Perfect
+network" really means perfect. Profiles saved by an earlier version load unchanged.
+
 In the CLI (`--preset`) a preset can be given by its **canonical id** or a **name in any UI
 language** (case- and Polish-diacritic-insensitive - `"Perfect network"` works too). Ids:
 `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.lte`, `presets.dsl`,

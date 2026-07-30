@@ -95,7 +95,7 @@
   "dialogs.profile_name": "Profile name:",
   "dialogs.profile_name_taken": "This name is already used by a built-in preset. Choose another name.",
   "dialogs.profile_scope_title": "Profile scope",
-  "dialogs.profile_scope_warning": "A profile stores only the link characteristics: loss, corruption, duplication, latency, jitter and speed limits.\n\nThese active settings will NOT be saved in the profile: {fields}.\n\nUse 'Save file...' to store the complete configuration.",
+  "dialogs.profile_scope_warning": "A profile stores what the link is like: loss, corruption, duplication, latency, jitter, latency spikes, link outages, the speed limits and the buffer.\n\nThese active settings will NOT be saved in the profile: {fields}.\n\nUse 'Save file...' to store the complete configuration.",
   "dialogs.report_not_saved": "Report not saved",
   "dialogs.reset_layout_body": "Forget the remembered window size and position, collapsed sections and table sorting? Your settings and the current session are kept.",
   "dialogs.reset_layout_title": "Reset window layout",

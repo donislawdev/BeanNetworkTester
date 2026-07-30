@@ -209,6 +209,8 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 
 **Profile** - gotowe presety **posortowane od najlepszego (góra) do najgorszego (dół)**: Idealna sieć, Dobre WiFi, Sieć 5G, Sieć LTE/4G, DSL domowy, Słabe WiFi, Kawiarnia (zatłoczone WiFi), Sieć 3G, Roaming zagraniczny, Łącze satelitarne, Modem 56k, Fatalna sieć - oraz Twoje własne (zapis pod nazwą). Program **startuje zawsze na „Idealnej sieci”** (nic nie jest psute, dopóki sam czegoś nie ustawisz). Presetów wbudowanych nie da się usunąć - przycisk „Usuń” jest wtedy nieaktywny.
 
+Profil zapisuje to, **jakie jest łącze**: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi; przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
+
 W CLI (`--preset`) preset można podać przez **kanoniczne id** albo **nazwę w dowolnym języku UI** (bez rozróżniania wielkości liter i polskich znaków - `"Idealna siec"` też zadziała). Id: `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.lte`, `presets.dsl`, `presets.weak_wifi`, `presets.cafe`, `presets.3g`, `presets.roaming`, `presets.satellite`, `presets.modem56k`, `presets.terrible`.
 
 ## Składnia filtrów (proces / IP / port)

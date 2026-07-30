@@ -95,7 +95,7 @@
   "dialogs.profile_name": "Nazwa profilu:",
   "dialogs.profile_name_taken": "Ta nazwa jest już zajęta przez wbudowany preset. Wybierz inną nazwę.",
   "dialogs.profile_scope_title": "Zakres profilu",
-  "dialogs.profile_scope_warning": "Profil zapisuje tylko charakterystykę łącza: stratę, uszkodzenia, duplikację, opóźnienie, jitter i limity prędkości.\n\nTe aktywne ustawienia NIE zostaną zapisane w profilu: {fields}.\n\nPełną konfigurację zapiszesz przyciskiem 'Zapisz plik...'.",
+  "dialogs.profile_scope_warning": "Profil zapisuje to, jakie jest łącze: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu, limity prędkości i bufor.\n\nTe aktywne ustawienia NIE zostaną zapisane w profilu: {fields}.\n\nPełną konfigurację zapiszesz przyciskiem 'Zapisz plik...'.",
   "dialogs.report_not_saved": "Nie zapisano raportu",
   "dialogs.reset_layout_body": "Zapomnieć zapamiętany rozmiar i pozycję okna, zwinięte sekcje i sortowanie tabel? Ustawienia i bieżąca sesja zostają.",
   "dialogs.reset_layout_title": "Zresetuj układ okna",
