@@ -73,6 +73,47 @@ def test_summary_strip_has_a_reserved_fixed_height():
     """)
 
 
+def test_the_profile_picker_fits_its_longest_name():
+    """BUG: the picker was a hardcoded 24 characters wide.
+
+    ttk sizes a combobox popdown from the widget and never from its contents, so
+    the list truncated in silence - "Zapchane lacze domowe (bufferbloat)" (35
+    characters) showed up as "Zapchane lacze domowe (bufferb", in both
+    languages, with nothing on screen saying the name went on. Presets get added
+    and renamed; a width typed by hand goes stale the first time one of them
+    grows.
+    """
+    run_gui("""
+        names = app.profile_names()
+        longest = max(len(n) for n in names)
+        assert app.profile_cb.kw["width"] >= longest, (
+            app.profile_cb.kw["width"], max(names, key=len))
+    """)
+
+
+def test_the_profile_picker_regrows_when_a_long_profile_is_saved():
+    """A picker that fits at build time can stop fitting a keystroke later:
+    saving a profile is exactly how a long name enters this list."""
+    run_gui("""
+        from beantester.gui.theme import POPDOWN_MAX_CHARS
+        before = app.profile_cb.kw["width"]
+        # longer than the longest PRESET, or nothing moves - the picker is
+        # already as wide as its widest built-in name
+        name = "Backup link at the warehouse, evening"
+        assert len(name) > max(len(n) for n in app.profile_names())
+        app.profiles.set(name, {})
+        app._sync_profile_widgets()
+        after = app.profile_cb.kw["width"]
+        assert after > before, (before, after)
+        assert after >= len(name), (after, name)
+
+        # ...but a name nobody should be able to shove the row apart with is capped
+        app.profiles.set("x" * 300, {})
+        app._sync_profile_widgets()
+        assert app.profile_cb.kw["width"] == POPDOWN_MAX_CHARS, app.profile_cb.kw["width"]
+    """)
+
+
 def test_start_bar_and_log_can_never_be_squeezed_away():
     """A ttk.PanedWindow pushed its sash down whenever a page grew, and the whole
     bottom strip (START / Apply / log) disappeared. It is packed to the bottom now."""

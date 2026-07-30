@@ -10,7 +10,7 @@ from ..form import ControlForm
 from ..labels import wrapping_label
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
-from ..theme import popdown_height
+from ..theme import popdown_height, popdown_width
 from ..tooltip import add_tooltip
 
 
@@ -81,7 +81,8 @@ class ControlPage:
         # App.load_selected_profile).
         names = app.profile_names()
         app.profile_cb = ttk.Combobox(row, textvariable=app.profile_var,
-                                      values=names, state="readonly", width=24,
+                                      values=names, state="readonly",
+                                      width=popdown_width(names),
                                       height=popdown_height(names))
         app.profile_cb.bind("<<ComboboxSelected>>", app.on_profile_selected)
         app.profile_cb.pack(side="left")

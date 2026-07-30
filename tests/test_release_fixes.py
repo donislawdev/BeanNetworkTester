@@ -343,10 +343,13 @@ def test_the_csv_has_readable_column_names():
 
 # -- lenient preset names (Polish "ł" does not decompose) ------------------------ #
 def test_preset_names_fold_stroke_letters():
-    check("'Lacze satelitarne' resolves",
-          bnt.resolve_preset("Lacze satelitarne") == "presets.satellite")
+    check("'Zapchane lacze domowe (bufferbloat)' resolves",
+          bnt.resolve_preset("Zapchane lacze domowe (bufferbloat)")
+          == "presets.bufferbloat")
     check("'Slabe WiFi' resolves",
           bnt.resolve_preset("Slabe WiFi") == "presets.weak_wifi")
+    check("'Pociag / metro (tunele)' resolves",
+          bnt.resolve_preset("Pociag / metro (tunele)") == "presets.metro")
 
 
 # -- the support link must be https, and the driver must not linger -------------- #

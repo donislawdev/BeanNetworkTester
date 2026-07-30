@@ -24,7 +24,7 @@ interface with tooltips and a command-line mode for CI.
 - **Flap the link on and off** - outages that come and go.
 - **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet).
 - **Aim at one app** - by process, PID, IP or port.
-- **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite and more.
+- **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite, In-flight Wi-Fi and more.
 - **Run scripted scenarios** - timed steps that change the network on their own.
 - **Reproducible by seed** - replay the exact same random loss and jitter.
 - **Watch it live** - chart, connections table, counters.
@@ -226,9 +226,19 @@ an `N` ms buffer the delay is bounded to ~`N` ms, the excess goes as "Rate-limit
 counter, not "Loss" nor "Buffer overflow"), and after raising the limit throughput recovers within
 ~`N` ms. Default 1000 ms. Active only with a download/upload limit or a schedule set.
 
-**Delay (ping)** - *Latency*: how many ms to add to every packet (raises ping). *Jitter*: random
-variation of the delay (+/- ms), which makes ping jump and reorders packets. Two things worth
-knowing: (1) jitter adds an independent random delay to each packet, so packets can overtake one
+**Delay (ping)** - *Latency*: how many ms to add to every packet. *Jitter*: random
+variation of the delay (+/- ms), which makes ping jump and reorders packets. Three things worth
+knowing:
+
+(0) **Ping rises by about twice the latency you set.** The delay is added to every packet, and with
+the default two-way traffic filter that is both the request and the reply - so `--latency 100`
+shows up as roughly +200 ms of ping (measured: `--latency 200` took a loopback ping from under
+1 ms to ~408 ms). Pick half the ping you want. Jitter does **not** double the same way: each packet
+draws its own value, so the wobble grows by about 1.4x, reaching 2x only at the extremes. The
+built-in presets are dialled this way - `Satellite (geostationary)` carries 340 ms and delivers the
+~680 ms ping a real geostationary link has.
+
+(1) jitter adds an independent random delay to each packet, so packets can overtake one
 another in the queue - jitter inherently **reorders packets** (a real network does the same).
 (2) Negative swings are clipped to zero, so when jitter is **larger than latency** the average
 added delay rises above latency itself (e.g. latency 0, jitter 50 ms gives ~half the packets with
@@ -279,10 +289,34 @@ given percentage of the time. Simulates a flickering connection.
   congested VPN, failing DNS, overloaded game server, upload dropped midway, blocked backend/API).
 
 **Profiles** - ready presets **sorted from best (top) to worst (bottom)**: Perfect network, Good
-Wi-Fi, 5G network, LTE/4G network, Home DSL, Weak Wi-Fi, Cafe (crowded Wi-Fi), 3G network,
-International roaming, Satellite link, 56k modem, Terrible network - plus your own (saved under a
-name). The program **always starts on "Perfect network"** (nothing is impaired until you set
-something). Built-in presets cannot be deleted - the "Delete" button is disabled for them.
+Wi-Fi, 5G network, Home DSL (VDSL), LTE/4G, Satellite (low orbit), Distant server (another
+continent), Weak Wi-Fi, Cafe (crowded Wi-Fi), Congested home link (bufferbloat), Train/metro
+(tunnels), 3G network, Foreign roaming, Satellite (geostationary), In-flight Wi-Fi, 56k modem,
+Terrible network - plus your own (saved under a name). The program **always starts on "Perfect
+network"** (nothing is impaired until you set something). Built-in presets cannot be deleted - the
+"Delete" button is disabled for them.
+
+Their numbers come from published measurements wherever measurements exist (Ookla medians for
+satellite and mobile, academic studies for Starlink's 15-second reconfiguration and for in-flight
+Wi-Fi); where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment next
+to the value in `beantester/presets.py` says so. A few of them are worth a sentence:
+
+- **Satellite (low orbit)** - modelled on Starlink. Its steady state is good (about 40 ms of ping,
+  100 Mbit/s); what makes it distinctive is the reconfiguration every 15 seconds, which briefly
+  stops transmission and shows up as an occasional latency spike rather than as loss.
+- **Distant server (another continent)** - a fast link with nothing broken, just far away
+  (~120 ms of ping). This is the one that exposes chatty protocols and code that assumes the server
+  is next door.
+- **Congested home link (bufferbloat)** - idle it looks fine (20 ms of ping); the impairment is the
+  queue. ⚠️ **It only bites once your application actually saturates the link**, because the buffer
+  is part of the speed limiter: send a trickle of test traffic and you will see a plain
+  8 Mbit/s down, 1 Mbit/s up link and nothing else. Saturate the 1 Mbit/s upload and watch ping
+  climb towards two seconds - the "the video call dies when somebody starts a backup" case.
+- **Train/metro (tunnels)** - the only preset that takes the link fully down for seconds at a time
+  (3 s out of every 30), so the application has to **reconnect**, not merely slow down.
+- **In-flight Wi-Fi** - the classic satellite kind: ~750 ms of ping and 7% loss, which is the
+  measured median, not a worst case. Aircraft with newer low-orbit equipment behave like
+  "Satellite (low orbit)" instead.
 
 A profile stores **what the link is like**: loss, corruption, duplication, latency, jitter, latency
 spikes, link outages (flapping), the speed limits and the buffer. Everything else - the target, the
@@ -294,9 +328,10 @@ network" really means perfect. Profiles saved by an earlier version load unchang
 
 In the CLI (`--preset`) a preset can be given by its **canonical id** or a **name in any UI
 language** (case- and Polish-diacritic-insensitive - `"Perfect network"` works too). Ids:
-`presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.lte`, `presets.dsl`,
-`presets.weak_wifi`, `presets.cafe`, `presets.3g`, `presets.roaming`, `presets.satellite`,
-`presets.modem56k`, `presets.terrible`.
+`presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.dsl`, `presets.lte`, `presets.leo`,
+`presets.distant`, `presets.weak_wifi`, `presets.cafe`, `presets.bufferbloat`, `presets.metro`,
+`presets.3g`, `presets.roaming`, `presets.satellite`, `presets.inflight`, `presets.modem56k`,
+`presets.terrible`.
 
 ## Filter syntax (process / IP / port)
 

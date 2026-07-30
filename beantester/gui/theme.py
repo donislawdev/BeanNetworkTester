@@ -464,6 +464,28 @@ def popdown_height(values):
     return min(len(values), POPDOWN_ROWS)
 
 
+POPDOWN_MIN_CHARS = 24            # what the profile picker was fixed at
+POPDOWN_MAX_CHARS = 44            # past this the picker starts shoving its row
+
+
+def popdown_width(values, minimum=POPDOWN_MIN_CHARS):
+    """Characters to give a combobox so its LONGEST value still fits.
+
+    The other half of ``popdown_height``: that one takes rows from how MANY
+    values there are, this one takes width from how LONG they are. ttk sizes the
+    popdown from the widget and never from its contents, so a fixed width
+    truncates in silence - at the old hardcoded 24 the profile picker cut
+    "Zapchane lacze domowe (bufferbloat)" off mid-word, in both languages, and
+    nothing on screen said the name went on.
+
+    Capped, because the profile list is the one a user can grow without limit:
+    a profile name is whatever they typed, and the row also holds "Save as..."
+    and "Delete".
+    """
+    longest = max((len(str(v)) for v in values), default=0)
+    return max(minimum, min(longest + 2, POPDOWN_MAX_CHARS))
+
+
 def unhighlight_combobox(event=None, widget=None):
     """Drop the selection AND the focus ring a readonly combobox keeps after a pick.
 

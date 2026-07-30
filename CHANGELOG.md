@@ -7,6 +7,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **The presets were wrong, and they are now checked against published measurements.**
+  Two mistakes ran through the whole list. Every latency was set as if it were a ping, but the delay
+  is added to each packet in **both** directions - so "Satellite link" at 600 ms was handing you a
+  1200 ms ping, against the ~680 ms a real geostationary link has. And three presets held speeds in
+  kilo**bits** where the field wants kilo**bytes**, which made them eight times too fast: "3G
+  network" delivered 3 Mbit/s, which is not what anybody picks that preset to feel. Both are fixed
+  throughout, and every value now carries a source (or an honest note that no measurement exists,
+  as for "weak Wi-Fi") in `beantester/presets.py`. **If you scripted `--preset`, the traffic you get
+  will change.** Two names changed with them: "Satellite link" is now "Satellite (geostationary)",
+  and "Home DSL" says VDSL. The ids did not change, so saved configs and profiles are unaffected -
+  but `--preset "Satellite link"` no longer resolves.
+
+- **BREAKING:** **The shipped scenarios in `scenarios/` were recalculated** the same way, so a
+  scenario and a preset finally describe the same network with the same numbers. A pleasant side
+  effect: the ping you get is now the number written in the file.
+
+### Added
+
+- **Five new presets**, each for a situation the old list could not describe:
+  - **Satellite (low orbit)** - Starlink-like. Fast and low-ping in the steady state; what marks it
+    out is the reconfiguration every 15 seconds, which briefly halts transmission and turns up as
+    an occasional ping spike rather than as lost packets.
+  - **Distant server (another continent)** - a fast, healthy link that is simply far away
+    (~120 ms of ping). The one that catches code written as if the server were in the next room.
+  - **Congested home link (bufferbloat)** - looks perfect when idle; the queue is the problem. Note
+    that **it only bites once your application really saturates the link** - send a trickle and you
+    will see an ordinary 8/1 Mbit/s link. Saturate the upload and watch ping climb towards two
+    seconds, which is the "the video call dies when somebody starts a backup" case.
+  - **Train / metro (tunnels)** - takes the connection fully down for 3 seconds out of every 30, so
+    your application has to reconnect rather than just slow down. Nothing else in the list does
+    that.
+  - **In-flight Wi-Fi** - the satellite kind: about 750 ms of ping and 7% loss, which is a measured
+    median rather than a worst case.
+
+### Fixed
+
+- **The profile picker cut long names off.** It was a fixed 24 characters wide, so
+  "Congested home link (bufferbloat)" showed up as "Congested home link (bufferb" with nothing on
+  screen saying the name went on - in both languages. It now sizes itself to its longest entry, and
+  regrows when you save a profile with a long name.
+
+### Changed
+
+- The Latency and Jitter tooltips now say the thing that was easy to get wrong: **ping rises by
+  about twice the latency you set** (both the request and the reply are delayed), while jitter
+  widens the wobble by about 1.4x rather than doubling it. Both READMEs explain it too.
+
 - **BREAKING:** **Profiles now remember more of the link.** A profile used to store seven things
   about a connection: loss, corruption, duplication, latency, jitter and the two speed limits. It
   now also stores the latency spikes, the link outages (flapping) and the buffer. The outages are
