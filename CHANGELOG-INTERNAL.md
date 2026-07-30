@@ -56,6 +56,25 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   - `presets.py` gained module-level imports of `fields` and `settings`. No cycle: nothing in
     `settings`'s dependency chain imports `presets` (checked), and `test_layering.py` is green.
 
+- **BREAKING:** **`--preset` applies a preset through the shared mapping** (`cli.py`), instead of
+  the copy of it that hand-wrote the seven classic keys. The GUI has always used
+  `preset_to_settings`, so the two front ends applied different subsets of the same preset name;
+  the only guard, `test_cli.py::test_cli_english`, asserts `latency` and `down` and nothing else.
+  With the profile scope widened this also stopped being a silent difference: the copy indexed
+  `p["corrupt"]` directly, so the first preset naming only the fields it means would have taken the
+  CLI down with a `KeyError` (reproduced against the future `presets.leo` shape before the fix).
+  Documented precedence is unchanged (defaults < file < preset < flags), but a preset now carries
+  five more keys, so `--config f.json --preset presets.3g` resets `buffer`, `spike_*` and `flap_*`
+  to their defaults where it previously left the file's values in place - the same rule that has
+  always applied to `loss` and `down`.
+  Tests: `test_cli.py::test_a_preset_carries_every_profile_field_into_the_settings` (new) drives a
+  PROBE preset whose every profile field is non-default, because run against the twelve real
+  presets the check is vacuous - none of them names a buffer, a spike or a flap, so the old copy
+  left exactly the defaults the shared mapping fills in, and the test would pass against the code
+  it exists to reject. `::test_a_preset_that_names_only_some_fields_does_not_break_the_cli` (new)
+  covers the partial-preset `KeyError`. Both verified by mutation: reverting `cli.py` turns them
+  red with `buffer 1000 != 1007` and `KeyError: 'corrupt'` respectively.
+
 - **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
   and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
   ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`
