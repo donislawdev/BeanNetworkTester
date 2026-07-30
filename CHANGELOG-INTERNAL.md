@@ -17,6 +17,8 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-30
+
 ### BREAKING
 
 - **BREAKING:** **every preset was re-tuned against measured sources, and five were added**

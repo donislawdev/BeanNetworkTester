@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-30
+
 ### BREAKING
 
 - **BREAKING:** **The presets were wrong, and they are now checked against published measurements.**
