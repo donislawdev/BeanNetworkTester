@@ -31,6 +31,33 @@ def test_every_filter_covers_ipv4_and_ipv6():
               ("icmp" not in expression) or ("icmpv6" in expression), f"({expression})")
 
 
+def test_every_preset_has_a_name_in_every_language():
+    """A preset without a translation shows its raw id in the picker.
+
+    ``fields.py`` has had this guard since forever
+    (``test_field_registry.py::test_labels_and_tips_exist_in_every_language``);
+    ``PRESETS`` never did, so five presets could be added, render as
+    "presets.leo" in the dropdown and in ``--preset``, and leave the suite
+    entirely green. Nothing else links this registry to the language files.
+
+    It reads the FILES, not ``translate()``: a key missing from Polish falls
+    back to the English text, which is not equal to the key, so a check written
+    through ``translate`` passes while the Polish picker quietly shows English.
+    Verified by mutation - deleting the Polish `presets.leo` line does not move
+    a ``translate``-based check at all.
+    """
+    import json as _json
+    import os as _os
+    from beantester.presets import PRESETS
+    from fakes import ROOT
+    for lang in ("en", "pl"):
+        path = _os.path.join(ROOT, "lang", f"{lang}.json")
+        with open(path, encoding="utf-8") as f:
+            names = _json.load(f)
+        missing = [k for k in PRESETS if not str(names.get(k, "")).strip()]
+        check(f"presets: every id has a {lang} name", not missing, f"({missing})")
+
+
 def test_presets_exist():
     import beantester as n
     for p in ("presets.lte", "presets.5g", "presets.dsl", "presets.modem56k",
@@ -57,6 +84,10 @@ def test_resolve_preset_variants():
     check("presets: Polish name resolves", n.resolve_preset("Sieć 3G") == "presets.3g")
     check("presets: diacritics-insensitive match",
           n.resolve_preset("Idealna siec") == "presets.perfect"
-          and n.resolve_preset("Lacze satelitarne") == "presets.satellite")
+          # a name with a STROKE letter, which NFD does not decompose - see
+          # fold_name. "Lacze satelitarne" used to be the example here; the
+          # preset was renamed to say geostationary, so the case moved to
+          # another name carrying an "l with stroke" rather than being dropped.
+          and n.resolve_preset("Odlegly serwer (inny kontynent)") == "presets.distant")
     check("presets: case-insensitive match", n.resolve_preset("terrible NETWORK") == "presets.terrible")
     check("presets: unknown name -> None", n.resolve_preset("no such preset") is None)

@@ -58,8 +58,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     `test_cli_runtime.py::test_print_config_dumps_the_effective_settings` read the expected latency
     from `PRESETS` instead of a hardcoded `150`. Both are about PRECEDENCE and about a preset
     REACHING the dump; a copy of the value only ever fails when a preset is retuned.
-  - **Known gap, closed in the next commit:** nothing links `PRESETS` to the language files, so the
-    five new ids currently render as their raw keys in the picker and the suite stays green.
+  - Names in both language files, and `presets.satellite` renamed to say **geostationary** so the
+    contrast with the new low-orbit entry is visible in the picker (the id is unchanged, so a
+    stored `ui.json` selection and any saved config keep working; `--preset "Satellite link"` and
+    `--preset "Lacze satelitarne"` do not, which is why this line is BREAKING). `presets.dsl` says
+    VDSL for the same reason - the numbers moved and the name should say which DSL it means.
+  - 🔴 **New guard: `test_presets_filters.py::test_every_preset_has_a_name_in_every_language`.**
+    `PRESETS` had no link to the language files at all - `fields.py` has had one since forever
+    (`test_field_registry.py::test_labels_and_tips_exist_in_every_language`), this registry did
+    not. Five presets were added, rendered as raw `presets.leo` in the picker and in `--preset`,
+    and the suite stayed entirely green.
+    The guard reads the language FILES rather than calling `translate()`, and that distinction was
+    found by mutation, not by reasoning: a key missing from Polish **falls back to the English
+    text**, which is not equal to the key, so the first version of this test passed unchanged when
+    the Polish `presets.leo` line was deleted. Re-verified after the fix - the same deletion now
+    fails with `presets: every id has a pl name (['presets.leo'])`. (`test_i18n_coverage` catches
+    the same deletion from the other side, by comparing key SETS; this one catches a preset id that
+    reaches neither file.)
+  - The two tests that pinned the old Polish name kept their POINT rather than being deleted: they
+    exist for the stroke-letter fold (`ł` does not decompose under NFD), so they moved to
+    `"Odlegly serwer (inny kontynent)"`, `"Zapchane lacze domowe (bufferbloat)"` and
+    `"Pociag / metro (tunele)"`. The `STROKE_LETTERS` comment in `presets.py` cited the old name as
+    its example and was updated with them.
 
 - **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
   in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,

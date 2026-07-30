@@ -115,8 +115,8 @@ PRESETS = {
 
 
 # Letters with a STROKE are single codepoints, not base + combining mark, so NFD
-# leaves them alone: Polish "ł" survived the fold, and ``--preset "Lacze
-# satelitarne"`` (or a profile named "Slabe WiFi") resolved to nothing at all.
+# leaves them alone: Polish "ł" survived the fold, and ``--preset "Slabe WiFi"``
+# (or ``"Zapchane lacze domowe (bufferbloat)"``) resolved to nothing at all.
 STROKE_LETTERS = str.maketrans({
     "ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "ø": "o", "Ø": "O",
     "ð": "d", "Ð": "D", "ħ": "h", "Ħ": "H", "ŧ": "t", "Ŧ": "T",
