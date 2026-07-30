@@ -84,7 +84,7 @@ class _FlowTable:
     older, never bigger.
     """
 
-    __slots__ = ("_new", "_old", "_limit", "_half", "_rotate_s", "_next_rotate",
+    __slots__ = ("_new", "_old", "_limit", "_half", "_rotate_s", "_last_rotate",
                  "_retired")
 
     def __init__(self, limit=MAX_FLOWS, rotate_s=FLOW_ROTATE_S):
@@ -93,7 +93,14 @@ class _FlowTable:
         self._rotate_s = float(rotate_s)
         self._new = {}
         self._old = {}
-        self._next_rotate = 0.0
+        # WHEN the last rotation happened, not when the next one is DUE. The
+        # deadline used to be cached as an absolute time, and ``keep_for`` changed
+        # the window without touching it - so a window that had been RAISED could
+        # never be lowered again for the life of the session. Measured: set_nat(5)
+        # (which raises the window to infinity) followed by set_nat(0) left the
+        # table with no age rotation at all, freed only by the SIZE ceiling. Derived
+        # live, a change to _rotate_s takes effect on the very next call.
+        self._last_rotate = 0.0
         # Retired generations wait here to be freed by the WATCHDOG, not by the
         # capture thread. Dropping the last reference to a dict is O(1) in Python
         # but O(n) in CPython's teardown: freeing a 200 000-entry generation costs
@@ -138,7 +145,16 @@ class _FlowTable:
             self._rotate()
 
     def keep_for(self, seconds):
-        """Raise the AGE window so a record survives at least ``seconds``.
+        """Set the AGE window so a record survives at least ``seconds``.
+
+        Takes effect at once, in BOTH directions. It used to only ever raise: the
+        rotation deadline was cached as an absolute time and this never touched it,
+        so once ``set_nat`` had pushed the window to infinity, ``set_nat(0)`` -
+        which plainly means "back to the default" - could not bring it down again
+        for the rest of the session, and the table was then freed only by its SIZE
+        ceiling. Every GUI "Apply" runs these setters, so toggling NAT off was
+        enough. See ``_last_rotate``.
+
 
         A record lives through one rotation and dies at the next, so the window is
         the MINIMUM lifetime: with the default 30 s an entry survives 30-60 s. That
@@ -156,10 +172,10 @@ class _FlowTable:
 
     def maybe_rotate(self, now):
         """Retire a generation on AGE. O(1): the old dict is handed to the watchdog."""
-        if len(self._new) < self._half and now < self._next_rotate:
+        if len(self._new) < self._half and (now - self._last_rotate) < self._rotate_s:
             return False
         self._rotate()
-        self._next_rotate = now + self._rotate_s
+        self._last_rotate = now
         return True
 
     def drain_retired(self):
@@ -176,7 +192,7 @@ class _FlowTable:
             self._retired.append(self._old)
         self._new = {}
         self._old = {}
-        self._next_rotate = 0.0
+        self._last_rotate = 0.0
 
     def __len__(self):
         return len(self._new) + len(self._old)

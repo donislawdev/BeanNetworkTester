@@ -418,8 +418,13 @@ def test_overflow_counts_packets_lost_not_queue_entries():
     s = sh.stats_snapshot()
     sh.stop()
 
-    check("overflow/dup: every packet was duplicated",
-          s["duplicated"] == n, f"(duplicated={s['duplicated']}, seen={s['seen']})")
+    # `duplicated` counts copies the queue ACCEPTED, so with ten slots and two
+    # entries per packet it is five - not 200. It used to read 200 here, because
+    # the counter was bumped on the DECISION to duplicate whatever became of the
+    # copy; that is the F5 fix, and this line is where the old meaning was pinned.
+    check("overflow/dup: only the copies that fit are counted as duplicated",
+          s["duplicated"] == queue // 2,
+          f"(duplicated={s['duplicated']}, seen={s['seen']})")
     check("overflow/dup: drops never exceed the packets they are drops OF",
           s["drop_overflow"] <= s["seen"],
           f"(overflow={s['drop_overflow']}, seen={s['seen']})")
@@ -643,6 +648,127 @@ def test_every_captured_packet_is_accounted_for_under_every_impairment(name):
           f"dup={s['duplicated']} overflow={s['drop_overflow']})")
     check(f"[{name}] and nothing was counted twice", s["drop_overflow"] == 0,
           "(the queue overflowed - this run cannot answer the question)")
+
+
+def test_the_flow_table_age_window_can_be_lowered_again_not_only_raised():
+    """Audit F3/T5. ``keep_for`` sets the window; it used to only ever raise it.
+
+    The rotation deadline was cached as an absolute time and ``keep_for`` changed
+    the window without touching it. ``set_nat(>0)`` pushes the window to infinity
+    on purpose (an expired NAT mapping must stay shut until the application sends,
+    so the record has to outlive any timer), and ``set_nat(0)`` plainly means "back
+    to the default" - but it could not bring the deadline back down, so for the
+    rest of the session that table aged out nothing and was freed only by its SIZE
+    ceiling. Every GUI "Apply" runs these setters, so toggling NAT off was enough.
+    """
+    from beantester.core import FLOW_ROTATE_S, _FlowTable
+
+    table = _FlowTable(limit=1000, rotate_s=FLOW_ROTATE_S)
+    table.set("a", 1.0)
+    table.maybe_rotate(100.0)
+
+    table.keep_for(float("inf"))                      # what set_nat(5) does
+    check("an infinite window stops the age rotation",
+          table.maybe_rotate(1e9) is False)
+
+    table.keep_for(0.0)                               # ...and what set_nat(0) does
+    check("lowering the window takes effect at once",
+          table.maybe_rotate(1e9) is True,
+          "(the raised window was never brought back down)")
+
+    # and the same through the real setters, which is how a session reaches it
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    rng = random.Random(0)
+    core.set_nat(5.0)
+    for i in range(10):
+        core.decide(100, True, 5000 + i, float(i), rng, remote_ip="1.2.3.4",
+                    remote_port=80)
+    check("NAT filled the flow table", len(core._flow_last) == 10,
+          f"({len(core._flow_last)})")
+    core.set_nat(0.0)
+    core._prune_next = 0.0
+    core._prune(1e9)
+    core._prune_next = 0.0
+    core._prune(2e9)                                  # two rotations retire both gens
+    check("with NAT off again the records age out",
+          len(core._flow_last) == 0, f"({len(core._flow_last)} left)")
+
+
+def test_evicting_the_connection_log_can_never_empty_it():
+    """Audit F4/T6. The eviction cutoff is a SAMPLED estimate, compared inclusively.
+
+    Rows sharing a timestamp all land on the same side of it, so a tie storm
+    removes far more than the estimate intended - and with every row on one stamp
+    it is the whole table. Measured before the floor: 1200 rows against a 1000 cap
+    trimmed to 0 instead of 900, i.e. the Connections tab silently emptied itself
+    while claiming to drop the oldest tenth.
+
+    Not reachable from ordinary traffic on this machine (``time.monotonic()``
+    resolves to ~100 ns, so a 1200-row burst still produced 865 distinct stamps),
+    which is exactly why it needs a test rather than a demonstration: the clock's
+    resolution is a platform property this code should not depend on.
+    """
+    def rows(engine, stamps):
+        for i, last in enumerate(stamps):
+            engine._conns[i] = dict(remote_ip="1.1.1.1", remote_port=1, local_port=i,
+                                    proto="TCP", packets=1, bytes=1, bytes_in=0,
+                                    bytes_out=0, sent=0, sent_in=0, sent_out=0,
+                                    dropped=0, first=last, last=last, dir="out",
+                                    scoped=False, proc="", pid=None)
+
+    keep = int(1000 * BeanEngine.EVICT_KEEP)
+
+    tied = BeanEngine()
+    tied.MAX_CONNS = 1000
+    rows(tied, [12345.0] * 1200)                      # every row on ONE stamp
+    tied._trim_conns()
+    check("a tie storm trims to the floor instead of wiping the log",
+          len(tied._conns) == keep, f"({len(tied._conns)} left, expected {keep})")
+
+    spread = BeanEngine()
+    spread.MAX_CONNS = 1000
+    rows(spread, [12345.0 + i * 1e-6 for i in range(1200)])
+    spread._trim_conns()
+    check("ordinary rows still trim to about the keep fraction",
+          keep <= len(spread._conns) <= keep + 50,
+          f"({len(spread._conns)} left, expected ~{keep})")
+    check("...and the SURVIVORS are the newest ones",
+          min(c["last"] for c in spread._conns.values()) > 12345.0,
+          "(an old row survived while a newer one was evicted)")
+
+
+def test_duplicated_counts_copies_that_were_queued_not_decisions():
+    """Audit F5/T8. The tile says "Packets sent twice" - so it has to count sends.
+
+    ``duplicated`` was bumped on the DECISION to duplicate, whatever became of the
+    copy. Measured with a queue too small to hold it: seen=40, duplicated=40, and
+    ZERO packets on the wire - a session that delivered nothing claiming forty
+    duplicates. Counted at ENQUEUE rather than at send, which is the same standard
+    ``corrupted`` is held to: the work was really done, though a STOP can still
+    strand the copy afterwards.
+    """
+    n = 40
+    engine = BeanEngine()
+    engine.set_seed(7)
+    engine.max_queue = 4                              # nothing like enough room
+    apply_settings(engine, dict(DEFAULT_SETTINGS, dup=100, latency=60000))
+    divert = FakeDivert([FakePacket(size=100, port=6000 + i) for i in range(n)])
+    engine.start("test", divert=divert)
+    deadline = time.time() + 15
+    while time.time() < deadline and engine.stats_snapshot()["seen"] < n:
+        time.sleep(0.01)
+    s = engine.stats_snapshot()
+    engine.stop()
+
+    check("every packet was seen", s["seen"] == n, f"({s['seen']})")
+    check("the queue was the bottleneck", s["drop_overflow"] > 0,
+          f"(overflow={s['drop_overflow']})")
+    check("duplicates are counted only for copies the queue took",
+          s["duplicated"] == engine.max_queue // 2,
+          f"(duplicated={s['duplicated']}, room for {engine.max_queue // 2})")
+    check("...and never more than the packets they are duplicates OF",
+          s["duplicated"] <= s["seen"], f"({s['duplicated']} > {s['seen']})")
 
 
 def test_a_dropped_packet_is_always_in_impairment_scope():
