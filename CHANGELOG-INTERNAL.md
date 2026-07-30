@@ -164,6 +164,48 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
   the watchdog call removed, `owner_targeted` returning False) - all nine RED.
 - Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+- **`BeanEngine._start_locked` swallowed a failed `divert.open()` (audit F1).** The `except` did
+  `crashlog.note(_exc, "engine")` and fell through, so `_running` went True, three workers were
+  spawned, and the capture thread's first `recv()` raised
+  `RuntimeError("WinDivert handle is not open")`. THAT became `self.fault`, the log line, the event
+  log and the repro report; the real cause never left crashlog at `severity=debug`.
+  MEASURED against the real driver with a filter it rejects - before: `start()` returned normally,
+  `is_running=True`, `fault='WinDivert handle is not open'`, 3 swallowed crashlog records, and the
+  log printed START *after* STOP. After: `start()` raises `OSError [WinError 87] Parametr jest
+  niepoprawny`, `is_running=False`, `fault=None` (there was no session to fault), **0 crashlog
+  records**.
+  - Both callers already handled this and NEITHER could be reached: `cli._run_session`
+    ([cli.py](beantester/cli.py)) wraps `start()` to `_fail(RUNTIME, "cannot start the capture:
+    {e}")`, and the GUI's `_finish_start` shows `dialogs.start_failed` WITH
+    `dialogs.run_as_admin` - the hint a non-elevated user needs. The exit code was right anyway
+    (via `if engine.fault` further down), but the message was the symptom.
+  - `except BaseException` and a bare `raise`, so the original exception object reaches the caller
+    unwrapped. `self._divert = None` first: `_running` is still False here and the engine never
+    reached `_LIVE_ENGINES`, so dropping the reference is the whole cleanup. Deliberately NO
+    `close()` - a pydivert handle that never opened raises from `close()` too (measured), which
+    would replace the real error with a second meaningless one.
+  - `session_info()['driver_queue']` stops lying as a side effect: it documents `None` as "the
+    simulate path, which has no driver queue", and an unopened handle used to produce exactly that
+    on a REAL session. Residual, NOT fixed here: a real handle whose `get_param` fails for some
+    other reason still reports `None` and still reads as "simulate".
+- **The START banner moved ABOVE the thread spawn (audit F6).** `self.log(log.start_filter)` and
+  `log_event("START", ...)` sat below the `except` block, so an early fault printed the live log
+  BACKWARDS (measured: recv error, fault, *then* "Start. Filter: ...", then Stop). The event log was
+  always ordered correctly - a worker-initiated stop blocks on `_stop_lock` until `start()` returns
+  - so only the log a tester actually watches was lying. Announcing first also reads correctly when
+  the spawn itself fails: START, fault, STOP.
+- **New tests.** `tests/test_failsafe.py::test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later`
+  (the real cause reaches the caller; the engine is not left "running"; no fault is recorded because
+  there was no session; the handle is dropped; and a later START still works) and
+  `::test_the_start_banner_is_logged_before_a_worker_can_fault`, with a new `UnopenableDivert`
+  double whose `recv()` still "works" - like the real thing, where an unopened handle fails at recv
+  with a message naming nothing. `tests/test_cli_runtime.py::test_exit_code_runtime_without_pydivert`
+  gained one assertion: the REASON must survive the trip to stderr, not just the exit code - that
+  branch was unreachable before this fix.
+  The banner test matches on the seed and on the interpolated exception text, NOT on translated
+  words: an earlier version looked for "fault" and passed or failed by the machine's UI language
+  (green on an English CI runner, red on this Polish one), which is a test reporting the locale.
+  Mutation-checked: restoring the swallow -> RED; moving the banner back below the spawn -> RED.
 - **`_watchdog_loop` read `self._socketwatch` TWICE per tick** - once for the `is not None` guard,
   once to call `reconcile`, with `self._ports.collected()` in between. A concurrent `stop()`
   landing in that gap made an ordinary STOP raise `AttributeError` into the tick's `except`,

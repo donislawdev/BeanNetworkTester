@@ -198,6 +198,101 @@ def test_a_dead_capture_thread_fails_open():
           f"({kinds})")
 
 
+class UnopenableDivert(QuietDivert):
+    """A handle that will not open - a rejected filter, a blocked driver, no
+    elevation. Its ``recv()`` still "works", exactly like the real thing: a
+    pydivert handle that never opened raises ``RuntimeError("WinDivert handle is
+    not open")`` from recv, which is a symptom naming nothing."""
+
+    ERROR = OSError("[WinError 87] The parameter is incorrect")
+
+    def open(self):
+        raise self.ERROR
+
+
+def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
+    """Audit F1. The real cause has to reach the caller, not just crashlog.
+
+    ``open()``'s exception used to be swallowed into a debug crash record, and the
+    damage was all in what came next: ``_running`` went True, three workers were
+    spawned, and the capture thread's first ``recv()`` failed with a message that
+    names nothing. THAT became ``self.fault``, the log, the event log and the repro
+    report, while the actual cause - measured with a filter the driver rejects,
+    ``OSError [WinError 87]``, or ``[WinError 5]`` when not elevated - never left
+    crashlog at ``severity=debug``.
+
+    Both callers already knew what to do and neither could ever be reached:
+    ``cli._run_session`` wraps start() to report "cannot start the capture: {e}"
+    with exit RUNTIME, and the GUI's ``_finish_start`` shows the start-failed
+    dialog WITH the "run as Administrator" hint - precisely what a non-elevated
+    user needs and never saw.
+    """
+    divert = UnopenableDivert()
+    engine = BeanEngine()
+    raised = None
+    try:
+        engine.start("test", divert=divert)
+    except Exception as exc:
+        raised = exc
+
+    check("the start fails instead of appearing to succeed", raised is not None)
+    check("and it is the REAL cause, not a symptom from the capture thread",
+          raised is UnopenableDivert.ERROR, f"({raised!r})")
+    check("the engine is not left believing it is running",
+          engine.is_running() is False)
+    check("no fault was recorded, because there was no session to fault",
+          engine.fault is None, f"({engine.fault!r})")
+    check("atexit is not left tracking a session that never began",
+          engine not in set(_LIVE_ENGINES))
+    check("the dead handle is dropped", engine._divert is None)
+
+    # ...and the engine is reusable, so the GUI's START button works on the next try
+    recover = QuietDivert()
+    engine.start("test", divert=recover)
+    check("a later START is not refused", engine.is_running() is True)
+    engine.stop()
+    check("and the recovered session releases its divert", recover.closed is True)
+
+
+def test_the_start_banner_is_logged_before_a_worker_can_fault():
+    """Audit F6: the live log used to read BACKWARDS on an early fault.
+
+    The "Start. Filter: ..." line sat BELOW the thread spawn, so a session that
+    died in its first milliseconds printed the recv error and the fault ABOVE its
+    own start line. Measured against the real driver with a rejected filter:
+
+        recv error: WinDivert handle is not open
+        engine fault: ... - the session was stopped, the network is normal
+        Start. Filter: this is not a valid filter  (seed=...)
+        Stop.
+
+    The event log was always ordered correctly (a worker-initiated stop blocks on
+    _stop_lock until start() returns), so only the log a tester actually watches
+    was lying.
+    """
+    lines = []
+    engine = BeanEngine(log_fn=lines.append)
+    engine.start("test", divert=ExplodingDivert(packets=0))   # faults on first recv
+    deadline = time.time() + 5
+    while time.time() < deadline and engine.is_running():
+        time.sleep(0.01)
+    engine.stop()
+
+    # Matched on text the TRANSLATION cannot move: the seed the engine prints and
+    # the exception message it interpolates. An earlier version looked for the word
+    # "fault" and passed or failed by the machine's UI language - green on an
+    # English CI runner, red on this Polish one, which is a test reporting the
+    # locale rather than the code.
+    def first(needle):
+        return next((i for i, ln in enumerate(lines) if needle in ln), None)
+
+    start_at, fault_at = first("seed="), first("driver went away")
+    check("the session announced itself", start_at is not None, f"({lines})")
+    check("the failure was reported", fault_at is not None, f"({lines})")
+    check("and the start line comes FIRST", start_at < fault_at,
+          f"(start at {start_at}, fault at {fault_at}: {lines})")
+
+
 def test_a_failed_start_never_leaves_an_open_divert(monkeypatch):
     """Regression (F1): start() was not atomic.
 

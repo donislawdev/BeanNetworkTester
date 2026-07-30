@@ -210,6 +210,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
   from a socket event lost under heavy load.
 
+- **When the capture could not start, the tool told you the wrong reason.** If the WinDivert handle
+  failed to open - no Administrator rights, a driver blocked or held at a different version by
+  another tool, a filter the driver rejects - the tool went ahead and started the session anyway,
+  then reported `WinDivert handle is not open`. That is a symptom, and it names nothing. The actual
+  reason (for example `[WinError 5] Access is denied`) was written only to a diagnostic file nobody
+  is asked to read. Worse, the *helpful* messages both interfaces already had could never appear:
+  the command line has an error that quotes the real cause, and the window has a dialog with a "run
+  as Administrator" hint - which is exactly what a non-elevated user needed and never saw. Starting
+  now fails immediately, with the reason, and both of those work.
+
+- **The log could read backwards when a session died right after starting.** The "Start. Filter:
+  ..." line was written after the capture had already begun, so a session that failed in its first
+  moments printed the error and the fault *above* its own start line. Anyone reading the log to work
+  out what happened when was reading it out of order. It is now announced first.
+
 - **Stopping a session could file a crash report for nothing.** If STOP landed inside the
   half-second housekeeping pass that keeps the socket map fresh, the tool tripped over its own
   shutdown and wrote an entry into `crashes/`. Nothing was broken - the session stopped correctly
