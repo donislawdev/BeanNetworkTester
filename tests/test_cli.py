@@ -27,14 +27,17 @@ def test_cli_advanced_flags():
 
 
 def test_cli_parsing_and_override():
-    from beantester import build_arg_parser, config_from_args, CLI_FILTERS
+    from beantester import build_arg_parser, config_from_args, CLI_FILTERS, PRESETS
     args = build_arg_parser().parse_args(
         ["--preset", "Sieć 3G", "--loss", "7", "--down", "500", "--filter", "tcp"])
     cfg = config_from_args(args)
     s = cfg["settings"]
     check("CLI: --loss overrides preset", s["loss"] == 7, f"(loss={s['loss']})")
     check("CLI: --down overrides preset", s["down"] == 500, f"(down={s['down']})")
-    check("CLI: preset value preserved (lat=150)", s["latency"] == 150, f"(lat={s['latency']})")
+    # read the expected value from the source: this test is about PRECEDENCE,
+    # and a hardcoded copy of it only fails when a preset is retuned
+    check("CLI: an untouched preset value survives",
+          s["latency"] == PRESETS["presets.3g"]["lat"], f"(lat={s['latency']})")
     check("CLI: 'tcp' filter mapped", cfg["filter"] == CLI_FILTERS["tcp"])
 
 

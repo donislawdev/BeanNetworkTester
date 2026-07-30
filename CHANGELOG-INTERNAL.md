@@ -19,6 +19,48 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **every preset was re-tuned against measured sources, and five were added**
+  (`presets.py`). The table is now 17 entries. Two systematic errors ran through the old values:
+  - **Latency was dialled as if it were a round trip.** `lat` is added to EVERY packet, and with
+    the default two-way filter that is both the request and the reply, so the delivered ping is
+    `2 x lat`. `presets.satellite` at 600 delivered a **1200 ms** ping against a real GEO figure of
+    683-684 ms (Ookla Q1 2025 medians for HughesNet and Viasat) - it is now 340. Same correction
+    for `lte` 45 -> 30, `roaming` 300 -> 200, `modem56k` 200 -> 100 and `3g` 150 -> 90 (UMTS is
+    100-200 ms RTT, not 300). `jit` deliberately was NOT halved: each packet draws its own
+    uniform, so the spread grows by sqrt(2), not 2 (measured: std 32.7 ms of RTT wobble at
+    `jit=40` against 23.1 ms per packet).
+  - **Three presets carried kbit/s numbers in a KB/s field, so they ran 8x fast.** `dsl` 1536/256
+    is the canonical ADSL pair in kbit/s; `3g` 384/128 is UMTS R99's. `3g` therefore delivered
+    3.1 Mbit/s - HSPA+, not the experience the preset is picked to reproduce. Also corrected:
+    `5g` upload (67 -> 21 Mbit/s; 5G upload runs 50-120% above 4G, not 6x), `weak_wifi` and `cafe`
+    (both were faster than most home DSL), and `terrible`, whose 2.1 Mbit/s made the WORST preset
+    faster than the 3G one.
+  - **New:** `presets.leo` (low-orbit satellite), `presets.distant` (fast pipe, high RTT, no loss -
+    the shape every other high-ping preset misses), `presets.bufferbloat` (idle-good link whose
+    queue is the impairment - the only preset that exercises `buffer`), `presets.metro` (periodic
+    tunnel outages; the only one that takes the link fully down long enough to force a RECONNECT)
+    and `presets.inflight` (satellite in-flight: 750 ms RTT and 7% median loss, measured over 45
+    flight-hours in "Mile High WiFi", WWW 2018).
+  - 🔴 **LEO carries a spike, NOT a flap, and that reversal came from the sources.** The first pass
+    described Starlink's 15 s handover as a link outage and justified the whole `flap` field with
+    it. Measurement says the reconfiguration stops transmission for 100 ms but the packets are
+    **QUEUED, not dropped** ("Making Sense of Constellations"), with the latency peak averaging
+    +74 ms ("A Multifaceted Look at Starlink Performance", WWW 2024). 100 ms out of every 15 000 is
+    0.67% of the timeline, hence `spike_prob=0.7, spike_ms=100` and no flap. Modelling it as loss
+    would have made the tool impair harder than the network it names.
+  - Every value in `PRESETS` now carries either a named source or an explicit **JUDGEMENT** marker
+    in the comment beside it (`weak_wifi`, `cafe`, `roaming`, `terrible` and the flap duty cycles
+    of `metro`/`inflight` are judgement - no canonical measurement exists for them). The source
+    block above `PRESETS` lists what was actually read. Rationale in PROJECT_NOTES rule 5: a number
+    describing the world outside this repo cannot be falsified by any test here, so it needs a
+    citation or an admission.
+  - Tests: `test_cli.py::test_cli_parsing_and_override` and
+    `test_cli_runtime.py::test_print_config_dumps_the_effective_settings` read the expected latency
+    from `PRESETS` instead of a hardcoded `150`. Both are about PRECEDENCE and about a preset
+    REACHING the dump; a copy of the value only ever fails when a preset is retuned.
+  - **Known gap, closed in the next commit:** nothing links `PRESETS` to the language files, so the
+    five new ids currently render as their raw keys in the picker and the suite stays green.
+
 - **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
   in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,
   `spike_ms`, `flap_period`, `flap_down` and `buffer` are marked `in_profile=True` in

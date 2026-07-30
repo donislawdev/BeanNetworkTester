@@ -487,7 +487,11 @@ def test_print_config_dumps_the_effective_settings():
     settings = json.loads(out)
     check("--print-config: exits OK", code == exitcodes.OK)
     check("--print-config: flags beat the preset", settings["loss"] == 7)
-    check("--print-config: the preset is applied", settings["latency"] == 150,
+    # from the source, not a copy: this asserts that a preset REACHES the dump,
+    # not what 3G happens to be tuned to this month
+    from beantester.presets import PRESETS
+    check("--print-config: the preset is applied",
+          settings["latency"] == PRESETS["presets.3g"]["lat"],
           f"({settings['latency']})")
     check("--print-config: duration is part of the model", "duration" in settings)
 
