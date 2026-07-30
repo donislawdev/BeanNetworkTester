@@ -74,6 +74,10 @@ class _FakePorts:
     def snapshot(self):
         return dict(self._ports)
 
+    def collected(self):
+        # see the same method on test_socketwatch_wiring._FakePorts
+        return dict(self._ports), time.monotonic()
+
     def warm_names(self):
         pass
 

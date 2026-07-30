@@ -12,7 +12,8 @@ socket source, so no WinDivert is needed.
 import threading
 import time
 
-from beantester.engine import BeanEngine
+from beantester import crashlog
+from beantester.engine import WATCHDOG_TICK_S, BeanEngine
 from beantester.socketwatch import BIND, CONNECT, SocketEvent
 from fakes import FakeDivert, FakePacket, check
 
@@ -62,6 +63,12 @@ class _FakePorts:
 
     def snapshot(self):
         return dict(self._ports)
+
+    def collected(self):
+        # This fake's map is a fixed dict, so it is always current - "collected
+        # now" is the honest stamp. The engine needs the pair because the watcher
+        # weighs a snapshot against its own events (see SocketWatcher.reconcile).
+        return dict(self._ports), time.monotonic()
 
     def warm_names(self):
         pass
@@ -127,6 +134,80 @@ def test_a_watcher_that_cannot_open_degrades_instead_of_killing_the_session():
         check("and fell back to no watcher", eng._socketwatch is None)
     finally:
         eng.stop()
+
+
+def test_the_watchdog_keeps_reconciling_the_live_map():
+    """The safety net has to be seen RUNNING, not assumed to be.
+
+    Both reconcile call sites sit inside exception handlers - ``crashlog.quiet`` at
+    bootstrap, the watchdog's own ``except`` per tick - so anything that makes the
+    call raise (a signature the caller did not follow, a table double missing a
+    method) turns "the snapshot no longer corrects the map" into a session that
+    looks perfectly healthy: same counters, same log, no warning. That is the one
+    failure mode this wiring cannot report on its own, so it gets a witness.
+    """
+    eng = BeanEngine()
+    eng._ports = _FakePorts({80: 1})
+    src = _FakeSocketSource([ev(CONNECT, 100, 5000)])
+    eng.start("true", divert=FakeDivert([]), socket_source=src)
+    try:
+        w = eng._socketwatch
+        check("a watcher was started", w is not None)
+        first = w.reconciles
+        check("the watchdog reconciles while the session runs",
+              _wait(lambda: w.reconciles > first, timeout=3.0),
+              f"(stuck at {w.reconciles})")
+    finally:
+        eng.stop()
+
+
+def test_a_stop_landing_mid_tick_does_not_fault_the_watchdog():
+    """``stop()`` clears ``_socketwatch`` while the watchdog is inside a tick.
+
+    The tick used to read that attribute TWICE - once for the ``is not None``
+    guard, once to call ``reconcile`` - with a ``collected()`` call in between. A
+    stop landing in that gap turned an ordinary STOP into an ``AttributeError``,
+    swallowed by the tick's ``except`` and filed as a crash record. Nobody would
+    ever see it; it would just sit in ``crashes/`` making a clean shutdown look
+    like a fault.
+
+    The race is a few instructions wide, so it is not raced here - it is STAGED:
+    the port table clears the engine's reference from inside the very call that
+    sits between the two reads.
+    """
+    crashlog.reset()
+
+    class _ClearsTheWatcher(_FakePorts):
+        def __init__(self, ports, engine):
+            super().__init__(ports)
+            self._engine = engine
+            self.fired = False
+
+        def collected(self):
+            # Exactly where a concurrent stop() would land - but only once the
+            # WATCHDOG is the caller. _start_socketwatch bootstraps through this
+            # same method while _socketwatch is still None, and an earlier version
+            # of this test spent its one shot there: nothing was staged, and a
+            # mutant restoring the double read survived.
+            if not self.fired and self._engine._socketwatch is not None:
+                self.fired = True
+                self._engine._socketwatch = None
+            return super().collected()
+
+    eng = BeanEngine()
+    ports = _ClearsTheWatcher({80: 1}, eng)
+    eng._ports = ports
+    src = _FakeSocketSource([ev(CONNECT, 100, 5000)])
+    eng.start("true", divert=FakeDivert([]), socket_source=src)
+    try:
+        check("the staged stop was reached", _wait(lambda: ports.fired, timeout=3.0))
+        time.sleep(WATCHDOG_TICK_S * 2)     # let the tick finish and one more run
+    finally:
+        eng.stop()
+
+    torn = [r for r in crashlog.recent(50) if r.get("type") == "AttributeError"]
+    check("a stop landing mid-tick leaves no crash record", not torn,
+          f"({[r.get('message') for r in torn]})")
 
 
 class _GatedDivert:

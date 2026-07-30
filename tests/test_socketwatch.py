@@ -61,8 +61,29 @@ def _wait(predicate, timeout=5.0):
     return False
 
 
-def _watcher():
-    return SocketWatcher(names=_FakeNames())
+class _Clock:
+    """A hand-driven clock.
+
+    Every reconcile test below turns on WHICH came first - the event or the
+    snapshot's collection - so that ordering has to be a fact of the test, not a
+    race against the real ``time.monotonic()``. (Its resolution here is ~100 ns,
+    but a test that would go red on a coarser clock is a test that reports the
+    machine instead of the code.)
+    """
+
+    def __init__(self, t=1000.0):
+        self.t = float(t)
+
+    def __call__(self):
+        return self.t
+
+    def tick(self, dt=1.0):
+        self.t += dt
+        return self.t
+
+
+def _watcher(clock=None):
+    return SocketWatcher(names=_FakeNames(), clock=clock or time.monotonic)
 
 
 # -- the map ------------------------------------------------------------------ #
@@ -115,31 +136,181 @@ def test_reconcile_bootstraps_and_prunes_only_after_a_two_pass_grace():
     """The snapshot seeds the map and catches missed CLOSEs - but a socket opened
     microseconds before the snapshot was taken (present via its event, absent from
     that snapshot) must survive one miss, or the safety net would evict live
-    connections."""
-    w = _watcher()
-    w.reconcile({80: 1, 443: 2})                      # bootstrap
+    connections.
+
+    Both later snapshots are collected AFTER the event on purpose: that is the
+    residual case the grace exists for. A snapshot collected BEFORE the event is a
+    different scenario entirely and is covered by
+    ``test_a_port_an_event_touched_after_the_collection_is_never_counted_absent``.
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    w.reconcile({80: 1, 443: 2}, clock())             # bootstrap
     check("bootstrap added the snapshot", w.snapshot() == {80: 1, 443: 2})
 
     w.apply(ev(CONNECT, 9, 5000))                     # a fresh socket via its event
     check("event added the fresh port", w.snapshot().get(5000) == 9)
 
-    w.reconcile({80: 1, 443: 2})                      # snapshot has not caught 5000 yet
+    # collected a hair AFTER the event, and it still missed the port: the socket
+    # opened while the table walk was in flight
+    w.reconcile({80: 1, 443: 2}, clock.tick())
     check("fresh port survives ONE absent snapshot", w.snapshot().get(5000) == 9,
           f"({w.snapshot()})")
 
-    w.reconcile({80: 1, 443: 2})                      # still absent -> missed-CLOSE case
+    w.reconcile({80: 1, 443: 2}, clock.tick())        # still absent -> missed-CLOSE case
     check("absent-twice port is pruned", 5000 not in w.snapshot(), f"({w.snapshot()})")
     check("snapshot ports are always kept", w.snapshot() == {80: 1, 443: 2})
 
 
 def test_reconcile_grace_resets_when_a_port_reappears():
-    w = _watcher()
+    clock = _Clock()
+    w = _watcher(clock)
     w.apply(ev(CONNECT, 9, 5000))
-    w.reconcile({})                                   # absent once (on watch)
-    w.reconcile({5000: 9})                            # reappears -> cleared
-    w.reconcile({})                                   # absent once again, not twice running
+    w.reconcile({}, clock.tick())                     # absent once (on watch)
+    w.reconcile({5000: 9}, clock.tick())              # reappears -> cleared
+    w.reconcile({}, clock.tick())                     # absent once again, not twice running
     check("a port that reappeared is not pruned on a single later miss",
           w.snapshot().get(5000) == 9, f"({w.snapshot()})")
+
+
+# -- reconcile: the snapshot is COMPLETE, not CURRENT (F2) --------------------- #
+def test_a_newer_event_is_not_undone_by_an_older_snapshot():
+    """The socket table is collected up to REFRESH_S before it is handed over, so
+    it can still name the PREVIOUS owner of a recycled port. Merging it blindly put
+    that owner back - measured 11 times in 25 s on a live session, on ordinary
+    Windows background traffic (137/138/1900/67).
+
+    Consequence if this regresses: engine._pid_for stamps the connection row with a
+    process that does not own the socket, and targeting.owner_targeted - the gate
+    for a TCP SYN and for EVERY UDP datagram - answers about the wrong process.
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    stale = clock()                                   # the table is walked HERE...
+    clock.tick()
+    w.apply(ev(CLOSE, 111, 50000))                    # ...and only then does the
+    w.apply(ev(CONNECT, 222, 50000))                  #    port change hands
+    check("the event stream has the live answer", w.pid_for(50000) == 222)
+
+    w.reconcile({50000: 111}, stale)                  # the stale walk, handed over late
+    check("an older snapshot does not revert the owner", w.pid_for(50000) == 222,
+          f"(pid_for={w.pid_for(50000)})")
+
+
+def test_a_port_known_only_from_a_connect_still_outranks_an_older_snapshot():
+    """The stamp an ADD event leaves is load-bearing on its own.
+
+    Written because a MUTANT SURVIVED: stripping the stamp from the ADD branch left
+    the handover test above green, because that one is carried by the CLOSE's
+    tombstone. This is the case where a CONNECT is the only thing that ever spoke
+    about the port - the watcher saw the socket open while a table walk already in
+    flight still named the previous owner (we never got the CLOSE, which is the
+    documented "events can be missed under load" case).
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    stale = clock()                                   # the walk names the old owner
+    clock.tick()
+    w.apply(ev(CONNECT, 222, 50000))                  # the ONLY event for this port
+
+    w.reconcile({50000: 111}, stale)
+    check("a snapshot that predates the connect does not win",
+          w.pid_for(50000) == 222, f"(pid_for={w.pid_for(50000)})")
+
+
+def test_a_closed_port_is_not_resurrected_by_an_older_snapshot():
+    """The same defect from its commonest side, and it does not need a recycled
+    port - only a close. A CLOSE event removes the port; a snapshot collected
+    before that close still lists it, and used to put it straight back. Measured on
+    a live session: 1394 resurrections in 25 s across 896 connections, each leaving
+    the map naming a pid that had already let the socket go.
+
+    This is what the tombstone in ``_evidence`` is for: without a mark, "closed a
+    moment ago" and "never seen" are the same absence.
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(ev(CONNECT, 111, 50000))
+    stale = clock.tick()                              # snapshot walked while it was open
+    clock.tick()
+    w.apply(ev(CLOSE, 111, 50000))
+    check("the close removed the port", w.pid_for(50000) is None)
+
+    w.reconcile({50000: 111}, stale)
+    check("an older snapshot does not resurrect a closed port",
+          w.pid_for(50000) is None, f"(pid_for={w.pid_for(50000)})")
+
+
+def test_a_snapshot_taken_after_the_event_still_heals_a_stale_entry():
+    """The guard against fixing this too hard.
+
+    "Events always win" was the smaller change and it was rejected here: socket
+    events CAN be missed under load, and if we then also miss the new owner's
+    CONNECT, the map keeps a dead pid that the prune will never take (the port is
+    in every snapshot, so it is never absent). The snapshot has to stay able to
+    correct the map - just not with data older than what it is correcting.
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(ev(CONNECT, 111, 50000))                  # ...and we miss its CLOSE, and
+    clock.tick()                                      #    the new owner's CONNECT
+    fresh = clock.tick()                              # a walk taken AFTER all that
+
+    w.reconcile({50000: 222}, fresh)
+    check("a snapshot newer than the event still heals the entry",
+          w.pid_for(50000) == 222, f"(pid_for={w.pid_for(50000)})")
+
+
+def test_a_port_an_event_touched_after_the_collection_is_never_counted_absent():
+    """The stamp gates the PRUNE too, not only the merge.
+
+    A snapshot cannot vouch for a socket that did not exist when it was walked, so
+    its silence about that port says nothing and must not spend one of the two
+    grace passes. Before this, the port's survival rested on WATCHDOG_TICK_S (0.2)
+    and portmap.REFRESH_S (0.3) interleaving so that two stale reconciles never ran
+    back to back - arithmetic that nothing stated and nothing tested.
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    stale = clock()                                   # walked before the socket existed
+    clock.tick()
+    w.apply(ev(CONNECT, 9, 5000))
+
+    w.reconcile({}, stale)                            # three passes of the SAME old walk
+    w.reconcile({}, stale)
+    w.reconcile({}, stale)
+    check("a port younger than the snapshot is not pruned by it",
+          w.pid_for(5000) == 9, f"({w.snapshot()})")
+
+    w.reconcile({}, clock.tick())                     # a walk that really did miss it
+    w.reconcile({}, clock.tick())
+    check("...but a snapshot newer than the event still prunes it after two passes",
+          w.pid_for(5000) is None, f"({w.snapshot()})")
+
+
+def test_the_evidence_map_does_not_grow_with_every_connection_ever_seen():
+    """Tombstones are bounded, or a browser would leak one entry per closed socket.
+
+    A tombstone is kept only while it can still veto a snapshot; once a snapshot
+    collected AFTER the close has agreed the port is gone, it is dropped. So the
+    steady state is (open sockets + one refresh interval of churn), not (every
+    socket this session ever saw).
+    """
+    clock = _Clock()
+    w = _watcher(clock)
+    for i in range(500):                              # 500 short-lived connections
+        w.apply(ev(CONNECT, 100, 6000 + i))
+        w.apply(ev(CLOSE, 100, 6000 + i))
+        clock.tick()
+    w.apply(ev(CONNECT, 100, 5000))                   # one that stays open
+    check("tombstones piled up while no snapshot had caught up",
+          len(w._evidence) > 100, f"({len(w._evidence)})")
+
+    w.reconcile({5000: 100}, clock.tick())            # a walk newer than every close
+    check("the map itself holds only the live socket", w.snapshot() == {5000: 100},
+          f"({w.snapshot()})")
+    check("and the evidence map collapsed to it", set(w._evidence) == {5000},
+          f"({len(w._evidence)} entries)")
 
 
 # -- name resolution is delegated, not duplicated ----------------------------- #
@@ -255,10 +426,11 @@ def test_pid_for_takes_no_lock_because_the_capture_thread_calls_it():
 def test_reconcile_publishes_a_new_map_instead_of_mutating_in_place():
     """The identity swap is what makes the lock-free read safe across an O(n) pass:
     mutating in place would let a reader observe half a reconcile."""
-    w = _watcher()
+    clock = _Clock()
+    w = _watcher(clock)
     w.apply(ev(CONNECT, 100, 5000))
     before = w._ports
-    w.reconcile({5000: 100, 80: 1})
+    w.reconcile({5000: 100, 80: 1}, clock.tick())
     check("reconcile published a NEW dict", w._ports is not before)
     check("with the merged content", w.snapshot() == {5000: 100, 80: 1},
           f"({w.snapshot()})")
@@ -270,7 +442,8 @@ def test_a_lock_free_reader_survives_writes_in_flight():
     while another inserts, deletes and republishes the whole map underneath it. A torn
     read would surface as an exception, or as a value that is neither the pid nor None.
     """
-    w = _watcher()
+    clock = _Clock()
+    w = _watcher(clock)
     w.apply(ev(CONNECT, 100, 5000))
     errors, values, reads = [], set(), [0]
     stop = threading.Event()
@@ -289,7 +462,9 @@ def test_a_lock_free_reader_survives_writes_in_flight():
         for i in range(300):
             w.apply(ev(CONNECT, 100 + (i % 7), 6000 + i))     # inserts...
             w.apply(ev(CLOSE, 100 + (i % 7), 6000 + i))       # ...and deletes
-            w.reconcile({5000: 100, 80: 1})                   # whole-map republish
+            # the clock advances, so this also drives the tombstone rebuild - the
+            # other O(n) pass a lock-free reader has to survive
+            w.reconcile({5000: 100, 80: 1}, clock.tick())     # whole-map republish
     finally:
         stop.set()
         t.join(timeout=5)

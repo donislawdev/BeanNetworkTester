@@ -97,6 +97,124 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - Help text and the flag tables in both READMEs now state that the flag is valid on its own.
 - Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
+### Fixed
+
+- **`SocketWatcher.reconcile()` let a STALE poller snapshot overwrite a newer SOCKET event
+  (audit F2).** The merge was unconditional (`merged[port] = pid`) and the docstring called the
+  snapshot "authoritative" - reading "complete" as "newest". It is collected up to
+  `portmap.REFRESH_S` (0.30 s) before it is handed over and applied up to a watchdog tick (0.20 s)
+  later; **measured: 10 of 20 ticks hand over a snapshot the previous tick already applied**,
+  because those two intervals interleave that way. Consumers of the damage: `engine._pid_for`
+  (connection-log `proc`/`pid`), `engine._process_for`, `targeting.owner_targeted` - the gate for a
+  TCP SYN and for EVERY UDP datagram - and `ProcessTargeting.refresh` via `table.snapshot()`.
+  - **Fix: every map entry carries the time of the evidence behind it.** New `_evidence`
+    (`local_port -> monotonic`), written by `apply()` on both branches, including CLOSE, where it is
+    a TOMBSTONE: without a mark, "closed a moment ago" and "never seen" are the same absence, which
+    is what let an older snapshot resurrect a closed port. A snapshot entry is applied only when the
+    snapshot was COLLECTED after that stamp.
+  - **The stamp gates the PRUNE too**, not only the merge: a port an event touched after the
+    collection does not count as absent, because that snapshot never had a chance to see it.
+    Previously its survival rested on `WATCHDOG_TICK_S` (0.2) and `portmap.REFRESH_S` (0.3)
+    interleaving so two stale reconciles never ran back to back - arithmetic nothing stated or
+    tested. The two-pass grace SURVIVES alongside it (the collection itself takes time).
+  - **`_evidence` is rebuilt in `reconcile`**, keeping a tombstone only while it can still veto a
+    snapshot. Steady state is (open sockets + one refresh interval of churn), not every socket the
+    session ever saw.
+  - **Rejected: "events always win"** (the smaller change). With a missed CLOSE *and* a missed new
+    CONNECT the map would keep a dead pid that the prune can never take, since the port is in every
+    snapshot. Guarded by `test_a_snapshot_taken_after_the_event_still_heals_a_stale_entry`.
+  - **New `portmap.PortTable.collected()` -> `(dict(ports), _last)` from ONE lock hold.**
+    `_last` is when the collection STARTED (`refresh()` reads `now` before the `iphlpapi` calls),
+    so it under-states freshness - the safe direction. Taking the map and the stamp separately
+    would let a refresh land between them and stamp OLD data with a NEW time, which is the one
+    error direction that silently reintroduces this bug. `snapshot()` is unchanged, so the shared
+    read surface (`snapshot`/`name_of`/`ancestors`/`refresh`/`pid_for`) that `ProcessTargeting`
+    resolves against does not grow a value only one of its two implementations could fill.
+  - **`collected_at` has no default, deliberately.** Both call sites sit inside exception handlers
+    (`crashlog.quiet` at bootstrap, the watchdog's per-tick `except`), so a missing argument would
+    become "the safety net silently stopped running" against a session that looks healthy. This is
+    not hypothetical: it happened during verification to a diagnostic script left on the old
+    signature, which reported 0 reconciles for a whole run.
+  - **`pid_for` is untouched** - `_evidence` is read only by `reconcile`, under `_lock`. The
+    lock-free capture-thread read stays a plain int->int dict lookup, so the hot path pays nothing
+    by construction, not by measurement.
+  - MEASURED on a live session (2026-07-29, real SOCKET handle, 887 connections / 5232 events /
+    123 reconciles in 25 s): **919 writes the old rule would have made are refused**, each for a
+    port an event touched 0-170 ms after that snapshot was walked; **0 stale writes survive**. An
+    earlier count of "1394 resurrections + 11 reverts" is superseded - that detector could not tell
+    a resurrected socket from the same process reopening a recycled port and over-reported by about
+    a third. A separate check confirmed the socket table drops a port immediately on `close()`
+    (pid `None` at +0.0 s), so lingering TCP teardown is NOT an explanation for what remains.
+- **New tests.** `tests/test_socketwatch.py`: `test_a_newer_event_is_not_undone_by_an_older_snapshot`,
+  `test_a_port_known_only_from_a_connect_still_outranks_an_older_snapshot` (written because a
+  MUTANT SURVIVED - the handover test is carried by the CLOSE tombstone, so the ADD branch's stamp
+  had no guard), `test_a_closed_port_is_not_resurrected_by_an_older_snapshot`,
+  `test_a_snapshot_taken_after_the_event_still_heals_a_stale_entry` (guards against over-fixing),
+  `test_a_port_an_event_touched_after_the_collection_is_never_counted_absent` (the prune gate),
+  `test_the_evidence_map_does_not_grow_with_every_connection_ever_seen` (tombstone bound), plus a
+  hand-driven `_Clock` so the event/collection ordering is a fact of the test rather than a race
+  against the real `time.monotonic()`. `tests/test_socketwatch_wiring.py::test_the_watchdog_keeps_reconciling_the_live_map`
+  (the safety net is seen running, since both call sites are inside handlers).
+  `tests/test_processes.py::test_collected_hands_over_the_map_and_when_it_was_gathered_together`
+  (the stamp is never newer than the moment the collection began).
+  `test_reconcile_bootstraps_and_prunes_only_after_a_two_pass_grace` now states that its snapshots
+  are collected AFTER the event on purpose - that is the residual case the grace is for; the
+  before-the-event case is a different scenario with its own test.
+  **Mutation-checked**: nine mutants (merge gate, prune gate, both `apply` stamps, tombstone
+  expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
+  the watchdog call removed, `owner_targeted` returning False) - all nine RED.
+- Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+- **`_watchdog_loop` read `self._socketwatch` TWICE per tick** - once for the `is not None` guard,
+  once to call `reconcile`, with `self._ports.collected()` in between. A concurrent `stop()`
+  landing in that gap made an ordinary STOP raise `AttributeError` into the tick's `except`,
+  filing a crash record for a clean shutdown. Now read ONCE into a local, the idiom `_live_pid`
+  already uses for the same attribute and the same reason.
+  Guard: `tests/test_socketwatch_wiring.py::test_a_stop_landing_mid_tick_does_not_fault_the_watchdog`
+  - the window is a few instructions wide, so it is STAGED rather than raced: the port-table double
+  clears the engine's reference from inside `collected()`. The first version of that test staged
+  nothing and a mutant restoring the double read SURVIVED, because `_start_socketwatch` bootstraps
+  through the same method while `_socketwatch` is still `None` and consumed the one shot; the
+  double now only fires once the watchdog is the caller. Mutation-checked RED afterwards.
+
+### Tests: the audit's coverage gaps, the ones whose subject already works
+
+Gaps T2/T4/T7 from the engine stability audit. T1/T5/T6/T8 are deliberately NOT here: their
+subjects (F1 swallowed `open()`, F3 `_FlowTable.keep_for`, F4 `_trim_conns` on tied stamps, F5 the
+`duplicated` counter) are still defective, and a test written now would either be red or would pin
+a bug as expected behaviour. They land with their fixes.
+
+- **T2 `tests/test_engine.py::test_every_captured_packet_is_accounted_for_under_every_impairment`**
+  (parametrised over 19 combinations). The only balance test was
+  `test_inject_batch.py::test_the_balance_holds_across_an_ordinary_session`, which drives a
+  PASS-THROUGH session and sums four of the twelve loss counters - the other eight being zero when
+  nothing is configured. So `seen == delivered + losses` was guarded exactly where it is hardest to
+  break. This arms every gate in turn (loss, corrupt, dup, latency+jitter, bandwidth,
+  bandwidth+dup, schedule, SYN, MTU, NAT, RST, flap, LAN, block, destination target) plus two
+  all-at-once runs, over mixed TCP/SYN/UDP/ICMP traffic in both directions. Delivered is counted as
+  DISTINCT packet objects, not sends, so duplication does not confuse the question; the test also
+  asserts `drop_overflow == 0`, because an overflowed original whose duplicate still got through is
+  a documented double-count (see `_enqueue`) and a different subject.
+- **T4 `::test_a_dropped_packet_is_always_in_impairment_scope`** - the premise
+  `impairment_loss_pct`'s docstring rests on ("cannot exceed 100%"), which nothing checked. Sweeps
+  400 randomised core configurations x 6 packets and asserts no `Decision` is ever
+  `drop=True, scoped=False`, plus that the sweep really armed several gates. A new impairment placed
+  ABOVE the targeting gates would break the FIGURE rather than the pipeline - silently, because the
+  number would still look like a percentage.
+  **`::test_the_loss_figure_stays_a_percentage_with_a_target_set`** is the end-to-end half, and its
+  docstring says plainly that it is the weaker of the two: mutation shows the unscoped-LAN-drop
+  mutant is caught by the structural test and NOT by this one.
+- **T7 `::test_nat_and_rst_survive_being_switched_off_and_on_mid_session`** - every GUI "Apply"
+  re-runs every setter, so a live session toggles these constantly, and nothing exercised the second
+  and third call. Covers NAT off->on (the flow table must not be stranded) and an RST cooldown
+  shortened mid-session (a flow reset after the change gets the SHORT hold; one already held keeps
+  the deadline it was given). An earlier version of the RST half could not tell "still held" from
+  "hit again", because `rst_prob=100` re-arms the flow the instant its cooldown lapses.
+- **Mutation-checked**: stranded packets uncounted at STOP -> RED (3 combos); a drop placed outside
+  targeting scope -> RED; `set_nat` made sticky -> RED; `set_rst` cooldown made sticky -> RED. One
+  mutant (removing the `drop_send` bump) survived the balance test because `FakeDivert` never fails
+  a send - checked, and it is already guarded by
+  `::test_a_packet_the_tool_could_not_re_inject_is_counted_as_a_drop`, so no gap.
+
 ### Tests: the recycled-PID window is measured and bounded, not just asserted (handoff point C)
 
 - The last "known edge, never reproduced" from the handoff. `owner_targeted` trusts the pid the live

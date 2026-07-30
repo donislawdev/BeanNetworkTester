@@ -467,6 +467,29 @@ class PortTable:
         with self._lock:
             return dict(self._ports)
 
+    def collected(self):
+        """The port map AND the moment its data was collected, from ONE lock hold.
+
+        ``snapshot()`` answers "what does the table say". This answers "what did it
+        say, and how old is that" - which is a different question, asked by exactly
+        one caller: :meth:`beantester.socketwatch.SocketWatcher.reconcile` uses the
+        stamp to decide whether this data is allowed to overwrite something it
+        learned from a live SOCKET event.
+
+        The two values MUST come from one lock hold. Taking the map and then asking
+        for the timestamp separately lets a refresh land in between, which stamps
+        OLD data with a NEW time - and given what the caller does with the stamp,
+        that is the one error direction that silently reintroduces the bug.
+
+        ``_last`` is the moment the collection STARTED, not the moment it was
+        installed: ``refresh()`` reads ``now`` before the ``iphlpapi`` calls and
+        only assigns it at the end. So this UNDER-states how fresh the map is
+        rather than over-stating it, which is the safe direction here - a tie, or
+        a doubt, resolves in favour of the live event stream.
+        """
+        with self._lock:
+            return dict(self._ports), self._last
+
     def pid_for(self, port):
         if port is None:
             return None

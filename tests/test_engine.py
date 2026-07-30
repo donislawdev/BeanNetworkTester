@@ -4,14 +4,19 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
 import os
+import random
 import re
 import time
 
+import pytest
+
 from beantester import BeanEngine
+from beantester.core import BeanCore
 from beantester.engine import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
                                impairment_loss_pct)
+from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
-from fakes import FakeDivert, FakePacket, check
+from fakes import FakeDivert, FakePacket, FakeTCP, check
 
 
 
@@ -541,6 +546,238 @@ def test_every_drop_counter_and_drop_reason_is_classified():
     check("every drop reason decide() can give routes to a counter",
           not (reasons - set(DROP_BY_REASON)),
           f"(unrouted: {sorted(reasons - set(DROP_BY_REASON))})")
+
+
+MIXED_TRAFFIC_COMBOS = {
+    "passthrough": {},
+    "loss": dict(loss=50),
+    "corrupt": dict(corrupt=100),
+    "duplication": dict(dup=100),
+    "duplication+loss": dict(dup=100, loss=30),
+    "latency+jitter": dict(latency=5, jitter=3),
+    "bandwidth": dict(down=8, up=8),
+    "bandwidth+duplication": dict(down=8, up=8, dup=100),
+    "schedule": dict(rate_schedule="1:8:8,1:64:64"),
+    "syn drop": dict(syn_drop=100),
+    "mtu": dict(max_size=200),
+    "nat": dict(nat_timeout=0.001),
+    "rst": dict(rst_prob=100, rst_cooldown=0.5),
+    "flap": dict(flap_period=0.02, flap_down=50),
+    "lan mode": dict(lan_mode=True),
+    "block": dict(block_ip="8.8.8.8", block_port="443"),
+    "destination target": dict(dst_ip="1.1.1.1", loss=100),
+    "everything at once": dict(loss=20, corrupt=20, dup=20, latency=3, jitter=2,
+                               spike_prob=20, spike_ms=5, down=32, up=32,
+                               syn_drop=50, max_size=1200, nat_timeout=0.01,
+                               rst_prob=20, rst_cooldown=0.2, flap_period=0.05,
+                               flap_down=30, block_port="8080"),
+    "everything + lan": dict(loss=20, dup=20, latency=2, lan_mode=True,
+                             rst_prob=20, syn_drop=50, max_size=1200),
+}
+
+
+def _mixed_traffic(n):
+    """TCP (some of it SYN), UDP and ICMP, both directions, several peers and sizes.
+
+    A single-protocol stream cannot reach most of the pipeline: SYN dropping needs
+    a SYN, the RST path needs TCP, LAN mode needs a public *and* a private peer,
+    and the MTU gate needs sizes on both sides of the limit.
+    """
+    peers = ["8.8.8.8", "1.1.1.1", "192.168.0.5", "10.0.0.9"]
+    out = []
+    for i in range(n):
+        proto = ("tcp", "tcp", "tcp", "udp", "icmp")[i % 5]
+        syn = proto == "tcp" and i % 11 == 0
+        p = FakePacket(size=64 + (i % 7) * 300, is_outbound=(i % 3 != 0),
+                       src_port=5000 + (i % 4), dst_port=(443, 53, 80, 8080)[i % 4],
+                       dst_addr=peers[i % 4], src_addr="10.0.0.2", syn=syn)
+        if proto == "tcp":
+            p.tcp = FakeTCP(syn=syn)
+            p.tcp.ack, p.tcp.seq_num, p.tcp.ack_num = not syn, 1000, 2000
+            p.udp = p.icmp = None
+        elif proto == "udp":
+            p.tcp = p.icmp = None
+            p.udp = object()
+        else:
+            p.tcp = p.udp = None
+            p.icmp = object()
+        out.append(p)
+    return out
+
+
+@pytest.mark.parametrize("name", sorted(MIXED_TRAFFIC_COMBOS))
+def test_every_captured_packet_is_accounted_for_under_every_impairment(name):
+    """seen == delivered + everything that killed a packet, with the impairments ON.
+
+    The existing balance test (test_inject_batch.py) drives a PASS-THROUGH session:
+    it sums four of the twelve loss counters, because the other eight are zero when
+    nothing is configured. So the invariant was guarded exactly where it is hardest
+    to break. Here every gate in the pipeline is armed in turn, plus one run with
+    all of them at once.
+
+    Delivered is counted as DISTINCT packet objects, not sends: duplication puts
+    the same packet on the wire twice, and the question this asserts is what became
+    of each CAPTURED packet. The queue is left at its default so nothing overflows
+    - an overflowed original whose duplicate still got through is a known,
+    documented double-count (see _enqueue) and a different subject.
+    """
+    n = 200
+    engine = BeanEngine()
+    engine.set_seed(4242)                 # random gates; unseeded this flakes on CI
+    apply_settings(engine, dict(DEFAULT_SETTINGS, **MIXED_TRAFFIC_COMBOS[name]))
+    divert = FakeDivert(_mixed_traffic(n))
+    engine.start("test", divert=divert)
+    deadline = time.time() + 15
+    while time.time() < deadline and engine.stats_snapshot()["seen"] < n:
+        time.sleep(0.01)
+    time.sleep(0.3)                       # let the delayed releases drain
+    engine.stop()                         # ...and account for whatever is still parked
+
+    s = engine.stats_snapshot()
+    delivered = len({id(p) for _, p in divert.sent})
+    killed = sum(s[k] for k in IMPAIRMENT_DROP_KEYS) + sum(s[k] for k in TOOL_DROP_KEYS)
+    check(f"[{name}] everything offered was captured", s["seen"] == n, f"({s['seen']})")
+    check(f"[{name}] no packet vanished from the books",
+          delivered + killed == s["seen"],
+          f"(delivered={delivered} killed={killed} seen={s['seen']} "
+          f"dup={s['duplicated']} overflow={s['drop_overflow']})")
+    check(f"[{name}] and nothing was counted twice", s["drop_overflow"] == 0,
+          "(the queue overflowed - this run cannot answer the question)")
+
+
+def test_a_dropped_packet_is_always_in_impairment_scope():
+    """The premise the loss figure rests on, asserted instead of assumed.
+
+    ``impairment_loss_pct`` divides every drop by ``scoped_seen`` and its docstring
+    says the result "cannot exceed 100%". That is only true because every drop in
+    ``decide()`` happens AFTER the targeting gates, so a dropped packet is always a
+    scoped one. Nothing checked it, and a new impairment placed ABOVE the gates
+    would break the figure rather than the pipeline - silently, because the number
+    would still look like a percentage.
+    """
+    rng = random.Random(7)
+    seen = set()
+    for trial in range(400):
+        core = BeanCore()
+        core.reset_buckets(0.0)
+        core.set_params(rng.choice([0, 50, 100]), 0, rng.choice([0, 100]),
+                        0, 0, rng.choice([0, 8]), rng.choice([0, 8]))
+        core.set_advanced(rng.choice([0, 100]), rng.choice([0, 200]))
+        core.set_nat(rng.choice([0, 0.001]))
+        core.set_rst(rng.choice([0, 100]), 0.5)
+        core.set_flap(True, 0.02, rng.choice([0, 50]))
+        core.set_lan(rng.random() < 0.5)
+        core.set_block(True, rng.choice(["", "8.8.8.8"]), rng.choice(["", "443"]))
+        core.set_target(rng.random() < 0.5, {5000})
+        core.set_dest(rng.random() < 0.5, rng.choice(["", "8.8.8.8"]),
+                      rng.choice(["", "443"]))
+        for step in range(6):
+            d = core.decide(rng.choice([64, 1400]), rng.random() < 0.5,
+                            rng.choice([5000, 5001]), trial + step * 0.5, rng,
+                            remote_ip=rng.choice(["8.8.8.8", "192.168.0.5"]),
+                            remote_port=rng.choice([443, 8080]),
+                            is_syn=rng.random() < 0.2, is_tcp=rng.random() < 0.7)
+            if d.drop:
+                seen.add(d.reason)
+            check("a dropped packet is never out of scope",
+                  not (d.drop and not d.scoped),
+                  f"(reason={d.reason!r})")
+    check("the sweep actually armed several gates", len(seen) >= 4,
+          f"(reasons hit: {sorted(seen, key=str)})")
+
+
+@pytest.mark.parametrize("name", ["loss", "bandwidth", "everything at once"])
+def test_the_loss_figure_stays_a_percentage_with_a_target_set(name):
+    """The other half: end to end, with targeting narrowing the denominator.
+
+    Targeting is what made this worth guarding - ``scoped_seen`` is smaller than
+    ``seen``, so an unscoped drop would push the figure straight past 100%.
+
+    MEASURED by mutation, and worth saying plainly: this test is the weaker of the
+    two. Marking the LAN gate's drop unscoped is caught by
+    ``test_a_dropped_packet_is_always_in_impairment_scope`` and NOT by this one -
+    an out-of-scope drop shrinks the denominator without necessarily pushing the
+    ratio over 1.0 on any given traffic mix. So the structural test is the guard;
+    this is the end-to-end sanity check that the two agree in a real session.
+    """
+    n = 200
+    engine = BeanEngine()
+    engine.set_seed(99)
+    engine.set_target(True, {5000, 5001})          # half the traffic is out of scope
+    apply_settings(engine, dict(DEFAULT_SETTINGS, **MIXED_TRAFFIC_COMBOS[name]))
+    engine.set_target(True, {5000, 5001})          # apply_settings clears it: re-arm
+    divert = FakeDivert(_mixed_traffic(n))
+    engine.start("test", divert=divert)
+    deadline = time.time() + 15
+    while time.time() < deadline and engine.stats_snapshot()["seen"] < n:
+        time.sleep(0.01)
+    time.sleep(0.3)
+    engine.stop()
+
+    s = engine.stats_snapshot()
+    pct = impairment_loss_pct(s)
+    check(f"[{name}] the denominator really was narrowed",
+          0 < s["scoped_seen"] < s["seen"], f"({s['scoped_seen']}/{s['seen']})")
+    check(f"[{name}] the loss figure is a percentage", 0.0 <= pct <= 100.0,
+          f"(pct={pct} scoped_seen={s['scoped_seen']} "
+          f"drops={ {k: s[k] for k in IMPAIRMENT_DROP_KEYS if s[k]} })")
+
+
+def test_nat_and_rst_survive_being_switched_off_and_on_mid_session():
+    """Every GUI "Apply" re-runs every setter, so a live session toggles these
+    constantly - and both keep state (a flow table of last-seen stamps, a table of
+    cooldown deadlines) that a naive toggle could strand. Nothing exercised the
+    second and third call.
+    """
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    flow = dict(remote_ip="8.8.8.8", remote_port=443)
+    rng = random.Random(0)
+
+    def inbound(t):
+        return core.decide(100, False, 5000, t, rng, is_tcp=True, **flow)
+
+    def outbound(t):
+        return core.decide(100, True, 5000, t, rng, is_tcp=True, **flow)
+
+    core.set_nat(5.0)
+    outbound(0.0)                                   # the mapping is created here
+    check("NAT expires the mapping while it is on", inbound(10.0).reason == "nat")
+
+    core.set_nat(0.0)                               # switched OFF mid-session
+    check("with NAT off the direction is open again", inbound(20.0).drop is False)
+
+    core.set_nat(5.0)                               # ...and ON again
+    outbound(30.0)
+    check("NAT still expires after being toggled off and on",
+          inbound(40.0).reason == "nat", "(the flow table was stranded by the toggle)")
+
+    # RST: the cooldown is a deadline held per flow, so shortening it must be felt
+    core2 = BeanCore()
+    core2.reset_buckets(0.0)
+    core2.set_nat(0.0)
+    core2.set_rst(100, 3600)                        # an hour-long hold
+    old = core2.decide(100, True, 6000, 0.0, rng, is_tcp=True, remote_ip="1.1.1.1",
+                       remote_port=80)
+    check("the reset fired", old.emit_rst is True and old.reason == "rst")
+
+    core2.set_rst(100, 0.5)                         # shortened mid-session
+    fresh = core2.decide(100, True, 6001, 1.0, rng, is_tcp=True, remote_ip="1.1.1.1",
+                         remote_port=81)
+    check("a new flow gets the reset too", fresh.reason == "rst")
+
+    # Stop new resets from firing, or the probability would re-arm the flow the
+    # instant its cooldown lapsed and the next check could not tell "still held"
+    # from "hit again" - which is exactly what an earlier version of this test did.
+    core2.set_rst(0, 0.5)
+    check("a flow reset AFTER the change is held for the SHORT cooldown",
+          core2.decide(100, True, 6001, 2.0, rng, is_tcp=True, remote_ip="1.1.1.1",
+                       remote_port=81).drop is False,
+          "(1.5 s deadline ignored - the toggle stranded the cooldown table)")
+    check("...while one already held keeps the deadline it was given",
+          core2.decide(100, True, 6000, 2.0, rng, is_tcp=True, remote_ip="1.1.1.1",
+                       remote_port=80).reason == "rst",
+          "(shortening retroactively released a connection already cut)")
 
 
 class IcmpPacket:

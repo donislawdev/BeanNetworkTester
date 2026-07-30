@@ -195,6 +195,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The live "which app owns this port" map could be dragged backwards by a stale reading, so a
+  connection was briefly credited to the wrong application.** The tool learns who owns a socket
+  two ways: from the driver, the instant a socket opens or closes, and from a periodic sweep of
+  the system's socket table. The sweep is complete but always a little behind - it is taken up to
+  0.3 s before it is used - and it was being applied on top of the live signal, so it could undo
+  what the driver had just reported: put back a port that had already been closed, or name the
+  previous owner of a port that had just changed hands. Measured over 25 seconds of ordinary
+  traffic on a test machine, that happened **919 times**. Each one is a short window (up to about
+  0.4 s) in which the Connections table shows the wrong process for a flow - and, if you are aiming
+  at a process, in which a brand-new UDP exchange or a fresh connection can be judged against the
+  wrong application: either your target's traffic slips through, or somebody else's gets impaired.
+  Readings are now weighed by when they were actually taken, so the older one no longer wins. The
+  sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
+  from a socket event lost under heavy load.
+
+- **Stopping a session could file a crash report for nothing.** If STOP landed inside the
+  half-second housekeeping pass that keeps the socket map fresh, the tool tripped over its own
+  shutdown and wrote an entry into `crashes/`. Nothing was broken - the session stopped correctly
+  and traffic returned to normal - but anyone checking that folder after a run would find a report
+  for an ordinary STOP. It no longer happens.
+
 - **Aiming at a process did not touch the first packet of a UDP exchange - and for DNS and QUIC
   that meant it did not touch them at all.** Working out which connections belong to your target
   means keeping a set of its ports, rebuilt in the background, and a brand-new port is not in it
