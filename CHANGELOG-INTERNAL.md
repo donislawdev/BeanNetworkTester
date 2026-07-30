@@ -75,6 +75,29 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   covers the partial-preset `KeyError`. Both verified by mutation: reverting `cli.py` turns them
   red with `buffer 1000 != 1007` and `KeyError: 'corrupt'` respectively.
 
+- **`ProfileStore._clean` falls back to each field's DEFAULT, not to zero** (`gui/profiles.py`).
+  `float(values.get(key, 0) or 0)` was correct only while every profile field defaulted to zero.
+  It does not any more: a `profiles.json` written before the scope widened has no `buffer` key, and
+  `buffer = 0` means an UNBOUNDED link buffer, so the old fill would have loaded every profile
+  saved by an earlier version as the runaway token bucket the bounded buffer exists to prevent -
+  silently, on settings the user had already saved. Absence (`null` and `""` included) now takes
+  `presets.PRESET_DEFAULTS[key]`; an explicit `0` in the file stays 0, because that is what "no cap
+  on the queue" looks like when it is meant. The on-disk format therefore needs NO migration and no
+  version field: it stays backward compatible (fewer keys read fine) and forward compatible (an
+  older build ignores keys it does not know, losing only the new fields).
+  Side effect of dropping `or 0`: a falsy non-numeric value (`[]`, `{}`) now drops the profile and
+  reports it via `store.problem`, where it used to load silently as 0. That matches what the module
+  promises - validate every entry, drop what it cannot use, and say so.
+  Tests (all new, `test_release_fixes.py`):
+  `::test_a_profile_from_before_the_wider_scope_loads_with_field_defaults` - a seven-key file loads
+  with its own values, `buffer` at the default and the impairments it never named off; verified by
+  mutation (restoring the blanket zero turns it red with `buffer 0.0`).
+  `::test_an_explicit_zero_buffer_is_not_the_same_as_a_missing_one` - the paired constraint that
+  makes the fallback usable; it is deliberately NOT a regression guard (it survives the mutation,
+  because both paths yield 0 there).
+  `::test_a_profile_round_trips_the_widened_scope` - save and load carry `flap_*`, `spike_*` and
+  `buffer`, through the same `settings_to_preset` call `App.save_profile` makes.
+
 - **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
   and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
   ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`
