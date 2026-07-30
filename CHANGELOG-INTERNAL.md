@@ -89,6 +89,11 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     reset points, the loop) is untouched - this was a recalculation, not a redesign.
     Covered by the existing `test_shipped_scenarios.py`, which drives every file through the real
     validator.
+  - New guard `test_readme_guards.py::test_both_readmes_list_every_preset_id`: the `--preset` id
+    list is typed by hand in both READMEs and nothing tied it to `PRESETS` - the same shape as the
+    project-layout guard right above it. Checks BOTH directions, because a renamed-away id leaves a
+    line pointing at a `--preset` value the CLI rejects. Verified by mutation (deleting
+    `presets.leo` from README.md fails with `missing: ['presets.leo']`).
   - The two tests that pinned the old Polish name kept their POINT rather than being deleted: they
     exist for the stroke-letter fold (`ł` does not decompose under NFD), so they moved to
     `"Odlegly serwer (inny kontynent)"`, `"Zapchane lacze domowe (bufferbloat)"` and

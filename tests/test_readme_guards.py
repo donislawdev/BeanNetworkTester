@@ -10,6 +10,9 @@ the other hand-maintained mirrors of the code:
   2. the "How it works" pipeline - prose that restates the numbered order in
      ``BeanCore.decide()``. It lost the LAN-mode and blocking steps once; this
      ties the English wording back to the docstring so a reorder goes red.
+  3. the ``--preset`` id list - a hand-typed mirror of ``PRESETS``. Five presets
+     were added in one sitting and the only thing standing between the docs and
+     a stale list was remembering to edit two files.
 """
 import ast
 import glob
@@ -78,6 +81,27 @@ def test_english_readme_pipeline_matches_core_decide():
     readme = _keyword_order(_section(_read("README.md"), "How it works"))
     check("README.md 'How it works' order matches BeanCore.decide()",
           core == readme, f"(core={core} readme={readme})")
+
+
+def test_both_readmes_list_every_preset_id():
+    """The ``--preset`` id list is typed by hand in both READMEs.
+
+    It is the same failure shape as the project layout above: a registry with a
+    prose mirror and nothing tying the two together. A missing id is worse than
+    a cosmetic gap, because the list is what a reader copies into a script -
+    a preset absent from it effectively does not exist.
+
+    Extras are checked too: an id that was renamed away leaves a line pointing
+    at a ``--preset`` value the CLI now rejects.
+    """
+    from beantester.presets import PRESETS
+    ids = set(PRESETS)
+    for readme in READMES:
+        found = set(re.findall(r"`(presets\.[a-z0-9_]+)`", _read(readme)))
+        check(f"{readme} lists every preset id", not (ids - found),
+              f"(missing: {sorted(ids - found)})")
+        check(f"{readme} lists no preset id that no longer exists",
+              not (found - ids), f"(stale: {sorted(found - ids)})")
 
 
 def test_polish_readme_pipeline_keeps_lan_and_blocking():
