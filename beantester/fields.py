@@ -49,6 +49,7 @@ class Field(NamedTuple):
     tip: str = ""                  # i18n key of the tooltip
     hint: str = ""                 # i18n key of the greyed hint next to the entry
     in_profile: bool = False       # stored by a user profile / built-in preset
+    preset_key: str = ""           # short key a preset/profile stores it under ("" = key)
     span: bool = False             # takes a whole row in the section grid
     cli: str = ""                  # argparse flag (without "--")
     overridden_by: str = ""        # key of a field that makes this one inert
@@ -82,20 +83,32 @@ FIELD_DEFS = (
           bounds=RATE, tip="tips.up_limit", in_profile=True, cli="up",
           overridden_by="rate_schedule", override_note="fields.schedule_overrides"),
     # The link buffer for the speed limit: how much queueing delay a rate-limited
-    # link may build up before it drops (bufferbloat), in ms. 0 = unbounded. NOT
-    # in_profile (like the other advanced impairments): only the seven classic
-    # preset fields are stored in a profile. It applies to the constant limits AND
-    # to a schedule, so it is NOT overridden_by the schedule.
+    # link may build up before it drops (bufferbloat), in ms. 0 = unbounded. It
+    # applies to the constant limits AND to a schedule, so it is NOT
+    # overridden_by the schedule.
+    #
+    # in_profile even though it is the one profile field that cannot impair
+    # anything on its own: both readers sit inside `if rate > 0` (core.decide
+    # steps 11 and 12), so with no speed limit it touches no packet. It belongs
+    # to a profile anyway, because `down`/`up` do: the buffer is what decides
+    # whether that same limit shows up as DELAY or as LOSS, and a profile that
+    # stored the limit without it stored half the link.
     Field("buffer", NUMBER, "fields.buffer", "speed_limit", unit="ms",
           bounds=MS, width=8, tip="tips.buffer", hint="fields.buffer_hint",
-          span=True, cli="buffer",
+          span=True, cli="buffer", in_profile=True,
           help_title="dialogs.buffer_help_title", help_body="dialogs.buffer_help"),
 
     # -- latency ----------------------------------------------------------- #
+    # preset_key: presets and profiles have stored these two under short names
+    # since the first version. The file on disk is a frozen format (a profile
+    # written by any release must still load), so the short names stay and the
+    # registry declares them instead of a second table doing the translation.
     Field("latency", NUMBER, "fields.latency", "latency", unit="ms",
-          bounds=MS, tip="tips.latency", in_profile=True, cli="latency"),
+          bounds=MS, tip="tips.latency", in_profile=True, preset_key="lat",
+          cli="latency"),
     Field("jitter", NUMBER, "fields.jitter", "latency", unit="ms",
-          bounds=MS, tip="tips.jitter", in_profile=True, cli="jitter"),
+          bounds=MS, tip="tips.jitter", in_profile=True, preset_key="jit",
+          cli="jitter"),
 
     # -- impairments ------------------------------------------------------- #
     Field("loss", NUMBER, "fields.loss", "impairments", unit="%",
@@ -106,10 +119,16 @@ FIELD_DEFS = (
           bounds=PCT, width=6, tip="tips.dup", in_profile=True, cli="dup"),
 
     # -- flapping ---------------------------------------------------------- #
+    # in_profile: the outage is PERIODIC and phase-locked to the session start
+    # (core.decide step 5), so a profile carrying these two reproduces a link
+    # that drops out on a cadence - which is what a satellite handover or a
+    # flaky uplink actually looks like, and what no other profile field can say.
     Field("flap_period", NUMBER, "fields.period", "flapping", unit="s",
-          bounds=SECONDS, width=6, tip="tips.flap", cli="flap-period"),
+          bounds=SECONDS, width=6, tip="tips.flap", in_profile=True,
+          cli="flap-period"),
     Field("flap_down", NUMBER, "fields.flap_down_pct", "flapping", unit="%",
-          bounds=PCT, width=6, tip="tips.flap", cli="flap-down"),
+          bounds=PCT, width=6, tip="tips.flap", in_profile=True,
+          cli="flap-down"),
 
     # -- destination ------------------------------------------------------- #
     Field("dst_ip", EXPR, "fields.ip", "destination", expr_kind=KIND_IP,
@@ -134,9 +153,11 @@ FIELD_DEFS = (
           unit_key="fields.unit_b_off", bounds=(0.0, 65535.0), width=8,
           tip="tips.mtu", cli="max-size"),
     Field("spike_prob", NUMBER, "fields.spike_prob", "advanced", unit="%",
-          bounds=PCT, width=6, tip="tips.spike", cli="spike-prob"),
+          bounds=PCT, width=6, tip="tips.spike", in_profile=True,
+          cli="spike-prob"),
     Field("spike_ms", NUMBER, "fields.spike_ms", "advanced", unit="ms",
-          bounds=MS, width=8, tip="tips.spike", cli="spike-ms"),
+          bounds=MS, width=8, tip="tips.spike", in_profile=True,
+          cli="spike-ms"),
     Field("nat_timeout", NUMBER, "fields.nat_timeout", "advanced",
           unit_key="fields.unit_s_off", bounds=SECONDS, width=6,
           tip="tips.nat", cli="nat-timeout"),

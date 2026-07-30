@@ -19,6 +19,43 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
+  in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,
+  `spike_ms`, `flap_period`, `flap_down` and `buffer` are marked `in_profile=True` in
+  `fields.FIELD_DEFS`; `presets.PRESET_TO_SETTING` is built from `Field.in_profile` +
+  the new `Field.preset_key` (the frozen short keys `lat`/`jit` are now declared by the registry,
+  not translated by a second table). This reverses the "Variant A" decision that deliberately kept
+  a profile to the seven classic preset fields - flapping is PERIODIC and phase-locked to the
+  session start (`BeanCore.decide` step 5), so it is the one impairment that lets a profile
+  describe a link that drops out on a cadence, which no other profile field can express.
+  Consequences worth naming:
+  - `PROFILE_FIELDS` had **no production consumer** before this (only `test_field_registry.py`);
+    what a profile actually stored came from `PRESET_TO_SETTING` in another module, so the two
+    could drift with nothing to notice. `in_profile` is now the only switch.
+  - `preset_to_settings()` is **always complete**: a preset names only the fields it means, and
+    every other profile field comes back at its `DEFAULT_SETTINGS` value. A partial answer would
+    leave the previous profile's flapping on screen after picking a clean link.
+  - The fill is the field's **default, not zero**. `buffer` defaults to 1000 ms and 0 means
+    UNBOUNDED there, so a blanket zero-fill would have quietly reinstated the runaway token bucket
+    (`BeanCore.decide` step 11) on every preset pick. `settings_to_preset()` lost its hardcoded
+    `0` fallback for the same reason.
+  - `buffer` is the only profile field that cannot impair anything on its own: both of its readers
+    sit inside `if rate > 0` (`decide` steps 11 and 12), so with no speed limit it touches no
+    packet. It is in the profile because `down`/`up` are - the buffer is what decides whether that
+    same limit shows up as DELAY or as LOSS.
+  - Visible effect for existing presets: none of the twelve names a buffer, so picking one now sets
+    the buffer to 1000 ms explicitly where it previously left the widget alone.
+  - Tests: `test_field_registry.py::test_the_stored_profile_shape_follows_the_registry` (new - the
+    stored shape covers exactly `PROFILE_FIELDS`, the short keys stay short, every stored field has
+    a default); `test_validators_settings.py::test_a_preset_always_yields_every_profile_field`
+    (new - unnamed fields come back as defaults, not zero and not missing);
+    `test_passthrough.py::PRESET_OFF` is now derived from `IMPAIRMENT_OFF` intersected with the
+    profile scope, so an impairment joining the scope cannot be forgotten there, and `buffer` is
+    correctly excluded (demanding `buffer == 0` of a harmless preset would demand an unbounded
+    buffer). `test_profile_scope_is_derived` updated to the 12 fields.
+  - `presets.py` gained module-level imports of `fields` and `settings`. No cycle: nothing in
+    `settings`'s dependency chain imports `presets` (checked), and `test_layering.py` is green.
+
 - **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
   and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
   ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`

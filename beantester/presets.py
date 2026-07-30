@@ -6,7 +6,9 @@ language files, and ``resolve_preset`` accepts either form.
 """
 import unicodedata
 
+from .fields import FIELD_DEFS
 from .i18n import loaded_language_codes, translate
+from .settings import DEFAULT_SETTINGS
 
 PRESETS = {
     # ordered best -> worst (top = best network, bottom = worst)
@@ -53,27 +55,45 @@ def resolve_preset(name):
     return None
 
 
-# Presets use short keys (lat/jit/...) for historical reasons; the settings model
-# uses the long ones. The mapping lives HERE, once - the GUI and the CLI used to
-# each carry their own copy of it.
-PRESET_TO_SETTING = {"loss": "loss", "corrupt": "corrupt", "dup": "dup",
-                     "lat": "latency", "jit": "jitter", "down": "down", "up": "up"}
+# Presets store their fields under short keys ("lat", "jit") and the settings
+# model uses the long ones. Which is which is DERIVED from the field registry
+# (``Field.in_profile`` + ``Field.preset_key``), so a field joins the profile
+# scope by exactly one flag. It used to be a second hand-written table, which
+# meant ``in_profile`` could say a field was in a profile while the save path
+# quietly dropped it - the flag and the storage disagreeing with nothing to
+# notice.
+PRESET_TO_SETTING = {(f.preset_key or f.key): f.key
+                     for f in FIELD_DEFS if f.in_profile}
+SETTING_TO_PRESET = {v: k for k, v in PRESET_TO_SETTING.items()}
+
+# What a profile field holds when nobody asked for anything. NOT zero: ``buffer``
+# defaults to 1000 ms and 0 means UNBOUNDED there - the runaway token bucket the
+# bounded buffer exists to prevent (see BeanCore.decide step 11). Filling a
+# missing field with a blanket zero would have quietly reinstated it.
+PRESET_DEFAULTS = {short: DEFAULT_SETTINGS[long]
+                   for short, long in PRESET_TO_SETTING.items()}
 
 
 def preset_to_settings(preset):
-    """``PRESETS`` entry (or preset id/name) -> settings-shaped dict."""
+    """``PRESETS`` entry (or preset id/name) -> settings-shaped dict.
+
+    ALWAYS complete: a preset names only the fields it means something by, and
+    every other profile field comes back at its default. Callers fill widgets
+    from this, so a partial answer would leave the PREVIOUS profile's flapping
+    or latency spikes on screen after picking a clean link.
+    """
     if isinstance(preset, str):
         canon = resolve_preset(preset)
         if canon is None:
             return {}
         preset = PRESETS[canon]
-    return {PRESET_TO_SETTING[k]: v for k, v in preset.items()
-            if k in PRESET_TO_SETTING}
-
-
-SETTING_TO_PRESET = {v: k for k, v in PRESET_TO_SETTING.items()}
+    out = {long: DEFAULT_SETTINGS[long] for long in SETTING_TO_PRESET}
+    out.update({PRESET_TO_SETTING[k]: v for k, v in preset.items()
+                if k in PRESET_TO_SETTING})
+    return out
 
 
 def settings_to_preset(s):
-    """Settings dict -> the 7-field shape a profile/preset is stored in."""
-    return {short: s.get(long, 0) for long, short in SETTING_TO_PRESET.items()}
+    """Settings dict -> the shape a profile/preset is stored in."""
+    return {short: s.get(long, DEFAULT_SETTINGS[long])
+            for long, short in SETTING_TO_PRESET.items()}

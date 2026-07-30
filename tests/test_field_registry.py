@@ -91,12 +91,35 @@ def test_numeric_fields_declare_bounds():
 
 
 def test_profile_scope_is_derived():
-    check("registry: a profile stores exactly the 7 link-characteristic fields",
+    check("registry: a profile stores the link-characteristic fields",
           set(F.PROFILE_FIELDS) == {"loss", "corrupt", "dup", "latency", "jitter",
-                                    "down", "up"}, f"({F.PROFILE_FIELDS})")
+                                    "down", "up", "buffer", "spike_prob",
+                                    "spike_ms", "flap_period", "flap_down"},
+          f"({F.PROFILE_FIELDS})")
     non_profile = {k for k, _ in F.NON_PROFILE_FIELDS}
     check("registry: profile and non-profile fields partition the model",
           non_profile | set(F.PROFILE_FIELDS) == set(DEFAULT_SETTINGS))
+
+
+def test_the_stored_profile_shape_follows_the_registry():
+    """``in_profile`` is the ONLY switch that puts a field into a profile.
+
+    The short-key map used to be a second hand-written table in ``presets.py``,
+    so ``in_profile=True`` could declare a field in scope while the save path
+    ignored it - and the failure was silent in both directions: the warning
+    dialog (built from ``NON_PROFILE_FIELDS``) would stop listing the field as
+    "not saved", and it still would not be saved.
+    """
+    from beantester.presets import PRESET_DEFAULTS, PRESET_TO_SETTING
+    stored = set(PRESET_TO_SETTING.values())
+    check("registry: the stored shape covers exactly the profile fields",
+          stored == set(F.PROFILE_FIELDS),
+          f"({sorted(stored ^ set(F.PROFILE_FIELDS))})")
+    # the on-disk format is frozen: these two have been short since v1
+    check("registry: the historical short keys are unchanged",
+          {"lat", "jit"} <= set(PRESET_TO_SETTING), f"({sorted(PRESET_TO_SETTING)})")
+    check("registry: every stored field has a default to fall back to",
+          set(PRESET_DEFAULTS) == set(PRESET_TO_SETTING))
 
 
 def test_every_registry_field_reaches_the_settings_through_its_cli_flag():
