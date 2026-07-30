@@ -31,7 +31,7 @@ from hypothesis import strategies as st
 
 from beantester.core import BeanCore, Decision
 from beantester.engine import BeanEngine
-from beantester.presets import PRESETS, preset_to_settings
+from beantester.presets import PRESETS, SETTING_TO_PRESET, preset_to_settings
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
 from fakes import FakeDivert, FakePacket, check
@@ -49,8 +49,18 @@ IMPAIRMENT_OFF = {
     "rate_schedule": "", "lan_mode": False,
 }
 
-# The seven fields a preset carries (short keys), and their "no impairment" value.
-PRESET_OFF = {"loss": 0, "corrupt": 0, "dup": 0, "lat": 0, "jit": 0, "down": 0, "up": 0}
+# The profile fields that can impair traffic, and their "no impairment" value.
+# Derived from IMPAIRMENT_OFF (settings keys) so an impairment joining the
+# profile scope cannot be forgotten here - the omission that would let a preset
+# ship with a live flap and still count as "harmless".
+#
+# `buffer` is a profile field and is deliberately NOT here: it is absent from
+# IMPAIRMENT_OFF because it cannot impair anything on its own - both of its
+# readers sit inside `if rate > 0` (BeanCore.decide steps 11 and 12), so with no
+# speed limit it touches no packet. Demanding `buffer == 0` of a harmless preset
+# would demand an UNBOUNDED buffer, which is the opposite of harmless.
+PRESET_OFF = {key: off for key, off in IMPAIRMENT_OFF.items()
+              if key in SETTING_TO_PRESET}
 
 
 def perfect_settings():
@@ -92,7 +102,9 @@ def test_defaults_have_every_impairment_switched_off():
 
 
 def test_the_perfect_preset_is_completely_harmless():
-    perfect = PRESETS["presets.perfect"]
+    # through the real mapping: a preset names only the fields it means, so what
+    # it DELIVERS is the completed dict, not the literal in the table
+    perfect = preset_to_settings(PRESETS["presets.perfect"])
     for key, off in PRESET_OFF.items():
         check(f"perfect preset {key} is off",
               perfect[key] == off, f"(is {perfect[key]!r})")
@@ -102,7 +114,8 @@ def test_perfect_is_the_only_harmless_preset():
     """Every OTHER preset must impair something. A 'bad network' preset that
     silently does nothing would pass every damage test while being useless."""
     harmless = [key for key, spec in PRESETS.items()
-                if all(spec[k] == off for k, off in PRESET_OFF.items())]
+                if all(preset_to_settings(spec)[k] == off
+                       for k, off in PRESET_OFF.items())]
     check("exactly one all-zero preset exists", harmless == ["presets.perfect"],
           f"(harmless presets: {harmless})")
 

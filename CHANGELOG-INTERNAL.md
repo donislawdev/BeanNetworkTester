@@ -19,6 +19,85 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
+  in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,
+  `spike_ms`, `flap_period`, `flap_down` and `buffer` are marked `in_profile=True` in
+  `fields.FIELD_DEFS`; `presets.PRESET_TO_SETTING` is built from `Field.in_profile` +
+  the new `Field.preset_key` (the frozen short keys `lat`/`jit` are now declared by the registry,
+  not translated by a second table). This reverses the "Variant A" decision that deliberately kept
+  a profile to the seven classic preset fields - flapping is PERIODIC and phase-locked to the
+  session start (`BeanCore.decide` step 5), so it is the one impairment that lets a profile
+  describe a link that drops out on a cadence, which no other profile field can express.
+  Consequences worth naming:
+  - `PROFILE_FIELDS` had **no production consumer** before this (only `test_field_registry.py`);
+    what a profile actually stored came from `PRESET_TO_SETTING` in another module, so the two
+    could drift with nothing to notice. `in_profile` is now the only switch.
+  - `preset_to_settings()` is **always complete**: a preset names only the fields it means, and
+    every other profile field comes back at its `DEFAULT_SETTINGS` value. A partial answer would
+    leave the previous profile's flapping on screen after picking a clean link.
+  - The fill is the field's **default, not zero**. `buffer` defaults to 1000 ms and 0 means
+    UNBOUNDED there, so a blanket zero-fill would have quietly reinstated the runaway token bucket
+    (`BeanCore.decide` step 11) on every preset pick. `settings_to_preset()` lost its hardcoded
+    `0` fallback for the same reason.
+  - `buffer` is the only profile field that cannot impair anything on its own: both of its readers
+    sit inside `if rate > 0` (`decide` steps 11 and 12), so with no speed limit it touches no
+    packet. It is in the profile because `down`/`up` are - the buffer is what decides whether that
+    same limit shows up as DELAY or as LOSS.
+  - Visible effect for existing presets: none of the twelve names a buffer, so picking one now sets
+    the buffer to 1000 ms explicitly where it previously left the widget alone.
+  - Tests: `test_field_registry.py::test_the_stored_profile_shape_follows_the_registry` (new - the
+    stored shape covers exactly `PROFILE_FIELDS`, the short keys stay short, every stored field has
+    a default); `test_validators_settings.py::test_a_preset_always_yields_every_profile_field`
+    (new - unnamed fields come back as defaults, not zero and not missing);
+    `test_passthrough.py::PRESET_OFF` is now derived from `IMPAIRMENT_OFF` intersected with the
+    profile scope, so an impairment joining the scope cannot be forgotten there, and `buffer` is
+    correctly excluded (demanding `buffer == 0` of a harmless preset would demand an unbounded
+    buffer). `test_profile_scope_is_derived` updated to the 12 fields.
+  - `presets.py` gained module-level imports of `fields` and `settings`. No cycle: nothing in
+    `settings`'s dependency chain imports `presets` (checked), and `test_layering.py` is green.
+
+- **BREAKING:** **`--preset` applies a preset through the shared mapping** (`cli.py`), instead of
+  the copy of it that hand-wrote the seven classic keys. The GUI has always used
+  `preset_to_settings`, so the two front ends applied different subsets of the same preset name;
+  the only guard, `test_cli.py::test_cli_english`, asserts `latency` and `down` and nothing else.
+  With the profile scope widened this also stopped being a silent difference: the copy indexed
+  `p["corrupt"]` directly, so the first preset naming only the fields it means would have taken the
+  CLI down with a `KeyError` (reproduced against the future `presets.leo` shape before the fix).
+  Documented precedence is unchanged (defaults < file < preset < flags), but a preset now carries
+  five more keys, so `--config f.json --preset presets.3g` resets `buffer`, `spike_*` and `flap_*`
+  to their defaults where it previously left the file's values in place - the same rule that has
+  always applied to `loss` and `down`.
+  Tests: `test_cli.py::test_a_preset_carries_every_profile_field_into_the_settings` (new) drives a
+  PROBE preset whose every profile field is non-default, because run against the twelve real
+  presets the check is vacuous - none of them names a buffer, a spike or a flap, so the old copy
+  left exactly the defaults the shared mapping fills in, and the test would pass against the code
+  it exists to reject. `::test_a_preset_that_names_only_some_fields_does_not_break_the_cli` (new)
+  covers the partial-preset `KeyError`. Both verified by mutation: reverting `cli.py` turns them
+  red with `buffer 1000 != 1007` and `KeyError: 'corrupt'` respectively.
+
+- **`ProfileStore._clean` falls back to each field's DEFAULT, not to zero** (`gui/profiles.py`).
+  `float(values.get(key, 0) or 0)` was correct only while every profile field defaulted to zero.
+  It does not any more: a `profiles.json` written before the scope widened has no `buffer` key, and
+  `buffer = 0` means an UNBOUNDED link buffer, so the old fill would have loaded every profile
+  saved by an earlier version as the runaway token bucket the bounded buffer exists to prevent -
+  silently, on settings the user had already saved. Absence (`null` and `""` included) now takes
+  `presets.PRESET_DEFAULTS[key]`; an explicit `0` in the file stays 0, because that is what "no cap
+  on the queue" looks like when it is meant. The on-disk format therefore needs NO migration and no
+  version field: it stays backward compatible (fewer keys read fine) and forward compatible (an
+  older build ignores keys it does not know, losing only the new fields).
+  Side effect of dropping `or 0`: a falsy non-numeric value (`[]`, `{}`) now drops the profile and
+  reports it via `store.problem`, where it used to load silently as 0. That matches what the module
+  promises - validate every entry, drop what it cannot use, and say so.
+  Tests (all new, `test_release_fixes.py`):
+  `::test_a_profile_from_before_the_wider_scope_loads_with_field_defaults` - a seven-key file loads
+  with its own values, `buffer` at the default and the impairments it never named off; verified by
+  mutation (restoring the blanket zero turns it red with `buffer 0.0`).
+  `::test_an_explicit_zero_buffer_is_not_the_same_as_a_missing_one` - the paired constraint that
+  makes the fallback usable; it is deliberately NOT a regression guard (it survives the mutation,
+  because both paths yield 0 there).
+  `::test_a_profile_round_trips_the_widened_scope` - save and load carry `flap_*`, `spike_*` and
+  `buffer`, through the same `settings_to_preset` call `App.save_profile` makes.
+
 - **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
   and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
   ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`

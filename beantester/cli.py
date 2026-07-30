@@ -25,7 +25,7 @@ from .engine import BeanEngine
 from .fields import BOOL, FIELD_DEFS
 from .filters import CLI_FILTERS
 from .paths import is_frozen
-from .presets import PRESETS, resolve_preset
+from .presets import PRESETS, preset_to_settings, resolve_preset
 from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
@@ -210,9 +210,14 @@ def config_from_args(args):
         if canon is None:
             _fail(exitcodes.CONFIG, f"unknown preset: {args.preset!r} "
                                     f"(canonical ids: {', '.join(PRESETS)})")
-        p = PRESETS[canon]
-        s.update(loss=p["loss"], corrupt=p["corrupt"], dup=p["dup"],
-                 latency=p["lat"], jitter=p["jit"], down=p["down"], up=p["up"])
+        # Through the SHARED mapping, not a copy of it. This used to hand-write
+        # the seven classic keys, which meant the GUI (which has always gone
+        # through preset_to_settings) and the CLI applied different subsets of
+        # the same preset: a profile field the copy did not know about reached
+        # one front end and not the other, under the same preset name. Since a
+        # preset may now name only the fields it means something by, the copy
+        # would also KeyError on the first partial preset.
+        s.update(preset_to_settings(PRESETS[canon]))
 
     # The flag -> settings-key mapping is DERIVED from the field registry, not
     # hand-written. It used to be a literal dict here, which meant a new field had

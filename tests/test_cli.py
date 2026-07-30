@@ -83,6 +83,62 @@ def test_cli_english():
     check("CLI: Polish preset name still works", cfg2["settings"]["latency"] == ref["lat"])
 
 
+def test_a_preset_carries_every_profile_field_into_the_settings(monkeypatch):
+    """``--preset`` goes through the shared mapping, not a copy of it.
+
+    The GUI has always applied a preset through ``preset_to_settings``; the CLI
+    hand-wrote the seven classic keys, so the same preset name produced
+    different traffic depending on which front end applied it. Nothing caught
+    it: ``test_cli_english`` asserts ``latency`` and ``down`` only.
+
+    The probe preset sets every profile field to a NON-DEFAULT value on purpose.
+    Run against the twelve real presets this test would be vacuous - none of
+    them names a buffer, a spike or a flap, so the hand-written copy would leave
+    those keys at exactly the defaults the shared mapping fills them with, and
+    the check would pass against the very code it exists to reject.
+    """
+    from beantester.cli import build_arg_parser, config_from_args
+    from beantester.fields import PROFILE_FIELDS
+    from beantester.presets import PRESETS, SETTING_TO_PRESET
+    from beantester.settings import DEFAULT_SETTINGS
+
+    probe = {SETTING_TO_PRESET[long]: float(DEFAULT_SETTINGS[long]) + 7
+             for long in PROFILE_FIELDS}          # +7 stays inside every bound
+    monkeypatch.setitem(PRESETS, "presets.__probe__", probe)
+
+    cfg = config_from_args(build_arg_parser().parse_args(
+        ["--preset", "presets.__probe__", "--simulate"]))
+    for long in PROFILE_FIELDS:
+        want = probe[SETTING_TO_PRESET[long]]
+        check(f"CLI: --preset carries {long}", cfg["settings"][long] == want,
+              f"(got {cfg['settings'][long]!r}, wanted {want!r})")
+
+
+def test_a_preset_that_names_only_some_fields_does_not_break_the_cli():
+    """A preset may name only what it means; the rest come back as defaults.
+
+    The hand-written copy indexed ``p["corrupt"]`` and friends directly, so the
+    first partial preset would have taken the CLI down with a KeyError.
+    """
+    from beantester.cli import build_arg_parser, config_from_args
+    from beantester.presets import PRESETS
+    from beantester.settings import DEFAULT_SETTINGS
+
+    partial = {"loss": 1, "lat": 40, "flap_period": 15, "flap_down": 3}
+    try:
+        PRESETS["presets.__partial__"] = partial
+        cfg = config_from_args(build_arg_parser().parse_args(
+            ["--preset", "presets.__partial__", "--simulate"]))
+    finally:
+        PRESETS.pop("presets.__partial__", None)
+    s = cfg["settings"]
+    check("CLI: a partial preset applies what it names",
+          s["loss"] == 1 and s["latency"] == 40 and s["flap_period"] == 15)
+    check("CLI: a partial preset leaves the rest at their defaults",
+          s["buffer"] == DEFAULT_SETTINGS["buffer"] and s["jitter"] == 0
+          and s["spike_ms"] == 0, f"(buffer={s['buffer']!r})")
+
+
 def test_lan_mode_cli():
     from beantester import build_arg_parser, config_from_args
     cfg = config_from_args(build_arg_parser().parse_args(["--lan-mode", "--simulate"]))

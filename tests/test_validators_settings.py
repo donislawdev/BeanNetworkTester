@@ -12,7 +12,9 @@ import pytest
 
 from beantester.cli import build_arg_parser, config_from_args
 from beantester.gui.ui_state import UiStateStore
-from beantester.presets import PRESETS, preset_to_settings, settings_to_preset
+from beantester.fields import PROFILE_FIELDS
+from beantester.presets import (PRESET_DEFAULTS, PRESETS, SETTING_TO_PRESET,
+                                preset_to_settings, settings_to_preset)
 from beantester.settings import (DEFAULT_SETTINGS, settings_from_raw,
                                  validate_ranges)
 from beantester.validators import parse_number, parse_seed
@@ -93,9 +95,34 @@ def test_preset_mapping_is_shared_by_gui_and_cli():
         s = preset_to_settings(preset)
         check(f"preset {key}: mapped to model keys",
               s["latency"] == preset["lat"] and s["jitter"] == preset["jit"])
-        check(f"preset {key}: round-trips back", settings_to_preset(s) == dict(preset))
+        # a preset names only the fields it means something by, so the round
+        # trip lands on the COMPLETED shape: defaults overlaid with the literal
+        check(f"preset {key}: round-trips back",
+              settings_to_preset(s) == dict(PRESET_DEFAULTS, **preset))
     check("preset: resolvable by name too",
           preset_to_settings("presets.3g")["down"] == PRESETS["presets.3g"]["down"])
+
+
+def test_a_preset_always_yields_every_profile_field():
+    """Unnamed profile fields come back as DEFAULTS - not zero, not missing.
+
+    Not missing, because the GUI fills widgets from this dict: a partial answer
+    would leave the PREVIOUS profile's flapping or spikes on screen after
+    picking a clean link. Not zero, because ``buffer`` defaults to 1000 ms and
+    0 means UNBOUNDED there - a blanket zero-fill would have quietly reinstated
+    the runaway token bucket on every preset pick.
+    """
+    for key, preset in PRESETS.items():
+        s = preset_to_settings(preset)
+        check(f"preset {key}: covers every profile field",
+              set(s) == set(PROFILE_FIELDS),
+              f"({sorted(set(s) ^ set(PROFILE_FIELDS))})")
+        for long in PROFILE_FIELDS:
+            if SETTING_TO_PRESET[long] in preset:
+                continue                       # the preset says something itself
+            check(f"preset {key}: unnamed {long} falls back to its default",
+                  s[long] == DEFAULT_SETTINGS[long],
+                  f"(is {s[long]!r}, default {DEFAULT_SETTINGS[long]!r})")
 
 
 def test_every_preset_is_within_the_declared_bounds():

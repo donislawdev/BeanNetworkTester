@@ -119,6 +119,69 @@ def test_profiles_are_written_atomically_and_validated():
     check("dropping it is reported", bool(reloaded.problem))
 
 
+def test_a_profile_from_before_the_wider_scope_loads_with_field_defaults():
+    """Old files carry seven keys and no ``buffer`` - and 0 there means UNBOUNDED.
+
+    ``_clean`` used to fill a missing key with a blanket zero, which was correct
+    only while every profile field defaulted to zero. ``buffer`` defaults to
+    1000 ms, so that fill would have turned every profile written before the
+    scope widened into a runaway token bucket (``BeanCore.decide`` step 11) the
+    moment it was loaded - silently, on somebody else's saved settings.
+    """
+    from beantester.gui.profiles import ProfileStore
+    from beantester.settings import DEFAULT_SETTINGS
+    path = os.path.join(tempfile.mkdtemp(), "profiles.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"old": {"loss": 2, "corrupt": 0, "dup": 0, "lat": 80,
+                           "jit": 40, "down": 2048, "up": 1024}}, f)
+    entry = ProfileStore(path).get("old")
+    check("a pre-widening profile still loads", entry is not None)
+    check("the fields it names survive",
+          entry["loss"] == 2 and entry["lat"] == 80 and entry["down"] == 2048)
+    check("a missing buffer falls back to its default, not to 0",
+          entry["buffer"] == DEFAULT_SETTINGS["buffer"], f"({entry['buffer']!r})")
+    check("the impairments it never named are off",
+          entry["flap_period"] == 0 and entry["flap_down"] == 0
+          and entry["spike_prob"] == 0 and entry["spike_ms"] == 0)
+
+
+def test_an_explicit_zero_buffer_is_not_the_same_as_a_missing_one():
+    """``buffer: 0`` is a real choice (no cap on the queue) and must survive.
+
+    The pair with the test above: absence falls back to the default, an explicit
+    zero does not. Collapsing the two would make the fallback unusable.
+    """
+    from beantester.gui.profiles import ProfileStore
+    path = os.path.join(tempfile.mkdtemp(), "profiles.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"unbounded": {"down": 50, "buffer": 0}}, f)
+    entry = ProfileStore(path).get("unbounded")
+    check("an explicit 0 buffer survives the load", entry["buffer"] == 0.0,
+          f"({entry['buffer']!r})")
+
+
+def test_a_profile_round_trips_the_widened_scope():
+    """Save and load must carry the spike and flap fields, not just the classic seven."""
+    from beantester.gui.profiles import ProfileStore
+    from beantester.presets import settings_to_preset
+    from beantester.settings import DEFAULT_SETTINGS
+    path = os.path.join(tempfile.mkdtemp(), "profiles.json")
+    store = ProfileStore(path)
+    # exactly what App.save_profile stores: the widget settings, mapped
+    store.set("leo-ish", settings_to_preset(dict(
+        DEFAULT_SETTINGS, latency=40, flap_period=15, flap_down=3,
+        spike_prob=2, spike_ms=150, buffer=250)))
+    check("saving works", store.persist() is None)
+
+    entry = ProfileStore(path).get("leo-ish")
+    check("the periodic outage survives a round trip",
+          entry["flap_period"] == 15 and entry["flap_down"] == 3, f"({entry})")
+    check("the latency spike survives a round trip",
+          entry["spike_prob"] == 2 and entry["spike_ms"] == 150, f"({entry})")
+    check("the link buffer survives a round trip", entry["buffer"] == 250,
+          f"({entry['buffer']!r})")
+
+
 # -- targeting: the live port set ---------------------------------------------- #
 class _FakeTable:
     """A socket table under the test's control."""
