@@ -338,6 +338,50 @@ class ProcessTargeting:
 NO_PROCESS = "(none)"
 
 
+def ports_shared_with_others(pids, table=None):
+    """``{port: frozenset(other pids)}`` - target ports that other processes hold too.
+
+    Why this exists, and why it only WARNS. A socket table row is ``(protocol,
+    family, local port) -> pid``, and :mod:`beantester.portmap` collapses all four
+    tables into ``port -> pid``, so a port several processes hold keeps one of them.
+    That is not a rounding error, it decides what gets impaired - MEASURED
+    2026-07-30 against the real table:
+
+    * targeting ``Spotify.exe`` left port 1900 (SSDP) and 5353 (mDNS) OUT of its
+      port set, so its own traffic there was never touched;
+    * targeting ``msedge.exe`` put 5353 IN, together with svchost's, Spotify's and
+      adb's traffic on the same port - three processes impaired that nobody asked
+      for;
+    * and on 5353 the winner is not even stable: across 40 walks 0.25 s apart it
+      was Spotify 32 times, adb 6, msedge 2, so scope flickers at the resolver's
+      rebuild rate.
+
+    It is not fixable by a better key. Three of the four shared ports found were
+    several processes on the SAME protocol and family (``SO_REUSEADDR`` multicast:
+    DHCP, SSDP, mDNS), where the local port genuinely does not identify the owner -
+    see the ADR in PROJECT_NOTES. What CAN be fixed is the silence, which is this.
+
+    ``table`` defaults to the polling table on purpose, even in a session where
+    targeting resolves against the live ``SocketWatcher``: this asks about the
+    OPERATING SYSTEM's socket table, not about how the tool learned a mapping.
+    Returns ``{}`` for a table that cannot answer (a test double, a non-Windows
+    fallback) - a missing diagnostic must never break the thing it describes.
+    """
+    if not pids:
+        return {}
+    table = table if table is not None else portmap.default_table()
+    getter = getattr(table, "shared_ports", None)
+    if getter is None:
+        return {}
+    targeted = set(pids)
+    out = {}
+    for port, owners in getter().items():
+        others = frozenset(owners) - targeted
+        if others and (set(owners) & targeted):
+            out[port] = others
+    return out
+
+
 def resolve_ports(matcher, table=None):
     """One-shot resolution: ``(ports, description)`` for a compiled matcher.
 

@@ -285,6 +285,7 @@
   "log.targeting": "Targeting",
   "log.targeting_error": "Targeting error",
   "log.targeting_none": "Targeting: NO matching process - traffic is NOT being impaired.",
+  "log.targeting_shared_ports": "Heads up: other processes have port(s) {ports} open too ({who}). The tool decides what to break from the port number, so on those it cannot tell whose traffic it is: it may break theirs as well, or miss the target's. All other ports are unaffected.",
   "log.targeting_requires_psutil": "Targeting requires psutil:  pip install psutil",
   "log.ui_error": "Internal error: {e} (the session keeps running; see the log).",
   "log.ui_state_problem": "Window-state file problem",

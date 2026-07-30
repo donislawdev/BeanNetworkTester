@@ -8,11 +8,13 @@ import json
 
 from . import crashlog
 from . import fields as F
+from . import portmap
 from .jsonfile import write_json
 from .fields import FIELD_DEFS, FIELDS
 from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
+from .targeting import ports_shared_with_others
 from .validators import parse_number, parse_seed
 
 DEFAULT_SETTINGS = dict(
@@ -127,6 +129,35 @@ def validate_settings(s, lang=None):
     return True
 
 
+def _warn_about_shared_ports(targeting, log):
+    """Say so when the target holds a port other programs hold at the same time.
+
+    The tool decides what to impair from the LOCAL PORT, and the operating
+    system's socket table lets several processes own one (``SO_REUSEADDR``: mDNS,
+    SSDP, DHCP). On those ports the answer is a coin toss - measured, targeting
+    Spotify left its own port 5353 out of scope while targeting msedge pulled
+    svchost, Spotify and adb in. Nothing here can fix that; what it can do is stop
+    the tool from reporting a clean result over it.
+
+    Said ONCE, on the announcing path (an explicit "apply"), never per resolver
+    tick. Best-effort throughout: a diagnostic that raised would break the very
+    thing it is describing.
+    """
+    with crashlog.quiet("settings.shared_ports"):
+        # The POLLING table, whatever targeting itself resolves against: the
+        # question is about the OS socket table, not about how we learned a port.
+        table = portmap.default_table()
+        table.refresh_if_stale()
+        shared = ports_shared_with_others(targeting.pids(), table)
+        if not shared:
+            return
+        others = sorted({table.name_of(pid) or str(pid)
+                         for pids in shared.values() for pid in pids})
+        log(T("log.targeting_shared_ports", n=len(shared),
+              ports=", ".join(str(p) for p in sorted(shared)),
+              who=", ".join(others)))
+
+
 def apply_targeting(engine, target, log=lambda *_: None, announce=True):
     """Resolve the target-process expression and point the engine at its ports.
 
@@ -184,6 +215,7 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
             log(f"{T('log.targeting')}: {targeting.describe()} "
                 f"({len(targeting.pids())} {T('log.processes')}, "
                 f"{len(targeting)} {T('log.ports')})")
+            _warn_about_shared_ports(targeting, log)
         else:
             # Loud on purpose: an unmatched target means NOTHING is impaired,
             # and a run in which nothing broke used to look exactly like a run

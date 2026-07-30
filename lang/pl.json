@@ -285,6 +285,7 @@
   "log.targeting": "Celuję w",
   "log.targeting_error": "Błąd celowania",
   "log.targeting_none": "Celowanie: BRAK pasującego procesu - ruch NIE jest modyfikowany.",
+  "log.targeting_shared_ports": "Uwaga: port(y) {ports} mają otwarte także inne procesy ({who}). Narzędzie decyduje o psuciu po numerze portu, więc na nich nie rozróżni, czyj to ruch: może popsuć także im albo pominąć ruch celu. Pozostałe porty są bez zmian.",
   "log.targeting_requires_psutil": "Celowanie wymaga psutil:  pip install psutil",
   "log.ui_error": "Błąd wewnętrzny: {e} (sesja działa dalej; sprawdź log).",
   "log.ui_state_problem": "Problem z plikiem stanu okna",
