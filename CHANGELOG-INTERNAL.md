@@ -75,6 +75,20 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     fails with `presets: every id has a pl name (['presets.leo'])`. (`test_i18n_coverage` catches
     the same deletion from the other side, by comparing key SETS; this one catches a preset id that
     reaches neither file.)
+  - **All seven shipped `scenarios/*.json` recalculated onto the same scale.** They carried the two
+    errors the presets did - rates on the 8x scale (`down: 8000` as an "LTE baseline") and
+    latencies dialled as round trips - so a scenario and a preset described the same network with
+    different numbers. Latencies halved, rates mapped onto KB/s. The pleasant consequence: the
+    DELIVERED ping is now the number the file says, because halving `lat` is exactly what makes
+    `2 x lat` equal the author's intent - `cafe-wifi.json` said 40 and delivered 80; it now says 20
+    and delivers 40. `mobile-lte-to-3g.json` walks `presets.lte` (ping 60, 33.6 Mbit/s) down to
+    `presets.3g`'s bandwidth (0.8 Mbit/s) and back, so the file and the preset finally agree about
+    what "LTE" and "3G" mean. **Jitter was NOT halved**, in scenarios or presets: each packet draws
+    its own uniform, so the spread grows by sqrt(2), not 2, and the existing values remain
+    plausible read as per-packet figures. The shape of every story (the relative progression, the
+    reset points, the loop) is untouched - this was a recalculation, not a redesign.
+    Covered by the existing `test_shipped_scenarios.py`, which drives every file through the real
+    validator.
   - The two tests that pinned the old Polish name kept their POINT rather than being deleted: they
     exist for the stroke-letter fold (`ł` does not decompose under NFD), so they moved to
     `"Odlegly serwer (inny kontynent)"`, `"Zapchane lacze domowe (bufferbloat)"` and
