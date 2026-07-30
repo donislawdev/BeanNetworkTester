@@ -40,6 +40,26 @@ _UDP_TABLE_OWNER_PID = 1
 _ERROR_INSUFFICIENT_BUFFER = 122
 
 
+def _put(out, owners, port, pid):
+    """Install one socket row into the flat map, remembering the owner it evicts.
+
+    The flat ``port -> pid`` map keeps the LAST row (see ``port_pid_map``), and
+    ``owners`` collects the losers so that collapse can be reported instead of
+    happening in silence. ONE function, called by both the native walk and the
+    psutil fallback: written inline in both, the rule would drift the first time
+    somebody edited one of them - and the two would then disagree about which
+    ports are shared depending on which path the machine took.
+
+    Nothing is allocated unless a port really has two owners, so the common row
+    costs one extra ``dict.get``.
+    """
+    if owners is not None:
+        previous = out.get(port)
+        if previous is not None and previous != pid:
+            owners.setdefault(port, {previous}).add(pid)
+    out[port] = pid
+
+
 def _swap16(value):
     """The socket tables store ports in network byte order inside a DWORD."""
     return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
@@ -93,8 +113,12 @@ class _Native:
         }
         self._sizes = {}            # (proto, family) -> bytes the table needed last time
 
-    def _table(self, proto, family, out):
-        """Append ``(port, pid)`` pairs of one table to ``out``."""
+    def _table(self, proto, family, out, owners=None):
+        """Append ``(port, pid)`` pairs of one table to ``out``.
+
+        ``owners`` (optional) collects ``port -> {pid, ...}`` for the ports where
+        more than one row claims the same number, which ``out`` cannot represent.
+        """
         import ctypes
         from ctypes import wintypes
 
@@ -136,13 +160,35 @@ class _Native:
             port = _swap16(row.dwLocalPort & 0xFFFF)
             pid = int(row.dwOwningPid)
             if port and pid:
-                out[port] = pid
+                # LAST ROW WINS, and that is unchanged - see port_pid_map for what
+                # it costs and _put for how the discarded owner is remembered.
+                _put(out, owners, port, pid)
         return True
 
     FAMILY_NAMES = {_AF_INET: "v4", _AF_INET6: "v6"}
 
-    def port_pid_map(self):
+    def port_pid_map(self, owners=None):
         """``{local port: pid}`` from all four socket tables, or ``None``.
+
+        🔴 **The key is the port NUMBER ALONE, and that loses information.** The
+        four tables (tcp/v4, tcp/v6, udp/v4, udp/v6) are merged into one flat dict
+        in that order, so a port claimed by several rows keeps only the LAST one:
+        UDP overwrites TCP, v6 overwrites v4, and within one table the winner is
+        whatever order ``iphlpapi`` returned. This is not a corner case on a real
+        machine - MEASURED 2026-07-30 (Win11, 50 samples): **4 of 127 port numbers
+        had conflicting owners**, and udp/v4:5353 (mDNS) had FIVE at once -
+        svchost, Spotify, adb and msedge twice. Also 68 (DHCP), 1900 (SSDP) and
+        49664, where TCP lsass and UDP svchost collide across protocols.
+
+        Most of that is NOT fixable by a richer key: three of the four are genuine
+        ``SO_REUSEADDR`` sharing inside ONE table, where the local port simply does
+        not identify the owner. See the ADR in PROJECT_NOTES ("Zachowania
+        ZAMIERZONE") for the options measured and rejected.
+
+        So the collapse stays, and ``owners`` (optional) is how it stops being
+        SILENT: pass a dict and it collects ``port -> {pid, ...}`` for exactly the
+        ports where a winner had to be picked. Callers turn that into the warning a
+        user can act on (see ``targeting.ports_shared_with_others``).
 
         A PARTIAL result is still returned. Dropping to psutil because one table
         of four stopped answering would trade a possible gap for a certain
@@ -159,7 +205,7 @@ class _Native:
         failed = []
         for proto in ("tcp", "udp"):
             for family in (_AF_INET, _AF_INET6):
-                if not self._table(proto, family, out):
+                if not self._table(proto, family, out, owners):
                     failed.append(f"{proto}/{self.FAMILY_NAMES[family]}")
         if len(failed) == 4:
             return None                  # nothing answered at all: let psutil try
@@ -180,7 +226,8 @@ def _make_native():
 
 
 # -- fallback (psutil) --------------------------------------------------------- #
-def _psutil_port_pid_map():
+def _psutil_port_pid_map(owners=None):
+    """Same shape - and the same collapse - as the native path. See port_pid_map."""
     try:
         import psutil
     except Exception:
@@ -193,7 +240,7 @@ def _psutil_port_pid_map():
                 continue
             port = laddr.port if hasattr(laddr, "port") else laddr[1]
             if port:
-                out[int(port)] = int(pid)
+                _put(out, owners, int(port), int(pid))
         return out
     except Exception:
         return None
@@ -352,6 +399,9 @@ class PortTable:
         self.clock = clock
         self._lock = threading.RLock()
         self._ports = {}                 # port -> pid
+        # port -> frozenset(pids), ONLY for the ports where _ports had to pick a
+        # winner. Diagnostics, never a decision input - see port_pid_map.
+        self._shared = {}
         self._info = {}                  # pid -> (name, ppid, created, written_at)
         self._bulk_at = 0.0              # last full process_iter (fallback path)
         self._last = 0.0                 # last successful refresh
@@ -414,15 +464,21 @@ class PortTable:
         # ---- outside the lock: everything that is O(number of sockets) ---------- #
         ports = None
         native_broke = False
+        # Collected alongside the map, from the same walk, so the two can never
+        # describe different moments. Empty on any ordinary machine minute - it only
+        # gains an entry where a port number really has two owners (see
+        # port_pid_map), so this costs nothing until there is something to say.
+        owners = {}
         if native is not None:
             try:
-                ports = native.port_pid_map()
+                ports = native.port_pid_map(owners)
             except Exception:                        # pragma: no cover
                 ports = None
             if ports is None:
                 native_broke = True                  # it stopped answering
         if ports is None:
-            ports = _psutil_port_pid_map()
+            owners.clear()                           # belongs to the walk that failed
+            ports = _psutil_port_pid_map(owners)
         # A PID that has just lost every socket is a PID whose process is probably
         # gone - and a PID can only be handed to somebody else AFTER its owner exits.
         # So this is the moment to forget its name, before the OS can hand the number
@@ -449,6 +505,10 @@ class PortTable:
                 return False
             self._installed_gen = gen
             self._ports = ports
+            # Installed with the map it belongs to, under the same lock and the same
+            # generation guard: a shared-port list from an older walk beside a newer
+            # map would name processes that no longer own anything.
+            self._shared = {port: frozenset(pids) for port, pids in owners.items()}
             self._last = now
             for pid in departed:
                 self._info.pop(pid, None)
@@ -466,6 +526,17 @@ class PortTable:
     def snapshot(self):
         with self._lock:
             return dict(self._ports)
+
+    def shared_ports(self):
+        """``{port: frozenset(pids)}`` for the ports ``snapshot()`` had to collapse.
+
+        Empty on most machines and most minutes. When it is not, it names exactly
+        what the flat map threw away, so the tool can warn instead of silently
+        attributing a shared port to one of its owners. Diagnostics only: nothing
+        in the decision pipeline reads this, and adding it changed no behaviour.
+        """
+        with self._lock:
+            return dict(self._shared)
 
     def collected(self):
         """The port map AND the moment its data was collected, from ONE lock hold.

@@ -303,7 +303,7 @@ def test_a_partial_socket_table_is_reported_not_silently_trusted(monkeypatch):
     recorded = _spy_on_crashlog(monkeypatch)
     seen = []
 
-    def fake_table(proto, family, out):
+    def fake_table(proto, family, out, owners=None):
         seen.append((proto, family))
         if proto == "udp" and family == _AF_INET6:
             return False                     # this one stops answering
@@ -318,6 +318,205 @@ def test_a_partial_socket_table_is_reported_not_silently_trusted(monkeypatch):
     check("the gap was recorded", len(recorded) == 1, f"({recorded})")
     check("the record names the table that failed",
           "udp/v6" in str(recorded[0].get("subsystem", "")), f"({recorded})")
+
+
+def test_a_port_several_processes_hold_is_recorded_instead_of_silently_collapsed():
+    """The flat ``port -> pid`` map keeps ONE owner. Now it says which it dropped.
+
+    MEASURED on a real machine (2026-07-30, 50 samples): 4 of 127 port numbers had
+    conflicting owners, and udp/v4:5353 had FIVE at once. The map cannot represent
+    that - three of those four were several processes on the same protocol and
+    family (SO_REUSEADDR: DHCP, SSDP, mDNS), where the local port genuinely does
+    not identify the owner. So the collapse stays and stops being SILENT.
+    """
+    from beantester.portmap import _AF_INET, _AF_INET6, _Native, _put
+
+    # Driven through the REAL row-installing rule. An earlier version of this test
+    # gave the fake table its own copy of that rule, so it asserted its own
+    # reimplementation: deleting the recording from portmap left it green.
+    rows = {("tcp", _AF_INET): [(80, 10), (5353, 11)],
+            ("udp", _AF_INET): [(5353, 12), (5353, 13)],   # two owners, one table
+            ("udp", _AF_INET6): [(5353, 14), (443, 15)]}   # ...and a third across
+
+    def fake_table(proto, family, out, owners=None):
+        for port, pid in rows.get((proto, family), ()):
+            _put(out, owners, port, pid)
+        return True
+
+    native = _Native.__new__(_Native)
+    native._sizes = {}
+    native._table = fake_table
+    owners = {}
+    flat = native.port_pid_map(owners)
+
+    check("the flat map is UNCHANGED - last row still wins", flat[5353] == 14,
+          f"({flat.get(5353)})")
+    check("every owner of the shared port was recorded",
+          owners.get(5353) == {11, 12, 13, 14}, f"({owners.get(5353)})")
+    check("a port with one owner is not reported as shared",
+          80 not in owners and 443 not in owners, f"({sorted(owners)})")
+
+    # ...and the same rule is what the psutil fallback uses, so the two paths
+    # cannot disagree about which ports are shared.
+    out, seen = {}, {}
+    for port, pid in [(7000, 1), (7000, 2), (7001, 3)]:
+        _put(out, seen, port, pid)
+    check("the shared rule keeps the last owner", out == {7000: 2, 7001: 3}, f"({out})")
+    check("...and remembers the one it evicted", seen == {7000: {1, 2}}, f"({seen})")
+    check("a caller that does not ask for collisions still gets the map",
+          [_put(out, None, 8000, 9), out.get(8000)][1] == 9)
+
+
+def test_shared_ports_are_published_with_the_map_they_belong_to():
+    """A shared-port list from an older walk beside a newer map would name
+    processes that no longer own anything, so it is installed under the same lock
+    and the same generation guard as ``_ports``."""
+    from beantester import portmap
+
+    table = portmap.PortTable()
+
+    class _Native:
+        def port_pid_map(self, owners=None):
+            if owners is not None:
+                owners[5353] = {11, 12}
+            return {5353: 12, 80: 10}
+
+    table._native = _Native()
+    table.native = True
+    table.refresh(force=True)
+
+    check("the map is the flat one", table.snapshot() == {5353: 12, 80: 10},
+          f"({table.snapshot()})")
+    check("and the collisions it hid are readable",
+          table.shared_ports() == {5353: frozenset({11, 12})},
+          f"({table.shared_ports()})")
+    check("shared_ports hands out a copy, not the live dict",
+          table.shared_ports() is not table._shared)
+
+
+def test_only_ports_the_TARGET_holds_are_reported_as_shared():
+    """The warning has to be about the user's target, not about the machine.
+
+    A global "4 ports are shared" tells a tester nothing they can act on. What
+    matters is "the process you aimed at shares one, so the result there is a coin
+    toss" - measured: targeting Spotify left its own 5353 out of scope, while
+    targeting msedge pulled svchost, Spotify and adb in with it.
+    """
+    from beantester.targeting import ports_shared_with_others
+
+    class _Table:
+        def shared_ports(self):
+            return {5353: frozenset({11, 12, 13}),   # the target is one of three
+                    1900: frozenset({77, 78})}        # nothing to do with us
+
+    shared = ports_shared_with_others({11, 99}, _Table())
+    check("the target's shared port is reported", 5353 in shared, f"({shared})")
+    check("...naming the OTHERS, not the target itself",
+          shared[5353] == frozenset({12, 13}), f"({shared.get(5353)})")
+    check("a port shared between two strangers is not our business",
+          1900 not in shared, f"({shared})")
+    check("no target, nothing to say", ports_shared_with_others(set(), _Table()) == {})
+    check("a table that cannot answer degrades to silence, not an error",
+          ports_shared_with_others({11}, object()) == {})
+
+
+def test_a_target_sharing_a_port_is_said_out_loud_once():
+    """...and a target that shares nothing stays quiet, or the line becomes noise."""
+    from beantester import portmap, settings
+
+    class _Table:
+        def __init__(self, shared):
+            self._shared = shared
+
+        def refresh_if_stale(self, now=None, miss=False):
+            return False
+
+        def shared_ports(self):
+            return self._shared
+
+        def name_of(self, pid, cheap=False):
+            return {12: "svchost.exe", 13: "adb.exe"}.get(pid, "")
+
+    class _Targeting:
+        def pids(self):
+            return {11}
+
+    def run(shared, monkey):
+        lines = []
+        monkey.setattr(portmap, "default_table", lambda: _Table(shared))
+        settings._warn_about_shared_ports(_Targeting(), lines.append)
+        return lines
+
+    import pytest as _pytest
+    mp = _pytest.MonkeyPatch()
+    try:
+        noisy = run({5353: frozenset({11, 12, 13})}, mp)
+        quiet = run({1900: frozenset({77, 78})}, mp)
+    finally:
+        mp.undo()
+
+    check("a shared target port is announced", len(noisy) == 1, f"({noisy})")
+    check("and the line names the port and who else has it",
+          "5353" in noisy[0] and "svchost.exe" in noisy[0] and "adb.exe" in noisy[0],
+          f"({noisy})")
+    check("a target that shares nothing says nothing", quiet == [], f"({quiet})")
+
+
+def test_the_shared_port_warning_is_actually_wired_into_apply_targeting():
+    """The unit test above proves the SENTENCE; this proves it is SAID.
+
+    Written because a mutant survived: deleting the call from ``apply_targeting``
+    left the direct-call test perfectly green. A diagnostic nobody invokes is the
+    same as no diagnostic, and it fails exactly the way this project hates - the
+    session looks clean.
+    """
+    from beantester import portmap, settings
+
+    class _Table:
+        def refresh_if_stale(self, now=None, miss=False):
+            return False
+
+        def shared_ports(self):
+            return {5353: frozenset({11, 12})}
+
+        def name_of(self, pid, cheap=False):
+            return {12: "svchost.exe"}.get(pid, "")
+
+    class _Targeting:
+        matched = True
+
+        def pids(self):
+            return {11}
+
+        def describe(self):
+            return "myapp.exe"
+
+        def refresh(self, *a, **k):
+            return frozenset({5353})
+
+        def __len__(self):
+            return 1
+
+    class _Engine:
+        def target_for(self, _matcher):
+            return _Targeting()
+
+        def set_target(self, *_a, **_k):
+            pass
+
+    import pytest as _pytest
+    mp = _pytest.MonkeyPatch()
+    lines = []
+    try:
+        mp.setattr(portmap, "default_table", lambda: _Table())
+        settings.apply_targeting(_Engine(), "myapp.exe", lines.append)
+    finally:
+        mp.undo()
+
+    check("applying a target announced what it matched",
+          any("myapp.exe" in ln for ln in lines), f"({lines})")
+    check("...and warned that one of its ports is shared",
+          any("5353" in ln and "svchost.exe" in ln for ln in lines), f"({lines})")
 
 
 def test_every_socket_table_failing_falls_back_to_psutil(monkeypatch):
@@ -382,7 +581,8 @@ class _World:
         from beantester import portmap
         # the bulk fallback must use this fake table, not the real toolhelp snapshot
         monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", False)
-        monkeypatch.setattr(portmap, "_psutil_port_pid_map", lambda: dict(self.ports))
+        monkeypatch.setattr(portmap, "_psutil_port_pid_map",
+                            lambda owners=None: dict(self.ports))
         monkeypatch.setattr(portmap, "_psutil_created",
                             lambda pid: self.created.get(int(pid)))
         monkeypatch.setattr(portmap, "_psutil_process_info", lambda pid: (
@@ -608,7 +808,7 @@ def test_the_socket_table_is_collected_without_holding_the_lock():
     probed = {}
 
     class _Native:
-        def port_pid_map(self):
+        def port_pid_map(self, owners=None):
             def probe():
                 got = table._lock.acquire(timeout=1.0)
                 probed["free"] = got
@@ -671,12 +871,12 @@ def test_an_older_collection_does_not_overwrite_a_newer_map():
     stale, fresh = {1111: 11}, {2222: 22}
 
     class _Slow:
-        def port_pid_map(self):
+        def port_pid_map(self, owners=None):
             gate.wait(timeout=5.0)
             return dict(stale)
 
     class _Fast:
-        def port_pid_map(self):
+        def port_pid_map(self, owners=None):
             return dict(fresh)
 
     table._native = _Slow()

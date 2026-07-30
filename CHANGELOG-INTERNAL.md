@@ -164,6 +164,70 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
   the watchdog call removed, `owner_targeted` returning False) - all nine RED.
 - Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+### Added: the port -> pid collapse stops being silent (ADR, no behaviour change)
+
+`portmap`'s map is keyed by the port NUMBER alone and merges four tables (tcp/v4, tcp/v6, udp/v4,
+udp/v6) in that order, so a port with several rows keeps the LAST: UDP overwrites TCP, v6
+overwrites v4, and within one table the winner is whatever `iphlpapi` returned.
+
+- **MEASURED 2026-07-30** (Win11, 50 samples, reading RAW rows - an earlier probe counted 2 of 91
+  because `_table` collapses inside itself and hid the rest): **4 of 127 port numbers had
+  conflicting owners** - 68 (DHCP, two svchosts), 1900 (SSDP, svchost + Spotify), **5353 (mDNS,
+  FIVE at once**: svchost, Spotify, adb, msedge twice) and 49664 (RPC: TCP lsass vs UDP svchost).
+  Under load (600 extra sockets, 718 port numbers) **no new ephemeral collision appeared**; 66
+  ports >= 49152 had exactly one owner.
+- **Consequences DEMONSTRATED through `ProcessTargeting`, not reasoned:** target `Spotify.exe` ->
+  1900 and 5353 OUT of its port set (its own traffic escapes); target `msedge.exe` -> 5353 IN,
+  together with svchost's, Spotify's and adb's traffic; target `lsass.exe` -> its TCP 49664 escapes
+  because UDP svchost won the row. The connection log shows one arbitrary owner for every row on
+  those ports. On 5353 the winner is not even stable: 40 walks 0.25 s apart gave Spotify x32, adb
+  x6, msedge x2, so scope flickers at the resolver's rebuild rate.
+- **REJECTED - a `(proto, port)` key** (two frozensets rather than a tuple, so no per-packet
+  allocation): fixes 1 of the 4, because three are several processes on the SAME protocol and
+  family (`SO_REUSEADDR`), where the local port does not carry the answer at all. Packet-path work
+  for one port in 127, in a budget where disabling the WHOLE connection log is 1.012x.
+- **REJECTED - `port -> {pids}` matching any owner**: not a fix, a POLICY change from "one
+  arbitrary owner" to "all of them". On 5353 that means targeting msedge also impairs svchost,
+  Spotify and adb - trading a coin-toss false negative for a guaranteed false positive, exactly
+  where the OS multiplexes.
+- **TAKEN: behaviour unchanged, silence removed.** New `portmap._put(out, owners, port, pid)` -
+  ONE source for the row-installing rule, used by the native walk and the psutil fallback, so the
+  two cannot drift about which ports are shared. It records the owner a row evicts and allocates
+  nothing unless a port really has two. `PortTable._shared` is installed beside `_ports`, under the
+  same lock and the same generation guard (a shared list from an older walk beside a newer map
+  would name processes that own nothing), and read via `shared_ports()`.
+  `targeting.ports_shared_with_others(pids, table)` intersects that with the TARGET's pids and
+  names the OTHERS; `settings._warn_about_shared_ports` says it once from `apply_targeting`'s
+  announcing path (never per resolver tick), via the new `log.targeting_shared_ports` key in both
+  language files. It asks the POLLING table on purpose even in a session where targeting resolves
+  against the `SocketWatcher`: the question is about the OS socket table, not about how the tool
+  learned a mapping.
+- A **global** "N ports are shared" counter was considered and dropped: a number about the machine,
+  not about the user's test, and nothing they can act on.
+- **New tests** in `tests/test_processes.py`:
+  `test_a_port_several_processes_hold_is_recorded_instead_of_silently_collapsed` (the flat map is
+  UNCHANGED - last row still wins - while every evicted owner is recorded; drives the REAL `_put`,
+  because the first version gave its fake table a copy of the rule and a mutant deleting the
+  recording SURVIVED), `test_shared_ports_are_published_with_the_map_they_belong_to`,
+  `test_only_ports_the_TARGET_holds_are_reported_as_shared` (a port shared between two strangers is
+  not reported; a table that cannot answer degrades to silence),
+  `test_a_target_sharing_a_port_is_said_out_loud_once` (and a target that shares nothing stays
+  quiet), and `test_the_shared_port_warning_is_actually_wired_into_apply_targeting` - written
+  because deleting the call site left the direct-call test green, which is a diagnostic nobody
+  invokes.
+  Mutation-checked: `_put` not recording, `_shared` not installed, the warning not filtered by
+  target, the target named among "the others", the call site deleted, and the warning firing with
+  nothing to say - all RED.
+- `_Native.port_pid_map` / `_psutil_port_pid_map` / `_Native._table` take an optional `owners`
+  dict. Four test doubles updated to match: with the old signature the call RAISED, the `except` in
+  `refresh()` swallowed it, and the whole collection fell through to the real system - the tests
+  caught exactly that.
+- **NOT measured**: the `SocketWatcher` side has the same shape (`_ports[port] = pid`, last event
+  wins) and was seen holding ports 138 and 1900 with two pids at once, but was not swept as
+  thoroughly as the poller.
+
+### Fixed
+
 - **`BeanEngine._start_locked` swallowed a failed `divert.open()` (audit F1).** The `except` did
   `crashlog.note(_exc, "engine")` and fell through, so `_running` went True, three workers were
   spawned, and the capture thread's first `recv()` raised

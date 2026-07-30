@@ -210,6 +210,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
   from a socket event lost under heavy load.
 
+### Added
+
+- **The tool now warns when your target shares a port with another program.** Windows lets several
+  programs hold the same local port at once - that is how mDNS, SSDP and DHCP work - and this tool
+  decides what to break from the port number, so on those ports it genuinely cannot tell whose
+  traffic it is looking at. On this machine, four port numbers out of 127 were like that, and one
+  of them (5353, used for local device discovery) had **five** owners at the same time. The
+  consequence is real in both directions: aiming at one program could leave its own traffic on such
+  a port untouched, or sweep three other programs' traffic in with it. Nothing about that changed -
+  it cannot be fixed, because the port number simply does not say who sent the packet - but the
+  tool no longer keeps it to itself. Applying a target now says which port is shared and with whom,
+  so you know that part of the result is a coin toss. Ports that are not shared, which is where
+  your application's own traffic lives, are unaffected.
+
+### Fixed
+
 - **When the capture could not start, the tool told you the wrong reason.** If the WinDivert handle
   failed to open - no Administrator rights, a driver blocked or held at a different version by
   another tool, a filter the driver rejects - the tool went ahead and started the session anyway,
