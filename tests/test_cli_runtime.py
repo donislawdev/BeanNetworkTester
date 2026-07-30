@@ -367,6 +367,12 @@ def test_exit_code_runtime_without_pydivert():
           code == exitcodes.RUNTIME, f"(code={code})")
     check("exit: the driver error goes to stderr",
           "error:" in err.getvalue() and out.getvalue() == "")
+    # The REASON has to survive the trip, not just the exit code (audit F1). The
+    # engine used to swallow a failed open() and let the capture thread report
+    # "WinDivert handle is not open" instead - a symptom naming nothing - so this
+    # branch was unreachable and the user never learned it was, say, [WinError 5].
+    check("exit: and it says WHY, not just that something failed",
+          "WinDivert could not be opened" in err.getvalue(), f"({err.getvalue()!r})")
 
 
 def test_exit_code_interrupted_and_terminated():

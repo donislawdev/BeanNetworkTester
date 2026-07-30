@@ -865,8 +865,33 @@ class BeanEngine:
         if hasattr(self._divert, "open"):
             try:
                 self._divert.open()
-            except Exception as _exc:
-                crashlog.note(_exc, "engine")
+            except BaseException:
+                # A handle that will not open is NOT a session. This used to be
+                # swallowed into a debug crash record, and the damage was entirely
+                # in what happened next: `_running` went True, three workers were
+                # spawned, and the capture thread's first `recv()` failed with
+                # `RuntimeError("WinDivert handle is not open")`. That message -
+                # a symptom, naming nothing - became `self.fault`, the log line,
+                # the event log and the repro report, while the actual cause
+                # (measured with a filter the driver rejects: `OSError [WinError
+                # 87] The parameter is incorrect`; `[WinError 5]` when not
+                # elevated) never left crashlog at severity=debug.
+                #
+                # Both callers already handle this properly and neither could ever
+                # reach that code: `cli._run_session` wraps start() to report
+                # "cannot start the capture: {e}" with exit RUNTIME, and the GUI's
+                # `_finish_start` shows the start-failed dialog WITH the "run as
+                # Administrator" hint - which is exactly what a non-elevated user
+                # needs and never saw. Raising is what wires them up.
+                #
+                # Cleared first so the engine is clean for a retry: `_running` is
+                # still False here and this object never reached _LIVE_ENGINES, so
+                # dropping the reference is the whole of the cleanup. No close() -
+                # a WinDivert handle that never opened raises from close() too
+                # (measured), which would replace the real error with a second
+                # meaningless one.
+                self._divert = None
+                raise
         self._running = True
         self._driver_queue = self._read_driver_queue()
         # Only asked for when nobody has supplied one. The QPC pair is an injected
@@ -980,6 +1005,29 @@ class BeanEngine:
             self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
             self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
             self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
+            # ANNOUNCED BEFORE THE WORKERS EXIST, not after. These lines used to sit
+            # below the except block, so a session that faulted early printed its log
+            # BACKWARDS - measured with a filter the driver rejects:
+            #
+            #     recv error: WinDivert handle is not open
+            #     engine fault: ... - the session was stopped, the network is normal
+            #     Start. Filter: <the filter>  (seed=...)
+            #     Stop.
+            #
+            # A tester reading that cannot tell what happened when, which is the one
+            # thing a log is for. The event log was already ordered correctly (a
+            # worker-initiated stop blocks on _stop_lock until start() returns), so
+            # only the live log lied. Announcing first also reads correctly when the
+            # spawn itself fails: START, then the fault, then STOP.
+            self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
+            if self._driver_queue:
+                # Said once, at START, because it frames every number that follows: a
+                # queue this deep is latency the tool can add without owning up to it.
+                q = self._driver_queue
+                self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
+                           kb=q["queue_size"] // 1024))
+            self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
+                                    + (f", duration={self._duration:g}s" if self._duration else ""))
             self._t_cap.start()
             self._t_inj.start()
             self._t_wd.start()
@@ -992,15 +1040,6 @@ class BeanEngine:
             self.log(T("log.engine_fault", e=str(exc)))
             self.stop(reason="fault")
             raise
-        self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
-        if self._driver_queue:
-            # Said once, at START, because it frames every number that follows: a
-            # queue this deep is latency the tool can add without owning up to it.
-            q = self._driver_queue
-            self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
-                       kb=q["queue_size"] // 1024))
-        self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
-                                + (f", duration={self._duration:g}s" if self._duration else ""))
 
     def _start_socketwatch(self, real_windivert, socket_source):
         """Start the live socket-event map for this session, when one is available.
