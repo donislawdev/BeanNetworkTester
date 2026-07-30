@@ -210,6 +210,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
   from a socket event lost under heavy load.
 
+### BREAKING
+
+- **BREAKING:** **"Duplicated" now counts packets that were actually sent twice, not packets the
+  tool decided to duplicate.** With duplication on and the tool under enough load to fill its
+  internal queue, the copy was quietly thrown away while the counter went up anyway. Measured on a
+  deliberately tiny queue: 40 packets in, **"Duplicated" read 40 while nothing at all reached the
+  wire**. The tile sits next to "Corrupted", which has always counted only the packets it really
+  changed, so this brings the two into line. Reports and NDJSON output from before and after this
+  change are not comparable on that field. Nothing else moved: the same packets are duplicated,
+  and the "Buffer overflow" tile already told you when the queue was the bottleneck.
+
 ### Added
 
 - **The tool now warns when your target shares a port with another program.** Windows lets several
@@ -240,6 +251,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   ..." line was written after the capture had already begun, so a session that failed in its first
   moments printed the error and the fault *above* its own start line. Anyone reading the log to work
   out what happened when was reading it out of order. It is now announced first.
+
+- **Turning NAT expiry off did not fully turn it off.** Switching it on tells the tool to remember
+  every connection for as long as the session lasts - it has to, or an expired mapping would quietly
+  reopen. Switching it back off was supposed to restore the normal "forget idle connections after
+  half a minute" behaviour, and did not: the tool kept every record for the rest of the run and only
+  released them when it ran out of room. Since every "Apply changes" re-sends all your settings, one
+  round trip through the NAT field was enough. Memory only - nothing was impaired differently.
+
+- **The Connections tab could empty itself instead of dropping its oldest rows.** Once the table is
+  full the tool discards roughly the oldest tenth, working from a sampled estimate of "old". If a
+  lot of rows carried the same timestamp, they all fell on the same side of that estimate and far
+  more went than intended - in the extreme, everything. It now refuses to drop below the level it
+  is trimming to, whatever the estimate says.
 
 - **Stopping a session could file a crash report for nothing.** If STOP landed inside the
   half-second housekeeping pass that keeps the socket map fresh, the tool tripped over its own

@@ -164,6 +164,54 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
   the watchdog call removed, `owner_targeted` returning False) - all nine RED.
 - Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+### Fixed: the last three audit findings (F3, F4, F5)
+
+- **`_FlowTable.keep_for` could only ever RAISE the age window (F3/T5).** The rotation deadline was
+  cached as an absolute `_next_rotate` and `keep_for` changed `_rotate_s` without touching it, so
+  once `set_nat(>0)` had pushed the window to infinity, `set_nat(0)` could not bring it down for the
+  rest of the session and `_flow_last` was freed only by its SIZE ceiling. Every GUI "Apply" runs
+  every setter, so one round trip through the NAT field was enough. **Fixed by removing the class,
+  not the symptom**: the table now stores `_last_rotate` (when the last rotation HAPPENED) and
+  derives the deadline live, so any change to `_rotate_s` takes effect on the very next call - no
+  reset to remember, in either direction. Impact was memory only: a retired record reads back as
+  "never seen", which the NAT check treats as "pass", so it can lose an impairment and never invent
+  one. Guard: `test_the_flow_table_age_window_can_be_lowered_again_not_only_raised` (both the unit
+  and the real `set_nat` path).
+- **`_trim_conns` could empty the connection log instead of trimming it (F4/T6).** The cutoff is a
+  SAMPLED estimate compared inclusively (`c["last"] <= cutoff`), so rows sharing a timestamp all
+  land on the same side of it; with every row on one stamp it takes the whole table. Measured
+  against a 1000-row cap: **1200 rows trimmed to 0 instead of 900**. Not reachable from ordinary
+  traffic here - `time.monotonic()` resolves to ~100 ns on this machine (26 204 ties in 200 000
+  reads), and a 1200-row burst still produced 865 distinct stamps and trimmed correctly - but the
+  clock's resolution is a platform property this code should not lean on. **Fixed with a floor**:
+  never evict more than `len(conns) - MAX_CONNS * EVICT_KEEP`, whatever the estimate says. Guard:
+  `test_evicting_the_connection_log_can_never_empty_it`, which also asserts the SURVIVORS are the
+  newest rows, so the floor cannot be satisfied by keeping the wrong ones.
+- **BREAKING: `duplicated` counted the DECISION to duplicate, not the copy (F5/T8).** `tips.stat_duplicated`
+  says "Packets sent twice"; the counter was bumped whenever `decide()` returned a second release,
+  whatever `_enqueue` then did with it. Measured with a queue too small to hold the copy: **seen=40,
+  duplicated=40, and ZERO packets sent** - a session that put nothing on the wire reporting forty
+  duplicates.
+  - **Decision: fix the COUNTER, not the tooltip.** The project's own convention is that counters
+    report what happened - `corrupted` counts "successful payload flips only", and `rst_reset` /
+    `rst_sent` were deliberately SPLIT because they answer different questions. `duplicated` was the
+    exception. And "Packets sent twice" is the sentence a tester actually wants; rewording it to
+    "packets the tool decided to duplicate" would be accurate and less useful.
+  - `_enqueue` now returns **whether it QUEUED the packet**, which is a different question from
+    whether an overflow was counted - the two part company for a copy, since a refused copy is
+    deliberately not an overflow. The capture loop counts one duplicate per copy the queue accepted.
+  - Counted at ENQUEUE, not at send, which is the same standard `corrupted` is held to: the work was
+    really done, though a STOP can still strand the copy afterwards.
+  - `duplicated` is part of the NDJSON `sample` schema (`cli._sample_record`), hence BREAKING:
+    reports across this line are not comparable on that field.
+  - `test_overflow_counts_packets_lost_not_queue_entries` had `duplicated == n` as a SETUP sanity
+    check pinning the old meaning; it now asserts the new one (`queue // 2`, five copies fitting in
+    ten slots) with a note saying why. Its actual subject - `drop_overflow` never exceeding `seen` -
+    is untouched and still passes unchanged.
+  - New guard: `test_duplicated_counts_copies_that_were_queued_not_decisions`.
+- **Mutation-checked**: caching the rotation deadline again, removing the eviction floor, counting
+  duplicates per decision again, and making `_enqueue` report overflow instead of queued - all RED.
+
 ### Added: the port -> pid collapse stops being silent (ADR, no behaviour change)
 
 `portmap`'s map is keyed by the port NUMBER alone and merges four tables (tcp/v4, tcp/v6, udp/v4,

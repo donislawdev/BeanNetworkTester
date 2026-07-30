@@ -596,7 +596,19 @@ class BeanEngine:
         # ---- lock again, only for the cheap part -----------------------------
         with self._clock:
             doomed = [k for k, c in self._conns.items() if c["last"] <= cutoff]
-            for key in doomed:
+            # The cutoff is a SAMPLED estimate and the comparison is inclusive, so
+            # rows sharing one timestamp all fall on the same side of it. With
+            # enough ties that is far more than the estimate intended - and with
+            # every row on one stamp it is the WHOLE table. Measured against a
+            # 1000-row cap: 1200 rows trimmed to 0 instead of 900.
+            #
+            # Not reachable from ordinary traffic on this machine (time.monotonic()
+            # resolves to ~100 ns here, so a 1200-row burst still produced 865
+            # distinct stamps and trimmed correctly), but it costs one max() to
+            # make the estimate incapable of emptying the log, and a coarser clock
+            # is a platform property this code should not have to rely on.
+            allowed = max(0, len(self._conns) - int(self.MAX_CONNS * self.EVICT_KEEP))
+            for key in doomed[:allowed]:
                 self._conns.pop(key, None)
 
     # kept under its old name: the capture path no longer evicts, but callers
@@ -1478,13 +1490,23 @@ class BeanEngine:
             self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
                            now, proto, scoped=dec.scoped)
             rels = dec.releases
-            refused = self._enqueue(rels[0], packet, key=key, modified=modified)
+            queued = self._enqueue(rels[0], packet, key=key, modified=modified)
             if len(rels) > 1:
-                for rel in rels[1:]:
-                    self._enqueue(rel, packet, copy=True, key=key,
-                                  modified=modified)
-                self._bump("duplicated")
-            if refused:
+                # Counted per copy that the queue ACCEPTED, not per decision to
+                # duplicate. The tile says "Packets sent twice", and it used to be
+                # bumped whatever happened to the copy: with a full queue the copy
+                # was silently discarded and the number rose anyway. Measured with
+                # a tiny queue - seen=40, duplicated=40, and ZERO packets sent -
+                # a session that put nothing on the wire claiming 40 duplicates.
+                # Counted at ENQUEUE, deliberately, which is the same standard
+                # `corrupted` is held to: the work was really done, even though a
+                # STOP can still strand the copy before it leaves.
+                copies = sum(1 for rel in rels[1:]
+                             if self._enqueue(rel, packet, copy=True, key=key,
+                                              modified=modified))
+                if copies:
+                    self._bump("duplicated", copies)
+            if not queued:
                 # A packet the QUEUE threw away used to count nowhere in its row:
                 # `dropped` was recorded from `dec.drop` alone, one step too early.
                 # Measured drop_overflow=5500 against `dropped=0` in the row it
@@ -1685,8 +1707,11 @@ class BeanEngine:
     def _enqueue(self, release, packet, copy=False, key=None, modified=False):
         """Queue one release of ``packet`` for delayed injection.
 
-        Returns True when the queue refused it, so the caller can record the loss
-        against the flow's row. ``key`` rides along in the queue entry: the
+        Returns True when the packet was actually QUEUED - not whether an overflow
+        was counted, which is a different question and the two part company for a
+        duplicate. The caller uses it twice: to record the loss against the flow's
+        row when an ORIGINAL was refused, and to count a duplicate only when its
+        copy really went into the queue. ``key`` rides along in the queue entry: the
         injector needs it to credit the DELIVERED bytes to the right row, and
         ``stop()`` needs it to charge whatever is still parked here to the rows
         that will never receive it.
@@ -1721,11 +1746,13 @@ class BeanEngine:
         """
         with self._cv:
             if len(self._heap) >= self.max_queue:
+                queued = False
+                # A refused COPY is still not an overflow: see above.
                 overflowed = not copy
                 if overflowed:
                     self._bump("drop_overflow")
             else:
-                overflowed = False
+                queued, overflowed = True, False
                 heapq.heappush(self._heap,
                                (release, next(self._counter), packet, copy, key,
                                 modified))
@@ -1736,7 +1763,7 @@ class BeanEngine:
                 self._cv.notify()
         if overflowed:
             self._warn_overflow()       # outside the lock: it logs, and logging waits
-        return overflowed
+        return queued
 
     def _inject_loop(self):
         while self._running:
