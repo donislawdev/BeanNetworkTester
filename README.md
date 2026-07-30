@@ -13,6 +13,9 @@ traffic with the **[WinDivert](https://www.reqrypt.org/windivert.html)** driver 
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**), and offers both a clear windowed
 interface with tooltips and a command-line mode for CI.
 
+⭐ **If it saved you time, leave a star.** That is how the next tester who needs it finds out it
+exists.
+
 > This is the English documentation. Polish version: [README.pl.md](README.pl.md).
 
 **What it can do**
