@@ -13,6 +13,9 @@ przechwytywanie ruchu sterownikiem **[WinDivert](https://www.reqrypt.org/windive
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**) i daje zarówno czytelny interfejs okienkowy
 z podpowiedziami, jak i tryb wiersza poleceń do CI.
 
+⭐ **Jeśli oszczędziło Ci czasu, zostaw gwiazdkę.** Dzięki temu trafi do kolejnego testera, który
+go potrzebuje.
+
 **Co potrafi**
 
 - **Dodaje opóźnienie i jitter** - stałe lub losowe.
