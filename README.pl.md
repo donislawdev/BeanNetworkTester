@@ -22,7 +22,7 @@ z podpowiedziami, jak i tryb wiersza poleceń do CI.
 - **Miga łączem** - przerwy, które przychodzą i znikają.
 - **Blokuje porty lub adresy IP** - mały wbudowany firewall, plus tryb LAN (bez internetu).
 - **Celuje w jedną aplikację** - po nazwie procesu, PID, IP lub porcie.
-- **Presety i zapisane profile** - modem 56k, kawiarniane WiFi, łącze satelitarne i więcej.
+- **Presety i zapisane profile** - modem 56k, kawiarniane WiFi, satelita, Wi-Fi w samolocie i więcej.
 - **Odtwarza skryptowane scenariusze** - kroki w czasie, które same zmieniają sieć.
 - **Powtarzalne dzięki seedowi** - odtwórz te same losowe straty i jitter.
 - **Podgląd na żywo** - wykres, tabela połączeń, liczniki.
@@ -169,9 +169,20 @@ leci jako „Odrzuc. przez limit” (osobny licznik, nie „Utracone” ani „B
 a po podniesieniu limitu przepustowość wraca w ~`N` ms. Domyślnie 1000 ms. Działa tylko przy
 ustawionym limicie pobierania/wysyłania lub harmonogramie.
 
-**Opóźnienie (ping)** - *Latencja*: ile ms doliczyć do każdego pakietu (podnosi ping).
+**Opóźnienie (ping)** - *Latencja*: ile ms doliczyć do każdego pakietu.
 *Jitter*: losowe wahanie opóźnienia (±ms), przez co ping skacze i miesza się kolejność pakietów.
-Dwie rzeczy warto wiedzieć: (1) jitter dokłada każdemu pakietowi niezależne, losowe opóźnienie,
+Trzy rzeczy warto wiedzieć:
+
+(0) **Ping rośnie o mniej więcej dwa razy tyle, ile ustawisz.** Opóźnienie dokładane jest do
+każdego pakietu, a przy domyślnym filtrze „w obie strony” to jest i zapytanie, i odpowiedź -
+więc `--latency 100` widać jako około +200 ms pingu (zmierzone: `--latency 200` podniosło ping
+po loopbacku z poniżej 1 ms do ~408 ms). Wpisuj połowę pingu, który chcesz uzyskać. Jitter **nie**
+podwaja się tak samo: każdy pakiet losuje własną wartość, więc wahania rosną o około 1,4x,
+a 2x osiągają dopiero w skrajności. Wbudowane presety są ustawione według tej zasady -
+`Satelita geostacjonarny` ma 340 ms i daje ~680 ms pingu, czyli tyle, ile ma prawdziwe łącze
+geostacjonarne.
+
+(1) jitter dokłada każdemu pakietowi niezależne, losowe opóźnienie,
 więc pakiety mogą się w kolejce wyprzedzać - jitter z natury **zmienia kolejność pakietów**
 (prawdziwa sieć robi tak samo). (2) Ujemne wychylenie jest przycinane do zera, więc gdy jitter
 jest **większy od latencji**, średnie doliczone opóźnienie rośnie powyżej samej latencji
@@ -207,11 +218,19 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 - *Seed* - ustaw dowolną liczbę, aby każdy przebieg losował tak samo (błąd da się odtworzyć). Puste = za każdym razem inaczej.
 - *Scenariusz* - plik JSON zmieniający ustawienia w czasie rzeczywistym (np. po 10 s dodaj ping, po 20 s zerwij). „Pętla” odtwarza go w kółko. Przykłady w katalogu `scenarios/` (kawiarniane Wi-Fi, komórka LTE→3G, przeciążony VPN, padający DNS, przeciążony serwer gry, zerwanie w środku uploadu, zablokowany backend/API).
 
-**Profile** - gotowe presety **posortowane od najlepszego (góra) do najgorszego (dół)**: Idealna sieć, Dobre WiFi, Sieć 5G, Sieć LTE/4G, DSL domowy, Słabe WiFi, Kawiarnia (zatłoczone WiFi), Sieć 3G, Roaming zagraniczny, Łącze satelitarne, Modem 56k, Fatalna sieć - oraz Twoje własne (zapis pod nazwą). Program **startuje zawsze na „Idealnej sieci”** (nic nie jest psute, dopóki sam czegoś nie ustawisz). Presetów wbudowanych nie da się usunąć - przycisk „Usuń” jest wtedy nieaktywny.
+**Profile** - gotowe presety **posortowane od najlepszego (góra) do najgorszego (dół)**: Idealna sieć, Dobre WiFi, Sieć 5G, DSL domowy (VDSL), Sieć LTE/4G, Satelita niskoorbitalny, Odległy serwer (inny kontynent), Słabe WiFi, Kawiarnia (zatłoczone WiFi), Zapchane łącze domowe (bufferbloat), Pociąg / metro (tunele), Sieć 3G, Roaming zagraniczny, Satelita geostacjonarny, Wi-Fi w samolocie, Modem 56k, Fatalna sieć - oraz Twoje własne (zapis pod nazwą). Program **startuje zawsze na „Idealnej sieci”** (nic nie jest psute, dopóki sam czegoś nie ustawisz). Presetów wbudowanych nie da się usunąć - przycisk „Usuń” jest wtedy nieaktywny.
+
+Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary istnieją (mediany Ookla dla satelity i sieci komórkowych, prace naukowe o 15-sekundowym przełączaniu Starlinka i o Wi-Fi w samolotach); tam, gdzie takiej liczby nie ma - „słabe WiFi” nie jest wielkością mierzalną - mówi o tym wprost komentarz przy wartości w `beantester/presets.py`. Kilka zasługuje na zdanie:
+
+- **Satelita niskoorbitalny** - wzorowany na Starlinku. W stanie ustalonym jest dobry (około 40 ms pingu, 100 Mb/s); wyróżnia go przełączanie satelity co 15 sekund, które na chwilę wstrzymuje transmisję i objawia się okazjonalnym skokiem pingu, a nie stratą pakietów.
+- **Odległy serwer (inny kontynent)** - szybkie łącze, w którym nic nie jest zepsute, tylko jest daleko (~120 ms pingu). To ten preset obnaża gadatliwe protokoły i kod pisany przy założeniu, że serwer stoi obok.
+- **Zapchane łącze domowe (bufferbloat)** - na biegu jałowym wygląda dobrze (20 ms pingu); zakłóceniem jest kolejka. ⚠️ **Gryzie dopiero wtedy, gdy Twoja aplikacja naprawdę nasyci łącze**, bo bufor jest częścią limitera prędkości: przy śladowym ruchu testowym zobaczysz zwykłe 8 Mb/s w dół i 1 Mb/s w górę, i nic poza tym. Nasyć ten 1 Mb/s uploadu, a ping pójdzie w stronę dwóch sekund - to jest przypadek „rozmowa wideo się sypie, gdy ktoś w domu wrzuca backup”.
+- **Pociąg / metro (tunele)** - jedyny preset, który kładzie łącze całkowicie na kilka sekund (3 s na każde 30), więc aplikacja musi się **połączyć od nowa**, a nie tylko zwolnić.
+- **Wi-Fi w samolocie** - ten klasyczny, satelitarny: ~750 ms pingu i 7% strat, przy czym to jest zmierzona **mediana**, nie najgorszy przypadek. Samoloty z nowszym sprzętem niskoorbitalnym zachowują się jak „Satelita niskoorbitalny”.
 
 Profil zapisuje to, **jakie jest łącze**: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi; przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
 
-W CLI (`--preset`) preset można podać przez **kanoniczne id** albo **nazwę w dowolnym języku UI** (bez rozróżniania wielkości liter i polskich znaków - `"Idealna siec"` też zadziała). Id: `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.lte`, `presets.dsl`, `presets.weak_wifi`, `presets.cafe`, `presets.3g`, `presets.roaming`, `presets.satellite`, `presets.modem56k`, `presets.terrible`.
+W CLI (`--preset`) preset można podać przez **kanoniczne id** albo **nazwę w dowolnym języku UI** (bez rozróżniania wielkości liter i polskich znaków - `"Idealna siec"` też zadziała). Id: `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.dsl`, `presets.lte`, `presets.leo`, `presets.distant`, `presets.weak_wifi`, `presets.cafe`, `presets.bufferbloat`, `presets.metro`, `presets.3g`, `presets.roaming`, `presets.satellite`, `presets.inflight`, `presets.modem56k`, `presets.terrible`.
 
 ## Składnia filtrów (proces / IP / port)
 
