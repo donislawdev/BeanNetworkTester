@@ -114,6 +114,46 @@ def test_the_profile_picker_regrows_when_a_long_profile_is_saved():
     """)
 
 
+def test_the_live_stats_tab_is_scrolled_so_the_chart_cannot_vanish():
+    """BUG: the throughput chart was squeezed to a ten-pixel sliver.
+
+    The counter grid reflows its columns with the window WIDTH, so a narrow
+    window turns it into five tall rows. It packs at its natural height, and the
+    chart - packed ``expand=True`` - got the leftover, which was almost nothing.
+    A canvas asking for 180 px is still shrunk below it when pack has nothing
+    left to hand out, so the request alone was never a floor.
+    """
+    run_gui("""
+        stats = app.pages["statistics"]
+        assert getattr(stats, "scroll", None) is not None, "the Live tab is not scrolled"
+        assert stats.canvas.kw.get("height", 0) > 0, stats.canvas.kw
+    """)
+
+
+def test_a_panel_window_reserves_its_footer_before_its_content():
+    """BUG: "Close" was sliced in half by the bottom edge of the Settings window.
+
+    pack hands out height in call order, so a footer packed LAST gets whatever
+    the content above left over - and the Settings content grew past its 520 px
+    until that was nothing. Packing the footer first reserves it, and the
+    content is what runs out of room instead. About had the same shape and was
+    one longer translation away from the same bug.
+    """
+    run_gui("""
+        for window_id in ("settings", "about"):
+            app.windows.open(window_id)
+            panel = app.windows._open[window_id]
+            packed = panel.body.pack_slaves()
+            bottom = [i for i, w in enumerate(packed)
+                      if (w.pack_info or {}).get("side") == "bottom"]
+            assert bottom, f"{window_id}: no bottom-packed footer"
+            assert bottom[0] == 0, (
+                f"{window_id}: the footer is packed at position {bottom[0]} of "
+                f"{len(packed)}, so the content above it claims the height first")
+            app.windows.close(window_id)
+    """)
+
+
 def test_start_bar_and_log_can_never_be_squeezed_away():
     """A ttk.PanedWindow pushed its sash down whenever a page grew, and the whole
     bottom strip (START / Apply / log) disappeared. It is packed to the bottom now."""

@@ -20,6 +20,7 @@ from ..chart import draw_throughput_chart
 from ..labels import wrapping_label
 from ..rates import average_kbps
 from ..scaling import scaled
+from ..scrollable import ScrollableFrame
 from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
@@ -106,6 +107,22 @@ class StatsPage:
 
     # -- sub-pages ----------------------------------------------------------- #
     def _build_live(self, parent):
+        # Scrolled, because this tab hit the SAME squeeze the page-level split
+        # above was meant to end. The counter grid reflows its columns with the
+        # window WIDTH, so a narrow window turns it into five tall rows; the grid
+        # packs at its natural height and the chart, packed expand=True, gets the
+        # leftover - which was about ten pixels, a black sliver under its own
+        # heading. A canvas asking for 180 px is still shrunk below it when pack
+        # has nothing left to give, so the request was never a floor.
+        # No Treeview/Text/Listbox lives in here (convention 14) - the chart
+        # canvas is a drawing surface with no scrolling of its own - so a
+        # scroller is safe, and nothing on this tab can be squeezed out of
+        # existence again. The trade: the scroller sizes its content to the
+        # REQUESTED height (gui/scrollable.py only stretches the width), so the
+        # chart no longer grows to fill a tall window - it keeps its 180 px.
+        self.scroll = ScrollableFrame(parent, top_margin=scaled(4))
+        parent = self.scroll.body
+
         self.grid = ttk.Frame(parent)
         self.grid.pack(fill="x", padx=scaled(8), pady=scaled(6))
         for key, cap, unit, tip in CELLS:

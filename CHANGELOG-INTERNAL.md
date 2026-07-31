@@ -42,8 +42,6 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   pre-change survey missed them: the grep output was cut by `head`, and I reported "no test uses it
   as a scenario action". The tests were right and the summary was wrong.)
 
-### BREAKING
-
 - **BREAKING:** **`scenario.py` validates the keys it always accepted silently.** New `STEP_KEYS`
   and `FILE_KEYS` registries; an unknown key in a step or at the file level raises a translated
   error naming it, exactly as an unknown `settings` name already did. `duration` is validated as a
@@ -126,6 +124,47 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   bullet moved out of "Advanced (NAT / connections)" and into the delay text. **Nothing guards
   that** - the bullet structure is prose, not a registry view - so it is the one part of this change
   a test could not have caught.
+
+### Fixed
+
+- **The Live stats tab is a `ScrollableFrame`** (`gui/pages/stats.py`). The counter grid reflows its
+  column count with the window WIDTH, so a narrow window turns it into five tall rows; it packs at
+  its natural height and the chart, packed `expand=True`, took the leftover - about ten pixels. The
+  canvas `height=scaled(180)` is a REQUEST, and pack shrinks below a request when it has nothing to
+  hand out, so it was never a floor. This is the same squeeze the module docstring records at page
+  level ("pack simply gave the last two panels no space at all"), reappearing one level down.
+  Convention 14 is satisfied - no Treeview/Text/Listbox on the tab, the chart canvas is a drawing
+  surface with no scrolling of its own.
+  🔴 **Known trade, verified rather than assumed:** `ScrollableFrame._on_canvas_configure` only
+  stretches the inner window's WIDTH, so content is laid out at its requested height. The chart
+  therefore stops growing on a tall window and keeps its 180 px. Making the scroller stretch height
+  to the viewport when content is shorter would restore it, but that is shared with the Control page
+  and was not touched here.
+- **Panel footers are packed FIRST** (`gui/panels/settings.py`, `gui/panels/about.py`). pack hands
+  out height in call order, so a footer packed last gets what the content left - which for Settings
+  was nothing, and "Close" was clipped by the window edge. About had the identical shape and only
+  fits today because its content is shorter.
+- **`dialogs._center` takes the widget to focus** and sets it after `focus_force()`; `ask_string`
+  passes its entry. The old `entry.focus_set()` failed twice over: it ran while the dialog was still
+  `withdraw()`n (`_shell`), where focus does not stick, and `_center` then forced focus to the
+  window and discarded it. That is why "Save profile..." needed a click before typing.
+  Guards (`test_gui_layout.py`): `::test_the_live_stats_tab_is_scrolled_so_the_chart_cannot_vanish`
+  and `::test_a_panel_window_reserves_its_footer_before_its_content`, which walks
+  `body.pack_slaves()` and asserts the bottom-packed footer is at index 0. Both mutation-verified -
+  reverting them gives "the Live tab is not scrolled" and "the footer is packed at position 5 of 6".
+
+### Tests
+
+- **`test_failsafe.py::test_a_dead_capture_thread_fails_open` was racy and CI caught it** (green ~5/5
+  locally, red on the runner). `_stop_locked` clears `_running` as its SECOND statement - deliberate,
+  so a watchdog mid-maintenance sees nothing to fire - and closes the divert several statements
+  later, logging the STOP event after that. So `not is_running()` is true well before all three
+  things the test then asserted, and a loaded runner can be descheduled inside that window. **The
+  product is correct: the fail-open invariant holds**, the divert is closed inside the same critical
+  section. The test now waits for the outcome (running cleared AND divert closed AND the event
+  logged), which is exactly the fix `::test_the_engine_stops_itself_after_its_duration` already
+  carries a few lines above - complete with the comment "Wait for the promise, not for the flag".
+  That test was fixed after CI caught the same shape; this one was never given the same treatment.
 
 ### Docs
 
