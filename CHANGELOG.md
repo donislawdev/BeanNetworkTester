@@ -51,7 +51,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   though the driver had been told to hand over nothing but your destination's traffic. The
   checkbox's own tooltip promised the opposite ("the Statistics and Connections tabs then show only
   that traffic"), and both READMEs contradicted themselves the same way, so there was no way to
-  tell from the screen which of the two you were looking at.
+  tell from the screen which of the two you were looking at. **Both READMEs are corrected too**, and
+  now describe the two scope switches as the different things they are.
   Both notes now say what the figures in front of you actually cover, including the case where a
   **process target** is set as well: the tool then captures your destination's traffic from every
   process and impairs one process's share of it, so the counters cover more than the impairment

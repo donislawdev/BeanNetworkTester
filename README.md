@@ -1218,14 +1218,30 @@ seeded).
   exclusion `chrome, !chromedriver`.
 - **Statistics and Connections show ALL captured traffic by default** - whatever the "Traffic to
   modify" filter passes. Targeting (process / IP / port) decides only **what gets broken**, not what
-  is visible in the tables and counters. Settings has a switch, **"Show only the targeted traffic"**,
-  that narrows the counters, the throughput chart, the Connections table and the connections CSV to
-  what your targeting selected. It changes what you SEE - never what is captured and never what is
-  impaired. **Three counters stay on the full traffic even then**: "Queue overflow", "Dropped at
-  stop" and "Send failed" count packets *this tool* lost, including traffic you never targeted, and
-  hiding those would hide the tool's own damage. The statistics CSV does not follow the switch
-  either - it is an append log, so it carries both totals in separate columns. The reproduction
-  report and `--format json` always carry both numbers.
+  is visible in the tables and counters. Two switches in Settings, in the **"Scope"** card, change
+  that, and they are not the same thing:
+  - **"Show only the targeted traffic"** narrows the counters, the throughput chart, the
+    Connections table and the connections CSV to what your targeting selected. It changes what you
+    SEE - never what is captured, never what is impaired, and you can flip it at any time.
+  - **"Capture only the targeted traffic"** narrows the *capture itself*: the driver stops handing
+    over anything but your destination's traffic, so the tabs cover that traffic because there is
+    nothing else to cover. It is fixed when the session starts, and it only works for a destination
+    the driver's filter language can express - a plain address, a list, a range or a CIDR. A
+    wildcard, an `re:` pattern or targeting only a process cannot be pushed down, and then the
+    option does nothing. The Scope card says which of the two you are getting **before** you press
+    START, the log says it again at start, and the Session panel's **"Capture"** row records it for
+    the run.
+
+  Whichever is on, **the note above the counters and above the Connections table says what those
+  figures actually cover**, including the case where the capture is narrowed *and* a process target
+  is set - the tool then captures your destination's traffic from every process and impairs one
+  process's share, so the counters cover more than the impairment does.
+  **Three counters stay on the full traffic even with "Show only" on**: "Queue overflow", "Dropped
+  at stop" and "Send failed" count packets *this tool* lost, including traffic you never targeted,
+  and hiding those would hide the tool's own damage. The statistics CSV does not follow the "Show
+  only" switch either - it is an append log, so it carries both totals in separate columns - but it
+  does record "Capture only" per row in `capture_narrowed`, because that one changes what was
+  counted at all. The reproduction report and `--format json` always carry both numbers.
 - **The speed limit shapes the AVERAGE** - the token bucket lets short bursts through, so the
   "Download/Upload peak" (averaged over a 1 s window) can be a touch higher than the set limit.
   Duplicates count against the limit (the second copy travels the link too).

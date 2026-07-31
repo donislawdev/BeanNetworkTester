@@ -41,6 +41,10 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   renamed. Two earlier mutants were BAD mutants rather than results - deleting the guard line
   itself (nothing can catch a deleted test) and renaming the column to a SUPERSTRING (the docs
   guard matches by substring, so `capture_narrowed_TYPO` still contains `capture_narrowed`).
+  Two consumers pin the header literally and went red on the full run, which is the change proving
+  itself: `test_conns_export.py::test_export_csv_stats_appends_then_rotates_on_a_column_change` and
+  the CSV section of `smoke_gui.py`. Neither was in the pre-change sweep - the sweep found the
+  readers of the FACT and missed the readers of the HEADER.
 
 - **BREAKING:** **`reset_now` removed from `scenario.ACTIONS`**, leaving `reset_tcp` as the only
   action. Touches the frozen scenario-file format ("Kontrakty publiczne"), so it needs the owner's
@@ -170,6 +174,21 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   where "cannot prove it" is the honest answer for every destination. Seven mutants, all caught;
   the build-time one survived the first pass (every test called `refresh()` first) and produced
   the third guard.
+
+- **The prose that contradicted itself is corrected, in every place it lived.** Both READMEs said
+  "Statistics and Connections show ALL captured traffic ... targeting decides only what gets broken,
+  not what is visible" a few hundred lines away from the `--narrow-filter` row saying "statistics
+  and connections cover the narrowed traffic only". Both behaviour sections now describe the two
+  scope switches as the different things they are, name where the answer is shown (the Scope card
+  before START, the log at start, the Session row for the run), and cover the
+  capture-narrowed-plus-process-target case.
+  `tips.scope_note_scoped` was the last UI text still false in a reachable state: shown for `VIEW`,
+  which can sit on top of a narrowed capture, it claimed "the traffic filter still decides what is
+  captured" and offered "turn it off to see everything again" - you would see everything CAPTURED,
+  which is already narrow. Reworded to be true either way rather than adding a fifth state for a
+  tooltip. `tips.narrow_filter` and `tips.scope_note` were CHECKED and left alone: the first
+  already promised what the code now delivers, and the second is only ever shown for `ALL`, where
+  every word of it is true.
 
 - **`App._log_capture_scope()`: the start-time narrowing verdict reaches the GUI log, both ways.**
   `cli._run_session` has reported this since the option shipped (`log.info` on success,

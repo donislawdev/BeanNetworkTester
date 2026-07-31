@@ -190,21 +190,25 @@ def test_export_csv_stats_appends_then_rotates_on_a_column_change():
         path = os.path.join(tempfile.mkdtemp(), "stats.csv")
         m.CSV_FILE = path
 
-        # first two exports share a column set: header once, then two data rows
+        # first two exports share a column set: header once, then two data rows.
+        # `capture_narrowed` comes from the SESSION, not the counters, and sits
+        # between the timestamp and them - it says which world the row's numbers
+        # were measured in (see App.CSV_SESSION_COLUMNS).
         app.engine.stats_snapshot = lambda: {"seen": 100, "drop_loss": 5, "queue": 2}
         app.export_csv()
         app.export_csv()
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
-        assert rows[0] == ["time", "packets_seen", "dropped_loss", "queue_len"], rows[0]
+        assert rows[0] == ["time", "capture_narrowed",
+                           "packets_seen", "dropped_loss", "queue_len"], rows[0]
         assert len(rows) == 3, rows                      # header + two rows
-        assert rows[1][1:] == ["100", "5", "2"], rows[1]
+        assert rows[1][1:] == ["no", "100", "5", "2"], rows[1]
 
         # a changed column set must NOT append into the old header - it rolls the
         # old file aside and starts a fresh one
         app.engine.stats_snapshot = lambda: {"seen": 7, "corrupted": 3}
         app.export_csv()
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
-        assert rows[0] == ["time", "packets_seen", "corrupted"], rows[0]
+        assert rows[0] == ["time", "capture_narrowed", "packets_seen", "corrupted"], rows[0]
         assert len(rows) == 2, rows                      # fresh header + one row
         backups = [n for n in os.listdir(os.path.dirname(path))
                    if n != "stats.csv" and n.endswith(".csv")]
