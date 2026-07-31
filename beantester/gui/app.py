@@ -76,7 +76,10 @@ SECTION_BY_ID = {s.id: s for s in SECTIONS}
 # opening the tool on a dozen expanded panels of NAT/MTU/schedule jargon is a wall
 # for a first-time user. Only the simple, common sections stay open; the choice is
 # remembered per-user afterwards, so a power user expands them once.
-FIRST_RUN_COLLAPSED = ["destination", "flapping", "advanced", "schedule",
+# Listed in form order, and every id must be a real Control-page section: a typo
+# here does NOT raise, it just leaves that panel expanded, which is invisible.
+# Guarded by tests/test_prefs.py::test_the_first_run_collapse_list_names_real_sections.
+FIRST_RUN_COLLAPSED = ["flapping", "destination", "block", "advanced", "schedule",
                        "session", "repro"]
 
 

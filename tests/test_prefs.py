@@ -249,6 +249,28 @@ def test_settings_window_number_field_says_why_it_is_red():
     """)
 
 
+def test_the_first_run_collapse_list_names_real_sections():
+    """A typo in ``FIRST_RUN_COLLAPSED`` fails SILENTLY.
+
+    Nothing looks the id up - the form asks "is my id in this list", so an entry
+    that matches no section simply never matches, and the panel it was meant to
+    fold opens on a fresh install with nobody the wiser. Same class as a preset
+    with no translation or a column missing from the docs: wrong, and invisible.
+
+    The list also has to name CONTROL-page sections. Collapsing a Settings-window
+    section from here would be a line that reads as if it did something.
+    """
+    from beantester.fields import CONTROL_SECTIONS
+    from beantester.gui.app import FIRST_RUN_COLLAPSED
+    control = {s.id for s in CONTROL_SECTIONS}
+    stray = [s for s in FIRST_RUN_COLLAPSED if s not in control]
+    assert not stray, (stray, sorted(control))
+    assert len(set(FIRST_RUN_COLLAPSED)) == len(FIRST_RUN_COLLAPSED), FIRST_RUN_COLLAPSED
+    # and the panels a first-time user needs must NOT be folded away
+    for stays_open in ("profiles", "traffic", "latency", "impairments"):
+        assert stays_open not in FIRST_RUN_COLLAPSED, stays_open
+
+
 def test_reset_ui_layout_forgets_window_state():
     run_gui("""
         from beantester.gui import dialogs

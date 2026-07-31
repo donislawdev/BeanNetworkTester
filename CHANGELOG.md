@@ -17,6 +17,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **"Blocking (firewall)" now starts collapsed** on a fresh install, like the other advanced
+  panels. If you have used the tool before, your own collapsed/expanded choices are remembered and
+  nothing moves.
+
 - **"Spike chance" and "Spike size" moved from "Advanced (NAT / connections)" to
   "Latency (ping)".** A spike is latency - an occasional large one - so it now sits next to the
   steady value and the jitter around it, instead of among the NAT and connection knobs. Nothing

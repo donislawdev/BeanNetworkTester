@@ -39,6 +39,16 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **`block` added to `FIRST_RUN_COLLAPSED`** (`gui/app.py`), and the list reordered to match form
+  order. It only applies when `ui.json` has no saved `collapsed` state, so existing users see no
+  change.
+  New guard `test_prefs.py::test_the_first_run_collapse_list_names_real_sections`: every id must be
+  a real **Control-page** section, with no duplicates, and the panels a first-time user needs
+  (`profiles`, `traffic`, `latency`, `impairments`) must not be in it. The list is consumed by
+  `form.py` as `sec.id not in app.collapsed_sections`, so **nothing ever looks an id up** - a typo
+  raises nothing, it just leaves that panel expanded, which is invisible. Verified by mutation:
+  `"blocking"` instead of `"block"` fails with `assert not ['blocking']`.
+
 - **`spike_prob` and `spike_ms` moved from the `advanced` section to `latency`** (`fields.py`): the
   two `Field` entries were relocated inside `FIELD_DEFS` so the registry reads in form order, and
   the two `Section` tuples were updated. **One entry per field really was enough** - grepped every
