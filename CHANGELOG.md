@@ -5,26 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-### Fixed
-
-- **The throughput chart could be squeezed until it vanished.** On a narrow window the counter grid
-  reflows into more rows, took the height, and left the chart a black sliver under its own heading.
-  The "Live" tab now scrolls, so nothing on it can be pushed out of existence. One trade worth
-  knowing: the chart keeps a fixed height now instead of growing to fill a tall window.
-- **"Close" was cut in half at the bottom of the Settings window.** The button is now reserved
-  before the settings above it, so it is always there whatever the window is holding. The About
-  window had the same construction and was one longer translation away from the same bug.
-- **"Save profile..." opens with the cursor already in the name box.** It used to need a click
-  before you could type.
-
 ### BREAKING
 
 - **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the
   same thing and is now the only action a scenario step can carry. A scenario file still using
   `reset_now` will not load, and says which step to fix. The **"Reset TCP now" button is not
   affected** - it never had anything to do with this name.
-
-### BREAKING
 
 - **BREAKING:** **A mistake in a scenario file now says so instead of doing nothing.** A misspelled
   key used to be accepted and ignored, which is the worst possible outcome: `"duraton"` quietly left
@@ -33,6 +19,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   error naming the key, the same way an unknown *setting* name has always been. `duration` is
   validated too: it has to be a number of seconds and it only means something next to an `action`.
   A file that was correct keeps working; one that was quietly half-working will now tell you where.
+
+### Added
+
+- **The README documents three things it never did**, in both languages:
+  - **The scenario file format** - the file and step keys, what may go in `settings`, the two
+    actions there are, the 1000-step limit, how looping restarts, and the 0.1 s tick.
+  - **The seven shipped scenarios**, a line each: what each one reproduces and what it is for
+    (which one kills the network mid-request, which one only touches DNS, which one is a one-shot).
+  - **Both CSV exports and all 17 Connections columns.** The two exports behave differently on
+    purpose - the statistics one appends and ignores the "targeted traffic only" switch, the
+    connections one overwrites and follows your search, sorting and that switch - and the
+    connections CSV does not reuse the table's labels, so there is a column-by-column map between
+    them.
 
 ### Changed
 
@@ -61,18 +60,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   about how it works changed, and neither did its `--spike-prob` / `--spike-ms` flags or its place
   in a saved profile.
 
-### Added
+### Fixed
 
-- **The README documents three things it never did**, in both languages:
-  - **The scenario file format** - the file and step keys, what may go in `settings`, the two
-    actions there are, the 1000-step limit, how looping restarts, and the 0.1 s tick.
-  - **The seven shipped scenarios**, a line each: what each one reproduces and what it is for
-    (which one kills the network mid-request, which one only touches DNS, which one is a one-shot).
-  - **Both CSV exports and all 17 Connections columns.** The two exports behave differently on
-    purpose - the statistics one appends and ignores the "targeted traffic only" switch, the
-    connections one overwrites and follows your search, sorting and that switch - and the
-    connections CSV does not reuse the table's labels, so there is a column-by-column map between
-    them.
+- **The throughput chart could be squeezed until it vanished.** On a narrow window the counter grid
+  reflows into more rows, took the height, and left the chart a black sliver under its own heading.
+  The "Live" tab now scrolls, so nothing on it can be pushed out of existence. One trade worth
+  knowing: the chart keeps a fixed height now instead of growing to fill a tall window.
+- **"Close" was cut in half at the bottom of the Settings window.** The button is now reserved
+  before the settings above it, so it is always there whatever the window is holding. The About
+  window had the same construction and was one longer translation away from the same bug.
+- **"Save profile..." opens with the cursor already in the name box.** It used to need a click
+  before you could type.
 
 ## [0.4.0] - 2026-07-30
 
