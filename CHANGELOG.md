@@ -17,6 +17,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **The checkbox is now called "Capture only the targeted traffic"** instead of "Narrow the driver
+  filter to the target". The old name described the machinery rather than what you get, and
+  "driver filter" means nothing unless you already know how the tool works. The `--narrow-filter`
+  flag is unchanged.
+
+- **Semicolons are gone from the interface texts and both READMEs.** Twenty-one tooltips and about
+  eighty lines of documentation used them to join sentences, which is not how people write. They
+  are now full stops or commas. Code samples keep theirs, since there a semicolon is syntax.
+
+- **The "Narrow the driver filter to the target" tooltip was rewritten.** It explained how the
+  option works rather than what it does, and it left out the part people most need: the option has
+  **no effect at all** if you target a process, or use a wildcard or an `re:` pattern in the
+  destination. It now says what it does, what changes in the Statistics and Connections tabs, and
+  when it will not apply.
+
 - **"Blocking (firewall)" now starts collapsed** on a fresh install, like the other advanced
   panels. If you have used the tool before, your own collapsed/expanded choices are remembered and
   nothing moves.

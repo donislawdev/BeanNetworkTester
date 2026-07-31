@@ -39,6 +39,43 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
+  `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two
+  languages that **was never rendered**: `gui/form.py::_place_one` handles `BOOL` and returns at
+  line 190, and the hint is drawn at line 249. The detail therefore had nowhere to live, so the
+  tooltip had swollen into a wall carrying all of it at once. The `hint` and both i18n keys are
+  gone, and the tooltip now leads with what the option does, names the on-screen places it affects
+  (the Statistics and Connections tabs), and states the limitation: **wildcards, `re:` patterns and
+  process-only targeting cannot be narrowed, so the option does nothing.** That last part was
+  verified by running `windivert_fragment` over each form (`10.0.0.*` and `re:^10\.` produce no
+  fragment; a plain address, a list, a range and a CIDR all do) rather than repeated from a code
+  comment.
+  New guard `test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one`: `BOOL` and
+  `CHOICE` return before the hint is drawn, so declaring one on either kind is text nobody can ever
+  read, and **nothing raises when it happens**. Verified by mutation - putting a hint back on the
+  checkbox fails with `[('narrow_filter', 'bool')]`.
+  Writing rules for user-facing text are now in `PROJECT_NOTES` (convention 1b), including the
+  measured reason NOT to build a "no code tokens in tooltips" guard: of its 5 hits, 3 are
+  legitimate (`re:` is syntax the user types, the CSV names are real filenames).
+  `fields.narrow_filter` renamed from "Narrow the driver filter to the target" to **"Capture only
+  the targeted traffic"** in both languages, by the same rule: the old label named the mechanism.
+  The `--narrow-filter` flag, the settings key and the config format are untouched.
+
+- **Semicolons swept out of every user-facing text, and the rule is now enforced.** 34 replacements
+  across `lang/en.json` and `lang/pl.json` (21 tooltips plus `dialogs.*` and `errors.*`), and 81
+  lines of prose across both READMEs. Each case was decided individually rather than regexed: a
+  full stop where the semicolon joined two independent clauses (which is what a semicolon is for),
+  a comma only inside a parenthetical aside. **Every rewritten line is the same length as the
+  original**, which is the invariant that proves nothing was mangled - and it caught the one line
+  that was: a Polish bullet with two semicolons got its tail duplicated by the sweep script, fixed
+  by hand.
+  Two new guards, both mutation-verified: `test_i18n.py::test_no_semicolons_in_ui_text` (fails with
+  `['tips.jitter']` when one is put back) and
+  `test_readme_guards.py::test_no_semicolons_in_readme_prose` (fenced blocks, indented blocks and
+  inline code spans are cut out first, because a semicolon there is syntax). Unlike the readability
+  lint rejected above, this one has **no false positives**, which is precisely why it is worth
+  having.
+
 - **`block` added to `FIRST_RUN_COLLAPSED`** (`gui/app.py`), and the list reordered to match form
   order. It only applies when `ui.json` has no saved `collapsed` state, so existing users see no
   change.

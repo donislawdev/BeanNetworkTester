@@ -85,6 +85,25 @@ def test_match_fields_is_a_view_over_the_registry():
           == ["target", "dst_ip", "dst_port", "block_ip", "block_port"])
 
 
+def test_only_fields_that_can_show_a_hint_declare_one():
+    """A hint on a checkbox is text nobody will ever read.
+
+    ``gui/form.py::_place_one`` handles BOOL and CHOICE and **returns** before
+    the line that renders ``field.hint``, so a hint on either kind is written,
+    translated into every language, reviewed and then shown to no one. That is
+    not hypothetical: ``narrow_filter`` carried a 300-character hint that never
+    appeared on screen, which is exactly why its TOOLTIP had swollen into a wall
+    trying to carry the same explanation.
+
+    Nothing raises when it happens - the text simply is not drawn - so this is
+    the only thing that can notice.
+    """
+    hintless = {F.BOOL, F.CHOICE}
+    stray = [(f.key, f.kind) for f in F.FIELD_DEFS if f.hint and f.kind in hintless]
+    check("registry: no field declares a hint its widget cannot show", not stray,
+          f"({stray})")
+
+
 def test_numeric_fields_declare_bounds():
     unbounded = [f.key for f in F.FIELD_DEFS if f.kind == F.NUMBER and not f.bounds]
     check("registry: every numeric field has bounds", not unbounded, f"({unbounded})")
