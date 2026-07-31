@@ -252,6 +252,8 @@
   "log.loaded_profile": "Loaded profile",
   "log.loop": "loop",
   "log.marker_needs_start": "Bug marker works after start (START).",
+  "log.narrow_applied": "Capturing only the targeted traffic - the driver hands over your destination's traffic and nothing else, so the counters and the connection list cover that traffic only.",
+  "log.narrow_no_effect": "\"Capture only the targeted traffic\" had no effect - this destination cannot be turned into a driver filter (a wildcard, an re: pattern, or no destination at all). Capturing everything, as usual.",
   "log.no_process_for_row": "No process name for that row (start as Administrator to resolve names).",
   "log.no_pydivert": "No pydivert. Install:  pip install pydivert",
   "log.not_copied": "Not copied",

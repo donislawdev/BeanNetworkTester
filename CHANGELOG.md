@@ -50,6 +50,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Hovering a note used to explain the OTHER state: the bubble was attached once and never updated,
   so it kept describing the wording that had just been replaced. It follows the note now.
 
+- **The window now says whether "Capture only the targeted traffic" actually worked.** The option
+  quietly does nothing when the destination cannot be turned into a driver filter - a wildcard, an
+  `re:` pattern, only a process target, or no destination at all - and since capturing everything
+  is the safe fallback, nothing else about the run looked unusual. The command line has warned
+  about this since the option shipped. The window, the only place the checkbox is visible, said
+  nothing at all, either way. Starting a session now logs which of the two happened.
+
 - **The Session panel says which traffic was captured.** New "Capture" row: *all traffic the filter
   passes* or *narrowed to the destination*. Two runs with the same packet count could describe two
   completely different worlds, and only the command line and the saved reproduction report ever

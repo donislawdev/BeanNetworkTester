@@ -118,6 +118,19 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   The `conns.py` module docstring claimed "these are ALL captured connections ... targeting decides
   what gets broken, not what gets seen" as unconditional fact; corrected.
 
+- **`App._log_capture_scope()`: the start-time narrowing verdict reaches the GUI log, both ways.**
+  `cli._run_session` has reported this since the option shipped (`log.info` on success,
+  `log.warn` on "asked for and did not get it"); the GUI passed `narrow=` to `engine.start()` and
+  never read the answer back - a grep for `narrow` across `beantester/gui/` returned exactly one
+  line, the call itself. Called from `_finish_start`, so it runs on the UI thread after a start
+  that actually succeeded, and only when the checkbox was ticked. Not a dialog: the session started
+  fine, and a modal would interrupt the run that was just asked for.
+  New keys `log.narrow_applied` / `log.narrow_no_effect` in both languages.
+  Guard: `test_view_scope.py::test_the_window_says_whether_the_narrowing_actually_happened` drives
+  all three cases (not asked, asked and got it, asked and did not). Four mutants, all caught: the
+  call removed, only the success branch kept, the request reported instead of the outcome, and the
+  "was it even asked for" gate defeated.
+
 - **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
   `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two
   languages that **was never rendered**: `gui/form.py::_place_one` handles `BOOL` and returns at

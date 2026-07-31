@@ -252,6 +252,8 @@
   "log.loaded_profile": "Wczytano profil",
   "log.loop": "pętla",
   "log.marker_needs_start": "Znacznik błędu zadziała po uruchomieniu (START).",
+  "log.narrow_applied": "Przechwytywanie tylko ruchu celu - sterownik podaje ruch z Twoim celem i nic więcej, więc liczniki i lista połączeń obejmują wyłącznie ten ruch.",
+  "log.narrow_no_effect": "„Przechwytuj tylko ruch celu” nic nie dało - tego celu nie da się zamienić na filtr sterownika (wildcard, wzorzec re: albo brak celu). Przechwytywane jest wszystko, jak zwykle.",
   "log.no_process_for_row": "Brak nazwy procesu dla tego wiersza (uruchom jako Administrator, aby rozwiązywać nazwy).",
   "log.no_pydivert": "Brak pydivert. Zainstaluj:  pip install pydivert",
   "log.not_copied": "Nie skopiowano",

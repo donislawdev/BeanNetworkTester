@@ -411,6 +411,40 @@ def test_an_incomplete_wording_table_is_refused_when_the_page_is_imported():
         raise AssertionError("a table with an unknown state was accepted")
 
 
+def test_the_window_says_whether_the_narrowing_actually_happened():
+    """Both outcomes, because only one of them is easy to notice.
+
+    The option silently does nothing when the destination cannot be expressed as
+    a driver filter, and the fallback is the safe direction - so a run that did
+    NOT narrow looks exactly like one that did. The CLI has said so since the
+    option shipped; the window, the one place the checkbox is visible, said
+    nothing either way.
+    """
+    run_gui("""
+        def start_with(narrow, narrowed):
+            app._log_lines = []
+            app.engine._narrowed = narrowed
+            app._pending_start_settings = dict(app._settings_from_widgets(),
+                                               narrow_filter=narrow)
+            app._finish_start(None)
+            app._drain_log()
+            return "\\n".join(app._log_lines)
+
+        # not asked for: the log must not gain a line about it either way
+        quiet = start_with(False, False)
+        assert bnt.T("log.narrow_applied") not in quiet
+        assert bnt.T("log.narrow_no_effect") not in quiet
+
+        got_it = start_with(True, True)
+        assert bnt.T("log.narrow_applied") in got_it, got_it
+
+        # asked for and did NOT get it - the case that used to pass in silence
+        missed = start_with(True, False)
+        assert bnt.T("log.narrow_no_effect") in missed, missed
+        assert bnt.T("log.narrow_applied") not in missed
+    """)
+
+
 def test_every_wording_table_is_complete_and_every_key_has_text():
     """The tables are keyed by all four states (gui/scope.py refuses less), but a
     complete table of MISSPELLED keys renders the key itself on screen - which is
