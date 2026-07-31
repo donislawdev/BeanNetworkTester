@@ -210,8 +210,13 @@ FIELD_DEFS = (
     # decide() judged by the new one - traffic the user just asked to impair
     # would never arrive, with every counter reading healthy. apply_settings
     # refuses that change out loud instead.
+    # No hint: a BOOL never renders one (gui/form.py returns before the hint
+    # line), so the one this field used to declare was written, translated into
+    # both languages and shown to nobody - which is why its tooltip had grown
+    # into a wall trying to say everything at once. Guarded by
+    # tests/test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one.
     Field("narrow_filter", BOOL, "fields.narrow_filter", "capture",
-          tip="tips.narrow_filter", hint="fields.narrow_filter_hint", span=True,
+          tip="tips.narrow_filter", span=True,
           cli="narrow-filter", start_only=True),
 
     # -- reproduction ------------------------------------------------------ #

@@ -39,6 +39,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
+  `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two
+  languages that **was never rendered**: `gui/form.py::_place_one` handles `BOOL` and returns at
+  line 190, and the hint is drawn at line 249. The detail therefore had nowhere to live, so the
+  tooltip had swollen into a wall carrying all of it at once. The `hint` and both i18n keys are
+  gone, and the tooltip now leads with what the option does, names the on-screen places it affects
+  (the Statistics and Connections tabs), and states the limitation: **wildcards, `re:` patterns and
+  process-only targeting cannot be narrowed, so the option does nothing.** That last part was
+  verified by running `windivert_fragment` over each form (`10.0.0.*` and `re:^10\.` produce no
+  fragment; a plain address, a list, a range and a CIDR all do) rather than repeated from a code
+  comment.
+  New guard `test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one`: `BOOL` and
+  `CHOICE` return before the hint is drawn, so declaring one on either kind is text nobody can ever
+  read, and **nothing raises when it happens**. Verified by mutation - putting a hint back on the
+  checkbox fails with `[('narrow_filter', 'bool')]`.
+  Writing rules for user-facing text are now in `PROJECT_NOTES` (convention 1b), including the
+  measured reason NOT to build a "no code tokens in tooltips" guard: of its 5 hits, 3 are
+  legitimate (`re:` is syntax the user types, the CSV names are real filenames).
+  **Known and NOT addressed here:** 12 English and 11 Polish tooltips still use semicolons, which
+  convention 1b now rules out. Sweeping them is a separate change - listed rather than done
+  silently.
+
 - **`block` added to `FIRST_RUN_COLLAPSED`** (`gui/app.py`), and the list reordered to match form
   order. It only applies when `ui.json` has no saved `collapsed` state, so existing users see no
   change.
