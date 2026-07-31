@@ -14,10 +14,48 @@ from gui_harness import run_gui
 
 
 # -- registry (pure) -------------------------------------------------------- #
-def test_every_pref_is_grouped_exactly_once():
+def test_every_pref_is_rendered_in_exactly_one_place():
+    """A pref belongs to a preference GROUP or to a registry SECTION - never both,
+    never neither. Either way it is unreachable in the window, which is the whole
+    failure this guards: a preference nobody can find is a preference that does
+    not exist.
+
+    "Show only the targeted traffic" is the one that names a section: it has to be
+    read next to "Capture only the targeted traffic", and those two live in
+    different registries on purpose (convention 42).
+    """
     grouped = [k for _, keys in PREF_GROUPS for k in keys]
-    check("prefs: every pref appears in a group", set(grouped) == set(PREFS_BY_KEY))
     check("prefs: no pref is listed in two groups", len(grouped) == len(set(grouped)))
+    sectioned = {p.key for p in PREFS if p.section}
+    both = sorted(set(grouped) & sectioned)
+    check("prefs: no pref is both grouped and sectioned", not both, f"({both})")
+    homeless = sorted(set(PREFS_BY_KEY) - set(grouped) - sectioned)
+    check("prefs: every pref is rendered somewhere", not homeless, f"({homeless})")
+
+
+def test_a_pref_can_only_name_a_section_that_will_actually_render_it():
+    """A typo in ``Pref.section`` fails SILENTLY - nothing looks the id up, the
+    extra builder simply never asks for that pref, and the checkbox is gone from
+    the window with nobody the wiser. Same class as a stray id in
+    ``FIRST_RUN_COLLAPSED``.
+
+    The section must also be on the SETTINGS surface and declare an ``extra``
+    builder, since that is the only hook a pref can be rendered through.
+    """
+    from beantester.fields import SECTIONS, SETTINGS_SECTIONS
+    by_id = {s.id: s for s in SECTIONS}
+    settings_ids = {s.id for s in SETTINGS_SECTIONS}
+    for p in PREFS:
+        if not p.section:
+            continue
+        sec = by_id.get(p.section)
+        check(f"prefs: {p.key} names a real section", sec is not None, p.section)
+        check(f"prefs: {p.key} names a Settings-window section",
+              p.section in settings_ids, p.section)
+        check(f"prefs: the {p.section} section has an extra builder to render it",
+              bool(sec.extra), repr(sec.extra))
+        check(f"prefs: {p.key} is reachable through prefs_in_section",
+              p in prefs.prefs_in_section(p.section))
 
 
 def test_pref_texts_resolve_in_every_language():

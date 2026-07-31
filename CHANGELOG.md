@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **the statistics CSV has a new `capture_narrowed` column**, right after `time`.
+  It says whether that row was measured with "Capture only the targeted traffic" in effect - and
+  without it two rows under the same header could count completely different traffic with no way
+  to tell them apart. Unlike the "show only the targeted traffic" switch, which the file sidesteps
+  by carrying both totals, this one changes what `packets_seen` counted at all, so no pair of
+  columns can undo it. **Your existing `bean_network_tester_stats.csv` is renamed with a timestamp
+  and a fresh one started** (the tool already does this whenever the columns change, so rows never
+  misalign under a stale header) - nothing is lost, but a script reading the file by column
+  position needs the offset.
+
 - **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the
   same thing and is now the only action a scenario step can carry. A scenario file still using
   `reset_now` will not load, and says which step to fix. The **"Reset TCP now" button is not
@@ -32,6 +42,60 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
     connections one overwrites and follows your search, sorting and that switch - and the
     connections CSV does not reuse the table's labels, so there is a column-by-column map between
     them.
+
+### Fixed
+
+- **With "Capture only the targeted traffic" on, the Statistics and Connections tabs said the exact
+  opposite of the truth.** Both kept their usual line - "Counters cover ALL captured traffic" and
+  "All captured connections ... targeting decides what gets impaired, not what gets listed" - even
+  though the driver had been told to hand over nothing but your destination's traffic. The
+  checkbox's own tooltip promised the opposite ("the Statistics and Connections tabs then show only
+  that traffic"), and both READMEs contradicted themselves the same way, so there was no way to
+  tell from the screen which of the two you were looking at. **Both READMEs are corrected too**, and
+  now describe the two scope switches as the different things they are.
+  Both notes now say what the figures in front of you actually cover, including the case where a
+  **process target** is set as well: the tool then captures your destination's traffic from every
+  process and impairs one process's share of it, so the counters cover more than the impairment
+  does - and now they say so. The throughput chart's caption names its traffic too, because that is
+  the picture people screenshot and send on.
+  Hovering a note used to explain the OTHER state: the bubble was attached once and never updated,
+  so it kept describing the wording that had just been replaced. It follows the note now.
+
+- **The two "only the targeted traffic" switches now sit in one "Scope" card, and it tells you
+  whether the first one will work.** They differ by a single word - **Capture** only the targeted
+  traffic against **Show** only the targeted traffic - and they used to be in separate panels a few
+  rows apart, so they read as two spellings of the same setting. Only one of them changes what the
+  tool takes in; the other changes what is on screen and can be flipped at any time. They are now
+  next to each other, with a line under them that says, **before you press START**, whether your
+  destination can actually be pushed down into the driver - and when it cannot, which forms do work
+  (a plain address, a list, a range, a CIDR) and which do not (a wildcard, an `re:` pattern, or
+  targeting only a process). While a session is running the line reports what **that session** did,
+  not what a restart would do.
+
+- **The Settings window scrolls, so no group can fall off the bottom.** With the new Scope card
+  there was one panel too many for the window: "Behaviour" rendered as a bare header with nothing
+  under it, and there was no scrollbar and no sign that a whole group of preferences was still down
+  there. The window also opens taller. If yours already has a remembered size, it keeps it - the
+  content is reachable either way now.
+
+- **The two Scope checkboxes sit together instead of drifting apart.** A blank line was reserved
+  between them (the space where "locked while a session runs" appears for the capture switch), which
+  pushed a pair you are meant to read together far enough apart to look like two unrelated settings.
+  The explanation lines now sit below both. The red "this destination cannot be narrowed" note is
+  shorter too - it no longer repeats the list of forms that do not work, which the checkbox's own
+  tooltip already spells out.
+
+- **The window now says whether "Capture only the targeted traffic" actually worked.** The option
+  quietly does nothing when the destination cannot be turned into a driver filter - a wildcard, an
+  `re:` pattern, only a process target, or no destination at all - and since capturing everything
+  is the safe fallback, nothing else about the run looked unusual. The command line has warned
+  about this since the option shipped. The window, the only place the checkbox is visible, said
+  nothing at all, either way. Starting a session now logs which of the two happened.
+
+- **The Session panel says which traffic was captured.** New "Capture" row: *all traffic the filter
+  passes* or *narrowed to the destination*. Two runs with the same packet count could describe two
+  completely different worlds, and only the command line and the saved reproduction report ever
+  said which - the window never mentioned it anywhere.
 
 ### Changed
 

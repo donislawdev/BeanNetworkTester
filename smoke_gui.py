@@ -170,8 +170,11 @@ app._export_csv()
 app._export_csv()                                 # same header -> plain append
 with open(_appmod.CSV_FILE, newline="", encoding="utf-8") as _f:
     _rows = list(_csv.reader(_f))
+# `capture_narrowed` sits between the timestamp and the counters: it records which
+# world each row's numbers were measured in (App.CSV_SESSION_COLUMNS).
+_SCOPE_HEAD = ["time", "capture_narrowed", "packets_seen"]
 check("GUI: CSV append keeps a single current header",
-      len(_rows) == 3 and _rows[0][:2] == ["time", "packets_seen"], f"({_rows[:1]})")
+      len(_rows) == 3 and _rows[0][:3] == _SCOPE_HEAD, f"({_rows[:1]})")
 with open(_appmod.CSV_FILE, "w", encoding="utf-8") as _f:
     _f.write("time,old_col\n1,2\n")               # legacy column layout
 app._export_csv()
@@ -179,7 +182,7 @@ _rotated = [x for x in os.listdir(_tmpdir) if x != "stats.csv"]
 with open(_appmod.CSV_FILE, newline="", encoding="utf-8") as _f:
     _first = next(_csv.reader(_f), [])
 check("GUI: CSV with a stale header is rotated aside and restarted",
-      len(_rotated) == 1 and _first[:2] == ["time", "packets_seen"], f"(rotated={_rotated})")
+      len(_rotated) == 1 and _first[:3] == _SCOPE_HEAD, f"(rotated={_rotated})")
 
 # -- no raw translation keys or ASCII-Polish leaking into the log -------------
 joined = "\n".join(app._log_lines)

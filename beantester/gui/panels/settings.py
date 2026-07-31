@@ -18,17 +18,22 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...fields import SETTINGS_SECTIONS
+from ...filters import narrowed_filter, windivert_for
 from ...i18n import T, available_languages
+from ...matchers import KIND_INT, KIND_IP, PORT_BOUNDS, parse_matcher, port_expression
+from ...settings import setting_expression
 from ...utils import number_string
 from ...validators import parse_number
 from ..accordion import CollapsibleSection
 from ..form import ControlForm
 from ..labels import wrapping_label
-from ..prefs import ACTION, BOOL, NUMBER, PREF_GROUPS, PREFS_BY_KEY
+from ..prefs import ACTION, BOOL, NUMBER, PREF_GROUPS, PREFS_BY_KEY, prefs_in_section
 from ..scaling import scaled
+from ..scrollable import ScrollableFrame
 from ..theme import popdown_height, unhighlight_combobox
 from ..tooltip import add_tooltip
 from ..windows import PanelWindow, register_window
+from ... import crashlog
 
 
 @register_window
@@ -37,7 +42,16 @@ class SettingsWindow(PanelWindow):
 
     ID = "settings"
     TITLE = "windows.settings"
-    SIZE = (520, 520)
+    # Grown from 520x520 when the Scope card arrived. Height is the binding
+    # dimension: reserving the footer (below) means the CONTENT is what runs out
+    # of room, so a card too many simply pushed the last group off the bottom -
+    # the Behaviour panel rendered as a bare header with nothing under it.
+    # The size alone is not the fix, and cannot be: a saved geometry is restored
+    # in preference to it (PanelWindow._restore_geometry), so anyone who has
+    # opened this window before keeps the old one. The scroller below is what
+    # makes the content reachable at ANY height - this just means it usually
+    # does not have to.
+    SIZE = (560, 620)
 
     def build(self, body):
         pad = scaled(12)
@@ -51,6 +65,15 @@ class SettingsWindow(PanelWindow):
         foot = ttk.Frame(body)
         foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
         ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
+
+        # ...and what runs out of room now scrolls instead of vanishing. Reserving
+        # the footer protects the Close button and nothing else: everything above
+        # it was simply cut off at the window edge, with no scrollbar and no hint
+        # that a whole group of preferences was still down there. This window grows
+        # with every preference added, in every language, at every DPI, so the
+        # height can only be right by accident - the scroller makes it not matter.
+        self.scroll = ScrollableFrame(body)
+        body = self.scroll.body
 
         self._pref_vars = {}
         self._pref_entries = {}
@@ -87,12 +110,97 @@ class SettingsWindow(PanelWindow):
         # does not grab the leftover height here and leave a gap before the prefs.
         form_holder = ttk.Frame(body)
         form_holder.pack(side="top", fill="x")
+        self._scope_status = None
+        self._scope_shown = None        # memo: what the status line currently says
+        self._scope_inputs = None       # memo: the values it was computed from
         self.form = ControlForm(form_holder, app, sections=SETTINGS_SECTIONS,
-                                collapsible=False)
+                                collapsible=False,
+                                extras={"scope": self._build_scope_extra})
 
         # -- GUI preferences (ui.json-backed, see gui/prefs.py) --------------- #
         for group_label, keys in PREF_GROUPS:
             self._build_pref_group(body, group_label, keys)
+
+    # -- the "Scope" card ------------------------------------------------------ #
+    def _build_scope_extra(self, body):
+        """The rest of the Scope card: the view preference, and the live verdict.
+
+        The two switches sit here TOGETHER because reading either one alone is
+        how the confusion starts - "Capture only..." changes what the tool takes
+        in and cannot be undone without restarting the session, "Show only..."
+        changes what is on screen and flips live. They come from two registries
+        (convention 42), so the card is the only place they can meet.
+        """
+        for pref in prefs_in_section("scope"):
+            self._build_pref_row(body, pref)
+        # The verdict, because ticking the box is a REQUEST: a wildcard, an re:
+        # pattern, a process-only target or no destination at all cannot be
+        # expressed as a driver filter, and the option then does nothing. Until
+        # now the only way to learn that was to start a session and read the log.
+        self._scope_status = wrapping_label(body, "", style="Hint.TLabel")
+        self._sync_scope_status()
+
+    def _narrowing_verdict(self):
+        """Will (or did) the capture actually narrow? ``None`` when unanswerable.
+
+        While a session runs the answer is the SESSION's - the handle's filter
+        was fixed when it opened, so a destination typed since then describes a
+        session that does not exist. Stopped, it is a preview of the fields as
+        they stand, asked of the driver's own parser exactly as ``start()`` will
+        ask it (``filters.narrowed_filter`` -> ``WinDivertHelperCompileFilter``),
+        so the preview cannot promise something the start would refuse.
+        """
+        app = self.app
+        raw = app._raw_settings()
+        if not raw.get("narrow_filter"):
+            return None                 # not asked for: nothing to report
+        if app.running:
+            return bool(app.engine.capture_narrowed())
+        try:
+            ip = parse_matcher(setting_expression("dst_ip", raw.get("dst_ip")), KIND_IP)
+            port = parse_matcher(port_expression(raw.get("dst_port")), KIND_INT,
+                                 bounds=PORT_BOUNDS)
+        except ValueError:
+            # A half-typed expression is the form's business, not this line's -
+            # it is already flagged in red under the field it belongs to.
+            return None
+        return narrowed_filter(windivert_for(raw.get("filter")), ip, port)[1]
+
+    def _sync_scope_status(self):
+        """Repaint the verdict line, and only when something behind it moved.
+
+        The verdict costs a call into the driver's filter parser, so it is
+        memoised on its inputs rather than recomputed on every tick.
+        """
+        label = self._scope_status
+        if label is None:
+            return
+        app = self.app
+        raw = app._raw_settings()
+        inputs = (bool(raw.get("narrow_filter")), raw.get("dst_ip"),
+                  raw.get("dst_port"), raw.get("filter"), app.running,
+                  app.engine.capture_narrowed())
+        if inputs == self._scope_inputs:
+            return
+        self._scope_inputs = inputs
+        verdict = self._narrowing_verdict()
+        text = "" if verdict is None else T(
+            "scope.narrow_works" if verdict else "scope.narrow_has_no_effect")
+        if text == self._scope_shown:
+            return
+        self._scope_shown = text
+        with crashlog.quiet("gui.panels.settings"):
+            label.config(text=text, style="Hint.TLabel" if verdict else "Bad.TLabel")
+            if text:
+                if not label.winfo_ismapped():
+                    label.pack(fill="x", pady=(scaled(4), 0))
+            else:
+                label.pack_forget()
+
+    def refresh(self):
+        """Ticked by the App while this window is open (PanelWindow.refresh)."""
+        with crashlog.quiet("gui.panels.settings"):
+            self._sync_scope_status()
 
     # -- preference rows ------------------------------------------------------- #
     def _build_pref_group(self, body, group_label, keys):

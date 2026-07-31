@@ -14,8 +14,11 @@ Notable behaviour:
   closed showed as "?", which was most of them;
 * idle/duration freeze when the session stops (the tester is not running, so
   nothing should keep ticking);
-* the header says it out loud: these are ALL captured connections, not just the
-  ones being impaired. Targeting decides what gets broken, not what gets seen.
+* the header says out loud what the table COVERS - and which of the four answers
+  it is depends on the session, not on this page (see ``gui/scope.py``). It used
+  to claim "ALL captured connections ... targeting decides what gets broken, not
+  what gets seen" unconditionally, which is the opposite of the truth once the
+  driver's own filter has been narrowed to the destination.
 """
 
 import time
@@ -28,10 +31,26 @@ from ...views import (avg_packet_bytes, connection_proc, filter_sort_connections
 from ..model_worker import AsyncModel
 from ..labels import wrapping_label
 from ..scaling import scaled
+from .. import scope
 from ..theme import CONN_COLORS, style_menu
-from ..tooltip import add_tooltip
+from ..tooltip import add_tooltip, retip
 from ..widgets import SortableTree
 from ... import crashlog
+
+# This page's wording for each coverage state (gui/scope.py insists on all four).
+SCOPE_NOTES = scope.keys_for_states({
+    scope.ALL: "conns.scope_note",
+    scope.CAPTURE: "conns.scope_note_capture",
+    scope.CAPTURE_PROCESS: "conns.scope_note_capture_process",
+    scope.VIEW: "conns.scope_note_scoped",
+})
+
+SCOPE_TIPS = scope.keys_for_states({
+    scope.ALL: "tips.scope_note",
+    scope.CAPTURE: "tips.scope_note_capture",
+    scope.CAPTURE_PROCESS: "tips.scope_note_capture",
+    scope.VIEW: "tips.scope_note_scoped",
+})
 
 COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "remote_ip": "conns.remote_ip", "remote_port": "conns.remote_port",
@@ -118,14 +137,13 @@ class ConnsPage:
         self.count.pack(side="right")
 
         # Same reasoning as on the Statistics page: the note says what the table
-        # COVERS, so it has to follow the view rather than describe the other one.
-        scoped = self.app.scoped_view()
-        scope = wrapping_label(self.frame, T("conns.scope_note_scoped" if scoped
-                                             else "conns.scope_note"))
-        scope.pack(anchor="w", padx=scaled(10), pady=(0, scaled(4)))
-        add_tooltip(scope, "tips.scope_note_scoped" if scoped else "tips.scope_note")
-        self._scope_note = scope
-        self._scope_note_scoped = scoped
+        # COVERS, so it renders the coverage verdict rather than one of its inputs.
+        state = self.app.coverage().state
+        note = wrapping_label(self.frame, T(SCOPE_NOTES[state]))
+        note.pack(anchor="w", padx=scaled(10), pady=(0, scaled(4)))
+        add_tooltip(note, SCOPE_TIPS[state])
+        self._scope_note = note
+        self._scope_note_state = state
 
         holder = ttk.Frame(self.frame)
         holder.pack(fill="both", expand=True, padx=scaled(10), pady=(0, scaled(10)))
@@ -320,22 +338,23 @@ class ConnsPage:
                 f"{c.get('remote_ip')}|{c.get('remote_port')}")
 
     def _sync_scope_note(self):
-        """Re-word the note when the view-scope preference has been toggled.
+        """Re-word the note (and its bubble) when the coverage changed.
 
-        The note states what the table COVERS, and the preference can be flipped
-        while this page is already built. A note describing the other view is the
-        misleading sentence it exists to prevent.
+        The note states what the table COVERS, and both of its inputs can move
+        while this page is already built: the preference is a checkbox, and the
+        capture verdict lands when a session starts. A note describing the other
+        state is the misleading sentence it exists to prevent.
         """
         note = getattr(self, "_scope_note", None)
         if note is None:
             return
-        scoped = self.app.scoped_view()
-        if scoped == getattr(self, "_scope_note_scoped", None):
+        state = self.app.coverage().state
+        if state == getattr(self, "_scope_note_state", None):
             return
-        self._scope_note_scoped = scoped
+        self._scope_note_state = state
         with crashlog.quiet("gui.pages.conns"):
-            note.config(text=T("conns.scope_note_scoped" if scoped
-                               else "conns.scope_note"))
+            note.config(text=T(SCOPE_NOTES[state]))
+            retip(note, SCOPE_TIPS[state])
 
     def refresh(self, force=False):
         """Repaint always (cheap); rebuild off-thread (never blocks the UI).

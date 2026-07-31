@@ -678,14 +678,17 @@ Statystyczny CSV nie idzie za przełącznikiem „tylko ruch celu", bo jest logi
 w którym kolumny znaczą co innego w jednych wierszach niż w drugich, jest gorszy niż bezużyteczny
 dla arkusza, dla którego istnieje. Zamiast tego niesie **obie** sumy (`bytes_in`/`bytes_out`
 i `delivered_in_scope_bytes_*`), więc zawężenie możesz zrobić sam i widzisz, co jest czym.
+**„Przechwytuj tylko ruch celu" nie da się tak cofnąć** - to zmienia samo to, co `packets_seen`
+w ogóle policzył - więc każdy wiersz zapisuje to w kolumnie `capture_narrowed`.
 
 ### Kolumny statystycznego CSV
 
-`time` plus każdy licznik, w tej kolejności:
+`time`, zasięg przechwytu tej sesji, potem każdy licznik, w tej kolejności:
 
 | kolumna | znaczenie |
 |---|---|
 | `time` | czas zegarowy kliknięcia |
+| `capture_narrowed` | `yes`, gdy w tej sesji działało „Przechwytuj tylko ruch celu", czyli każda liczba w tym wierszu obejmuje **wyłącznie** ruch z Twoim celem. `no` znaczy, że wiersz obejmuje wszystko, co przepuścił filtr ruchu. Bez tej kolumny dwa wiersze z tym samym `packets_seen` mogłyby opisywać zupełnie różny ruch |
 | `packets_seen` | przechwycone pakiety |
 | `packets_in_scope` | z tego te, które celowanie wybrało do psucia |
 | `dropped_loss` | odrzucone przez ustawienie Strata |
@@ -980,6 +983,7 @@ beantester/              pakiet z implementacją
     windows.py           bazowa klasa i rejestr okien wtórnych
     dialogs.py           ciemne, wbudowane odpowiedniki messagebox/simpledialog
     rates.py             uśrednianie przepustowości (czysty, testowalny helper)
+    scope.py             co obejmują liczby na ekranie (jeden czysty werdykt)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    tłumaczenia (en, pl)
 tests/                   testy pytest
@@ -1071,14 +1075,29 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   albo wykluczenie `chrome, !chromedriver`.
 - **Statystyki i Połączenia domyślnie pokazują CAŁY przechwycony ruch** - to, co przepuszcza filtr
   „Ruch do modyfikacji”. Celowanie (proces / IP / port) decyduje wyłącznie o tym, **co zostanie
-  zepsute**, a nie o tym, co jest widoczne w tabelach i licznikach. W Ustawieniach jest przełącznik
-  **„Pokazuj tylko ruch celu”**, który zawęża liczniki, wykres przepustowości, tabelę Połączeń i
-  eksport połączeń do tego, co wybrało Twoje celowanie. Zmienia to, co WIDZISZ - nigdy tego, co jest
-  przechwytywane, ani tego, co jest psute. **Trzy liczniki i tak zostają na całym ruchu**:
-  „Przepełnienie kolejki”, „Porzucone przy stopie” i „Błąd wysyłki” liczą pakiety zgubione przez
-  *to narzędzie*, także spoza celu, a ukrycie ich ukryłoby jego własne szkody. Eksport CSV statystyk
-  też nie idzie za przełącznikiem - to log dopisywany, więc niesie obie liczby w osobnych kolumnach.
-  Raport reprodukcji i `--format json` zawsze niosą obie.
+  zepsute**, a nie o tym, co jest widoczne w tabelach i licznikach. Zmieniają to dwa przełączniki
+  w Ustawieniach, w karcie **„Zasięg”** - i nie są tym samym:
+  - **„Pokazuj tylko ruch celu”** zawęża liczniki, wykres przepustowości, tabelę Połączeń i eksport
+    połączeń do tego, co wybrało Twoje celowanie. Zmienia to, co WIDZISZ - nigdy tego, co jest
+    przechwytywane, ani tego, co jest psute - i możesz go przełączyć w dowolnej chwili.
+  - **„Przechwytuj tylko ruch celu”** zawęża *sam przechwyt*: sterownik przestaje podawać cokolwiek
+    poza ruchem z Twoim celem, więc zakładki obejmują ten ruch, bo innego po prostu nie ma. Jest
+    ustalany przy starcie sesji i działa tylko dla celu, który da się wyrazić w języku filtrów
+    sterownika - zwykły adres, lista, zakres albo CIDR. Wildcarda, wzorca `re:` ani samego celowania
+    w proces zepchnąć się nie da i wtedy opcja nic nie robi. Karta „Zasięg” mówi, który z dwóch
+    wariantów dostaniesz, **zanim** naciśniesz START, log powtarza to przy starcie, a wiersz
+    **„Przechwyt”** w panelu Sesji zapisuje to dla całego przebiegu.
+
+  Niezależnie od tego, który jest włączony, **notka nad licznikami i nad tabelą Połączeń mówi, co te
+  liczby naprawdę obejmują** - łącznie z przypadkiem, w którym przechwyt jest zawężony, a do tego
+  ustawiony jest cel po procesie: narzędzie przechwytuje wtedy ruch z Twoim celem od każdego procesu,
+  a psuje udział jednego procesu, więc liczniki obejmują więcej niż psucie.
+  **Trzy liczniki i tak zostają na całym ruchu przy włączonym „Pokazuj tylko”**: „Przepełnienie
+  kolejki”, „Porzucone przy stopie” i „Błąd wysyłki” liczą pakiety zgubione przez *to narzędzie*,
+  także spoza celu, a ukrycie ich ukryłoby jego własne szkody. Eksport CSV statystyk też nie idzie
+  za przełącznikiem „Pokazuj tylko” - to log dopisywany, więc niesie obie liczby w osobnych
+  kolumnach - ale „Przechwytuj tylko” zapisuje w kolumnie `capture_narrowed`, bo to zmienia samo to,
+  co zostało policzone. Raport reprodukcji i `--format json` zawsze niosą obie.
 - **Limit prędkości kształtuje ŚREDNIĄ** - kubełek tokenów przepuszcza chwilowe skoki, więc
   „Szczyt pobierania/wysyłania” (uśredniany w oknie 1 s) potrafi być odrobinę wyższy niż ustawiony
   limit. Duplikaty są liczone do limitu (drugi egzemplarz też jedzie łączem).

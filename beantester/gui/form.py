@@ -121,6 +121,25 @@ class ControlForm:
 
             if sec.fields:
                 self._place_fields(body, sec)
+
+            # CONTENT first, commentary after. The extra builder adds widgets of
+            # the section's own (a picker, buttons, a second checkbox); the note
+            # and the error line below are sentences ABOUT that content, so they
+            # belong underneath all of it.
+            # This is not cosmetic. The note is packed EMPTY and kept mapped (see
+            # below), so it reserves a blank line wherever it sits - and it used
+            # to sit between the registry field and whatever the extra added. In
+            # the Settings window's Scope card that put a blank line between the
+            # two checkboxes a user is meant to read as a pair, which is exactly
+            # how they came to look like unrelated settings.
+            # Only the note moves: the error label is created here but PACKED
+            # later (when it has text), and pack appends, so it already landed
+            # below the extra in every section that has one.
+            builder = self.extras.get(sec.extra) if sec.extra else None
+            if builder:
+                builder(body)
+
+            if sec.fields:
                 if any(FIELDS[k].overridden_by or FIELDS[k].start_only
                        for k in sec.fields):
                     # wrapping, not a fixed 560 px: a long note (or a longer
@@ -140,10 +159,6 @@ class ControlForm:
                 if any(FIELDS[k].kind in VALIDATED_KINDS for k in sec.fields):
                     err = wrapping_label(body, "", style="Bad.TLabel")
                     self.errors[sec.id] = err          # packed only when non-empty
-
-            builder = self.extras.get(sec.extra) if sec.extra else None
-            if builder:
-                builder(body)
 
         for sec in self._sections:
             if sec.toggle:

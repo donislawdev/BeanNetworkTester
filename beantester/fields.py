@@ -215,7 +215,7 @@ FIELD_DEFS = (
     # both languages and shown to nobody - which is why its tooltip had grown
     # into a wall trying to say everything at once. Guarded by
     # tests/test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one.
-    Field("narrow_filter", BOOL, "fields.narrow_filter", "capture",
+    Field("narrow_filter", BOOL, "fields.narrow_filter", "scope",
           tip="tips.narrow_filter", span=True,
           cli="narrow-filter", start_only=True),
 
@@ -269,11 +269,18 @@ SECTIONS = (
     # Table row limit lives in the Settings window, not on the Control page: it is
     # a view preference (ui_only, applied live), not part of the traffic scenario.
     Section("tables", "frames.tables", ("row_limit",), columns=1, surface="settings"),
-    # Capture scope lives in the Settings window rather than on the Control page:
-    # it is a session-wide choice about what the DRIVER hands over, not one of the
+    # Scope lives in the Settings window rather than on the Control page: these
+    # are session-wide choices about what the tool takes in and shows, not
     # impairments being dialled in.
-    Section("capture", "frames.capture", ("narrow_filter",), columns=1,
-            surface="settings"),
+    # ONE card holding BOTH switches, through the ``extra`` builder: "Capture
+    # only the targeted traffic" is a registry field (CLI flag, travels in a
+    # config file) and "Show only the targeted traffic" is a ui.json preference,
+    # so they cannot share a registry - but they must share a card. Rendered
+    # apart, in two panels a few rows away from each other, they read as two
+    # spellings of the same switch, and only one of them changes what the tool
+    # captures. The extra also carries the live verdict for the first one.
+    Section("scope", "frames.scope", ("narrow_filter",), columns=1,
+            surface="settings", extra="scope"),
     Section("repro", "frames.repro", ("seed",), columns=1, extra="repro"),
 )
 

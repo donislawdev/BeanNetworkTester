@@ -19,6 +19,33 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **`capture_narrowed` column in the statistics CSV.** New `App.CSV_SESSION_COLUMNS`
+  (keyed by `session_info()` key, the way `CSV_COLUMNS` is keyed by counter key) and
+  `_csv_session_value`, written between the timestamp and the counters. Booleans go out as
+  `yes`/`no` in English, like `impaired` in the connections export - a CSV is read by scripts, not
+  in the interface language. Touches a frozen on-disk format ("Kontrakty publiczne"), so it needs
+  the owner's version bump; the existing file rotates through the header-change path that already
+  exists in `export_csv`.
+  Why it is worth breaking: the file's own comment says an append log whose columns mean different
+  things in different rows is worse than useless, and that argument was applied to the VIEW
+  preference (both totals carried, reader narrows them) while capture narrowing - the stronger
+  version, which changes `seen` itself and cannot be undone by picking a column - had no marker at
+  all. The CLI's JSON summary has carried the same fact since narrowing shipped, and the repro
+  report embeds the whole `session_info`; this was the last surface that could not say.
+  `test_readme_guards.py::test_both_readmes_document_every_csv_column` now unions the session
+  columns, and both READMEs document it (table row plus the paragraph explaining why this file
+  ignores the view switch but cannot ignore this).
+  Guard: `test_view_scope.py::test_the_stats_csv_records_which_world_each_row_was_measured_in`
+  exports twice across a changed verdict and reads the file back. Four mutants, all caught: the
+  column removed, its value pinned, the row desynchronised from the header, and the README entry
+  renamed. Two earlier mutants were BAD mutants rather than results - deleting the guard line
+  itself (nothing can catch a deleted test) and renaming the column to a SUPERSTRING (the docs
+  guard matches by substring, so `capture_narrowed_TYPO` still contains `capture_narrowed`).
+  Two consumers pin the header literally and went red on the full run, which is the change proving
+  itself: `test_conns_export.py::test_export_csv_stats_appends_then_rotates_on_a_column_change` and
+  the CSV section of `smoke_gui.py`. Neither was in the pre-change sweep - the sweep found the
+  readers of the FACT and missed the readers of the HEADER.
+
 - **BREAKING:** **`reset_now` removed from `scenario.ACTIONS`**, leaving `reset_tcp` as the only
   action. Touches the frozen scenario-file format ("Kontrakty publiczne"), so it needs the owner's
   version bump. Thanks to the step validation added earlier in this release, a file still using the
@@ -61,6 +88,151 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   user hunting. Verified by mutation: disabling the two checks turns all three red.
 
 ### Changed
+
+- **What the on-screen numbers COVER is now derived in one place: `gui/scope.py`.** The notes on
+  Statistics and Connections answer "what do these figures cover?", but both read a single input -
+  the `scope_view_to_target` preference (`stats.py` line 149, `conns.py` line 122). With
+  `narrow_filter` on and effective, the driver's filter has the destination folded into it, so both
+  notes stated the opposite of the truth ("ALL captured traffic ... targeting decides what gets
+  impaired, not what gets listed") while `tips.narrow_filter`, one window away, promised the two
+  tabs "then show only that traffic". Both READMEs carry the same contradiction (the
+  `--narrow-filter` row against the behaviour list). Nothing could go red over it: prose has no
+  guard.
+  This commit adds the fact and the single decider, and wires up no surface yet:
+  `BeanEngine.capture_narrowed()` (the start-only verdict as a plain bool, beside the
+  `session_info()` dict the repro report and the NDJSON summary already carry - deliberately NOT
+  cleared by `stop()`, because the counters it describes stay on screen);
+  `BeanCore.process_target_active()` / `BeanEngine.process_target_active()` (the process half of
+  `targeting_active()` alone - the half `processId` can never push into a NETWORK-layer filter, so
+  it still separates CAPTURED from IMPAIRED when the capture has been narrowed); pure, Tk-free
+  `scope.coverage()` returning one of `ALL` / `CAPTURE` / `CAPTURE_PROCESS` / `VIEW`; and
+  `App.coverage()`, which is to every sentence about the figures what `App.scoped_stat` already is
+  to the figures themselves.
+  `VIEW` outranks `CAPTURE` on purpose: with the view scoped every counter with a twin IS its
+  scoped twin, so the figures cover what targeting selected however wide the capture behind them
+  was. `CAPTURE_PROCESS` is a state rather than a hedge in the wording because with no process
+  target everything captured is also impaired, and "your targeting still decides what gets impaired
+  inside it" would then be true, useless, and would imply a narrowing that is not happening.
+  Five new guards in `test_view_scope.py` (all eight input combinations, the precedence, `None`
+  reading as off, the two readers of the narrowing fact agreeing, the process half on its own).
+  Verified by mutation: `stop()` clearing the flag, the precedence flipped, the process half
+  widened to `targeting_active()`, and the reader hardcoded to `False` are each caught.
+
+- **Every surface that states what the figures cover now renders the verdict.** `stats.py` and
+  `conns.py` each hold a `state -> i18n key` table built through `scope.keys_for_states()`, which
+  refuses a table that is missing a state (or carries an obsolete one) when the page module is
+  imported - so a fifth state breaks the build rather than one screen falling back to "everything".
+  Wired up: both scope notes, their tooltips, the chart caption (`THROUGHPUT_TITLES`) and a new
+  `session.capture` row in `SESSION_ROWS`.
+  Ten new keys in both language files (`stats.scope_note_capture`,
+  `stats.scope_note_capture_process`, the two `conns.` twins, `frames.throughput_capture`,
+  `session.capture` / `_all` / `_narrowed`, `tips.scope_note_capture`, `tips.session_capture`).
+  🔴 **The session row reads `session_info()["narrowed"]`, NOT the coverage state** - it is about
+  what the driver handed over, which a view preference cannot change. That distinction survived
+  only because a mutant exposed it: deriving the row from `state != ALL` passed the whole file, and
+  the case that separates them (view scoped, capture wide) was missing from the test. It is there
+  now.
+  New in `tooltip.py`: `retip(widget, key)`. `add_tooltip` binds `Tooltip.text` once, so every
+  re-worded label kept a bubble explaining the state it had just left - the scope notes had been
+  doing this since the view preference shipped. `Tooltip.text` is read when the bubble is shown, so
+  swapping the attribute is the whole update.
+  Six new guards in `test_view_scope.py` (both notes across all four states, note/bubble agreement,
+  the chart caption, the session row, table completeness plus every key resolving in EN **and** PL,
+  and `keys_for_states` refusing an incomplete or stale table). Eight mutants, all caught: each note
+  reverted to reading the preference, the `retip` call dropped, the caption frozen, the session row
+  pinned wide, the session row rederived from the coverage state, `keys_for_states` stripped of its
+  check, and a misspelled note key.
+  The `conns.py` module docstring claimed "these are ALL captured connections ... targeting decides
+  what gets broken, not what gets seen" as unconditional fact; corrected.
+
+- **One "Scope" card in the Settings window, holding both switches and a live verdict.** The
+  `capture` section is renamed `scope` (label `frames.scope`, `frames.capture` retired) and gains
+  `extra="scope"`; `SettingsWindow._build_scope_extra` fills the rest of that card. The two
+  switches cannot share a registry - `narrow_filter` is a `Field` with a CLI flag that travels in a
+  config file, `scope_view_to_target` is a ui.json `Pref` (convention 42) - so the CARD is the only
+  place they can meet, and the `extra` hook is the sanctioned way to put a page's own widgets
+  inside a registry section.
+  `Pref` gains `section: str = ""`, naming the registry section that renders it instead of a
+  preference group, plus `prefs.prefs_in_section()`. Declared on the `Pref` rather than in a second
+  list, so "where is this rendered" keeps one answer. `PREF_GROUPS` no longer lists it.
+  Two guards had to change, and both were registry PROXIES for "is this reachable in the window":
+  `test_every_pref_is_grouped_exactly_once` becomes
+  `test_every_pref_is_rendered_in_exactly_one_place` (group XOR section, never both, never
+  neither), and the old `any(... in PREF_GROUPS)` line in `test_view_scope.py` is replaced by
+  `test_both_scope_switches_are_rendered_in_one_card`, which opens the real window and walks the
+  widget parents. New `test_a_pref_can_only_name_a_section_that_will_actually_render_it` - a typo
+  in `Pref.section` fails silently, exactly like a stray id in `FIRST_RUN_COLLAPSED`.
+  **The verdict line answers before START.** `_narrowing_verdict()` asks
+  `filters.narrowed_filter` - the same call, and therefore the same driver-parser answer,
+  `start()` will make - over matchers built from the current destination fields; while a session
+  runs it returns `engine.capture_narrowed()` instead, because the handle's filter is already
+  fixed and the fields on screen may describe a session that does not exist. Memoised on its
+  inputs, so the driver's parser is asked when something moves, not every tick.
+  Guards: the card answers before a session, a running session outranks the preview, and the line
+  is right at BUILD time rather than one tick later. `narrowed_filter` is PATCHED in those tests -
+  it reaches `WinDivertHelperCompileFilter`, which is absent on the Linux half of the CI matrix,
+  where "cannot prove it" is the honest answer for every destination. Seven mutants, all caught;
+  the build-time one survived the first pass (every test called `refresh()` first) and produced
+  the third guard.
+
+- **The prose that contradicted itself is corrected, in every place it lived.** Both READMEs said
+  "Statistics and Connections show ALL captured traffic ... targeting decides only what gets broken,
+  not what is visible" a few hundred lines away from the `--narrow-filter` row saying "statistics
+  and connections cover the narrowed traffic only". Both behaviour sections now describe the two
+  scope switches as the different things they are, name where the answer is shown (the Scope card
+  before START, the log at start, the Session row for the run), and cover the
+  capture-narrowed-plus-process-target case.
+  `tips.scope_note_scoped` was the last UI text still false in a reachable state: shown for `VIEW`,
+  which can sit on top of a narrowed capture, it claimed "the traffic filter still decides what is
+  captured" and offered "turn it off to see everything again" - you would see everything CAPTURED,
+  which is already narrow. Reworded to be true either way rather than adding a fifth state for a
+  tooltip. `tips.narrow_filter` and `tips.scope_note` were CHECKED and left alone: the first
+  already promised what the code now delivers, and the second is only ever shown for `ALL`, where
+  every word of it is true.
+
+- **Two layout defects the Scope card exposed, both structural rather than cosmetic.** Reported from
+  a screenshot; neither was visible to any existing test.
+  1. **`ControlForm` built section bodies as fields -> note -> error -> extra.** The note is packed
+     EMPTY and kept mapped on purpose (a `start_only` or `overridden_by` section must not jump when
+     the reason text appears mid-session), so it reserves a blank line wherever it sits - and it sat
+     between the registry field and everything the extra added. In the Scope card that wedged a
+     blank line between the two checkboxes that exist to be read as a pair. The extra now runs
+     BEFORE the note: content first, commentary after. **Only `scope` changes today** - it is the
+     only extra-bearing section with a `start_only` or overridden field (checked against the
+     registry, not assumed), and the error label was never affected because it is created here but
+     PACKED later, and `pack` appends, so it already landed below the extra everywhere.
+  2. **`SettingsWindow` had no scroller.** The footer is packed first so the CONTENT is what runs
+     out of room, which meant one card too many pushed the last preference group off the bottom
+     edge - "Behaviour" rendered as a bare header, with no scrollbar and no hint anything was
+     missing. Body is now a `ScrollableFrame` (the Control page's proven combination: `ControlForm`
+     + `CollapsibleSection` + a combobox inside a scroller), with Close deliberately OUTSIDE it.
+     `SIZE` 520x520 -> 560x620, and the comment says why that is not the fix: `_restore_geometry`
+     prefers a saved geometry, so anyone who has opened this window keeps the old size. The height
+     of this window can only ever be right by accident - it grows with every preference, in two
+     languages, at every DPI.
+  `scope.narrow_has_no_effect` shortened in both languages (EN 230 -> 194, PL 214 -> 176 chars):
+  three red sentences under a checkbox is the wall convention 1b exists to prevent, and the third
+  listed the forms that do NOT work, which `tips.narrow_filter` already spells out. The positive
+  half carries the same information and is the actionable one.
+  New guards: `test_nothing_is_wedged_between_the_two_scope_checkboxes` (walks the card's children
+  and asserts the pref checkbox is the NEXT one after the field checkbox, and that the reserved note
+  is still present, below both) and `test_the_settings_window_can_reach_every_group_at_any_height`
+  (every section and the last pref group's rows descend from the scroller, Close does not). Four
+  mutants, all caught: the extra moved back after the note, the scroller removed, the groups built
+  outside it, and Close moved inside it.
+
+- **`App._log_capture_scope()`: the start-time narrowing verdict reaches the GUI log, both ways.**
+  `cli._run_session` has reported this since the option shipped (`log.info` on success,
+  `log.warn` on "asked for and did not get it"); the GUI passed `narrow=` to `engine.start()` and
+  never read the answer back - a grep for `narrow` across `beantester/gui/` returned exactly one
+  line, the call itself. Called from `_finish_start`, so it runs on the UI thread after a start
+  that actually succeeded, and only when the checkbox was ticked. Not a dialog: the session started
+  fine, and a modal would interrupt the run that was just asked for.
+  New keys `log.narrow_applied` / `log.narrow_no_effect` in both languages.
+  Guard: `test_view_scope.py::test_the_window_says_whether_the_narrowing_actually_happened` drives
+  all three cases (not asked, asked and got it, asked and did not). Four mutants, all caught: the
+  call removed, only the success branch kept, the request reported instead of the outcome, and the
+  "was it even asked for" gate defeated.
 
 - **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
   `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two

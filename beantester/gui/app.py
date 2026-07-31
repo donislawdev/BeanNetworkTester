@@ -54,6 +54,7 @@ from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
 from .pages import PAGES
 from .profiles import ProfileStore
 from .rates import PeakWindow
+from . import scope
 from .scaling import (geometry_fits, init_scaling, initial_geometry,
                       max_window_size, min_window_size, scaled)
 from .scrollable import WheelDispatcher
@@ -1042,9 +1043,34 @@ class App:
                    "bytes_in_scoped": "delivered_in_scope_bytes_down",
                    "bytes_out_scoped": "delivered_in_scope_bytes_up"}
 
+    # Columns that come from the SESSION rather than the counters: they say which
+    # world the counters were measured in. The comment above explains why this
+    # file must not follow the view preference - a column meaning one thing in
+    # some rows and another in the rest is useless to the spreadsheet it exists
+    # for. Capture narrowing is the STRONGER version of that problem and had no
+    # column at all: it does not pick between two totals, it changes `seen`
+    # itself, so a narrowed row and a wide row were indistinguishable while
+    # counting completely different traffic. The CLI has carried the same fact in
+    # its JSON summary (`capture_narrowed`) since narrowing shipped, and the repro
+    # report carries the whole `session_info` - only this file could not say.
+    # Keyed by session_info() key, like CSV_COLUMNS is keyed by counter key.
+    CSV_SESSION_COLUMNS = {"narrowed": "capture_narrowed"}
+
+    @staticmethod
+    def _csv_session_value(key, info):
+        """One session cell. Booleans as yes/no in English, like `impaired` in the
+        connections export - a CSV is read by scripts and spreadsheets, so it does
+        not follow the interface language."""
+        value = info.get(key)
+        return ("yes" if value else "no") if isinstance(value, bool) else value
+
     def export_csv(self):
         snap = self.engine.stats_snapshot()
-        header = ["time", *(self.CSV_COLUMNS.get(k, k) for k in snap)]
+        info = self.engine.session_info()
+        session_cells = [self._csv_session_value(k, info)
+                         for k in self.CSV_SESSION_COLUMNS]
+        header = ["time", *self.CSV_SESSION_COLUMNS.values(),
+                  *(self.CSV_COLUMNS.get(k, k) for k in snap)]
         try:
             write_header = not os.path.exists(CSV_FILE)
             if not write_header:
@@ -1061,7 +1087,8 @@ class App:
                 writer = csv.writer(f)
                 if write_header:
                     writer.writerow(header)
-                writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"), *snap.values()])
+                writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"),
+                                 *session_cells, *snap.values()])
             self.log(f"{T('log.stats_saved_to')} {os.path.basename(CSV_FILE)}")
         except Exception as e:
             self.log(f"{T('log.csv_error')}: {e}")
@@ -1478,10 +1505,32 @@ class App:
             self._scenario.loop = self.loop_var.get()
             self.engine.start_scenario(self._scenario, s, log=self.log)
         self._snapshot_target()
+        self._log_capture_scope(s)
         # No refresher thread any more: _tick applies a changed expression and the
         # engine's resolver keeps the port set fresh (see _refresh_target).
         self._applied_target = None     # re-apply once, now that the engine is up
         self._sync_running_ui()
+
+    def _log_capture_scope(self, s):
+        """Say whether "Capture only the targeted traffic" actually took effect.
+
+        Asked for and got it, or asked for and did NOT: both have to be said, and
+        only the second is easy to miss. The option silently does nothing when the
+        destination cannot be expressed as a driver filter - a wildcard, an ``re:``
+        pattern, only a process target, no destination at all, or a port list too
+        long for the driver's grammar - and the fallback is the safe direction, so
+        nothing else about the session looks unusual. The CLI has warned about
+        this since the option shipped (``cli._run_session``); the window said
+        nothing at all, which left the one interface where the checkbox is
+        actually visible as the one that never mentioned the outcome.
+
+        Not a dialog: this is information about a session that started fine, and a
+        modal here would interrupt the run the user just asked for.
+        """
+        if not s.get("narrow_filter"):
+            return
+        self.log(T("log.narrow_applied" if self.engine.capture_narrowed()
+                   else "log.narrow_no_effect"))
 
     def _stop(self):
         if self._transition is not None:
@@ -1788,6 +1837,23 @@ class App:
         if key in self.SCOPED_TWIN and self.scoped_view():
             key = self.SCOPED_TWIN[key]
         return snap.get(key, default)
+
+    def coverage(self):
+        """What the on-screen numbers cover, as one verdict (see gui/scope.py).
+
+        ``scoped_stat`` is the single decider for the FIGURES; this is the single
+        decider for every sentence, caption and row that says what those figures
+        are OF. They were separate before, and that is exactly how the notes came
+        to describe the view preference while claiming to describe the capture.
+
+        Cheap on purpose, because more than one page asks per tick: an attribute
+        read, a dict lookup in the preference store, and one uncontended
+        ``core._lock``. Deliberately NOT ``session_info()``, which builds a dict
+        and formats two timestamps to answer the same question.
+        """
+        return scope.coverage(self.engine.capture_narrowed(),
+                              self.scoped_view(),
+                              self.engine.process_target_active())
 
     def _sample(self):
         """Snapshot the engine and keep the throughput history continuous."""
