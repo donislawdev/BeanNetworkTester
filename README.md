@@ -92,14 +92,14 @@ tooltip explaining what it does.
 Translations live in **`lang/<code>.json`** files (bundled: `lang/pl.json` with full Polish
 characters and `lang/en.json`). On startup the app **scans the `lang/` directory** and detects
 the available languages automatically, and the startup language follows your system locale
-(Polish system -> Polish; no match -> English). A **Language / Jezyk** selector in the top-right
+(Polish system -> Polish, no match -> English). A **Language / Jezyk** selector in the top-right
 corner switches it at any time - the UI rebuilds in the chosen language while keeping your
 current settings.
 
 **Everything** in the interface is translated: tabs, labels, buttons, tooltips, column headers,
 statistics, the session panel, the event log, log messages, dialogs, and error messages
 (exceptions shown to the user). The code uses **keys** only (e.g. `app.tabs.statistics`) and the
-text comes from the language file; when a key is missing in the chosen language English is used,
+text comes from the language file. When a key is missing in the chosen language English is used,
 and as a last resort the key itself. (The command line - CLI - is **always in English**,
 regardless of system and UI language.)
 
@@ -132,7 +132,7 @@ current screen.
   narrow column and an empty right half), so there is far less scrolling. The whole tab scrolls -
   including with the **mouse wheel**.
 - **Statistics** - three sub-tabs, so nothing is clipped on small screens:
-  - **Live** - counters (packets, lost, corrupted, torn down...) and a throughput chart; the
+  - **Live** - counters (packets, lost, corrupted, torn down...) and a throughput chart. The
     counter grid picks its column count to fit the window width. An "Export CSV" button.
   - **Session** - seed, duration, data used, peaks + "Mark bug", "Save repro report", "Copy CLI
     command" buttons.
@@ -152,7 +152,7 @@ current screen.
   fills the filter fields with one click.
   The table is **virtualised**: it draws only the rows actually on screen, so scrolling is instant
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
-  many to show is set with the **"Row limit"** field (*Tables* section; 0 = no limit, default
+  many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
 - At the bottom: **START/STOP**, **Apply changes** and **Load/Save file**, with the log beneath.
   This bar is anchored to the bottom edge - no tab can cover it.
@@ -257,7 +257,7 @@ round trip hits it about twice as often as the number suggests.
 
 **Impairment (%)** - *Loss*: percentage of packets vanishing without a trace (5% is already a
 clearly failing network). *Corruption*: percentage of packets with a flipped data bit - it affects
-**only payload-bearing packets**; packets with no data (e.g. pure ACK, SYN) have nothing to flip,
+**only payload-bearing packets**. Packets with no data (e.g. pure ACK, SYN) have nothing to flip,
 so they pass untouched and are **not counted as corrupted**. *Duplication*: percentage of packets
 sent twice.
 
@@ -269,14 +269,14 @@ given percentage of the time. Simulates a flickering connection.
   lists, ranges, CIDR, wildcards, comparisons, exclusions and regular expressions - see
   [Filter syntax](#filter-syntax-process--ip--port). E.g. IP `10.0.0.1-10.0.0.50,!10.0.0.7`, port
   `80,443,8000-8100`. Empty = any.
-- *TCP SYN drop (%)* - percentage of dropped connection-opening packets; simulates a connection
+- *TCP SYN drop (%)* - percentage of dropped connection-opening packets. Simulates a connection
   that will not establish (retry testing) - useful for tests from behind NAT.
-- *Max size (MTU)* - drop packets larger than N bytes; reproduces an "MTU black hole" from
+- *Max size (MTU)* - drop packets larger than N bytes. Reproduces an "MTU black hole" from
   tunnels/VPN/behind NAT (small ones pass, large ones vanish). 0 = disabled.
 - *NAT timeout* - if a connection is silent for more than N seconds, the next inbound packet is
-  dropped (the mapping "disappears"); a keep-alive test. 0 = disabled.
-- *TCP tear-down (RST)* - percentage of connections abruptly torn with an RST packet; forces
-  reconnects. **TCP only** (RST is a TCP concept; UDP cannot be "torn" - use loss or link flapping).
+  dropped (the mapping "disappears"). A keep-alive test. 0 = disabled.
+- *TCP tear-down (RST)* - percentage of connections abruptly torn with an RST packet. Forces
+  reconnects. **TCP only** (RST is a TCP concept, UDP cannot be "torn" - use loss or link flapping).
   The **Tear down TCP now** button resets all active TCP connections for ~3 s.
 - *Schedule* - throughput that changes over time: `time:download:upload` in KB/s, comma-separated.
   E.g. `2:100:0, 2:500:0` = 2 s at 100 KB/s, then 2 s at 500, in a loop. When the schedule is
@@ -286,7 +286,7 @@ given percentage of the time. Simulates a flickering connection.
 **Session:**
 - *Duration (s)* - after this many seconds the program **stops itself** (exactly as if you clicked
   STOP): impairment disappears, the driver is released. `0` = runs until STOP (the previous, default
-  behaviour). The CLI equivalent is `--duration`; like the traffic filter, it is taken into account
+  behaviour). The CLI equivalent is `--duration`. Like the traffic filter, it is taken into account
   **only at START** ("Apply changes" does not touch it). The value is saved in the config file and
   in the reproduction command.
 
@@ -307,16 +307,16 @@ network"** (nothing is impaired until you set something). Built-in presets canno
 
 Their numbers come from published measurements wherever measurements exist (Ookla medians for
 satellite and mobile, academic studies for Starlink's 15-second reconfiguration and for in-flight
-Wi-Fi); where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment next
+Wi-Fi). Where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment next
 to the value in `beantester/presets.py` says so. A few of them are worth a sentence:
 
 - **Satellite (low orbit)** - modelled on Starlink. Its steady state is good (about 40 ms of ping,
-  100 Mbit/s); what makes it distinctive is the reconfiguration every 15 seconds, which briefly
+  100 Mbit/s). What makes it distinctive is the reconfiguration every 15 seconds, which briefly
   stops transmission and shows up as an occasional latency spike rather than as loss.
 - **Distant server (another continent)** - a fast link with nothing broken, just far away
   (~120 ms of ping). This is the one that exposes chatty protocols and code that assumes the server
   is next door.
-- **Congested home link (bufferbloat)** - idle it looks fine (20 ms of ping); the impairment is the
+- **Congested home link (bufferbloat)** - idle it looks fine (20 ms of ping). The impairment is the
   queue. ⚠️ **It only bites once your application actually saturates the link**, because the buffer
   is part of the speed limiter: send a trickle of test traffic and you will see a plain
   8 Mbit/s down, 1 Mbit/s up link and nothing else. Saturate the 1 Mbit/s upload and watch ping
@@ -329,7 +329,7 @@ to the value in `beantester/presets.py` says so. A few of them are worth a sente
 
 A profile stores **what the link is like**: loss, corruption, duplication, latency, jitter, latency
 spikes, link outages (flapping), the speed limits and the buffer. Everything else - the target, the
-destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out of it; saving a
+destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out of it. Saving a
 profile warns you about the ones you currently have switched on. Use **"Save file..."** for the
 complete configuration. Picking a profile or a preset sets **all** of those fields at once,
 including the ones a given preset does not mention - those go back to their default, so "Perfect
@@ -354,7 +354,7 @@ works identically in the GUI and the CLI (`--target`, `--dst-ip`, `--dst-port`).
 |---|---|---|
 | `a,b,c` | **list** - any of the values matches | `80,443` |
 | `a-b` | **range**, both ends **inclusive** | `8000-8100`, `10.0.0.1-10.0.0.50` |
-| `>` `<` `>=` `<=` | **comparison** (numeric; for IP by address value) | `>1024`, `<=80`, `>10.0.0.5` |
+| `>` `<` `>=` `<=` | **comparison** (numeric, for IP by address value) | `>1024`, `<=80`, `>10.0.0.5` |
 | `!` | **exclusion** - "different from" | `!53` |
 | `*` `?` | **wildcard** (`*` = any run, `?` = one character) | `chrome*`, `192.168.1.*` |
 | `re:` | **regular expression** (Python `re`, case-insensitive) | `re:^chrome\.exe$` |
@@ -447,7 +447,7 @@ the same address to the tool.
 80,443,8000-8100,!8080         a mix
 ```
 
-The allowed range is **0-65535**; `99999` is an error, not a silent skip.
+The allowed range is **0-65535**. `99999` is an error, not a silent skip.
 
 ### Regular expressions (`re:`)
 
@@ -478,7 +478,7 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
 
 * **`chrome` also catches `chromedriver`, but `chrome.exe` does not.** A bare name is a *substring*:
   the text "chrome" appears in `chromedriver.exe`, but the text "chrome.exe" does not (there it is
-  `chrome` + `driver.exe`). So `chrome.exe` -> only `chrome.exe`; `chrome` -> `chrome.exe`
+  `chrome` + `driver.exe`). So `chrome.exe` -> only `chrome.exe`. `chrome` -> `chrome.exe`
   **and** `chromedriver.exe`.
 * **`chrome*` is broader than it looks.** The star is "any run", so `chrome*` catches
   `chromedriver.exe` exactly like `chrome`. Want exactly one app? Use `re:^chrome\.exe$` or add an
@@ -498,7 +498,7 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
   runs.
 * **`>chrome` is an error.** Comparisons work on numbers (PID), not names.
 * **`2000-1000` is an error** (reversed range), not an empty set.
-* **A wildcard is not a regex.** In `chrome*` the star means "any run"; in `re:chrome*` it means
+* **A wildcard is not a regex.** In `chrome*` the star means "any run". In `re:chrome*` it means
   "the letter `e` repeated 0+ times". If you write `re:`, you write a regex.
 
 Every syntax error is reported **immediately**: in the GUI the field turns red with the reason
@@ -555,11 +555,11 @@ Designed so that after a bug you can recreate exactly the same conditions:
   went out, 29 replies came back, and the tool broke none of them. End-to-end loss is what your
   application's own figures (or `ping`'s "Lost") are for.
 - **Data used** - Downloaded / Uploaded / Total (MB) cumulatively from start plus the session's
-  average throughput; you know at once how much data the app used. (The report also has "attempted
+  average throughput. You know at once how much data the app used. (The report also has "attempted
   MB" - how much the app wanted to send before loss/limits are subtracted.)
 - **Event log** with timestamps: start, setting changes, scenario steps, tear-downs, and your bug
   markers - with **sorting** on a column-header click.
-- **Mark the moment of a bug** - click exactly when you see the bug; it inserts a timestamped marker
+- **Mark the moment of a bug** - click exactly when you see the bug. It inserts a timestamped marker
   into the log.
 - **Save reproduction report** - a single JSON file with the lot: seed, all settings, counters,
   metrics, event log, connections and a **ready CLI command** that recreates the conditions.
@@ -636,7 +636,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--latency` | ms | fixed delay added to every packet |
 | `--jitter` | ms | random delay variation (+/-) |
 | `--down` `--up` | KB/s | throughput limit (0 = no limit) |
-| `--buffer` | ms | link buffer for the speed limit (0 = no limit); bounds queue delay, the excess goes as "Rate-limit drop" |
+| `--buffer` | ms | link buffer for the speed limit (0 = no limit). Bounds queue delay, the excess goes as "Rate-limit drop" |
 | `--spike-prob` `--spike-ms` | % / ms | with the given probability append extra delay |
 | `--syn-drop` | % | percentage of dropped TCP SYN packets |
 | `--max-size` | B | "MTU black hole" - drop packets larger than N bytes (0 = off) |
@@ -645,7 +645,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
-| `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only; while it is on, statistics and connections cover the narrowed traffic only |
+| `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only. While it is on, statistics and connections cover the narrowed traffic only |
 
 **Targeting** (all three accept the full [filter syntax](#filter-syntax-process--ip--port): lists,
 ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally CIDR)
@@ -657,7 +657,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--dst-port` | remote ports (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
 | `--filter` | which traffic to capture at all (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
-**Blocking (firewall)** - drop all traffic to the chosen destinations. Blocking triggers on **IP OR port** (an empty field is ignored, so `--block-port 443` alone blocks 443 to any address). Same [filter syntax](#filter-syntax-process--ip--port) as above; it respects process targeting (blocks only the target's traffic).
+**Blocking (firewall)** - drop all traffic to the chosen destinations. Blocking triggers on **IP OR port** (an empty field is ignored, so `--block-port 443` alone blocks 443 to any address). Same [filter syntax](#filter-syntax-process--ip--port) as above. It respects process targeting (blocks only the target's traffic).
 
 | Flag | Description | Examples |
 |---|---|---|
@@ -677,7 +677,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--scenario FILE` `--loop` | a timeline scenario (JSON) and looping it |
 | `--seed N` | randomness seed - the same run can be repeated |
 | `--duration N` | **run time in seconds** (0 = until Ctrl+C). The same field is in the GUI ("Session") |
-| `--row-limit N` | a **GUI-only** setting: max rows in the tables (0 = no limit; default 50 000). In headless CLI (no window) it does nothing - it is only saved to the config file and takes effect when that config is opened in the GUI. The "Row limit" field's equivalent |
+| `--row-limit N` | a **GUI-only** setting: max rows in the tables (0 = no limit, default 50 000). In headless CLI (no window) it does nothing - it is only saved to the config file and takes effect when that config is opened in the GUI. The "Row limit" field's equivalent |
 | `--interval N` | how often to report, in seconds (must be > 0) |
 | `--log-conns` | print the observed connections at the end |
 | `--repro-out FILE` | save a reproduction report (JSON) |
@@ -792,7 +792,7 @@ tooltip on that header.
 | `time[s]` | Seconds between the first and the last packet of this connection in this session. |
 | `idle[s]` | Seconds since the last packet. Stops counting when the session stops. |
 
-**The delivered/seen pair is the point of the table.** With nothing impaired they are equal; add
+**The delivered/seen pair is the point of the table.** With nothing impaired they are equal. Add
 loss or a speed limit and they part, and **the gap between them is the damage done to that
 connection**. (Before they were split there was one pair, holding captured bytes under headings that
 meant delivered: a row could read 5 MB received while its application got 0.4 MB.)
@@ -936,7 +936,7 @@ All of them loop except `upload-drop-midway.json`, so you can start one and leav
 
 ### 1. Link degradation in the background of E2E tests (GitHub Actions, Windows)
 
-The tests run at 300 ms delay and 5% loss; the shaper stops itself after 120 s, so no "stuck" step
+The tests run at 300 ms delay and 5% loss. The shaper stops itself after 120 s, so no "stuck" step
 leaves a broken network on the agent.
 
 ```yaml
@@ -970,7 +970,7 @@ leaves a broken network on the agent.
 ```bat
 BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
 ```
-Code `0` = the file is valid; `3` = there is an error (with a readable message on stderr).
+Code `0` = the file is valid. `3` = there is an error (with a readable message on stderr).
 
 ### 3. A short, repeatable run with an artifact
 
@@ -1005,11 +1005,11 @@ Three deliberate build decisions (do not change them without need - each fixes a
 - **console subsystem** (not `--noconsole`): otherwise the exe has no `stdout`/`stderr`, and
   `cmd.exe` and PowerShell **do not wait** for a GUI process - CI would see neither output nor exit
   code. On GUI start the program detaches from the console itself, so a double-click leaves no black
-  window;
+  window.
 - **onedir** (not `--onefile`): `pydivert` carries `WinDivert64.sys`, and onefile unpacked it to
   `%TEMP%\_MEIxxxx`. The kernel holds an open handle to the loaded `.sys`, so the directory **could
   not be deleted** until a restart. In the directory build the driver sits next to the exe, on a
-  stable path;
+  stable path.
 - **`asInvoker`** (not `--uac-admin`): `requireAdministrator` always creates a **new** process on
   elevation - losing the caller's pipes and exit code. Now the GUI asks for elevation itself, and
   the CLI ends with code `7` and a clear message when rights are missing (`--simulate` does not need
@@ -1067,7 +1067,7 @@ The **CI/CD CLI contract** is guarded separately:
 - `tests/test_cli_runtime.py` - exit codes (0/1/3/4/5/6/130/143), `--duration` accuracy (not "to the
   nearest report"), stdout/stderr separation, NDJSON, `-q`/`-v`, `--dry-run`, `--print-config`,
   `--min-packets`, `--duration` precedence over the config file. The reporting loop gets an injected
-  clock, so duration tests run in microseconds;
+  clock, so duration tests run in microseconds.
 - `tests/test_failsafe.py` - the session stops itself after `duration`, a dead capture thread causes
   a *fail-open* (releasing the driver = network returns), the GUI `_tick` survives an exception, the
   targeting thread never touches tkinter, closing the window always releases the engine.
@@ -1079,7 +1079,7 @@ downloadable artifact.
 
 ## Project layout
 
-The code is split into the `beantester/` package; a thin launcher `bean_network_tester.py` stays in
+The code is split into the `beantester/` package. A thin launcher `bean_network_tester.py` stays in
 the root, so all existing commands (README, reproduction reports, PyInstaller) work unchanged.
 
 ```
@@ -1135,17 +1135,17 @@ BeanNetworkTester.spec   the build recipe (onedir, console, asInvoker)
 The core `BeanCore.decide()` is a pure function that decides a packet's fate in order:
 targeting -> LAN mode -> blocking (firewall) -> NAT -> RST -> flapping -> MTU -> SYN -> loss -> corruption ->
 delay/jitter/spike -> throughput limit (a token bucket with a bounded buffer, optionally from the
-schedule) -> duplication. The capture thread reads packets and runs the decision; the re-inject
+schedule) -> duplication. The capture thread reads packets and runs the decision. The re-inject
 thread sends them at the chosen moment. All randomness goes through one generator (optionally
 seeded).
 
 ## Notes and limitations
 
-- It modifies traffic matching the filter; for narrower tests use "Target process" or "Target
+- It modifies traffic matching the filter. For narrower tests use "Target process" or "Target
   destination".
 - Ping = ICMP: to affect it, pick a filter that includes ICMP.
 - A speed limit is hard to see on ping (small packets) - test with a file download.
-- Real RST capture and injection only work on Windows with WinDivert; the logic is confirmed by
+- Real RST capture and injection only work on Windows with WinDivert. The logic is confirmed by
   tests that run everywhere.
 - A tool for testing your own applications and networks.
 
@@ -1199,7 +1199,7 @@ seeded).
   exactly one connection - the one it opens before it owns any socket. Aiming at a **process id**
   never recovers, because that id no longer exists: everything after the restart is left untouched.
   From the command line the run says so when it happens, and ends with how much of the captured
-  traffic was actually in scope; in the window it is the red note under the process field.
+  traffic was actually in scope. In the window it is the red note under the process field.
 - **An exclusion on its own also covers everything the tool cannot identify.** `!chrome` in the
   process field means "impair everything except chrome" - and "everything" includes any connection
   whose owning process could not be determined: protected system processes the tool cannot open,
@@ -1211,7 +1211,7 @@ seeded).
   traffic passes untouched. The program says so explicitly (a red note under the field and a log
   entry), because "a run in which nothing broke" looks identical to "the app held up".
 - **A bare process name is a substring** - `chrome` also catches `chromedriver.exe`. This is kept on
-  purpose (compatibility with old configs); for precision reach for `re:^chrome\.exe$` or the
+  purpose (compatibility with old configs). For precision reach for `re:^chrome\.exe$` or the
   exclusion `chrome, !chromedriver`.
 - **Statistics and Connections show ALL captured traffic by default** - whatever the "Traffic to
   modify" filter passes. Targeting (process / IP / port) decides only **what gets broken**, not what
@@ -1229,9 +1229,9 @@ seeded).
 - **The window has a maximum size and cannot be maximised** - the layout (two columns + the log bar)
   stops making sense stretched to 4K, so the size is capped and the maximise button removed.
 - **Duration counts from START** - changing the field mid-session does nothing (like the traffic
-  filter); once the limit is reached the program simply STOPs and leaves the results on screen.
+  filter). Once the limit is reached the program simply STOPs and leaves the results on screen.
 - **STOP drops the packets waiting in the delay queue** - the end of a session is immediate. At a
-  large `latency` this shows as a one-off "gap"; it is not a bug.
+  large `latency` this shows as a one-off "gap". It is not a bug.
 - **A failure mid-session always ends with the network restored** - if the capture thread dies, the
   engine STOPs itself and releases the driver (*fail-open*), instead of holding an open handle no one
   reaches (this was a real path to "the user suddenly has no internet"). The reason goes to the log
@@ -1249,7 +1249,7 @@ seeded).
 ## Contributing
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to set up the tests
-and the conventions the project follows; please also read the
+and the conventions the project follows. Please also read the
 [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature requests go through the issue
 templates, and security issues are handled privately via the [security policy](SECURITY.md).
 

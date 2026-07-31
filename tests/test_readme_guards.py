@@ -161,6 +161,30 @@ def test_both_readmes_list_every_scenario_action_and_shipped_file():
               f"(missing: {missing_files})")
 
 
+def test_no_semicolons_in_readme_prose():
+    """Same rule as the UI text (PROJECT_NOTES convention 1b): a full stop or a
+    comma, because that is what people write.
+
+    Code is exempt and has to be, since a semicolon is syntax there - bash,
+    JSON, PowerShell, filter expressions. So fenced blocks, indented blocks and
+    inline `code spans` are all cut out before looking, which is what keeps this
+    check free of false positives.
+    """
+    for readme in READMES:
+        offenders, fenced = [], False
+        for number, line in enumerate(_read(readme).splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+                continue
+            if fenced or line.startswith("    "):
+                continue
+            prose = re.sub(r"`[^`]*`", "", line)
+            if ";" in prose:
+                offenders.append(f"{number}: {prose.strip()[:60]}")
+        check(f"{readme}: no semicolons in prose", not offenders,
+              f"({offenders[:4]})")
+
+
 def test_polish_readme_pipeline_keeps_lan_and_blocking():
     """The regression that happened: the PL brief skipped LAN mode and blocking."""
     sec = _section(_read("README.pl.md"), "Jak to działa")

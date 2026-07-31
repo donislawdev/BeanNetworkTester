@@ -51,6 +51,26 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
     check("detect: POSIX env 'pl_PL.UTF-8' -> pl", n.detect_language() == "pl")
 
 
+def test_no_semicolons_in_ui_text():
+    """People do not write semicolons in ordinary prose - a full stop or a comma
+    (PROJECT_NOTES convention 1b).
+
+    Unlike readability, this one IS mechanical and has no false positives, which
+    is exactly why it is worth a test: 21 tooltips had drifted into semicolons
+    before anybody looked. A semicolon joins two independent clauses, so the
+    right replacement is almost always a full stop.
+    """
+    import json as _json
+    for code in ("en", "pl"):
+        with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+            data = _json.load(f)
+        data.pop("_meta", None)
+        offenders = sorted(k for k, v in data.items()
+                           if isinstance(v, str) and ";" in v)
+        check(f"i18n {code}: no semicolons in user-facing text", not offenders,
+              f"({offenders[:6]})")
+
+
 def test_i18n_coverage():
     """Language files stay in sync: same keys, no empty texts, EN differs from keys."""
     import json as _json

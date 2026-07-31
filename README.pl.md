@@ -87,9 +87,9 @@ dowolne pole pojawia się dymek z wyjaśnieniem, co ono robi.
 
 ## Język / Language
 
-Tłumaczenia mieszkają w plikach **`lang/<kod>.json`** (w komplecie: `lang/pl.json` z pełnymi polskimi znakami oraz `lang/en.json`). Przy starcie aplikacja **skanuje katalog `lang/`** i sama wykrywa dostępne języki, a język startowy dobiera według ustawień systemu (system po polsku → polski; brak dopasowania → angielski). W prawym górnym rogu okna jest lista **Język / Language**, którą można przełączyć w dowolnej chwili - UI przebuduje się na wybrany język, zachowując bieżące ustawienia.
+Tłumaczenia mieszkają w plikach **`lang/<kod>.json`** (w komplecie: `lang/pl.json` z pełnymi polskimi znakami oraz `lang/en.json`). Przy starcie aplikacja **skanuje katalog `lang/`** i sama wykrywa dostępne języki, a język startowy dobiera według ustawień systemu (system po polsku → polski, brak dopasowania → angielski). W prawym górnym rogu okna jest lista **Język / Language**, którą można przełączyć w dowolnej chwili - UI przebuduje się na wybrany język, zachowując bieżące ustawienia.
 
-Tłumaczone jest **wszystko** w interfejsie: zakładki, etykiety, przyciski, podpowiedzi, nagłówki kolumn, statystyki, panel sesji, dziennik zdarzeń, komunikaty w logu, okna dialogowe, a także komunikaty błędów (wyjątki pokazywane użytkownikowi). W kodzie używa się wyłącznie **kluczy** (np. `app.tabs.statistics`), a tekst pochodzi z pliku języka; gdy w wybranym języku brakuje klucza, używany jest angielski, a w ostateczności sam klucz. (Tryb wiersza poleceń - CLI - jest **zawsze po angielsku**, niezależnie od języka systemu i UI.)
+Tłumaczone jest **wszystko** w interfejsie: zakładki, etykiety, przyciski, podpowiedzi, nagłówki kolumn, statystyki, panel sesji, dziennik zdarzeń, komunikaty w logu, okna dialogowe, a także komunikaty błędów (wyjątki pokazywane użytkownikowi). W kodzie używa się wyłącznie **kluczy** (np. `app.tabs.statistics`), a tekst pochodzi z pliku języka. Gdy w wybranym języku brakuje klucza, używany jest angielski, a w ostateczności sam klucz. (Tryb wiersza poleceń - CLI - jest **zawsze po angielsku**, niezależnie od języka systemu i UI.)
 
 **Dodanie nowego języka** nie wymaga zmian w kodzie: skopiuj `lang/en.json` np. do `lang/de.json`, przetłumacz wartości i uzupełnij nagłówek `"_meta": {"code": "de", "name": "Deutsch"}` - język pojawi się na liście po ponownym uruchomieniu. Uszkodzony plik języka jest pomijany (nie wywali aplikacji).
 
@@ -109,11 +109,11 @@ Rozmiar i pozycja okna, wybrana zakładka, język, zwinięte sekcje, podział lo
 
 - **Sterowanie** - wszystkie ustawienia zakłóceń, pogrupowane w **zwijane sekcje** (stan zwinięcia jest zapamiętywany). Na szerokim oknie sekcje układają się **w dwie kolumny** (zamiast jednej wąskiej i pustej prawej połowy), więc przewijania jest znacznie mniej. Cała zakładka jest przewijana - również **kółkiem myszy**.
 - **Statystyki** - trzy podzakładki, żeby nic nie było ucinane na małych ekranach:
-  - **Na żywo** - liczniki (pakiety, utracone, uszkodzone, zerwane…) i wykres przepustowości; siatka liczników sama dobiera liczbę kolumn do szerokości okna. Przycisk „Eksportuj CSV”.
+  - **Na żywo** - liczniki (pakiety, utracone, uszkodzone, zerwane…) i wykres przepustowości. Siatka liczników sama dobiera liczbę kolumn do szerokości okna. Przycisk „Eksportuj CSV”.
   - **Sesja** - seed, czas trwania, zużyte dane, szczyty + przyciski „Oznacz błąd”, „Zapisz raport repro”, „Kopiuj komendę CLI”.
   - **Zdarzenia** - dziennik zdarzeń (START/STOP/ZMIANA/SCENARIUSZ/BŁĄD/RESET).
-- **Połączenia** - podgląd, z jakimi adresami IP:port gada testowany system. Kolumny: **proces**, **protokół**, zdalne IP, porty, liczba pakietów, **KB**, **czas trwania** i **czas od ostatniej aktywności**. Ruch, który w ogóle nie ma portów - ping (ICMP) - też się tu pojawia: jeden wiersz na adres, z pustymi komórkami portów. **Kolumny „pobrane”/„wysłane”/„razem” to ruch DOSTARCZONY** - dokładnie ta sama wielkość, którą panel Sesja nazywa „Pobrano (MB)”. **Kolumny „pobr. widz.”/„wys. widz.” to ruch PRZECHWYCONY**, zanim cokolwiek zostało zepsute. Bez ustawionych zakłóceń obie pary są równe; z chwilą włączenia straty albo limitu prędkości rozjeżdżają się, a **różnica między nimi to szkoda na tym połączeniu**. Najedź na dowolną, żeby dostać pełne zdanie. (Przed rozdzieleniem była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi „dostarczone”: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.) Do tego wyszukiwarka (z opóźnieniem, żeby nie mielić tabeli przy każdym znaku), sortowanie po kliknięciu w nagłówek, **„Zamroź”** (wiersze przestają uciekać spod kursora) oraz **menu pod prawym przyciskiem myszy**: kopiuj wiersz / adres IP, **„Celuj w ten proces”**, **„Ogranicz do tego IP:port”** - wypełnia pola filtrów jednym kliknięciem.
-  Tabela jest **wirtualizowana**: rysuje tylko te wiersze, które faktycznie widać, więc przewijanie jest natychmiastowe niezależnie od tego, czy ma 400 wierszy, czy kilkaset tysięcy. Dawny sztywny limit 400 wierszy zniknął - ile pokazać, ustawiasz polem **„Limit wierszy”** (sekcja *Tabele*; 0 = bez limitu, domyślnie 50 000).
+- **Połączenia** - podgląd, z jakimi adresami IP:port gada testowany system. Kolumny: **proces**, **protokół**, zdalne IP, porty, liczba pakietów, **KB**, **czas trwania** i **czas od ostatniej aktywności**. Ruch, który w ogóle nie ma portów - ping (ICMP) - też się tu pojawia: jeden wiersz na adres, z pustymi komórkami portów. **Kolumny „pobrane”/„wysłane”/„razem” to ruch DOSTARCZONY** - dokładnie ta sama wielkość, którą panel Sesja nazywa „Pobrano (MB)”. **Kolumny „pobr. widz.”/„wys. widz.” to ruch PRZECHWYCONY**, zanim cokolwiek zostało zepsute. Bez ustawionych zakłóceń obie pary są równe. Z chwilą włączenia straty albo limitu prędkości rozjeżdżają się, a **różnica między nimi to szkoda na tym połączeniu**. Najedź na dowolną, żeby dostać pełne zdanie. (Przed rozdzieleniem była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi „dostarczone”: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.) Do tego wyszukiwarka (z opóźnieniem, żeby nie mielić tabeli przy każdym znaku), sortowanie po kliknięciu w nagłówek, **„Zamroź”** (wiersze przestają uciekać spod kursora) oraz **menu pod prawym przyciskiem myszy**: kopiuj wiersz / adres IP, **„Celuj w ten proces”**, **„Ogranicz do tego IP:port”** - wypełnia pola filtrów jednym kliknięciem.
+  Tabela jest **wirtualizowana**: rysuje tylko te wiersze, które faktycznie widać, więc przewijanie jest natychmiastowe niezależnie od tego, czy ma 400 wierszy, czy kilkaset tysięcy. Dawny sztywny limit 400 wierszy zniknął - ile pokazać, ustawiasz polem **„Limit wierszy”** (sekcja *Tabele*, 0 = bez limitu, domyślnie 50 000).
 - Na dole: **START/STOP**, **Zastosuj zmiany** i **Wczytaj/Zapisz plik**, a pod nimi log. Ten pasek jest zakotwiczony przy dolnej krawędzi - żadna zakładka nie jest w stanie go zasłonić.
 
 ### Kiedy zmiany wchodzą w życie
@@ -202,7 +202,7 @@ więc pojedyncze odpytanie trafia na nią mniej więcej dwa razy częściej, ni�
 
 **Zakłócenia (%)** - *Utrata*: procent pakietów znikających bez śladu (5% to już wyraźnie
 zrywająca się sieć). *Uszkodzenie*: procent pakietów z przekłamanym bitem danych - dotyczy
-tylko pakietów z ładunkiem (payloadem); pakiety bez danych (np. czyste ACK, SYN) nie mają czego
+tylko pakietów z ładunkiem (payloadem). Pakiety bez danych (np. czyste ACK, SYN) nie mają czego
 przekłamać, więc przechodzą nietknięte i **nie są liczone jako uszkodzone**.
 *Duplikacja*: procent pakietów wysyłanych podwójnie.
 
@@ -211,16 +211,16 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 
 **Zaawansowane (NAT / połączenia):**
 - *Celuj w cel (IP/port)* - psuj tylko ruch do/od wybranych serwerów. Oba pola przyjmują listy, zakresy, CIDR, wildcardy, porównania, wykluczenia i wyrażenia regularne - patrz [Składnia filtrów](#składnia-filtrów-proces--ip--port). Np. IP `10.0.0.1-10.0.0.50,!10.0.0.7`, port `80,443,8000-8100`. Puste = dowolne.
-- *Gubione TCP SYN (%)* - procent gubionych pakietów rozpoczynających połączenie; symuluje sytuację, gdy połączenie nie chce się nawiązać (test ponawiania prób) - przydatne przy testach zza NAT.
-- *Maks. rozmiar (MTU)* - gub pakiety większe niż N bajtów; odwzorowuje „czarną dziurę MTU” z tuneli/VPN/za NAT (małe przechodzą, duże znikają). 0 = wyłączone.
-- *NAT timeout* - jeśli połączenie milczy dłużej niż N sekund, kolejny pakiet przychodzący jest odrzucany (mapowanie „znika”); test keep-alive. 0 = wyłączone.
-- *Zrywanie TCP (RST)* - procent połączeń nagle zrywanych pakietem RST; wymusza reconnect. **Dotyczy wyłącznie TCP** (RST to pojęcie TCP-owe; UDP nie da się „zerwać” - użyj strat albo przerwy w łączu). Przycisk **Zerwij TCP teraz** zrywa wszystkie aktywne połączenia TCP na ~3 s.
+- *Gubione TCP SYN (%)* - procent gubionych pakietów rozpoczynających połączenie. Symuluje sytuację, gdy połączenie nie chce się nawiązać (test ponawiania prób) - przydatne przy testach zza NAT.
+- *Maks. rozmiar (MTU)* - gub pakiety większe niż N bajtów. Odwzorowuje „czarną dziurę MTU” z tuneli/VPN/za NAT (małe przechodzą, duże znikają). 0 = wyłączone.
+- *NAT timeout* - jeśli połączenie milczy dłużej niż N sekund, kolejny pakiet przychodzący jest odrzucany (mapowanie „znika”). Test keep-alive. 0 = wyłączone.
+- *Zrywanie TCP (RST)* - procent połączeń nagle zrywanych pakietem RST. Wymusza reconnect. **Dotyczy wyłącznie TCP** (RST to pojęcie TCP-owe, UDP nie da się „zerwać” - użyj strat albo przerwy w łączu). Przycisk **Zerwij TCP teraz** zrywa wszystkie aktywne połączenia TCP na ~3 s.
 - *Harmonogram* - zmienna przepustowość w czasie: `czas:pobieranie:wysyłanie` w KB/s, po przecinku. Np. `2:100:0, 2:500:0` = 2 s po 100 KB/s, potem 2 s po 500, w pętli. Gdy harmonogram jest niepusty, **zastępuje** stałe pola „Pobieranie/Wysyłanie” - GUI wyszarza je i mówi o tym wprost.
 
 **Sesja:**
 - *Czas trwania (s)* - po tylu sekundach program **sam się zatrzyma** (dokładnie tak, jakbyś kliknął
   STOP): zakłócenia znikają, sterownik zostaje zwolniony. `0` = działa aż do STOP-a (zachowanie jak
-  dotychczas - domyślne). Odpowiednik `--duration` w CLI; jak filtr ruchu, brany jest pod uwagę
+  dotychczas - domyślne). Odpowiednik `--duration` w CLI. Jak filtr ruchu, brany jest pod uwagę
   **tylko przy STARCIE** („Zastosuj zmiany” go nie rusza). Wartość zapisuje się w pliku konfiguracji
   i w komendzie reprodukcji.
 
@@ -230,15 +230,15 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 
 **Profile** - gotowe presety **posortowane od najlepszego (góra) do najgorszego (dół)**: Idealna sieć, Dobre WiFi, Sieć 5G, DSL domowy (VDSL), Sieć LTE/4G, Satelita niskoorbitalny, Odległy serwer (inny kontynent), Słabe WiFi, Kawiarnia (zatłoczone WiFi), Zapchane łącze domowe (bufferbloat), Pociąg / metro (tunele), Sieć 3G, Roaming zagraniczny, Satelita geostacjonarny, Wi-Fi w samolocie, Modem 56k, Fatalna sieć - oraz Twoje własne (zapis pod nazwą). Program **startuje zawsze na „Idealnej sieci”** (nic nie jest psute, dopóki sam czegoś nie ustawisz). Presetów wbudowanych nie da się usunąć - przycisk „Usuń” jest wtedy nieaktywny.
 
-Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary istnieją (mediany Ookla dla satelity i sieci komórkowych, prace naukowe o 15-sekundowym przełączaniu Starlinka i o Wi-Fi w samolotach); tam, gdzie takiej liczby nie ma - „słabe WiFi” nie jest wielkością mierzalną - mówi o tym wprost komentarz przy wartości w `beantester/presets.py`. Kilka zasługuje na zdanie:
+Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary istnieją (mediany Ookla dla satelity i sieci komórkowych, prace naukowe o 15-sekundowym przełączaniu Starlinka i o Wi-Fi w samolotach). Tam, gdzie takiej liczby nie ma - „słabe WiFi” nie jest wielkością mierzalną - mówi o tym wprost komentarz przy wartości w `beantester/presets.py`. Kilka zasługuje na zdanie:
 
-- **Satelita niskoorbitalny** - wzorowany na Starlinku. W stanie ustalonym jest dobry (około 40 ms pingu, 100 Mb/s); wyróżnia go przełączanie satelity co 15 sekund, które na chwilę wstrzymuje transmisję i objawia się okazjonalnym skokiem pingu, a nie stratą pakietów.
+- **Satelita niskoorbitalny** - wzorowany na Starlinku. W stanie ustalonym jest dobry (około 40 ms pingu, 100 Mb/s). Wyróżnia go przełączanie satelity co 15 sekund, które na chwilę wstrzymuje transmisję i objawia się okazjonalnym skokiem pingu, a nie stratą pakietów.
 - **Odległy serwer (inny kontynent)** - szybkie łącze, w którym nic nie jest zepsute, tylko jest daleko (~120 ms pingu). To ten preset obnaża gadatliwe protokoły i kod pisany przy założeniu, że serwer stoi obok.
-- **Zapchane łącze domowe (bufferbloat)** - na biegu jałowym wygląda dobrze (20 ms pingu); zakłóceniem jest kolejka. ⚠️ **Gryzie dopiero wtedy, gdy Twoja aplikacja naprawdę nasyci łącze**, bo bufor jest częścią limitera prędkości: przy śladowym ruchu testowym zobaczysz zwykłe 8 Mb/s w dół i 1 Mb/s w górę, i nic poza tym. Nasyć ten 1 Mb/s uploadu, a ping pójdzie w stronę dwóch sekund - to jest przypadek „rozmowa wideo się sypie, gdy ktoś w domu wrzuca backup”.
+- **Zapchane łącze domowe (bufferbloat)** - na biegu jałowym wygląda dobrze (20 ms pingu). Zakłóceniem jest kolejka. ⚠️ **Gryzie dopiero wtedy, gdy Twoja aplikacja naprawdę nasyci łącze**, bo bufor jest częścią limitera prędkości: przy śladowym ruchu testowym zobaczysz zwykłe 8 Mb/s w dół i 1 Mb/s w górę, i nic poza tym. Nasyć ten 1 Mb/s uploadu, a ping pójdzie w stronę dwóch sekund - to jest przypadek „rozmowa wideo się sypie, gdy ktoś w domu wrzuca backup”.
 - **Pociąg / metro (tunele)** - jedyny preset, który kładzie łącze całkowicie na kilka sekund (3 s na każde 30), więc aplikacja musi się **połączyć od nowa**, a nie tylko zwolnić.
 - **Wi-Fi w samolocie** - ten klasyczny, satelitarny: ~750 ms pingu i 7% strat, przy czym to jest zmierzona **mediana**, nie najgorszy przypadek. Samoloty z nowszym sprzętem niskoorbitalnym zachowują się jak „Satelita niskoorbitalny”.
 
-Profil zapisuje to, **jakie jest łącze**: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi; przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
+Profil zapisuje to, **jakie jest łącze**: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi. Przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
 
 W CLI (`--preset`) preset można podać przez **kanoniczne id** albo **nazwę w dowolnym języku UI** (bez rozróżniania wielkości liter i polskich znaków - `"Idealna siec"` też zadziała). Id: `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.dsl`, `presets.lte`, `presets.leo`, `presets.distant`, `presets.weak_wifi`, `presets.cafe`, `presets.bufferbloat`, `presets.metro`, `presets.3g`, `presets.roaming`, `presets.satellite`, `presets.inflight`, `presets.modem56k`, `presets.terrible`.
 
@@ -254,7 +254,7 @@ Działa identycznie w GUI i w CLI (`--target`, `--dst-ip`, `--dst-port`).
 |---|---|---|
 | `a,b,c` | **lista** - pasuje którakolwiek z wartości | `80,443` |
 | `a-b` | **zakres**, oba końce **włącznie** | `8000-8100`, `10.0.0.1-10.0.0.50` |
-| `>` `<` `>=` `<=` | **porównanie** (liczbowo; dla IP po wartości adresu) | `>1024`, `<=80`, `>10.0.0.5` |
+| `>` `<` `>=` `<=` | **porównanie** (liczbowo, dla IP po wartości adresu) | `>1024`, `<=80`, `>10.0.0.5` |
 | `!` | **wykluczenie** - „różne od” | `!53` |
 | `*` `?` | **wildcard** (`*` = dowolny ciąg, `?` = jeden znak) | `chrome*`, `192.168.1.*` |
 | `re:` | **wyrażenie regularne** (Python `re`, bez rozróżniania wielkości liter) | `re:^chrome\.exe$` |
@@ -347,7 +347,7 @@ to dla narzędzia ten sam adres.
 80,443,8000-8100,!8080         mieszanka
 ```
 
-Dozwolony zakres to **0-65535**; `99999` to błąd, a nie ciche pominięcie.
+Dozwolony zakres to **0-65535**. `99999` to błąd, a nie ciche pominięcie.
 
 ### Wyrażenia regularne (`re:`)
 
@@ -378,7 +378,7 @@ re:^ch.{1,8}e\.exe$           BŁĄD - zostanie rozcięte na "re:^ch.{1" i "8}e\
 
 * **`chrome` łapie też `chromedriver`, ale `chrome.exe` już nie.** Goła nazwa to *podciąg*:
   tekst „chrome" występuje w `chromedriver.exe`, ale tekst „chrome.exe" już nie (bo tam jest
-  `chrome` + `driver.exe`). Czyli `chrome.exe` → tylko `chrome.exe`; `chrome` → `chrome.exe`
+  `chrome` + `driver.exe`). Czyli `chrome.exe` → tylko `chrome.exe`. `chrome` → `chrome.exe`
   **i** `chromedriver.exe`.
 * **`chrome*` jest szersze, niż wygląda.** Gwiazdka to „dowolny ciąg", więc `chrome*` łapie
   `chromedriver.exe` dokładnie tak samo jak `chrome`. Chcesz dokładnie jedną aplikację?
@@ -396,7 +396,7 @@ re:^ch.{1,8}e\.exe$           BŁĄD - zostanie rozcięte na "re:^ch.{1" i "8}e\
   Chcesz „albo/albo”? Zostaw drugie pole puste i zrób dwa przebiegi.
 * **`>chrome` to błąd.** Porównania działają na liczbach (PID), nie na nazwach.
 * **`2000-1000` to błąd** (odwrócony zakres), a nie pusty zbiór.
-* **Wildcard nie jest regexem.** W `chrome*` gwiazdka znaczy „dowolny ciąg”; w `re:chrome*`
+* **Wildcard nie jest regexem.** W `chrome*` gwiazdka znaczy „dowolny ciąg”. W `re:chrome*`
   znaczy „litera `e` powtórzona 0+ razy”. Jeśli piszesz `re:`, piszesz regexa.
 
 Każdy błąd składni jest zgłaszany **od razu**: w GUI pole robi się czerwone i pod spodem pojawia się
@@ -428,9 +428,9 @@ Zaprojektowane tak, by po wystąpieniu błędu odtworzyć dokładnie te same war
 - **Co liczą „Efektywne straty”** - jaką część ruchu, w który celujesz, zepsuło **to narzędzie**, licząc **każde** zakłócenie: ustawioną Utratę plus porzucenia z limitu prędkości, blokadę, odcięcie internetu w trybie LAN, przerwy w łączu, zrywanie połączeń, odrzucone SYN-y, odrzucenia z MTU i wygasanie NAT. Gdy ustawisz cel, liczy się wyłącznie jego ruch, więc inne aplikacje nie rozwadniają tej liczby. Pakiety porzucone przez samo **narzędzie** są świadomie pominięte - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” to jego własne awarie, nie zachowanie łącza, i mają osobne liczniki. `effective_loss_pct` w raporcie to ta sama liczba, obok `packets_in_scope`.
 - **Czekanie w kolejce sterownika (szczyt)** - najdłuższy czas, jaki pakiet **już** przeczekał wewnątrz WinDiverta, zanim narzędzie go dostało. To pomiar, nie oszacowanie: sterownik stempluje każdy pakiet czasem przechwycenia, a narzędzie próbkuje to 20 razy na sekundę. Na spokojnej maszynie to ułamek milisekundy (zmierzone tutaj: 0,05-0,16 ms). Gdy rośnie, narzędzie dokłada opóźnienie, którego nie widać w żadnym innym liczniku, bo powstaje w kolejce sterownika przed jego własną - a powyżej 50 ms mówi o tym w logu i na liście zdarzeń. Puste przy `--simulate`, bo tam nie ma sterownika.
 - **To miara tej maszyny, nie internetu.** Narzędzie widzi pakiety przechodzące przez stos sieciowy tego komputera, więc pakiet zgubiony w sieci - odpowiedź, która nie wróciła - nigdy tu nie dociera i nic go tu nie policzy. Czysty ping 30 pakietów, w którym zginie jedna odpowiedź, pokaże w wierszu połączenia **59** pakietów i **zero** porzuceń, i obie liczby są prawdziwe: wyszło 30 żądań, wróciło 29 odpowiedzi, a narzędzie nie zepsuło żadnego. Od straty end-to-end są liczniki samej aplikacji (albo „Lost” w wyniku `ping`).
-- **Zużycie danych** - Pobrano / Wysłano / Razem (MB) narastająco od startu oraz średnia przepustowość sesji; od razu wiesz, ile danych aplikacja zużyła. (W raporcie jest też „próbowano MB” - ile aplikacja chciała przesłać przed odjęciem strat/limitów.)
+- **Zużycie danych** - Pobrano / Wysłano / Razem (MB) narastająco od startu oraz średnia przepustowość sesji. Od razu wiesz, ile danych aplikacja zużyła. (W raporcie jest też „próbowano MB” - ile aplikacja chciała przesłać przed odjęciem strat/limitów.)
 - **Dziennik zdarzeń** ze znacznikami czasu: start, zmiany ustawień, kroki scenariusza, zerwania, oraz Twoje znaczniki błędu - z **sortowaniem** po kliknięciu w nagłówek kolumny.
-- **Zaznacz moment błędu** - kliknij dokładnie gdy zobaczysz błąd; wstawia znacznik z czasem do dziennika.
+- **Zaznacz moment błędu** - kliknij dokładnie gdy zobaczysz błąd. Wstawia znacznik z czasem do dziennika.
 - **Zapisz raport reprodukcji** - jeden plik JSON z kompletem: seed, wszystkie ustawienia, liczniki, metryki, dziennik zdarzeń, połączenia oraz **gotową komendę CLI**, która odtwarza warunki. Zapisuje też **kolejkę WinDiverta, za którą działała sesja** (`session.driver_queue`: długość, czas i rozmiar). To bufor samego sterownika, przed buforem tego narzędzia: przy domyślnych 2000 ms pakiet może w nim poczekać, a to czekanie dokłada się do Twojego opóźnienia, nie pojawiając się w żadnym tutejszym liczniku. Raport z maszyny, której nie masz przed sobą, mówi teraz, za jaką kolejką powstały jego liczby. Te same trzy wartości trafiają do logu przy STARCIE.
 - **Kopiuj komendę CLI** - od razu do schowka: `BeanNetworkTester.exe --seed … --loss … --duration …`
   (komenda dopasowuje się do builda: z repozytorium dostaniesz `python bean_network_tester.py …`).
@@ -499,7 +499,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--latency` | ms | stałe opóźnienie doklejane do każdego pakietu |
 | `--jitter` | ms | losowe wahanie opóźnienia (±) |
 | `--down` `--up` | KB/s | limit przepustowości (0 = bez limitu) |
-| `--buffer` | ms | bufor łącza dla limitu prędkości (0 = bez limitu); ogranicza opóźnienie kolejki, nadmiar leci jako „Odrzuc. przez limit” |
+| `--buffer` | ms | bufor łącza dla limitu prędkości (0 = bez limitu). Ogranicza opóźnienie kolejki, nadmiar leci jako „Odrzuc. przez limit” |
 | `--spike-prob` `--spike-ms` | % / ms | z podanym prawdopodobieństwem doklej dodatkowe opóźnienie |
 | `--syn-drop` | % | procent gubionych pakietów TCP SYN |
 | `--max-size` | B | „czarna dziura MTU” - gub pakiety większe niż N bajtów (0 = wył.) |
@@ -508,7 +508,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cykliczne zrywanie łącza: co ile i na jaki ułamek okresu |
 | `--rate-schedule` | - | zmienna przepustowość: `"czas:pobieranie:wysyłanie,..."` w KB/s, w pętli |
 | `--lan-mode` | - | tryb LAN: odetnij internet (adresy publiczne), zostaw sieć lokalną |
-| `--narrow-filter` | - | wepchnij `--dst-ip`/`--dst-port` do filtra WinDiverta, żeby sterownik w ogóle nie podawał ruchu, którego nie dałoby się popsuć (dużo szybciej przy dużej liczbie pakietów). Tylko przy STARCIE; gdy działa, statystyki i połączenia obejmują wyłącznie zawężony ruch |
+| `--narrow-filter` | - | wepchnij `--dst-ip`/`--dst-port` do filtra WinDiverta, żeby sterownik w ogóle nie podawał ruchu, którego nie dałoby się popsuć (dużo szybciej przy dużej liczbie pakietów). Tylko przy STARCIE. Gdy działa, statystyki i połączenia obejmują wyłącznie zawężony ruch |
 
 **Celowanie** (wszystkie trzy przyjmują pełną [składnię filtrów](#składnia-filtrów-proces--ip--port): listy, zakresy, `!`, `>`, `<`, `>=`, `<=`, wildcardy, `re:`, a `--dst-ip` dodatkowo CIDR)
 
@@ -519,7 +519,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--dst-port` | zdalne porty (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
 | `--filter` | który ruch w ogóle przechwytywać (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
-**Blokowanie (firewall)** - twarde odcięcie (drop) ruchu do wskazanych celów. Blokada działa na **IP LUB port** (puste pole jest pomijane, więc sam `--block-port 443` blokuje 443 do każdego adresu). Ta sama [składnia filtrów](#składnia-filtrów-proces--ip--port) co wyżej; respektuje celowanie w proces (blokuje tylko ruch celu).
+**Blokowanie (firewall)** - twarde odcięcie (drop) ruchu do wskazanych celów. Blokada działa na **IP LUB port** (puste pole jest pomijane, więc sam `--block-port 443` blokuje 443 do każdego adresu). Ta sama [składnia filtrów](#składnia-filtrów-proces--ip--port) co wyżej. Respektuje celowanie w proces (blokuje tylko ruch celu).
 
 | Flaga | Opis | Przykłady |
 |---|---|---|
@@ -539,7 +539,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--scenario PLIK` `--loop` | scenariusz na osi czasu (JSON) i jego zapętlenie |
 | `--seed N` | ziarno losowości - ten sam przebieg da się powtórzyć |
 | `--duration N` | **czas pracy w sekundach** (0 = do Ctrl+C). To samo pole jest w GUI (sekcja „Sesja”) |
-| `--row-limit N` | ustawienie **tylko dla GUI**: maks. wierszy w tabelach (0 = bez limitu; domyślnie 50 000). W samym CLI (bez okna) nic nie robi - jest jedynie zapisywane do pliku konfiguracji i działa dopiero, gdy ten config otworzysz w GUI. Odpowiednik pola „Limit wierszy” |
+| `--row-limit N` | ustawienie **tylko dla GUI**: maks. wierszy w tabelach (0 = bez limitu, domyślnie 50 000). W samym CLI (bez okna) nic nie robi - jest jedynie zapisywane do pliku konfiguracji i działa dopiero, gdy ten config otworzysz w GUI. Odpowiednik pola „Limit wierszy” |
 | `--interval N` | co ile sekund raportować (musi być > 0) |
 | `--log-conns` | wypisz na końcu zaobserwowane połączenia |
 | `--repro-out PLIK` | zapisz raport reprodukcji (JSON) |
@@ -654,7 +654,7 @@ w podpowiedzi nad tym nagłówkiem.
 | `czas[s]` | Sekundy między pierwszym a ostatnim pakietem tego połączenia w tej sesji. |
 | `bezczynne[s]` | Sekundy od ostatniego pakietu. Przestaje rosnąć po zatrzymaniu sesji. |
 
-**Para dostarczone/widziane jest sensem tej tabeli.** Gdy nic nie psujesz, są równe; dołóż stratę
+**Para dostarczone/widziane jest sensem tej tabeli.** Gdy nic nie psujesz, są równe. Dołóż stratę
 albo limit prędkości, a się rozjadą - i **różnica między nimi to szkoda wyrządzona temu połączeniu**.
 (Zanim je rozdzielono, była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi
 dostarczone: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.)
@@ -711,7 +711,7 @@ i `delivered_in_scope_bytes_*`), więc zawężenie możesz zrobić sam i widzisz
 | `driver_wait_peak_ms` | najdłuższe czekanie pakietu w sterowniku, zanim narzędzie go zobaczyło |
 
 Trzy ostatnie liczniki odrzuceń - `dropped_overflow`, `dropped_at_stop`, `dropped_send_failed` -
-to straty **samego narzędzia**, a nie psucie, o które prosiłeś; dlatego są liczone osobno.
+to straty **samego narzędzia**, a nie psucie, o które prosiłeś. Dlatego są liczone osobno.
 
 ### Kolumny CSV połączeń
 
@@ -797,7 +797,7 @@ Wszystkie chodzą w pętli poza `upload-drop-midway.json`, więc można je włą
 
 ### 1. Degradacja łącza w tle testów E2E (GitHub Actions, Windows)
 
-Testy jadą przy 300 ms opóźnienia i 5 % strat; shaper sam się wyłącza po 120 s,
+Testy jadą przy 300 ms opóźnienia i 5 % strat. Shaper sam się wyłącza po 120 s,
 więc żaden „zawieszony” krok nie zostawi zepsutej sieci na agencie.
 
 ```yaml
@@ -831,7 +831,7 @@ więc żaden „zawieszony” krok nie zostawi zepsutej sieci na agencie.
 ```bat
 BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
 ```
-Kod `0` = plik jest poprawny; `3` = jest błąd (z czytelnym komunikatem na stderr).
+Kod `0` = plik jest poprawny. `3` = jest błąd (z czytelnym komunikatem na stderr).
 
 ### 3. Krótki, powtarzalny przebieg z artefaktem
 
@@ -865,10 +865,10 @@ Trzy świadome decyzje builda (nie zmieniaj ich bez potrzeby - każda naprawia r
 
 - **podsystem konsolowy** (a nie `--noconsole`): inaczej exe nie ma `stdout`/`stderr`, a `cmd.exe`
   i PowerShell **nie czekają** na proces GUI - CI nie zobaczyłby ani wyjścia, ani kodu wyjścia.
-  Przy starcie GUI program sam odłącza się od konsoli, więc po dwukliku nie zostaje czarne okno;
+  Przy starcie GUI program sam odłącza się od konsoli, więc po dwukliku nie zostaje czarne okno.
 - **onedir** (a nie `--onefile`): `pydivert` niesie `WinDivert64.sys`, a onefile rozpakowywał go do
   `%TEMP%\_MEIxxxx`. Jądro trzyma otwarty uchwyt do wczytanego `.sys`, więc katalogu **nie dało się
-  skasować** aż do restartu. W wersji katalogowej sterownik leży obok exe, na stałej ścieżce;
+  skasować** aż do restartu. W wersji katalogowej sterownik leży obok exe, na stałej ścieżce.
 - **`asInvoker`** (a nie `--uac-admin`): `requireAdministrator` zawsze tworzy **nowy** proces przy
   elewacji - gubi potoki i kod wyjścia wołającego. Teraz GUI samo prosi o podniesienie uprawnień,
   a CLI kończy się kodem `7` z jasnym komunikatem, gdy uprawnień brakuje (`--simulate` ich nie wymaga).
@@ -923,7 +923,7 @@ Osobno pilnowany jest **kontrakt CLI pod CI/CD**:
 - `tests/test_cli_runtime.py` - kody wyjścia (0/1/3/4/5/6/130/143), dokładność `--duration`
   (nie „do najbliższego raportu”), rozdział stdout/stderr, NDJSON, `-q`/`-v`, `--dry-run`,
   `--print-config`, `--min-packets`, precedencja `--duration` względem pliku konfiguracji.
-  Pętla raportowania dostaje wstrzykiwany zegar, więc testy czasu trwania idą w mikrosekundach;
+  Pętla raportowania dostaje wstrzykiwany zegar, więc testy czasu trwania idą w mikrosekundach.
 - `tests/test_failsafe.py` - sesja sama się zatrzymuje po `duration`, martwy wątek przechwytujący
   powoduje *fail-open* (zwolnienie sterownika = sieć wraca), `_tick` GUI przeżywa wyjątek,
   wątek celowania nigdy nie dotyka tkintera, zamknięcie okna zawsze zwalnia silnik.
@@ -935,7 +935,7 @@ sprawdzenie NDJSON, a na koniec **build `.exe` i smoke zbudowanego pliku** (`--v
 
 ## Struktura projektu
 
-Kod jest podzielony na pakiet `beantester/`; w korzeniu zostaje cienki launcher
+Kod jest podzielony na pakiet `beantester/`. W korzeniu zostaje cienki launcher
 `bean_network_tester.py`, dzięki czemu wszystkie dotychczasowe komendy (README,
 raporty reprodukcji, PyInstaller) działają bez zmian.
 
@@ -992,15 +992,15 @@ BeanNetworkTester.spec   przepis builda (onedir, konsola, asInvoker)
 Rdzeń `BeanCore.decide()` to czysta funkcja decydująca o losie pakietu w kolejności:
 celowanie → tryb LAN → blokada (firewall) → NAT → RST → flapping → MTU → SYN → utrata → uszkodzenie →
 opóźnienie/jitter/skok → limit przepustowości (token bucket z ograniczonym buforem, ew. z harmonogramu) → duplikacja.
-Wątek przechwytujący czyta pakiety i wykonuje decyzję; wątek re-injektujący wysyła je w
+Wątek przechwytujący czyta pakiety i wykonuje decyzję. Wątek re-injektujący wysyła je w
 wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalnie seedowany).
 
 ## Uwagi i ograniczenia
 
-- Modyfikuje ruch pasujący do filtra; do węższych testów użyj „Celuj w proces” lub „Celuj w cel”.
+- Modyfikuje ruch pasujący do filtra. Do węższych testów użyj „Celuj w proces” lub „Celuj w cel”.
 - Ping = ICMP: żeby na niego wpłynąć, wybierz filtr obejmujący ICMP.
 - Limit prędkości słabo widać na pingu (małe pakiety) - testuj pobieraniem pliku.
-- Realne przechwytywanie i wstrzykiwanie RST działa tylko na Windowsie z WinDivert; logikę
+- Realne przechwytywanie i wstrzykiwanie RST działa tylko na Windowsie z WinDivert. Logikę
   potwierdzają testy uruchamiane wszędzie.
 - Narzędzie do testowania własnych aplikacji i sieci.
 
@@ -1054,7 +1054,7 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   połączenie - to, które program otwiera, zanim ma jakiekolwiek gniazdo. Celowanie po **PID** nie
   wraca nigdy, bo tego numeru już nie ma: wszystko po restarcie zostaje nietknięte. W wierszu
   poleceń przebieg mówi o tym w chwili, gdy to zauważy, i na koniec podaje, ile przechwyconego
-  ruchu naprawdę było w zasięgu; w oknie jest to czerwona notka pod polem procesu.
+  ruchu naprawdę było w zasięgu. W oknie jest to czerwona notka pod polem procesu.
 - **Samo wykluczenie obejmuje też wszystko, czego narzędzie nie rozpozna.** `!chrome` w polu procesu
   znaczy „psuj wszystko oprócz chrome" - a „wszystko" obejmuje każde połączenie, którego właściciela
   nie udało się ustalić: procesy chronione, których nie da się otworzyć, oraz - na ścieżce
@@ -1067,7 +1067,7 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
   i wpis w logu), bo „przebieg, w którym nic się nie zepsuło” wygląda identycznie jak „aplikacja
   wytrzymała”.
 - **Goła nazwa procesu to podciąg** - `chrome` łapie też `chromedriver.exe`. To zachowanie
-  zachowane celowo (zgodność ze starymi konfiguracjami); po precyzję sięgnij po `re:^chrome\.exe$`
+  zachowane celowo (zgodność ze starymi konfiguracjami). Po precyzję sięgnij po `re:^chrome\.exe$`
   albo wykluczenie `chrome, !chromedriver`.
 - **Statystyki i Połączenia domyślnie pokazują CAŁY przechwycony ruch** - to, co przepuszcza filtr
   „Ruch do modyfikacji”. Celowanie (proces / IP / port) decyduje wyłącznie o tym, **co zostanie
@@ -1085,10 +1085,10 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
 - **Okno ma maksymalny rozmiar i nie da się go zmaksymalizować** - układ (dwie kolumny + pasek logu)
   przestaje mieć sens rozciągnięty na 4K, więc rozmiar jest ograniczony, a przycisk maksymalizacji
   usunięty.
-- **Czas trwania liczy się od STARTU** - zmiana pola w trakcie sesji nic nie robi (jak filtr ruchu);
+- **Czas trwania liczy się od STARTU** - zmiana pola w trakcie sesji nic nie robi (jak filtr ruchu).
   po osiągnięciu limitu program po prostu robi STOP i zostawia wyniki na ekranie.
 - **STOP porzuca pakiety czekające w kolejce opóźnienia** - koniec sesji jest natychmiastowy.
-  Przy dużym `latency` to widać jako jednorazową „dziurę”; to nie jest błąd.
+  Przy dużym `latency` to widać jako jednorazową „dziurę”. To nie jest błąd.
 - **Awaria w środku sesji zawsze kończy się przywróceniem sieci** - jeśli wątek przechwytujący
   padnie, silnik sam robi STOP i zwalnia sterownik (*fail-open*), zamiast trzymać otwarty uchwyt,
   do którego nikt nie sięga (to była realna droga do „user nagle nie ma internetu”).
@@ -1106,7 +1106,7 @@ wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalni
 ## Współtworzenie
 
 Wkład jest mile widziany. Plik [CONTRIBUTING.md](CONTRIBUTING.md) opisuje, jak uruchomić testy
-i jakich konwencji trzyma się projekt; zajrzyj też do [kodeksu postępowania](CODE_OF_CONDUCT.md).
+i jakich konwencji trzyma się projekt. Zajrzyj też do [kodeksu postępowania](CODE_OF_CONDUCT.md).
 Zgłoszenia błędów i propozycje funkcji idą przez szablony zgłoszeń, a sprawy bezpieczeństwa
 obsługuje prywatnie [polityka bezpieczeństwa](SECURITY.md).
 

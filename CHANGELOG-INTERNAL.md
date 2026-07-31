@@ -57,9 +57,24 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   Writing rules for user-facing text are now in `PROJECT_NOTES` (convention 1b), including the
   measured reason NOT to build a "no code tokens in tooltips" guard: of its 5 hits, 3 are
   legitimate (`re:` is syntax the user types, the CSV names are real filenames).
-  **Known and NOT addressed here:** 12 English and 11 Polish tooltips still use semicolons, which
-  convention 1b now rules out. Sweeping them is a separate change - listed rather than done
-  silently.
+  `fields.narrow_filter` renamed from "Narrow the driver filter to the target" to **"Capture only
+  the targeted traffic"** in both languages, by the same rule: the old label named the mechanism.
+  The `--narrow-filter` flag, the settings key and the config format are untouched.
+
+- **Semicolons swept out of every user-facing text, and the rule is now enforced.** 34 replacements
+  across `lang/en.json` and `lang/pl.json` (21 tooltips plus `dialogs.*` and `errors.*`), and 81
+  lines of prose across both READMEs. Each case was decided individually rather than regexed: a
+  full stop where the semicolon joined two independent clauses (which is what a semicolon is for),
+  a comma only inside a parenthetical aside. **Every rewritten line is the same length as the
+  original**, which is the invariant that proves nothing was mangled - and it caught the one line
+  that was: a Polish bullet with two semicolons got its tail duplicated by the sweep script, fixed
+  by hand.
+  Two new guards, both mutation-verified: `test_i18n.py::test_no_semicolons_in_ui_text` (fails with
+  `['tips.jitter']` when one is put back) and
+  `test_readme_guards.py::test_no_semicolons_in_readme_prose` (fenced blocks, indented blocks and
+  inline code spans are cut out first, because a semicolon there is syntax). Unlike the readability
+  lint rejected above, this one has **no false positives**, which is precisely why it is worth
+  having.
 
 - **`block` added to `FIRST_RUN_COLLAPSED`** (`gui/app.py`), and the list reordered to match form
   order. It only applies when `ui.json` has no saved `collapsed` state, so existing users see no
