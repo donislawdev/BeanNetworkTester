@@ -72,6 +72,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   targeting only a process). While a session is running the line reports what **that session** did,
   not what a restart would do.
 
+- **The Settings window scrolls, so no group can fall off the bottom.** With the new Scope card
+  there was one panel too many for the window: "Behaviour" rendered as a bare header with nothing
+  under it, and there was no scrollbar and no sign that a whole group of preferences was still down
+  there. The window also opens taller. If yours already has a remembered size, it keeps it - the
+  content is reachable either way now.
+
+- **The two Scope checkboxes sit together instead of drifting apart.** A blank line was reserved
+  between them (the space where "locked while a session runs" appears for the capture switch), which
+  pushed a pair you are meant to read together far enough apart to look like two unrelated settings.
+  The explanation lines now sit below both. The red "this destination cannot be narrowed" note is
+  shorter too - it no longer repeats the list of forms that do not work, which the checkbox's own
+  tooltip already spells out.
+
 - **The window now says whether "Capture only the targeted traffic" actually worked.** The option
   quietly does nothing when the destination cannot be turned into a driver filter - a wildcard, an
   `re:` pattern, only a process target, or no destination at all - and since capturing everything

@@ -333,7 +333,7 @@
   "presets.satellite": "Satellite (geostationary)",
   "presets.terrible": "Terrible network",
   "presets.weak_wifi": "Weak WiFi",
-  "scope.narrow_has_no_effect": "This destination cannot be pushed down into the driver, so the capture covers everything the traffic filter passes. A plain address, a list, a range or a CIDR works. A wildcard, an re: pattern or targeting only a process does not.",
+  "scope.narrow_has_no_effect": "This destination cannot be pushed down into the driver, so the option changes nothing - the capture covers everything the traffic filter passes. A plain address, a list, a range or a CIDR works.",
   "scope.narrow_works": "This destination can be pushed down into the driver, so the capture will cover it only.",
   "session.avg_rate": "Avg throughput",
   "session.capture": "Capture",

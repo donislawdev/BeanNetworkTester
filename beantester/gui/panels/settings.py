@@ -29,6 +29,7 @@ from ..form import ControlForm
 from ..labels import wrapping_label
 from ..prefs import ACTION, BOOL, NUMBER, PREF_GROUPS, PREFS_BY_KEY, prefs_in_section
 from ..scaling import scaled
+from ..scrollable import ScrollableFrame
 from ..theme import popdown_height, unhighlight_combobox
 from ..tooltip import add_tooltip
 from ..windows import PanelWindow, register_window
@@ -41,7 +42,16 @@ class SettingsWindow(PanelWindow):
 
     ID = "settings"
     TITLE = "windows.settings"
-    SIZE = (520, 520)
+    # Grown from 520x520 when the Scope card arrived. Height is the binding
+    # dimension: reserving the footer (below) means the CONTENT is what runs out
+    # of room, so a card too many simply pushed the last group off the bottom -
+    # the Behaviour panel rendered as a bare header with nothing under it.
+    # The size alone is not the fix, and cannot be: a saved geometry is restored
+    # in preference to it (PanelWindow._restore_geometry), so anyone who has
+    # opened this window before keeps the old one. The scroller below is what
+    # makes the content reachable at ANY height - this just means it usually
+    # does not have to.
+    SIZE = (560, 620)
 
     def build(self, body):
         pad = scaled(12)
@@ -55,6 +65,15 @@ class SettingsWindow(PanelWindow):
         foot = ttk.Frame(body)
         foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
         ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
+
+        # ...and what runs out of room now scrolls instead of vanishing. Reserving
+        # the footer protects the Close button and nothing else: everything above
+        # it was simply cut off at the window edge, with no scrollbar and no hint
+        # that a whole group of preferences was still down there. This window grows
+        # with every preference added, in every language, at every DPI, so the
+        # height can only be right by accident - the scroller makes it not matter.
+        self.scroll = ScrollableFrame(body)
+        body = self.scroll.body
 
         self._pref_vars = {}
         self._pref_entries = {}

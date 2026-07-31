@@ -190,6 +190,37 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   already promised what the code now delivers, and the second is only ever shown for `ALL`, where
   every word of it is true.
 
+- **Two layout defects the Scope card exposed, both structural rather than cosmetic.** Reported from
+  a screenshot; neither was visible to any existing test.
+  1. **`ControlForm` built section bodies as fields -> note -> error -> extra.** The note is packed
+     EMPTY and kept mapped on purpose (a `start_only` or `overridden_by` section must not jump when
+     the reason text appears mid-session), so it reserves a blank line wherever it sits - and it sat
+     between the registry field and everything the extra added. In the Scope card that wedged a
+     blank line between the two checkboxes that exist to be read as a pair. The extra now runs
+     BEFORE the note: content first, commentary after. **Only `scope` changes today** - it is the
+     only extra-bearing section with a `start_only` or overridden field (checked against the
+     registry, not assumed), and the error label was never affected because it is created here but
+     PACKED later, and `pack` appends, so it already landed below the extra everywhere.
+  2. **`SettingsWindow` had no scroller.** The footer is packed first so the CONTENT is what runs
+     out of room, which meant one card too many pushed the last preference group off the bottom
+     edge - "Behaviour" rendered as a bare header, with no scrollbar and no hint anything was
+     missing. Body is now a `ScrollableFrame` (the Control page's proven combination: `ControlForm`
+     + `CollapsibleSection` + a combobox inside a scroller), with Close deliberately OUTSIDE it.
+     `SIZE` 520x520 -> 560x620, and the comment says why that is not the fix: `_restore_geometry`
+     prefers a saved geometry, so anyone who has opened this window keeps the old size. The height
+     of this window can only ever be right by accident - it grows with every preference, in two
+     languages, at every DPI.
+  `scope.narrow_has_no_effect` shortened in both languages (EN 230 -> 194, PL 214 -> 176 chars):
+  three red sentences under a checkbox is the wall convention 1b exists to prevent, and the third
+  listed the forms that do NOT work, which `tips.narrow_filter` already spells out. The positive
+  half carries the same information and is the actionable one.
+  New guards: `test_nothing_is_wedged_between_the_two_scope_checkboxes` (walks the card's children
+  and asserts the pref checkbox is the NEXT one after the field checkbox, and that the reserved note
+  is still present, below both) and `test_the_settings_window_can_reach_every_group_at_any_height`
+  (every section and the last pref group's rows descend from the scroller, Close does not). Four
+  mutants, all caught: the extra moved back after the note, the scroller removed, the groups built
+  outside it, and Close moved inside it.
+
 - **`App._log_capture_scope()`: the start-time narrowing verdict reaches the GUI log, both ways.**
   `cli._run_session` has reported this since the option shipped (`log.info` on success,
   `log.warn` on "asked for and did not get it"); the GUI passed `narrow=` to `engine.start()` and

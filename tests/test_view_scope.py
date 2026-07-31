@@ -443,6 +443,102 @@ def test_an_incomplete_wording_table_is_refused_when_the_page_is_imported():
         raise AssertionError("a table with an unknown state was accepted")
 
 
+def test_nothing_is_wedged_between_the_two_scope_checkboxes():
+    """They are a pair, so nothing may sit in the gap between them.
+
+    What did: ``narrow_filter`` is ``start_only``, and ControlForm reserves an
+    EMPTY, permanently-mapped note line for such a section (so the panel does not
+    jump when the field locks mid-session). The extra builder ran after it, so the
+    blank line landed between the two checkboxes and pushed them visibly apart -
+    which is how a pair reads as two unrelated settings. Content now comes before
+    the commentary.
+    """
+    run_gui("""
+        panel = app.open_window("settings")
+        card = panel.form.sections["scope"].body
+        kids = list(card.winfo_children())
+
+        def index_of(predicate):
+            for i, w in enumerate(kids):
+                if predicate(w):
+                    return i
+                for sub in w.winfo_children():
+                    if predicate(sub):
+                        return i
+            return -1
+
+        capture = index_of(lambda w: w is panel.form.entries["narrow_filter"])
+        view = index_of(lambda w: w.kw.get("text") == bnt.T("prefs.scope_view"))
+        assert capture >= 0 and view >= 0, (capture, view, len(kids))
+        assert view == capture + 1, (
+            "something sits between the two scope checkboxes: "
+            + repr([getattr(w, "kw", {}).get("text") for w in kids[capture:view + 1]]))
+
+        # ...and the reserved note is still there, just below both of them
+        note = panel.form.notes.get("scope")
+        assert note is not None, "the start-only note went missing"
+        assert kids.index(note) > view, (kids.index(note), view)
+    """)
+
+
+def test_the_settings_window_can_reach_every_group_at_any_height():
+    """The Behaviour group used to render as a bare header with nothing under it.
+
+    The footer is packed first on purpose, so the CONTENT is what runs out of
+    room - which meant a card too many pushed the last group off the bottom edge,
+    with no scrollbar and no sign that anything was missing. The window grows with
+    every preference, in two languages, at every DPI, so its height can only be
+    right by accident.
+    """
+    run_gui("""
+        panel = app.open_window("settings")
+        assert getattr(panel, "scroll", None) is not None, "the body does not scroll"
+
+        # every group is built inside the scrolled body, not the raw window body
+        def descends_from(widget, ancestor):
+            while widget is not None:
+                if widget is ancestor:
+                    return True
+                widget = getattr(widget, "master", None)
+            return False
+
+        for section in panel.form.sections.values():
+            assert descends_from(section.body, panel.scroll.body), section
+
+        def find_text(widget, text):
+            if widget.kw.get("text") == text:
+                return widget
+            for sub in widget.winfo_children():
+                found = find_text(sub, text)
+                if found is not None:
+                    return found
+            return None
+
+        # The LAST group is the one that fell off the bottom edge. Checked by its
+        # ROWS rather than its header: a CollapsibleSection carries its title
+        # itself, so there is no `text` widget to find for the group name.
+        for key in ("prefs.confirm_close", "prefs.restore_profile", "prefs.reset_layout"):
+            found = find_text(panel.body, bnt.T(key))
+            assert found is not None, key
+            assert descends_from(found, panel.scroll.body), f"{key} is outside the scroller"
+
+        # ...but Close stays OUT of it. It is the way to shut the window, so it
+        # must never be the thing that scrolled away.
+        def find_close(widget):
+            if widget.kw.get("text") == bnt.T("buttons.close"):
+                return widget
+            for sub in widget.winfo_children():
+                found = find_close(sub)
+                if found is not None:
+                    return found
+            return None
+
+        close = find_close(panel.body)
+        assert close is not None, "the Close button is gone"
+        assert not descends_from(close, panel.scroll.body), "Close can scroll out of view"
+    """)
+
+
 def test_the_scope_card_answers_before_the_session_starts():
     """Ticking the box is a REQUEST, and the answer used to arrive only after a
     start - as a log line, in a window you may not be looking at.
