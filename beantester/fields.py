@@ -109,6 +109,17 @@ FIELD_DEFS = (
     Field("jitter", NUMBER, "fields.jitter", "latency", unit="ms",
           bounds=MS, tip="tips.jitter", in_profile=True, preset_key="jit",
           cli="jitter"),
+    # A spike IS latency - an occasional large one - so it belongs next to the
+    # steady value and the jitter around it, not among the NAT/connection knobs
+    # it used to sit with. Nothing outside this registry knew where they lived:
+    # every other reader (core, settings, summary, repro, presets, the GUI's
+    # variable wiring) goes by the field KEY.
+    Field("spike_prob", NUMBER, "fields.spike_prob", "latency", unit="%",
+          bounds=PCT, width=6, tip="tips.spike", in_profile=True,
+          cli="spike-prob"),
+    Field("spike_ms", NUMBER, "fields.spike_ms", "latency", unit="ms",
+          bounds=MS, width=8, tip="tips.spike", in_profile=True,
+          cli="spike-ms"),
 
     # -- impairments ------------------------------------------------------- #
     Field("loss", NUMBER, "fields.loss", "impairments", unit="%",
@@ -152,12 +163,6 @@ FIELD_DEFS = (
     Field("max_size", NUMBER, "fields.max_size", "advanced",
           unit_key="fields.unit_b_off", bounds=(0.0, 65535.0), width=8,
           tip="tips.mtu", cli="max-size"),
-    Field("spike_prob", NUMBER, "fields.spike_prob", "advanced", unit="%",
-          bounds=PCT, width=6, tip="tips.spike", in_profile=True,
-          cli="spike-prob"),
-    Field("spike_ms", NUMBER, "fields.spike_ms", "advanced", unit="ms",
-          bounds=MS, width=8, tip="tips.spike", in_profile=True,
-          cli="spike-ms"),
     Field("nat_timeout", NUMBER, "fields.nat_timeout", "advanced",
           unit_key="fields.unit_s_off", bounds=SECONDS, width=6,
           tip="tips.nat", cli="nat-timeout"),
@@ -245,14 +250,14 @@ SECTIONS = (
     Section("target_process", "frames.target_process", ("target",),
             columns=1, extra="target"),
     Section("speed_limit", "frames.speed_limit", ("down", "up", "buffer"), columns=2),
-    Section("latency", "frames.latency", ("latency", "jitter"), columns=2),
+    Section("latency", "frames.latency",
+            ("latency", "jitter", "spike_prob", "spike_ms"), columns=2),
     Section("impairments", "frames.impairments", ("loss", "corrupt", "dup"), columns=3),
     Section("flapping", "frames.flapping", ("flap_period", "flap_down"), columns=2),
     Section("destination", "frames.destination", ("dst_ip", "dst_port"), columns=1),
     Section("block", "frames.block", ("block_ip", "block_port"), columns=1),
     Section("advanced", "frames.advanced",
-            ("syn_drop", "max_size", "spike_prob", "spike_ms",
-             "nat_timeout", "rst_prob", "rst_cooldown"),
+            ("syn_drop", "max_size", "nat_timeout", "rst_prob", "rst_cooldown"),
             columns=2, extra="advanced"),
     Section("schedule", "frames.schedule", ("rate_schedule",), columns=1),
     Section("session", "frames.session", ("duration",), columns=1),

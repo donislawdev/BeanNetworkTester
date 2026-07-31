@@ -15,6 +15,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   validated too: it has to be a number of seconds and it only means something next to an `action`.
   A file that was correct keeps working; one that was quietly half-working will now tell you where.
 
+### Changed
+
+- **"Spike chance" and "Spike size" moved from "Advanced (NAT / connections)" to
+  "Latency (ping)".** A spike is latency - an occasional large one - so it now sits next to the
+  steady value and the jitter around it, instead of among the NAT and connection knobs. Nothing
+  about how it works changed, and neither did its `--spike-prob` / `--spike-ms` flags or its place
+  in a saved profile.
+
 ### Added
 
 - **The README documents three things it never did**, in both languages:
