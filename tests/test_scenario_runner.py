@@ -81,6 +81,36 @@ def test_runner_applies_each_step_and_fires_reset_events(spy_apply):
           any(kind == "SCENARIO" for kind, _ in engine.events), f"({engine.events})")
 
 
+def test_the_runner_fires_exactly_the_actions_the_validator_accepts(spy_apply):
+    """The runner reads ``scenario.ACTIONS`` instead of listing the names again.
+
+    It used to carry its own copy of the tuple, one module away from the
+    validator that decides which names are legal. The two agreeing was a
+    coincidence maintained by hand, and the failure mode is silent in both
+    directions: an action dropped from ``ACTIONS`` would keep working here long
+    after the file that declares it stopped accepting it, and one added there
+    would validate fine and then do nothing.
+    """
+    from beantester.scenario import ACTIONS
+
+    def run(action):
+        class OneAction(FakeScenario):
+            def events_between(self, prev_t, t):
+                if prev_t < 0.1 <= t:
+                    yield (0.1, {"action": action, "duration": 1.5})
+        engine = FakeEngine()
+        runner = ScenarioRunner(engine)
+        runner.start(OneAction(loop=False, duration=0.3), base_settings={})
+        _join(runner)
+        return engine.resets
+
+    for action in ACTIONS:
+        check(f"the runner honours {action!r}", run(action) == [1.5],
+              f"({run(action)})")
+    check("the runner ignores a name the validator would reject",
+          run("reset_now") == [], "(reset_now is no longer an action)")
+
+
 def test_a_change_is_applied_only_when_the_settings_actually_change(spy_apply):
     class Constant(FakeScenario):
         def settings_at(self, t, base):

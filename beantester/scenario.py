@@ -11,7 +11,10 @@ import json
 from .i18n import translate
 from .settings import DEFAULT_SETTINGS
 
-ACTIONS = ("reset_tcp", "reset_now")      # "reset_now" = the pre-1.3 spelling
+# The actions a step may carry. ``scenario_runner`` reads THIS tuple rather than
+# listing them again - it used to carry its own copy, which would have accepted a
+# name the validator here rejects.
+ACTIONS = ("reset_tcp",)
 MAX_STEPS = 1000
 
 # Everything a step and a file may contain. Anything else is a typo, and a typo
