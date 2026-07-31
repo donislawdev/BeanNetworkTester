@@ -104,6 +104,63 @@ def test_both_readmes_list_every_preset_id():
               not (found - ids), f"(stale: {sorted(found - ids)})")
 
 
+def test_both_readmes_document_every_csv_column():
+    """The two CSV headers are registries with a hand-typed mirror in the docs.
+
+    A CSV column nobody documented is worse than an undocumented GUI column: the
+    GUI has a tooltip on every header, a CSV has nothing but the word itself, and
+    the connections export deliberately does NOT reuse the table's labels
+    (``impaired`` for "impaired?", ``delivered_down_bytes`` for "down[KB]").
+    """
+    from beantester.gui.app import App
+    names = set(App.CONN_CSV_HEADER)
+    names |= {App.CSV_COLUMNS.get(k, k) for k in App.CSV_COLUMNS}
+    for readme in READMES:
+        text = _read(readme)
+        missing = sorted(n for n in names if n not in text)
+        check(f"{readme} documents every CSV column", not missing,
+              f"(missing: {missing})")
+
+
+def test_both_readmes_document_every_connections_column():
+    """Same rule for the table itself: 17 columns, all sortable, all explained.
+
+    The check is on the i18n LABEL rather than the internal key, because the
+    label is what the reader sees in the app and has to find in the docs.
+    """
+    import json
+    import os as _os
+    from beantester.gui.pages.conns import COLUMNS
+    for readme, lang in zip(READMES, ("en", "pl")):
+        with open(_os.path.join(ROOT, "lang", f"{lang}.json"), encoding="utf-8") as f:
+            names = json.load(f)
+        text = _read(readme)
+        missing = sorted(names[key] for key in COLUMNS.values()
+                         if names[key] not in text)
+        check(f"{readme} documents every Connections column", not missing,
+              f"(missing: {missing})")
+
+
+def test_both_readmes_list_every_scenario_action_and_shipped_file():
+    """The action list is two entries and the shipped set is seven files; both are
+    exactly the kind of thing that grows once and is never written down."""
+    import glob
+    import os as _os
+    from beantester.scenario import ACTIONS, FILE_KEYS, STEP_KEYS
+    files = sorted(_os.path.basename(p)
+                   for p in glob.glob(_os.path.join(ROOT, "scenarios", "*.json")))
+    for readme in READMES:
+        text = _read(readme)
+        for name, items in (("action", ACTIONS), ("step key", STEP_KEYS),
+                            ("file key", FILE_KEYS)):
+            missing = [i for i in items if f"`{i}`" not in text]
+            check(f"{readme} documents every scenario {name}", not missing,
+                  f"(missing: {missing})")
+        missing_files = [f for f in files if f not in text]
+        check(f"{readme} describes every shipped scenario", not missing_files,
+              f"(missing: {missing_files})")
+
+
 def test_polish_readme_pipeline_keeps_lan_and_blocking():
     """The regression that happened: the PL brief skipped LAN mode and blocking."""
     sec = _section(_read("README.pl.md"), "Jak to działa")

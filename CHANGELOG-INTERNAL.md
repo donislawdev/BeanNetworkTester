@@ -17,6 +17,42 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### BREAKING
+
+- **BREAKING:** **`scenario.py` validates the keys it always accepted silently.** New `STEP_KEYS`
+  and `FILE_KEYS` registries; an unknown key in a step or at the file level raises a translated
+  error naming it, exactly as an unknown `settings` name already did. `duration` is validated as a
+  number `>= 0` and rejected without an `action`.
+  The bug this closes was a SILENT one, which is why it was worth a breaking change: `duration`
+  reached the engine as `float(step.get("duration", 3.0))` straight off the unvalidated dict, so a
+  string raised on the SCENARIO THREAD (killing the timeline mid-run while the session carried on,
+  looking exactly like a file being ignored) and a misspelling fell back to 3 s. Same shape for
+  `"lop"` instead of `"loop"`. Touches a frozen on-disk format (`PROJECT_NOTES`, "Kontrakty
+  publiczne"), so it needs the owner's version bump.
+  New i18n keys in both files: `errors.scenario_unknown_key`, `errors.scenario_unknown_file_key`,
+  `errors.scenario_step_duration`, `errors.scenario_duration_without_action`.
+  Tests (`test_settings_config_scenario.py`): `::test_a_scenario_step_rejects_a_bad_duration`,
+  `::test_a_scenario_step_rejects_a_duration_with_nothing_to_apply_to`,
+  `::test_a_misspelled_scenario_key_is_an_error_not_a_silent_default` - the last one asserts the
+  offending key is NAMED in the message, since "invalid scenario" without a name would leave the
+  user hunting. Verified by mutation: disabling the two checks turns all three red.
+
+### Docs
+
+- **Three registries gained a documented mirror, and a guard to keep it honest.** The scenario
+  format, both CSV headers and the 17 Connections columns were undocumented in both READMEs; the
+  column meanings existed only as GUI tooltips (`tips.col_*`), and the CSV headers existed nowhere
+  but the code. New guards in `test_readme_guards.py`:
+  `::test_both_readmes_document_every_csv_column` (over `App.CONN_CSV_HEADER` and
+  `App.CSV_COLUMNS`), `::test_both_readmes_document_every_connections_column` (over
+  `conns.COLUMNS`, checked by i18n LABEL, since the label is what a reader has to find), and
+  `::test_both_readmes_list_every_scenario_action_and_shipped_file` (over `ACTIONS`, `STEP_KEYS`,
+  `FILE_KEYS` and the actual `scenarios/*.json` set).
+  The CSV guard **failed on its first run and caught a real gap** - the docs abbreviated
+  `delivered_in_scope_bytes_down / ..._up`, so the second name appeared nowhere - and
+  `test_cli_docs.py::test_no_stale_app_flags_in_readmes` caught the new prose writing a literal
+  `--flag` that no parser has. Both are the guards working before the commit, not after.
+
 ### CI
 
 - **CI and the release build run on Python 3.14 only.** The test matrix dropped `3.10` and `3.13`

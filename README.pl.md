@@ -51,6 +51,9 @@ go potrzebuje.
 - [Statystyki (co znaczą liczniki)](#statystyki-co-znaczą-liczniki)
 - [Plik konfiguracji (wspólny GUI + CLI)](#plik-konfiguracji-wspólny-gui--cli)
 - [Tryb wiersza poleceń (CLI)](#tryb-wiersza-poleceń-cli)
+- [Kolumny w Połączeniach](#kolumny-w-połączeniach)
+- [Eksporty CSV](#eksporty-csv)
+- [Format pliku scenariusza](#format-pliku-scenariusza)
 - [Przepisy pod CI/CD](#przepisy-pod-cicd)
 - [Zbudowanie pliku .exe](#zbudowanie-pliku-exe)
 - [Co może zaskoczyć (przeczytaj, zanim zgłosisz błąd)](#co-może-zaskoczyć-przeczytaj-zanim-zgłosisz-błąd)
@@ -621,6 +624,170 @@ jest **walidowany** - losowy JSON kończy się czytelnym błędem, a nie „scen
 
 Każdy przebieg CLI kończy się wypisaniem **efektywnego seeda** i gotowej komendy do odtworzenia,
 a `--repro-out plik.json` zapisuje pełny raport reprodukcji.
+
+## Kolumny w Połączeniach
+
+Siedemnaście kolumn, każda sortowalna kliknięciem w nagłówek i każda z tym samym wyjaśnieniem
+w podpowiedzi nad tym nagłówkiem.
+
+| kolumna | co zawiera |
+|---|---|
+| `proces` | Proces będący właścicielem portu lokalnego. `?` znaczy, że nazwy nie udało się ustalić - uruchom jako Administrator. |
+| `PID` | Identyfikator procesu właściciela portu lokalnego, ustalony w chwili przechwycenia pakietu. |
+| `protokół` | Protokół transportowy: TCP / UDP / ICMP / IP. |
+| `zdalne IP` | Adres, z którym rozmawia ta maszyna. Prawy klik na wierszu zawęża psucie do niego. |
+| `zd.port` | Port po drugiej stronie (443 = HTTPS, 53 = DNS, 80 = HTTP). Pusty dla ruchu bez portów, np. pinga. |
+| `lok.port` | Port na tej maszynie - to on wiąże połączenie z procesem. Pusty dla ping/ICMP, dlatego te wiersze zwykle nie mają nazwy procesu. |
+| `pakiety` | Pakiety zobaczone na tym połączeniu, odkąd się pojawiło. |
+| `psute?` | Czy połączenie było **w zasięgu psucia** w tej sesji - psute, a nie tylko obserwowane. Zostaje na `tak` po zamknięciu połączenia, jako zapis. Bez ustawionego celowania wszystko jest w zasięgu. |
+| `odrzucone` | Pakiety odrzucone na tym połączeniu przez aktywne zakłócenia (strata, przerwa w łączu, tryb LAN, resety, ...). |
+| `pobrane[KB]` | Dane, które **naprawdę dotarły** do aplikacji - tyle pobrała. To ta sama wielkość, którą panel sesji nazywa „Pobrano (MB)". |
+| `wysłane[KB]` | Dane, które **naprawdę wyszły** z tej maszyny - tyle aplikacja wysłała. |
+| `razem[KB]` | Dostarczone pobieranie + dostarczone wysyłanie. |
+| `pobr. widz.[KB]` | Dane **przechwycone** na wejściu, przed psuciem - tyle połączenie zaoferowało. |
+| `wys. widz.[KB]` | Dane **przechwycone** na wyjściu - tyle aplikacja próbowała wysłać. |
+| `śr.[B]` | Średni rozmiar pakietu na tym połączeniu (bajty / pakiety). |
+| `czas[s]` | Sekundy między pierwszym a ostatnim pakietem tego połączenia w tej sesji. |
+| `bezczynne[s]` | Sekundy od ostatniego pakietu. Przestaje rosnąć po zatrzymaniu sesji. |
+
+**Para dostarczone/widziane jest sensem tej tabeli.** Gdy nic nie psujesz, są równe; dołóż stratę
+albo limit prędkości, a się rozjadą - i **różnica między nimi to szkoda wyrządzona temu połączeniu**.
+(Zanim je rozdzielono, była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi
+dostarczone: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.)
+
+## Eksporty CSV
+
+Dwa przyciski zapisują dwa pliki i **celowo zachowują się inaczej**. Oba lądują obok pliku
+wykonywalnego (albo w korzeniu projektu przy uruchomieniu ze źródeł).
+
+| | **Statystyki** („Eksportuj CSV", Statystyki → Na żywo) | **Połączenia** („Eksportuj połączenia CSV") |
+|---|---|---|
+| plik | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
+| tryb | **Dopisuje** wiersz przy każdym kliknięciu - log, z którego zrobisz wykres przez wiele przebiegów | **Nadpisuje** - migawka tabeli w obecnym stanie |
+| zapis | atomowy (plik tymczasowy + podmiana), więc padnięcie w trakcie go nie utnie | tak samo |
+| Twoje szukanie / sortowanie | nie dotyczy | **respektuje** - plik zgadza się z tym, na co patrzyłeś |
+| „Pokazuj tylko ruch celu" | **celowo ignoruje** - patrz niżej | **respektuje** |
+| pole „Limit wierszy" | nie dotyczy | **ignoruje** - eksportuje wszystkie odfiltrowane wiersze, nie tylko narysowane |
+| zmiana kolumn między wersjami | stary plik dostaje nazwę ze znacznikiem czasu i zaczyna się nowy, więc wiersze nigdy nie rozjadą się pod nieaktualnym nagłówkiem | nie dotyczy |
+
+Statystyczny CSV nie idzie za przełącznikiem „tylko ruch celu", bo jest logiem dopisywanym: plik,
+w którym kolumny znaczą co innego w jednych wierszach niż w drugich, jest gorszy niż bezużyteczny
+dla arkusza, dla którego istnieje. Zamiast tego niesie **obie** sumy (`bytes_in`/`bytes_out`
+i `delivered_in_scope_bytes_*`), więc zawężenie możesz zrobić sam i widzisz, co jest czym.
+
+### Kolumny statystycznego CSV
+
+`time` plus każdy licznik, w tej kolejności:
+
+| kolumna | znaczenie |
+|---|---|
+| `time` | czas zegarowy kliknięcia |
+| `packets_seen` | przechwycone pakiety |
+| `packets_in_scope` | z tego te, które celowanie wybrało do psucia |
+| `dropped_loss` | odrzucone przez ustawienie Strata |
+| `dropped_overflow` | odrzucone, bo kolejka samego narzędzia była pełna |
+| `corrupted` | pakiety z przekłamaną zawartością |
+| `duplicated` | dołożone kopie |
+| `dropped_syn` | odrzucone SYN-y TCP („połączenia, które się nie otwierają") |
+| `dropped_mtu` | odrzucone za przekroczenie maksymalnego rozmiaru (czarna dziura MTU) |
+| `dropped_nat` | odrzucone, bo mapowanie NAT wygasło |
+| `dropped_rst` | ruch pochłonięty, gdy połączenie było trzymane po resecie |
+| `dropped_lan` | odrzucone przez tryb LAN (internet odcięty, sieć lokalna żyje) |
+| `dropped_block` | odrzucone przez blokadę (firewall) |
+| `dropped_link_outage` | odrzucone w trakcie przerwy w łączu (flapping) |
+| `dropped_rate_limit` | odrzucone przez pełny bufor limitu prędkości |
+| `dropped_at_stop` | zakolejkowane pakiety porzucone przy zatrzymaniu sesji |
+| `dropped_send_failed` | sterownik odmówił ich ponownego wstrzyknięcia |
+| `connections_reset` | faktycznie zerwane połączenia |
+| `rst_sent` | pakiety RST, które dotarły do stosu |
+| `bytes_in` / `bytes_out` | bajty dostarczone, cały przechwycony ruch |
+| `bytes_in_total` / `bytes_out_total` | bajty przechwycone, przed psuciem |
+| `delivered_in_scope_bytes_down` / `delivered_in_scope_bytes_up` | bajty dostarczone, tylko ruch celowany |
+| `queue_len` / `queue_peak` | pakiety czekające w kolejce opóźnienia, teraz i w szczycie |
+| `driver_wait_peak_ms` | najdłuższe czekanie pakietu w sterowniku, zanim narzędzie go zobaczyło |
+
+Trzy ostatnie liczniki odrzuceń - `dropped_overflow`, `dropped_at_stop`, `dropped_send_failed` -
+to straty **samego narzędzia**, a nie psucie, o które prosiłeś; dlatego są liczone osobno.
+
+### Kolumny CSV połączeń
+
+Te same wiersze co w tabeli, ale **nagłówki nie są etykietami z tabeli** - rozwijają to, co tabela
+skraca:
+
+| kolumna CSV | kolumna tabeli |
+|---|---|
+| `process`, `pid`, `proto`, `remote_ip`, `remote_port`, `local_port`, `packets` | to samo, bez skrótów |
+| `impaired` | `psute?` (`yes` / `no`) |
+| `dropped` | `odrzucone` |
+| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `pobrane[KB]`, `wysłane[KB]`, `razem[KB]` - **tutaj w bajtach, nie kilobajtach** |
+| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `pobr. widz.[KB]`, `wys. widz.[KB]` (plus ich suma) |
+| `avg_bytes` | `śr.[B]` |
+| `duration_s`, `idle_s` | `czas[s]`, `bezczynne[s]` |
+
+## Format pliku scenariusza
+
+Scenariusz to oś czasu: lista kroków, każdy z czasem w sekundach i tym, co ma się wtedy stać. Plik
+jest JSON-em - obiektem albo gołą listą kroków:
+
+```json
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 20, "jitter": 15, "loss": 1, "down": 1024, "up": 256 } },
+    { "at": 20, "settings": { "loss": 3, "down": 512 } },
+    { "at": 45, "action": "reset_tcp", "duration": 5 },
+    { "at": 60, "settings": { "loss": 0, "flap_period": 0 } }
+  ]
+}
+```
+
+**Poziom pliku**
+
+| klucz | znaczenie |
+|---|---|
+| `steps` | wymagany - lista kroków. Goła lista `[ ... ]` na najwyższym poziomie też działa i znaczy `loop: false`. |
+| `loop` | opcjonalny, domyślnie `false`. Odtwarza oś czasu w kółko, wracając do zera po `at` OSTATNIEGO kroku. |
+
+**Poziom kroku** - krok musi mieć `settings`, `action` albo oba. Krok, który nie ma ani jednego, to
+błąd, a nie pauza.
+
+| klucz | znaczenie |
+|---|---|
+| `at` | wymagany - sekundy od startu sesji (`>= 0`). Kroki są po nim sortowane, więc ich kolejność w pliku nie ma znaczenia. |
+| `settings` | **częściowy** obiekt ustawień. **Kumulatywny**: każdy krok nakłada łatkę na stan zostawiony przez poprzednie, więc wartość trwa, dopóki któryś późniejszy krok jej nie zmieni. |
+| `action` | `reset_tcp` - zrywa w tym momencie połączenia TCP będące w zasięgu. `reset_now` to pisownia sprzed 1.3 i nadal działa. **To jedyne dwie akcje.** |
+| `duration` | ile sekund reset trzyma połączenia zerwane (domyślnie `3`). Ma sens wyłącznie razem z `action`. |
+
+**Jakie nazwy wchodzą do `settings`** - dowolne ustawienie, jakie ma narzędzie, pod **tą samą nazwą
+co w pliku konfiguracji** (czyli jej flaga wiersza poleceń z myślnikami zamienionymi na podkreślenia): `loss`,
+`latency`, `jitter`, `down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`,
+`target`, `rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `seed` i reszta.
+`--print-config` wypisuje pełny zestaw nazw wraz z bieżącymi wartościami.
+
+**Wszystko jest sprawdzane przy wczytaniu, a pomyłka sama się nazywa.** Nieznane ustawienie,
+nieznana akcja, nieznany klucz, `duration` nie będące liczbą, krok, który nic nie robi, lista pusta
+albo dłuższa niż **1000** kroków - każde kończy się komunikatem wskazującym numer kroku. To ważniejsze,
+niż brzmi: źle wpisany klucz był wcześniej **niemy**, więc `"duraton"` po cichu zostawiał reset na
+domyślnych 3 sekundach, a `"lop"` po cichu wyłączał pętlę - i w obu przypadkach wyglądało to tak,
+jakby narzędzie ignorowało plik.
+
+Kroki nakłada zegar tykający **co 0,1 s**, więc czasy poniżej sekundy są dotrzymywane z mniej więcej
+taką dokładnością. `--dry-run` waliduje `--scenario` bez dotykania sterownika, co czyni z niego tanie
+sprawdzenie w pipelinie.
+
+### Scenariusze dołączone w `scenarios/`
+
+Wszystkie chodzą w pętli poza `upload-drop-midway.json`, więc można je włączyć i zostawić.
+
+| plik | co odtwarza |
+|---|---|
+| `cafe-wifi.json` | Kawiarnia zapełniająca się przez 85 s: przyzwoite łącze schodzi do ~240 ms pingu, 6% strat i 2 Mb/s, a w najgorszym momencie zrywa się całkowicie co 12 s, po czym wraca do formy. |
+| `mobile-lte-to-3g.json` | Telefon wychodzący poza zasięg LTE: z 33 Mb/s w dół do 0,8 Mb/s jak na 3G, potem **całkowita przerwa z resetem TCP** w 60 s, częściowy powrót i znowu LTE. Ten do testowania, co aplikacja robi, gdy sieć umiera w połowie żądania. |
+| `congested-vpn.json` | VPN, w którym pada **upload**, a pobieranie trzyma się dobrze (512 → 160 KB/s), ze skokami latencji, MTU 1400 i sporadycznymi resetami. |
+| `failing-dns.json` | Wycelowany **wyłącznie w UDP port 53**: rozwiązywanie nazw degraduje się do 60% strat i 1,5 s pingu, na 13 s **pada w 100%**, po czym wraca. Reszta ruchu działa normalnie - i to właśnie czyni z tego test DNS-u, a nie test awarii. |
+| `overloaded-game-server.json` | Serwer uginający się pod obciążeniem: ping, jitter, straty i duplikacja rosną razem, ze skokami latencji do 800 ms na 45% pakietów. |
+| `upload-drop-midway.json` | **Bez pętli** - jednorazowy: upload zaczyna zdrowo, degraduje się, zostaje **ucięty do zera w połowie transferu** z resetem TCP, potem częściowo wraca. Do testowania wznawialnych wysyłek i pasków postępu, które kłamią. |
+| `blocked-endpoint.json` | Jeden backend (`203.0.113.0/24`) zostaje **zablokowany** w 20 s, reszta działa dalej, po czym blokada znika. Do testowania timeoutów, ponowień i fallbacków wobec pojedynczej zależności. |
 
 ## Przepisy pod CI/CD
 
