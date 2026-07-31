@@ -14,6 +14,14 @@ from .settings import DEFAULT_SETTINGS
 ACTIONS = ("reset_tcp", "reset_now")      # "reset_now" = the pre-1.3 spelling
 MAX_STEPS = 1000
 
+# Everything a step and a file may contain. Anything else is a typo, and a typo
+# here is SILENT: a misspelled "duraton" left the reset running for the default
+# 3 s, a misspelled "lop" turned looping off, and both looked like the tool
+# ignoring the file. Unknown SETTINGS names have been a hard error since this
+# module was written - these are the same rule, one level up.
+STEP_KEYS = ("at", "settings", "action", "duration")
+FILE_KEYS = ("steps", "loop")
+
 
 def _err(key, **fmt):
     return ValueError(translate(key, None, **fmt))
@@ -48,6 +56,26 @@ def _validate_step(index, step):
 
     if settings is None and action is None:
         raise _err("errors.scenario_step_empty", step=where)
+
+    # How long a reset holds the connections down. It reached the engine as
+    # ``float(step.get("duration", 3.0))`` straight off the unvalidated dict, so
+    # a string blew up on the scenario THREAD (killing the timeline mid-run,
+    # with the session still going) and a negative number was a reset that reset
+    # nothing.
+    if "duration" in step:
+        if action is None:
+            raise _err("errors.scenario_duration_without_action", step=where)
+        try:
+            duration = float(step["duration"])
+        except (TypeError, ValueError):
+            raise _err("errors.scenario_step_duration", step=where)
+        if duration < 0:
+            raise _err("errors.scenario_step_duration", step=where)
+
+    unknown = [k for k in step if k not in STEP_KEYS]
+    if unknown:
+        raise _err("errors.scenario_unknown_key", step=where,
+                   field=", ".join(sorted(unknown)))
 
     out = dict(step)
     out["at"] = at
@@ -95,6 +123,10 @@ def parse_scenario(data):
     elif isinstance(data, dict):
         if "steps" not in data:
             raise _err("errors.scenario_no_steps")
+        stray = [k for k in data if k not in FILE_KEYS]
+        if stray:
+            raise _err("errors.scenario_unknown_file_key",
+                       field=", ".join(sorted(stray)))
         raw, loop = data.get("steps"), bool(data.get("loop", False))
     else:
         raise _err("errors.scenario_not_a_scenario")

@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### BREAKING
+
+- **BREAKING:** **A mistake in a scenario file now says so instead of doing nothing.** A misspelled
+  key used to be accepted and ignored, which is the worst possible outcome: `"duraton"` quietly left
+  a reset at its 3-second default, `"lop"` quietly turned looping off, and in both cases the tool
+  looked like it was ignoring your file. Unknown keys - in a step and at the top level - are now an
+  error naming the key, the same way an unknown *setting* name has always been. `duration` is
+  validated too: it has to be a number of seconds and it only means something next to an `action`.
+  A file that was correct keeps working; one that was quietly half-working will now tell you where.
+
+### Added
+
+- **The README documents three things it never did**, in both languages:
+  - **The scenario file format** - the file and step keys, what may go in `settings`, the two
+    actions there are, the 1000-step limit, how looping restarts, and the 0.1 s tick.
+  - **The seven shipped scenarios**, a line each: what each one reproduces and what it is for
+    (which one kills the network mid-request, which one only touches DNS, which one is a one-shot).
+  - **Both CSV exports and all 17 Connections columns.** The two exports behave differently on
+    purpose - the statistics one appends and ignores the "targeted traffic only" switch, the
+    connections one overwrites and follows your search, sorting and that switch - and the
+    connections CSV does not reuse the table's labels, so there is a column-by-column map between
+    them.
+
 ## [0.4.0] - 2026-07-30
 
 ### BREAKING

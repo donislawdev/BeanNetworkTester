@@ -53,6 +53,9 @@ exists.
 - [Statistics (what the counters mean)](#statistics-what-the-counters-mean)
 - [Configuration file](#configuration-file)
 - [Command-line mode (CLI)](#command-line-mode-cli)
+- [Connections columns](#connections-columns)
+- [CSV exports](#csv-exports)
+- [Scenario file format](#scenario-file-format)
 - [CI/CD recipes](#cicd-recipes)
 - [Building an .exe](#building-an-exe)
 - [Gotchas (read before filing a bug)](#gotchas-read-before-filing-a-bug)
@@ -134,9 +137,9 @@ current screen.
   - **Session** - seed, duration, data used, peaks + "Mark bug", "Save repro report", "Copy CLI
     command" buttons.
   - **Events** - the event log (START/STOP/CHANGE/SCENARIO/BUG/RESET).
-- **Connections** - a view of which IP:port the tested system talks to. Columns: **process**,
-  **protocol**, remote IP, ports, packet count, **KB delivered**, **KB seen**, **duration** and
-  **time since last activity**. Traffic that has no ports at all - ping (ICMP) - is listed too, one
+- **Connections** - a view of which IP:port the tested system talks to. Every column is documented
+  in [Connections columns](#connections-columns) below, and each one also has a tooltip on its
+  header. Traffic that has no ports at all - ping (ICMP) - is listed too, one
   row per address with the port cells left empty.
   - **"down"/"up"/"total" are what the application actually got**, the same quantity the session
     panel calls "Downloaded (MB)". **"down seen"/"up seen" are what the tool captured** before
@@ -760,6 +763,171 @@ with a readable error, not a "scenario with 0 steps".
 
 Every CLI run ends by printing the **effective seed** and a ready command to reproduce it, and
 `--repro-out file.json` saves the full reproduction report.
+
+## Connections columns
+
+Seventeen columns, all sortable by clicking the header, and each with the same explanation as a
+tooltip on that header.
+
+| column | what it holds |
+|---|---|
+| `process` | The process that owns the local port. `?` means the name could not be resolved - run as Administrator. |
+| `PID` | Process id owning the local port, resolved when the packet was captured. |
+| `proto` | Transport protocol: TCP / UDP / ICMP / IP. |
+| `remote IP` | The address this machine is talking to. Right-click a row to limit the impairments to it. |
+| `r.port` | Port on the remote side (443 = HTTPS, 53 = DNS, 80 = HTTP). Empty for traffic with no ports, such as ping. |
+| `l.port` | Port on this machine - what links the connection to a process. Empty for ping/ICMP, which is also why those rows usually have no process name. |
+| `packets` | Packets seen on this connection since it appeared. |
+| `impaired?` | Whether the connection was **in impairment scope** this session - impaired, not merely watched. It stays `yes` after the connection closes, as a record. With no targeting set, everything is in scope. |
+| `dropped` | Packets dropped on this connection by the active impairments (loss, link outage, LAN mode, resets, ...). |
+| `down[KB]` | Data that actually **reached** the application - what it downloaded. Same quantity the session panel calls "Downloaded (MB)". |
+| `up[KB]` | Data that actually **left** this machine - what the application uploaded. |
+| `total[KB]` | Delivered download + delivered upload. |
+| `down seen[KB]` | Data the tool **captured** coming in, before any impairment - what the connection offered. |
+| `up seen[KB]` | Data the tool **captured** going out - what the application tried to send. |
+| `avg[B]` | Average packet size on this connection (total bytes / packets). |
+| `time[s]` | Seconds between the first and the last packet of this connection in this session. |
+| `idle[s]` | Seconds since the last packet. Stops counting when the session stops. |
+
+**The delivered/seen pair is the point of the table.** With nothing impaired they are equal; add
+loss or a speed limit and they part, and **the gap between them is the damage done to that
+connection**. (Before they were split there was one pair, holding captured bytes under headings that
+meant delivered: a row could read 5 MB received while its application got 0.4 MB.)
+
+## CSV exports
+
+Two buttons write two files, and they behave **differently on purpose**. Both land next to the
+executable (or in the project root when running from source).
+
+| | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
+|---|---|---|
+| file | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
+| mode | **Appends** a row per click - a log you can build a chart from across runs | **Overwrites** - a snapshot of the table as it is now |
+| written | atomically (temp file + rename), so a crash mid-write cannot truncate it | same |
+| your search / sorting | not applicable | **followed** - the file matches what you were looking at |
+| "Show only the targeted traffic" | **ignored on purpose** - see below | **followed** |
+| the "Row limit" field | not applicable | **ignored** - every filtered row is exported, not just the drawn ones |
+| columns change between versions | the old file is renamed with a timestamp and a new one started, so rows never misalign under a stale header | not applicable |
+
+The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
+append log: a file whose columns mean one thing in some rows and another in the rest is worse than
+useless for the spreadsheet it exists for. It carries **both** totals instead
+(`bytes_in`/`bytes_out` and `delivered_in_scope_bytes_*`), so you can narrow it yourself and still
+see which is which.
+
+### Statistics CSV columns
+
+`time` plus every counter, in this order:
+
+| column | meaning |
+|---|---|
+| `time` | wall-clock time of the click |
+| `packets_seen` | packets captured |
+| `packets_in_scope` | of those, the ones targeting selected for impairment |
+| `dropped_loss` | dropped by the Loss setting |
+| `dropped_overflow` | dropped because the tool's own queue was full (see the note on it below) |
+| `corrupted` | packets whose payload was flipped |
+| `duplicated` | extra copies queued |
+| `dropped_syn` | TCP SYNs dropped ("connections that never open") |
+| `dropped_mtu` | dropped for exceeding the max size (MTU black hole) |
+| `dropped_nat` | dropped because the NAT mapping had expired |
+| `dropped_rst` | traffic swallowed while a connection was held down after a reset |
+| `dropped_lan` | dropped by LAN mode (internet cut, local network alive) |
+| `dropped_block` | dropped by the blocking (firewall) fields |
+| `dropped_link_outage` | dropped during a flapping outage |
+| `dropped_rate_limit` | dropped by a full speed-limit buffer |
+| `dropped_at_stop` | queued packets discarded when the session stopped |
+| `dropped_send_failed` | the driver refused to re-inject them |
+| `connections_reset` | connections actually torn down |
+| `rst_sent` | RST packets that reached the stack |
+| `bytes_in` / `bytes_out` | delivered bytes, all captured traffic |
+| `bytes_in_total` / `bytes_out_total` | captured bytes, before impairment |
+| `delivered_in_scope_bytes_down` / `delivered_in_scope_bytes_up` | delivered bytes, targeted traffic only |
+| `queue_len` / `queue_peak` | packets waiting in the delay queue, now and at peak |
+| `driver_wait_peak_ms` | the longest the driver made a packet wait before the tool saw it |
+
+The last three drop counters - `dropped_overflow`, `dropped_at_stop`, `dropped_send_failed` - are
+the **tool's own** losses rather than impairment you asked for, which is why they are counted apart.
+
+### Connections CSV columns
+
+Same rows as the table, but **the headers are not the table's labels** - they spell out what the
+table shortens:
+
+| CSV column | table column |
+|---|---|
+| `process`, `pid`, `proto`, `remote_ip`, `remote_port`, `local_port`, `packets` | same, unabbreviated |
+| `impaired` | `impaired?` (`yes` / `no`) |
+| `dropped` | `dropped` |
+| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `down[KB]`, `up[KB]`, `total[KB]` - **in bytes here, not kilobytes** |
+| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen[KB]`, `up seen[KB]` (plus their total) |
+| `avg_bytes` | `avg[B]` |
+| `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
+
+## Scenario file format
+
+A scenario is a timeline: a list of steps, each with a time in seconds and what to do at that
+moment. The file is JSON, either an object or a bare list of steps:
+
+```json
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 20, "jitter": 15, "loss": 1, "down": 1024, "up": 256 } },
+    { "at": 20, "settings": { "loss": 3, "down": 512 } },
+    { "at": 45, "action": "reset_tcp", "duration": 5 },
+    { "at": 60, "settings": { "loss": 0, "flap_period": 0 } }
+  ]
+}
+```
+
+**File level**
+
+| key | meaning |
+|---|---|
+| `steps` | required - the list of steps. A bare `[ ... ]` at the top level works too, and means `loop: false`. |
+| `loop` | optional, default `false`. Replays the timeline endlessly, restarting after the LAST step's `at`. |
+
+**Step level** - a step needs `settings`, `action`, or both. One that has neither is an error, not a
+pause.
+
+| key | meaning |
+|---|---|
+| `at` | required - seconds from the start of the session (`>= 0`). Steps are sorted by it, so their order in the file does not matter. |
+| `settings` | a **partial** settings object. **Cumulative**: each step patches the state the previous ones left, so a value stays until some later step changes it back. |
+| `action` | `reset_tcp` - tear down the TCP connections in scope at that moment. `reset_now` is the pre-1.3 spelling and still works. **These two are the only actions.** |
+| `duration` | seconds the reset holds connections down (default `3`). Only valid together with an `action`. |
+
+**Which names go in `settings`** - any setting the tool has, under the **same name as the config
+file** (that is, its command-line flag with the dashes turned into underscores): `loss`, `latency`, `jitter`,
+`down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`, `target`,
+`rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `seed` and the rest. Run
+`--print-config` to dump the full set of names with their current values.
+
+**Everything is validated when the file loads, and a mistake names itself.** An unknown setting, an
+unknown action, an unknown key, a `duration` that is not a number, a step that does nothing, a step
+list that is empty or longer than **1000** steps - each fails with a message pointing at the step
+number. This matters more than it sounds: a misspelled key used to be **silent**, so `"duraton"`
+quietly left the reset at its 3-second default and `"lop"` quietly turned looping off, and in both
+cases the tool looked like it was ignoring the file.
+
+Steps are applied by a timer that ticks **every 0.1 s**, so sub-second timings are honoured to about
+that much. `--dry-run` validates a `--scenario` without touching the driver, which makes it a
+cheap check in a pipeline.
+
+### The scenarios that ship in `scenarios/`
+
+All of them loop except `upload-drop-midway.json`, so you can start one and leave it running.
+
+| file | what it reproduces |
+|---|---|
+| `cafe-wifi.json` | A cafe filling up over 85 s: a decent link degrades to ~240 ms of ping, 6% loss and 2 Mbit/s, with the connection cutting out entirely every 12 s at the worst point, then recovers. |
+| `mobile-lte-to-3g.json` | A phone walking out of LTE coverage: 33 Mbit/s down to 3G's 0.8, then a **full outage with a TCP reset** at 60 s, then a partial recovery and back to LTE. The one for testing what your app does when the network dies mid-request. |
+| `congested-vpn.json` | A VPN whose **upload** collapses while download stays fine (512 to 160 KB/s), with latency spikes, an MTU of 1400 and occasional resets. |
+| `failing-dns.json` | Aimed at **UDP port 53 only**: name resolution degrades to 60% loss and 1.5 s of ping, goes **100% dead for 13 s**, then comes back. Everything else on the machine keeps working, which is what makes it a DNS test rather than an outage test. |
+| `overloaded-game-server.json` | A server sagging under load: ping, jitter, loss and duplication all climb together, with latency spikes up to 800 ms at 45% of packets. |
+| `upload-drop-midway.json` | **Does not loop** - a one-shot: an upload that starts healthy, degrades, is **cut to zero mid-transfer** with a TCP reset, then partially recovers. For testing resumable uploads and progress bars that lie. |
+| `blocked-endpoint.json` | One backend (`203.0.113.0/24`) is **blocked** at 20 s while everything else keeps working, then unblocked. For testing timeouts, retries and fallbacks against a single dependency. |
 
 ## CI/CD recipes
 

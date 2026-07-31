@@ -117,6 +117,50 @@ def test_load_missing_files_raise():
         check(f"load_{name}_file: missing file raises an exception", raised)
 
 
+def test_a_scenario_step_rejects_a_bad_duration():
+    """``duration`` reached the engine straight off the unvalidated dict.
+
+    ``scenario_runner`` does ``float(step.get("duration", 3.0))`` on the SCENARIO
+    THREAD, so a string killed the timeline mid-run while the session carried on
+    - the file looked ignored rather than broken. A negative value was a reset
+    that reset nothing.
+    """
+    import pytest
+    from beantester.scenario import parse_scenario
+    for bad in ("soon", -5, None, [3]):
+        with pytest.raises(ValueError):
+            parse_scenario([{"at": 1, "action": "reset_tcp", "duration": bad}])
+    ok = parse_scenario([{"at": 1, "action": "reset_tcp", "duration": 8}])
+    check("scenario: a valid duration still passes", ok.steps[0]["duration"] == 8)
+
+
+def test_a_scenario_step_rejects_a_duration_with_nothing_to_apply_to():
+    import pytest
+    from beantester.scenario import parse_scenario
+    with pytest.raises(ValueError):
+        parse_scenario([{"at": 1, "settings": {"loss": 5}, "duration": 8}])
+
+
+def test_a_misspelled_scenario_key_is_an_error_not_a_silent_default():
+    """The failure this whole validation exists for: a typo did NOTHING visible.
+
+    ``"duraton"`` left the reset on its 3 s default and ``"lop"`` turned looping
+    off, both without a word. Unknown SETTINGS names have been a hard error since
+    this module was written; these are the same rule one level up.
+    """
+    import pytest
+    from beantester.scenario import parse_scenario
+    with pytest.raises(ValueError) as bad_step:
+        parse_scenario([{"at": 1, "action": "reset_tcp", "duraton": 8}])
+    check("scenario: the misspelled key is named in the message",
+          "duraton" in str(bad_step.value), f"({bad_step.value})")
+
+    with pytest.raises(ValueError) as bad_file:
+        parse_scenario({"steps": [{"at": 1, "settings": {"loss": 5}}], "lop": True})
+    check("scenario: the misspelled file key is named too",
+          "lop" in str(bad_file.value), f"({bad_file.value})")
+
+
 def test_scenario_settings_at():
     from beantester import Scenario
     sc = Scenario([{"at": 0, "settings": {"loss": 0, "latency": 0}},
