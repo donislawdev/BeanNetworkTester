@@ -91,6 +91,33 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   Verified by mutation: `stop()` clearing the flag, the precedence flipped, the process half
   widened to `targeting_active()`, and the reader hardcoded to `False` are each caught.
 
+- **Every surface that states what the figures cover now renders the verdict.** `stats.py` and
+  `conns.py` each hold a `state -> i18n key` table built through `scope.keys_for_states()`, which
+  refuses a table that is missing a state (or carries an obsolete one) when the page module is
+  imported - so a fifth state breaks the build rather than one screen falling back to "everything".
+  Wired up: both scope notes, their tooltips, the chart caption (`THROUGHPUT_TITLES`) and a new
+  `session.capture` row in `SESSION_ROWS`.
+  Ten new keys in both language files (`stats.scope_note_capture`,
+  `stats.scope_note_capture_process`, the two `conns.` twins, `frames.throughput_capture`,
+  `session.capture` / `_all` / `_narrowed`, `tips.scope_note_capture`, `tips.session_capture`).
+  🔴 **The session row reads `session_info()["narrowed"]`, NOT the coverage state** - it is about
+  what the driver handed over, which a view preference cannot change. That distinction survived
+  only because a mutant exposed it: deriving the row from `state != ALL` passed the whole file, and
+  the case that separates them (view scoped, capture wide) was missing from the test. It is there
+  now.
+  New in `tooltip.py`: `retip(widget, key)`. `add_tooltip` binds `Tooltip.text` once, so every
+  re-worded label kept a bubble explaining the state it had just left - the scope notes had been
+  doing this since the view preference shipped. `Tooltip.text` is read when the bubble is shown, so
+  swapping the attribute is the whole update.
+  Six new guards in `test_view_scope.py` (both notes across all four states, note/bubble agreement,
+  the chart caption, the session row, table completeness plus every key resolving in EN **and** PL,
+  and `keys_for_states` refusing an incomplete or stale table). Eight mutants, all caught: each note
+  reverted to reading the preference, the `retip` call dropped, the caption frozen, the session row
+  pinned wide, the session row rederived from the coverage state, `keys_for_states` stripped of its
+  check, and a misspelled note key.
+  The `conns.py` module docstring claimed "these are ALL captured connections ... targeting decides
+  what gets broken, not what gets seen" as unconditional fact; corrected.
+
 - **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
   `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two
   languages that **was never rendered**: `gui/form.py::_place_one` handles `BOOL` and returns at

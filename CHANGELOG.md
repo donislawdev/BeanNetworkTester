@@ -33,6 +33,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
     connections CSV does not reuse the table's labels, so there is a column-by-column map between
     them.
 
+### Fixed
+
+- **With "Capture only the targeted traffic" on, the Statistics and Connections tabs said the exact
+  opposite of the truth.** Both kept their usual line - "Counters cover ALL captured traffic" and
+  "All captured connections ... targeting decides what gets impaired, not what gets listed" - even
+  though the driver had been told to hand over nothing but your destination's traffic. The
+  checkbox's own tooltip promised the opposite ("the Statistics and Connections tabs then show only
+  that traffic"), and both READMEs contradicted themselves the same way, so there was no way to
+  tell from the screen which of the two you were looking at.
+  Both notes now say what the figures in front of you actually cover, including the case where a
+  **process target** is set as well: the tool then captures your destination's traffic from every
+  process and impairs one process's share of it, so the counters cover more than the impairment
+  does - and now they say so. The throughput chart's caption names its traffic too, because that is
+  the picture people screenshot and send on.
+  Hovering a note used to explain the OTHER state: the bubble was attached once and never updated,
+  so it kept describing the wording that had just been replaced. It follows the note now.
+
+- **The Session panel says which traffic was captured.** New "Capture" row: *all traffic the filter
+  passes* or *narrowed to the destination*. Two runs with the same packet count could describe two
+  completely different worlds, and only the command line and the saved reproduction report ever
+  said which - the window never mentioned it anywhere.
+
 ### Changed
 
 - **The checkbox is now called "Capture only the targeted traffic"** instead of "Narrow the driver

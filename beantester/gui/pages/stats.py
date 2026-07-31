@@ -21,10 +21,42 @@ from ..labels import wrapping_label
 from ..rates import average_kbps
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
+from .. import scope
 from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C
-from ..tooltip import add_tooltip
+from ..tooltip import add_tooltip, retip
 from ..widgets import SortableTree
 from ... import crashlog
+
+# What the figures on this page COVER, in this page's words. Keyed by every
+# coverage state (gui/scope.py enforces that at import), because the state that
+# had no wording of its own is exactly the one that read as its opposite: with
+# the driver filter narrowed, "ALL captured traffic" described a capture that had
+# already been cut down to the destination.
+SCOPE_NOTES = scope.keys_for_states({
+    scope.ALL: "stats.scope_note",
+    scope.CAPTURE: "stats.scope_note_capture",
+    scope.CAPTURE_PROCESS: "stats.scope_note_capture_process",
+    scope.VIEW: "stats.scope_note_scoped",
+})
+
+# The bubble is the longer version of the very sentence above it, so it follows
+# the same state - and is re-worded on the tick with it (see _sync_scope_note).
+SCOPE_TIPS = scope.keys_for_states({
+    scope.ALL: "tips.scope_note",
+    scope.CAPTURE: "tips.scope_note_capture",
+    scope.CAPTURE_PROCESS: "tips.scope_note_capture",
+    scope.VIEW: "tips.scope_note_scoped",
+})
+
+# The chart caption names its own scope: this is the one figure on the page
+# somebody screenshots and sends on, so "which traffic is this?" has to survive
+# leaving the window.
+THROUGHPUT_TITLES = scope.keys_for_states({
+    scope.ALL: "frames.throughput",
+    scope.CAPTURE: "frames.throughput_capture",
+    scope.CAPTURE_PROCESS: "frames.throughput_capture",
+    scope.VIEW: "frames.throughput_scoped",
+})
 
 CELLS = (
     ("down", "stats.download", "KB/s", "tips.stat_down"),
@@ -53,6 +85,11 @@ SESSION_ROWS = (
     ("private_ipv4", "session.private_ipv4", ""),
     ("private_ipv6", "session.private_ipv6", ""),
     ("seed", "session.seed", "tips.eff_seed"),
+    # Which traffic the driver handed over. A saved screenshot of this panel used
+    # to be unreadable on that point: two sessions with the same `packets` figure
+    # could describe two different worlds, and only the CLI and the repro report
+    # said which. The GUI never mentioned it anywhere.
+    ("capture", "session.capture", "tips.session_capture"),
     ("start", "session.start", ""),
     ("stop", "session.stop", ""),
     ("elapsed", "session.duration", ""),
@@ -142,20 +179,20 @@ class StatsPage:
         # anchor, not fill: the wraplength follows the PARENT's width either way
         # (gui/labels.py), while filling would hand the note - and its tooltip -
         # the empty space to the right of the sentence.
-        # Two variants, because the note is the one thing on this page that states
-        # what the numbers COVER. Leaving the "ALL captured traffic" wording up
-        # while the view is narrowed would be the tool telling the user the exact
-        # opposite of the truth, next to the numbers it applies to.
-        scoped = self.app.scoped_view()
-        scope = wrapping_label(parent, T("stats.scope_note_scoped" if scoped
-                                         else "stats.scope_note"))
-        scope.pack(anchor="w", padx=scaled(10), pady=(scaled(2), 0))
-        add_tooltip(scope, "tips.scope_note_scoped" if scoped else "tips.scope_note")
-        # Kept so the tick can re-word it: the preference can be toggled while this
-        # page is already built, and a note describing the OTHER view is exactly
-        # the misleading sentence it exists to prevent.
-        self._scope_note = scope
-        self._scope_note_scoped = scoped
+        # The note is the one thing on this page that states what the numbers
+        # COVER, so it renders the coverage verdict rather than any single input.
+        # Leaving the "ALL captured traffic" wording up over narrowed figures is
+        # the tool telling the user the exact opposite of the truth, right next to
+        # the numbers it applies to.
+        state = self.app.coverage().state
+        note = wrapping_label(parent, T(SCOPE_NOTES[state]))
+        note.pack(anchor="w", padx=scaled(10), pady=(scaled(2), 0))
+        add_tooltip(note, SCOPE_TIPS[state])
+        # Kept so the tick can re-word it: the view preference can be toggled -
+        # and a session started - while this page is already built, and a note
+        # describing the OTHER state is exactly what it exists to prevent.
+        self._scope_note = note
+        self._scope_note_state = state
 
         self._chart_frame = ttk.LabelFrame(parent, text=self._throughput_title())
         frame = self._chart_frame
@@ -255,12 +292,10 @@ class StatsPage:
         somebody screenshots and sends on, so "which traffic is this?" has to be
         readable from the picture rather than from a tooltip nobody hovered - and
         the caption is redrawn every tick, so it cannot go stale after the
-        preference is toggled.
+        preference is toggled or a session starts.
         """
         secs = self.app.pref("chart_seconds")
-        key = ("frames.throughput_scoped" if self.app.scoped_view()
-               else "frames.throughput")
-        return T(key, s=f"{secs:.0f}")
+        return T(THROUGHPUT_TITLES[self.app.coverage().state], s=f"{secs:.0f}")
 
     def draw_chart(self):
         self._chart_job = None
@@ -302,17 +337,23 @@ class StatsPage:
             self.refresh_events()
 
     def _sync_scope_note(self):
-        """Re-word the note when the preference has been toggled since it was built."""
+        """Re-word the note when the coverage changed since it was built.
+
+        The tooltip moves with it. It used to be bound once and never touched
+        again, so toggling the preference re-worded the note and left the bubble
+        underneath still explaining the other state - the same contradiction one
+        hover deeper.
+        """
         note = getattr(self, "_scope_note", None)
         if note is None:
             return
-        scoped = self.app.scoped_view()
-        if scoped == getattr(self, "_scope_note_scoped", None):
+        state = self.app.coverage().state
+        if state == getattr(self, "_scope_note_state", None):
             return
-        self._scope_note_scoped = scoped
+        self._scope_note_state = state
         with crashlog.quiet("gui.pages.stats"):
-            note.config(text=T("stats.scope_note_scoped" if scoped
-                               else "stats.scope_note"))
+            note.config(text=T(SCOPE_NOTES[state]))
+            retip(note, SCOPE_TIPS[state])
 
     def refresh_counters(self):
         self._sync_scope_note()
@@ -343,6 +384,13 @@ class StatsPage:
         self.sess_labels["private_ipv6"].config(text=ipv6)
         seed = info["seed"]
         self.sess_labels["seed"].config(text="-" if seed is None else str(seed))
+        # Straight off the session fact, NOT off the coverage state: this row is
+        # about what the driver handed over, which the view preference cannot
+        # change. Reading the state here would make a view switch look like a
+        # different capture.
+        self.sess_labels["capture"].config(
+            text=T("session.capture_narrowed" if info["narrowed"]
+                   else "session.capture_all"))
         self.sess_labels["start"].config(text=info["start"] or "-")
         # a running session has no stop time yet - and a stopped one must show it
         self.sess_labels["stop"].config(text=info["stop"] or "-")

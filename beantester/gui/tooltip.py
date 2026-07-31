@@ -183,6 +183,28 @@ def add_tooltip(widget, key, shortcut=None):
     return widget
 
 
+def retip(widget, key, shortcut=None):
+    """Re-word an existing tooltip in place (attaching one if there is none).
+
+    A label whose text is rewritten at runtime keeps the bubble it was built
+    with, and the bubble is the LONGER explanation of the very sentence that just
+    changed. The scope notes did exactly this: toggling "Show only the targeted
+    traffic" re-worded the note and left the old tooltip under it, so hovering
+    contradicted the line it was attached to - the same class of lie the note
+    itself exists to prevent, one hover deeper.
+
+    ``Tooltip.text`` is read when the bubble is shown, not when it is bound, so
+    swapping the attribute is the whole update.
+    """
+    if not key:
+        return widget
+    tip = getattr(widget, "_bnt_tooltip", None)
+    if tip is None:
+        return add_tooltip(widget, key, shortcut)
+    tip.text = tooltip_text(key, shortcut)
+    return widget
+
+
 class _BubbleHandle:
     """What ``make_bubble`` hands back: something that can be ``destroy()``ed."""
 

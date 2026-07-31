@@ -48,6 +48,23 @@ VIEW = "view"                       # the view preference is doing the narrowing
 STATES = (ALL, CAPTURE, CAPTURE_PROCESS, VIEW)
 
 
+def keys_for_states(mapping):
+    """Freeze a ``state -> i18n key`` table, refusing an incomplete one.
+
+    Each surface keeps its own table, because each says this in its own words -
+    but a table missing a state would fall back to whatever ``.get()`` returned,
+    which is precisely how "ALL captured traffic" came to sit over narrowed
+    figures. Checked when the module is imported, so a state added later breaks
+    the build instead of one screen, and an obsolete key cannot linger either.
+    """
+    missing = [s for s in STATES if s not in mapping]
+    unknown = [s for s in mapping if s not in STATES]
+    if missing or unknown:
+        raise ValueError("coverage table: missing=%s unknown=%s"
+                         % (missing, unknown))
+    return dict(mapping)
+
+
 class Coverage(NamedTuple):
     """The verdict, plus the raw facts behind it.
 

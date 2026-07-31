@@ -265,6 +265,177 @@ def test_the_app_verdict_reads_the_engine_and_the_preference_together():
     """)
 
 
+def test_a_narrowed_capture_re_words_both_notes():
+    """The bug, from the user's side: tick the box, start, read the two tabs.
+
+    Both notes used to keep saying "ALL captured traffic" / "All captured
+    connections ... targeting decides what gets impaired, not what gets listed"
+    over figures the DRIVER had already cut down to the destination - while the
+    checkbox's own tooltip promised the opposite, one window away.
+    """
+    run_gui("""
+        app.set_pref("scope_view_to_target", False)
+        for page_id in ("statistics", "connections"):
+            app.select_page(page_id)
+            app.pages[page_id].refresh()
+
+        stats, conns = app.pages["statistics"], app.pages["connections"]
+        assert stats._scope_note.kw.get("text") == bnt.T("stats.scope_note")
+        assert conns._scope_note.kw.get("text") == bnt.T("conns.scope_note")
+
+        app.engine._narrowed = True          # what a narrowed start writes
+        stats.refresh(); conns.refresh()
+        assert stats._scope_note.kw.get("text") == bnt.T("stats.scope_note_capture"), \\
+            stats._scope_note.kw.get("text")
+        assert conns._scope_note.kw.get("text") == bnt.T("conns.scope_note_capture"), \\
+            conns._scope_note.kw.get("text")
+
+        # ...and with a process target as well, the counters cover MORE than the
+        # impairment does, which is a different sentence again.
+        app.engine.set_target(True, {50001})
+        stats.refresh(); conns.refresh()
+        assert stats._scope_note.kw.get("text") == \\
+            bnt.T("stats.scope_note_capture_process"), stats._scope_note.kw.get("text")
+        assert conns._scope_note.kw.get("text") == \\
+            bnt.T("conns.scope_note_capture_process"), conns._scope_note.kw.get("text")
+    """)
+
+
+def test_the_note_and_its_bubble_never_describe_different_states():
+    """The tooltip is the longer version of the sentence it hangs under.
+
+    It was bound once at build time and never touched again, so every re-wording
+    left the bubble explaining the state the note had just stopped being in.
+    """
+    run_gui("""
+        app.set_pref("scope_view_to_target", False)
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.refresh()
+        note = page._scope_note
+        assert note._bnt_tooltip.text == bnt.T("tips.scope_note"), note._bnt_tooltip.text
+
+        app.engine._narrowed = True
+        page.refresh()
+        assert note.kw.get("text") == bnt.T("stats.scope_note_capture")
+        assert note._bnt_tooltip.text == bnt.T("tips.scope_note_capture"), \\
+            note._bnt_tooltip.text
+
+        app.set_pref("scope_view_to_target", True)
+        page.refresh()
+        assert note.kw.get("text") == bnt.T("stats.scope_note_scoped")
+        assert note._bnt_tooltip.text == bnt.T("tips.scope_note_scoped"), \\
+            note._bnt_tooltip.text
+    """)
+
+
+def test_the_chart_caption_names_the_traffic_it_is_drawing():
+    """The chart is what gets screenshotted and sent on, so the picture has to
+    carry its own scope - a tooltip nobody hovered cannot."""
+    run_gui("""
+        app.set_pref("scope_view_to_target", False)
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.refresh()
+        secs = "%.0f" % app.pref("chart_seconds")
+        assert page._chart_frame.kw.get("text") == bnt.T("frames.throughput", s=secs)
+
+        app.engine._narrowed = True
+        page.refresh()
+        assert page._chart_frame.kw.get("text") == \\
+            bnt.T("frames.throughput_capture", s=secs), page._chart_frame.kw.get("text")
+    """)
+
+
+def test_the_session_panel_says_which_traffic_the_driver_handed_over():
+    """Two sessions with the same `packets` figure can describe two different
+    worlds. The CLI and the repro report always said which; the GUI said nothing
+    anywhere, so a screenshot of this panel was unreadable on the point.
+
+    It follows the session fact, not the coverage state: a VIEW preference cannot
+    change what was captured, and showing it here would say it had.
+    """
+    run_gui("""
+        app.set_pref("scope_view_to_target", False)
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.select("session")
+        row = lambda: page.sess_labels["capture"].kw.get("text")
+        page.refresh()
+        assert row() == bnt.T("session.capture_all"), row()
+
+        # The discriminating case: the VIEW is narrowed while the CAPTURE is not.
+        # Deriving this row from the coverage state instead of the session fact
+        # passes every other assertion here and lies about exactly this one.
+        app.set_pref("scope_view_to_target", True)
+        page.refresh()
+        assert row() == bnt.T("session.capture_all"), row()
+
+        app.engine._narrowed = True
+        page.refresh()
+        assert row() == bnt.T("session.capture_narrowed"), row()
+
+        app.set_pref("scope_view_to_target", False)    # ...and back: still narrowed
+        page.refresh()
+        assert row() == bnt.T("session.capture_narrowed"), row()
+    """)
+
+
+def test_an_incomplete_wording_table_is_refused_when_the_page_is_imported():
+    """``keys_for_states`` is the mechanism that stops a state from having no
+    words of its own, so it needs its own test rather than only complete callers.
+
+    A table missing a state would fall back to whatever the lookup returned,
+    which is how "ALL captured traffic" came to sit over narrowed figures in the
+    first place - the state existed, the sentence did not.
+    """
+    complete = {s: f"key.{s}" for s in scope.STATES}
+    check("a complete table passes through",
+          scope.keys_for_states(complete) == complete)
+
+    short = {s: f"key.{s}" for s in scope.STATES if s != scope.CAPTURE_PROCESS}
+    try:
+        scope.keys_for_states(short)
+    except ValueError as exc:
+        check("the refusal names the missing state", scope.CAPTURE_PROCESS in str(exc),
+              str(exc))
+    else:
+        raise AssertionError("an incomplete wording table was accepted")
+
+    stale = dict(complete, no_such_state="key.gone")
+    try:
+        scope.keys_for_states(stale)
+    except ValueError as exc:
+        check("and an obsolete entry is named too", "no_such_state" in str(exc), str(exc))
+    else:
+        raise AssertionError("a table with an unknown state was accepted")
+
+
+def test_every_wording_table_is_complete_and_every_key_has_text():
+    """The tables are keyed by all four states (gui/scope.py refuses less), but a
+    complete table of MISSPELLED keys renders the key itself on screen - which is
+    what a missing translation looks like to a user."""
+    run_gui("""
+        from beantester.gui import scope
+        from beantester.gui.pages import conns as conns_page, stats as stats_page
+
+        tables = {
+            "stats.SCOPE_NOTES": stats_page.SCOPE_NOTES,
+            "stats.SCOPE_TIPS": stats_page.SCOPE_TIPS,
+            "stats.THROUGHPUT_TITLES": stats_page.THROUGHPUT_TITLES,
+            "conns.SCOPE_NOTES": conns_page.SCOPE_NOTES,
+            "conns.SCOPE_TIPS": conns_page.SCOPE_TIPS,
+        }
+        for lang in ("en", "pl"):
+            bnt.set_language(lang)
+            for name, table in tables.items():
+                assert set(table) == set(scope.STATES), (name, sorted(table))
+                for state, key in table.items():
+                    text = bnt.T(key)
+                    assert text and text != key, (lang, name, state, key)
+    """)
+
+
 def test_the_stats_csv_carries_both_totals_and_never_narrows():
     """It is an append log: rows written under different preferences must compare."""
     run_gui("""
