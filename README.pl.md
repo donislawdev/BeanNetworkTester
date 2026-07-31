@@ -623,7 +623,7 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 
 Seed gwarantuje identyczne **decyzje na pakiet** dla tej samej sekwencji pakietów.
 Kroki scenariusza są kumulatywne (każdy nakłada łatkę na stan), a `action: reset_tcp`
-zrywa w danym momencie połączenia TCP (stara nazwa `reset_now` nadal działa). Plik scenariusza
+zrywa w danym momencie połączenia TCP. Plik scenariusza
 jest **walidowany** - losowy JSON kończy się czytelnym błędem, a nie „scenariuszem z 0 kroków”.
 
 Każdy przebieg CLI kończy się wypisaniem **efektywnego seeda** i gotowej komendy do odtworzenia,
@@ -759,7 +759,7 @@ błąd, a nie pauza.
 |---|---|
 | `at` | wymagany - sekundy od startu sesji (`>= 0`). Kroki są po nim sortowane, więc ich kolejność w pliku nie ma znaczenia. |
 | `settings` | **częściowy** obiekt ustawień. **Kumulatywny**: każdy krok nakłada łatkę na stan zostawiony przez poprzednie, więc wartość trwa, dopóki któryś późniejszy krok jej nie zmieni. |
-| `action` | `reset_tcp` - zrywa w tym momencie połączenia TCP będące w zasięgu. `reset_now` to pisownia sprzed 1.3 i nadal działa. **To jedyne dwie akcje.** |
+| `action` | `reset_tcp` - zrywa w tym momencie połączenia TCP będące w zasięgu. **To jedyna akcja.** Pisownia sprzed 1.3, `reset_now`, została usunięta, więc plik, który jej używa, nie wczyta się i wskaże numer kroku. |
 | `duration` | ile sekund reset trzyma połączenia zerwane (domyślnie `3`). Ma sens wyłącznie razem z `action`. |
 
 **Jakie nazwy wchodzą do `settings`** - dowolne ustawienie, jakie ma narzędzie, pod **tą samą nazwą

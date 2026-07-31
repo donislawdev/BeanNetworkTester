@@ -9,6 +9,7 @@ import threading
 import time
 
 from .i18n import T
+from .scenario import ACTIONS
 from .settings import apply_settings
 from .summary import settings_summary
 
@@ -49,9 +50,11 @@ class ScenarioRunner:
                 last = s
                 eng.log_event("SCENARIO", settings_summary(s, "en"))
             for at, ev in scenario.events_between(prev_t, t):
-                # "reset_now" is the pre-1.3 spelling of "reset_tcp" (the action
-                # only ever reset TCP connections - see BeanCore.decide step 4)
-                if str(ev.get("action")) in ("reset_tcp", "reset_now"):
+                # From scenario.ACTIONS, not a second list of the same names: a
+                # copy here would keep honouring an action the validator has
+                # stopped accepting, which is how "reset_now" outlived its own
+                # removal for exactly as long as nobody looked.
+                if str(ev.get("action")) in ACTIONS:
                     eng.reset_now(float(ev.get("duration", 3.0)))
                     log(f"{T('log.scenario')} [{at:.0f}s]: {T('log.scenario_reset')}.")
             prev_t = t

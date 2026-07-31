@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the
+  same thing and is now the only action a scenario step can carry. A scenario file still using
+  `reset_now` will not load, and says which step to fix. The **"Reset TCP now" button is not
+  affected** - it never had anything to do with this name.
+
+### BREAKING
+
 - **BREAKING:** **A mistake in a scenario file now says so instead of doing nothing.** A misspelled
   key used to be accepted and ignored, which is the worst possible outcome: `"duraton"` quietly left
   a reset at its 3-second default, `"lop"` quietly turned looping off, and in both cases the tool

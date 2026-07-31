@@ -761,7 +761,7 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 
 The seed guarantees identical **per-packet decisions** for the same packet sequence. Scenario steps
 are cumulative (each patches the state), and `action: reset_tcp` tears down TCP connections at that
-moment (the old name `reset_now` still works). The scenario file is **validated** - random JSON ends
+moment. The scenario file is **validated** - random JSON ends
 with a readable error, not a "scenario with 0 steps".
 
 Every CLI run ends by printing the **effective seed** and a ready command to reproduce it, and
@@ -898,7 +898,7 @@ pause.
 |---|---|
 | `at` | required - seconds from the start of the session (`>= 0`). Steps are sorted by it, so their order in the file does not matter. |
 | `settings` | a **partial** settings object. **Cumulative**: each step patches the state the previous ones left, so a value stays until some later step changes it back. |
-| `action` | `reset_tcp` - tear down the TCP connections in scope at that moment. `reset_now` is the pre-1.3 spelling and still works. **These two are the only actions.** |
+| `action` | `reset_tcp` - tear down the TCP connections in scope at that moment. **It is the only action.** The pre-1.3 spelling `reset_now` has been removed, so a file still using it fails to load with a message naming the step. |
 | `duration` | seconds the reset holds connections down (default `3`). Only valid together with an `action`. |
 
 **Which names go in `settings`** - any setting the tool has, under the **same name as the config

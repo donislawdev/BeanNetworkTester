@@ -19,6 +19,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **`reset_now` removed from `scenario.ACTIONS`**, leaving `reset_tcp` as the only
+  action. Touches the frozen scenario-file format ("Kontrakty publiczne"), so it needs the owner's
+  version bump. Thanks to the step validation added earlier in this release, a file still using the
+  old name fails with a message naming the step rather than being silently ignored.
+- **`scenario_runner` now reads `ACTIONS` instead of carrying its own copy of the names.** It
+  matched against a hand-written `("reset_tcp", "reset_now")` one module away from the tuple that
+  decides which names are legal. The two agreeing was a coincidence maintained by hand, and the
+  drift is silent BOTH ways: an action dropped from `ACTIONS` keeps firing here, and one added
+  there validates and then does nothing. Same class as the preset mapping the CLI used to duplicate.
+  Guard: `test_scenario_runner.py::test_the_runner_fires_exactly_the_actions_the_validator_accepts`
+  drives every name in `ACTIONS` through the real runner loop and asserts a rejected name fires
+  nothing. Verified by mutation - restoring the hardcoded tuple fails with
+  `the runner ignores a name the validator would reject`.
+  🔴 **`reset_now` still exists as a METHOD name** (`core.reset_now`, `engine.reset_now`,
+  `App.reset_now_click`, the `buttons.reset_now` / `tips.reset_now` keys) - that is the GUI's
+  "Reset TCP now" button and the engine's public API, unrelated to the scenario action. A
+  grep-and-delete would have removed a working feature. Noted in `PROJECT_NOTES` beside the action
+  list.
+  Three fixtures in `test_settings_config_scenario.py` used `reset_now` as a scenario action and
+  went red on the change, which is the removal proving itself - they now use `reset_tcp`. (My
+  pre-change survey missed them: the grep output was cut by `head`, and I reported "no test uses it
+  as a scenario action". The tests were right and the summary was wrong.)
+
+### BREAKING
+
 - **BREAKING:** **`scenario.py` validates the keys it always accepted silently.** New `STEP_KEYS`
   and `FILE_KEYS` registries; an unknown key in a step or at the file level raises a translated
   error naming it, exactly as an unknown `settings` name already did. `duration` is validated as a

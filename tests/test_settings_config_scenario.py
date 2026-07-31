@@ -189,7 +189,7 @@ def test_scenario_block_step_applies_and_clears():
 
 def test_scenario_events():
     from beantester import Scenario
-    sc = Scenario([{"at": 10, "action": "reset_now", "duration": 3}])
+    sc = Scenario([{"at": 10, "action": "reset_tcp", "duration": 3}])
     check("scenario: action within (9,11]", len(sc.events_between(9, 11)) == 1)
     check("scenario: no action before", len(sc.events_between(0, 9)) == 0)
     check("scenario: no action after", len(sc.events_between(11, 20)) == 0)
@@ -200,7 +200,7 @@ def test_scenario_file_roundtrip():
     import tempfile, os as _os, json as _json
     data = {"loop": True, "steps": [{"at": 0, "settings": {"latency": 0}},
                                     {"at": 5, "settings": {"latency": 300}},
-                                    {"at": 10, "action": "reset_now", "duration": 2}]}
+                                    {"at": 10, "action": "reset_tcp", "duration": 2}]}
     path = _os.path.join(tempfile.gettempdir(), "ns_scen.json")
     with open(path, "w") as f:
         _json.dump(data, f)
@@ -225,7 +225,7 @@ def test_scenario_unsorted_and_empty():
 
 def test_scenario_events_boundaries():
     from beantester import Scenario
-    sc = Scenario([{"at": 10, "action": "reset_now"}])
+    sc = Scenario([{"at": 10, "action": "reset_tcp"}])
     check("scenario: t0 exclusive - (10,11] misses at=10, (9,10] catches it",
           len(sc.events_between(10, 11)) == 0 and len(sc.events_between(9, 10)) == 1)
 
