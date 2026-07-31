@@ -186,8 +186,23 @@ def test_a_dead_capture_thread_fails_open():
     divert = ExplodingDivert(packets=3)
     eng.start("test", divert=divert)
 
-    check("fail-open: the engine stops on a capture failure",
-          _wait_until(lambda: not eng.is_running()))
+    # Wait for the promise, not for the flag - the same fix
+    # test_the_engine_stops_itself_after_its_duration already carries. ``_running``
+    # is cleared as the SECOND statement of ``_stop_locked`` (deliberately: an
+    # early clear stops the watchdog firing a second, racing stop), and the divert
+    # is closed several statements later, with the event logged after that. So
+    # "not is_running()" is true well before any of the three things asserted
+    # below, and a loaded runner can be scheduled away inside that window. It was
+    # green ~5/5 locally and red on CI, which is exactly the shape of that gap.
+    def stopped_completely():
+        kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
+        return (not eng.is_running() and divert.closed
+                and ("STOP", "events.fault") in kinds)
+
+    check("fail-open: the engine stops on a capture failure and finishes teardown",
+          _wait_until(stopped_completely),
+          f"(running={eng.is_running()}, closed={divert.closed}, "
+          f"events={[(e[2], e[3]) for e in eng.events_snapshot()]})")
     check("fail-open: the divert is closed (network restored)", divert.closed is True)
     check("fail-open: the reason is recorded", eng.stop_reason == "fault",
           f"({eng.stop_reason})")

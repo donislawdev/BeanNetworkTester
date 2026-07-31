@@ -42,6 +42,16 @@ class SettingsWindow(PanelWindow):
     def build(self, body):
         pad = scaled(12)
         app = self.app
+
+        # Packed FIRST, though it sits at the bottom. pack hands out height in
+        # call order, so a footer packed last gets whatever the content left -
+        # which was nothing, and "Close" was sliced in half by the window edge.
+        # Reserving it here means the content above is what runs out of room,
+        # and the button a user needs to shut the window always exists.
+        foot = ttk.Frame(body)
+        foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
+        ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
+
         self._pref_vars = {}
         self._pref_entries = {}
         self._pref_errors = {}      # group label -> (error label, its number keys)
@@ -83,10 +93,6 @@ class SettingsWindow(PanelWindow):
         # -- GUI preferences (ui.json-backed, see gui/prefs.py) --------------- #
         for group_label, keys in PREF_GROUPS:
             self._build_pref_group(body, group_label, keys)
-
-        foot = ttk.Frame(body)
-        foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
-        ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
 
     # -- preference rows ------------------------------------------------------- #
     def _build_pref_group(self, body, group_label, keys):

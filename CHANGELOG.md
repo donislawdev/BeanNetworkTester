@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **The throughput chart could be squeezed until it vanished.** On a narrow window the counter grid
+  reflows into more rows, took the height, and left the chart a black sliver under its own heading.
+  The "Live" tab now scrolls, so nothing on it can be pushed out of existence. One trade worth
+  knowing: the chart keeps a fixed height now instead of growing to fill a tall window.
+- **"Close" was cut in half at the bottom of the Settings window.** The button is now reserved
+  before the settings above it, so it is always there whatever the window is holding. The About
+  window had the same construction and was one longer translation away from the same bug.
+- **"Save profile..." opens with the cursor already in the name box.** It used to need a click
+  before you could type.
+
 ### BREAKING
 
 - **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the

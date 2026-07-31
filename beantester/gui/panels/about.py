@@ -43,6 +43,19 @@ class AboutWindow(PanelWindow):
     def build(self, body):
         pad = scaled(12)
 
+        # Packed FIRST so it reserves its height, for the reason spelled out in
+        # panels/settings.py: pack gives out space in call order, so a footer
+        # packed last is the one that gets clipped when the content grows. This
+        # window still fits today - it is the same code, one translation away
+        # from the same bug.
+        foot = ttk.Frame(body)
+        foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
+        donate = ttk.Button(foot, text=T("buttons.donate"), style="Donate.TButton",
+                            command=self._donate)
+        donate.pack(side="left")
+        add_tooltip(donate, "tips.donate")
+        ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
+
         head = ttk.Frame(body)
         head.pack(side="top", fill="x", padx=pad, pady=(pad, scaled(4)))
         ttk.Label(head, text=APP_NAME, style="Title.TLabel").pack(side="left")
@@ -91,14 +104,6 @@ class AboutWindow(PanelWindow):
                         % (name, version, licence, "", "", url))
         text.insert("end", "\n" + T("about.licenses_dir", path=legal.licenses_dir()) + "\n")
         text.config(state="disabled")
-
-        foot = ttk.Frame(body)
-        foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
-        donate = ttk.Button(foot, text=T("buttons.donate"), style="Donate.TButton",
-                            command=self._donate)
-        donate.pack(side="left")
-        add_tooltip(donate, "tips.donate")
-        ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
 
     def _donate(self):
         """Open the support page in the user's browser - the app opens no sockets."""

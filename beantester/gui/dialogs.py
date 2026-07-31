@@ -21,8 +21,16 @@ WRAP = 380
 _result = {}          # per-dialog result, keyed by the toplevel
 
 
-def _center(win, parent):
-    """Place the dialog over its parent and only THEN show it."""
+def _center(win, parent, focus=None):
+    """Place the dialog over its parent and only THEN show it.
+
+    ``focus`` is the widget the keyboard should land on. It has to be given HERE
+    rather than set by the caller beforehand, for two reasons that stack: the
+    dialog is built withdrawn (see ``_shell``), where focus does not stick, and
+    ``focus_force`` below moves it to the window and would discard it anyway.
+    That is why "Save profile..." opened with the cursor nowhere and the name
+    field had to be clicked.
+    """
     try:
         win.update_idletasks()
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -37,6 +45,8 @@ def _center(win, parent):
         win.deiconify()
         win.lift()
         win.focus_force()
+        if focus is not None:
+            focus.focus_set()
     except Exception as _exc:
         crashlog.note(_exc, "gui.dialogs")
 
@@ -156,10 +166,6 @@ def ask_string(parent, title, prompt):
     var = tk.StringVar(value="")
     entry = ttk.Entry(body, textvariable=var, width=32)
     entry.pack(fill="x", pady=(scaled(10), 0))
-    try:
-        entry.focus_set()
-    except Exception as _exc:
-        crashlog.note(_exc, "gui.dialogs")
 
     def accept():
         _close(win, var.get())
@@ -173,5 +179,5 @@ def ask_string(parent, title, prompt):
     win.protocol("WM_DELETE_WINDOW", lambda: _close(win, None))
     win.bind("<Escape>", lambda e: _close(win, None))
     win.bind("<Return>", lambda e: accept())
-    _center(win, parent)
+    _center(win, parent, focus=entry)      # type straight away, no click needed
     return _run(win, None)
