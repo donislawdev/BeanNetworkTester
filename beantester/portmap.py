@@ -353,6 +353,152 @@ def _looks_recycled(current, cached):
     return abs(current - cached) >= 0.001
 
 
+# -- one process, read through ONE handle --------------------------------------- #
+# psutil has no cheap per-process parent lookup on Windows. ``Process.ppid()`` is
+# ``ppid_map()`` - a snapshot of EVERY process, taken afresh on every call, because
+# the C extension exports only ``ppid_map`` and no ``proc_ppid`` (checked, psutil
+# 7.2.2). MEASURED 2026-08-01, elevated, 33 socket-owning PIDs: **9.36 ms per PID,
+# 308.9 ms for the set** - which ``warm_names()`` paid on the WATCHDOG thread, so
+# the capture thread was starved and the driver's queue backed up to 508 ms.
+#
+# OpenProcess answers the same three questions for **0.03 ms per PID** (1.0 ms for
+# the set), and answers them BETTER: the handle pins the identity, so the name, the
+# parent and the creation stamp all describe the one process the kernel handed us.
+#
+# A cached ``{pid: ppid}`` table was measured (0.31 ms per PID) and REJECTED: its
+# staleness window lets one process's name meet another process's parent once a PID
+# is recycled, which is the very mixture ``_looks_recycled`` exists to prevent.
+# Speed was not the reason to prefer the handle; that was.
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_STATUS_SUCCESS = 0
+_FILETIME_EPOCH_DELTA = 11644473600.0     # 1601-01-01 -> unix epoch, in seconds
+
+# ``(ctypes, wintypes, kernel32, ntdll, PROCESS_BASIC_INFORMATION)``, bound once;
+# ``False`` once it is known to be unavailable. Deliberately NOT rebuilt per call,
+# unlike the structure ``_toolhelp_process_table`` declares inline: that one is
+# throttled to a snapshot a second and can afford it, this one runs once per PID.
+#
+# This caches ABILITY, never POLICY. ``_ALLOW_NATIVE_PROCESSES`` is checked per call
+# in ``_native_process_info`` instead, and the first version of this got that wrong:
+# gating the BINDING meant the flag was read once, so a test flipping it afterwards
+# was silently ignored - ``test_a_target_restarting_onto_a_recycled_pid_is_still_
+# impaired`` asked its fake world for pid 5000 and got ``wslhost.exe`` off the real
+# machine. Caching a policy decision breaks in both directions, too: bound while a
+# test had it off, the native route would then stay off for the whole process.
+_NATIVE_INFO_API = [None]
+
+
+def _native_info_api():
+    """Bind the entry points and the result structure once. ``None`` if unavailable."""
+    if _NATIVE_INFO_API[0] is None:
+        _NATIVE_INFO_API[0] = False
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESS_BASIC_INFORMATION(ctypes.Structure):
+                _fields_ = [("ExitStatus", ctypes.c_long),
+                            ("PebBaseAddress", ctypes.c_void_p),
+                            ("AffinityMask", ctypes.c_size_t),
+                            ("BasePriority", ctypes.c_long),
+                            ("UniqueProcessId", ctypes.c_size_t),
+                            ("InheritedFromUniqueProcessId", ctypes.c_size_t)]
+
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            ntdll = ctypes.WinDLL("ntdll", use_last_error=True)
+            # restype/argtypes MATTER here for the same reason they do in
+            # _toolhelp_process_table: the handle is pointer-sized and the default
+            # c_int return truncates it on 64-bit.
+            k32.OpenProcess.restype = wintypes.HANDLE
+            k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            k32.CloseHandle.argtypes = [wintypes.HANDLE]
+            k32.GetProcessTimes.argtypes = (
+                [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4)
+            k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+            k32.QueryFullProcessImageNameW.argtypes = [
+                wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                ctypes.POINTER(wintypes.DWORD)]
+            ntdll.NtQueryInformationProcess.argtypes = [
+                wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                wintypes.ULONG, ctypes.POINTER(wintypes.ULONG)]
+            _NATIVE_INFO_API[0] = (ctypes, wintypes, k32, ntdll,
+                                   PROCESS_BASIC_INFORMATION)
+        except Exception:
+            _NATIVE_INFO_API[0] = False
+    return _NATIVE_INFO_API[0] or None
+
+
+def _native_process_info(pid):
+    """``(name, ppid, created)`` for one pid through a single handle, or ``None``.
+
+    ``None`` means "not resolved" and hands the question to the caller's existing
+    fallbacks; it is never an error worth reporting. Three ways to get there, and
+    the third was found by measurement rather than reasoning:
+
+    * ``OpenProcess`` refuses - not elevated, or the process is protected. The
+      snapshot path names those without opening them, which is what it is for.
+    * the process is gone between the socket table naming it and this call. Normal
+      under churn: 11-18 of ~2100 lookups in a 25 s churn test.
+    * **the process has just exited and answers only PARTLY.**
+      ``NtQueryInformationProcess`` and ``GetProcessTimes`` still succeed on it
+      while ``QueryFullProcessImageNameW`` returns an EMPTY name (caught in that
+      same test: pid 45336, identical ppid and creation stamp across two reads,
+      name ``'cmd.exe'`` then ``''``). Caching that empty string would blank the
+      connection log's process column, so it counts as unresolved. PID 4
+      (``System``) answers the same way, permanently.
+
+    ``NtQueryInformationProcess`` is documented as subject to change, so every
+    failure mode above lands on the same ``None``: if a future Windows withdraws it,
+    this degrades to the psutil path that used to run - to today's behaviour and
+    today's cost, not to a broken tool.
+    """
+    if not _ALLOW_NATIVE_PROCESSES:
+        return None
+    api = _native_info_api()
+    if api is None:
+        return None
+    ctypes, wintypes, k32, ntdll, PROCESS_BASIC_INFORMATION = api
+    try:
+        handle = k32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    except Exception:
+        return None
+    if not handle:
+        return None
+    try:
+        basic = PROCESS_BASIC_INFORMATION()
+        written = wintypes.ULONG()
+        status = ntdll.NtQueryInformationProcess(      # 0 = ProcessBasicInformation
+            handle, 0, ctypes.byref(basic), ctypes.sizeof(basic), ctypes.byref(written))
+        if status != _STATUS_SUCCESS:
+            # Also the guard for a structure that does not match this architecture
+            # (WOW64): the query fails rather than returning nonsense.
+            return None
+        ppid = int(basic.InheritedFromUniqueProcessId)
+
+        created_ft, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        if not k32.GetProcessTimes(handle, ctypes.byref(created_ft), ctypes.byref(exited),
+                                   ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+        ticks = (created_ft.dwHighDateTime << 32) | created_ft.dwLowDateTime
+        created = ticks / 10_000_000.0 - _FILETIME_EPOCH_DELTA
+
+        size = wintypes.DWORD(512)
+        buffer = ctypes.create_unicode_buffer(512)
+        if not k32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+            return None
+        name = (buffer.value or "").rsplit("\\", 1)[-1]
+        if not name:
+            return None
+        return (name, ppid, created)
+    except Exception:
+        return None
+    finally:
+        # The handle must go back whatever happened above - this runs once per PID,
+        # so leaking here would leak steadily for the life of the session.
+        with crashlog.quiet("portmap.close_handle"):
+            k32.CloseHandle(handle)
+
+
 def _psutil_created(pid):
     """Start time of ``pid`` right now - the identity stamp. ``None`` if unknown.
 
@@ -374,13 +520,30 @@ def _psutil_created(pid):
 
 
 def _psutil_process_info(pid):
-    """``(name, ppid, created)`` for one pid, or ``None`` when it cannot be resolved."""
+    """``(name, ppid, created)`` for one pid, or ``None`` when it cannot be resolved.
+
+    The portable path, and the fallback whenever ``_native_process_info`` cannot
+    answer - see ``_process_info``. Kept as the fallback rather than replaced: it
+    resolves whatever the handle route cannot, at the cost the tool used to pay
+    anyway, so no environment loses an answer it has today.
+    """
     try:
         import psutil
         process = psutil.Process(int(pid))
         return str(process.name() or ""), process.ppid(), process.create_time()
     except Exception:
         return None
+
+
+def _process_info(pid):
+    """``(name, ppid, created)`` for one pid: the handle first, psutil behind it.
+
+    The one route ``PortTable.info`` takes to resolve a PID it has not cached.
+    Both halves are module-level functions so the hot-path guard can count trips to
+    the OS by replacing them (``tests/test_hot_path.py``).
+    """
+    resolved = _native_process_info(pid)
+    return resolved if resolved is not None else _psutil_process_info(pid)
 
 
 # -- the table ----------------------------------------------------------------- #
@@ -619,15 +782,20 @@ class PortTable:
         scans the whole system for that one PID). An ADMIN opens every socket-owning
         PID - 0 of 27 denied here - so a warm refresh's recycle check is ~0.16 ms; a
         NON-admin is denied on system / other-user PIDs (16 of 27) and it climbs to
-        ~90-180 ms, with the cold resolve at ~380 ms against ~36 ms elevated. Real
-        impairment ALWAYS runs elevated (WinDivert will not open without admin), so
-        this is cheap in every real session; the slow figure appears only on the one
-        non-elevated path that runs the resolver at all, ``--simulate`` (synthetic
-        packets, and the cost sits on the RESOLVER thread, never the capture one).
-        Batching the denied PIDs in one ``NtQuerySystemInformation`` was measured and
-        REJECTED (2026-07-24): it speeds only the non-elevated warm check - a demo
-        mode - and does nothing for the elevated hot path or for the cold resolve,
-        which NAME resolution dominates.
+        ~90-180 ms. Real impairment ALWAYS runs elevated (WinDivert will not open
+        without admin), so this is cheap in every real session; the slow figure
+        appears only on the one non-elevated path that runs the resolver at all,
+        ``--simulate`` (synthetic packets, and the cost sits on the RESOLVER thread,
+        never the capture one). Batching the denied PIDs in one
+        ``NtQuerySystemInformation`` was measured and REJECTED (2026-07-24): it
+        speeds only the non-elevated warm check - a demo mode - and does nothing for
+        the elevated hot path.
+
+        The cold RESOLVE behind a cache miss is no longer psutil's - see
+        ``_process_info``. This note used to put it at ~36 ms elevated and blame NAME
+        resolution; both halves were wrong. MEASURED 2026-08-01: the PARENT lookup
+        was 9.36 ms of a 9.4 ms per-PID resolve while the name cost 0.02-0.06 ms, so
+        33 PIDs came to 308.9 ms. Read through one handle, the same set costs 1.0 ms.
         """
         if pid is None:
             return ("", None)
@@ -653,7 +821,7 @@ class PortTable:
             # ask the OS. "" is the honest answer; the resolver will have filled the
             # cache by the time this row is looked at again.
             return ("", None)
-        resolved = _psutil_process_info(pid)
+        resolved = _process_info(pid)
         if resolved is None:
             # psutil.Process could not open the process (it is HARDENED - Chrome's
             # network service, some services - or denied, or already gone). Fall back
@@ -694,8 +862,19 @@ class PortTable:
         belongs to before deciding what to target.
 
         Cheap in the steady state: the names are already cached, so this is one
-        identity check per PID (~0.13 ms for the 25-odd PIDs a desktop has). The
-        first pass pays the real resolve (~124 ms) once.
+        identity check per PID (measured 0.2-0.4 ms for the 33 this desktop has).
+
+        A COLD pass is NOT a one-off, and the sentence that used to say it was hid a
+        real fault for as long as it stood. Entries expire ``INFO_TTL_S`` after they
+        were WRITTEN and a cache hit deliberately does not renew that stamp (see
+        ``_expire_info``), while every newly started process arrives uncached - so
+        cold passes recur for the whole life of a session: every 30 s on an idle
+        machine, and on nearly every watchdog tick while processes churn. When the
+        resolve behind them cost 9.4 ms per PID this starved the CAPTURE thread,
+        backing the driver's queue up to 508 ms and printing 7 spurious "the driver
+        is dropping packets" warnings in 95 s (measured 2026-08-01 - the whole reason
+        ``_process_info`` exists). At ~1 ms the recurrence is harmless, but it is
+        still a recurrence, not a first pass.
         """
         for pid in set(self.snapshot().values()):
             self.info(pid)

@@ -45,6 +45,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The tool kept pausing itself and then warning you about WinDivert.** Every so often - on the
+  first Start, then roughly every 30 seconds, and far more often on a busy machine - it spent up to
+  half a second working out which program owns which connection. While that was going on it stopped
+  picking up packets, so they piled up inside the driver, and then it told you: *"WinDivert held a
+  packet for 105 ms ... the driver's queue is backing up ... narrow the traffic filter."*
+  Nothing was wrong with your filter and nothing was wrong with the driver. The delay was the tool's
+  own, so narrowing the filter could not have helped - and that half second landed on your traffic
+  without showing up in any counter, in a tool whose whole job is to control delay precisely.
+  Looking up those program names now takes about a millisecond instead of several hundred. Measured
+  over a 95-second session with programs constantly starting and stopping: the worst pile-up dropped
+  from 508 ms to 17 ms, and the warning stopped appearing. The process names in the Connections tab
+  are exactly as before. If you do see that warning now, it means what it says.
+
 - **With "Capture only the targeted traffic" on, the Statistics and Connections tabs said the exact
   opposite of the truth.** Both kept their usual line - "Counters cover ALL captured traffic" and
   "All captured connections ... targeting decides what gets impaired, not what gets listed" - even

@@ -299,6 +299,47 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Fixed
 
+- **The tool was stalling its own capture thread and then blaming WinDivert for it.** Reported as a
+  spurious warning on the first START ("WinDivert held a packet for 105 ms ... the driver's queue is
+  backing up ... narrow the traffic filter"), which was true about the wait and wrong about the
+  cause: nothing outside the tool was congested, and narrowing the filter could not have helped.
+  - **Cause.** `PortTable.warm_names()` runs on the WATCHDOG thread and resolves every socket-owning
+    PID. The resolve went through `psutil.Process(pid)`, whose `ppid()` on Windows is `ppid_map()` -
+    a snapshot of EVERY process, taken afresh per call, because the C extension exports only
+    `ppid_map` and no `proc_ppid` (checked, psutil 7.2.2). So a pass took **one full system scan per
+    PID**: measured 9.36 ms/PID, **308.9 ms for 33 PIDs**, against 9.6 ms for a single snapshot
+    covering all 453 processes. The name was never the expensive part - `name()` measured
+    0.02-0.06 ms, and the docstring blaming NAME resolution for the cold resolve was wrong.
+  - **Not a startup wart.** `_expire_info` drops an entry `INFO_TTL_S` after it was WRITTEN and a
+    cache hit deliberately does not renew that stamp, so cold passes RECUR. Measured over 95 s:
+    spikes at t=0.3, 30.5, 60.9, 91.1 s, peaks 457/317/206/202 ms. With process churn (new PIDs
+    arriving continuously) it is worse still - 13 of 19 windows over the warn line, **peak 508 ms,
+    7 warnings in 95 s**.
+  - **Fix: `portmap._process_info` - one handle instead of one snapshot per PID.** New
+    `_native_process_info` reads name, parent and creation stamp through a single
+    `OpenProcess` + `NtQueryInformationProcess` + `GetProcessTimes` + `QueryFullProcessImageNameW`,
+    with `_psutil_process_info` kept behind it as the fallback. **0.03 ms/PID, 1.0 ms for the set.**
+    Measured end to end on the shipped code, churn on, 95 s: **peak 508 -> 16.6 ms, 0 of 20 windows
+    over the warn line, 7 warnings -> 0**, process names still 36/36. `warm_names()` cold:
+    344-458 -> 24 ms; warm 0.22 ms.
+  - **Why the handle and not a cached `{pid: ppid}` table**, which measured 0.31 ms/PID and would
+    also have fixed the symptom: the handle PINS the identity, so name, parent and creation stamp
+    describe the one process the kernel gave us. A cached table has a staleness window in which a
+    recycled PID lets one process's name meet another's parent - the mixture `_looks_recycled`
+    exists to prevent. Speed was not the deciding argument.
+  - **Verified against churn** (2149 lookups, 489 PIDs, continuous spawn/exit): 0 ppid
+    disagreements with psutil, 0 with the toolhelp snapshot (461/461 identical). **NOT verified:**
+    PID recycling could not be forced (0 observed), so that property rests on the mechanism, not a
+    measurement; 32-bit/WOW64 and ARM64 are untested. Every failure path returns `None` and falls
+    back, so if a future Windows withdraws `NtQueryInformationProcess` this degrades to today's
+    behaviour and today's cost, not to a broken tool.
+  - **One bug found by the suite, worth recording.** The first version gated
+    `_ALLOW_NATIVE_PROCESSES` while BINDING the ctypes entry points and cached the result, so the
+    flag was read once per process: `test_a_target_restarting_onto_a_recycled_pid_is_still_impaired`
+    asked its fake world for pid 5000 and got `wslhost.exe` off the real machine. The gate is now
+    read per call, like `_toolhelp_process_table` does it. Caching ABILITY is fine; caching POLICY
+    is not, and it fails in both directions.
+
 - **The Live stats tab is a `ScrollableFrame`** (`gui/pages/stats.py`). The counter grid reflows its
   column count with the window WIDTH, so a narrow window turns it into five tall rows; it packs at
   its natural height and the chart, packed `expand=True`, took the leftover - about ten pixels. The
@@ -326,6 +367,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   reverting them gives "the Live tab is not scrolled" and "the footer is packed at position 5 of 6".
 
 ### Tests
+
+- **Four new guards in `test_processes.py` for the per-PID handle read**, filling a gap that had
+  been open for as long as `ppid` has mattered: it feeds `PortTable.ancestors`, which is how
+  `targeting.py` matches a process TREE, and every existing targeting test drives a FAKE table with
+  its own `ancestors` - so all of them stay green no matter what the real resolver returns.
+  - `::test_the_handle_read_agrees_with_an_independent_oracle_on_the_parent` - checks the parent
+    against `os.getppid()`, which shares no code with psutil or toolhelp, and cross-checks name and
+    parent against the psutil path it replaced.
+  - `::test_a_process_that_will_not_name_itself_is_declined` - PID 4 (`System`) never yields an
+    image name and must resolve to `None`, not to a nameless cache entry.
+  - `::test_a_name_that_comes_back_empty_is_declined_not_cached` - the succeeded-but-EMPTY name, the
+    state a just-exited process is in (measured under churn: pid 45336, identical parent and start
+    time across two reads, name `'cmd.exe'` then `''`). Drives the five ctypes entry points through
+    an injected fake, which also pins the FILETIME epoch conversion and runs the parsing on
+    **every platform**, not only where the API exists.
+  - `::test_the_native_policy_gate_is_read_per_call_not_cached` - regression test for the bind-time
+    gate described above.
+  - **Verified by mutation, and one had to be rewritten to earn it.** Four mutants: policy gate
+    removed, parent replaced by the process's own pid, creation stamp dropped, empty name cached.
+    The first version of the empty-name guard **SURVIVED** its mutant - PID 4 leaves by the
+    failed-call branch, so deleting the empty-string check changed nothing it could see. Splitting
+    it into the two tests above catches all four.
+- `test_hot_path.py::OS_FUNCTIONS` gained `_native_process_info`. Without it the guard would have
+  gone on passing while no longer watching the main resolve route - the failure mode where a test
+  stays green because it stopped looking. Its docstring's call tally is re-measured.
 
 - **`test_failsafe.py::test_a_dead_capture_thread_fails_open` was racy and CI caught it** (green ~5/5
   locally, red on the runner). `_stop_locked` clears `_running` as its SECOND statement - deliberate,
