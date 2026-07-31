@@ -17,6 +17,23 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
+### CI
+
+- **CI and the release build run on Python 3.14 only.** The test matrix dropped `3.10` and `3.13`
+  for a single `3.14` (it still varies the OS, so it is 2 cells instead of 4), and both PyInstaller
+  jobs - `ci.yml`'s `build` and `release.yml` - moved from 3.13 to 3.14. That is the version the
+  project is developed, built and released on; the old matrix was proving a configuration nobody
+  receives. Verified against `actions/python-versions` before the change rather than assumed:
+  3.14.6 is stable and published for `linux-x64` and `win32-x64`, which is exactly what
+  `ubuntu-latest` and `windows-latest` need.
+  🔴 **`requires-python` stays at `>=3.10`, and both READMEs still say "Python 3.10+"** (owner's
+  decision): installing from source on an older Python remains supported, it just stops being
+  CI-proven. The mismatch is deliberate and is written down in both workflows - do NOT close it by
+  raising `requires-python`; if 3.10 needs guarding again, add the version back to the MATRIX.
+  The two PyInstaller jobs must keep the same interpreter as each other, because PyInstaller
+  freezes it into the bundle: letting them drift means CI smoke-tests one artefact and users
+  download another.
+
 ## [0.4.0] - 2026-07-30
 
 ### BREAKING

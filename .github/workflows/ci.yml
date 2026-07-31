@@ -30,11 +30,17 @@ jobs:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    # The matrix varies the OS, not the interpreter. `requires-python` stays at
+    # >=3.10 on purpose - installing from source on an older Python is supported -
+    # but CI proves the version the project is actually developed, built and
+    # released on. Testing 3.10 was exercising a configuration nobody ships.
+    # If that trade stops being worth it, add a version back HERE; do not "fix"
+    # the gap by raising requires-python to match.
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.14"]
     steps:
       - uses: actions/checkout@v7
       - name: Verify required release files are in the checkout
@@ -164,9 +170,12 @@ jobs:
     needs: tests
     steps:
       - uses: actions/checkout@v7
+      # Must match the interpreter release.yml builds with: PyInstaller freezes
+      # THIS Python into the bundle, so a CI build on a different one is not
+      # smoke-testing the artefact users get.
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - name: Install dependencies
         run: |

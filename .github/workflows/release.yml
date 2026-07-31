@@ -21,9 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
+      # step with the build job in ci.yml, or CI smoke-tests one artefact and
+      # users download another.
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
 
       - name: Install dependencies
