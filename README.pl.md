@@ -195,6 +195,11 @@ jest **większy od latencji**, średnie doliczone opóźnienie rośnie powyżej 
 (np. latencja 0, jitter 50 ms daje ~połowę pakietów bez opóźnienia i średnią ~12 ms, nie 0).
 Przy latencji większej niż jitter efekt jest pomijalny.
 
+*Skok latencji* jest w tej samej sekcji, bo skok to też opóźnienie - tyle że sporadyczne i duże.
+Z podanym prawdopodobieństwem dokleja dodatkowe opóźnienie (ms) do **pojedynczego pakietu**, czyli
+tak, jak chwilowy „lag” naprawdę wygląda. Szansa liczona jest na pakiet i działa **w każdą stronę**,
+więc pojedyncze odpytanie trafia na nią mniej więcej dwa razy częściej, niż sugeruje ta liczba.
+
 **Zakłócenia (%)** - *Utrata*: procent pakietów znikających bez śladu (5% to już wyraźnie
 zrywająca się sieć). *Uszkodzenie*: procent pakietów z przekłamanym bitem danych - dotyczy
 tylko pakietów z ładunkiem (payloadem); pakiety bez danych (np. czyste ACK, SYN) nie mają czego
@@ -208,7 +213,6 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 - *Celuj w cel (IP/port)* - psuj tylko ruch do/od wybranych serwerów. Oba pola przyjmują listy, zakresy, CIDR, wildcardy, porównania, wykluczenia i wyrażenia regularne - patrz [Składnia filtrów](#składnia-filtrów-proces--ip--port). Np. IP `10.0.0.1-10.0.0.50,!10.0.0.7`, port `80,443,8000-8100`. Puste = dowolne.
 - *Gubione TCP SYN (%)* - procent gubionych pakietów rozpoczynających połączenie; symuluje sytuację, gdy połączenie nie chce się nawiązać (test ponawiania prób) - przydatne przy testach zza NAT.
 - *Maks. rozmiar (MTU)* - gub pakiety większe niż N bajtów; odwzorowuje „czarną dziurę MTU” z tuneli/VPN/za NAT (małe przechodzą, duże znikają). 0 = wyłączone.
-- *Skok latencji* - z podanym prawdopodobieństwem doklej dodatkowe opóźnienie (ms) do pojedynczego pakietu; odwzorowuje chwilowe „lagi”.
 - *NAT timeout* - jeśli połączenie milczy dłużej niż N sekund, kolejny pakiet przychodzący jest odrzucany (mapowanie „znika”); test keep-alive. 0 = wyłączone.
 - *Zrywanie TCP (RST)* - procent połączeń nagle zrywanych pakietem RST; wymusza reconnect. **Dotyczy wyłącznie TCP** (RST to pojęcie TCP-owe; UDP nie da się „zerwać” - użyj strat albo przerwy w łączu). Przycisk **Zerwij TCP teraz** zrywa wszystkie aktywne połączenia TCP na ~3 s.
 - *Harmonogram* - zmienna przepustowość w czasie: `czas:pobieranie:wysyłanie` w KB/s, po przecinku. Np. `2:100:0, 2:500:0` = 2 s po 100 KB/s, potem 2 s po 500, w pętli. Gdy harmonogram jest niepusty, **zastępuje** stałe pola „Pobieranie/Wysyłanie” - GUI wyszarza je i mówi o tym wprost.

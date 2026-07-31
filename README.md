@@ -250,6 +250,11 @@ another in the queue - jitter inherently **reorders packets** (a real network do
 added delay rises above latency itself (e.g. latency 0, jitter 50 ms gives ~half the packets with
 no delay and a mean of ~12 ms, not 0). When latency is larger than jitter the effect is negligible.
 
+*Latency spike* lives in the same section, because a spike is latency too - an occasional large
+one. With the given probability it appends extra delay (ms) to a **single packet**, which is how
+momentary "lag" actually arrives. The chance is per packet and applies **in each direction**, so a
+round trip hits it about twice as often as the number suggests.
+
 **Impairment (%)** - *Loss*: percentage of packets vanishing without a trace (5% is already a
 clearly failing network). *Corruption*: percentage of packets with a flipped data bit - it affects
 **only payload-bearing packets**; packets with no data (e.g. pure ACK, SYN) have nothing to flip,
@@ -268,8 +273,6 @@ given percentage of the time. Simulates a flickering connection.
   that will not establish (retry testing) - useful for tests from behind NAT.
 - *Max size (MTU)* - drop packets larger than N bytes; reproduces an "MTU black hole" from
   tunnels/VPN/behind NAT (small ones pass, large ones vanish). 0 = disabled.
-- *Latency spike* - with the given probability append extra delay (ms) to a single packet;
-  reproduces momentary "lag".
 - *NAT timeout* - if a connection is silent for more than N seconds, the next inbound packet is
   dropped (the mapping "disappears"); a keep-alive test. 0 = disabled.
 - *TCP tear-down (RST)* - percentage of connections abruptly torn with an RST packet; forces

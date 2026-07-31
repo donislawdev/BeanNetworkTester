@@ -37,6 +37,24 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   offending key is NAMED in the message, since "invalid scenario" without a name would leave the
   user hunting. Verified by mutation: disabling the two checks turns all three red.
 
+### Changed
+
+- **`spike_prob` and `spike_ms` moved from the `advanced` section to `latency`** (`fields.py`): the
+  two `Field` entries were relocated inside `FIELD_DEFS` so the registry reads in form order, and
+  the two `Section` tuples were updated. **One entry per field really was enough** - grepped every
+  reader first, and `core.py`, `settings.py`, `summary.py`, `repro.py`, `presets.py` and the GUI's
+  variable wiring all go by the field KEY, so none of them knew which section the fields lived in.
+  `test_prefs.py` and `test_windows.py` use `"advanced"` as a collapsed-section id; the section
+  still exists with its remaining five fields, so they are unaffected.
+  Moving the entries changes the KEY ORDER of `PRESET_TO_SETTING` and `PRESET_DEFAULTS` (both are
+  derived from `FIELD_DEFS` order) and therefore the key order written into `profiles.json`. Checked
+  rather than assumed: every test over those compares sets or whole dicts, never order, and JSON
+  object order carries no meaning here.
+  Docs: the option walkthrough in both READMEs is organised by GUI section, so the *Latency spike*
+  bullet moved out of "Advanced (NAT / connections)" and into the delay text. **Nothing guards
+  that** - the bullet structure is prose, not a registry view - so it is the one part of this change
+  a test could not have caught.
+
 ### Docs
 
 - **Three registries gained a documented mirror, and a guard to keep it honest.** The scenario
