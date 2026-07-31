@@ -54,6 +54,7 @@ from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
 from .pages import PAGES
 from .profiles import ProfileStore
 from .rates import PeakWindow
+from . import scope
 from .scaling import (geometry_fits, init_scaling, initial_geometry,
                       max_window_size, min_window_size, scaled)
 from .scrollable import WheelDispatcher
@@ -1788,6 +1789,23 @@ class App:
         if key in self.SCOPED_TWIN and self.scoped_view():
             key = self.SCOPED_TWIN[key]
         return snap.get(key, default)
+
+    def coverage(self):
+        """What the on-screen numbers cover, as one verdict (see gui/scope.py).
+
+        ``scoped_stat`` is the single decider for the FIGURES; this is the single
+        decider for every sentence, caption and row that says what those figures
+        are OF. They were separate before, and that is exactly how the notes came
+        to describe the view preference while claiming to describe the capture.
+
+        Cheap on purpose, because more than one page asks per tick: an attribute
+        read, a dict lookup in the preference store, and one uncontended
+        ``core._lock``. Deliberately NOT ``session_info()``, which builds a dict
+        and formats two timestamps to answer the same question.
+        """
+        return scope.coverage(self.engine.capture_narrowed(),
+                              self.scoped_view(),
+                              self.engine.process_target_active())
 
     def _sample(self):
         """Snapshot the engine and keep the throughput history continuous."""

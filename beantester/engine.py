@@ -310,6 +310,21 @@ class BeanEngine:
                     # two worlds produced its numbers.
                     narrowed=bool(getattr(self, "_narrowed", False)))
 
+    def capture_narrowed(self):
+        """Did this session's driver filter get the destination folded into it?
+
+        The same fact ``session_info()["narrowed"]`` reports, as a plain bool.
+        Separate because the callers are different: ``session_info`` is the
+        REPORTING surface (the repro report, the NDJSON summary) and builds a
+        dict with two ``strftime`` calls, while the GUI asks this question on
+        every 700 ms tick, on the UI thread, from more than one page.
+
+        A START-time fact, and deliberately NOT cleared by ``stop()``: after a
+        session ends its counters stay on screen, so the sentence describing what
+        they cover has to keep describing the session that produced them.
+        """
+        return bool(self._narrowed)
+
     # WinDivert's own queue, the one BEFORE ours. Nothing in this program used to
     # read it, so a session's numbers could not be interpreted: with QUEUE_TIME at
     # its default the driver may hold a packet for up to two seconds, and that
@@ -438,6 +453,18 @@ class BeanEngine:
     def targeting_active(self):
         """True when process or destination targeting is narrowing traffic."""
         return self.core.targeting_active()
+
+    def process_target_active(self):
+        """True when a PROCESS target is narrowing what gets impaired.
+
+        The process half of ``targeting_active()`` on its own. It is the half a
+        narrowed capture cannot express - ``processId`` is a bad token on the
+        NETWORK layer, so the driver hands over the destination's traffic from
+        every process and ``decide()`` step 1 does the rest. That difference is
+        the whole reason the coverage verdict has a state for it
+        (``gui/scope.py``).
+        """
+        return self.core.process_target_active()
 
     def set_lan(self, *a):
         self.core.set_lan(*a)

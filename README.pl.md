@@ -980,6 +980,7 @@ beantester/              pakiet z implementacją
     windows.py           bazowa klasa i rejestr okien wtórnych
     dialogs.py           ciemne, wbudowane odpowiedniki messagebox/simpledialog
     rates.py             uśrednianie przepustowości (czysty, testowalny helper)
+    scope.py             co obejmują liczby na ekranie (jeden czysty werdykt)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    tłumaczenia (en, pl)
 tests/                   testy pytest

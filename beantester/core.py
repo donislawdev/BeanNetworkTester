@@ -506,6 +506,16 @@ class BeanCore:
         with self._lock:
             return bool(self.target_active or self.dst_active)
 
+    def process_target_active(self):
+        """True when a PROCESS target (step 1) is narrowing what gets impaired.
+
+        The destination half can be pushed down into the driver's own filter;
+        this half never can, so it stays a difference between what is CAPTURED
+        and what is IMPAIRED even when the capture has been narrowed.
+        """
+        with self._lock:
+            return bool(self.target_active)
+
     def decide(self, size, is_outbound, local_port, now, rng,
                remote_ip=None, remote_port=None, is_syn=False, is_tcp=False):
         with self._lock:

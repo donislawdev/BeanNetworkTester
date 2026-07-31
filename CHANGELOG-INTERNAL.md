@@ -62,6 +62,35 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **What the on-screen numbers COVER is now derived in one place: `gui/scope.py`.** The notes on
+  Statistics and Connections answer "what do these figures cover?", but both read a single input -
+  the `scope_view_to_target` preference (`stats.py` line 149, `conns.py` line 122). With
+  `narrow_filter` on and effective, the driver's filter has the destination folded into it, so both
+  notes stated the opposite of the truth ("ALL captured traffic ... targeting decides what gets
+  impaired, not what gets listed") while `tips.narrow_filter`, one window away, promised the two
+  tabs "then show only that traffic". Both READMEs carry the same contradiction (the
+  `--narrow-filter` row against the behaviour list). Nothing could go red over it: prose has no
+  guard.
+  This commit adds the fact and the single decider, and wires up no surface yet:
+  `BeanEngine.capture_narrowed()` (the start-only verdict as a plain bool, beside the
+  `session_info()` dict the repro report and the NDJSON summary already carry - deliberately NOT
+  cleared by `stop()`, because the counters it describes stay on screen);
+  `BeanCore.process_target_active()` / `BeanEngine.process_target_active()` (the process half of
+  `targeting_active()` alone - the half `processId` can never push into a NETWORK-layer filter, so
+  it still separates CAPTURED from IMPAIRED when the capture has been narrowed); pure, Tk-free
+  `scope.coverage()` returning one of `ALL` / `CAPTURE` / `CAPTURE_PROCESS` / `VIEW`; and
+  `App.coverage()`, which is to every sentence about the figures what `App.scoped_stat` already is
+  to the figures themselves.
+  `VIEW` outranks `CAPTURE` on purpose: with the view scoped every counter with a twin IS its
+  scoped twin, so the figures cover what targeting selected however wide the capture behind them
+  was. `CAPTURE_PROCESS` is a state rather than a hedge in the wording because with no process
+  target everything captured is also impaired, and "your targeting still decides what gets impaired
+  inside it" would then be true, useless, and would imply a narrowing that is not happening.
+  Five new guards in `test_view_scope.py` (all eight input combinations, the precedence, `None`
+  reading as off, the two readers of the narrowing fact agreeing, the process half on its own).
+  Verified by mutation: `stop()` clearing the flag, the precedence flipped, the process half
+  widened to `targeting_active()`, and the reader hardcoded to `False` are each caught.
+
 - **`tips.narrow_filter` rewritten in both languages, and the cause of its shape removed.**
   `narrow_filter` declared `hint="fields.narrow_filter_hint"` - a 300-character explanation in two
   languages that **was never rendered**: `gui/form.py::_place_one` handles `BOOL` and returns at

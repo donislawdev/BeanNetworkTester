@@ -20,7 +20,7 @@ away by somebody making things consistent:
 import time
 
 from beantester.engine import BeanEngine
-from beantester.gui import prefs
+from beantester.gui import prefs, scope
 from fakes import FakeDivert, FakePacket, check
 from gui_harness import run_gui
 
@@ -135,6 +135,133 @@ def test_the_note_follows_the_view_instead_of_describing_the_other_one():
         narrow = page._scope_note.kw.get("text")
         assert narrow == bnt.T("stats.scope_note_scoped"), narrow
         assert narrow != wide, "the note did not change with the preference"
+    """)
+
+
+# -- the coverage verdict (gui/scope.py) ----------------------------------- #
+# What the numbers on screen cover depends on THREE facts, not one, and the
+# notes used to read only the third. These pin the derivation itself, so a
+# surface can be checked against the verdict instead of against a re-derivation.
+def test_the_verdict_names_a_state_for_every_combination_of_the_three_facts():
+    """All eight inputs, spelled out - no combination may fall through to "all".
+
+    The dangerous fall-through is (capture narrowed, view wide): that is the
+    state the notes got wrong, and the one a table missing an entry lands on.
+    """
+    cases = {
+        # (capture_narrowed, view_scoped, process_target): state
+        (False, False, False): scope.ALL,
+        (False, False, True): scope.ALL,
+        (True, False, False): scope.CAPTURE,
+        (True, False, True): scope.CAPTURE_PROCESS,
+        (False, True, False): scope.VIEW,
+        (False, True, True): scope.VIEW,
+        (True, True, False): scope.VIEW,
+        (True, True, True): scope.VIEW,
+    }
+    for (narrowed, viewed, proc), expected in cases.items():
+        got = scope.coverage(narrowed, viewed, proc)
+        check(f"coverage{(narrowed, viewed, proc)}", got.state == expected,
+              f"= {got.state}, expected {expected}")
+        check("the raw facts travel with the verdict",
+              (got.capture_narrowed, got.view_scoped, got.process_target)
+              == (narrowed, viewed, proc), str(got))
+    check("every state is reachable",
+          set(cases.values()) == set(scope.STATES), str(scope.STATES))
+
+
+def test_the_view_preference_outranks_a_narrowed_capture():
+    """With the view scoped, the figures ARE the scoped twins - whatever was captured.
+
+    Ordering these the other way round would put a sentence about the capture
+    over numbers that had already been narrowed further, which is the same class
+    of lie this module exists to remove.
+    """
+    verdict = scope.coverage(True, True, False)
+    check("the view wins", verdict.state == scope.VIEW, verdict.state)
+    check("but the capture fact is still readable for the surfaces that need it",
+          verdict.capture_narrowed is True, str(verdict))
+
+
+def test_a_missing_fact_cannot_invent_a_fifth_state():
+    """The callers read a preference store, an engine flag and a core flag; before
+    the first session one of them can answer None, and that must be "no"."""
+    verdict = scope.coverage(None, None, None)
+    check("None reads as off", verdict.state == scope.ALL, verdict.state)
+    check("and is stored as a real bool",
+          verdict.capture_narrowed is False and verdict.view_scoped is False,
+          str(verdict))
+
+
+def test_the_narrowing_fact_has_one_source_and_two_readers_that_agree():
+    """``capture_narrowed()`` and ``session_info()["narrowed"]`` are one fact.
+
+    They are read by different worlds - the GUI's per-tick surfaces and the
+    reproduction report / NDJSON summary - so a session that narrowed must not be
+    able to look narrowed in a saved report and wide on screen.
+    """
+    engine = BeanEngine()
+    engine.start("test", divert=FakeDivert([]))
+    try:
+        check("a session with an injected divert is not narrowed",
+              engine.capture_narrowed() is False, str(engine.capture_narrowed()))
+        check("and both readers say so",
+              engine.session_info()["narrowed"] == engine.capture_narrowed())
+        # The one line a REAL narrowed start would have written (engine.py:
+        # _start_locked). It cannot happen on an injected divert by design -
+        # see test_narrow_filter.py::test_an_injected_divert_is_never_narrowed.
+        engine._narrowed = True
+        check("both readers follow the fact",
+              engine.capture_narrowed() is True
+              and engine.session_info()["narrowed"] is True)
+    finally:
+        engine.stop()
+    check("STOP does not clear it: the counters it describes are still on screen",
+          engine.capture_narrowed() is True, str(engine.capture_narrowed()))
+    engine.start("test", divert=FakeDivert([]))
+    try:
+        check("but the next session starts from its own truth",
+              engine.capture_narrowed() is False, str(engine.capture_narrowed()))
+    finally:
+        engine.stop()
+
+
+def test_the_process_half_of_targeting_is_readable_on_its_own():
+    """A narrowed capture can express the DESTINATION and never the process.
+
+    So "capture narrowed" and "a process target is still filtering inside it" are
+    two different questions, and the second needs its own reader - with a
+    destination target set, ``process_target_active`` must stay False even though
+    ``targeting_active`` is True.
+    """
+    engine = BeanEngine()
+    check("nothing targeted", engine.process_target_active() is False)
+    engine.set_dest(True, "8.8.8.8", "53")
+    check("a destination target is not a process target",
+          engine.process_target_active() is False)
+    check("though targeting IS active", engine.targeting_active() is True)
+    engine.set_target(True, {50001})
+    check("a process target reads True", engine.process_target_active() is True)
+    engine.set_target(False, set())
+    check("and clears again", engine.process_target_active() is False)
+
+
+def test_the_app_verdict_reads_the_engine_and_the_preference_together():
+    """One decider on the App, so no surface re-derives this from its own inputs."""
+    run_gui("""
+        from beantester.gui import scope
+
+        app.set_pref("scope_view_to_target", False)
+        assert app.coverage().state == scope.ALL, app.coverage()
+
+        app.engine._narrowed = True          # what a narrowed start writes
+        assert app.coverage().state == scope.CAPTURE, app.coverage()
+
+        app.engine.set_target(True, {50001})
+        assert app.coverage().state == scope.CAPTURE_PROCESS, app.coverage()
+
+        app.set_pref("scope_view_to_target", True)
+        assert app.coverage().state == scope.VIEW, app.coverage()
     """)
 
 

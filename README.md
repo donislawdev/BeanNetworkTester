@@ -1123,6 +1123,7 @@ beantester/              the implementation package
     windows.py           base class and registry for secondary windows
     dialogs.py           dark, in-app replacements for messagebox/simpledialog
     rates.py             throughput averaging (a pure, testable helper)
+    scope.py             what the numbers on screen cover (one pure verdict)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl)
 tests/                   pytest tests
