@@ -35,6 +35,18 @@ class Pref(NamedTuple):
     hint: str = ""                 # i18n key of the greyed hint
     width: int = 8
     action: str = ""               # App method name for kind == ACTION
+    # Id of a ``fields.Section`` that renders this pref through its ``extra``
+    # builder, INSTEAD of a preference group. For the rare pref that belongs
+    # beside a registry field rather than with the other preferences: "Show only
+    # the targeted traffic" has to be read together with "Capture only the
+    # targeted traffic", and those two live in different registries (one is a
+    # ui.json preference, the other an engine field with a CLI flag - convention
+    # 42 keeps them apart on purpose). Splitting them across two cards is what
+    # made them look like two spellings of one switch.
+    # Declared here rather than in a second list, so "where is this rendered"
+    # has exactly one answer. A pref must be in a group OR name a section, never
+    # both and never neither - guarded by tests/test_prefs.py.
+    section: str = ""
 
 
 PREFS = (
@@ -53,7 +65,7 @@ PREFS = (
     # `seen` AND `scoped_seen` regardless, so a pipeline never has to guess which
     # world a file came from.
     Pref("scope_view_to_target", BOOL, "prefs.scope_view", "tips.scope_view",
-         default=False, hint="prefs.scope_view_hint"),
+         default=False, hint="prefs.scope_view_hint", section="scope"),
     # -- behaviour --------------------------------------------------------- #
     Pref("confirm_close", BOOL, "prefs.confirm_close", "tips.confirm_close",
          default=True),
@@ -66,10 +78,17 @@ PREFS = (
 PREFS_BY_KEY = {p.key: p for p in PREFS}
 
 # How the Settings window groups them (each is a card, like a Control section).
+# Prefs that name a ``section`` are rendered there instead and must NOT appear
+# here - see ``SECTION_PREFS`` below.
 PREF_GROUPS = (
-    ("prefs.group_view", ("chart_seconds", "log_lines", "scope_view_to_target")),
+    ("prefs.group_view", ("chart_seconds", "log_lines")),
     ("prefs.group_behaviour", ("confirm_close", "restore_profile", "reset_layout")),
 )
+
+
+def prefs_in_section(section_id):
+    """Prefs rendered inside a registry section's ``extra`` builder, in order."""
+    return tuple(p for p in PREFS if p.section == section_id)
 
 
 def ui_key(key):

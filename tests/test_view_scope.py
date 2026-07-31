@@ -77,8 +77,40 @@ def test_the_preference_exists_and_defaults_to_showing_everything():
     check("it is a checkbox", pref.kind == prefs.BOOL, pref.kind)
     check("and it defaults to showing everything", pref.default is False,
           repr(pref.default))
-    check("it is rendered in the Settings window",
-          any("scope_view_to_target" in keys for _, keys in prefs.PREF_GROUPS))
+
+
+def test_both_scope_switches_are_rendered_in_one_card():
+    """The two switches must be READ TOGETHER, so they must be SEEN together.
+
+    They differ by one verb - "Capture only the targeted traffic" against "Show
+    only the targeted traffic" - and only the first changes what the tool takes
+    in. Rendered in two separate panels a few rows apart, they read as two
+    spellings of one setting. They come from different registries (an engine
+    field with a CLI flag against a ui.json preference), so nothing but the card
+    can hold them together, and nothing but a built window can prove it did.
+    """
+    run_gui("""
+        panel = app.open_window("settings")
+
+        # the field half: the checkbox ControlForm built for this section
+        assert "narrow_filter" in panel.form.entries, sorted(panel.form.entries)
+        card = panel.form.entries["narrow_filter"].master
+
+        # the preference half: same card, not a preference group elsewhere
+        assert "scope_view_to_target" in panel._pref_vars, sorted(panel._pref_vars)
+
+        def descends_from(widget, ancestor):
+            while widget is not None:
+                if widget is ancestor:
+                    return True
+                widget = getattr(widget, "master", None)
+            return False
+
+        holder = panel._scope_status
+        assert holder is not None, "the scope card has no status line"
+        assert descends_from(holder, card) or descends_from(card, holder.master), \\
+            "the verdict line is not in the same card as the capture switch"
+    """)
 
 
 def test_the_scoped_twins_cover_exactly_the_three_counters_that_have_one():
@@ -409,6 +441,92 @@ def test_an_incomplete_wording_table_is_refused_when_the_page_is_imported():
         check("and an obsolete entry is named too", "no_such_state" in str(exc), str(exc))
     else:
         raise AssertionError("a table with an unknown state was accepted")
+
+
+def test_the_scope_card_answers_before_the_session_starts():
+    """Ticking the box is a REQUEST, and the answer used to arrive only after a
+    start - as a log line, in a window you may not be looking at.
+
+    ``narrowed_filter`` is patched here rather than trusted: it asks the DRIVER's
+    own parser, which is absent on the Linux half of the CI matrix, where the
+    honest answer for every destination is "cannot prove it". Patching keeps the
+    test about the LINE, not about whether pydivert happens to be installed.
+    """
+    run_gui("""
+        from beantester.gui.panels import settings as settings_panel
+
+        answer = [True]
+        settings_panel.narrowed_filter = lambda base, ip, port: (base, answer[0])
+
+        panel = app.open_window("settings")
+        status = panel._scope_status
+
+        # not asked for: the line says nothing and takes up no room
+        app.vars["narrow_filter"].set(False)
+        panel.refresh()
+        assert status.kw.get("text") == "", status.kw.get("text")
+        assert status.pack_info is None
+
+        # asked for, and this destination can be pushed into the driver
+        app.vars["narrow_filter"].set(True)
+        app.vars["dst_ip"].set("8.8.8.8")
+        panel.refresh()
+        assert status.kw.get("text") == bnt.T("scope.narrow_works"), status.kw.get("text")
+        assert status.pack_info is not None
+
+        # asked for, and it cannot - the case that used to pass in silence
+        answer[0] = False
+        app.vars["dst_ip"].set("192.*")
+        panel.refresh()
+        assert status.kw.get("text") == bnt.T("scope.narrow_has_no_effect"), \\
+            status.kw.get("text")
+        assert status.kw.get("style") == "Bad.TLabel", status.kw.get("style")
+    """)
+
+
+def test_the_verdict_is_right_the_moment_the_window_opens():
+    """Not one tick later. Somebody who ticks the box, opens Settings and reads a
+    blank line has been told nothing - and 700 ms is long enough to look away.
+
+    Deliberately never calls ``refresh()``: this asserts the BUILD path, which
+    every other test in here skips straight past.
+    """
+    run_gui("""
+        from beantester.gui.panels import settings as settings_panel
+        settings_panel.narrowed_filter = lambda base, ip, port: (base, False)
+
+        app.vars["narrow_filter"].set(True)
+        app.vars["dst_ip"].set("192.*")
+        panel = app.open_window("settings")
+
+        assert panel._scope_status.kw.get("text") == bnt.T("scope.narrow_has_no_effect"), \\
+            panel._scope_status.kw.get("text")
+        assert panel._scope_status.pack_info is not None
+    """)
+
+
+def test_a_running_session_outranks_the_preview_in_the_scope_card():
+    """Mid-session the handle's filter is already fixed, so the fields on screen
+    can describe a session that does not exist. The line must report what this
+    session DID, not what a restart would do - that is the whole reason the
+    destination is start-only while narrowing is on."""
+    run_gui("""
+        from beantester.gui.panels import settings as settings_panel
+        settings_panel.narrowed_filter = lambda base, ip, port: (base, True)
+
+        panel = app.open_window("settings")
+        app.vars["narrow_filter"].set(True)
+        app.vars["dst_ip"].set("8.8.8.8")
+        panel.refresh()
+        assert panel._scope_status.kw.get("text") == bnt.T("scope.narrow_works")
+
+        # the session narrowed nothing, whatever the preview would say now
+        app.running = True
+        app.engine._narrowed = False
+        panel.refresh()
+        assert panel._scope_status.kw.get("text") == bnt.T("scope.narrow_has_no_effect"), \\
+            panel._scope_status.kw.get("text")
+    """)
 
 
 def test_the_window_says_whether_the_narrowing_actually_happened():

@@ -50,6 +50,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Hovering a note used to explain the OTHER state: the bubble was attached once and never updated,
   so it kept describing the wording that had just been replaced. It follows the note now.
 
+- **The two "only the targeted traffic" switches now sit in one "Scope" card, and it tells you
+  whether the first one will work.** They differ by a single word - **Capture** only the targeted
+  traffic against **Show** only the targeted traffic - and they used to be in separate panels a few
+  rows apart, so they read as two spellings of the same setting. Only one of them changes what the
+  tool takes in; the other changes what is on screen and can be flipped at any time. They are now
+  next to each other, with a line under them that says, **before you press START**, whether your
+  destination can actually be pushed down into the driver - and when it cannot, which forms do work
+  (a plain address, a list, a range, a CIDR) and which do not (a wildcard, an `re:` pattern, or
+  targeting only a process). While a session is running the line reports what **that session** did,
+  not what a restart would do.
+
 - **The window now says whether "Capture only the targeted traffic" actually worked.** The option
   quietly does nothing when the destination cannot be turned into a driver filter - a wildcard, an
   `re:` pattern, only a process target, or no destination at all - and since capturing everything

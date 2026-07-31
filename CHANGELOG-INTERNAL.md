@@ -118,6 +118,36 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   The `conns.py` module docstring claimed "these are ALL captured connections ... targeting decides
   what gets broken, not what gets seen" as unconditional fact; corrected.
 
+- **One "Scope" card in the Settings window, holding both switches and a live verdict.** The
+  `capture` section is renamed `scope` (label `frames.scope`, `frames.capture` retired) and gains
+  `extra="scope"`; `SettingsWindow._build_scope_extra` fills the rest of that card. The two
+  switches cannot share a registry - `narrow_filter` is a `Field` with a CLI flag that travels in a
+  config file, `scope_view_to_target` is a ui.json `Pref` (convention 42) - so the CARD is the only
+  place they can meet, and the `extra` hook is the sanctioned way to put a page's own widgets
+  inside a registry section.
+  `Pref` gains `section: str = ""`, naming the registry section that renders it instead of a
+  preference group, plus `prefs.prefs_in_section()`. Declared on the `Pref` rather than in a second
+  list, so "where is this rendered" keeps one answer. `PREF_GROUPS` no longer lists it.
+  Two guards had to change, and both were registry PROXIES for "is this reachable in the window":
+  `test_every_pref_is_grouped_exactly_once` becomes
+  `test_every_pref_is_rendered_in_exactly_one_place` (group XOR section, never both, never
+  neither), and the old `any(... in PREF_GROUPS)` line in `test_view_scope.py` is replaced by
+  `test_both_scope_switches_are_rendered_in_one_card`, which opens the real window and walks the
+  widget parents. New `test_a_pref_can_only_name_a_section_that_will_actually_render_it` - a typo
+  in `Pref.section` fails silently, exactly like a stray id in `FIRST_RUN_COLLAPSED`.
+  **The verdict line answers before START.** `_narrowing_verdict()` asks
+  `filters.narrowed_filter` - the same call, and therefore the same driver-parser answer,
+  `start()` will make - over matchers built from the current destination fields; while a session
+  runs it returns `engine.capture_narrowed()` instead, because the handle's filter is already
+  fixed and the fields on screen may describe a session that does not exist. Memoised on its
+  inputs, so the driver's parser is asked when something moves, not every tick.
+  Guards: the card answers before a session, a running session outranks the preview, and the line
+  is right at BUILD time rather than one tick later. `narrowed_filter` is PATCHED in those tests -
+  it reaches `WinDivertHelperCompileFilter`, which is absent on the Linux half of the CI matrix,
+  where "cannot prove it" is the honest answer for every destination. Seven mutants, all caught;
+  the build-time one survived the first pass (every test called `refresh()` first) and produced
+  the third guard.
+
 - **`App._log_capture_scope()`: the start-time narrowing verdict reaches the GUI log, both ways.**
   `cli._run_session` has reported this since the option shipped (`log.info` on success,
   `log.warn` on "asked for and did not get it"); the GUI passed `narrow=` to `engine.start()` and
