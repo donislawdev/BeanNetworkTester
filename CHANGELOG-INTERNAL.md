@@ -19,6 +19,29 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **`capture_narrowed` column in the statistics CSV.** New `App.CSV_SESSION_COLUMNS`
+  (keyed by `session_info()` key, the way `CSV_COLUMNS` is keyed by counter key) and
+  `_csv_session_value`, written between the timestamp and the counters. Booleans go out as
+  `yes`/`no` in English, like `impaired` in the connections export - a CSV is read by scripts, not
+  in the interface language. Touches a frozen on-disk format ("Kontrakty publiczne"), so it needs
+  the owner's version bump; the existing file rotates through the header-change path that already
+  exists in `export_csv`.
+  Why it is worth breaking: the file's own comment says an append log whose columns mean different
+  things in different rows is worse than useless, and that argument was applied to the VIEW
+  preference (both totals carried, reader narrows them) while capture narrowing - the stronger
+  version, which changes `seen` itself and cannot be undone by picking a column - had no marker at
+  all. The CLI's JSON summary has carried the same fact since narrowing shipped, and the repro
+  report embeds the whole `session_info`; this was the last surface that could not say.
+  `test_readme_guards.py::test_both_readmes_document_every_csv_column` now unions the session
+  columns, and both READMEs document it (table row plus the paragraph explaining why this file
+  ignores the view switch but cannot ignore this).
+  Guard: `test_view_scope.py::test_the_stats_csv_records_which_world_each_row_was_measured_in`
+  exports twice across a changed verdict and reads the file back. Four mutants, all caught: the
+  column removed, its value pinned, the row desynchronised from the header, and the README entry
+  renamed. Two earlier mutants were BAD mutants rather than results - deleting the guard line
+  itself (nothing can catch a deleted test) and renaming the column to a SUPERSTRING (the docs
+  guard matches by substring, so `capture_narrowed_TYPO` still contains `capture_narrowed`).
+
 - **BREAKING:** **`reset_now` removed from `scenario.ACTIONS`**, leaving `reset_tcp` as the only
   action. Touches the frozen scenario-file format ("Kontrakty publiczne"), so it needs the owner's
   version bump. Thanks to the step validation added earlier in this release, a file still using the

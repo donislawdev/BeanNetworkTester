@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **the statistics CSV has a new `capture_narrowed` column**, right after `time`.
+  It says whether that row was measured with "Capture only the targeted traffic" in effect - and
+  without it two rows under the same header could count completely different traffic with no way
+  to tell them apart. Unlike the "show only the targeted traffic" switch, which the file sidesteps
+  by carrying both totals, this one changes what `packets_seen` counted at all, so no pair of
+  columns can undo it. **Your existing `bean_network_tester_stats.csv` is renamed with a timestamp
+  and a fresh one started** (the tool already does this whenever the columns change, so rows never
+  misalign under a stale header) - nothing is lost, but a script reading the file by column
+  position needs the offset.
+
 - **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the
   same thing and is now the only action a scenario step can carry. A scenario file still using
   `reset_now` will not load, and says which step to fix. The **"Reset TCP now" button is not

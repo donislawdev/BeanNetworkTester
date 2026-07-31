@@ -816,15 +816,17 @@ The statistics CSV does not follow the "show only the targeted traffic" switch b
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
 useless for the spreadsheet it exists for. It carries **both** totals instead
 (`bytes_in`/`bytes_out` and `delivered_in_scope_bytes_*`), so you can narrow it yourself and still
-see which is which.
+see which is which. **"Capture only the targeted traffic" cannot be undone that way** - it changes
+what `packets_seen` counted in the first place - so every row records it in `capture_narrowed`.
 
 ### Statistics CSV columns
 
-`time` plus every counter, in this order:
+`time`, the session's capture scope, then every counter, in this order:
 
 | column | meaning |
 |---|---|
 | `time` | wall-clock time of the click |
+| `capture_narrowed` | `yes` when "Capture only the targeted traffic" was in effect for that session, so every count on the row covers your destination's traffic **only**. `no` means the row covers everything the traffic filter passed. Without this column two rows with the same `packets_seen` could describe completely different traffic |
 | `packets_seen` | packets captured |
 | `packets_in_scope` | of those, the ones targeting selected for impairment |
 | `dropped_loss` | dropped by the Loss setting |

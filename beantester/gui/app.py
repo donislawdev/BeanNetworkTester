@@ -1043,9 +1043,34 @@ class App:
                    "bytes_in_scoped": "delivered_in_scope_bytes_down",
                    "bytes_out_scoped": "delivered_in_scope_bytes_up"}
 
+    # Columns that come from the SESSION rather than the counters: they say which
+    # world the counters were measured in. The comment above explains why this
+    # file must not follow the view preference - a column meaning one thing in
+    # some rows and another in the rest is useless to the spreadsheet it exists
+    # for. Capture narrowing is the STRONGER version of that problem and had no
+    # column at all: it does not pick between two totals, it changes `seen`
+    # itself, so a narrowed row and a wide row were indistinguishable while
+    # counting completely different traffic. The CLI has carried the same fact in
+    # its JSON summary (`capture_narrowed`) since narrowing shipped, and the repro
+    # report carries the whole `session_info` - only this file could not say.
+    # Keyed by session_info() key, like CSV_COLUMNS is keyed by counter key.
+    CSV_SESSION_COLUMNS = {"narrowed": "capture_narrowed"}
+
+    @staticmethod
+    def _csv_session_value(key, info):
+        """One session cell. Booleans as yes/no in English, like `impaired` in the
+        connections export - a CSV is read by scripts and spreadsheets, so it does
+        not follow the interface language."""
+        value = info.get(key)
+        return ("yes" if value else "no") if isinstance(value, bool) else value
+
     def export_csv(self):
         snap = self.engine.stats_snapshot()
-        header = ["time", *(self.CSV_COLUMNS.get(k, k) for k in snap)]
+        info = self.engine.session_info()
+        session_cells = [self._csv_session_value(k, info)
+                         for k in self.CSV_SESSION_COLUMNS]
+        header = ["time", *self.CSV_SESSION_COLUMNS.values(),
+                  *(self.CSV_COLUMNS.get(k, k) for k in snap)]
         try:
             write_header = not os.path.exists(CSV_FILE)
             if not write_header:
@@ -1062,7 +1087,8 @@ class App:
                 writer = csv.writer(f)
                 if write_header:
                     writer.writerow(header)
-                writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"), *snap.values()])
+                writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"),
+                                 *session_cells, *snap.values()])
             self.log(f"{T('log.stats_saved_to')} {os.path.basename(CSV_FILE)}")
         except Exception as e:
             self.log(f"{T('log.csv_error')}: {e}")

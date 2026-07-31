@@ -678,14 +678,17 @@ Statystyczny CSV nie idzie za przełącznikiem „tylko ruch celu", bo jest logi
 w którym kolumny znaczą co innego w jednych wierszach niż w drugich, jest gorszy niż bezużyteczny
 dla arkusza, dla którego istnieje. Zamiast tego niesie **obie** sumy (`bytes_in`/`bytes_out`
 i `delivered_in_scope_bytes_*`), więc zawężenie możesz zrobić sam i widzisz, co jest czym.
+**„Przechwytuj tylko ruch celu" nie da się tak cofnąć** - to zmienia samo to, co `packets_seen`
+w ogóle policzył - więc każdy wiersz zapisuje to w kolumnie `capture_narrowed`.
 
 ### Kolumny statystycznego CSV
 
-`time` plus każdy licznik, w tej kolejności:
+`time`, zasięg przechwytu tej sesji, potem każdy licznik, w tej kolejności:
 
 | kolumna | znaczenie |
 |---|---|
 | `time` | czas zegarowy kliknięcia |
+| `capture_narrowed` | `yes`, gdy w tej sesji działało „Przechwytuj tylko ruch celu", czyli każda liczba w tym wierszu obejmuje **wyłącznie** ruch z Twoim celem. `no` znaczy, że wiersz obejmuje wszystko, co przepuścił filtr ruchu. Bez tej kolumny dwa wiersze z tym samym `packets_seen` mogłyby opisywać zupełnie różny ruch |
 | `packets_seen` | przechwycone pakiety |
 | `packets_in_scope` | z tego te, które celowanie wybrało do psucia |
 | `dropped_loss` | odrzucone przez ustawienie Strata |

@@ -596,3 +596,39 @@ def test_the_stats_csv_carries_both_totals_and_never_narrows():
         assert cols["seen"] == "packets_seen", cols["seen"]
         assert cols["scoped_seen"] == "packets_in_scope", cols["scoped_seen"]
     """)
+
+
+def test_the_stats_csv_records_which_world_each_row_was_measured_in():
+    """An append log needs the capture scope ON THE ROW.
+
+    The view preference picks between two columns that are both present, so a
+    reader can undo it. Capture narrowing cannot be undone that way - it changes
+    what `packets_seen` counted - so without this column two rows under one
+    header could describe completely different traffic with no way to tell.
+    """
+    import csv as _csv
+    import os
+    import tempfile
+
+    out = run_gui("""
+        import csv, os, tempfile
+        from beantester.gui import app as app_mod
+
+        path = os.path.join(tempfile.mkdtemp(), "stats.csv")
+        app_mod.CSV_FILE = path
+
+        app.engine._narrowed = False
+        app.export_csv()
+        app.engine._narrowed = True
+        app.export_csv()
+
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        print(repr(rows[0].index("capture_narrowed")))
+        print(repr([r[rows[0].index("capture_narrowed")] for r in rows[1:]]))
+        # one header, two rows: a changed column set would have rotated the file
+        assert len(rows) == 3, rows
+    """)
+    index, values = [eval(line) for line in out.strip().splitlines()[-2:]]
+    check("the scope column sits right after the timestamp", index == 1, str(index))
+    check("and records each row's own world", values == ["no", "yes"], str(values))
