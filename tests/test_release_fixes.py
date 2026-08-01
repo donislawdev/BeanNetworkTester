@@ -16,7 +16,7 @@ from beantester.engine import BeanEngine
 from beantester.scenario import load_scenario_file, parse_scenario
 from beantester.summary import settings_summary
 from beantester.targeting import ProcessTargeting
-from fakes import FakeDivert, FakePacket, check
+from fakes import FakeDivert, FakePacket, check, wait_until
 
 
 # -- the preview strip used to round fractions away --------------------------- #
@@ -42,9 +42,11 @@ def test_summary_does_not_advertise_limits_a_schedule_replaces():
 def test_the_session_clock_freezes_on_stop():
     engine = BeanEngine()
     engine.start("test", divert=FakeDivert([]))
-    time.sleep(0.05)
+    wait_until(lambda: engine.session_info()["elapsed"] > 0)
     engine.stop()
     first = engine.session_info()
+    # A fixed wait, deliberately: this asserts the clock does NOT move, and there
+    # is no condition to poll for the absence of a change.
     time.sleep(0.15)
     second = engine.session_info()
     check("elapsed stops growing after STOP", first["elapsed"] == second["elapsed"],
@@ -58,7 +60,7 @@ def test_a_link_outage_is_not_counted_as_loss():
     engine = BeanEngine()
     engine.core.set_flap(True, 10.0, 100.0)      # the link is down all the time
     engine.start("test", divert=FakeDivert([FakePacket(size=100) for _ in range(5)]))
-    time.sleep(0.2)
+    wait_until(lambda: engine.stats_snapshot()["drop_flap"] == 5)
     engine.stop()
     st = engine.stats_snapshot()
     check("outage drops have their own counter", st["drop_flap"] == 5, f"({st})")

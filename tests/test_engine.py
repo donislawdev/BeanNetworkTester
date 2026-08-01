@@ -16,7 +16,7 @@ from beantester.engine import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_K
                                impairment_loss_pct)
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
-from fakes import FakeDivert, FakePacket, FakeTCP, check
+from fakes import FakeDivert, FakePacket, FakeTCP, check, wait_until
 
 
 
@@ -126,10 +126,7 @@ def test_connection_log():
     fake = FakeDivert(pkts)
     sh = BeanEngine()
     sh.start("test", divert=fake)
-    deadline = time.time() + 5
-    while time.time() < deadline and sh.stats_snapshot()["seen"] < 3:
-        time.sleep(0.02)
-    time.sleep(0.05)
+    wait_until(lambda: len(sh.connections_snapshot()) == 2)
     conns = sh.connections_snapshot()
     sh.stop()
     check("connection log: 2 flows recorded", len(conns) == 2, f"(={len(conns)})")
@@ -142,10 +139,8 @@ def test_connection_fields():
             FakePacket(size=250, is_outbound=False, port=7100, src_addr="1.1.1.1", syn=True)]
     sh = BeanEngine()
     sh.start("test", divert=FakeDivert(pkts))
-    deadline = time.time() + 5
-    while time.time() < deadline and sh.stats_snapshot()["seen"] < 3:
-        time.sleep(0.02)
-    time.sleep(0.05)
+    wait_until(lambda: len(sh.connections_snapshot()) == 1
+               and sh.stats_snapshot()["seen"] >= 3)
     conns = sh.connections_snapshot()
     sh.stop()
     check("connections: single flow", len(conns) == 1, f"(={len(conns)})")
@@ -194,13 +189,14 @@ def test_effective_seed_always_set():
     sh = BeanEngine()
     sh.set_seed(None)                       # no seed -> the program should pick one itself
     sh.start("test", divert=SyntheticDivert(gen_kbps=3000, seed=1))
-    time.sleep(0.2)
+    wait_until(lambda: sh.effective_seed() is not None)
     eff = sh.effective_seed()
     sh.stop()
     check("effective seed: set even when not provided", isinstance(eff, int) and eff > 0, f"(={eff})")
     sh2 = BeanEngine(); sh2.set_seed(12345)
     sh2.start("test", divert=SyntheticDivert(gen_kbps=3000, seed=1))
-    time.sleep(0.1); e2 = sh2.effective_seed(); sh2.stop()
+    wait_until(lambda: sh2.effective_seed() is not None)
+    e2 = sh2.effective_seed(); sh2.stop()
     check("effective seed: when provided, the same number", e2 == 12345, f"(={e2})")
 
 
@@ -209,7 +205,7 @@ def test_event_log():
     sh.start("test", divert=SyntheticDivert(gen_kbps=3000, seed=1))
     sh.reset_now(2.0)
     sh.log_event("BUG", "test")
-    time.sleep(0.1)
+    wait_until(lambda: any(e[2] == "BUG" for e in sh.events_snapshot()))
     evs = sh.events_snapshot()
     sh.stop()
     kinds = [e[2] for e in evs]
@@ -251,10 +247,7 @@ def test_block_integration():
     sh = BeanEngine()
     sh.set_block(True, "203.0.113.0/24", "443")
     sh.start("test", divert=FakeDivert(pkts))
-    deadline = time.time() + 5
-    while time.time() < deadline and sh.stats_snapshot()["seen"] < 3:
-        time.sleep(0.02)
-    time.sleep(0.05)
+    wait_until(lambda: sh.stats_snapshot()["drop_block"] == 2)
     s = sh.stats_snapshot()
     sh.stop()
     check("block integ.: matching IP and port dropped (2), other passes",
@@ -1400,9 +1393,12 @@ def test_scenario_integration():
     sh = BeanEngine()
     sh.start("test", divert=SyntheticDivert(gen_kbps=2000))
     sh.start_scenario(sc, DEFAULT_SETTINGS, log=lambda *_: None)
-    time.sleep(0.15)
+    # Read the FIRST step's value straight away rather than sleeping 0.15 s into
+    # a 0.3 s window: a stall longer than the gap made the "before" read land
+    # after the step and the test failed for a reason it was not about. The late
+    # value is polled for, so a slow box makes this test slower, never red.
     loss_early = sh.core.loss
-    time.sleep(0.35)
+    wait_until(lambda: sh.core.loss >= 1.0, timeout=5.0)
     loss_late = sh.core.loss
     sh.stop()
     check("scenario: loss=0 at start", loss_early == 0.0, f"(={loss_early})")

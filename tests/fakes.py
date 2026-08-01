@@ -22,6 +22,26 @@ def check(name, cond, detail=""):
     assert cond, f"{name} {detail}".strip()
 
 
+def wait_until(predicate, timeout=5.0, interval=0.005):
+    """Block until ``predicate()`` is true; returns whether it became true.
+
+    Use this instead of ``time.sleep(0.05)`` before an assertion about worker
+    state. A fixed wait is wrong in both directions: it is a race on a loaded CI
+    box, and on a fast one it is dead time paid by every run. Polling to a
+    deadline returns as soon as the thread has done its work and only spends the
+    full timeout when the test is genuinely about to fail.
+
+    It cannot express "this never happens" - for that, a fixed wait is still the
+    honest tool, so those stay, with a comment saying so.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return bool(predicate())
+
+
 class FakeTCP:
     def __init__(self, syn=False, ack=False):
         self.syn = syn

@@ -431,6 +431,35 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **New `tests/test_gui_file_actions.py` - Save file / Load file / Save repro were the three
+  largest uncovered blocks in `gui/app.py`.** The modules behind them are well covered and both
+  write formats frozen by "Kontrakty publiczne"; what had no test is the App side - which values
+  the form hands over, what comes back into the widgets, and what happens when the write fails.
+  Eight tests: the config round-trips through the real on-disk format, a cancelled dialog (an empty
+  path, which is how the user backs out of every one of these) writes nothing and clears nothing,
+  an unwritable path and a broken or wrong-shaped JSON are reported through `dialogs.show_error`
+  with the form left intact, a repro without a session refuses before it even opens the dialog, and
+  a saved report carries the seed plus the CLI line to replay it - into the log, or the report is
+  half useless.
+- **`fakes.wait_until` replaces the fixed waits that raced an assertion.** Ten sites in
+  `test_engine.py`, `test_release_fixes.py` and `test_scenario_runner.py` now poll to a deadline
+  instead of sleeping a guessed interval. The worst was `test_scenario_integration`: it read
+  `core.loss` 0.15 s into a 0.3 s window, so a stall longer than the gap made the "before" read
+  land after the scenario step and the test failed for a reason it was not about. It now reads the
+  first value immediately and polls for the second. The remaining fixed waits are the ones that
+  assert something does NOT happen (the session clock does not move after STOP; a looping scenario
+  is still alive past its duration) - absence cannot be polled for, so they stay, each with a
+  comment saying why. This buys reliability, not speed: the waits removed total ~1.3 s of a ~368 s
+  run.
+- **The flow-table guards live in one place again.** Four tests moved from `test_audit_fixes.py`
+  into `test_core.py`. The table had guards in three files because two of them are named after the
+  EPISODE that produced them rather than the subject they cover, so finding "what protects the flow
+  table" needed knowledge of the project's history. Nothing referenced the four by name, so the
+  move was free. The wider scatter was MEASURED before touching anything and mostly is not scatter:
+  targeting appears in eight files because there are eight distinct mechanisms, and
+  `test_release_fixes.py` / `test_gui_release_fixes.py` are cited by name from six places in the
+  handover note plus the regression-surface table, so renaming them would cost more than the
+  discoverability it buys.
 - **`crashlog.install()` claims every failure path; only one of the three was guarded.**
   Mutation-checked 2026-08-01: gutting the main-thread hook and the Tk-callback hook left 106
   tests green, while the same treatment of the worker hook reddens

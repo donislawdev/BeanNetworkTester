@@ -16,7 +16,7 @@ import pytest
 
 from beantester import scenario_runner
 from beantester.scenario_runner import ScenarioRunner
-from fakes import check
+from fakes import check, wait_until
 
 
 class FakeEngine:
@@ -132,6 +132,8 @@ def test_a_looping_scenario_keeps_running_past_its_duration(spy_apply):
     runner = ScenarioRunner(engine)
     runner.start(FakeScenario(loop=True, duration=0.2), base_settings={})
     try:
+        # A fixed wait, deliberately: the assertion is that the loop is STILL
+        # running past its duration, and absence of an ending cannot be polled.
         time.sleep(0.45)            # well past the 0.2s duration
         check("a looping scenario is still running after its duration elapses",
               runner._thread.is_alive())
@@ -145,7 +147,7 @@ def test_the_runner_stops_when_the_engine_stops(spy_apply):
     engine = FakeEngine()
     runner = ScenarioRunner(engine)
     runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
-    time.sleep(0.15)
+    wait_until(lambda: bool(spy_apply))       # the runner has applied its first step
     engine.running = False          # engine went down; the runner must notice
     _join(runner)
     check("the runner exits once the engine is no longer running",
