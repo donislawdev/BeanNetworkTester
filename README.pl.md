@@ -99,7 +99,17 @@ The UI is bilingual (Polish and English). On startup the language follows your s
 
 - Windows 10/11 (64-bit), Python 3.10+ (z opcją tcl/tk)
 - Uprawnienia administratora
-- `pydivert` (przechwytywanie ruchu), `psutil` (celowanie w proces - opcjonalne)
+- `pydivert` (przechwytywanie ruchu), `psutil` (rezerwa, patrz niżej)
+
+Instalacja ze źródeł działa na Pythonie 3.10 i nowszym. CI testuje i buduje **wyłącznie na 3.14** -
+to ta wersja jest zamrożona w wydawanym pliku `.exe`, więc starsze są wspierane, ale nie
+sprawdzane przy każdym commicie.
+
+`psutil` instaluje się razem z narzędziem, ale to nie on sprawia, że celowanie w proces działa na
+Windows. Tam tablica gniazd i nazwy procesów pochodzą wprost z systemu, a celowanie działa nawet
+po całkowitym usunięciu `psutila` (zmierzone: 310 zmapowanych portów, 37 z 37 rozwiązanych nazw).
+Jest rezerwą dla wszystkiego innego, dzięki czemu testy silnika chodzą na Linuksie zupełnie bez
+sterownika.
 
 ## Okno programu
 
@@ -129,7 +139,7 @@ Rozmiar i pozycja okna, wybrana zakładka, język, zwinięte sekcje, podział lo
 W trakcie działającej sesji **zablokowane są dwa elementy** (odblokowują się po STOP):
 **filtr ruchu** (stosowany tylko przy STARCIE) oraz **wybór języka** (zmiana języka przebudowuje całe UI). Przycisk STOP jest czerwony - nie da się go pomylić ze START.
 
-Nieaktywne pola (np. „Okres”/„Procent przerwy”, gdy „Włącz” jest odznaczone) są **wyszarzone razem z etykietami** - od razu widać, co jest aktywne, a co nie.
+Pole, które przejęło inne ustawienie, jest **wyszarzone razem z etykietą**, z notką mówiącą, co je przejęło - robią tak „Pobieranie”/„Wysyłanie”, gdy ustawisz Harmonogram, bo przepustowość bierze się wtedy z jego kroków. Od razu widać, co naprawdę działa.
 
 ### Skróty klawiaturowe
 
@@ -157,7 +167,7 @@ Pola liczbowe są sprawdzane **na żywo, razem z zakresem** (np. utrata 0-100%, 
 **Celuj w proces** - zawęź działanie do wybranych aplikacji: nazwa procesu (np. `chrome.exe`),
 PID, lista po przecinku, zakres PID, wildcard lub wyrażenie regularne - patrz
 [Składnia filtrów](#składnia-filtrów-proces--ip--port). Reszta ruchu na komputerze pozostaje
-nietknięta. Puste pole = cały ruch. Wymaga `psutil`.
+nietknięta. Puste pole = cały ruch.
 
 **Limit prędkości** - maksymalna przepustowość osobno dla pobierania (ruch przychodzący)
 i wysyłania (wychodzący), w KB/s. 0 = bez limitu. Ping to małe pakiety, więc limit prędkości
@@ -960,9 +970,23 @@ Osobno pilnowany jest **kontrakt CLI pod CI/CD**:
   wątek celowania nigdy nie dotyka tkintera, zamknięcie okna zawsze zwalnia silnik.
 
 Te same testy odpala automatycznie **GitHub Actions** przy każdym pushu
-(`.github/workflows/ci.yml`): macierz Linux + **Windows**, smoke GUI, asercje kodów wyjścia,
-sprawdzenie NDJSON, a na koniec **build `.exe` i smoke zbudowanego pliku** (`--version`,
-`--simulate`, błędna konfiguracja → kod 3) z artefaktem do pobrania.
+(`.github/workflows/ci.yml`), na macierzy Linux + **Windows**: cały suite za **bramką pokrycia**,
+smoke GUI na atrapie tkintera, asercje kodów wyjścia, sprawdzenie NDJSON, `--doctor` i `--license`,
+a na koniec **build `.exe` i smoke zbudowanego pliku** (`--version`, `--simulate`, błędna
+konfiguracja → kod 3) plus kontrola, że sterownik WinDivert naprawdę trafił obok exe, z artefaktem
+do pobrania.
+
+Jeden krok wart jest osobnego zdania, bo żaden test jednostkowy go nie zastąpi: **render GUI na
+prawdziwym Tk** pod wirtualnym ekranem, w minimalnej wspieranej rozdzielczości 1366x768 i **w
+każdym języku**. Buduje prawdziwe okno, obchodzi wszystkie strony, otwiera okno „O programie” i
+wywala build, gdy którykolwiek przycisk jest węższy, niż prosi, czyli gdy jego tekst jest ucięty.
+Polskie napisy są dłuższe od angielskich, więc to tam pękają układy, i ten krok złapał już
+uszkodzenia niewidoczne po angielsku.
+
+Wydania wychodzą drugim workflow (`.github/workflows/release.yml`), po wypchnięciu tagu `v*`.
+Sprawdza on tag wobec `VERSION.txt`, odmawia publikacji, dopóki changelogi są otwarte, buduje exe
+i robi jego smoke, a potem publikuje zip razem z plikiem `SHA256SUMS.txt`, którego weryfikację
+opisuje to README.
 
 ## Struktura projektu
 

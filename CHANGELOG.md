@@ -798,6 +798,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   application left alone, name the one you *do* want broken instead; then anything unidentified
   passes through untouched. Both READMEs say so next to the equivalent note for `!53` on ports.
 
+- **Both READMEs described a checkbox that does not exist.** They explained greyed-out fields with
+  "Period"/"Down percentage" going inactive when an **"Enable"** box is unchecked. Those boxes were
+  removed some time ago, so a reader was being sent to look for a control that is not there. The
+  paragraph now uses the case that really happens: "Download"/"Upload" grey out with a note when a
+  Schedule takes them over.
+
+- **What the automated checks actually cover, and what happens at release.** The Tests section
+  listed about half of what runs on every push. It now includes the coverage gate, the `--doctor`
+  and `--license` checks, the check that the WinDivert driver really shipped next to the exe, and
+  the one step no unit test can stand in for: a **GUI render check on real Tk** at the minimum
+  1366x768, **in every language**, which fails the build when a button's text is clipped. Polish
+  labels are longer than English ones, so that is where layouts break. There is also a short
+  description of how a release is produced, since the README asks you to verify the
+  `SHA256SUMS.txt` that workflow publishes.
+
+- **`psutil` is no longer described as what makes process targeting work.** "Target process" said
+  it *requires* `psutil`. On Windows the socket table and the process names come from the OS, and
+  targeting keeps working with `psutil` removed outright (measured: 310 ports mapped, 37 of 37
+  names resolved). It is the fallback used off Windows. The Requirements section also now says
+  plainly that installing from source works on Python 3.10 and newer while CI tests and builds on
+  3.14 only, which is the version frozen into the released `.exe`.
+
 ## [0.3.0] - 2026-07-20
 
 ### Changed

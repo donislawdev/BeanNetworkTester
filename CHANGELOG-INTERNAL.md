@@ -1030,6 +1030,28 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   `conns.COLUMNS`, checked by i18n LABEL, since the label is what a reader has to find), and
   `::test_both_readmes_list_every_scenario_action_and_shipped_file` (over `ACTIONS`, `STEP_KEYS`,
   `FILE_KEYS` and the actual `scenarios/*.json` set).
+
+- **Four README drifts found by reading the prose the guards do NOT cover.** `test_readme_guards`
+  pins the layout tree, the `decide()` order, the presets, both CSV headers, the Connections
+  columns and the scenario set; `test_cli_docs` pins every flag. What is left is ordinary prose,
+  and that is where all four were:
+  - **An "Enable" checkbox in both READMEs that no longer exists.** Verified before changing it,
+    not assumed: no i18n key for it anywhere in `lang/*.json`, and no section passes `toggle=` in
+    `fields.py` (the `Section.toggle` mechanism survives, unused). Replaced with the case that
+    really happens, `overridden_by` on `down`/`up` under a schedule.
+  - **"Target process ... requires `psutil`" is false on Windows.** Measured by blocking the
+    import with a `MetaPathFinder` and re-running: 310 ports mapped, 37 of 37 names resolved,
+    `make_targeting("claude")` found 99 ports. `psutil` is the off-Windows fallback, and it stays
+    in `requirements.txt` unconditionally. **A first attempt at this probe proved nothing** - it
+    used the removed `find_module` hook, which 3.14 ignores, so `psutil` imported anyway. The
+    probe printed that it had failed, which is the only reason it was not written up as a result.
+  - **The Tests section listed roughly half of `ci.yml`**, omitting the coverage gate, `--doctor`,
+    `--license`, the "driver ships next to the exe" check and, most notably, the **GUI render
+    check on real Tk under Xvfb in both languages** - the one step with no unit-test equivalent.
+  - **Neither README mentioned `release.yml`**, while telling users to verify the
+    `SHA256SUMS.txt` that only that workflow produces.
+  No new guard: the fix here is prose accuracy, and the honest mechanical guard for prose does not
+  exist (PROJECT_NOTES rule 5). Both READMEs changed together, as convention requires.
   The CSV guard **failed on its first run and caught a real gap** - the docs abbreviated
   `delivered_in_scope_bytes_down / ..._up`, so the second name appeared nowhere - and
   `test_cli_docs.py::test_no_stale_app_flags_in_readmes` caught the new prose writing a literal
