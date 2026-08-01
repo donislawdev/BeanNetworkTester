@@ -493,17 +493,20 @@ def _plan_the_end_of_the_scenario(log, cfg, scen, engine):
     """
     if cfg["duration"]:
         return
-    # An injected engine (public seam) may be a double that predates this call.
-    # Falling back silently would quietly restore the hang, so it is reported.
     if not callable(getattr(engine, "scenario_finished", None)):
-        log.debug("this engine cannot report the end of a scenario; "
-                  "the run will need --duration to stop")
-    elif not scen.loop and scen.duration > 0:
+        # An injected engine (public seam) may be a double that predates this
+        # call. Falling back is right - crashing somebody's harness is not - but
+        # falling back SILENTLY would quietly restore the hang.
+        why = "this engine cannot report when a scenario ends"
+    elif scen.loop:
+        why = "it repeats"
+    elif not scen.duration:
+        why = "it has a single step, so there is no timeline"
+    else:
         cfg["stop_on_scenario"] = True
         log.info(f"No --duration: this run will stop when the scenario ends "
                  f"(about {scen.duration:g}s).")
         return
-    why = "it repeats" if scen.loop else "it has a single step, so there is no timeline"
     log.warn(f"this scenario will not stop the run on its own ({why}) and there "
              f"is no --duration, so the session keeps going until you stop it.")
 

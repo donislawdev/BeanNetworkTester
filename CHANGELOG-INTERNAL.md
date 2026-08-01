@@ -78,7 +78,19 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   `::test_an_explicit_duration_still_wins_over_the_scenario`,
   `::test_a_scenario_with_no_timeline_does_not_cut_the_run_short`,
   `::test_a_looping_scenario_runs_to_its_duration_not_to_its_timeline`,
-  `::test_a_scenario_that_cannot_end_the_run_says_so_up_front`.
+  `::test_a_scenario_that_cannot_end_the_run_says_so_up_front`,
+  `::test_the_loop_flag_takes_the_derived_ending_away_again` (``--loop`` is folded into
+  ``scen.loop`` BEFORE the end is planned, so reading the file's own flag instead of the effective
+  one would end a run the user asked to repeat),
+  `::test_an_engine_that_cannot_report_the_scenario_end_says_so`.
+  Those last two were written AFTER the code and so were never red; both were verified by mutation
+  instead. The second one paid for itself immediately: `_plan_the_end_of_the_scenario` used to log
+  the injected-engine case and then FALL THROUGH to the shared warning, telling the reader a
+  two-step file "has a single step, so there is no timeline". The branch is now an `if/elif/else`
+  where every reason is true for its case, and the test asserts the reason given is that one rather
+  than merely that some warning appeared. (Mutation also showed the two chunks composing: without
+  the guard the double raises `TypeError` into the new session handler and comes back as a coded
+  `RUNTIME` instead of a traceback.)
   The CLI tests cannot use `FakeClock` (the runner reads the wall clock on its own thread), so they
   run on real time with a budgeted `sleep` that raises `_NeverEnded` - a **`BaseException`**, since
   the new session handler below catches `Exception` and would otherwise swallow the signal and make

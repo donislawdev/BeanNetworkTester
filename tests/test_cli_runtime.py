@@ -514,6 +514,43 @@ def test_the_loop_flag_takes_the_derived_ending_away_again(tmp_path):
           f"({err.getvalue()!r})")
 
 
+def test_an_engine_that_cannot_report_the_scenario_end_says_so(tmp_path):
+    """``engine=`` is a public seam, so the double may predate this feature.
+
+    Falling back to the old behaviour is right - the alternative is crashing on
+    somebody's test harness - but falling back QUIETLY would restore the hang
+    with nothing to explain it. The code claims it reports the fallback; this is
+    that claim being checked rather than believed.
+
+    The reason has to be the RIGHT one, too. The first version of this branch
+    fell through to the shared warning and told the user the scenario "has a
+    single step, so there is no timeline" - about a two-step file with a
+    perfectly good timeline. True-sounding prose next to correct code is the
+    failure this project spends the most effort on, and a test that only asserted
+    "some warning appeared" walked straight past it.
+    """
+    import pytest
+
+    from beantester.engine import BeanEngine
+
+    class _OlderDouble(BeanEngine):
+        scenario_finished = None          # an engine from before this existed
+
+    scen = _scenario_file(tmp_path, "finite.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    with pytest.raises(_NeverEnded):
+        run_cli(["--simulate", "--scenario", scen, "--interval", "1"],
+                sleep=_budgeted_sleep(budget=12), engine=_OlderDouble(),
+                out=out, err=err)
+    log = err.getvalue()
+    check("scenario: an engine that cannot answer falls back to the old ending",
+          "cannot report when a scenario ends" in log, f"({log!r})")
+    check("scenario: and the reason given is that one, not a made-up one",
+          "single step" not in log and "it repeats" not in log, f"({log!r})")
+
+
 def test_a_scenario_that_cannot_end_the_run_says_so_up_front(tmp_path):
     """Half the fix for the hang is honesty about the half that still hangs.
 
