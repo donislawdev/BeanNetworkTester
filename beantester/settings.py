@@ -5,6 +5,7 @@ The shape of a setting (type, label, bounds, section, profile scope) lives in
 settings dict and applies it to an engine.
 """
 import json
+import socket
 
 from . import crashlog
 from . import fields as F
@@ -129,6 +130,39 @@ def validate_settings(s, lang=None):
     return True
 
 
+# A port several programs hold at once is almost always a DISCOVERY protocol, and a
+# bare number tells a tester nothing: "5353" reads as a fault, "5353 (mDNS)" reads as
+# the ordinary state it is. Not hypothetical - that is exactly how this warning was
+# read when it fired (2026-08-01).
+#
+# The name comes from the MACHINE'S OWN services file through socket.getservbyport,
+# not from a table invented here, so it cannot drift from what the OS believes. The
+# overlay covers only what that file leaves unhelpful, CHECKED on this machine:
+# 5353 is absent from it altogether (the lookup raises - mDNS is IANA / RFC 6762),
+# and DHCP is registered under its historical BOOTP names ("bootps" / "bootpc").
+_PORT_LABELS = {5353: "mDNS", 67: "DHCP", 68: "DHCP"}
+
+
+def describe_port(port):
+    """``"5353 (mDNS)"`` when the port names a known service, ``"49664"`` when not."""
+    try:
+        number = int(port)
+    except (TypeError, ValueError):
+        return str(port)
+    label = _PORT_LABELS.get(number)
+    if label is None:
+        for protocol in ("udp", "tcp"):
+            try:
+                # Upper-cased because a services file is lower-case by convention
+                # ("ssdp", "llmnr") and these are protocol acronyms - left alone they
+                # read as a typo next to the overlay's canonical "mDNS".
+                label = socket.getservbyport(number, protocol).upper()
+                break
+            except (OSError, OverflowError, ValueError):
+                continue
+    return f"{number} ({label})" if label else str(number)
+
+
 def _warn_about_shared_ports(targeting, log):
     """Say so when the target holds a port other programs hold at the same time.
 
@@ -139,6 +173,21 @@ def _warn_about_shared_ports(targeting, log):
     svchost, Spotify and adb in. Nothing here can fix that; what it can do is stop
     the tool from reporting a clean result over it.
 
+    Two things this used to get wrong, both reported from a real session:
+
+    * **it called the target's own program an "other process".** The subtraction in
+      ``ports_shared_with_others`` is by PID, and ``ProcessTargeting`` only ever sees
+      PIDs that WON a port in the collapsed map (``targeting.py:117``), so a second
+      process of the same program that lost every collapse survives it and prints
+      under the target's own name. Measured: targeting ``msedge`` matched pid 55120
+      while pid 47664 - also ``msedge.exe`` - came back as somebody else. Those are
+      now marked inline rather than silently listed among strangers.
+    * **it offered both outcomes when it knew which one applied.** "may break theirs
+      as well, or miss the target's" are not equally likely on a given port: if the
+      port's collapse WINNER is in the target set the port is in scope and everyone
+      on it gets impaired, and if it is not, the target's traffic there is skipped.
+      One line each, and the tool says which.
+
     Said ONCE, on the announcing path (an explicit "apply"), never per resolver
     tick. Best-effort throughout: a diagnostic that raised would break the very
     thing it is describing.
@@ -148,14 +197,34 @@ def _warn_about_shared_ports(targeting, log):
         # question is about the OS socket table, not about how we learned a port.
         table = portmap.default_table()
         table.refresh_if_stale()
-        shared = ports_shared_with_others(targeting.pids(), table)
+        targeted = targeting.pids()
+        shared = ports_shared_with_others(targeted, table)
         if not shared:
             return
-        others = sorted({table.name_of(pid) or str(pid)
-                         for pids in shared.values() for pid in pids})
-        log(T("log.targeting_shared_ports", n=len(shared),
-              ports=", ".join(str(p) for p in sorted(shared)),
-              who=", ".join(others)))
+        # One read of the winners, so a rebuild between the two calls cannot pair a
+        # port with an owner from a different walk.
+        winners = table.snapshot()
+        own_programs = {str(name).lower() for name in targeting.names()}
+        said = False
+        for port in sorted(shared):
+            winner = winners.get(port)
+            if winner is None:
+                # The map moved under us and this port is gone from it. A stale
+                # diagnostic is worse than none, so say nothing about this one.
+                continue
+            who = set()
+            for pid in shared[port]:
+                name = table.name_of(pid) or str(pid)
+                if name.lower() in own_programs:
+                    name = f"{name} ({T('log.shared_port_same_app')})"
+                who.add(name)
+            in_scope = winner in targeted
+            log(T("log.shared_port_hits" if in_scope else "log.shared_port_misses",
+                  port=describe_port(port), who=", ".join(sorted(who)),
+                  winner=table.name_of(winner) or str(winner)))
+            said = True
+        if said:
+            log(T("log.shared_port_footer"))
 
 
 def apply_targeting(engine, target, log=lambda *_: None, announce=True):

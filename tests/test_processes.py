@@ -620,46 +620,143 @@ def test_only_ports_the_TARGET_holds_are_reported_as_shared():
           ports_shared_with_others({11}, object()) == {})
 
 
-def test_a_target_sharing_a_port_is_said_out_loud_once():
-    """...and a target that shares nothing stays quiet, or the line becomes noise."""
-    from beantester import portmap, settings
+#: pid -> name for the shared-port fakes. 11 and 14 are deliberately the SAME
+#: program under two pids - that is the case the warning used to report as a
+#: stranger, and a fixture that cannot tell them apart cannot catch it.
+_SHARED_PORT_NAMES = {11: "msedge.exe", 12: "svchost.exe", 13: "adb.exe",
+                      14: "msedge.exe"}
 
-    class _Table:
-        def __init__(self, shared):
-            self._shared = shared
 
-        def refresh_if_stale(self, now=None, miss=False):
-            return False
+class _SharedTable:
+    def __init__(self, shared, winners):
+        self._shared, self._winners = shared, winners
 
-        def shared_ports(self):
-            return self._shared
+    def refresh_if_stale(self, now=None, miss=False):
+        return False
 
-        def name_of(self, pid, cheap=False):
-            return {12: "svchost.exe", 13: "adb.exe"}.get(pid, "")
+    def shared_ports(self):
+        return self._shared
 
-    class _Targeting:
-        def pids(self):
-            return {11}
+    def snapshot(self):
+        return dict(self._winners)
 
-    def run(shared, monkey):
-        lines = []
-        monkey.setattr(portmap, "default_table", lambda: _Table(shared))
-        settings._warn_about_shared_ports(_Targeting(), lines.append)
-        return lines
+    def name_of(self, pid, cheap=False):
+        return _SHARED_PORT_NAMES.get(pid, "")
 
+
+class _SharedTargeting:
+    def __init__(self, pids=(11,), names=("msedge.exe",)):
+        self._pids, self._names = set(pids), list(names)
+
+    def pids(self):
+        return set(self._pids)
+
+    def names(self):
+        return list(self._names)
+
+
+def _shared_warning(shared, winners, targeting=None):
+    """Run the warning against a fake OS and return the lines it produced."""
     import pytest as _pytest
+    from beantester import i18n, portmap, settings
+    lines = []
     mp = _pytest.MonkeyPatch()
+    previous = i18n.current_language()
     try:
-        noisy = run({5353: frozenset({11, 12, 13})}, mp)
-        quiet = run({1900: frozenset({77, 78})}, mp)
+        i18n.set_language("en")               # assertions read the English text
+        mp.setattr(portmap, "default_table",
+                   lambda: _SharedTable(shared, winners))
+        settings._warn_about_shared_ports(targeting or _SharedTargeting(),
+                                          lines.append)
     finally:
         mp.undo()
+        i18n.set_language(previous)
+    return lines
 
-    check("a shared target port is announced", len(noisy) == 1, f"({noisy})")
+
+def test_a_target_sharing_a_port_is_said_out_loud_once():
+    """...and a target that shares nothing stays quiet, or the line becomes noise."""
+    noisy = _shared_warning({5353: frozenset({11, 12, 13})}, {5353: 11})
+    quiet = _shared_warning({1900: frozenset({77, 78})}, {1900: 77})
+
+    check("a shared target port is announced", len(noisy) == 2, f"({noisy})")
     check("and the line names the port and who else has it",
           "5353" in noisy[0] and "svchost.exe" in noisy[0] and "adb.exe" in noisy[0],
           f"({noisy})")
+    check("the port carries its service name, not a bare number",
+          "mDNS" in noisy[0], f"({noisy[0]!r})")
+    check("and the other ports are accounted for once, at the end",
+          "unaffected" in noisy[-1], f"({noisy[-1]!r})")
     check("a target that shares nothing says nothing", quiet == [], f"({quiet})")
+
+
+def test_the_targets_own_program_is_not_reported_as_a_stranger():
+    """A second process of the SAME program must not read as somebody else's.
+
+    Reported from a real session: targeting ``chrome`` produced "other processes have
+    this port open too (... chrome.exe ...)", which reads as targeting being broken.
+    It is not - ``ports_shared_with_others`` subtracts by PID, and ``ProcessTargeting``
+    only ever sees pids that WON a port in the collapsed map, so a second pid of the
+    same program that lost every collapse survives the subtraction. Measured against
+    the real table: targeting ``msedge`` matched pid 55120 while pid 47664 - also
+    ``msedge.exe`` - came back listed as a stranger.
+    """
+    lines = _shared_warning({5353: frozenset({11, 12, 14})}, {5353: 11})
+    check("the warning was said", lines, f"({lines})")
+    body = lines[0]
+    check("the sibling process is still named", "msedge.exe" in body, f"({body!r})")
+    check("...but marked as the target's own program rather than a stranger",
+          "msedge.exe (same program as your target)" in body, f"({body!r})")
+    check("a genuinely different program carries no such mark",
+          "svchost.exe (same" not in body, f"({body!r})")
+
+
+def test_the_warning_says_which_of_the_two_outcomes_applies():
+    """It used to offer both ("may break theirs, or miss the target's") while the
+    tool already knew which one. The collapse WINNER decides it: in the target set
+    means the port is in scope and everyone on it gets impaired, otherwise the
+    target's own traffic there is skipped."""
+    hits = _shared_warning({5353: frozenset({11, 12})}, {5353: 11})[0]
+    misses = _shared_warning({5353: frozenset({11, 12})}, {5353: 12})[0]
+
+    check("the target owning the port is told its neighbours get broken too",
+          "their traffic gets broken too" in hits, f"({hits!r})")
+    check("...and is not also told the opposite", "skipped" not in hits, f"({hits!r})")
+    check("losing the port is told the target's traffic is skipped",
+          "will be skipped" in misses, f"({misses!r})")
+    check("...and names who holds it instead", "svchost.exe" in misses,
+          f"({misses!r})")
+    check("...and is not also told its neighbours get broken",
+          "gets broken too" not in misses, f"({misses!r})")
+
+
+def test_a_port_that_left_the_map_is_not_described_from_stale_data():
+    """The winner is read from one snapshot. If a rebuild lands between the two
+    reads the port is simply gone, and a stale diagnostic is worse than none."""
+    lines = _shared_warning({5353: frozenset({11, 12})}, {})
+    check("nothing is claimed about a port with no known owner", lines == [],
+          f"({lines})")
+
+
+def test_known_ports_are_named_and_unknown_ones_are_left_alone():
+    """"5353" reads as a fault. "5353 (mDNS)" reads as the ordinary state it is.
+
+    The names come from the machine's own services file, so this asserts the SHAPE
+    plus the two entries the overlay carries because that file is unhelpful for
+    them - mDNS is absent from it on Windows, and DHCP is registered under its
+    historical BOOTP names.
+    """
+    from beantester.settings import describe_port
+    check("mDNS is named even though Windows omits it from services",
+          describe_port(5353) == "5353 (mDNS)", f"({describe_port(5353)!r})")
+    check("DHCP is named, not left as bootps", describe_port(67) == "67 (DHCP)",
+          f"({describe_port(67)!r})")
+    check("an ephemeral port stays a bare number", describe_port(49664) == "49664",
+          f"({describe_port(49664)!r})")
+    check("a nonsense port never raises", describe_port(None) == "None",
+          f"({describe_port(None)!r})")
+    check("out-of-range never raises", describe_port(999999) == "999999",
+          f"({describe_port(999999)!r})")
 
 
 def test_the_shared_port_warning_is_actually_wired_into_apply_targeting():
@@ -679,14 +776,20 @@ def test_the_shared_port_warning_is_actually_wired_into_apply_targeting():
         def shared_ports(self):
             return {5353: frozenset({11, 12})}
 
+        def snapshot(self):
+            return {5353: 11}
+
         def name_of(self, pid, cheap=False):
-            return {12: "svchost.exe"}.get(pid, "")
+            return {11: "myapp.exe", 12: "svchost.exe"}.get(pid, "")
 
     class _Targeting:
         matched = True
 
         def pids(self):
             return {11}
+
+        def names(self):
+            return ["myapp.exe"]
 
         def describe(self):
             return "myapp.exe"
