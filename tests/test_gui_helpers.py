@@ -171,3 +171,45 @@ def test_average_kbps_is_total_bytes_over_elapsed():
     check("avg-rate: too little elapsed time reads 0, not a spike",
           average_kbps(500_000, 0.3) == 0.0)
     check("avg-rate: no traffic is 0", average_kbps(0, 10.0) == 0.0)
+
+
+# -- the running-state icon: BOTH branches ----------------------------------- #
+def test_the_running_icon_copies_the_idle_artwork_and_stamps_a_dot():
+    """The primary branch: keep a user-supplied ``bean.png``'s artwork and stamp
+    the running dot on a COPY of it.
+
+    This branch was unreachable in tests until the tkinter double grew a working
+    ``tk.call`` (2026-08-01) - the copy raised, the exception went to crashlog and
+    every GUI test silently exercised the fallback below instead. Neither branch
+    had a guard, so the swap went unnoticed; this pins both.
+    """
+    from gui_harness import run_gui
+    run_gui("""
+        import fake_tk
+        from beantester.gui import icon
+
+        idle = icon.make_bean_icon(64)
+        fake_tk.INTERP.calls.clear()
+        running = icon._running_variant(idle, 64)
+
+        assert running is not None and running is not idle, "it must be a COPY"
+        copies = [c for c in fake_tk.INTERP.calls if len(c) > 1 and c[1] == "copy"]
+        assert copies, "the idle artwork must be copied, not redrawn: " + str(
+            fake_tk.INTERP.calls)
+    """)
+
+
+def test_the_running_icon_falls_back_to_drawing_when_the_copy_is_impossible():
+    """A user-supplied PNG that Tk cannot copy must still produce a running icon,
+    not an exception on the way to the taskbar."""
+    from gui_harness import run_gui
+    run_gui("""
+        from beantester.gui import icon
+
+        class Hostile:
+            def width(self): raise RuntimeError("no size for you")
+            def height(self): return 64
+
+        drawn = icon._running_variant(Hostile(), 64)
+        assert drawn is not None, "the fallback must still hand back an icon"
+    """, allow_faults=("no size for you",))

@@ -1013,3 +1013,116 @@ def test_block_bad_expression_raises():
         core.set_block(True, ip="999.1.1.1")
     with pytest.raises(ValueError):
         core.set_block(True, port="2000-1000")
+
+
+# -- the flow table: one ceiling, guarded in ONE place ----------------------- #
+# Moved here from test_audit_fixes.py (2026-08-01). The flow table had guards in
+# three files because two of them are named after the EPISODE that produced them
+# rather than the subject they cover, so a reader looking for "what protects the
+# flow table" had to know the project's history to find them. Nothing referenced
+# these four by name, so the move costs nothing.
+
+
+def test_flow_tables_bounded_without_rst():
+    """With RST and NAT disabled the flow tables must not grow without bound."""
+    core = BeanCore()                       # rst_prob = 0, nat_timeout = 0
+    rng = random.Random(1)
+    for i in range(12000):                  # 12000 distinct flows
+        core.decide(100, True, 1000 + i, float(i), rng,
+                    remote_ip="8.8.8.8", remote_port=80, is_tcp=True)
+    # the prune is throttled (runs at most every few seconds), so the table
+    # may briefly exceed the threshold by one throttle window of new flows
+    check("flow_last stays bounded", len(core._flow_last) <= 4100,
+          f"(size={len(core._flow_last)})")
+
+
+def test_flow_table_stays_bounded_under_heavy_churn():
+    """Regression, twice over.
+
+    First: the O(n) table rebuild used to run for EVERY packet, then (after the
+    first fix) once every 5 s - but it was still a REBUILD, and at 3.2 million
+    entries that is a 1001 ms freeze of the capture thread. It is now a generation
+    swap: O(1).
+
+    Second: the table was bounded by AGE only, so under churn it had no ceiling at
+    all. It now has one, and a session that opens flows as fast as it can must not
+    push past it.
+    """
+    from beantester.core import MAX_FLOWS
+
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    core.nat_timeout_s = 30.0               # the only thing that makes it track
+    rng = random.Random(1)
+
+    # 500 000 brand-new flows inside ONE simulated second. This is the case that
+    # matters: the size check used to live in _prune(), which is throttled to once
+    # a second, so a whole second of churn could land between two checks. Measured
+    # at 150 000 flows/s the table peaked at 299 999 against a 200 000 ceiling -
+    # and the old version of this test never noticed, because it only ever pushed
+    # 60 000 flows through, which cannot reach the ceiling however it is enforced.
+    now = 1000.0
+    peak = 0
+    for i in range(500_000):
+        now += 0.000002                     # ~2 us apart: 500k flows in ~1 second
+        core.decide(100, True, 1024 + (i % 60000), now, rng,
+                    remote_ip=f"10.{i // 65536 % 256}.{i // 256 % 256}.{i % 256}",
+                    remote_port=443)
+        if i % 5000 == 0:
+            peak = max(peak, len(core._flow_last))
+    peak = max(peak, len(core._flow_last))
+
+    check("the flow table has a ceiling and respects it EVEN inside one second",
+          peak <= MAX_FLOWS, f"(peak={peak:,} vs ceiling {MAX_FLOWS:,})")
+    check("and it is a _FlowTable, not a bare dict that rebuilds itself",
+          not isinstance(core._flow_last, dict))
+
+
+def test_rotation_is_o1_not_a_rebuild():
+    """The whole point: no O(n) work may happen inside decide()'s lock.
+
+    "Swap the dict instead of rebuilding it" was only *most* of the answer. Moving
+    the reference is O(1), but DROPPING the last reference to a 200 000-entry dict
+    is O(n) in CPython's teardown: ~7 ms here, up to 22 ms measured in the engine.
+    That is still a stall in the packet path, in a tool whose entire job is to
+    inject a precise amount of latency. So a retired generation is handed to the
+    watchdog (``drain_retired``) and freed there.
+    """
+    import time
+
+    from beantester.core import _FlowTable
+
+    table = _FlowTable(limit=400_000, rotate_s=1.0)
+    for i in range(200_000):
+        table.set((i, "1.1.1.1", 80), 1.0)
+
+    # the ceiling rotated it on the way in, so a full generation is already retired
+    t0 = time.perf_counter()
+    table.maybe_rotate(10.0)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    check("retiring a generation is O(1) - nothing is freed on this thread",
+          elapsed_ms < 1.0,
+          f"({elapsed_ms:.2f} ms - a rebuild of this table used to cost ~30 ms, "
+          f"and freeing it inline cost ~7 ms)")
+    check("the new generation starts empty", len(table._new) == 0)
+
+    # and the retired dicts are waiting for whoever is not the capture thread
+    retired = table.drain_retired()
+    check("the retired generations are handed over, not dropped", retired,
+          f"({len(retired)} generation(s))")
+    check("draining twice gives nothing the second time", table.drain_retired() == [])
+
+
+def test_the_size_ceiling_holds_inside_a_single_second():
+    """The ceiling used to be checked only from the throttled prune (once a second),
+    so a whole second of churn could land between two checks."""
+    from beantester.core import _FlowTable
+
+    table = _FlowTable(limit=1000, rotate_s=30.0)
+    peak = 0
+    for i in range(50_000):                 # 50x the ceiling, no time passing at all
+        table.set((i, "1.1.1.1", 80), 1.0)
+        peak = max(peak, len(table))
+    check("the table never passes its ceiling, whatever the clock does",
+          peak <= 1000, f"(peak={peak})")

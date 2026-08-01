@@ -56,9 +56,12 @@ def _grab_active(widget):
     created by Tcl and is NOT a tkinter-registered widget, so ``grab_current``
     routes it through ``_nametowidget`` and raises on it; the raw ``grab
     current`` call returns the window path as a plain string instead.
-    ``grab_current`` stays as a fallback for environments without ``.tk`` (the
-    test double). A modal dialog also grabs, but those carry no tooltips and the
-    background can't emit hover events under a modal grab, so nothing is lost.
+    ``grab_current`` stays as a fallback for a widget with no ``tk`` handle at
+    all. It is NOT "the path the test double takes" - the double answers ``call``
+    like the real interpreter, so tests exercise the branch above, which is the
+    one production uses. A modal dialog also grabs, but those carry no tooltips
+    and the background can't emit hover events under a modal grab, so nothing is
+    lost.
     """
     tk_obj = getattr(widget, "tk", None)
     if tk_obj is not None:

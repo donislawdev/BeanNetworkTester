@@ -17,6 +17,7 @@ SCREEN = [1920, 1080]     # mutable: tests can pretend to be on a 1366x768 lapto
 DPI = [96.0]
 CLIPBOARD = []            # what the app copied (Ctrl+C, "copy row", repro CLI)
 GRAB = [None]             # what currently holds the Tk grab (an open popdown)
+CLASS_BINDINGS = {}       # (widget class, sequence) -> handler, set by bind_class
 FOCUS = [None]            # the widget holding keyboard focus (ttk paints it)
 
 
@@ -47,6 +48,8 @@ class W:
         self.bindings = {}
         self.states = set()         # ttk widget state flags (active, focus, ...)
         self.alive = True
+        self._yview = (0.0, 1.0)    # everything fits until a test says otherwise
+        self.scrolled = []          # every scroll the widget was asked to do
         master = args[0] if args else kw.get("master")
         self.master = master if isinstance(master, W) else None
         if isinstance(master, W):
@@ -262,10 +265,134 @@ class W:
     def after_cancel(self, _job):
         return None
 
+    def bind_class(self, widget_class, sequence, func=None, add=None):
+        """Class-level binding, RECORDED - it is a behaviour, not a no-op.
+
+        ``gui/scrollable.py`` replaces ttk's own combobox wheel binding with a
+        no-op, because scrolling the page while the pointer crossed a combobox
+        silently changed the selected traffic filter. Against ``__getattr__``
+        that call vanished, so nothing could check the fix was still in place.
+        """
+        CLASS_BINDINGS[(widget_class, sequence)] = func
+        return ""
+
+    @property
+    def class_bindings(self):
+        return CLASS_BINDINGS
+
+    # -- scrolling ---------------------------------------------------------- #
+    # A widget that cannot say how much of it is visible cannot be asked whether
+    # it has anything to scroll: `_can_scroll` unpacks `yview()` into two floats,
+    # and against `__getattr__`'s no-op that raised and was swallowed, so the
+    # wheel dispatcher's "is there a scrollable under the pointer" answer was
+    # always False. Default (0.0, 1.0) = everything fits, like a fresh widget.
+    def yview(self, *args):
+        if args:
+            self.scrolled.append(("yview",) + args)
+            return None
+        return self._yview
+
+    def yview_scroll(self, amount, what="units"):
+        self.scrolled.append(("scroll", amount, what))
+
+    def yview_moveto(self, fraction):
+        self.scrolled.append(("moveto", fraction))
+
+    @property
+    def _w(self):
+        """Tk widget path. Real code passes it straight back into ``tk.call``."""
+        return self._path()
+
+    @property
+    def tk(self):
+        """The shared interpreter handle - every real widget points at the same one.
+
+        Explicit, and it MUST be, for the reason spelled out above ``winfo_exists``:
+        ``__getattr__`` answers an unknown attribute with a function, and a function
+        has no ``.call``. Production code that reaches THROUGH this attribute
+        (``root.tk.call("tk", "scaling", ...)`` in ``gui/scaling.py``) therefore blew
+        up and had the failure swallowed by ``crashlog`` - so Tk font scaling never
+        ran in a single GUI test, silently, for as long as the fake existed.
+        """
+        return INTERP
+
     def __getattr__(self, name):
+        # A MARKER the app stamps on a widget must read as absent when it was
+        # never stamped. `getattr(w, "_bnt_scroll_owner", None)` asks exactly that
+        # question, and a no-op function is not None - so the wheel dispatcher
+        # treated EVERY widget as an owning scroll container and resolved the
+        # wheel to a function. Same trap as `winfo_exists`, one layer over: there
+        # the fabricated value read as "destroyed", here as "present".
+        if name.startswith("_bnt_"):
+            raise AttributeError(name)
+
         def _f(*a, **k):
             return None
         return _f
+
+
+class Interp:
+    """The Tcl interpreter behind ``widget.tk``: records calls, answers the few
+    that production actually reads back.
+
+    Anything not modelled returns ``""`` - Tcl's empty result - rather than
+    ``None``, because callers treat the result as a string.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def call(self, *args):
+        self.calls.append(tuple(args))
+        if args[:2] == ("grab", "current"):
+            holder = GRAB[0]
+            return holder._path() if isinstance(holder, W) else ("" if holder is None
+                                                                 else str(holder))
+        return ""
+
+    def reset(self):
+        self.calls.clear()
+
+
+INTERP = Interp()
+
+
+class Text(W):
+    """A text widget that keeps line accounting, so trimming can be tested.
+
+    Only what the app asks of it: ``insert``/``delete``/``index``/``get``. It models
+    the LINE COUNT (which is all ``index("end-1c")`` is read for - see
+    ``App._append_log_line``), not full Tk index arithmetic. Before this class the
+    log box was a bare ``W``, ``index()`` came back as ``None`` from ``__getattr__``,
+    and the ``.split(".")`` behind it raised into ``crashlog`` on every logged line:
+    the widget-side trim never ran in any test.
+    """
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.lines = [""]           # a fresh Tk Text already holds its final newline
+
+    def insert(self, _where, text):
+        parts = str(text).split("\n")
+        self.lines[-1] += parts[0]
+        self.lines.extend(parts[1:])
+
+    def index(self, _spec="end-1c"):
+        return f"{len(self.lines)}.0"
+
+    def delete(self, start="1.0", end=None):
+        if end in (None, "end"):
+            self.lines = [""]
+            return
+        try:
+            upto = int(str(end).split(".")[0]) - int(str(start).split(".")[0])
+        except (TypeError, ValueError):
+            return
+        if upto > 0:
+            self.lines = self.lines[upto:] or [""]
+
+    def get(self, _start="1.0", _end="end"):
+        return "\n".join(self.lines)
 
 
 class Root(W):
@@ -446,8 +573,12 @@ class Treeview(W):
     def selection(self):
         return self._sel
 
-    def yview(self):
-        return (0.0, 1.0)
+    # `yview` deliberately NOT overridden: it used to return a hard-coded
+    # (0.0, 1.0), i.e. "there is never anything to scroll". A double that cannot
+    # express the other variant silently voids the test that depends on it - the
+    # wheel dispatcher asks exactly this question to decide whether a table keeps
+    # its own wheel, and with a constant answer that branch was unreachable.
+    # W.yview reads `_yview`, so a test can say how much of the table is visible.
 
 
 class Font:
@@ -463,7 +594,7 @@ def install():
     widgets = dict(Tk=Root, Toplevel=Root, Frame=W, Label=W, Canvas=W, PhotoImage=W,
                    StringVar=Var, BooleanVar=Var, IntVar=Var, DoubleVar=Var,
                    Button=W, Entry=W, Checkbutton=W, LabelFrame=W, Scrollbar=W,
-                   Text=W, Listbox=W, Menu=Menu, PanedWindow=Paned,
+                   Text=Text, Listbox=W, Menu=Menu, PanedWindow=Paned,
                    TclError=TclError)
     tk = types.ModuleType("tkinter")
     for name, value in widgets.items():
@@ -480,7 +611,7 @@ def install():
     tk.ttk = ttk
 
     st = types.ModuleType("tkinter.scrolledtext")
-    st.ScrolledText = W
+    st.ScrolledText = Text
     sys.modules["tkinter.scrolledtext"] = st
 
     font = types.ModuleType("tkinter.font")

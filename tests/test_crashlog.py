@@ -18,6 +18,7 @@ This tests all four.
 """
 import json
 import os
+import sys
 import threading
 
 import pytest
@@ -137,6 +138,68 @@ def test_a_worker_thread_exception_is_recorded(isolated):
                    for e in written), written
     finally:
         crashlog.reset()
+
+
+def test_an_unhandled_main_thread_exception_is_recorded(isolated):
+    """``install()`` claims to take over EVERY failure path; only the worker one
+    was guarded. Mutation-checked 2026-08-01: gutting this hook left 106 tests
+    green, so the main thread - where a CLI run and the Tk mainloop both live -
+    could die without leaving a single line behind.
+
+    The previous ``sys.excepthook`` must still run: we record, we do not swallow.
+    """
+    crashlog.install(native=False)
+    chained = []
+    try:
+        previous = sys.excepthook
+        exc = _boom("main thread died")
+        sys.excepthook(type(exc), exc, exc.__traceback__)
+
+        written = _entries(isolated)
+        assert any(e["type"] == "ValueError" and "main thread died" in e["message"]
+                   and e.get("source") == "main-thread" for e in written), written
+
+        # the hook is a wrapper, not a replacement
+        crashlog.reset()
+        sys.excepthook = lambda *a: chained.append(a)
+        crashlog.install(native=False)
+        exc2 = _boom("still chained")
+        sys.excepthook(type(exc2), exc2, exc2.__traceback__)
+        assert chained, "install() must call the excepthook it replaced"
+    finally:
+        sys.excepthook = sys.__excepthook__
+        crashlog.reset()
+
+
+def test_a_tk_callback_crash_is_recorded(isolated):
+    """Widget callbacks are the third failure path, and the one a user actually
+    triggers by clicking. Tk swallows them into its own reporter, so without this
+    hook a crash inside a button handler reached nobody. Mutation-checked with
+    the main-thread hook above: gutting it changed nothing in the suite."""
+    class _Root:
+        report_callback_exception = None
+
+    root = _Root()
+    handler = crashlog.install_tk(root)
+    assert root.report_callback_exception is handler, "the hook must be attached"
+
+    exc = _boom("clicked something fatal")
+    handler(type(exc), exc, exc.__traceback__)
+
+    written = _entries(isolated)
+    assert any(e["type"] == "ValueError" and "clicked something fatal" in e["message"]
+               and e.get("source") == "tk-callback" for e in written), written
+
+
+def test_attaching_the_tk_hook_to_a_hostile_root_is_not_a_crash(isolated):
+    """``install_tk`` runs during startup; a root that refuses the attribute must
+    not take the app down with it."""
+    class _Hostile:
+        def __setattr__(self, name, value):
+            raise RuntimeError("no attributes here")
+
+    handler = crashlog.install_tk(_Hostile())
+    assert callable(handler), "it still hands back a usable handler"
 
 
 def test_install_is_idempotent(isolated):

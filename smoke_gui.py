@@ -22,6 +22,13 @@ import fake_tk                                    # noqa: E402
 
 tk = fake_tk.install()
 
+# The user's own files (UI state, profiles, crash log) must not be written into
+# the repository by a smoke run. Same helper the pytest GUI harness uses; without
+# it this script overwrote the developer's real bean_network_tester_ui.json and
+# left a crashes/ folder behind on every `pytest tests`.
+import user_files                                 # noqa: E402
+user_files.redirect_to_temp()
+
 import bean_network_tester as n                   # noqa: E402  (after the fakes)
 
 fails = []

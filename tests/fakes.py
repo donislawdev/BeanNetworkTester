@@ -7,8 +7,39 @@ LANG_DIR = os.path.join(ROOT, "lang")
 
 
 def check(name, cond, detail=""):
-    """Assertion helper keeping the original suite's readable messages."""
+    """Assertion helper keeping the original suite's readable messages.
+
+    ``__tracebackhide__`` keeps the failure pointing at the CALLING test rather
+    than at the ``assert`` inside this helper. Without it pytest's last frame is
+    always this file, which is the one place the failure is never interesting.
+
+    Pass ``detail`` whenever the values are not obvious from the name: pytest can
+    only rewrite an ``assert`` it can see, so ``check("ports match", a == b)``
+    reports the label and nothing else, while a plain ``assert a == b`` would show
+    both sides.
+    """
+    __tracebackhide__ = True
     assert cond, f"{name} {detail}".strip()
+
+
+def wait_until(predicate, timeout=5.0, interval=0.005):
+    """Block until ``predicate()`` is true; returns whether it became true.
+
+    Use this instead of ``time.sleep(0.05)`` before an assertion about worker
+    state. A fixed wait is wrong in both directions: it is a race on a loaded CI
+    box, and on a fast one it is dead time paid by every run. Polling to a
+    deadline returns as soon as the thread has done its work and only spends the
+    full timeout when the test is genuinely about to fail.
+
+    It cannot express "this never happens" - for that, a fixed wait is still the
+    honest tool, so those stay, with a comment saying so.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return bool(predicate())
 
 
 class FakeTCP:

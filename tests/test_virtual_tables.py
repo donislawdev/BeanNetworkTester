@@ -198,3 +198,79 @@ def test_event_table_is_virtualised_too():
         assert len(table.tree.get_children()) == table.window()
         assert len(table.tree.get_children()) < 100, "event table is not virtualised"
     """)
+
+
+def test_clicking_a_column_header_sorts_by_it_and_clicking_again_reverses():
+    """The table's primary interaction, and it had ZERO test coverage (measured
+    2026-08-01: `_clicked` was never called by anything in the suite).
+
+    The header command is what `refresh_headers` installs on every column, so the
+    test goes through the heading exactly the way a click does, rather than
+    calling the private method directly.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        columns = list(table.columns)
+        first, second = columns[0], columns[1]
+        seen = []
+        table.on_sort = lambda state: seen.append(dict(state))
+
+        def click(col):
+            table.refresh_headers()
+            table.tree.headings[col]["command"]()
+
+        click(first)
+        assert table.sort["col"] == first, table.sort
+        assert seen and seen[-1]["col"] == first, seen
+
+        # the SAME column flips direction
+        was = table.sort["reverse"]
+        click(first)
+        assert table.sort["col"] == first and table.sort["reverse"] is not was, table.sort
+
+        # a DIFFERENT column starts from that column's default direction, it does
+        # not inherit the direction the previous one happened to be left in
+        table.sort["reverse"] = True
+        default = table.sort.get("default_reverse", False)
+        click(second)
+        assert table.sort["col"] == second, table.sort
+        assert table.sort["reverse"] == default, table.sort
+
+        assert len(seen) == 3, "every click must reach the on_sort callback"
+    """)
+
+
+def test_sorting_returns_the_viewport_to_the_top():
+    """A new order means the rows under the pointer are different anyway, and the
+    top is what the user looks at after sorting."""
+    run_gui("""
+        table = app.pages["connections"].table
+        table.sync([(str(i), ("p%d" % i, "TCP", "1.2.3.4", "443", "5000",
+                              "7", "0.5", "1.0", "0.1")) for i in range(400)])
+        table.set_offset(120)
+        assert table.offset > 0, table.offset
+
+        table.refresh_headers()
+        table.tree.headings[list(table.columns)[0]]["command"]()
+        assert table.offset == 0, "sorting must scroll back to the top"
+    """)
+
+
+def test_copying_with_headers_puts_the_column_names_on_the_first_line():
+    run_gui("""
+        table = app.pages["connections"].table
+        table.sync([("a", ("chrome.exe", "TCP", "1.2.3.4", "443", "5000",
+                           "7", "0.5", "1.0", "0.1"))])
+        table.select_keys(["a"])
+
+        plain = table.copy_text()
+        with_head = table.copy_text(header=True)
+        assert len(with_head.splitlines()) == len(plain.splitlines()) + 1, (
+            plain, with_head)
+        assert with_head.splitlines()[1] == plain, "the rows must be unchanged"
+        assert "chrome.exe" in with_head
+
+        # nothing selected copies nothing at all, rather than a lone header row
+        table.select_keys([])
+        assert table.copy_text() == "" and table.copy_text(header=True) == ""
+    """)

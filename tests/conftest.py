@@ -13,7 +13,24 @@ if ROOT not in sys.path:
 
 import pytest  # noqa: E402
 
-from beantester import i18n  # noqa: E402
+from beantester import crashlog, i18n  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _crash_log_outside_the_repo(tmp_path_factory):
+    """No test run may leave a ``crashes/`` folder in the working tree.
+
+    Tests that inject faults on purpose still record them - they just record them
+    somewhere disposable. Without this the suite dropped a real crash log next to
+    the sources on every run: git-ignored, so nothing ever showed it, and
+    indistinguishable at a glance from a crash the developer actually hit.
+
+    ``tests/test_crashlog.py`` points ``app_dir`` at its own per-test directory on
+    top of this; a function-scoped monkeypatch wins over a session fixture, so the
+    two do not fight.
+    """
+    crashlog.app_dir = lambda: str(tmp_path_factory.mktemp("crashlog"))
+    yield
 
 
 @pytest.fixture(autouse=True)

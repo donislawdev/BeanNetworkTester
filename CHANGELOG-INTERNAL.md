@@ -89,6 +89,17 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **Coverage gate raised 80 -> 83** (convention 32). Measured with `COVERAGE_PROCESS_START` on
+  2026-08-01: **87.43%**, up from 83.03% on 2026-07-21. The comment above `fail_under` now also
+  records what the number is NOT: it reports lines as missing that mutation proves are guarded
+  (coverage cannot see inside `threading.excepthook`) and as covered where nothing checks them (a
+  short-circuited `and`, a line executed only while the object is built). It gauges the trend for
+  the package; a behaviour is proved guarded by mutation.
+- **`tooltip._grab_active` docstring corrected.** It said `grab_current` was the fallback "for
+  environments without `.tk` (the test double)". The double answers `call` like the real
+  interpreter now, so tests take the branch production takes; the fallback is for a widget with no
+  `tk` handle at all.
+
 - **What the on-screen numbers COVER is now derived in one place: `gui/scope.py`.** The notes on
   Statistics and Connections answer "what do these figures cover?", but both read a single input -
   the `scope_view_to_target` preference (`stats.py` line 149, `conns.py` line 122). With
@@ -419,6 +430,144 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   reverting them gives "the Live tab is not scrolled" and "the footer is packed at position 5 of 6".
 
 ### Tests
+
+- **New `tests/test_gui_file_actions.py` - Save file / Load file / Save repro were the three
+  largest uncovered blocks in `gui/app.py`.** The modules behind them are well covered and both
+  write formats frozen by "Kontrakty publiczne"; what had no test is the App side - which values
+  the form hands over, what comes back into the widgets, and what happens when the write fails.
+  Eight tests: the config round-trips through the real on-disk format, a cancelled dialog (an empty
+  path, which is how the user backs out of every one of these) writes nothing and clears nothing,
+  an unwritable path and a broken or wrong-shaped JSON are reported through `dialogs.show_error`
+  with the form left intact, a repro without a session refuses before it even opens the dialog, and
+  a saved report carries the seed plus the CLI line to replay it - into the log, or the report is
+  half useless.
+- **`fakes.wait_until` replaces the fixed waits that raced an assertion.** Ten sites in
+  `test_engine.py`, `test_release_fixes.py` and `test_scenario_runner.py` now poll to a deadline
+  instead of sleeping a guessed interval. The worst was `test_scenario_integration`: it read
+  `core.loss` 0.15 s into a 0.3 s window, so a stall longer than the gap made the "before" read
+  land after the scenario step and the test failed for a reason it was not about. It now reads the
+  first value immediately and polls for the second. The remaining fixed waits are the ones that
+  assert something does NOT happen (the session clock does not move after STOP; a looping scenario
+  is still alive past its duration) - absence cannot be polled for, so they stay, each with a
+  comment saying why. This buys reliability, not speed: the waits removed total ~1.3 s of a ~368 s
+  run.
+- **The flow-table guards live in one place again.** Four tests moved from `test_audit_fixes.py`
+  into `test_core.py`. The table had guards in three files because two of them are named after the
+  EPISODE that produced them rather than the subject they cover, so finding "what protects the flow
+  table" needed knowledge of the project's history. Nothing referenced the four by name, so the
+  move was free. The wider scatter was MEASURED before touching anything and mostly is not scatter:
+  targeting appears in eight files because there are eight distinct mechanisms, and
+  `test_release_fixes.py` / `test_gui_release_fixes.py` are cited by name from six places in the
+  handover note plus the regression-surface table, so renaming them would cost more than the
+  discoverability it buys.
+- **`crashlog.install()` claims every failure path; only one of the three was guarded.**
+  Mutation-checked 2026-08-01: gutting the main-thread hook and the Tk-callback hook left 106
+  tests green, while the same treatment of the worker hook reddens
+  `test_crashlog.py::test_a_worker_thread_exception_is_recorded` at once. New:
+  `::test_an_unhandled_main_thread_exception_is_recorded` (also checks the previous
+  `sys.excepthook` still runs - we record, we do not swallow),
+  `::test_a_tk_callback_crash_is_recorded` and
+  `::test_attaching_the_tk_hook_to_a_hostile_root_is_not_a_crash`. Both new guards were confirmed
+  red against their mutants.
+- **New `tests/test_license_surface.py` - `--license` had zero test coverage**, the one finding of
+  the 2026-08-01 review with legal rather than functional weight (convention 35). What was tested
+  is that `LICENSE` and `THIRD-PARTY-NOTICES.md` EXIST in the tree; the code reads them through
+  `resource_path()`, a different resolution, and `legal._read` answers an `OSError` with an empty
+  string. So a frozen build that stopped resolving them would print an empty licence and keep the
+  suite green. Six tests: the texts resolve and are non-empty, every component carries a version
+  and a source URL, the report names all of them plus the no-telemetry line, the flag writes to
+  stdout and exits OK without touching the driver, and `--format json` is one parsable record whose
+  `components[]` matches `legal.COMPONENTS` exactly (the NDJSON schema is a frozen contract).
+- **New `tests/test_wheel_and_scroll.py` - the three user-visible fixes in `gui/scrollable.py`
+  had no guard at all** (44.5% line coverage). The one existing test replaced `_resolve` with a
+  lambda and the one touching `ensure_visible` replaced it with a spy: both good wiring tests, but
+  between them the behaviour never ran. Nine tests covering the master-chain walk (a nested control
+  scrolls the page it sits on), a self-scrolling Treeview keeping its own wheel only while it has
+  something to scroll, a bounded walk, the end-to-end `_on_wheel`, the disarmed combobox class
+  binding, and `ensure_visible` as maths in four cases including "taller than the viewport shows
+  its START". Three mutants planted in `scrollable.py` (broken walk, broken tall-widget branch,
+  removed combobox disarm) were each caught by the matching test.
+- **New `tests/test_tooltip_bubble.py` - the module's whole reason for existing was unguarded**
+  (39.9% coverage; the entire show/hide lifecycle untouched). One reused bubble per toplevel is
+  what stops Windows flashing the taskbar button on every hover, and a rewrite to one `Toplevel`
+  per hover would have passed the suite. Seven tests: the bubble is reused across widgets, a
+  destroyed one is rebuilt, a Tk grab suppresses it (it would cover the dropdown it describes),
+  empty text builds nothing, the Enter/Leave state machine, `retip` re-wording, and the shortcut
+  line.
+- **`SortableTree._clicked` - sorting by clicking a column header - was called by nothing.** Three
+  tests in `test_virtual_tables.py` go through the heading command the way a click does: the same
+  column flips direction, a different column starts from its own `default_reverse` instead of
+  inheriting the previous one, every click reaches `on_sort`, sorting returns the viewport to the
+  top, and `copy_text(header=True)` adds exactly one line while leaving the rows unchanged.
+- **Pure `winenv` helpers in `test_failsafe.py`.** `_quote` builds the parameter string for the
+  elevated re-launch (a mis-quote means the elevated copy starts with the wrong settings, or with
+  extra ones) and `elevation_disabled` reads `BEAN_NO_ELEVATE`, which the whole automated
+  GUI/screenshot workflow depends on. Both pure, both previously at zero coverage. The quoting
+  assertions build their paths with `chr(92)` so the test's own escaping cannot be what they
+  measure.
+- **Both branches of `gui/icon.py::_running_variant`.** The primary branch (copy the idle artwork,
+  stamp the dot) only became reachable once the tkinter double grew a working `tk.call`; before
+  that every GUI test silently exercised the fallback instead. Neither had a guard, so the swap
+  went unnoticed - two tests now pin both.
+
+- **A green GUI test can no longer hide a swallowed fault.** `gui_harness.run_gui` now ends every
+  subprocess by reading `crashlog.recent()` back and failing the test on anything not declared via
+  the new `run_gui(allow_faults=(...))`. `crashlog.quiet`/`note` exist so a failure stops being
+  invisible to US while staying invisible to the user (convention 30) - but nothing ever read them
+  back, so the swallowing was invisible to us too. The check lives in the subprocess rather than in
+  a test that scans `crashes/`, so the failure carries the name of the test that caused it and it
+  keeps working now that the crash log is redirected per subprocess. Verified in both directions:
+  a planted `crashlog.quiet` fault fails the test, and the same fault named in `allow_faults`
+  passes.
+- **The suite no longer writes the developer's own files into the working tree.** New
+  `tests/user_files.py::redirect_to_temp` sends UI state, profiles and the crash log to a temp
+  directory; `gui_harness` and `smoke_gui.py` both call it, and a session-scoped fixture in
+  `conftest.py` does the same for the in-process tests. The redirect existed only inside the
+  harness, so `smoke_gui.py` - run by `test_gui_smoke.py` and by CI - overwrote the real
+  `bean_network_tester_ui.json` (window geometry, language, sort order, preferences) and left a
+  `crashes/` folder next to the sources on every `pytest tests`. Both are git-ignored, so nothing
+  ever showed it. A full run now leaves the tree untouched.
+- **Three more fidelity gaps in `fake_tk`, all the same class as `winfo_exists`** (production
+  reaching THROUGH an attribute of the double), all found by writing the tests that needed them:
+  - `W.__getattr__` now refuses `_bnt_*` names instead of fabricating a function for them. Those
+    are the app's own marker attributes, and `getattr(w, "_bnt_scroll_owner", None)` asks whether
+    a widget was STAMPED - a no-op function is not `None`, so `WheelDispatcher._resolve` treated
+    every widget as an owning scroll container and resolved the wheel to a function.
+  - `W.yview`/`yview_scroll`/`yview_moveto` are explicit and read a settable `_yview`;
+    `Treeview.yview` no longer hard-codes `(0.0, 1.0)`. A double that always answers "nothing to
+    scroll" cannot express the other variant, so the dispatcher's "does this widget keep its own
+    wheel" branch was unreachable and `_can_scroll` was constant.
+  - `W.bind_class` records into `CLASS_BINDINGS` instead of vanishing, which is the only way to
+    check that `_disarm_combobox_wheel` is still in place.
+- **`fakes.check` sets `__tracebackhide__`**, so a failure points at the calling test instead of at
+  the `assert` inside the helper - the one frame that is never interesting. Its docstring now also
+  says when the third argument matters: 750 of 1564 call sites omit it, and pytest can only rewrite
+  an `assert` it can see, so `check("ports match", a == b)` reports the label and nothing else.
+
+- **Three test doubles had drifted from the interfaces they stand in for, and the suite was
+  recording it 809 times per run without anyone reading it.** `crashlog` writes every swallowed
+  exception to `crashes/crashes.ndjson` (convention 30), so the drift was fully visible - just
+  never looked at. Measured 2026-08-01 on a full green run; after this change the same run leaves
+  **6** entries, all of them faults the tests inject on purpose.
+  - `fake_tk.W.tk` is now an explicit shared `Interp` with a recording `call()`. It was reaching
+    `W.__getattr__`, which answers any unknown attribute with a function, and a function has no
+    `.call` - so `gui/scaling.py`'s `root.tk.call("tk", "scaling", dpi/72.0)` raised into
+    `crashlog` on every App build (x526) and **Tk font scaling never ran in a single GUI test**.
+    `Interp.call` answers `grab current` from the existing `GRAB` slot, which also puts
+    `tooltip._grab_active` back on its PRIMARY path instead of the `grab_current()` fallback.
+  - `fake_tk.Text` is a real class instead of an alias for bare `W`, modelling the line
+    accounting behind `insert`/`delete`/`index`/`get`. `App._append_log_line` reads
+    `index("end-1c").split(".")` to bound the WIDGET as well as the in-memory list; against the
+    old double `index()` returned `None` and the `.split` raised (x264), so the widget-side trim
+    never executed. Verified after the fix: 900 appends with `log_lines=500` leave 502 lines in
+    the widget.
+  - `warm_names()` added to the three port-table doubles (`test_target_resolver._CountingTable`
+    and both `FakeTable`s in `test_gui_state`), plus the `cheap=` keyword `PortTable.name_of`
+    actually takes. The watchdog calls `warm_names()` every tick; without it those tests ran
+    against a silently degraded engine - the exact mechanism the `warm_names` ADR is about.
+  This is the same class of bug the note already records for `winfo_exists`: production reaching
+  THROUGH an attribute of the double. The generalised rule (any attribute whose RESULT is called
+  must be explicit in the fake) is now in the note beside it.
 
 - **Four new guards in `test_processes.py` for the per-PID handle read**, filling a gap that had
   been open for as long as `ppid` has mattered: it feeds `PortTable.ancestors`, which is how
