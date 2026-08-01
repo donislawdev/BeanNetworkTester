@@ -915,3 +915,74 @@ def test_closing_the_window_always_releases_the_engine():
         assert stopped, "the engine was not stopped when the window closed"
         assert app.running is False
     """)
+
+
+# -- pure winenv helpers: no UAC, no ctypes, no excuse for being untested ----- #
+
+
+def test_the_relaunch_quoting_survives_a_path_with_spaces_and_quotes():
+    """``_quote`` builds the parameter string handed to ``ShellExecuteW`` when the
+    app re-launches itself elevated. It is a pure function and it was untested,
+    while a mis-quoted argument means the elevated copy starts with the WRONG
+    settings - or, with a crafted path, with extra ones.
+    """
+    from beantester import winenv
+
+    check("a plain argument is wrapped", winenv._quote("--simulate") == '"--simulate"')
+
+    # Built from parts so the test's own escaping cannot be what it measures.
+    sep = chr(92)
+    spaced = "C:" + sep + "Program Files" + sep + "bean.py"
+    check("a path with spaces stays ONE argument",
+          winenv._quote(spaced) == '"' + spaced + '"', f"({winenv._quote(spaced)})")
+    check("...and its backslashes are passed through untouched",
+          winenv._quote(spaced).count(sep) == 2, f"({winenv._quote(spaced)})")
+
+    quoted = winenv._quote('a"b')
+    check("an embedded quote is escaped, not left to close the string early",
+          quoted == '"a\\"b"', f"({quoted})")
+    check("the result always opens and closes with a quote",
+          quoted.startswith('"') and quoted.endswith('"'), f"({quoted})")
+    check("a non-string argument does not explode", winenv._quote(7) == '"7"')
+
+
+def test_the_no_elevate_switch_is_read_the_way_the_screenshot_workflow_uses_it():
+    """``BEAN_NO_ELEVATE=1`` is what keeps an automated GUI run from spawning a
+    UAC prompt that nothing can answer. Every value that is not empty and not "0"
+    disables elevation - "0" and "" must NOT."""
+    import os
+
+    from beantester import winenv
+
+    previous = os.environ.get("BEAN_NO_ELEVATE")
+    try:
+        for value, expected in (("1", True), ("yes", True), ("true", True),
+                                (" 1 ", True), ("0", False), ("", False)):
+            os.environ["BEAN_NO_ELEVATE"] = value
+            check(f"BEAN_NO_ELEVATE={value!r} -> {expected}",
+                  winenv.elevation_disabled() is expected,
+                  f"(got {winenv.elevation_disabled()})")
+        os.environ.pop("BEAN_NO_ELEVATE", None)
+        check("unset means elevation is allowed", winenv.elevation_disabled() is False)
+    finally:
+        os.environ.pop("BEAN_NO_ELEVATE", None)
+        if previous is not None:
+            os.environ["BEAN_NO_ELEVATE"] = previous
+
+
+def test_elevation_is_refused_when_the_switch_is_set():
+    """The switch has to reach the decision, not just the reader: an automated run
+    that spawns a "runas" child hangs forever in a non-interactive shell."""
+    import os
+
+    from beantester import winenv
+
+    previous = os.environ.get("BEAN_NO_ELEVATE")
+    os.environ["BEAN_NO_ELEVATE"] = "1"
+    try:
+        check("elevate_self() refuses while BEAN_NO_ELEVATE is set",
+              winenv.elevate_self([]) is False)
+    finally:
+        os.environ.pop("BEAN_NO_ELEVATE", None)
+        if previous is not None:
+            os.environ["BEAN_NO_ELEVATE"] = previous

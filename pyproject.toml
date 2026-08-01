@@ -54,14 +54,20 @@ omit = ["*/__main__.py"]
 # without failing on the small run-to-run variance of the subprocess GUI coverage.
 # Raise it as coverage climbs - never lower it to make a red build go green.
 #
-# Measured 2026-07-21 (Win11 AMD64, CPython 3.14.6, full `pytest tests`):
-#   COVERAGE_PROCESS_START set  -> 83.03%   <- the real number
+# Measured 2026-08-01 (Win11 AMD64, CPython 3.14.6, full `pytest tests`):
+#   COVERAGE_PROCESS_START set  -> 85.86%   <- the real number (was 83.03% on 2026-07-21)
 #   COVERAGE_PROCESS_START unset -> 45%     <- meaningless, see below
 #
 # NOTE: it only means anything with COVERAGE_PROCESS_START set, because the GUI tests
 # run in subprocesses whose coverage is otherwise never collected. Unset, the same
 # suite reports 45%, so ANY sane gate would fail on a codebase that is actually fine.
-fail_under = 80
+#
+# The number is a TREND gauge for the whole package, not a verdict on a module: it
+# reports lines as missing that mutation proves are guarded (coverage cannot see
+# inside threading.excepthook) and as covered where nothing checks them (a short
+# -circuited `and`, a line executed only while building the object). Guarding a
+# behaviour is proved by mutation, never by this percentage.
+fail_under = 83
 show_missing = true
 skip_covered = false
 exclude_lines = [

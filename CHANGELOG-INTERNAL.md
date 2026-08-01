@@ -89,6 +89,17 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Changed
 
+- **Coverage gate raised 80 -> 83** (convention 32). Measured with `COVERAGE_PROCESS_START` on
+  2026-08-01: **87.43%**, up from 83.03% on 2026-07-21. The comment above `fail_under` now also
+  records what the number is NOT: it reports lines as missing that mutation proves are guarded
+  (coverage cannot see inside `threading.excepthook`) and as covered where nothing checks them (a
+  short-circuited `and`, a line executed only while the object is built). It gauges the trend for
+  the package; a behaviour is proved guarded by mutation.
+- **`tooltip._grab_active` docstring corrected.** It said `grab_current` was the fallback "for
+  environments without `.tk` (the test double)". The double answers `call` like the real
+  interpreter now, so tests take the branch production takes; the fallback is for a widget with no
+  `tk` handle at all.
+
 - **What the on-screen numbers COVER is now derived in one place: `gui/scope.py`.** The notes on
   Statistics and Connections answer "what do these figures cover?", but both read a single input -
   the `scope_view_to_target` preference (`stats.py` line 149, `conns.py` line 122). With
@@ -419,6 +430,56 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   reverting them gives "the Live tab is not scrolled" and "the footer is packed at position 5 of 6".
 
 ### Tests
+
+- **`crashlog.install()` claims every failure path; only one of the three was guarded.**
+  Mutation-checked 2026-08-01: gutting the main-thread hook and the Tk-callback hook left 106
+  tests green, while the same treatment of the worker hook reddens
+  `test_crashlog.py::test_a_worker_thread_exception_is_recorded` at once. New:
+  `::test_an_unhandled_main_thread_exception_is_recorded` (also checks the previous
+  `sys.excepthook` still runs - we record, we do not swallow),
+  `::test_a_tk_callback_crash_is_recorded` and
+  `::test_attaching_the_tk_hook_to_a_hostile_root_is_not_a_crash`. Both new guards were confirmed
+  red against their mutants.
+- **New `tests/test_license_surface.py` - `--license` had zero test coverage**, the one finding of
+  the 2026-08-01 review with legal rather than functional weight (convention 35). What was tested
+  is that `LICENSE` and `THIRD-PARTY-NOTICES.md` EXIST in the tree; the code reads them through
+  `resource_path()`, a different resolution, and `legal._read` answers an `OSError` with an empty
+  string. So a frozen build that stopped resolving them would print an empty licence and keep the
+  suite green. Six tests: the texts resolve and are non-empty, every component carries a version
+  and a source URL, the report names all of them plus the no-telemetry line, the flag writes to
+  stdout and exits OK without touching the driver, and `--format json` is one parsable record whose
+  `components[]` matches `legal.COMPONENTS` exactly (the NDJSON schema is a frozen contract).
+- **New `tests/test_wheel_and_scroll.py` - the three user-visible fixes in `gui/scrollable.py`
+  had no guard at all** (44.5% line coverage). The one existing test replaced `_resolve` with a
+  lambda and the one touching `ensure_visible` replaced it with a spy: both good wiring tests, but
+  between them the behaviour never ran. Nine tests covering the master-chain walk (a nested control
+  scrolls the page it sits on), a self-scrolling Treeview keeping its own wheel only while it has
+  something to scroll, a bounded walk, the end-to-end `_on_wheel`, the disarmed combobox class
+  binding, and `ensure_visible` as maths in four cases including "taller than the viewport shows
+  its START". Three mutants planted in `scrollable.py` (broken walk, broken tall-widget branch,
+  removed combobox disarm) were each caught by the matching test.
+- **New `tests/test_tooltip_bubble.py` - the module's whole reason for existing was unguarded**
+  (39.9% coverage; the entire show/hide lifecycle untouched). One reused bubble per toplevel is
+  what stops Windows flashing the taskbar button on every hover, and a rewrite to one `Toplevel`
+  per hover would have passed the suite. Seven tests: the bubble is reused across widgets, a
+  destroyed one is rebuilt, a Tk grab suppresses it (it would cover the dropdown it describes),
+  empty text builds nothing, the Enter/Leave state machine, `retip` re-wording, and the shortcut
+  line.
+- **`SortableTree._clicked` - sorting by clicking a column header - was called by nothing.** Three
+  tests in `test_virtual_tables.py` go through the heading command the way a click does: the same
+  column flips direction, a different column starts from its own `default_reverse` instead of
+  inheriting the previous one, every click reaches `on_sort`, sorting returns the viewport to the
+  top, and `copy_text(header=True)` adds exactly one line while leaving the rows unchanged.
+- **Pure `winenv` helpers in `test_failsafe.py`.** `_quote` builds the parameter string for the
+  elevated re-launch (a mis-quote means the elevated copy starts with the wrong settings, or with
+  extra ones) and `elevation_disabled` reads `BEAN_NO_ELEVATE`, which the whole automated
+  GUI/screenshot workflow depends on. Both pure, both previously at zero coverage. The quoting
+  assertions build their paths with `chr(92)` so the test's own escaping cannot be what they
+  measure.
+- **Both branches of `gui/icon.py::_running_variant`.** The primary branch (copy the idle artwork,
+  stamp the dot) only became reachable once the tkinter double grew a working `tk.call`; before
+  that every GUI test silently exercised the fallback instead. Neither had a guard, so the swap
+  went unnoticed - two tests now pin both.
 
 - **A green GUI test can no longer hide a swallowed fault.** `gui_harness.run_gui` now ends every
   subprocess by reading `crashlog.recent()` back and failing the test on anything not declared via
