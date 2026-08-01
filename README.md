@@ -412,6 +412,20 @@ ports. The port set is kept current during the session from the system's socket 
 opened connections of the process are caught as they open (without real WinDivert it falls back to
 re-scanning the socket table a few times a second).
 
+**What "its local ports" means in practice.** A packet carries addresses and ports, never a program
+name, so the tool cannot match on "Chrome" directly. It looks up which **local** ports the process
+owns and matches every packet on its local port.
+
+This is why `443` never shows up here. When Chrome loads a page, `443` is the **server's** port -
+Chrome's own end of that connection is a temporary port like `15597`, and that number belongs to
+one process at a time, so its traffic is caught exactly.
+
+A few ports work differently. mDNS (5353), SSDP (1900) and DHCP (67/68) are held by several
+programs at once, because that is how programs find devices on your network. There the port number
+no longer says whose traffic it is, so it is all or nothing: either everything on that port is
+impaired or nothing on it is. The log says so when it happens and names which of the two applies.
+Ordinary traffic is not affected.
+
 ### The "IP" field
 
 **IPv4 and IPv6** are supported. A rule never matches an address from the other family - an IPv4

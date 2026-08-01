@@ -312,6 +312,20 @@ Zbiór portów jest utrzymywany na bieżąco w trakcie sesji ze zdarzeń gniazd 
 otwarte połączenia procesu są łapane od razu (bez realnego WinDivert narzędzie wraca do skanowania
 tabeli gniazd kilka razy na sekundę).
 
+**Co znaczy „jego porty lokalne” w praktyce.** Pakiet niesie adresy i porty, nigdy nazwy programu,
+więc narzędzie nie umie dopasować po „Chrome”. Sprawdza, jakie **porty lokalne** ma ten proces,
+i każdy pakiet dopasowuje po jego porcie lokalnym.
+
+Dlatego nie zobaczysz tu `443`. Gdy Chrome otwiera stronę, `443` należy do **serwera** - własny
+koniec tego połączenia po stronie Chrome'a to port tymczasowy, na przykład `15597`, a taki numer ma
+w danej chwili jeden proces, więc jego ruch jest łapany dokładnie.
+
+Kilka portów działa inaczej. mDNS (5353), SSDP (1900) i DHCP (67/68) trzyma naraz kilka programów,
+bo tak właśnie programy znajdują urządzenia w Twojej sieci. Tam numer portu przestaje mówić, czyj
+to ruch, więc jest wszystko albo nic: albo psuje się wszystko na tym porcie, albo nic na nim. Log
+mówi o tym, gdy to zajdzie, i nazywa, który z dwóch przypadków zachodzi. Zwykłego ruchu to nie
+dotyczy.
+
 ### Pole „IP”
 
 Obsługiwane jest **IPv4 i IPv6**. Reguła nigdy nie dopasowuje adresu z innej rodziny -
