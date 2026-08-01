@@ -420,6 +420,40 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **A green GUI test can no longer hide a swallowed fault.** `gui_harness.run_gui` now ends every
+  subprocess by reading `crashlog.recent()` back and failing the test on anything not declared via
+  the new `run_gui(allow_faults=(...))`. `crashlog.quiet`/`note` exist so a failure stops being
+  invisible to US while staying invisible to the user (convention 30) - but nothing ever read them
+  back, so the swallowing was invisible to us too. The check lives in the subprocess rather than in
+  a test that scans `crashes/`, so the failure carries the name of the test that caused it and it
+  keeps working now that the crash log is redirected per subprocess. Verified in both directions:
+  a planted `crashlog.quiet` fault fails the test, and the same fault named in `allow_faults`
+  passes.
+- **The suite no longer writes the developer's own files into the working tree.** New
+  `tests/user_files.py::redirect_to_temp` sends UI state, profiles and the crash log to a temp
+  directory; `gui_harness` and `smoke_gui.py` both call it, and a session-scoped fixture in
+  `conftest.py` does the same for the in-process tests. The redirect existed only inside the
+  harness, so `smoke_gui.py` - run by `test_gui_smoke.py` and by CI - overwrote the real
+  `bean_network_tester_ui.json` (window geometry, language, sort order, preferences) and left a
+  `crashes/` folder next to the sources on every `pytest tests`. Both are git-ignored, so nothing
+  ever showed it. A full run now leaves the tree untouched.
+- **Three more fidelity gaps in `fake_tk`, all the same class as `winfo_exists`** (production
+  reaching THROUGH an attribute of the double), all found by writing the tests that needed them:
+  - `W.__getattr__` now refuses `_bnt_*` names instead of fabricating a function for them. Those
+    are the app's own marker attributes, and `getattr(w, "_bnt_scroll_owner", None)` asks whether
+    a widget was STAMPED - a no-op function is not `None`, so `WheelDispatcher._resolve` treated
+    every widget as an owning scroll container and resolved the wheel to a function.
+  - `W.yview`/`yview_scroll`/`yview_moveto` are explicit and read a settable `_yview`;
+    `Treeview.yview` no longer hard-codes `(0.0, 1.0)`. A double that always answers "nothing to
+    scroll" cannot express the other variant, so the dispatcher's "does this widget keep its own
+    wheel" branch was unreachable and `_can_scroll` was constant.
+  - `W.bind_class` records into `CLASS_BINDINGS` instead of vanishing, which is the only way to
+    check that `_disarm_combobox_wheel` is still in place.
+- **`fakes.check` sets `__tracebackhide__`**, so a failure points at the calling test instead of at
+  the `assert` inside the helper - the one frame that is never interesting. Its docstring now also
+  says when the third argument matters: 750 of 1564 call sites omit it, and pytest can only rewrite
+  an `assert` it can see, so `check("ports match", a == b)` reports the label and nothing else.
+
 - **Three test doubles had drifted from the interfaces they stand in for, and the suite was
   recording it 809 times per run without anyone reading it.** `crashlog` writes every swallowed
   exception to `crashes/crashes.ndjson` (convention 30), so the drift was fully visible - just

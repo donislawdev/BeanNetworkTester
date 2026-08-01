@@ -7,7 +7,18 @@ LANG_DIR = os.path.join(ROOT, "lang")
 
 
 def check(name, cond, detail=""):
-    """Assertion helper keeping the original suite's readable messages."""
+    """Assertion helper keeping the original suite's readable messages.
+
+    ``__tracebackhide__`` keeps the failure pointing at the CALLING test rather
+    than at the ``assert`` inside this helper. Without it pytest's last frame is
+    always this file, which is the one place the failure is never interesting.
+
+    Pass ``detail`` whenever the values are not obvious from the name: pytest can
+    only rewrite an ``assert`` it can see, so ``check("ports match", a == b)``
+    reports the label and nothing else, while a plain ``assert a == b`` would show
+    both sides.
+    """
+    __tracebackhide__ = True
     assert cond, f"{name} {detail}".strip()
 
 

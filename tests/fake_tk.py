@@ -17,6 +17,7 @@ SCREEN = [1920, 1080]     # mutable: tests can pretend to be on a 1366x768 lapto
 DPI = [96.0]
 CLIPBOARD = []            # what the app copied (Ctrl+C, "copy row", repro CLI)
 GRAB = [None]             # what currently holds the Tk grab (an open popdown)
+CLASS_BINDINGS = {}       # (widget class, sequence) -> handler, set by bind_class
 FOCUS = [None]            # the widget holding keyboard focus (ttk paints it)
 
 
@@ -47,6 +48,8 @@ class W:
         self.bindings = {}
         self.states = set()         # ttk widget state flags (active, focus, ...)
         self.alive = True
+        self._yview = (0.0, 1.0)    # everything fits until a test says otherwise
+        self.scrolled = []          # every scroll the widget was asked to do
         master = args[0] if args else kw.get("master")
         self.master = master if isinstance(master, W) else None
         if isinstance(master, W):
@@ -262,6 +265,39 @@ class W:
     def after_cancel(self, _job):
         return None
 
+    def bind_class(self, widget_class, sequence, func=None, add=None):
+        """Class-level binding, RECORDED - it is a behaviour, not a no-op.
+
+        ``gui/scrollable.py`` replaces ttk's own combobox wheel binding with a
+        no-op, because scrolling the page while the pointer crossed a combobox
+        silently changed the selected traffic filter. Against ``__getattr__``
+        that call vanished, so nothing could check the fix was still in place.
+        """
+        CLASS_BINDINGS[(widget_class, sequence)] = func
+        return ""
+
+    @property
+    def class_bindings(self):
+        return CLASS_BINDINGS
+
+    # -- scrolling ---------------------------------------------------------- #
+    # A widget that cannot say how much of it is visible cannot be asked whether
+    # it has anything to scroll: `_can_scroll` unpacks `yview()` into two floats,
+    # and against `__getattr__`'s no-op that raised and was swallowed, so the
+    # wheel dispatcher's "is there a scrollable under the pointer" answer was
+    # always False. Default (0.0, 1.0) = everything fits, like a fresh widget.
+    def yview(self, *args):
+        if args:
+            self.scrolled.append(("yview",) + args)
+            return None
+        return self._yview
+
+    def yview_scroll(self, amount, what="units"):
+        self.scrolled.append(("scroll", amount, what))
+
+    def yview_moveto(self, fraction):
+        self.scrolled.append(("moveto", fraction))
+
     @property
     def _w(self):
         """Tk widget path. Real code passes it straight back into ``tk.call``."""
@@ -281,6 +317,15 @@ class W:
         return INTERP
 
     def __getattr__(self, name):
+        # A MARKER the app stamps on a widget must read as absent when it was
+        # never stamped. `getattr(w, "_bnt_scroll_owner", None)` asks exactly that
+        # question, and a no-op function is not None - so the wheel dispatcher
+        # treated EVERY widget as an owning scroll container and resolved the
+        # wheel to a function. Same trap as `winfo_exists`, one layer over: there
+        # the fabricated value read as "destroyed", here as "present".
+        if name.startswith("_bnt_"):
+            raise AttributeError(name)
+
         def _f(*a, **k):
             return None
         return _f
@@ -528,8 +573,12 @@ class Treeview(W):
     def selection(self):
         return self._sel
 
-    def yview(self):
-        return (0.0, 1.0)
+    # `yview` deliberately NOT overridden: it used to return a hard-coded
+    # (0.0, 1.0), i.e. "there is never anything to scroll". A double that cannot
+    # express the other variant silently voids the test that depends on it - the
+    # wheel dispatcher asks exactly this question to decide whether a table keeps
+    # its own wheel, and with a constant answer that branch was unreachable.
+    # W.yview reads `_yview`, so a test can say how much of the table is visible.
 
 
 class Font:
