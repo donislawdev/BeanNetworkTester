@@ -3,824 +3,351 @@
 All notable changes to Bean Network Tester.
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
-## [Unreleased]
+## [0.4.0] - 2026-08-01
+
+**The short version.** This release is about numbers you can trust and targeting that catches what
+you aimed at. If you read nothing else:
+
+- **Aiming at a process now catches a connection from its first packet**, TCP and UDP alike.
+  "Drop SYN" combined with a process target previously did nothing at all, and DNS and QUIC walked
+  past untouched.
+- **"Effective loss" was wrong and is now right.** It counts every impairment, over the traffic you
+  aimed at. A session losing 90% of its traffic to a speed limit used to report 0.0%.
+- **Presets and the shipped scenarios were recalculated** against published measurements. Latency
+  was applied twice, and three presets were eight times too fast.
+- **A session moves about 1.3x more packets a second**, and a delay you ask for arrives without the
+  old few-millisecond surcharge.
+- **New: "Capture only the targeted traffic".** On a real run without it, the driver threw away 43%
+  of the traffic you had aimed at before this tool ever saw it.
+- **New: "Show only the targeted traffic"**, five new presets, a "Driver queue wait" reading, and a
+  warning when your target shares a port with another program.
+- **Config and scenario files now reject a typo** instead of ignoring it.
+- Plus a long list of fixes to the counters, the Connections table and session start/stop.
+
+**If you script this tool, read the BREAKING section**: presets, "Effective loss", profiles, the
+statistics CSV, the connections CSV and the reproduction report all changed shape or meaning.
 
 ### BREAKING
 
-- **BREAKING:** **a misspelled setting in a config file is now an error.** `{"loss": 10, "latancy":
-  300}` used to load without a word: `--dry-run` answered *"Configuration is valid"*, exit `0`, and
-  the run then went out with **no latency at all**. In a pipeline that is a green job that impaired
-  less than it was told to, and nothing anywhere says so. An unknown setting is now a `config` (`3`)
-  error naming the key - and where there is an obvious near miss it says so: *"Unknown setting in
-  the config file: latancy. Did you mean 'latency'?"* This is the rule scenario files already
-  follow.
-  **Any file this program saved keeps loading** (`--save-config` writes exactly the settings it
-  knows). The one file that will now be refused is a hand-written one with a name this build does
-  not recognise - including, and this is the cost of the change, a config written by a **newer**
-  version that has a setting this one does not. The message names the key, so removing it is
-  enough.
+- **A misspelled setting in a config file is now an error.** `"latancy": 300` used to load in
+  silence, so `--dry-run` said *"Configuration is valid"* and the run went out with no latency at
+  all. Unknown settings now fail with code `3`, naming the key and suggesting the near miss. Files
+  this tool saved keep loading. A hand-written file with an unknown name will not.
 
-- **BREAKING:** **a scenario that ends now ends the run.** `--scenario` with a file that does not
-  loop and has a timeline (more than one step) used to print "Scenario finished." and then keep
-  the session going forever: without `--duration` there was nothing left to stop it. In a pipeline
-  that is a job that hangs to its own timeout, exits with a code this tool never produced, writes
-  no `summary` record, and leaves the WinDivert driver loaded. Such a run now stops when the
-  scenario does (`stop_reason: "scenario_done"`), and says so at the start: *"No --duration: this
-  run will stop when the scenario ends (about 85s)."*
-  **`--duration` still wins wherever you pass it**, so any command that already had one behaves
-  exactly as before. Two kinds of scenario have no end to derive - a looping one, and a
-  single-step one (which is settings, not a timeline) - and those keep running until you stop
-  them, but now say so instead of leaving you to find out.
+- **A mistake in a scenario file now says so instead of doing nothing.** `"duraton"` used to leave a
+  reset at its default and `"lop"` used to turn looping off, both silently, so the tool looked like
+  it was ignoring your file. Unknown keys, in a step or at the top level, are now an error naming
+  the key. A correct file keeps working.
 
-- **BREAKING:** **the statistics CSV has a new `capture_narrowed` column**, right after `time`.
-  It says whether that row was measured with "Capture only the targeted traffic" in effect - and
-  without it two rows under the same header could count completely different traffic with no way
-  to tell them apart. Unlike the "show only the targeted traffic" switch, which the file sidesteps
-  by carrying both totals, this one changes what `packets_seen` counted at all, so no pair of
-  columns can undo it. **Your existing `bean_network_tester_stats.csv` is renamed with a timestamp
-  and a fresh one started** (the tool already does this whenever the columns change, so rows never
-  misalign under a stale header) - nothing is lost, but a script reading the file by column
-  position needs the offset.
+- **A scenario that ends now ends the run.** A non-looping scenario with a timeline used to print
+  "Scenario finished." and then run forever, which in a pipeline is a job that hangs to its own
+  timeout and writes no `summary`. Such a run now stops with `stop_reason: "scenario_done"` and says
+  so at the start. `--duration` still wins wherever you pass it.
 
-- **BREAKING:** **the old `reset_now` name for a scenario action is gone.** `reset_tcp` does the
-  same thing and is now the only action a scenario step can carry. A scenario file still using
-  `reset_now` will not load, and says which step to fix. The **"Reset TCP now" button is not
-  affected** - it never had anything to do with this name.
+- **The old `reset_now` scenario action is gone.** `reset_tcp` does the same thing and is now the
+  only action. A file still using `reset_now` will not load and says which step to fix. The
+  "Reset TCP now" button is unaffected.
 
-- **BREAKING:** **A mistake in a scenario file now says so instead of doing nothing.** A misspelled
-  key used to be accepted and ignored, which is the worst possible outcome: `"duraton"` quietly left
-  a reset at its 3-second default, `"lop"` quietly turned looping off, and in both cases the tool
-  looked like it was ignoring your file. Unknown keys - in a step and at the top level - are now an
-  error naming the key, the same way an unknown *setting* name has always been. `duration` is
-  validated too: it has to be a number of seconds and it only means something next to an `action`.
-  A file that was correct keeps working; one that was quietly half-working will now tell you where.
+- **The presets were wrong and are now checked against published measurements.** Latency was set as
+  if it were a ping, but it is added in both directions, so "Satellite link" at 600 ms delivered a
+  1200 ms ping. Three presets held kilo**bits** where the field wants kilo**bytes**, making them
+  eight times too fast. **If you scripted `--preset`, your traffic changes.** Ids are unchanged, but
+  `--preset "Satellite link"` is now "Satellite (geostationary)".
 
-### Added
+- **The shipped scenarios in `scenarios/` were recalculated** the same way, so a scenario and a
+  preset describe the same network with the same numbers. The ping you get is now the number written
+  in the file.
 
-- **The README documents three things it never did**, in both languages:
-  - **The scenario file format** - the file and step keys, what may go in `settings`, the two
-    actions there are, the 1000-step limit, how looping restarts, and the 0.1 s tick.
-  - **The seven shipped scenarios**, a line each: what each one reproduces and what it is for
-    (which one kills the network mid-request, which one only touches DNS, which one is a one-shot).
-  - **Both CSV exports and all 17 Connections columns.** The two exports behave differently on
-    purpose - the statistics one appends and ignores the "targeted traffic only" switch, the
-    connections one overwrites and follows your search, sorting and that switch - and the
-    connections CSV does not reuse the table's labels, so there is a column-by-column map between
-    them.
+- **"Effective loss" now means what its name says, and your numbers will change.** It used to be the
+  configured Loss percentage over every packet seen, ignoring speed limits, blocking, LAN cut, link
+  outages, resets, dropped SYNs and expired NAT. It now counts every impairment, over the traffic you
+  aimed at. `effective_loss_pct` and `effective_corruption_pct` moved with it, so reports from before
+  and after are not comparable.
 
-### Fixed
+- **"Duplicated" counts packets actually sent twice, not packets the tool decided to duplicate.**
+  Under load the copy was thrown away while the counter rose anyway: 40 packets in, "Duplicated"
+  read 40, nothing reached the wire. This matches "Corrupted", which always counted only real
+  changes. Reports from before and after are not comparable on that field.
 
-- **`--dry-run` no longer sounds like it checked more than it did.** It validates the settings; it
-  never asks whether this machine could actually run a capture, so on a box without Administrator
-  rights it answered *"Configuration is valid"* about a command that then exits `7`. Widening the
-  check would have broken a normal habit - validating a config on a build agent and running it
-  somewhere else - so the sentence changed instead: the success line now says it checked the
-  settings and not the machine, and points at `--doctor` for the other half. Both READMEs show the
-  pair.
-- **An unforeseen error during a run is now an exit code, not a stack trace.** The command line
-  promises that every way of ending has its own number - and it kept that promise everywhere
-  except the one place where a session actually runs. An unexpected failure inside the reporting
-  loop escaped as a raw Python traceback with exit code `1`, which is also the code for "the
-  session could not start", so a pipeline could not tell an internal bug from a driver that would
-  not open. Now it is reported as `runtime` (`1`) with a line saying what happened, **and the run
-  still writes its complete `summary` record** - a `--format json` file no longer ends mid-stream.
-  A failure while building the final report (rarer, and it takes the counters with it) says so in
-  its own words, so one fault never reads like two.
-- **The shared-port warning called your own target "another process".** Targeting `chrome` could
-  answer *"other processes have port 5353 open too (Spotify.exe, adb.exe, **chrome.exe**,
-  msedge.exe, svchost.exe)"* - listing the very program you were targeting among the strangers,
-  which reads as targeting being broken. It was not: a program like Chrome runs several processes,
-  and the tool could only see the one that owns the port in the system's table. Those are now
-  marked *"same program as your target"* instead of being listed as somebody else.
-- **...and it offered two outcomes when it already knew which one applied.** The old line said the
-  tool "may break theirs as well, or miss the target's" - but the system's socket table decides
-  that, and the tool reads it. Now it says the one that is true: either *"on this one port their
-  traffic gets broken too"* or *"the target's traffic on this one port will be skipped"*, naming
-  which program holds the port instead.
-- **Shared ports now say what they are.** `5353` on its own reads like a fault. It is mDNS - the
-  protocol programs use to find devices on your network, and it is *meant* to be open in several
-  programs at once. The warning now writes `5353 (mDNS)`, `1900 (SSDP)`, `67 (DHCP)` and so on,
-  taking the names from your own machine's services list. Ports it has no name for stay plain
-  numbers.
+- **Profiles now remember more of the link:** latency spikes, link outages (flapping) and the buffer,
+  on top of the original seven fields. Outages are why it was worth doing - a profile can finally
+  describe a link that cuts out. Old profiles load exactly as before. Picking a preset now clears
+  all of these, so "Perfect network" really does clear everything, and `--preset` finally does what
+  the window does.
 
-- **The tool kept pausing itself and then warning you about WinDivert.** Every so often - on the
-  first Start, then roughly every 30 seconds, and far more often on a busy machine - it spent up to
-  half a second working out which program owns which connection. While that was going on it stopped
-  picking up packets, so they piled up inside the driver, and then it told you: *"WinDivert held a
-  packet for 105 ms ... the driver's queue is backing up ... narrow the traffic filter."*
-  Nothing was wrong with your filter and nothing was wrong with the driver. The delay was the tool's
-  own, so narrowing the filter could not have helped - and that half second landed on your traffic
-  without showing up in any counter, in a tool whose whole job is to control delay precisely.
-  Looking up those program names now takes about a millisecond instead of several hundred. Measured
-  over a 95-second session with programs constantly starting and stopping: the worst pile-up dropped
-  from 508 ms to 17 ms, and the warning stopped appearing. The process names in the Connections tab
-  are exactly as before. If you do see that warning now, it means what it says.
+- **The Connections table now shows what arrived AND what was offered.** "down", "up" and "total"
+  held *captured* bytes under headings meaning delivered, so a row could read 5 MB while the
+  application got 0.4 MB. Those three are now delivered, and new **"down seen"** / **"up seen"**
+  hold what was captured. **The connections CSV changed shape**: the three old byte columns are
+  replaced by six `delivered_*` and `captured_*` ones, renamed rather than reused.
 
-- **With "Capture only the targeted traffic" on, the Statistics and Connections tabs said the exact
-  opposite of the truth.** Both kept their usual line - "Counters cover ALL captured traffic" and
-  "All captured connections ... targeting decides what gets impaired, not what gets listed" - even
-  though the driver had been told to hand over nothing but your destination's traffic. The
-  checkbox's own tooltip promised the opposite ("the Statistics and Connections tabs then show only
-  that traffic"), and both READMEs contradicted themselves the same way, so there was no way to
-  tell from the screen which of the two you were looking at. **Both READMEs are corrected too**, and
-  now describe the two scope switches as the different things they are.
-  Both notes now say what the figures in front of you actually cover, including the case where a
-  **process target** is set as well: the tool then captures your destination's traffic from every
-  process and impairs one process's share of it, so the counters cover more than the impairment
-  does - and now they say so. The throughput chart's caption names its traffic too, because that is
-  the picture people screenshot and send on.
-  Hovering a note used to explain the OTHER state: the bubble was attached once and never updated,
-  so it kept describing the wording that had just been replaced. It follows the note now.
+- **The reproduction report's "connections reset" counted packets, not connections.** One reset
+  connection could report itself as 50. The report now carries three keys that answer three
+  questions: `connections_reset`, `rst_packets_dropped` and `rst_sent`. The statistics CSV gained a
+  matching `connections_reset` column. Nothing on screen changed.
 
-- **The two "only the targeted traffic" switches now sit in one "Scope" card, and it tells you
-  whether the first one will work.** They differ by a single word - **Capture** only the targeted
-  traffic against **Show** only the targeted traffic - and they used to be in separate panels a few
-  rows apart, so they read as two spellings of the same setting. Only one of them changes what the
-  tool takes in; the other changes what is on screen and can be flipped at any time. They are now
-  next to each other, with a line under them that says, **before you press START**, whether your
-  destination can actually be pushed down into the driver - and when it cannot, which forms do work
-  (a plain address, a list, a range, a CIDR) and which do not (a wildcard, an `re:` pattern, or
-  targeting only a process). While a session is running the line reports what **that session** did,
-  not what a restart would do.
+- **The statistics CSV gained `capture_narrowed` and `packets_in_scope` columns.** The first records
+  whether "Capture only the targeted traffic" was in effect, without which two rows under one header
+  can count completely different traffic. Your existing file is moved aside with a timestamp and a
+  fresh one started, as it already is whenever columns change, so no row misaligns. A script reading
+  by column position needs the new offsets.
 
-- **The Settings window scrolls, so no group can fall off the bottom.** With the new Scope card
-  there was one panel too many for the window: "Behaviour" rendered as a bare header with nothing
-  under it, and there was no scrollbar and no sign that a whole group of preferences was still down
-  there. The window also opens taller. If yours already has a remembered size, it keeps it - the
-  content is reachable either way now.
-
-- **The two Scope checkboxes sit together instead of drifting apart.** A blank line was reserved
-  between them (the space where "locked while a session runs" appears for the capture switch), which
-  pushed a pair you are meant to read together far enough apart to look like two unrelated settings.
-  The explanation lines now sit below both. The red "this destination cannot be narrowed" note is
-  shorter too - it no longer repeats the list of forms that do not work, which the checkbox's own
-  tooltip already spells out.
-
-- **The window now says whether "Capture only the targeted traffic" actually worked.** The option
-  quietly does nothing when the destination cannot be turned into a driver filter - a wildcard, an
-  `re:` pattern, only a process target, or no destination at all - and since capturing everything
-  is the safe fallback, nothing else about the run looked unusual. The command line has warned
-  about this since the option shipped. The window, the only place the checkbox is visible, said
-  nothing at all, either way. Starting a session now logs which of the two happened.
-
-- **The Session panel says which traffic was captured.** New "Capture" row: *all traffic the filter
-  passes* or *narrowed to the destination*. Two runs with the same packet count could describe two
-  completely different worlds, and only the command line and the saved reproduction report ever
-  said which - the window never mentioned it anywhere.
-
-### Changed
-
-- **The checkbox is now called "Capture only the targeted traffic"** instead of "Narrow the driver
-  filter to the target". The old name described the machinery rather than what you get, and
-  "driver filter" means nothing unless you already know how the tool works. The `--narrow-filter`
-  flag is unchanged.
-
-- **Semicolons are gone from the interface texts and both READMEs.** Twenty-one tooltips and about
-  eighty lines of documentation used them to join sentences, which is not how people write. They
-  are now full stops or commas. Code samples keep theirs, since there a semicolon is syntax.
-
-- **The "Narrow the driver filter to the target" tooltip was rewritten.** It explained how the
-  option works rather than what it does, and it left out the part people most need: the option has
-  **no effect at all** if you target a process, or use a wildcard or an `re:` pattern in the
-  destination. It now says what it does, what changes in the Statistics and Connections tabs, and
-  when it will not apply.
-
-- **"Blocking (firewall)" now starts collapsed** on a fresh install, like the other advanced
-  panels. If you have used the tool before, your own collapsed/expanded choices are remembered and
-  nothing moves.
-
-- **"Spike chance" and "Spike size" moved from "Advanced (NAT / connections)" to
-  "Latency (ping)".** A spike is latency - an occasional large one - so it now sits next to the
-  steady value and the jitter around it, instead of among the NAT and connection knobs. Nothing
-  about how it works changed, and neither did its `--spike-prob` / `--spike-ms` flags or its place
-  in a saved profile.
-
-### Fixed
-
-- **The throughput chart could be squeezed until it vanished.** On a narrow window the counter grid
-  reflows into more rows, took the height, and left the chart a black sliver under its own heading.
-  The "Live" tab now scrolls, so nothing on it can be pushed out of existence. One trade worth
-  knowing: the chart keeps a fixed height now instead of growing to fill a tall window.
-- **"Close" was cut in half at the bottom of the Settings window.** The button is now reserved
-  before the settings above it, so it is always there whatever the window is holding. The About
-  window had the same construction and was one longer translation away from the same bug.
-- **"Save profile..." opens with the cursor already in the name box.** It used to need a click
-  before you could type.
-
-## [0.4.0] - 2026-07-30
-
-### BREAKING
-
-- **BREAKING:** **The presets were wrong, and they are now checked against published measurements.**
-  Two mistakes ran through the whole list. Every latency was set as if it were a ping, but the delay
-  is added to each packet in **both** directions - so "Satellite link" at 600 ms was handing you a
-  1200 ms ping, against the ~680 ms a real geostationary link has. And three presets held speeds in
-  kilo**bits** where the field wants kilo**bytes**, which made them eight times too fast: "3G
-  network" delivered 3 Mbit/s, which is not what anybody picks that preset to feel. Both are fixed
-  throughout, and every value now carries a source (or an honest note that no measurement exists,
-  as for "weak Wi-Fi") in `beantester/presets.py`. **If you scripted `--preset`, the traffic you get
-  will change.** Two names changed with them: "Satellite link" is now "Satellite (geostationary)",
-  and "Home DSL" says VDSL. The ids did not change, so saved configs and profiles are unaffected -
-  but `--preset "Satellite link"` no longer resolves.
-
-- **BREAKING:** **The shipped scenarios in `scenarios/` were recalculated** the same way, so a
-  scenario and a preset finally describe the same network with the same numbers. A pleasant side
-  effect: the ping you get is now the number written in the file.
+- **`--gui` no longer accepts any other option.** `--gui --loss 30 --duration 600` used to open no
+  window and quietly impair in the background, with no STOP button anywhere. It now stops with a
+  usage error (code `2`) and says what to do instead. If a script relied on this, delete `--gui`
+  from it.
 
 ### Added
 
-- **Five new presets**, each for a situation the old list could not describe:
-  - **Satellite (low orbit)** - Starlink-like. Fast and low-ping in the steady state; what marks it
-    out is the reconfiguration every 15 seconds, which briefly halts transmission and turns up as
-    an occasional ping spike rather than as lost packets.
-  - **Distant server (another continent)** - a fast, healthy link that is simply far away
-    (~120 ms of ping). The one that catches code written as if the server were in the next room.
-  - **Congested home link (bufferbloat)** - looks perfect when idle; the queue is the problem. Note
-    that **it only bites once your application really saturates the link** - send a trickle and you
-    will see an ordinary 8/1 Mbit/s link. Saturate the upload and watch ping climb towards two
-    seconds, which is the "the video call dies when somebody starts a backup" case.
-  - **Train / metro (tunnels)** - takes the connection fully down for 3 seconds out of every 30, so
-    your application has to reconnect rather than just slow down. Nothing else in the list does
-    that.
-  - **In-flight Wi-Fi** - the satellite kind: about 750 ms of ping and 7% loss, which is a measured
-    median rather than a worst case.
+- **Five new presets:** Satellite (low orbit), Distant server (another continent), Congested home
+  link (bufferbloat), Train / metro (tunnels) and In-flight Wi-Fi. Two are worth a note: bufferbloat
+  only bites once you really saturate the link, and Train / metro is the only preset that takes the
+  connection fully down, so your application has to reconnect rather than just slow down.
 
-### Fixed
+- **"Show only the targeted traffic"** (Settings, off by default) points the counters, the chart, the
+  Connections table and the connections CSV at your target alone. It changes what you **see**, never
+  what is captured or impaired. Three things deliberately do not follow it: "Queue overflow",
+  "Dropped at stop" and "Send failed" always cover everything, because they count the tool's own
+  losses. The statistics CSV carries both totals instead. Reports and `--format json` are unchanged.
 
-- **The profile picker cut long names off.** It was a fixed 24 characters wide, so
-  "Congested home link (bufferbloat)" showed up as "Congested home link (bufferb" with nothing on
-  screen saying the name went on - in both languages. It now sizes itself to its longest entry, and
-  regrows when you save a profile with a long name.
+- **"Capture only the targeted traffic"** (`--narrow-filter`) pushes your destination IP and port
+  into WinDivert, so traffic that could never be impaired is not handed over at all. It is a
+  correctness fix, not just a speed one: measured on a real run, without it the driver threw away
+  **43% of the traffic you aimed at** before the tool saw it. It applies at START, and does nothing
+  for a process target, a wildcard or an `re:` pattern - the run says which.
 
-### Changed
+- **"Driver queue wait (peak)"** in the Session tab shows how long packets waited inside WinDivert
+  before the tool saw them. That is the one delay the tool adds and counted nowhere. It is measured,
+  not estimated. Expect a fraction of a millisecond when idle; above 50 ms the log says so. Blank
+  under `--simulate`.
 
-- The Latency and Jitter tooltips now say the thing that was easy to get wrong: **ping rises by
-  about twice the latency you set** (both the request and the reply are delayed), while jitter
-  widens the wobble by about 1.4x rather than doubling it. Both READMEs explain it too.
+- **A session now records the WinDivert queue it ran behind** (length, time and size) in the log and
+  in the reproduction report, so a report from a machine you do not have in front of you says which
+  queue produced its numbers.
 
-- **BREAKING:** **Profiles now remember more of the link.** A profile used to store seven things
-  about a connection: loss, corruption, duplication, latency, jitter and the two speed limits. It
-  now also stores the latency spikes, the link outages (flapping) and the buffer. The outages are
-  the reason this was worth doing: they repeat on a fixed cadence, so a profile can finally describe
-  a link that cuts out every so often - a satellite handover, a flaky uplink - which none of the
-  other fields could say. Four things follow from it:
-  - **Profiles you saved with an earlier version load exactly as before.** The fields they never had
-    are simply off, and the buffer keeps its normal 1000 ms instead of quietly becoming unlimited.
-  - **Picking a preset or a profile now sets all of those fields at once.** None of the twelve
-    built-in presets mentions a spike, an outage or a buffer, so those go back to their defaults
-    rather than keeping whatever was left in the form: "Perfect network" now really does clear
-    everything. If you had dialled the buffer yourself, picking a preset resets it to 1000 ms.
-  - **`--preset` on the command line now does the same thing the window does.** It applied only the
-    original seven values, so the same preset name could produce different traffic depending on
-    which one you started it from.
-  - If you open a profile saved by this version in an older build, the new fields are ignored.
+- **The tool now warns when your target shares a port with another program.** Windows lets several
+  programs hold one local port - that is how mDNS, SSDP and DHCP work - and this tool decides what to
+  break from the port number. On this machine four ports out of 127 were shared, one of them by five
+  programs. Applying a target now names the port and who holds it, so you know that part of the
+  result is a coin toss.
 
-- **BREAKING:** **The reproduction report's "connections reset" counted packets, not connections.**
-  It held the number of packets a reset connection swallows while it is held down, which for a
-  30 second cooldown on a busy connection is thousands against a handful of actual resets - one
-  reset connection could report itself as 50. The report now carries the three RST numbers as three
-  keys, because they answer three different questions: `connections_reset` (how many connections
-  were torn down), `rst_packets_dropped` (how much traffic that cost while they were held down) and
-  `rst_sent` (how many RST packets actually reached the network stack). The last two can differ
-  from the first - a connection is held down whether or not an RST could be built for it - and that
-  gap is worth seeing. The statistics CSV gained a `connections_reset` column to match. Nothing on
-  screen changed: the live "RST reset" tile always said "packets" in its tooltip and was right.
+- **The command line says when your target stops matching**, instead of finishing green in silence.
+  Measured: aiming by process id and restarting the program left five out of five new connections
+  untouched with nothing in the output. Aiming by **name** recovers on its own and costs only the
+  first connection. Aiming by **process id** never recovers. If the program under test restarts, aim
+  by name.
 
-- **BREAKING:** **The Connections table now tells you what arrived AND what was offered.** The
-  "down", "up" and "total" columns held the bytes the tool *captured* - under headings the session
-  panel uses for what actually arrived. Those are the same number only while you are impairing
-  nothing: with a speed limit in place a row could read 5 MB received while its application had
-  received 0.4 MB. Those three columns are now the **delivered** bytes, agreeing with "Downloaded
-  (MB)" in the session panel, and two new columns - **"down seen"** and **"up seen"** - hold what
-  was captured. The gap between the pairs is the damage done to that connection, which is the
-  number you were probably trying to read off this table in the first place. Every one of them has
-  a tooltip saying which is which, because the headings alone cannot carry it. The footer sums the
-  delivered columns, and says so. **The connections CSV changed shape**: `download_bytes`,
-  `upload_bytes` and `total_bytes` are replaced by `delivered_down_bytes`, `delivered_up_bytes`,
-  `delivered_total_bytes`, `captured_down_bytes`, `captured_up_bytes` and `captured_total_bytes` -
-  renamed rather than reused, because a column that quietly changes meaning is worse than one that
-  disappears.
-
-- **BREAKING:** **"Effective loss" now means what its name says, and your numbers will change.**
-  It used to be the configured Loss percentage divided by every packet the tool saw, and both
-  halves of that were wrong. It ignored every other way the tool destroys traffic - a speed limit,
-  blocking, LAN cut, a link outage, a connection reset, a dropped SYN, an expired NAT mapping - so
-  a session losing 90% of its traffic to a bandwidth cap reported **0.0%**. And when you targeted
-  one application it still divided by the whole machine's traffic, so impairing that application
-  by 50% showed as **16.7%** while the application itself measured 50.1%. The figure now counts
-  every impairment, over the traffic you aimed at. `effective_loss_pct` and
-  `effective_corruption_pct` in the reproduction report moved the same way, so a report from
-  before this release is not comparable with one from after; the report also gained
-  `packets_in_scope`, and the session's NDJSON summary carries the same count. Packets the tool
-  itself threw away stay out of the figure on purpose: "Buffer overflow" and "Dropped at stop" are
-  the tool failing, not the link behaving badly, and they have their own counters. The number in
-  the session panel now has a tooltip saying exactly this - it had none before, which is part of
-  why it could be wrong for so long without anyone noticing.
-- **BREAKING:** the statistics CSV gained a `packets_in_scope` column. An existing `stats.csv`
-  from an older version is moved aside automatically and a fresh one started, exactly as it
-  already is whenever the columns change, so no row is ever silently misaligned against the
-  wrong header.
-
-- **BREAKING:** **`--gui` no longer accepts any other option.** Combining it with settings -
-  for example `--gui --loss 30 --duration 600` - used to open no window at all and quietly run
-  the impairment in the background instead, with no STOP button anywhere and only Ctrl+C in a
-  console you may not have been watching. It now stops immediately with a usage error (exit
-  code 2) and says what to do: launch the GUI with no arguments, or drop `--gui` to run those
-  settings from the command line. If a script of yours relied on the old behaviour, delete
-  `--gui` from it and it behaves exactly as before.
+- **Every run with a process target ends by saying how much of the captured traffic was yours** -
+  "In scope: 40 of 500 captured packets" - and calls it out when that is zero. A run where your
+  target caught nothing looks exactly like a run where your application coped. It is a warning, not
+  a failure, because a quiet target is perfectly ordinary.
 
 ### Changed
 
-- **A packet you did not ask to change now goes back on the wire exactly as it arrived - and the
-  session moves about 12% more traffic because of it.** The tool used to recompute every packet's
-  checksums before re-injecting it, including packets it had not touched at all. That was wasted
-  work, and it also meant a session with nothing configured did not quite pass traffic through
-  unchanged: modern network cards leave the checksum for the hardware to finish, so recomputing it
-  put different bytes on the wire than the ones that came in. Checksums are now recomputed only
-  when the tool actually edited the packet - which today means corruption - and for the reset (RST)
-  packets it builds itself. Measured comparing both behaviours inside the same session:
-  **1.12x more packets a second, in 8 comparisons out of 8**. Verified over a real network card,
-  not just loopback: 24 MiB of TCP through the tool arrived byte for byte, with a matching SHA-256.
+- **The checkbox is now called "Capture only the targeted traffic"**, not "Narrow the driver filter
+  to the target". The old name described the machinery. The `--narrow-filter` flag is unchanged, and
+  its tooltip was rewritten to say what it does and when it will not apply.
 
-- **A session now moves noticeably more traffic - about a third more packets a second.** The tool
-  handles your packets on two threads: one takes them from the driver, the other puts them back on
-  the wire. Python makes those two take turns, and by default a thread that is ready to work can be
-  left waiting up to 5 milliseconds for its turn. That waiting, not the work itself, was the limit:
-  putting a packet back took 57 microseconds while the same call takes 27 with nothing else in the
-  way. A session now asks Python for shorter turns while it runs, and hands that setting back when
-  it stops. Measured on a real capture, comparing both settings inside the same session, on
-  loopback and over a real network card: **1.33x to 1.36x more packets a second, in 24 comparisons
-  out of 24** - and with slightly *less* processor time per packet, not more. The queue of packets
-  waiting to be re-injected stops backing up, which is what that number looks like from the other
-  side. **Nothing changes in what you configure or see**, and the delay you ask for is delivered
-  just as accurately as before: against a configured 10 ms, packets were late by 0.73 ms before
-  and 0.76 ms after, which is the same number twice.
+- **A session moves about a third more packets a second.** The tool handles packets on two threads,
+  and Python left one waiting up to 5 ms for its turn - that waiting, not the work, was the limit. A
+  session now asks for shorter turns and hands the setting back at STOP. Measured on loopback and a
+  real card: **1.33x to 1.36x, in 24 comparisons out of 24**, at slightly less processor time per
+  packet.
+
+- **A packet you did not ask to change goes back on the wire exactly as it arrived**, and the session
+  moves about 12% more traffic for it. Checksums used to be recomputed for every packet, including
+  untouched ones, which also meant a session with nothing configured did not quite pass traffic
+  through unchanged. Measured: **1.12x more packets a second, 8 comparisons out of 8**, and 24 MiB of
+  TCP arrived byte for byte over a real card.
 
 - **Targeting a process no longer competes with the traffic it is measuring.** Working out which
-  connections belong to your target means asking Windows about its sockets, and that used to
-  happen on the same thread that handles your packets - dozens of times a second, because every
-  packet from every *other* application prompted another look. On a busy machine that stole time
-  from the capture itself, which is how a tester ends up measuring the tool instead of their
-  application. The lookup now runs on its own thread. Nothing changes in what you set or see;
-  a freshly opened connection still starts being impaired within tens of milliseconds, and STOP
-  stays immediate even while a lookup is in progress.
+  sockets belong to your target used to happen on the thread handling your packets, dozens of times a
+  second. It now runs on its own thread. A freshly opened connection is still impaired within tens of
+  milliseconds and STOP stays immediate.
+
+- **Semicolons are gone from the interface texts and both READMEs.** Twenty-one tooltips and about
+  eighty lines of documentation used them to join sentences, which is not how people write. Code
+  samples keep theirs, where a semicolon is syntax.
+
+- **"Spike chance" and "Spike size" moved to "Latency (ping)"** from "Advanced (NAT / connections)",
+  because a spike is latency. Nothing about how they work changed, nor their flags, nor their place
+  in a profile.
+
+- **"Blocking (firewall)" starts collapsed** on a fresh install, like the other advanced panels. If
+  you have used the tool before, your own choices are remembered.
+
+- **The Latency and Jitter tooltips say the thing that was easy to get wrong:** ping rises by about
+  twice the latency you set, because both the request and the reply are delayed, while jitter widens
+  the wobble by about 1.4x rather than doubling it. Both READMEs explain it too.
+
+### Fixed
+
+- **Aiming at a process missed the first packet of every new connection.** Measured: 20 fresh
+  connections with "Drop SYN" at 100% produced 20 successful connections and not one dropped SYN, so
+  **"Drop SYN" plus a process target did nothing at all**. The first packet is now checked against
+  the live socket map.
+  **What changes for you:** connections aimed at a process now take longer to open and a minority
+  fail outright, which is what a bad network does. If a test measured "time to first byte" under
+  impairment, expect it to move.
+
+- **Aiming at a process did not touch the first packet of a UDP exchange** - and DNS and QUIC take a
+  fresh port every time, so it did not touch them at all. If you tested a game, a video call or a
+  browser over QUIC and the impairment seemed weaker than configured, this is why. Ordinary TCP data
+  is deliberately still not re-checked: measuring showed it would cost throughput for nothing.
+
+- **The live "which app owns this port" map could be dragged backwards by a stale reading**, so a
+  connection was briefly credited to the wrong application. A periodic sweep of the socket table,
+  always a little behind, was applied on top of the live signal from the driver. Measured over 25
+  seconds of ordinary traffic: **919 times**. Readings are now weighed by when they were taken.
+
+- **Targeting could follow a process id after the process was gone**, and Windows hands those numbers
+  out again. A restarted target could come back under a remembered number and **not be impaired**,
+  while an unrelated program inheriting that number **was**. The tool now checks the process is still
+  the same one, and forgets it when it closes its last connection.
+
+- **Three fixes to short-lived and freshly opened connections.** Targeting now follows the system's
+  socket events instead of scanning a few times a second, so a connection that opens and closes
+  between two scans is no longer missed. The Connections table fills in the owning program from the
+  first packet instead of leaving the row blank. And setting a process target no longer makes the
+  first START pause for a second or two.
+
+- **The "impaired?" column now reflects the whole session, not just this instant.** It asked whether
+  the port was in the target *right now*, so a row flipped to "no" the moment its connection closed
+  and a run impairing all of Chrome looked like it caught almost nothing. The column, the row
+  highlight, the sort and the CSV now read one record, so they cannot disagree.
+
+- **The tool kept pausing itself and then blaming WinDivert.** Every so often it spent up to half a
+  second working out which program owns which connection, stopped collecting packets while it did,
+  and then told you the driver's queue was backing up and to narrow your filter. The delay was its
+  own. Measured over 95 seconds with programs constantly starting: the worst pile-up dropped from
+  **508 ms to 17 ms** and the warning stopped appearing.
+
+- **The "driver held a packet" warning described lost accuracy when what you were losing was
+  traffic.** Measured on a deliberately overloaded run: at 138,000 packets a second offered, the tool
+  moved about 14,000 and **91.75% was thrown away by the driver before the tool saw it**, while every
+  drop counter on screen read zero. The warning now says a full driver queue means dropped packets,
+  not just late ones.
+
+- **With "Capture only the targeted traffic" on, the Statistics and Connections tabs said the exact
+  opposite of the truth**, keeping their "counters cover ALL captured traffic" line while the driver
+  had been told to hand over nothing else. The checkbox tooltip promised the opposite and both
+  READMEs contradicted themselves. Both notes, the chart caption and the READMEs now describe what
+  the figures actually cover, including the case where a process target is set as well.
+
+- **Four fixes to the Scope settings.** The two "only the targeted traffic" switches now sit in one
+  **Scope** card instead of separate panels a few rows apart, with a line that tells you **before
+  START** whether your destination can actually be narrowed. The Settings window scrolls, so no group
+  falls off the bottom. Starting a session logs which of the two outcomes you got. And the Session
+  panel gained a **"Capture"** row, so a saved run says which traffic it counted.
+
+- **Three counters were lying about how much was lost.** "Buffer overflow" and "Dropped at stop"
+  charged for duplicate copies as well as packets, so a run duplicating everything reported nearly
+  twice as many dropped as captured. A connection's "dropped" count ignored packets its own queue
+  threw away. And packets the tool failed to re-inject left the arithmetic entirely - those now have
+  a **"Send failed"** counter, a banner and an event-log entry, throttled so they cannot flood the
+  log.
+
+- **Three tooltips were telling you things that were not true.** "Dropped" claimed to count link
+  outages, which have had their own counter for a while. "Downloaded (MB)" promised a figure that
+  never appeared. And "Effective loss" read as "never reached the far end" when it measures damage
+  done on this machine - loss out in the network never arrives here, so nothing here can count it.
+  No numbers changed.
+
+- **The delay you set is the delay you get.** Windows rounds up the wait used to hold a packet back,
+  and it was a fixed surcharge rather than a percentage, so it barely showed at 100 ms and swamped
+  small settings. Measured with a plain `ping`: asking for 10 ms used to cost 12.6 ms extra and now
+  costs 1 ms, the same 1 ms as at 50 ms. Jitter below about 15 ms used to vanish into the noise.
+
+- **Long cut-offs and NAT blackouts now last as long as you set them.** The tool forgets a connection
+  it has not seen for a while, and a forgotten connection looks brand new - so a reset cooldown above
+  about half a minute resumed after roughly 30 seconds however long you asked for, and "NAT mapping
+  expiry" at 30 seconds never blocked a single packet.
+
+- **"NAT mapping expiry" now really cuts the incoming direction.** The packet rejected for "the
+  mapping has expired" was itself counted as activity, so the mapping reopened on the spot: an app
+  that never sent a keep-alive lost about one packet every five seconds and otherwise worked, passing
+  a test it should have failed. Incoming traffic now stays cut until the application sends something.
+
+- **"Reset connections" now works where it claimed to.** It no longer fires on a connection that is
+  still opening, where the forged reset carries no acknowledgement number and Windows is entitled to
+  ignore it - measured, the connection hung until its own timeout. And it now really resets **local
+  (loopback) connections**, which previously just went quiet for the cooldown while the tool reported
+  an RST as sent. Connections to other machines were never affected.
+
+- **Ping traffic never appeared in the Connections tab**, which claims to list all of them - anything
+  without ports was silently left out. Thirty seconds of pinging left the tab empty while the
+  counters ticked up beside it. Portless traffic is now listed as one row per address with the port
+  cells empty.
+
+- **The Connections tab could empty itself instead of dropping its oldest rows.** When many rows
+  carried the same timestamp they all fell on the same side of the "old" estimate, so far more went
+  than intended - in the extreme, everything. It now refuses to drop below the level it is trimming
+  to.
+
+- **When the capture could not start, the tool told you the wrong reason.** A handle that failed to
+  open produced `WinDivert handle is not open` - a symptom naming nothing - while the real cause went
+  to a diagnostic file nobody reads. The helpful messages both interfaces already had, including the
+  window's "run as Administrator" hint, could therefore never appear. Starting now fails immediately,
+  with the reason.
+
+- **Four ways a session mishandled its own start and stop.** A failed start could leave the tool
+  holding your traffic without impairing it, refusing every later START. Ending a session kept hold
+  of your traffic for a moment while tidying up, so a connection could stall. STOP could take two
+  seconds in two different races. And the log could print a fault above its own "Start" line.
+
+- **An unforeseen error during a run is now an exit code, not a stack trace.** A failure inside the
+  reporting loop escaped as a raw traceback with code `1`, which is also "the session could not
+  start", so a pipeline could not tell an internal bug from a driver that would not open. It is now
+  `runtime` (`1`) with a line saying what happened, **and the run still writes its complete
+  `summary`** - a `--format json` file no longer ends mid-stream.
+
+- **Three fixes to `--dry-run` and `--doctor` claiming more than they checked.** `--dry-run` said
+  "Configuration is valid" about a command that then exits `7`, so it now says which half it checked
+  and points at `--doctor`. It also reads your `--scenario` file now, which it never opened.
+  `--doctor` no longer calls a driver "not loaded" when Windows simply refused to let it look.
+
+- **Three fixes to the shared-port warning.** It listed your own target among the strangers, because
+  a program like Chrome runs several processes. It offered two possible outcomes when the socket
+  table already decides which one applies. And it printed bare numbers, so `5353` read like a fault
+  rather than mDNS. It now says `5353 (mDNS)`, names the program, and states the one outcome that is
+  true.
+
+- **Three files could stop the program from starting, and no longer do.** A translation file with a
+  malformed header, a window-layout file with an entry in the wrong shape, and a `--config` file that
+  was valid JSON but not a set of settings - the last one reported the tool as having crashed. Each
+  is now skipped or reported clearly, and the rest of your setup is kept.
+
+- **Four smaller interface fixes.** The throughput chart could be squeezed until it vanished on a
+  narrow window (the Live tab now scrolls). "Close" was cut in half at the bottom of the Settings
+  window. The profile picker cut long names off at 24 characters. And "Save profile..." opens with
+  the cursor already in the name box.
+
+- **Two things left litter behind.** A failed "Export connections CSV" left a stray `.tmp` file next
+  to the real one, and stopping a session could file a crash report in `crashes/` for an ordinary
+  STOP. Neither happens now.
+
+- **Starting a second scenario without stopping the first is no longer possible.** The engine
+  replaced the running one and left the old one going in the background, so two scenarios fought over
+  the same settings. Nothing in the program does this today, so it is a guard rather than a bug you
+  could have hit.
 
 ### Docs
 
-- **Both READMEs claimed slightly more than the tool does about brand-new connections.** They said
-  a connection is in scope "the moment it opens", which holds for a program the tool already
-  recognises but not for that program's *first* connection: until it owns at least one socket there
-  is nothing to recognise it by, so that one connection goes through untouched. Measured, so the
-  exception is now stated rather than implied, next to a new note on what to do about it - if the
-  program under test restarts, aim by **name** rather than by process id.
+- **Both READMEs now document the scenario file format, the seven shipped scenarios, both CSV exports
+  and all 17 Connections columns** - none of which were written down anywhere. The column meanings
+  existed only as tooltips, and the CSV headers only in the code.
 
-- **The process field's exclusions are now documented properly.** Writing `!chrome` means "impair
-  everything except chrome" - and "everything" includes any connection whose owning process could
-  not be identified yet, which every brand-new connection passes through. If you want one
-  application left alone, name the one you *do* want broken instead; then anything unidentified
-  passes through untouched. Both READMEs say so next to the equivalent note for `!53` on ports.
+- **Three corrections to what the READMEs claimed.** A connection is in scope "the moment it opens"
+  only for a program the tool already recognises, not for that program's *first* connection. An
+  exclusion like `!chrome` also covers every connection whose owner could not be identified, so do
+  not use one to protect an application - name the one you *do* want broken. And both files explained
+  greyed-out fields with an "Enable" checkbox that no longer exists.
 
-### Added
-
-- **You can now point Statistics, the chart and Connections at your target alone.** Settings gains
-  **"Show only the targeted traffic"** (off by default, so nothing changes unless you ask). With it
-  on, the counter grid, the throughput chart, the Connections table and the connections CSV export
-  all cover just the traffic your process / IP / port targeting selected - useful when the machine
-  is busy and the numbers you care about are buried in everything else. It changes what you **see**,
-  never what is captured and never what is impaired. Three things deliberately do not follow it, and
-  each says so where you would look:
-  - **"Queue overflow", "Dropped at stop" and "Send failed" always cover the full traffic**, because
-    they count packets *this tool* lost - including traffic you never targeted. Hiding those would
-    hide the tool's own damage, which is the opposite of the point.
-  - **The statistics CSV keeps both totals** in separate columns instead of following the switch: it
-    is an append log, and a column that means one thing in some rows and another in the rest cannot
-    be charted.
-  - **The reproduction report and `--format json` are unchanged** - they have always carried both
-    the captured and the in-scope numbers, so a saved run never depends on how the window was set
-    when it was made.
-  The note above the counters and above the Connections table re-words itself to say which of the
-  two you are looking at, and the chart caption names it too - so a screenshot cannot be misread.
-
-- **A new option lets the driver do the filtering, for when you are testing at high packet rates.**
-  Normally the tool receives every packet on the machine and hands almost all of them straight
-  back - measured on a real run, 1944 packets taken in and none of them even eligible to be
-  impaired. With **"Narrow the driver filter to the target"** (`--narrow-filter`) the destination
-  IP and port are pushed into WinDivert itself, so traffic that could never be impaired is not
-  handed over at all. Worth knowing before you switch it on: it takes effect **when a session
-  starts**, the destination fields are then fixed until you stop, and Statistics and Connections
-  cover only the narrowed traffic. It does nothing for a **process** target (Windows does not offer
-  the tool a process name at that level) and falls back silently-but-loudly to capturing everything
-  if your destination uses a wildcard or a `re:` pattern - the run says which of the two happened.
-  **It turned out to be more than a speed option, and this is the part worth reading twice.**
-  Measured on a real run with other traffic on the machine: without it, the driver was so busy
-  handing over traffic the tool was never going to touch that it **threw away 43% of the traffic
-  you actually aimed at, before the tool could see it** - so the session impaired less than it
-  reported, and worked out its percentages from what survived. With the option on, all of it
-  arrived and nothing was lost. If you test at high packet rates against a specific address or
-  port, this is the setting that makes your numbers mean what they say.
-
-- **The command line now says when the process you aimed at stops matching, instead of running on
-  in silence.** If your target exits - it crashed, or your test harness restarted it and Windows
-  gave it a new process id - everything from that moment on is left untouched. The run used to
-  carry on and finish green, with the only mention of your target being one line printed at the
-  start. Measured here against a real capture: aiming at a process id and then restarting that
-  program left five out of five of its new connections completely untouched, and nothing in the
-  output said so. The run now says it the moment it notices, and says so again if the target comes
-  back. Worth knowing which form to use: aiming by **name** recovers on its own within about half a
-  second of the restarted program opening its first connection, and only that first connection
-  escapes; aiming by **process id** never recovers, because that id no longer exists. If the
-  program under test restarts, aim by name.
-
-- **Every run with a process target now ends by saying how much of the captured traffic was
-  actually yours** - "In scope: 40 of 500 captured packets" - and calls it out when that number is
-  zero. A run in which your target caught nothing looks exactly like a run in which your
-  application coped, and those are opposite results. The existing `--min-packets` check cannot see
-  this: it catches a traffic filter that matched nothing, which is a different mistake. This is a
-  warning rather than a failure, because aiming at a program that happens to be quiet is a
-  perfectly ordinary thing to do.
-
-- **The session panel now shows how long packets waited inside the driver before the tool saw
-  them.** This is the one delay the tool adds and counted nowhere: it happens in WinDivert's queue,
-  ahead of the tool's own, so a tester measuring latency puts it down to their application or to
-  the network. It is not an estimate - the driver stamps every packet with a capture time, and the
-  tool now reads it 20 times a second. **"Driver queue wait (peak)"** in the Session tab holds the
-  worst one, and it goes into the reproduction report with everything else. On an idle machine
-  expect a fraction of a millisecond (measured here: 0.05-0.16 ms). Above 50 ms the log and the
-  event list say so, at most once every five seconds. It stays blank under `--simulate`, which has
-  no driver to wait in.
-
-- **A session now records the WinDivert queue it is running behind.** WinDivert has its own buffer,
-  ahead of this tool's, and nothing here ever read it - so a packet could sit in the driver for up
-  to two seconds (the default queue time), land on your measured latency, and appear in no counter
-  at all. The three values (length, time, size) are read when a session starts, written to the log,
-  and stored in the reproduction report as `session.driver_queue`, so a report from a machine you
-  do not have in front of you says which queue produced its numbers. Read on this machine:
-  4096 packets / 2000 ms / 4 MiB - and note the size limit binds first for full-size packets,
-  4 MiB / 1500 B = 2796 packets, not 4096. Nothing is changed about how the queue behaves; this is
-  about being able to see it. `--doctor` deliberately does not read them: the values need an open
-  handle, and opening one loads the driver, which would falsify the "windivert driver" line printed
-  in the same report.
-
-### Fixed
-
-- **The live "which app owns this port" map could be dragged backwards by a stale reading, so a
-  connection was briefly credited to the wrong application.** The tool learns who owns a socket
-  two ways: from the driver, the instant a socket opens or closes, and from a periodic sweep of
-  the system's socket table. The sweep is complete but always a little behind - it is taken up to
-  0.3 s before it is used - and it was being applied on top of the live signal, so it could undo
-  what the driver had just reported: put back a port that had already been closed, or name the
-  previous owner of a port that had just changed hands. Measured over 25 seconds of ordinary
-  traffic on a test machine, that happened **919 times**. Each one is a short window (up to about
-  0.4 s) in which the Connections table shows the wrong process for a flow - and, if you are aiming
-  at a process, in which a brand-new UDP exchange or a fresh connection can be judged against the
-  wrong application: either your target's traffic slips through, or somebody else's gets impaired.
-  Readings are now weighed by when they were actually taken, so the older one no longer wins. The
-  sweep still corrects the map when it genuinely is the newer of the two, which is what recovers
-  from a socket event lost under heavy load.
-
-### BREAKING
-
-- **BREAKING:** **"Duplicated" now counts packets that were actually sent twice, not packets the
-  tool decided to duplicate.** With duplication on and the tool under enough load to fill its
-  internal queue, the copy was quietly thrown away while the counter went up anyway. Measured on a
-  deliberately tiny queue: 40 packets in, **"Duplicated" read 40 while nothing at all reached the
-  wire**. The tile sits next to "Corrupted", which has always counted only the packets it really
-  changed, so this brings the two into line. Reports and NDJSON output from before and after this
-  change are not comparable on that field. Nothing else moved: the same packets are duplicated,
-  and the "Buffer overflow" tile already told you when the queue was the bottleneck.
-
-### Added
-
-- **The tool now warns when your target shares a port with another program.** Windows lets several
-  programs hold the same local port at once - that is how mDNS, SSDP and DHCP work - and this tool
-  decides what to break from the port number, so on those ports it genuinely cannot tell whose
-  traffic it is looking at. On this machine, four port numbers out of 127 were like that, and one
-  of them (5353, used for local device discovery) had **five** owners at the same time. The
-  consequence is real in both directions: aiming at one program could leave its own traffic on such
-  a port untouched, or sweep three other programs' traffic in with it. Nothing about that changed -
-  it cannot be fixed, because the port number simply does not say who sent the packet - but the
-  tool no longer keeps it to itself. Applying a target now says which port is shared and with whom,
-  so you know that part of the result is a coin toss. Ports that are not shared, which is where
-  your application's own traffic lives, are unaffected.
-
-### Fixed
-
-- **When the capture could not start, the tool told you the wrong reason.** If the WinDivert handle
-  failed to open - no Administrator rights, a driver blocked or held at a different version by
-  another tool, a filter the driver rejects - the tool went ahead and started the session anyway,
-  then reported `WinDivert handle is not open`. That is a symptom, and it names nothing. The actual
-  reason (for example `[WinError 5] Access is denied`) was written only to a diagnostic file nobody
-  is asked to read. Worse, the *helpful* messages both interfaces already had could never appear:
-  the command line has an error that quotes the real cause, and the window has a dialog with a "run
-  as Administrator" hint - which is exactly what a non-elevated user needed and never saw. Starting
-  now fails immediately, with the reason, and both of those work.
-
-- **The log could read backwards when a session died right after starting.** The "Start. Filter:
-  ..." line was written after the capture had already begun, so a session that failed in its first
-  moments printed the error and the fault *above* its own start line. Anyone reading the log to work
-  out what happened when was reading it out of order. It is now announced first.
-
-- **Turning NAT expiry off did not fully turn it off.** Switching it on tells the tool to remember
-  every connection for as long as the session lasts - it has to, or an expired mapping would quietly
-  reopen. Switching it back off was supposed to restore the normal "forget idle connections after
-  half a minute" behaviour, and did not: the tool kept every record for the rest of the run and only
-  released them when it ran out of room. Since every "Apply changes" re-sends all your settings, one
-  round trip through the NAT field was enough. Memory only - nothing was impaired differently.
-
-- **The Connections tab could empty itself instead of dropping its oldest rows.** Once the table is
-  full the tool discards roughly the oldest tenth, working from a sampled estimate of "old". If a
-  lot of rows carried the same timestamp, they all fell on the same side of that estimate and far
-  more went than intended - in the extreme, everything. It now refuses to drop below the level it
-  is trimming to, whatever the estimate says.
-
-- **Stopping a session could file a crash report for nothing.** If STOP landed inside the
-  half-second housekeeping pass that keeps the socket map fresh, the tool tripped over its own
-  shutdown and wrote an entry into `crashes/`. Nothing was broken - the session stopped correctly
-  and traffic returned to normal - but anyone checking that folder after a run would find a report
-  for an ordinary STOP. It no longer happens.
-
-- **Aiming at a process did not touch the first packet of a UDP exchange - and for DNS and QUIC
-  that meant it did not touch them at all.** Working out which connections belong to your target
-  means keeping a set of its ports, rebuilt in the background, and a brand-new port is not in it
-  yet. TCP had a way around this: a connection starts with a SYN, so one packet per connection was
-  checked against the live socket map. UDP has no SYN, so nothing was checked - and the traffic
-  where it matters takes a **fresh port every time**: every DNS query, every QUIC connection. Those
-  went past your target untouched, every one of them. They no longer do. If you have tested a game,
-  a video call or a browser over QUIC and the impairment seemed weaker than you configured, this is
-  why. Ordinary TCP data is deliberately still not re-checked - it does not need to be, and
-  measuring showed it would cost real throughput for nothing.
-
-- **The "the driver held a packet" warning told you about lost accuracy when what you were losing
-  was traffic.** It said the wait lands on the delay you are measuring - true, and not the half
-  that matters. Measured here on a deliberately overloaded run: with 138,000 packets a second
-  offered, the tool moved about 14,000 of them and **91.75% of the traffic was thrown away by the
-  driver before this tool ever saw it** - while every drop counter on screen still read zero,
-  because the tool cannot count what never reaches it. (The same load with the tool switched off
-  lost nothing at all, so that loss is the tool's presence, not the machine.) The warning now says
-  that a full driver queue means dropped packets, not just late ones, and tells you to narrow the
-  traffic filter. The session-start line about the queue says the same. If you have ever run a test
-  through this tool at a high packet rate and trusted the counters, this is the entry to read
-  twice.
-
-- **Aiming at a process missed the first packet of every new connection - and your test results
-  will change because of it.** Working out which connections belong to your target means keeping a
-  set of its ports, and that set is rebuilt in the background. A connection opened a moment ago was
-  not in it yet, so its very first packet was waved through untouched, every time. Measured here:
-  20 fresh connections against a targeted process with "Drop SYN" at 100% produced 20 successful
-  connections and not one dropped SYN. **"Drop SYN" combined with process targeting therefore did
-  nothing at all** - the SYN is by definition the first packet, so it always escaped. The first
-  packet is now checked against the live socket map, so it is caught like any other.
-
-  What changes for you: with loss (or blocking, or a link outage) aimed at a process, **connections
-  will now take noticeably longer to open**, because the SYN can be lost and TCP has to retransmit
-  it - and a minority will fail to open at all, which is what a bad network does. Before, every
-  connection opened at full speed and only then started suffering. If a test of yours measured
-  "time to first byte" under impairment, expect it to move.
-
-  Two limits worth knowing, both measured rather than guessed. The tool recognises your target by
-  the connections it currently has open, so **a program that has none open at the moment the tool
-  looks is invisible again**: over 20 fresh connections with "Drop SYN", a program keeping its
-  connections open was caught **19 times out of 20** (only the very first escaped, before it had
-  opened anything), while the same program closing each connection before starting the next was
-  caught **6 times out of 20**. So a browser or an app under test is covered; a script that opens
-  one connection, closes it and pauses will keep slipping through. And a program using UDP has no
-  SYN, so its first packet is not covered by any of this.
-
-- **"Reset connections" no longer fires on a connection that is still opening.** It could not have
-  worked there anyway: the reset packet the tool forges from a connection request carries no
-  acknowledgement number, and Windows is entitled to ignore exactly that - measured, the connection
-  hung until its own timeout instead of being reset. That combination was unreachable before the
-  change above; it would have become the normal case. Resets now fire on established connections,
-  where they were measured to work.
-
-- **"Reset connections" did nothing to local (loopback) connections - it just made them go
-  quiet.** Aim the tool at `127.0.0.1` traffic with resets switched on and the connection was not
-  reset: it stopped carrying anything for the length of the cooldown, so the application sat there
-  until its own timeout expired, while the tool reported an RST as sent. Anything talking to a
-  service on your own machine - a local server, a database, a dev proxy - was affected. It now
-  resets for real, which for a test that expects a broken connection is the difference between
-  "failed as designed" and "hung". Connections to other machines were never affected, and are
-  unchanged: that path was measured working (a connection reset 6.6 s after the tool was pointed
-  at it).
-
-- **A connection's "dropped" count ignored the packets the tool's own queue threw away.** The
-  figure was recorded a step too early - before the packet was even queued - so a session that
-  dropped 5 500 packets to a full delay queue could show `dropped = 0` on the very row it happened
-  to, and packets still waiting when you pressed STOP were never counted against their connection
-  at all. Both now land on the row they belong to.
-
-- **A failed "Export connections CSV" left a stray `.tmp` file next to the real one.** The export
-  writes to a temporary file and renames it, which is what makes it safe to overwrite the previous
-  export - but when the write failed, the half-written temp file stayed on disk. Nothing cleaned
-  it up, and the next export silently overwrote it, so it was litter you could find but not
-  explain. It is now removed on failure, exactly as the profile and config files already do, and a
-  failed export leaves the previous one untouched.
-
-- **STOP could take two seconds if a capture error happened to land at the same moment.** If the
-  capture side failed for its own reason a fraction of a second before you pressed STOP, the two
-  waited on each other until a two-second safety timeout expired. Nothing was lost or stuck - the
-  session did stop - but the button felt broken. The capture side now waits only for a session
-  that is still starting up, never for a stop that is already under way. Related: when two
-  failures land together, the report keeps the first one, which is the actual cause; it used to be
-  overwritten by the follow-up "a worker thread died", which says nothing useful on its own.
-
-- **Starting a second scenario without stopping the first is no longer possible.** The engine
-  replaced the running scenario with the new one and left the old one running in the background,
-  unreachable: two scenarios then fought over the same settings with nothing on screen to say why.
-  Nothing in the program did this today - it starts one scenario per session - so this is a guard
-  rather than a bug you could have hit.
-
-- **Packets the tool failed to put back on the wire vanished from the numbers.** When re-injecting
-  a packet fails - the connection went down mid-session, the driver refused it - the packet is
-  gone. It had been counted as seen, it was never delivered, and nothing recorded it as lost, so
-  it simply left the arithmetic: a session could show packets climbing while the delivered total
-  stood still, with no counter explaining the gap. Every other way a packet can die here has had a
-  counter for a while; this one only had a line in the log. There is now a **"Send failed"**
-  counter next to "Buffer overflow" and "Dropped at stop", a warning banner when it happens, and
-  an entry in the event log so the reproduction report carries it too. Like the other two, it is
-  the tool failing rather than the link you asked it to simulate, so it stays out of "Effective
-  loss" - but it is in the seen/delivered/dropped arithmetic, where it belongs.
-
-- **A run of send failures no longer floods the log (and freezes the window with it).** The
-  message was written once per failed packet, and the window applies every queued line to the log
-  strip on the interface thread, so a burst of failures could lock up the window on top of losing
-  the packets. It is now written at most once every five seconds, carrying the running count and
-  the last error, exactly like the queue-overflow warning that has worked this way for a while.
-
-- **"Effective loss" now says whose loss it is.** The number counts what this tool broke, and the
-  tooltip said "how much of the traffic you aimed at never arrived" - which reads as "never
-  reached the far end". Those are different things, and the difference shows up the first time you
-  compare the tool against a real run: ping 30 packets, lose one reply out on the network, and the
-  connection row reads 59 packets with zero drops. Both numbers are right - 30 requests went out,
-  29 replies came back, and the tool broke none of them - but nothing on screen said so. The
-  tooltip and both READMEs now spell out that the figure measures damage done on this machine, and
-  that loss happening somewhere out in the network never reaches this machine, so nothing here can
-  count it. No numbers changed.
-
-- **Ping traffic never appeared in the Connections tab, which claims to list all of them.** The
-  note under the tab says "All captured connections" and the README says the same, but anything
-  without ports was silently left out - and ping (ICMP) has none. Thirty seconds of pinging with
-  the "Ping (ICMP)" traffic filter selected left the tab completely empty while the packet
-  counters ticked up beside it, which reads as a broken tool. Portless traffic is now listed as
-  one row per address, with the two port cells left empty. The process column usually stays empty
-  on those rows as well: a ping has no socket to trace back to an application, which is how ICMP
-  works rather than something missing here. In the command line, `--log-conns` prints `-` where
-  such a row has no port.
-
-- **"Buffer overflow" and "Dropped at stop" counted up to twice the packets they lost.** With
-  "Duplicate packets" switched on, the tool puts a second copy of the packet in its delay queue,
-  and both counters were charging for the copy as well as for the packet. A run that duplicated
-  everything reported nearly twice as many dropped as it ever captured, so the "Buffer overflow"
-  tile could show a bigger number than the "Packets" tile right beside it, and the overload
-  warning in the log quoted that inflated figure back at you. Both now count packets that never
-  arrived. A dropped copy is not one of them: your application receives one packet instead of
-  two, and one packet is what it would have received without the tool, so a copy that does not
-  fit no longer counts and no longer raises the overload warning on its own. Runs without
-  duplication are unaffected; figures from earlier runs with duplication are not comparable with
-  these, because the old ones were too high.
-
-- **Two tooltips were telling you things that were not true.** "Dropped" said it also counted
-  link outages - those have had their own counter for a while, so the tooltip was sending you to
-  the wrong number when working out where your packets went. "Downloaded (MB)" promised that
-  hovering would also show how much the app tried to download; nothing of the sort ever appeared.
-  Both now describe what the counter actually holds.
-
-- **Long connection cut-offs and NAT blackouts now last as long as you set them.** Two impairments
-  quietly stopped early, because the tool forgets a connection it has not seen for a while and a
-  forgotten connection looks brand new. "Reset connections" with a cooldown above about half a
-  minute resumed traffic after roughly 30 seconds however long you had asked for - a scenario
-  written as "the connection is down for two minutes" simply did not happen. "NAT mapping expiry"
-  was worse: at a 30 second timeout it never blocked a single packet, because the connection was
-  forgotten just before the incoming traffic arrived. Both now hold for exactly as long as
-  configured - a 120 second cooldown resets every 120 seconds, and an expired NAT mapping stays
-  shut until the application sends something, which is the behaviour the setting describes. The
-  tool's memory limits are unchanged.
-
-- **The delay you set is the delay you get.** Every configured delay used to arrive with several
-  milliseconds of padding on top, because of how Windows rounds up the wait the tool uses to hold
-  a packet back. It was a fixed surcharge rather than a percentage, so it barely showed at 100 ms
-  and swamped the small settings: with the tool asked for 10 ms, a ping measured about 12.6 ms of
-  extra round trip on top of the expected amount, and asking for 1 ms produced roughly seven times
-  that. Simulating a fast LAN, a game server or a VoIP hop is exactly where that hurt. The tool now
-  asks Windows for a fine-grained timer while a session runs, and gives it back at STOP. Measured
-  with a plain `ping`, 40 packets per setting: asking for 10 ms of delay now costs 1 ms more than
-  it should instead of 12.6 ms, and asking for 50 ms costs the same 1 ms more - the surcharge is
-  gone rather than merely smaller. Jitter benefits the same way: variation below about 15 ms used
-  to disappear into the timer's own noise.
-
-- **"NAT mapping expiry" now really cuts the incoming direction, instead of losing one packet
-  every few seconds.** This impairment is there to answer one question: does the application
-  notice its mapping is gone and send something to re-open it? It could not answer that. The
-  packet the tool rejected for "the mapping has expired" was itself counted as activity on that
-  connection, so the mapping came back on the spot and traffic flowed again for another whole
-  timeout - then one more packet was dropped, and so on. With `--nat-timeout 5` an app that never
-  sent a keep-alive lost about one packet every five seconds and otherwise carried on working, so
-  it passed a test it should have failed. Now incoming traffic stays cut until the application
-  actually sends something outbound, which is what re-opens the mapping on a real NAT. Nothing
-  changes when you leave the setting at 0 (off, the default).
-
-- **Short-lived connections now show which program they belong to.** The Connections table works
-  out the owning program by asking Windows which application holds each socket, and that answer
-  used to come from a list refreshed a few times a second. A connection that opened and finished
-  in between two of those refreshes was never on the list, so its row stayed blank in the Process
-  and PID columns - and brief connections like that are exactly what you get when a browser, or an
-  app you are testing, opens hundreds of them a minute. The tool is now told who owns a connection
-  the moment it is created, so the row is filled in from its very first packet. The program's name
-  can still appear a moment after its process number, because names are looked up in the
-  background, but the row no longer stays empty.
-
-- **A window you have moved now keeps its place when you switch language.** Changing the language
-  rebuilds the whole main window, and a smaller window open at the time - Settings, for example -
-  was torn down with it. It came back at the size and position it had the last time you closed it,
-  quietly throwing away wherever you had just dragged it. It now stays where you put it.
-
-- **Setting a process target no longer makes the first start pause.** Working out which process
-  owns each connection could take a second or two the first time, because it fell back to scanning
-  every process on the system. It now resolves only what it needs, so starting - and typing a
-  target - is quick, and the connections it catches settle in almost immediately instead of after
-  that pause.
-
-- **Targeting a process now catches its connections as they open, including short-lived ones.**
-  Working out which connections belong to your target used to mean scanning the system's socket
-  table a few times a second - so a connection that opened and closed between two scans (a browser
-  makes many) could slip through unimpaired, and pointing the tool at a busy app like Chrome caught
-  only some of its traffic. On Windows the tool now follows the system's socket events as they
-  happen, so a connection is impaired from the moment it opens - for outbound connections, before
-  its first packet even leaves. Without real WinDivert it falls back to the old scan. Nothing
-  changes in how you set a target.
-
-- **The "impaired?" column now reflects the whole session, not just this instant.** When you
-  targeted a process, the column asked "is this connection's port in the target *right now*" -
-  so the moment a connection closed (a browser closes hundreds a minute) its row flipped to
-  "no", and a run that was impairing all of Chrome looked like it was catching almost nothing.
-  The column now records whether a connection was in impairment scope at any point this session
-  and keeps saying "yes" after it closes. The row highlight, the column, the sort and the CSV
-  export all read that one record, so they can never disagree - a row is coloured exactly when
-  its column says "yes".
-
-- **One bad translation file no longer stops the whole program.** Language files are plain JSON
-  next to the program, and you can add your own. If one of them had a malformed `_meta` header -
-  the little block naming the language - the program refused to start at all, with a technical
-  error and no hint that a language file was to blame. Even asking it for its version failed. A
-  header it cannot read is now simply ignored: the translations in that file are still used, and
-  the language is named after the file.
-- **`--dry-run` now checks your scenario file as well.** That option exists to tell you whether a
-  run will work before you start it - but it never actually opened the scenario file, so a damaged,
-  empty or half-written scenario passed the check with "Configuration is valid" and then failed the
-  real run moments later. It now reads the scenario too and tells you straight away what is wrong
-  with it. A check that passes everything is worse than no check at all.
-- **A settings file in the wrong form now gives a clear message instead of crashing.** If you
-  pointed `--config` at a JSON file that was readable but not a set of settings - a list, say, or
-  a single value, which is what some tools produce - the program stopped with a raw Python error
-  and reported itself as having crashed. It now says what it expected and stops with the "bad
-  configuration" code, so a script running it can tell the difference between "your file is wrong"
-  and "the tool broke".
-- **A damaged window-layout file no longer stops the program from starting.** The program
-  remembers your window size, the page you were last on and which sections you had collapsed, in a
-  small file next to it. That file is yours to edit, and it also gets copied between machines - and
-  if an entry in it ended up the wrong shape, the program could fail to open at all, with an error
-  that gave no hint which file was to blame. Anything it cannot make sense of is now ignored, that
-  one setting goes back to its default, and the log tells you which entries were skipped. The rest
-  of your layout is kept.
-- **Ending a session now hands your network back at once, instead of a moment later.** When a run
-  finished - whether you pressed STOP or its time ran out - the tool stopped looking at packets
-  immediately, but kept its grip on your network traffic for a moment longer while it tidied up
-  after itself. In that moment Windows was still handing packets to something that was no longer
-  reading them, so a connection or two could stall right at the end of a run. The moment was
-  usually far too short to notice; if the tool happened to be busy working out which process you
-  were targeting, it stretched to about a quarter of a second. Your traffic is now let go first,
-  and the tidying up happens afterwards.
-- **Targeting could follow a process ID after the process was gone - and Windows hands those
-  numbers out again.** Two things went wrong once that happened, both silently. Restart the
-  application you are targeting and it could come back with a number the tool still remembered
-  under the old name, so **it was no longer impaired** - the run looked like the app coping when
-  really nothing was being done to it. And in the other direction, a completely different program
-  that happened to inherit the number **was impaired instead**, so an application you never named
-  had its network broken. The tool now checks that the process behind a number is still the same
-  one before it trusts what it remembers, and forgets a process the moment it closes its last
-  connection.
-- **`--doctor` could report a WinDivert driver as "not loaded" when it simply was not allowed
-  to look.** Windows refuses full access to some services even for an Administrator, and the
-  check treated that refusal as "the service is not there" - in the one command whose whole job
-  is to tell you the truth about your machine. It now asks only for permission to read the
-  state, which also means the driver line is accurate **without** running as Administrator. If
-  the state genuinely cannot be read, the line now says so and warns, instead of quietly
-  reporting a clean machine.
-- **`--cleanup-driver` explains a refusal instead of calling it "not installed".** Being told
-  "access denied - the service exists but this account may not remove it" points somewhere;
-  being told the service was never there does not.
-- **A session that fails to start now hands your network back and lets you try again.** Starting a
-  run sets up several background workers, and if your machine could not spare the resources for one
-  of them - most likely while you are already running the heavy load you are testing against - the
-  start failed halfway. The tool could be left holding your traffic without actually impairing it,
-  showing an error while quietly keeping its grip, and every later START was refused until you
-  killed the program. A failed start now releases your network immediately and leaves the tool
-  ready to start again, exactly as if you had never pressed START.
-- **STOP is immediate again when you press it just as a timed run ends.** If you hit STOP at the
-  same moment a run reached its set duration, the tool could sit on "stopping" for about two seconds
-  before the window went back to normal. Your network was already handed back at once - it was only
-  the button that lagged - but a STOP that looks stuck is exactly the wrong thing in a tool whose
-  whole job is undoing what you did to your own connection. It now finishes right away either way.
+- **The Requirements and Tests sections now match reality.** `psutil` is not what makes process
+  targeting work on Windows - the socket table and process names come from the OS, and targeting
+  keeps working without it. Source installs work on Python 3.10 and newer while CI tests and builds
+  on 3.14 only, which is the version frozen into the released `.exe`. The Tests section also now
+  covers the GUI render check and how a release is produced.
 
 ## [0.3.0] - 2026-07-20
 

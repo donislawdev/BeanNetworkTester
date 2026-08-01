@@ -51,6 +51,29 @@ jobs:
           else echo "PRERELEASE=false" >> "$GITHUB_ENV"; fi
           echo "TITLE=$ver" >> "$GITHUB_ENV"
 
+      # The step above proves the tag is LABELLED right. This one proves the release
+      # NOTES are, which is a different thing and had no check at all until 0.4.0:
+      # 43 commits landed after the v0.4.0-rc.1 tag and collected under [Unreleased],
+      # three of them BREAKING. Tagging v0.4.0 then would have passed the check above
+      # (the base still matched VERSION.txt) and published a changelog that dated
+      # 0.4.0 weeks earlier and filed three contract breaks as "not released yet".
+      # A pre-release tag is checked the same way: -rc.N ships the same notes.
+      - name: Check the changelogs are closed for this version
+        shell: bash
+        run: |
+          version="$(cat VERSION.txt)"
+          escaped="${version//./\\.}"
+          fail=0
+          for f in CHANGELOG.md CHANGELOG-INTERNAL.md; do
+            grep -qE "^## \[${escaped}\] +- +[0-9]{4}-[0-9]{2}-[0-9]{2}" "$f" \
+              || { echo "$f: no dated '## [$version] - YYYY-MM-DD' section"; fail=1; }
+            open="$(awk '/^## \[Unreleased\]/{u=1;next} /^## \[/{u=0} u && /^- /{n++} END{print n+0}' "$f")"
+            test "$open" = "0" \
+              || { echo "$f: [Unreleased] still holds $open entries - they would ship as $version while reading as unreleased"; fail=1; }
+          done
+          test "$fail" = "0" || exit 1
+          echo "changelogs closed for $version"
+
       # CI (ci.yml) already runs the full test suite on every push to master - i.e. on
       # exactly this commit - so the release does not re-test. It builds, smoke-tests the
       # exe and publishes. (Re-testing here would also need the dev deps and could hit
@@ -85,11 +108,20 @@ jobs:
 
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
+      #
+      # The body is this version's section of CHANGELOG.md, not --generate-notes.
+      # --generate-notes lists merged pull request titles, so the release page showed
+      # something nobody wrote and never showed the changelog at all - for 0.4.0 that
+      # would have been 43 PR titles. Extracting the section instead means the release
+      # page, a blog post and CHANGELOG.md are one text that cannot drift apart.
+      # The step above has already proved that section exists and is dated.
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          flags=(--title "$TITLE" --generate-notes)
+          python tools/release_notes.py > RELEASE_NOTES.md
+          head -5 RELEASE_NOTES.md
+          flags=(--title "$TITLE" --notes-file RELEASE_NOTES.md)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
           gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "${flags[@]}"

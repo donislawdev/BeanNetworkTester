@@ -112,7 +112,16 @@ crash the app).
 
 - Windows 10/11 (64-bit), Python 3.10+ (with the tcl/tk option)
 - Administrator rights
-- `pydivert` (traffic capture), `psutil` (process targeting - optional)
+- `pydivert` (traffic capture), `psutil` (a fallback, see below)
+
+Installing from source works on Python 3.10 and newer. CI tests and builds on **3.14 only** -
+that is the version the released `.exe` is frozen with, so older ones are supported but not
+re-proven on every commit.
+
+`psutil` is installed with the tool but is not what makes process targeting work on Windows. There
+the socket table and the process names come straight from the OS, and targeting keeps working with
+`psutil` removed entirely (measured: 310 ports mapped, 37 of 37 names resolved). It is the fallback
+for everything else, which is how the engine's tests run on Linux with no driver at all.
 
 ## The window
 
@@ -174,8 +183,10 @@ While a session runs **two elements are locked** (they unlock on STOP): the **tr
 (applied only at START) and the **language selector** (changing language rebuilds the whole UI).
 The STOP button is red - it cannot be confused with START.
 
-Inactive fields (e.g. "Period"/"Down percentage" when "Enable" is unchecked) are **greyed out
-together with their labels** - you can see at a glance what is active and what is not.
+A field another setting has taken over is **greyed out together with its label**, with a note
+saying which setting took it - "Download"/"Upload" do this when a Schedule is set, because the
+throughput then comes from the schedule steps. You can see at a glance what is actually in
+effect.
 
 ### Keyboard shortcuts
 
@@ -216,7 +227,7 @@ behaves without internet access (e.g. no gateway/WAN, a captive portal).
 **Target process** - narrow the effect to chosen apps: process name (e.g. `chrome.exe`), PID, a
 comma-separated list, PID range, wildcard or regular expression - see
 [Filter syntax](#filter-syntax-process--ip--port). The rest of the machine's traffic stays
-untouched. Empty field = all traffic. Requires `psutil`.
+untouched. Empty field = all traffic.
 
 **Speed limit** - maximum throughput separately for download (inbound) and upload (outbound), in
 KB/s. 0 = no limit. Ping is small packets, so a speed limit barely changes it - to test the limit
@@ -1102,10 +1113,23 @@ The **CI/CD CLI contract** is guarded separately:
   a *fail-open* (releasing the driver = network returns), the GUI `_tick` survives an exception, the
   targeting thread never touches tkinter, closing the window always releases the engine.
 
-**GitHub Actions** runs the same tests on every push (`.github/workflows/ci.yml`): a Linux +
-**Windows** matrix, GUI smoke, exit-code assertions, an NDJSON check, and finally **an `.exe` build
-and a smoke test of the built file** (`--version`, `--simulate`, a bad config -> code 3) with a
-downloadable artifact.
+**GitHub Actions** runs the same tests on every push (`.github/workflows/ci.yml`), on a Linux +
+**Windows** matrix: the suite behind a **coverage gate**, the GUI smoke on the fake tkinter,
+exit-code assertions, an NDJSON check, `--doctor` and `--license`, and then **an `.exe` build with
+a smoke test of the built file** (`--version`, `--simulate`, a bad config -> code 3) plus a check
+that the WinDivert driver really shipped next to the exe, with a downloadable artifact.
+
+One step is worth knowing about because no unit test can do its job: a **GUI render check on real
+Tk** under a virtual screen, at the minimum supported 1366x768, **in every language**. It builds
+the actual window, walks every page, opens the About window and fails the build when any button is
+narrower than it asks to be, which is to say when its text is clipped. Polish labels are longer
+than English ones, so that is where layouts break, and it has caught breakage that was invisible
+in English.
+
+Releases go out through a second workflow (`.github/workflows/release.yml`) on a `v*` tag. It
+checks the tag against `VERSION.txt`, refuses to publish while the changelogs are still open,
+builds and smoke-tests the exe, then publishes the zip together with the `SHA256SUMS.txt` this
+README tells you to verify.
 
 ## Project layout
 
