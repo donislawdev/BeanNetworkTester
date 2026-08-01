@@ -552,7 +552,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--config PLIK` / `--save-config PLIK` | wczytaj / zapisz ustawienia (JSON, wspólne z GUI) |
 | `--scenario PLIK` `--loop` | scenariusz na osi czasu (JSON) i jego zapętlenie |
 | `--seed N` | ziarno losowości - ten sam przebieg da się powtórzyć |
-| `--duration N` | **czas pracy w sekundach** (0 = do Ctrl+C). To samo pole jest w GUI (sekcja „Sesja”) |
+| `--duration N` | **czas pracy w sekundach** (0 = do Ctrl+C albo do końca osi czasu z `--scenario`). To samo pole jest w GUI (sekcja „Sesja”) |
 | `--row-limit N` | ustawienie **tylko dla GUI**: maks. wierszy w tabelach (0 = bez limitu, domyślnie 50 000). W samym CLI (bez okna) nic nie robi - jest jedynie zapisywane do pliku konfiguracji i działa dopiero, gdy ten config otworzysz w GUI. Odpowiednik pola „Limit wierszy” |
 | `--interval N` | co ile sekund raportować (musi być > 0) |
 | `--log-conns` | wypisz na końcu zaobserwowane połączenia |
@@ -895,7 +895,10 @@ Ikonę można wygenerować ponownie skryptem z użyciem Pillow (`pip install pil
 ## Co może zaskoczyć (przeczytaj, zanim zgłosisz błąd)
 
 - **`--duration` to bezpiecznik, nie tylko wygoda.** Bez niego sesja trwa do `Ctrl+C` / STOP.
-  W CI **zawsze** podawaj `--duration`.
+  W CI **zawsze** podawaj `--duration`. Jedyny wyjątek to scenariusz z osią czasu: `--scenario`
+  z plikiem, który się nie zapętla i ma więcej niż jeden krok, kończy teraz przebieg razem ze
+  scenariuszem i mówi o tym na starcie. Scenariusz zapętlony albo jednokrokowy nie ma się na czym
+  zatrzymać, więc ostrzega i trwa, dopóki go nie zatrzymasz.
 - **Zero ruchu = zielony przebieg.** Jeśli filtr nie złapie ani jednego pakietu, program działa
   poprawnie i kończy się kodem `0`. Chcesz, żeby to był błąd → `--fail-on-no-traffic`.
 - **Filtr ruchu i czas trwania działają tylko od STARTU** (jak w GUI): „Zastosuj zmiany” ich nie rusza.

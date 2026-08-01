@@ -138,7 +138,9 @@ def build_arg_parser():
     # default=None (NOT 0): --duration is a setting now, so a flag that is not
     # given must not override a --config file with a zero
     p.add_argument("--duration", type=float, default=None,
-                   help="run time [s], 0 = until Ctrl+C (also settable in the GUI)")
+                   help="run time [s], 0 = until Ctrl+C - or, with a --scenario "
+                        "that has a timeline, until that timeline runs out "
+                        "(also settable in the GUI)")
     p.add_argument("--row-limit", type=float, default=None,
                    help="most rows a GUI table will show, 0 = no limit "
                         "(the tables are virtualised, so this only bounds the "
@@ -463,8 +465,47 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
         verdict = state
         if deadline is not None and now >= deadline - 1e-9:
             return "duration"
+        # A scenario's timeline is an ending too, and without --duration it is the
+        # ONLY one the run has. It used to be nobody's: the runner thread ended,
+        # logged "Scenario finished." and left the session going forever - a CI
+        # job that hangs to its timeout, with no summary and (on a real run) the
+        # driver still loaded. Asked of the runner rather than derived from
+        # `scen.duration` here, so the tail past the last step stays in one place.
+        if cfg.get("stop_on_scenario") and engine.scenario_finished():
+            return "scenario_done"
         if not engine.is_running():         # the engine's own watchdog stopped it
             return engine.stop_reason or "fault"
+
+
+def _plan_the_end_of_the_scenario(log, cfg, scen, engine):
+    """Decide whether the scenario's own end may stop this run, and say so.
+
+    ``--duration`` is the user speaking and always wins; this only fills the gap
+    where there is no deadline at all. A scenario can end the run when it has a
+    timeline to run out of - which a looping one never does, and a single-step
+    one does not have (``Scenario.duration`` is the ``at`` of the last step, so
+    one step at 0 is duration 0 and would end the session inside a tenth of a
+    second: settings, not a timeline).
+
+    Where the run therefore cannot end by itself, that is said out loud. It has
+    always been true and was never mentioned - the log said "Running. Ctrl+C to
+    stop." and left the reader to discover the rest at the job timeout.
+    """
+    if cfg["duration"]:
+        return
+    # An injected engine (public seam) may be a double that predates this call.
+    # Falling back silently would quietly restore the hang, so it is reported.
+    if not callable(getattr(engine, "scenario_finished", None)):
+        log.debug("this engine cannot report the end of a scenario; "
+                  "the run will need --duration to stop")
+    elif not scen.loop and scen.duration > 0:
+        cfg["stop_on_scenario"] = True
+        log.info(f"No --duration: this run will stop when the scenario ends "
+                 f"(about {scen.duration:g}s).")
+        return
+    why = "it repeats" if scen.loop else "it has a single step, so there is no timeline"
+    log.warn(f"this scenario will not stop the run on its own ({why}) and there "
+             f"is no --duration, so the session keeps going until you stop it.")
 
 
 def _run_session(args, cfg, log, sleep, clock, engine):
@@ -515,6 +556,7 @@ def _run_session(args, cfg, log, sleep, clock, engine):
                      "no destination set). Capturing everything, as usual.")
 
     scenario_failed = None
+    cfg["stop_on_scenario"] = False
     if cfg["scenario"]:
         try:
             scen = load_scenario_file(cfg["scenario"])
@@ -522,6 +564,7 @@ def _run_session(args, cfg, log, sleep, clock, engine):
             engine.start_scenario(scen, cfg["settings"], log=log.info)
             log.debug(f"scenario: {len(scen.steps)} steps, "
                       f"{scen.duration:.0f}s, loop={scen.loop}")
+            _plan_the_end_of_the_scenario(log, cfg, scen, engine)
         except Exception as e:                 # a broken scenario is a failed run
             scenario_failed = e
             log.error(f"scenario error: {e}")
@@ -540,6 +583,21 @@ def _run_session(args, cfg, log, sleep, clock, engine):
         except _Terminated:
             log.warn("Terminated (SIGTERM).")
             code, stop_reason = exitcodes.TERMINATED, "terminated"
+        except Exception as exc:
+            # Anything unforeseen in the session is STILL a coded exit (the CI
+            # contract, convention 18). It used to escape run_cli outright: a
+            # traceback on stderr, no summary record at all, and CPython's own
+            # exit 1 - the same number as RUNTIME, so a job could not tell an
+            # unhandled bug from a driver that would not open.
+            # Caught HERE and not only at the top of run_cli because at this
+            # point the engine is alive and the counters are readable, so the
+            # run can still hand back a complete summary instead of a truncated
+            # NDJSON file. CliError is a SystemExit and passes straight through
+            # to its own handler, as before.
+            crashlog.record(exc, "cli")
+            log.error(f"unexpected failure in the session: "
+                      f"{type(exc).__name__}: {exc}")
+            code, stop_reason = exitcodes.RUNTIME, "fault"
         finally:
             engine.stop()
     else:
@@ -695,6 +753,20 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
     except _Terminated:
         log.warn("Terminated (SIGTERM).")
         return exitcodes.TERMINATED
+    except Exception as exc:
+        # Last resort. The session has its own handler (which can still emit a
+        # summary); this one covers everything outside it - loading a config,
+        # building the result, a bug in this module - where there is nothing
+        # left to report. The promise it keeps is the narrow one from the class
+        # docstring above: an exit CODE, never a raw traceback.
+        crashlog.record(exc, "cli")
+        # Worded to name its PHASE. A fault in something the summary also needs
+        # (the counters, say) trips the session handler first and then this one,
+        # and two identical "unexpected failure" lines read like two separate
+        # bugs instead of one fault and the report it took down with it.
+        log.error(f"unexpected failure while finishing the run: "
+                  f"{type(exc).__name__}: {exc}")
+        return exitcodes.RUNTIME
     finally:
         # Unload the driver we loaded. A --simulate run never touched one, so this
         # is free where it does not matter; where it does, it is what makes the

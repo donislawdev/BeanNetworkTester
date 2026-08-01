@@ -19,6 +19,45 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **a finished scenario ends the CLI run** (`stop_reason: "scenario_done"`, a new
+  value of an existing NDJSON field, so it needs the owner's version bump).
+  `ScenarioRunner.finished` is set on the timeline-complete branch only (`scenario_runner.py`),
+  and `BeanEngine.scenario_finished()` exposes it; `cli._report_loop` returns `"scenario_done"`
+  when `cfg["stop_on_scenario"]` is set. **The end of a timeline is ASKED OF THE RUNNER, not
+  recomputed from `Scenario.duration` in the CLI** - the tail past the last step (`duration + 0.1`)
+  lives in the runner, and a second reader of the same fact drifts on the first edit ("Jedno
+  zrodlo prawdy").
+  `finished` deliberately means *the timeline ran out* and NOT *the runner stopped*: `stop()` and a
+  dead engine also end that loop, and reporting either as `scenario_done` would dress a faulted run
+  up as a clean one. `cli._plan_the_end_of_the_scenario` decides and announces; it declines for a
+  looping scenario and for `duration == 0` (a single step at `at: 0` is settings, not a timeline,
+  and would otherwise end the session inside 0.1 s), warning in both cases. An injected engine
+  without `scenario_finished` (public `engine=` seam) falls back to the old behaviour but SAYS so
+  at debug level, because a silent fallback would quietly restore the hang.
+  Measured before: a two-step non-looping scenario with no `--duration` was still sampling when a
+  hard timeout killed it at 12 s (exit 124). After: `exit 0, reason=scenario_done`.
+  Note the detection inherits the report loop's wake-up granularity - the run ends at the first
+  wake AFTER the timeline, so up to `--interval` late. That bound is the sleep-cap item, not this
+  one.
+  New tests: `tests/test_scenario_runner.py::test_a_completed_timeline_reports_that_it_finished`,
+  `::test_a_looping_runner_never_reports_finished`,
+  `::test_a_runner_the_engine_shut_down_did_not_finish`;
+  `tests/test_cli_runtime.py::test_a_finished_scenario_ends_the_run_even_without_a_duration`,
+  `::test_an_explicit_duration_still_wins_over_the_scenario`,
+  `::test_a_scenario_with_no_timeline_does_not_cut_the_run_short`,
+  `::test_a_looping_scenario_runs_to_its_duration_not_to_its_timeline`,
+  `::test_a_scenario_that_cannot_end_the_run_says_so_up_front`.
+  The CLI tests cannot use `FakeClock` (the runner reads the wall clock on its own thread), so they
+  run on real time with a budgeted `sleep` that raises `_NeverEnded` - a **`BaseException`**, since
+  the new session handler below catches `Exception` and would otherwise swallow the signal and make
+  a hang look like a clean `RUNTIME`. That is a hang turned into a named failure instead of a test
+  that stalls the suite.
+  Stability pass (convention/rule 8, the flag is read off-thread): 4.8M cold reads before any
+  runner exists - all `False`, no exceptions; 30 cycles x 8 concurrent readers - no within-runner
+  `True -> False`; runner swap and `stop_scenario` both leave `False`. (The first version of that
+  check counted transitions ACROSS runners and "found" hundreds of regressions - `start()` resets
+  the flag by design. The script was wrong, not the code.)
+
 - **BREAKING:** **`capture_narrowed` column in the statistics CSV.** New `App.CSV_SESSION_COLUMNS`
   (keyed by `session_info()` key, the way `CSV_COLUMNS` is keyed by counter key) and
   `_csv_session_value`, written between the timestamp and the counters. Booleans go out as
@@ -310,6 +349,26 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Fixed
 
+- **`run_cli` no longer lets an unforeseen exception escape as a traceback.** Convention 18 and the
+  `CliError` docstring both promise "never a raw traceback", and that held for the parse/validate
+  surface only: `test_cli_fuzz.py` runs every one of its cases under `--dry-run` ("pure contract
+  surface"), so the SESSION path - engine, threads, driver, report loop - had no guard at all.
+  Measured: a `RuntimeError` raised in `_report_loop` escaped `run_cli` with no `[bean] error:`
+  line, no `summary` record, and CPython's exit `1` (colliding with `RUNTIME`).
+  Two layers, deliberately, because they can do different amounts for the caller:
+  1. `except Exception` inside `_run_session` around the report loop - the engine is still alive
+     and the counters readable, so the run sets `RUNTIME`/`"fault"` and **still emits a complete
+     `summary`**, instead of leaving a truncated NDJSON file;
+  2. `except Exception` in `run_cli` as the last resort, for everything outside the session
+     (config load, building the result, a bug in this module) where nothing can be summarised.
+  Both go through `crashlog.record` (convention 30 - the only sanctioned swallow). `CliError` is a
+  `SystemExit`, so it passes both handlers untouched to its own, as before. The outer message names
+  its PHASE ("while finishing the run") because a fault in something the summary also needs trips
+  both handlers, and two identical lines read as two separate bugs.
+  New tests: `tests/test_cli_runtime.py::
+  test_an_unexpected_session_fault_is_a_coded_exit_with_a_full_summary` (asserts the complete
+  summary and `stop_reason == "fault"`) and `::test_a_fault_outside_the_session_is_still_a_coded_
+  exit` (asserts the two messages are distinguishable).
 - **The shared-port warning named the target's own program among the "other processes".** Reported
   from a real session targeting `chrome`. Not a regression from the handle-read change - verified
   field for field on both checkouts (matched pids, target ports, shared ports, co-owners and the
