@@ -1052,6 +1052,23 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     `SHA256SUMS.txt` that only that workflow produces.
   No new guard: the fix here is prose accuracy, and the honest mechanical guard for prose does not
   exist (PROJECT_NOTES rule 5). Both READMEs changed together, as convention requires.
+
+- **The user-facing `[0.4.0]` section was rewritten at a third of the length.** Measured before
+  touching it: **817 lines, 92 entries, 11 338 words, median 115 per entry, longest 342**. That is
+  not a release note, it is an internal log wearing one - convention 39 already says CHANGELOG.md
+  carries the EFFECT for a tester and CHANGELOG-INTERNAL.md carries the reasoning, and this file
+  holds **50 729 words** for the same version, so nothing was lost by cutting. Verified that claim
+  before cutting rather than assuming it: eight topics from the longest user-facing entries were
+  checked here first, including two that needed a second look under different names
+  (`effective_loss_pct`, `switch interval` / `THREAD_SWITCH`).
+  After: **346 lines, 67 entries, 4 023 words, median 65, longest 93.** Related fixes merged into
+  one entry each where they shared a subject (the 55 `Fixed` entries became 22), and a **short
+  lead block** was added above the first section - deliberately NOT a `### Highlights`, so it
+  cannot collide with convention 39's section vocabulary or the guards that read it.
+  🔴 **Six entries carrying `**BREAKING:**` were sitting inside `### Changed`** (profiles, the
+  connections table, the repro report's reset count, "Effective loss", the CSV columns, `--gui`).
+  They are now in `### BREAKING`, which is the whole point of that section existing first.
+  Past versions were left alone: `[0.3.0]` and `[0.2.0]` are published release notes.
   The CSV guard **failed on its first run and caught a real gap** - the docs abbreviated
   `delivered_in_scope_bytes_down / ..._up`, so the second name appeared nowhere - and
   `test_cli_docs.py::test_no_stale_app_flags_in_readmes` caught the new prose writing a literal
