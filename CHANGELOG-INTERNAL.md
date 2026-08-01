@@ -15,7 +15,7 @@ flags, exit codes, the NDJSON schema, on-disk file formats, or the facade's publ
 a `### BREAKING` section placed FIRST in that version, and each such line is prefixed with
 `**BREAKING:**`. A breaking change also requires a version bump by the owner (convention 34).
 
-## [Unreleased]
+## [0.4.0] - 2026-08-01
 
 ### BREAKING
 
@@ -169,6 +169,260 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   `::test_a_misspelled_scenario_key_is_an_error_not_a_silent_default` - the last one asserts the
   offending key is NAMED in the message, since "invalid scenario" without a name would leave the
   user hunting. Verified by mutation: disabling the two checks turns all three red.
+
+- **BREAKING:** **every preset was re-tuned against measured sources, and five were added**
+  (`presets.py`). The table is now 17 entries. Two systematic errors ran through the old values:
+  - **Latency was dialled as if it were a round trip.** `lat` is added to EVERY packet, and with
+    the default two-way filter that is both the request and the reply, so the delivered ping is
+    `2 x lat`. `presets.satellite` at 600 delivered a **1200 ms** ping against a real GEO figure of
+    683-684 ms (Ookla Q1 2025 medians for HughesNet and Viasat) - it is now 340. Same correction
+    for `lte` 45 -> 30, `roaming` 300 -> 200, `modem56k` 200 -> 100 and `3g` 150 -> 90 (UMTS is
+    100-200 ms RTT, not 300). `jit` deliberately was NOT halved: each packet draws its own
+    uniform, so the spread grows by sqrt(2), not 2 (measured: std 32.7 ms of RTT wobble at
+    `jit=40` against 23.1 ms per packet).
+  - **Three presets carried kbit/s numbers in a KB/s field, so they ran 8x fast.** `dsl` 1536/256
+    is the canonical ADSL pair in kbit/s; `3g` 384/128 is UMTS R99's. `3g` therefore delivered
+    3.1 Mbit/s - HSPA+, not the experience the preset is picked to reproduce. Also corrected:
+    `5g` upload (67 -> 21 Mbit/s; 5G upload runs 50-120% above 4G, not 6x), `weak_wifi` and `cafe`
+    (both were faster than most home DSL), and `terrible`, whose 2.1 Mbit/s made the WORST preset
+    faster than the 3G one.
+  - **New:** `presets.leo` (low-orbit satellite), `presets.distant` (fast pipe, high RTT, no loss -
+    the shape every other high-ping preset misses), `presets.bufferbloat` (idle-good link whose
+    queue is the impairment - the only preset that exercises `buffer`), `presets.metro` (periodic
+    tunnel outages; the only one that takes the link fully down long enough to force a RECONNECT)
+    and `presets.inflight` (satellite in-flight: 750 ms RTT and 7% median loss, measured over 45
+    flight-hours in "Mile High WiFi", WWW 2018).
+  - 🔴 **LEO carries a spike, NOT a flap, and that reversal came from the sources.** The first pass
+    described Starlink's 15 s handover as a link outage and justified the whole `flap` field with
+    it. Measurement says the reconfiguration stops transmission for 100 ms but the packets are
+    **QUEUED, not dropped** ("Making Sense of Constellations"), with the latency peak averaging
+    +74 ms ("A Multifaceted Look at Starlink Performance", WWW 2024). 100 ms out of every 15 000 is
+    0.67% of the timeline, hence `spike_prob=0.7, spike_ms=100` and no flap. Modelling it as loss
+    would have made the tool impair harder than the network it names.
+  - Every value in `PRESETS` now carries either a named source or an explicit **JUDGEMENT** marker
+    in the comment beside it (`weak_wifi`, `cafe`, `roaming`, `terrible` and the flap duty cycles
+    of `metro`/`inflight` are judgement - no canonical measurement exists for them). The source
+    block above `PRESETS` lists what was actually read. Rationale in PROJECT_NOTES rule 5: a number
+    describing the world outside this repo cannot be falsified by any test here, so it needs a
+    citation or an admission.
+  - Tests: `test_cli.py::test_cli_parsing_and_override` and
+    `test_cli_runtime.py::test_print_config_dumps_the_effective_settings` read the expected latency
+    from `PRESETS` instead of a hardcoded `150`. Both are about PRECEDENCE and about a preset
+    REACHING the dump; a copy of the value only ever fails when a preset is retuned.
+  - Names in both language files, and `presets.satellite` renamed to say **geostationary** so the
+    contrast with the new low-orbit entry is visible in the picker (the id is unchanged, so a
+    stored `ui.json` selection and any saved config keep working; `--preset "Satellite link"` and
+    `--preset "Lacze satelitarne"` do not, which is why this line is BREAKING). `presets.dsl` says
+    VDSL for the same reason - the numbers moved and the name should say which DSL it means.
+  - 🔴 **New guard: `test_presets_filters.py::test_every_preset_has_a_name_in_every_language`.**
+    `PRESETS` had no link to the language files at all - `fields.py` has had one since forever
+    (`test_field_registry.py::test_labels_and_tips_exist_in_every_language`), this registry did
+    not. Five presets were added, rendered as raw `presets.leo` in the picker and in `--preset`,
+    and the suite stayed entirely green.
+    The guard reads the language FILES rather than calling `translate()`, and that distinction was
+    found by mutation, not by reasoning: a key missing from Polish **falls back to the English
+    text**, which is not equal to the key, so the first version of this test passed unchanged when
+    the Polish `presets.leo` line was deleted. Re-verified after the fix - the same deletion now
+    fails with `presets: every id has a pl name (['presets.leo'])`. (`test_i18n_coverage` catches
+    the same deletion from the other side, by comparing key SETS; this one catches a preset id that
+    reaches neither file.)
+  - **All seven shipped `scenarios/*.json` recalculated onto the same scale.** They carried the two
+    errors the presets did - rates on the 8x scale (`down: 8000` as an "LTE baseline") and
+    latencies dialled as round trips - so a scenario and a preset described the same network with
+    different numbers. Latencies halved, rates mapped onto KB/s. The pleasant consequence: the
+    DELIVERED ping is now the number the file says, because halving `lat` is exactly what makes
+    `2 x lat` equal the author's intent - `cafe-wifi.json` said 40 and delivered 80; it now says 20
+    and delivers 40. `mobile-lte-to-3g.json` walks `presets.lte` (ping 60, 33.6 Mbit/s) down to
+    `presets.3g`'s bandwidth (0.8 Mbit/s) and back, so the file and the preset finally agree about
+    what "LTE" and "3G" mean. **Jitter was NOT halved**, in scenarios or presets: each packet draws
+    its own uniform, so the spread grows by sqrt(2), not 2, and the existing values remain
+    plausible read as per-packet figures. The shape of every story (the relative progression, the
+    reset points, the loop) is untouched - this was a recalculation, not a redesign.
+    Covered by the existing `test_shipped_scenarios.py`, which drives every file through the real
+    validator.
+  - **The profile picker was a hardcoded `width=24` characters** (`gui/pages/control.py`), against a
+    longest name of 34 (EN) and 35 (PL), so the popdown truncated in silence - ttk sizes a combobox
+    popdown from the widget and never from its contents. New `theme.popdown_width(values)` is the
+    other half of `popdown_height`: that one takes rows from how MANY values there are, this takes
+    characters from how LONG they are, capped at `POPDOWN_MAX_CHARS = 44` because a profile name is
+    whatever the user typed and the row also holds two buttons. Applied at build AND in
+    `App._sync_profile_widgets`, since saving a profile is how a long name enters the list.
+    Tests (`test_gui_layout.py`): `::test_the_profile_picker_fits_its_longest_name` and
+    `::test_the_profile_picker_regrows_when_a_long_profile_is_saved`.
+    **What each actually catches, measured rather than assumed.** Mutating ONE path leaves the
+    picker correct, because the other still sets the width - so the fit test only goes red when
+    BOTH are broken, which is the pre-fix state and exactly the reported bug: it fails with
+    `(24, 'Zapchane lacze domowe (bufferbloat)')`. The regrow test is the one that pins the sync
+    path on its own. The first version of the regrow test was also wrong and its own assertion said
+    so: it saved a profile SHORTER than the longest preset and expected the picker to grow
+    (`37 -> 37`), so the name in it is now deliberately longer than any built-in.
+  - New guard `test_readme_guards.py::test_both_readmes_list_every_preset_id`: the `--preset` id
+    list is typed by hand in both READMEs and nothing tied it to `PRESETS` - the same shape as the
+    project-layout guard right above it. Checks BOTH directions, because a renamed-away id leaves a
+    line pointing at a `--preset` value the CLI rejects. Verified by mutation (deleting
+    `presets.leo` from README.md fails with `missing: ['presets.leo']`).
+  - The two tests that pinned the old Polish name kept their POINT rather than being deleted: they
+    exist for the stroke-letter fold (`ł` does not decompose under NFD), so they moved to
+    `"Odlegly serwer (inny kontynent)"`, `"Zapchane lacze domowe (bufferbloat)"` and
+    `"Pociag / metro (tunele)"`. The `STROKE_LETTERS` comment in `presets.py` cited the old name as
+    its example and was updated with them.
+
+- **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
+  in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,
+  `spike_ms`, `flap_period`, `flap_down` and `buffer` are marked `in_profile=True` in
+  `fields.FIELD_DEFS`; `presets.PRESET_TO_SETTING` is built from `Field.in_profile` +
+  the new `Field.preset_key` (the frozen short keys `lat`/`jit` are now declared by the registry,
+  not translated by a second table). This reverses the "Variant A" decision that deliberately kept
+  a profile to the seven classic preset fields - flapping is PERIODIC and phase-locked to the
+  session start (`BeanCore.decide` step 5), so it is the one impairment that lets a profile
+  describe a link that drops out on a cadence, which no other profile field can express.
+  Consequences worth naming:
+  - `PROFILE_FIELDS` had **no production consumer** before this (only `test_field_registry.py`);
+    what a profile actually stored came from `PRESET_TO_SETTING` in another module, so the two
+    could drift with nothing to notice. `in_profile` is now the only switch.
+  - `preset_to_settings()` is **always complete**: a preset names only the fields it means, and
+    every other profile field comes back at its `DEFAULT_SETTINGS` value. A partial answer would
+    leave the previous profile's flapping on screen after picking a clean link.
+  - The fill is the field's **default, not zero**. `buffer` defaults to 1000 ms and 0 means
+    UNBOUNDED there, so a blanket zero-fill would have quietly reinstated the runaway token bucket
+    (`BeanCore.decide` step 11) on every preset pick. `settings_to_preset()` lost its hardcoded
+    `0` fallback for the same reason.
+  - `buffer` is the only profile field that cannot impair anything on its own: both of its readers
+    sit inside `if rate > 0` (`decide` steps 11 and 12), so with no speed limit it touches no
+    packet. It is in the profile because `down`/`up` are - the buffer is what decides whether that
+    same limit shows up as DELAY or as LOSS.
+  - Visible effect for existing presets: none of the twelve names a buffer, so picking one now sets
+    the buffer to 1000 ms explicitly where it previously left the widget alone.
+  - Tests: `test_field_registry.py::test_the_stored_profile_shape_follows_the_registry` (new - the
+    stored shape covers exactly `PROFILE_FIELDS`, the short keys stay short, every stored field has
+    a default); `test_validators_settings.py::test_a_preset_always_yields_every_profile_field`
+    (new - unnamed fields come back as defaults, not zero and not missing);
+    `test_passthrough.py::PRESET_OFF` is now derived from `IMPAIRMENT_OFF` intersected with the
+    profile scope, so an impairment joining the scope cannot be forgotten there, and `buffer` is
+    correctly excluded (demanding `buffer == 0` of a harmless preset would demand an unbounded
+    buffer). `test_profile_scope_is_derived` updated to the 12 fields.
+  - `presets.py` gained module-level imports of `fields` and `settings`. No cycle: nothing in
+    `settings`'s dependency chain imports `presets` (checked), and `test_layering.py` is green.
+
+- **BREAKING:** **`--preset` applies a preset through the shared mapping** (`cli.py`), instead of
+  the copy of it that hand-wrote the seven classic keys. The GUI has always used
+  `preset_to_settings`, so the two front ends applied different subsets of the same preset name;
+  the only guard, `test_cli.py::test_cli_english`, asserts `latency` and `down` and nothing else.
+  With the profile scope widened this also stopped being a silent difference: the copy indexed
+  `p["corrupt"]` directly, so the first preset naming only the fields it means would have taken the
+  CLI down with a `KeyError` (reproduced against the future `presets.leo` shape before the fix).
+  Documented precedence is unchanged (defaults < file < preset < flags), but a preset now carries
+  five more keys, so `--config f.json --preset presets.3g` resets `buffer`, `spike_*` and `flap_*`
+  to their defaults where it previously left the file's values in place - the same rule that has
+  always applied to `loss` and `down`.
+  Tests: `test_cli.py::test_a_preset_carries_every_profile_field_into_the_settings` (new) drives a
+  PROBE preset whose every profile field is non-default, because run against the twelve real
+  presets the check is vacuous - none of them names a buffer, a spike or a flap, so the old copy
+  left exactly the defaults the shared mapping fills in, and the test would pass against the code
+  it exists to reject. `::test_a_preset_that_names_only_some_fields_does_not_break_the_cli` (new)
+  covers the partial-preset `KeyError`. Both verified by mutation: reverting `cli.py` turns them
+  red with `buffer 1000 != 1007` and `KeyError: 'corrupt'` respectively.
+
+- **`ProfileStore._clean` falls back to each field's DEFAULT, not to zero** (`gui/profiles.py`).
+  `float(values.get(key, 0) or 0)` was correct only while every profile field defaulted to zero.
+  It does not any more: a `profiles.json` written before the scope widened has no `buffer` key, and
+  `buffer = 0` means an UNBOUNDED link buffer, so the old fill would have loaded every profile
+  saved by an earlier version as the runaway token bucket the bounded buffer exists to prevent -
+  silently, on settings the user had already saved. Absence (`null` and `""` included) now takes
+  `presets.PRESET_DEFAULTS[key]`; an explicit `0` in the file stays 0, because that is what "no cap
+  on the queue" looks like when it is meant. The on-disk format therefore needs NO migration and no
+  version field: it stays backward compatible (fewer keys read fine) and forward compatible (an
+  older build ignores keys it does not know, losing only the new fields).
+  Side effect of dropping `or 0`: a falsy non-numeric value (`[]`, `{}`) now drops the profile and
+  reports it via `store.problem`, where it used to load silently as 0. That matches what the module
+  promises - validate every entry, drop what it cannot use, and say so.
+  Tests (all new, `test_release_fixes.py`):
+  `::test_a_profile_from_before_the_wider_scope_loads_with_field_defaults` - a seven-key file loads
+  with its own values, `buffer` at the default and the impairments it never named off; verified by
+  mutation (restoring the blanket zero turns it red with `buffer 0.0`).
+  `::test_an_explicit_zero_buffer_is_not_the_same_as_a_missing_one` - the paired constraint that
+  makes the fallback usable; it is deliberately NOT a regression guard (it survives the mutation,
+  because both paths yield 0 there).
+  `::test_a_profile_round_trips_the_widened_scope` - save and load carry `flap_*`, `spike_*` and
+  `buffer`, through the same `settings_to_preset` call `App.save_profile` makes.
+
+- **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
+  and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
+  ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`
+  and `drop_lan`; the denominator was every captured packet, including traffic outside the
+  targeting scope. Measured on this branch, driven through `BeanEngine` with `FakeDivert`:
+  a 50 KB/s cap with **zero** configured loss went from **0.0% to 99.9%** (`drop_rate=999` of
+  1000 packets), and 50% loss with a third of the traffic in scope went from **17.7% to 53.0%**
+  (`seen=900`, `scoped_seen=300`, `drop_loss=159`). Both reproduce the audit's shape (0.0% against
+  a real 90%, and 16.7% against the target application's 50.1%). `metrics.effective_loss_pct` and
+  `metrics.effective_corruption_pct` therefore change meaning; reports across this line are not
+  comparable. Additive alongside them: `metrics.packets_in_scope`, the `scoped_seen` counter in
+  `st` (so it also appears in NDJSON `summary.counters`), and the CSV column `packets_in_scope`
+  (`App.CSV_COLUMNS`). `_sample_record` in `cli.py` was deliberately left alone - it is a curated
+  subset, and the summary already carries the full counter dict.
+- **New single source in `engine.py`.** `DROP_BY_REASON` (the reason -> counter map, lifted out of
+  the capture loop), `IMPAIRMENT_DROP_KEYS` **derived from it**, `TOOL_DROP_KEYS`, and two pure
+  functions `impairment_loss_pct(stats)` / `corruption_pct(stats)` used by both the GUI and the
+  repro report. They take a stats dict, not an engine, so the GUI computes from the snapshot it
+  already holds and the tests need no session. `repro.py` and `gui/pages/stats.py` import them;
+  no layering rule is touched (`engine` imports neither).
+- **Why the tool's own drops are excluded**, recorded here because it is a judgement call:
+  `README.md` defines the term around a congested link ("that is how a congested link behaves"),
+  and `tips.stat_shutdown` says of queued-at-stop packets "They were not lost in the network".
+  There is also a hard reason: the delay queue holds out-of-scope packets too, so counting
+  `drop_overflow` against a `scoped_seen` denominator could produce a figure above 100%. As
+  defined, every counted drop happened to a packet that is in the denominator, so the result
+  cannot exceed 100%.
+- **Hot path measured, not assumed** (Win11 AMD64, CPython 3.14.6, 150k 1500 B packets through
+  `FakeDivert`, median of 5, benchmarked back to back against a `git worktree` of master).
+  Nothing-impaired path 149.7k -> **157.1k pkt/s** (ranges 145.7-155.4 vs 150.6-163.3: overlapping,
+  so read as no regression while gaining a third counter). 100%-loss path 234.5k ->
+  **267.8k pkt/s** (188.2-238.2 vs 234.1-274.2: the new minimum sits at the old maximum), which is
+  the dict literal no longer being built for every dropped packet.
+- **Two deliberate rearrangements in the capture loop.** (1) `seen`, `bytes_*_total` and
+  `scoped_seen` now share ONE `_slock` acquisition, placed after `decide()` because scope is not
+  knowable before it - fewer acquisitions per packet than before the counter was added. If
+  `decide()` ever raised, the packet would go uncounted where it used to be counted; it does not
+  raise (`Matcher.matches()` is documented never to) and if it did, the capture thread dies and
+  the session fail-stops. (2) `DROP_BY_REASON` at module scope instead of a literal per drop.
+- New tests in `tests/test_engine.py`, all verified by mutation (four mutants, each caught with
+  the pre-fix number): `test_effective_loss_counts_every_impairment_not_just_the_loss_setting`
+  (reverting the numerator gives `pct=0.0` against `drop_rate=999`),
+  `test_effective_loss_measures_the_traffic_that_was_targeted` (reverting the denominator gives
+  `pct=17.7`; never bumping `scoped_seen` gives `scoped_seen=0`), and
+  `test_every_drop_counter_and_drop_reason_is_classified` - a mechanical guard that every
+  `drop_*` counter in `reset_stats()` is in `IMPAIRMENT_DROP_KEYS` or `TOOL_DROP_KEYS`, and that
+  every reason `Decision(True, ...)` can carry in `core.py` routes through `DROP_BY_REASON`. That
+  last one is the guard against F4's actual failure mode: a counter that exists, is correct, and
+  is simply not part of the sum.
+- i18n: new key `tips.eff_loss` in `lang/en.json` + `lang/pl.json` (the session row had **no**
+  tooltip at all, which is part of why the figure could lie unnoticed); `SESSION_ROWS` in
+  `gui/pages/stats.py` now names it. README EN + PL gained a bullet defining the figure; the
+  existing prose about a speed limit causing loss above the set percentage was left untouched -
+  it was already true, and now the number finally agrees with it.
+
+- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
+  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
+  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
+  while `--help` advertised "force the GUI". On real WinDivert that meant
+  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
+  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
+  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
+  to stderr and stdout stays clean.
+- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
+  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
+  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
+  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
+  than widening it.
+- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
+  loss and getting zero without being told is the class of quiet lie this project removes), and
+  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
+  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
+  than declined.
+- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
+  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
+- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
+- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
 
 ### Changed
 
@@ -775,264 +1029,6 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   freezes it into the bundle: letting them drift means CI smoke-tests one artefact and users
   download another.
 
-## [0.4.0] - 2026-07-30
-
-### BREAKING
-
-- **BREAKING:** **every preset was re-tuned against measured sources, and five were added**
-  (`presets.py`). The table is now 17 entries. Two systematic errors ran through the old values:
-  - **Latency was dialled as if it were a round trip.** `lat` is added to EVERY packet, and with
-    the default two-way filter that is both the request and the reply, so the delivered ping is
-    `2 x lat`. `presets.satellite` at 600 delivered a **1200 ms** ping against a real GEO figure of
-    683-684 ms (Ookla Q1 2025 medians for HughesNet and Viasat) - it is now 340. Same correction
-    for `lte` 45 -> 30, `roaming` 300 -> 200, `modem56k` 200 -> 100 and `3g` 150 -> 90 (UMTS is
-    100-200 ms RTT, not 300). `jit` deliberately was NOT halved: each packet draws its own
-    uniform, so the spread grows by sqrt(2), not 2 (measured: std 32.7 ms of RTT wobble at
-    `jit=40` against 23.1 ms per packet).
-  - **Three presets carried kbit/s numbers in a KB/s field, so they ran 8x fast.** `dsl` 1536/256
-    is the canonical ADSL pair in kbit/s; `3g` 384/128 is UMTS R99's. `3g` therefore delivered
-    3.1 Mbit/s - HSPA+, not the experience the preset is picked to reproduce. Also corrected:
-    `5g` upload (67 -> 21 Mbit/s; 5G upload runs 50-120% above 4G, not 6x), `weak_wifi` and `cafe`
-    (both were faster than most home DSL), and `terrible`, whose 2.1 Mbit/s made the WORST preset
-    faster than the 3G one.
-  - **New:** `presets.leo` (low-orbit satellite), `presets.distant` (fast pipe, high RTT, no loss -
-    the shape every other high-ping preset misses), `presets.bufferbloat` (idle-good link whose
-    queue is the impairment - the only preset that exercises `buffer`), `presets.metro` (periodic
-    tunnel outages; the only one that takes the link fully down long enough to force a RECONNECT)
-    and `presets.inflight` (satellite in-flight: 750 ms RTT and 7% median loss, measured over 45
-    flight-hours in "Mile High WiFi", WWW 2018).
-  - 🔴 **LEO carries a spike, NOT a flap, and that reversal came from the sources.** The first pass
-    described Starlink's 15 s handover as a link outage and justified the whole `flap` field with
-    it. Measurement says the reconfiguration stops transmission for 100 ms but the packets are
-    **QUEUED, not dropped** ("Making Sense of Constellations"), with the latency peak averaging
-    +74 ms ("A Multifaceted Look at Starlink Performance", WWW 2024). 100 ms out of every 15 000 is
-    0.67% of the timeline, hence `spike_prob=0.7, spike_ms=100` and no flap. Modelling it as loss
-    would have made the tool impair harder than the network it names.
-  - Every value in `PRESETS` now carries either a named source or an explicit **JUDGEMENT** marker
-    in the comment beside it (`weak_wifi`, `cafe`, `roaming`, `terrible` and the flap duty cycles
-    of `metro`/`inflight` are judgement - no canonical measurement exists for them). The source
-    block above `PRESETS` lists what was actually read. Rationale in PROJECT_NOTES rule 5: a number
-    describing the world outside this repo cannot be falsified by any test here, so it needs a
-    citation or an admission.
-  - Tests: `test_cli.py::test_cli_parsing_and_override` and
-    `test_cli_runtime.py::test_print_config_dumps_the_effective_settings` read the expected latency
-    from `PRESETS` instead of a hardcoded `150`. Both are about PRECEDENCE and about a preset
-    REACHING the dump; a copy of the value only ever fails when a preset is retuned.
-  - Names in both language files, and `presets.satellite` renamed to say **geostationary** so the
-    contrast with the new low-orbit entry is visible in the picker (the id is unchanged, so a
-    stored `ui.json` selection and any saved config keep working; `--preset "Satellite link"` and
-    `--preset "Lacze satelitarne"` do not, which is why this line is BREAKING). `presets.dsl` says
-    VDSL for the same reason - the numbers moved and the name should say which DSL it means.
-  - 🔴 **New guard: `test_presets_filters.py::test_every_preset_has_a_name_in_every_language`.**
-    `PRESETS` had no link to the language files at all - `fields.py` has had one since forever
-    (`test_field_registry.py::test_labels_and_tips_exist_in_every_language`), this registry did
-    not. Five presets were added, rendered as raw `presets.leo` in the picker and in `--preset`,
-    and the suite stayed entirely green.
-    The guard reads the language FILES rather than calling `translate()`, and that distinction was
-    found by mutation, not by reasoning: a key missing from Polish **falls back to the English
-    text**, which is not equal to the key, so the first version of this test passed unchanged when
-    the Polish `presets.leo` line was deleted. Re-verified after the fix - the same deletion now
-    fails with `presets: every id has a pl name (['presets.leo'])`. (`test_i18n_coverage` catches
-    the same deletion from the other side, by comparing key SETS; this one catches a preset id that
-    reaches neither file.)
-  - **All seven shipped `scenarios/*.json` recalculated onto the same scale.** They carried the two
-    errors the presets did - rates on the 8x scale (`down: 8000` as an "LTE baseline") and
-    latencies dialled as round trips - so a scenario and a preset described the same network with
-    different numbers. Latencies halved, rates mapped onto KB/s. The pleasant consequence: the
-    DELIVERED ping is now the number the file says, because halving `lat` is exactly what makes
-    `2 x lat` equal the author's intent - `cafe-wifi.json` said 40 and delivered 80; it now says 20
-    and delivers 40. `mobile-lte-to-3g.json` walks `presets.lte` (ping 60, 33.6 Mbit/s) down to
-    `presets.3g`'s bandwidth (0.8 Mbit/s) and back, so the file and the preset finally agree about
-    what "LTE" and "3G" mean. **Jitter was NOT halved**, in scenarios or presets: each packet draws
-    its own uniform, so the spread grows by sqrt(2), not 2, and the existing values remain
-    plausible read as per-packet figures. The shape of every story (the relative progression, the
-    reset points, the loop) is untouched - this was a recalculation, not a redesign.
-    Covered by the existing `test_shipped_scenarios.py`, which drives every file through the real
-    validator.
-  - **The profile picker was a hardcoded `width=24` characters** (`gui/pages/control.py`), against a
-    longest name of 34 (EN) and 35 (PL), so the popdown truncated in silence - ttk sizes a combobox
-    popdown from the widget and never from its contents. New `theme.popdown_width(values)` is the
-    other half of `popdown_height`: that one takes rows from how MANY values there are, this takes
-    characters from how LONG they are, capped at `POPDOWN_MAX_CHARS = 44` because a profile name is
-    whatever the user typed and the row also holds two buttons. Applied at build AND in
-    `App._sync_profile_widgets`, since saving a profile is how a long name enters the list.
-    Tests (`test_gui_layout.py`): `::test_the_profile_picker_fits_its_longest_name` and
-    `::test_the_profile_picker_regrows_when_a_long_profile_is_saved`.
-    **What each actually catches, measured rather than assumed.** Mutating ONE path leaves the
-    picker correct, because the other still sets the width - so the fit test only goes red when
-    BOTH are broken, which is the pre-fix state and exactly the reported bug: it fails with
-    `(24, 'Zapchane lacze domowe (bufferbloat)')`. The regrow test is the one that pins the sync
-    path on its own. The first version of the regrow test was also wrong and its own assertion said
-    so: it saved a profile SHORTER than the longest preset and expected the picker to grow
-    (`37 -> 37`), so the name in it is now deliberately longer than any built-in.
-  - New guard `test_readme_guards.py::test_both_readmes_list_every_preset_id`: the `--preset` id
-    list is typed by hand in both READMEs and nothing tied it to `PRESETS` - the same shape as the
-    project-layout guard right above it. Checks BOTH directions, because a renamed-away id leaves a
-    line pointing at a `--preset` value the CLI rejects. Verified by mutation (deleting
-    `presets.leo` from README.md fails with `missing: ['presets.leo']`).
-  - The two tests that pinned the old Polish name kept their POINT rather than being deleted: they
-    exist for the stroke-letter fold (`ł` does not decompose under NFD), so they moved to
-    `"Odlegly serwer (inny kontynent)"`, `"Zapchane lacze domowe (bufferbloat)"` and
-    `"Pociag / metro (tunele)"`. The `STROKE_LETTERS` comment in `presets.py` cited the old name as
-    its example and was updated with them.
-
-- **BREAKING:** **the profile scope grew from 7 fields to 12**, and the shape a profile is stored
-  in is now DERIVED from the field registry instead of a second hand-written table. `spike_prob`,
-  `spike_ms`, `flap_period`, `flap_down` and `buffer` are marked `in_profile=True` in
-  `fields.FIELD_DEFS`; `presets.PRESET_TO_SETTING` is built from `Field.in_profile` +
-  the new `Field.preset_key` (the frozen short keys `lat`/`jit` are now declared by the registry,
-  not translated by a second table). This reverses the "Variant A" decision that deliberately kept
-  a profile to the seven classic preset fields - flapping is PERIODIC and phase-locked to the
-  session start (`BeanCore.decide` step 5), so it is the one impairment that lets a profile
-  describe a link that drops out on a cadence, which no other profile field can express.
-  Consequences worth naming:
-  - `PROFILE_FIELDS` had **no production consumer** before this (only `test_field_registry.py`);
-    what a profile actually stored came from `PRESET_TO_SETTING` in another module, so the two
-    could drift with nothing to notice. `in_profile` is now the only switch.
-  - `preset_to_settings()` is **always complete**: a preset names only the fields it means, and
-    every other profile field comes back at its `DEFAULT_SETTINGS` value. A partial answer would
-    leave the previous profile's flapping on screen after picking a clean link.
-  - The fill is the field's **default, not zero**. `buffer` defaults to 1000 ms and 0 means
-    UNBOUNDED there, so a blanket zero-fill would have quietly reinstated the runaway token bucket
-    (`BeanCore.decide` step 11) on every preset pick. `settings_to_preset()` lost its hardcoded
-    `0` fallback for the same reason.
-  - `buffer` is the only profile field that cannot impair anything on its own: both of its readers
-    sit inside `if rate > 0` (`decide` steps 11 and 12), so with no speed limit it touches no
-    packet. It is in the profile because `down`/`up` are - the buffer is what decides whether that
-    same limit shows up as DELAY or as LOSS.
-  - Visible effect for existing presets: none of the twelve names a buffer, so picking one now sets
-    the buffer to 1000 ms explicitly where it previously left the widget alone.
-  - Tests: `test_field_registry.py::test_the_stored_profile_shape_follows_the_registry` (new - the
-    stored shape covers exactly `PROFILE_FIELDS`, the short keys stay short, every stored field has
-    a default); `test_validators_settings.py::test_a_preset_always_yields_every_profile_field`
-    (new - unnamed fields come back as defaults, not zero and not missing);
-    `test_passthrough.py::PRESET_OFF` is now derived from `IMPAIRMENT_OFF` intersected with the
-    profile scope, so an impairment joining the scope cannot be forgotten there, and `buffer` is
-    correctly excluded (demanding `buffer == 0` of a harmless preset would demand an unbounded
-    buffer). `test_profile_scope_is_derived` updated to the 12 fields.
-  - `presets.py` gained module-level imports of `fields` and `settings`. No cycle: nothing in
-    `settings`'s dependency chain imports `presets` (checked), and `test_layering.py` is green.
-
-- **BREAKING:** **`--preset` applies a preset through the shared mapping** (`cli.py`), instead of
-  the copy of it that hand-wrote the seven classic keys. The GUI has always used
-  `preset_to_settings`, so the two front ends applied different subsets of the same preset name;
-  the only guard, `test_cli.py::test_cli_english`, asserts `latency` and `down` and nothing else.
-  With the profile scope widened this also stopped being a silent difference: the copy indexed
-  `p["corrupt"]` directly, so the first preset naming only the fields it means would have taken the
-  CLI down with a `KeyError` (reproduced against the future `presets.leo` shape before the fix).
-  Documented precedence is unchanged (defaults < file < preset < flags), but a preset now carries
-  five more keys, so `--config f.json --preset presets.3g` resets `buffer`, `spike_*` and `flap_*`
-  to their defaults where it previously left the file's values in place - the same rule that has
-  always applied to `loss` and `down`.
-  Tests: `test_cli.py::test_a_preset_carries_every_profile_field_into_the_settings` (new) drives a
-  PROBE preset whose every profile field is non-default, because run against the twelve real
-  presets the check is vacuous - none of them names a buffer, a spike or a flap, so the old copy
-  left exactly the defaults the shared mapping fills in, and the test would pass against the code
-  it exists to reject. `::test_a_preset_that_names_only_some_fields_does_not_break_the_cli` (new)
-  covers the partial-preset `KeyError`. Both verified by mutation: reverting `cli.py` turns them
-  red with `buffer 1000 != 1007` and `KeyError: 'corrupt'` respectively.
-
-- **`ProfileStore._clean` falls back to each field's DEFAULT, not to zero** (`gui/profiles.py`).
-  `float(values.get(key, 0) or 0)` was correct only while every profile field defaulted to zero.
-  It does not any more: a `profiles.json` written before the scope widened has no `buffer` key, and
-  `buffer = 0` means an UNBOUNDED link buffer, so the old fill would have loaded every profile
-  saved by an earlier version as the runaway token bucket the bounded buffer exists to prevent -
-  silently, on settings the user had already saved. Absence (`null` and `""` included) now takes
-  `presets.PRESET_DEFAULTS[key]`; an explicit `0` in the file stays 0, because that is what "no cap
-  on the queue" looks like when it is meant. The on-disk format therefore needs NO migration and no
-  version field: it stays backward compatible (fewer keys read fine) and forward compatible (an
-  older build ignores keys it does not know, losing only the new fields).
-  Side effect of dropping `or 0`: a falsy non-numeric value (`[]`, `{}`) now drops the profile and
-  reports it via `store.problem`, where it used to load silently as 0. That matches what the module
-  promises - validate every entry, drop what it cannot use, and say so.
-  Tests (all new, `test_release_fixes.py`):
-  `::test_a_profile_from_before_the_wider_scope_loads_with_field_defaults` - a seven-key file loads
-  with its own values, `buffer` at the default and the impairments it never named off; verified by
-  mutation (restoring the blanket zero turns it red with `buffer 0.0`).
-  `::test_an_explicit_zero_buffer_is_not_the_same_as_a_missing_one` - the paired constraint that
-  makes the fallback usable; it is deliberately NOT a regression guard (it survives the mutation,
-  because both paths yield 0 there).
-  `::test_a_profile_round_trips_the_widened_scope` - save and load carry `flap_*`, `spike_*` and
-  `buffer`, through the same `settings_to_preset` call `App.save_profile` makes.
-
-- **BREAKING:** the effective-loss figure is redefined at both ends (audit F4). `gui/pages/stats.py`
-  and `repro.py` computed `100 * drop_loss / seen`. The numerator was the configured Loss alone,
-  ignoring `drop_rate`, `drop_flap`, `drop_block`, `drop_syn`, `drop_mtu`, `drop_nat`, `drop_rst`
-  and `drop_lan`; the denominator was every captured packet, including traffic outside the
-  targeting scope. Measured on this branch, driven through `BeanEngine` with `FakeDivert`:
-  a 50 KB/s cap with **zero** configured loss went from **0.0% to 99.9%** (`drop_rate=999` of
-  1000 packets), and 50% loss with a third of the traffic in scope went from **17.7% to 53.0%**
-  (`seen=900`, `scoped_seen=300`, `drop_loss=159`). Both reproduce the audit's shape (0.0% against
-  a real 90%, and 16.7% against the target application's 50.1%). `metrics.effective_loss_pct` and
-  `metrics.effective_corruption_pct` therefore change meaning; reports across this line are not
-  comparable. Additive alongside them: `metrics.packets_in_scope`, the `scoped_seen` counter in
-  `st` (so it also appears in NDJSON `summary.counters`), and the CSV column `packets_in_scope`
-  (`App.CSV_COLUMNS`). `_sample_record` in `cli.py` was deliberately left alone - it is a curated
-  subset, and the summary already carries the full counter dict.
-- **New single source in `engine.py`.** `DROP_BY_REASON` (the reason -> counter map, lifted out of
-  the capture loop), `IMPAIRMENT_DROP_KEYS` **derived from it**, `TOOL_DROP_KEYS`, and two pure
-  functions `impairment_loss_pct(stats)` / `corruption_pct(stats)` used by both the GUI and the
-  repro report. They take a stats dict, not an engine, so the GUI computes from the snapshot it
-  already holds and the tests need no session. `repro.py` and `gui/pages/stats.py` import them;
-  no layering rule is touched (`engine` imports neither).
-- **Why the tool's own drops are excluded**, recorded here because it is a judgement call:
-  `README.md` defines the term around a congested link ("that is how a congested link behaves"),
-  and `tips.stat_shutdown` says of queued-at-stop packets "They were not lost in the network".
-  There is also a hard reason: the delay queue holds out-of-scope packets too, so counting
-  `drop_overflow` against a `scoped_seen` denominator could produce a figure above 100%. As
-  defined, every counted drop happened to a packet that is in the denominator, so the result
-  cannot exceed 100%.
-- **Hot path measured, not assumed** (Win11 AMD64, CPython 3.14.6, 150k 1500 B packets through
-  `FakeDivert`, median of 5, benchmarked back to back against a `git worktree` of master).
-  Nothing-impaired path 149.7k -> **157.1k pkt/s** (ranges 145.7-155.4 vs 150.6-163.3: overlapping,
-  so read as no regression while gaining a third counter). 100%-loss path 234.5k ->
-  **267.8k pkt/s** (188.2-238.2 vs 234.1-274.2: the new minimum sits at the old maximum), which is
-  the dict literal no longer being built for every dropped packet.
-- **Two deliberate rearrangements in the capture loop.** (1) `seen`, `bytes_*_total` and
-  `scoped_seen` now share ONE `_slock` acquisition, placed after `decide()` because scope is not
-  knowable before it - fewer acquisitions per packet than before the counter was added. If
-  `decide()` ever raised, the packet would go uncounted where it used to be counted; it does not
-  raise (`Matcher.matches()` is documented never to) and if it did, the capture thread dies and
-  the session fail-stops. (2) `DROP_BY_REASON` at module scope instead of a literal per drop.
-- New tests in `tests/test_engine.py`, all verified by mutation (four mutants, each caught with
-  the pre-fix number): `test_effective_loss_counts_every_impairment_not_just_the_loss_setting`
-  (reverting the numerator gives `pct=0.0` against `drop_rate=999`),
-  `test_effective_loss_measures_the_traffic_that_was_targeted` (reverting the denominator gives
-  `pct=17.7`; never bumping `scoped_seen` gives `scoped_seen=0`), and
-  `test_every_drop_counter_and_drop_reason_is_classified` - a mechanical guard that every
-  `drop_*` counter in `reset_stats()` is in `IMPAIRMENT_DROP_KEYS` or `TOOL_DROP_KEYS`, and that
-  every reason `Decision(True, ...)` can carry in `core.py` routes through `DROP_BY_REASON`. That
-  last one is the guard against F4's actual failure mode: a counter that exists, is correct, and
-  is simply not part of the sum.
-- i18n: new key `tips.eff_loss` in `lang/en.json` + `lang/pl.json` (the session row had **no**
-  tooltip at all, which is part of why the figure could lie unnoticed); `SESSION_ROWS` in
-  `gui/pages/stats.py` now names it. README EN + PL gained a bullet defining the figure; the
-  existing prose about a speed limit causing loss above the set percentage was left untouched -
-  it was already true, and now the number finally agrees with it.
-
-- **BREAKING:** `--gui` combined with any other option now exits `USAGE(2)`. `args.gui` was
-  parsed and then **never read anywhere** - `cli.py::main` routes to the GUI only when argv is
-  empty or exactly `["--gui"]`, so every other combination fell through to a full CLI session
-  while `--help` advertised "force the GUI". On real WinDivert that meant
-  `--gui --loss 30 --duration 600` impaired the machine's network with no window and no STOP
-  control. The guard sits at the top of `run_cli`'s `try` block (before `--license` /
-  `--doctor` / `--cleanup-driver`) and uses the existing `CliError` path, so the message goes
-  to stderr and stdout stays clean.
-- Blast radius checked before the change: nothing in `tests/`, `smoke_gui.py`, `tools/` or the
-  launcher facade passes `--gui`; `test_cli_fuzz.py` builds `FLAGS` from `FIELD_DEFS`, so the
-  fuzzer never generates it; `test_cli_docs.py` compares flag NAMES, not help text. `USAGE` was
-  already in the fuzzer's `ACCEPTABLE` set, so the new outcome fits the CLI contract rather
-  than widening it.
-- Rejected alternatives: opening the GUI and silently dropping the other flags (asking for 30%
-  loss and getting zero without being told is the class of quiet lie this project removes), and
-  opening the GUI with the form PREFILLED from the flags. The second is genuinely nicer and is
-  still open - it needs `gui/app.py`, which is due for decomposition, so it is deferred rather
-  than declined.
-- New test: `tests/test_cli_runtime.py::test_gui_flag_combined_with_settings_is_a_usage_error`
-  - asserts `USAGE(2)`, the reason on stderr, and an empty stdout (the data-channel invariant).
-- Help text and the flag tables in both READMEs now state that the flag is valid on its own.
-- Version bump deliberately NOT taken (convention 34): the owner closes it in `VERSION.txt`.
-
 ### Fixed
 
 - **`SocketWatcher.reconcile()` let a STALE poller snapshot overwrite a newer SOCKET event
@@ -1100,6 +1096,7 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   expiry, the "events always win" over-fix, `collected()` stamping `clock()` instead of `_last`,
   the watchdog call removed, `owner_targeted` returning False) - all nine RED.
 - Four rows added to PROJECT_NOTES "Powierzchnia regresji".
+
 ### Fixed: the last three audit findings (F3, F4, F5)
 
 - **`_FlowTable.keep_for` could only ever RAISE the age window (F3/T5).** The rotation deadline was
