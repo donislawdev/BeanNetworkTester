@@ -29,15 +29,26 @@ nobody has written yet. Threads are compared by IDENTITY against the engine's ow
 handles rather than by name substring, so it does not depend on how CPython
 happens to name a thread.
 
-Measured while writing this, on a real session with traffic and targeting active
-(the numbers are the point of the test, not decoration):
+Measured on a real session with traffic and targeting active (the numbers are the
+point of the test, not decoration). Re-measured 2026-08-01, when the per-PID resolve
+moved from psutil to a handle read (``portmap._process_info``):
 
-    5232x  _psutil_created         from bean-target-resolver
-    1431x  _psutil_process_info    from bean-target-resolver
-     448x  _psutil_created         from the watchdog
-     212x  _Native._table          from bean-target-resolver
-       3x  _psutil_process_table   from bean-target-resolver
+    1210x  _psutil_created         from bean-target-resolver
+     330x  _native_process_info    from bean-target-resolver
+     330x  _psutil_process_info    from bean-target-resolver
+     238x  _psutil_created         from MainThread
+      70x  _native_process_info    from MainThread
+      68x  _psutil_created         from the watchdog
+      67x  _psutil_process_info    from MainThread
+      40x  _Native._table          from bean-target-resolver
        0x  anything                from the capture or inject thread
+
+The two resolve counts matching is not double work: this test points targeting at a
+name nothing has, so the socket table keeps naming PIDs that have already EXITED
+(checked: ``psutil.pid_exists`` is False for the frequent ones). Both routes decline
+them, one after the other. Traced separately over 390 resolves, the handle answered
+4, declined 386, and psutil then resolved 1 of those - which is the fallback earning
+its place rather than shadowing the primary.
 
 The work is real and it is heavy - and all of it happens somewhere the user's
 packets do not wait for it. That is the whole design, asserted.
@@ -87,7 +98,7 @@ from fakes import check
 # level functions called through module globals, so replacing the attribute is
 # enough - production picks up the replacement at call time.
 OS_FUNCTIONS = ("_psutil_port_pid_map", "_psutil_process_table",
-                "_psutil_created", "_psutil_process_info")
+                "_psutil_created", "_psutil_process_info", "_native_process_info")
 
 
 @contextlib.contextmanager

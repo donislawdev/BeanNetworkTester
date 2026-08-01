@@ -254,6 +254,206 @@ def test_toolhelp_snapshot_names_this_process_without_opening_it():
     check("the snapshot carries no start time (TTL takes over)", created is None)
 
 
+# -- the per-PID handle read (Windows only) --------------------------------- #
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="the handle read is Windows-only")
+def test_the_handle_read_agrees_with_an_independent_oracle_on_the_parent():
+    """The PARENT pid, checked against something that is neither psutil nor toolhelp.
+
+    ``ppid`` is load-bearing and had no guardian: it feeds ``PortTable.ancestors``,
+    which is how ``targeting.py`` matches a process TREE, so a wrong parent silently
+    stops a target from catching its children. Every existing targeting test drives a
+    FAKE table with its own ``ancestors``, so all of them stay green no matter what
+    this returns - the trap PROJECT_NOTES calls out about fixtures that cannot tell
+    the variants apart.
+
+    ``os.getppid()`` is the independent oracle: CPython asks the OS directly, so it
+    shares no code with either resolver.
+    """
+    import os
+    from beantester.portmap import _native_process_info, _psutil_process_info
+    resolved = _native_process_info(os.getpid())
+    check("the handle read answered for this process", resolved is not None)
+    name, ppid, created = resolved
+    check("it names this process", name.lower().endswith(".exe"), f"({name!r})")
+    check("the parent matches the OS", ppid == os.getppid(),
+          f"(handle said {ppid}, os.getppid() said {os.getppid()})")
+    check("it carries a start time, so the recycle check stays verifiable",
+          isinstance(created, float) and created > 0, f"({created!r})")
+    # and it must agree with the path it replaced, or the connection log changes
+    # meaning without anybody deciding that it should
+    fallback = _psutil_process_info(os.getpid())
+    check("name and parent match the psutil path it replaced",
+          fallback is not None and fallback[0].lower() == name.lower()
+          and fallback[1] == ppid, f"({fallback!r} vs {resolved!r})")
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="the handle read is Windows-only")
+def test_a_process_that_will_not_name_itself_is_declined():
+    """PID 4 (``System``) never yields an image name, so it must resolve to ``None``.
+
+    A real standing example of the partial read rather than a race to reproduce. It
+    exercises the FAILED-call route out; the succeeded-but-empty route has its own
+    test below, because a mutant showed these are two different branches and this
+    one alone does not cover both.
+    """
+    from beantester.portmap import _native_process_info
+    check("the System process is declined, not cached nameless",
+          _native_process_info(4) is None)
+
+
+def _fake_native_api(name_value, ppid=4321, ticks=133_000_000_000_000_000, ok=True):
+    """A stand-in for the bound ctypes surface, so the parsing can be driven directly.
+
+    The five entry points live in one injectable tuple precisely so this is possible:
+    it makes the branches reachable without a process in the right state, and it runs
+    the parsing on EVERY platform rather than only where the API exists.
+    """
+    class _Field:
+        def __init__(self, v=0):
+            self.value = v
+
+    class _Basic:
+        def __init__(self):
+            self.InheritedFromUniqueProcessId = ppid
+            self.UniqueProcessId = 999
+
+    class _Filetime:
+        def __init__(self):
+            self.dwHighDateTime = ticks >> 32
+            self.dwLowDateTime = ticks & 0xFFFFFFFF
+
+    class _Ctypes:
+        byref = staticmethod(lambda x: x)
+        sizeof = staticmethod(lambda x: 48)
+        create_unicode_buffer = staticmethod(lambda n: _Field(name_value))
+
+    class _Wintypes:
+        ULONG = _Field
+        DWORD = _Field
+        FILETIME = _Filetime
+
+    class _K32:
+        OpenProcess = staticmethod(lambda *a: 1234)
+        CloseHandle = staticmethod(lambda *a: 1)
+        GetProcessTimes = staticmethod(lambda *a: 1)
+        QueryFullProcessImageNameW = staticmethod(lambda *a: 1 if ok else 0)
+
+    class _Ntdll:
+        NtQueryInformationProcess = staticmethod(lambda *a: 0)
+
+    return (_Ctypes, _Wintypes, _K32, _Ntdll, _Basic)
+
+
+def test_a_name_that_comes_back_empty_is_declined_not_cached(monkeypatch):
+    """The succeeded-but-EMPTY name must fall through, never reach the cache.
+
+    A process that has just exited still answers NtQueryInformationProcess and
+    GetProcessTimes while its image name comes back blank (measured under churn: pid
+    45336, identical parent and start time across two reads, name 'cmd.exe' then '').
+    Caching that would blank the connection log's process column - the exact bug the
+    column was added to fix.
+
+    Written after a mutant SURVIVED: deleting the empty-name guard changed nothing
+    the PID 4 test could see, because PID 4 leaves by the failed-call branch instead.
+    """
+    from beantester import portmap
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API", [_fake_native_api("")])
+    check("an empty name resolves to nothing at all",
+          portmap._native_process_info(45336) is None)
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API",
+                        [_fake_native_api(r"C:\Windows\System32\cmd.exe")])
+    resolved = portmap._native_process_info(45336)
+    check("a real name resolves", resolved is not None, f"({resolved!r})")
+    check("...to its basename, not the full path", resolved[0] == "cmd.exe",
+          f"({resolved[0]!r})")
+    check("...with the parent the API reported", resolved[1] == 4321,
+          f"({resolved[1]})")
+    # 133e15 FILETIME ticks = 2022-06-18T04:26:40Z, checked two ways (the epoch shift
+    # by hand, and datetime from the 1601 base). Pinned because that shift is the one
+    # piece of arithmetic here and off-by-a-constant would look perfectly plausible.
+    check("...and a start time converted off the FILETIME epoch",
+          abs(resolved[2] - 1655526400.0) < 1.0, f"({resolved[2]!r})")
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API",
+                        [_fake_native_api("cmd.exe", ok=False)])
+    check("a failed name call is declined too",
+          portmap._native_process_info(45336) is None)
+
+
+def test_the_native_policy_gate_is_read_per_call_not_cached(monkeypatch):
+    """``_ALLOW_NATIVE_PROCESSES`` must gate every call, not just the first one.
+
+    This is a REGRESSION TEST, not a hypothetical: the first version of the handle
+    read checked the flag while BINDING the ctypes entry points and cached the
+    result, so a test switching the flag off afterwards was ignored and got real
+    machine processes back inside its fake world. Caching a policy decision fails in
+    both directions - bound while the flag was off, the native route would then stay
+    off for the rest of the process.
+    """
+    import os
+    from beantester import portmap
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", False)
+    check("the native read declines while the flag is off",
+          portmap._native_process_info(os.getpid()) is None)
+    monkeypatch.undo()
+    if sys.platform.startswith("win"):
+        check("...and answers again once it is back on",
+              portmap._native_process_info(os.getpid()) is not None)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="the handle read is Windows-only")
+def test_a_cold_binding_does_not_push_other_threads_onto_the_slow_path(monkeypatch):
+    """Threads arriving while the ctypes surface is being bound must WAIT, not degrade.
+
+    Two threads reach this from the first moments of a session - the watchdog warming
+    names and the resolver matching a target - so the bind window lands exactly where
+    the whole change exists to save time. Silently taking the psutil route there costs
+    9 ms a lookup instead of 0.03 ms, which is what was being fixed.
+
+    A regression test for a fault a LOCK DID NOT FIX. Publishing an "in progress"
+    marker in the shared slot defeated it invisibly: the fast path reads that slot
+    unlocked and ``False is not None``, so every other thread read it as "unavailable"
+    and returned without ever queueing on the lock. Measured before: exactly 200 of
+    1600 calls took the native route, 3 trials of 3 and then 5 of 5 - one thread's
+    worth, every time. After: 1600 of 1600, 5 trials of 5.
+    """
+    import os
+    import threading
+    from beantester import portmap
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API", [None])      # never bound yet
+    threads_n, per_thread = 8, 50
+    resolved, failures = [], []
+    barrier = threading.Barrier(threads_n)
+
+    def hammer():
+        barrier.wait()                    # everybody hits the cold slot together
+        try:
+            for _ in range(per_thread):
+                resolved.append(portmap._native_process_info(os.getpid()) is not None)
+        except Exception as exc:          # noqa: BLE001 - the point is to report it
+            failures.append(repr(exc))
+
+    workers = [threading.Thread(target=hammer) for _ in range(threads_n)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=30)
+
+    check("no thread raised while the surface was being bound", not failures,
+          f"({failures[:2]})")
+    check("every thread got an answer", len(resolved) == threads_n * per_thread,
+          f"({len(resolved)} of {threads_n * per_thread})")
+    check("and none of them was pushed onto the psutil path by the bind",
+          all(resolved), f"({sum(resolved)} of {len(resolved)} took the handle route)")
+
+
 # -- port resolution fails LOUDLY (for us), quietly (for the user) ---------- #
 #
 # All three of these used to swallow. An empty map, a blank process name and a
