@@ -17,19 +17,6 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ## [Unreleased]
 
-### Changed
-
-- **`internal_tools/` added to `.gitignore`** - a home for scripts kept between sessions
-  (measurement rigs, probes against the real driver, expensive diagnostics). Not shipped, never a
-  CI dependency, backed up by the owner separately; index and entry rule in
-  `internal_tools/README.md`. Only the `.gitignore` line is in this repo.
-  The alternative was the scratchpad, and the scratchpad does not survive a session: `PROJECT_NOTES`
-  rule 5 has been pointing at "`bench_ab.py` from that session's scratchpad" - a file that no longer
-  existed - so the same A/B rig kept being rebuilt without its interleaving or its drift canary.
-  **`tools/` is deliberately NOT covered by this and stays tracked**: `ci.yml` runs
-  `tools/ci_gui_render.py` on the Linux runner, so ignoring it would break the GUI render check on
-  a fresh clone. A script that becomes a CI dependency moves to `tools/`.
-
 ### BREAKING
 
 - **BREAKING:** **`load_config_file` rejects unknown keys** (`settings.py`), the same rule
@@ -184,6 +171,17 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   user hunting. Verified by mutation: disabling the two checks turns all three red.
 
 ### Changed
+
+- **`internal_tools/` added to `.gitignore`** - a home for scripts kept between sessions
+  (measurement rigs, probes against the real driver, expensive diagnostics). Not shipped, never a
+  CI dependency, backed up by the owner separately; index and entry rule in
+  `internal_tools/README.md`. Only the `.gitignore` line is in this repo.
+  The alternative was the scratchpad, and the scratchpad does not survive a session: `PROJECT_NOTES`
+  rule 5 has been pointing at "`bench_ab.py` from that session's scratchpad" - a file that no longer
+  existed - so the same A/B rig kept being rebuilt without its interleaving or its drift canary.
+  **`tools/` is deliberately NOT covered by this and stays tracked**: `ci.yml` runs
+  `tools/ci_gui_render.py` on the Linux runner, so ignoring it would break the GUI render check on
+  a fresh clone. A script that becomes a CI dependency moves to `tools/`.
 
 - **Coverage gate raised 80 -> 83** (convention 32). Measured with `COVERAGE_PROCESS_START` on
   2026-08-01: **87.43%**, up from 83.03% on 2026-07-21. The comment above `fail_under` now also
