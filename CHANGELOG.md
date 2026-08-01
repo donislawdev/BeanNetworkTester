@@ -45,6 +45,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The shared-port warning called your own target "another process".** Targeting `chrome` could
+  answer *"other processes have port 5353 open too (Spotify.exe, adb.exe, **chrome.exe**,
+  msedge.exe, svchost.exe)"* — listing the very program you were targeting among the strangers,
+  which reads as targeting being broken. It was not: a program like Chrome runs several processes,
+  and the tool could only see the one that owns the port in the system's table. Those are now
+  marked *"same program as your target"* instead of being listed as somebody else.
+- **...and it offered two outcomes when it already knew which one applied.** The old line said the
+  tool "may break theirs as well, or miss the target's" — but the system's socket table decides
+  that, and the tool reads it. Now it says the one that is true: either *"on this one port their
+  traffic gets broken too"* or *"the target's traffic on this one port will be skipped"*, naming
+  which program holds the port instead.
+- **Shared ports now say what they are.** `5353` on its own reads like a fault. It is mDNS — the
+  protocol programs use to find devices on your network, and it is *meant* to be open in several
+  programs at once. The warning now writes `5353 (mDNS)`, `1900 (SSDP)`, `67 (DHCP)` and so on,
+  taking the names from your own machine's services list. Ports it has no name for stay plain
+  numbers.
+
 - **The tool kept pausing itself and then warning you about WinDivert.** Every so often - on the
   first Start, then roughly every 30 seconds, and far more often on a busy machine - it spent up to
   half a second working out which program owns which connection. While that was going on it stopped

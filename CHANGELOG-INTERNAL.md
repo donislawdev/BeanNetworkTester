@@ -299,6 +299,41 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Fixed
 
+- **The shared-port warning named the target's own program among the "other processes".** Reported
+  from a real session targeting `chrome`. Not a regression from the handle-read change - verified
+  field for field on both checkouts (matched pids, target ports, shared ports, co-owners and the
+  full name map for all 37 socket pids were **identical**), and the warning itself predates it
+  (`a1336ad`, on master).
+  - **Cause.** `ports_shared_with_others` subtracts by PID (`targeting.py:379`), while
+    `ProcessTargeting.refresh` only ever enumerates pids that WON a port in the collapsed
+    `port -> pid` map (`targeting.py:117`). A second process of the same program that lost every
+    collapse is therefore invisible to targeting, survives the subtraction, and prints under the
+    target's own name. Reproduced against the real table: targeting `msedge` matched pid 55120
+    while pid 47664 - also `msedge.exe`, `in_collapsed_map=False` - came back as a stranger.
+  - Co-owners whose name matches one the target resolved are now marked inline
+    (`log.shared_port_same_app`) rather than listed as strangers. Marked, not hidden: they really
+    do hold the port, and they really are not in the target set.
+  - **The message also offered both outcomes when the tool already knew which applied.** The
+    collapse WINNER decides it: in the target set means the port is in scope and everything on it
+    is impaired (`log.shared_port_hits`), otherwise the target's own traffic there is skipped
+    (`log.shared_port_misses`, which names the holder). Measured on the same session: 5353 was
+    **not in the target's port set at all** (14 ports, none of them 5353), so only the second half
+    was ever true there.
+  - One line per port instead of one line for all of them, since the verdict is per port, plus a
+    single trailing `log.shared_port_footer`. The winner is read from ONE `snapshot()`, and a port
+    missing from it is skipped rather than described from a different walk.
+  - **`settings.describe_port`** turns `5353` into `5353 (mDNS)`. Names come from the machine's own
+    services file via `socket.getservbyport` (upper-cased - a services file is lower-case by
+    convention), so they cannot drift from what the OS believes. `_PORT_LABELS` overlays only what
+    that file leaves unhelpful, checked here: 5353 is absent from it on Windows (IANA / RFC 6762)
+    and DHCP is registered as `bootps`/`bootpc`.
+  - i18n: `log.targeting_shared_ports` replaced by `log.shared_port_hits`, `log.shared_port_misses`,
+    `log.shared_port_same_app`, `log.shared_port_footer` in `lang/en.json` + `lang/pl.json`.
+  - **Fixture repair that mattered.** The existing fakes had no `snapshot()` and no `names()`, and
+    `_warn_about_shared_ports` runs inside `crashlog.quiet` - so the new code would have raised,
+    been swallowed, produced zero lines, and left a test asserting `len(...) == 1` to fail for the
+    wrong reason. Both fakes now carry the full read surface.
+
 - **The tool was stalling its own capture thread and then blaming WinDivert for it.** Reported as a
   spurious warning on the first START ("WinDivert held a packet for 105 ms ... the driver's queue is
   backing up ... narrow the traffic filter"), which was true about the wait and wrong about the
@@ -413,6 +448,17 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 - `test_hot_path.py::OS_FUNCTIONS` gained `_native_process_info`. Without it the guard would have
   gone on passing while no longer watching the main resolve route - the failure mode where a test
   stays green because it stopped looking. Its docstring's call tally is re-measured.
+
+- **Four new guards in `test_processes.py` for the shared-port warning**, all verified by mutation
+  (5 mutants, 5 caught):
+  - `::test_the_targets_own_program_is_not_reported_as_a_stranger` - the fixture deliberately gives
+    pids 11 and 14 the SAME program name, because a fake that cannot tell them apart cannot catch
+    this at all.
+  - `::test_the_warning_says_which_of_the_two_outcomes_applies` - asserts each branch says its own
+    verdict AND does not also say the opposite.
+  - `::test_a_port_that_left_the_map_is_not_described_from_stale_data`
+  - `::test_known_ports_are_named_and_unknown_ones_are_left_alone` - shape plus the two overlay
+    entries, since the rest comes from the machine's services file.
 
 - **`test_failsafe.py::test_a_dead_capture_thread_fails_open` was racy and CI caught it** (green ~5/5
   locally, red on the runner). `_stop_locked` clears `_running` as its SECOND statement - deliberate,
