@@ -262,10 +262,92 @@ class W:
     def after_cancel(self, _job):
         return None
 
+    @property
+    def _w(self):
+        """Tk widget path. Real code passes it straight back into ``tk.call``."""
+        return self._path()
+
+    @property
+    def tk(self):
+        """The shared interpreter handle - every real widget points at the same one.
+
+        Explicit, and it MUST be, for the reason spelled out above ``winfo_exists``:
+        ``__getattr__`` answers an unknown attribute with a function, and a function
+        has no ``.call``. Production code that reaches THROUGH this attribute
+        (``root.tk.call("tk", "scaling", ...)`` in ``gui/scaling.py``) therefore blew
+        up and had the failure swallowed by ``crashlog`` - so Tk font scaling never
+        ran in a single GUI test, silently, for as long as the fake existed.
+        """
+        return INTERP
+
     def __getattr__(self, name):
         def _f(*a, **k):
             return None
         return _f
+
+
+class Interp:
+    """The Tcl interpreter behind ``widget.tk``: records calls, answers the few
+    that production actually reads back.
+
+    Anything not modelled returns ``""`` - Tcl's empty result - rather than
+    ``None``, because callers treat the result as a string.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def call(self, *args):
+        self.calls.append(tuple(args))
+        if args[:2] == ("grab", "current"):
+            holder = GRAB[0]
+            return holder._path() if isinstance(holder, W) else ("" if holder is None
+                                                                 else str(holder))
+        return ""
+
+    def reset(self):
+        self.calls.clear()
+
+
+INTERP = Interp()
+
+
+class Text(W):
+    """A text widget that keeps line accounting, so trimming can be tested.
+
+    Only what the app asks of it: ``insert``/``delete``/``index``/``get``. It models
+    the LINE COUNT (which is all ``index("end-1c")`` is read for - see
+    ``App._append_log_line``), not full Tk index arithmetic. Before this class the
+    log box was a bare ``W``, ``index()`` came back as ``None`` from ``__getattr__``,
+    and the ``.split(".")`` behind it raised into ``crashlog`` on every logged line:
+    the widget-side trim never ran in any test.
+    """
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.lines = [""]           # a fresh Tk Text already holds its final newline
+
+    def insert(self, _where, text):
+        parts = str(text).split("\n")
+        self.lines[-1] += parts[0]
+        self.lines.extend(parts[1:])
+
+    def index(self, _spec="end-1c"):
+        return f"{len(self.lines)}.0"
+
+    def delete(self, start="1.0", end=None):
+        if end in (None, "end"):
+            self.lines = [""]
+            return
+        try:
+            upto = int(str(end).split(".")[0]) - int(str(start).split(".")[0])
+        except (TypeError, ValueError):
+            return
+        if upto > 0:
+            self.lines = self.lines[upto:] or [""]
+
+    def get(self, _start="1.0", _end="end"):
+        return "\n".join(self.lines)
 
 
 class Root(W):
@@ -463,7 +545,7 @@ def install():
     widgets = dict(Tk=Root, Toplevel=Root, Frame=W, Label=W, Canvas=W, PhotoImage=W,
                    StringVar=Var, BooleanVar=Var, IntVar=Var, DoubleVar=Var,
                    Button=W, Entry=W, Checkbutton=W, LabelFrame=W, Scrollbar=W,
-                   Text=W, Listbox=W, Menu=Menu, PanedWindow=Paned,
+                   Text=Text, Listbox=W, Menu=Menu, PanedWindow=Paned,
                    TclError=TclError)
     tk = types.ModuleType("tkinter")
     for name, value in widgets.items():
@@ -480,7 +562,7 @@ def install():
     tk.ttk = ttk
 
     st = types.ModuleType("tkinter.scrolledtext")
-    st.ScrolledText = W
+    st.ScrolledText = Text
     sys.modules["tkinter.scrolledtext"] = st
 
     font = types.ModuleType("tkinter.font")

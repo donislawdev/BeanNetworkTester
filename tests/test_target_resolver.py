@@ -40,11 +40,16 @@ class _CountingTable:
     def snapshot(self):
         return dict(self.ports)
 
-    def name_of(self, pid):
+    def name_of(self, pid, cheap=False):
         return self._info.get(pid, ("", None))[0]
 
     def ancestors(self, pid, depth=8):
         return []
+
+    def warm_names(self):
+        """The watchdog calls this every tick; a double without it degrades the
+        engine silently (the exception is swallowed into crashlog)."""
+        return None
 
     # the engine's side of the PortTable surface (see _process_for / _pid_for)
     def refresh_if_stale(self, now=None, miss=False):

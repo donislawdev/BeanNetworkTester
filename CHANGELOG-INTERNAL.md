@@ -420,6 +420,31 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **Three test doubles had drifted from the interfaces they stand in for, and the suite was
+  recording it 809 times per run without anyone reading it.** `crashlog` writes every swallowed
+  exception to `crashes/crashes.ndjson` (convention 30), so the drift was fully visible - just
+  never looked at. Measured 2026-08-01 on a full green run; after this change the same run leaves
+  **6** entries, all of them faults the tests inject on purpose.
+  - `fake_tk.W.tk` is now an explicit shared `Interp` with a recording `call()`. It was reaching
+    `W.__getattr__`, which answers any unknown attribute with a function, and a function has no
+    `.call` - so `gui/scaling.py`'s `root.tk.call("tk", "scaling", dpi/72.0)` raised into
+    `crashlog` on every App build (x526) and **Tk font scaling never ran in a single GUI test**.
+    `Interp.call` answers `grab current` from the existing `GRAB` slot, which also puts
+    `tooltip._grab_active` back on its PRIMARY path instead of the `grab_current()` fallback.
+  - `fake_tk.Text` is a real class instead of an alias for bare `W`, modelling the line
+    accounting behind `insert`/`delete`/`index`/`get`. `App._append_log_line` reads
+    `index("end-1c").split(".")` to bound the WIDGET as well as the in-memory list; against the
+    old double `index()` returned `None` and the `.split` raised (x264), so the widget-side trim
+    never executed. Verified after the fix: 900 appends with `log_lines=500` leave 502 lines in
+    the widget.
+  - `warm_names()` added to the three port-table doubles (`test_target_resolver._CountingTable`
+    and both `FakeTable`s in `test_gui_state`), plus the `cheap=` keyword `PortTable.name_of`
+    actually takes. The watchdog calls `warm_names()` every tick; without it those tests ran
+    against a silently degraded engine - the exact mechanism the `warm_names` ADR is about.
+  This is the same class of bug the note already records for `winfo_exists`: production reaching
+  THROUGH an attribute of the double. The generalised rule (any attribute whose RESULT is called
+  must be explicit in the fake) is now in the note beside it.
+
 - **Four new guards in `test_processes.py` for the per-PID handle read**, filling a gap that had
   been open for as long as `ppid` has mattered: it feeds `PortTable.ancestors`, which is how
   `targeting.py` matches a process TREE, and every existing targeting test drives a FAKE table with
