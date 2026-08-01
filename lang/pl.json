@@ -109,6 +109,8 @@
   "dialogs.start_failed": "Nie udało się uruchomić",
   "dialogs.values_numbers": "Wartości muszą być liczbami.",
   "errors.bad_config_value": "Nieprawidłowa wartość pola '{field}' w pliku konfiguracji: {value}",
+  "errors.config_unknown_setting": "Nieznane ustawienie w pliku konfiguracji: {field}. Usuń je albo popraw pisownię.",
+  "errors.config_unknown_setting_hint": "Nieznane ustawienie w pliku konfiguracji: {field}. Czy chodziło o '{suggestion}'?",
   "errors.bad_filter_bounds": "Pole '{field}': '{term}' jest poza dozwolonym zakresem ({min}-{max}).",
   "errors.bad_filter_compare": "Pole '{field}': porównanie '{term}' wymaga liczby po operatorze.",
   "errors.bad_filter_compare_name": "Pole '{field}': operatory porównania (>, <, >=, <=) działają tylko z PID-em (liczbą), nie z nazwą procesu - '{term}'.",

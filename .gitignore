@@ -30,3 +30,10 @@ BeanNetworkTester-*.zip
 .claude/
 PROJECT_NOTES.md
 HISTORY_NOTES.md
+
+# Internal scripts kept between sessions: measurement rigs, probes, diagnostics.
+# Never shipped, never a CI dependency, backed up by the owner separately.
+# NOTE: `tools/` is a different thing and STAYS TRACKED - ci.yml runs
+# tools/ci_gui_render.py, so ignoring it would break the workflow on a fresh
+# clone. See internal_tools/README.md.
+internal_tools/

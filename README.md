@@ -690,7 +690,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--config FILE` / `--save-config FILE` | load / save settings (JSON, shared with the GUI) |
 | `--scenario FILE` `--loop` | a timeline scenario (JSON) and looping it |
 | `--seed N` | randomness seed - the same run can be repeated |
-| `--duration N` | **run time in seconds** (0 = until Ctrl+C). The same field is in the GUI ("Session") |
+| `--duration N` | **run time in seconds** (0 = until Ctrl+C, or until a `--scenario` timeline runs out). The same field is in the GUI ("Session") |
 | `--row-limit N` | a **GUI-only** setting: max rows in the tables (0 = no limit, default 50 000). In headless CLI (no window) it does nothing - it is only saved to the config file and takes effect when that config is opened in the GUI. The "Row limit" field's equivalent |
 | `--interval N` | how often to report, in seconds (must be > 0) |
 | `--log-conns` | print the observed connections at the end |
@@ -986,7 +986,18 @@ leaves a broken network on the agent.
 ```bat
 BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
 ```
-Code `0` = the file is valid. `3` = there is an error (with a readable message on stderr).
+Code `0` = the file is valid. `3` = there is an error (with a readable message on stderr). A
+misspelled setting counts as an error and says which key it is - it used to be dropped in silence,
+so the check passed and the run then went out without that setting.
+
+`--dry-run` checks the **settings**, not the machine: it never asks about Administrator rights or
+about the driver, so it answers `0` on a build agent that could not actually run a capture. That is
+deliberate - validating a config in one place and running it in another is normal. When you want
+both halves answered, run the pair:
+
+```bat
+BeanNetworkTester.exe --doctor && BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
+```
 
 ### 3. A short, repeatable run with an artifact
 
@@ -1037,7 +1048,10 @@ for normal operation.
 ## Gotchas (read before filing a bug)
 
 - **`--duration` is a safety net, not just convenience.** Without it a session lasts until
-  `Ctrl+C` / STOP. In CI **always** pass `--duration`.
+  `Ctrl+C` / STOP. In CI **always** pass `--duration`. The one exception is a scenario with a
+  timeline: `--scenario` with a file that does not loop and has more than one step now ends the
+  run when the scenario ends, and says so at the start. A looping or single-step scenario has no
+  end to stop at, so it warns and keeps going until you stop it.
 - **No traffic = a green run.** If the filter catches not a single packet, the program works
   correctly and exits with code `0`. Want that to be an error -> `--fail-on-no-traffic`.
 - **The traffic filter and duration take effect only from START** (as in the GUI): "Apply changes"

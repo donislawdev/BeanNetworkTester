@@ -143,6 +143,52 @@ def test_a_looping_scenario_keeps_running_past_its_duration(spy_apply):
     check("stop() actually stops the loop", not runner._thread.is_alive())
 
 
+def test_a_completed_timeline_reports_that_it_finished(spy_apply):
+    """The runner is the only thing that knows when a timeline is over.
+
+    The CLI used to have no way to ask: a non-looping scenario ended, the runner
+    thread exited, and the session ran on forever (printing "Scenario finished."
+    while doing exactly that). Deriving the end from ``scenario.duration`` on the
+    caller's side would be a SECOND reader of the same fact - and the tail
+    (``duration + 0.1``) lives here, so the two would drift on the first edit.
+    """
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    check("a runner that has not started has not finished", not runner.finished)
+    runner.start(FakeScenario(loop=False, duration=0.3), base_settings={})
+    _join(runner)
+    check("a completed non-looping timeline reports finished", runner.finished)
+
+
+def test_a_looping_runner_never_reports_finished(spy_apply):
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=True, duration=0.2), base_settings={})
+    try:
+        time.sleep(0.45)                      # well past the 0.2 s duration
+        check("a looping timeline never reports finished", not runner.finished)
+    finally:
+        runner.stop()
+        _join(runner)
+    check("and stopping it is still not 'finished'", not runner.finished)
+
+
+def test_a_runner_the_engine_shut_down_did_not_finish(spy_apply):
+    """"The engine went away" and "the timeline is over" are different endings.
+
+    Both end the runner's loop. Only the second one may end the session: if a
+    dead engine reported ``finished``, the CLI would report a clean
+    ``scenario_done`` for a run that actually faulted.
+    """
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=False, duration=5.0), base_settings={})
+    wait_until(lambda: bool(spy_apply))
+    engine.running = False
+    _join(runner)
+    check("an engine shutdown is not a finished timeline", not runner.finished)
+
+
 def test_the_runner_stops_when_the_engine_stops(spy_apply):
     engine = FakeEngine()
     runner = ScenarioRunner(engine)

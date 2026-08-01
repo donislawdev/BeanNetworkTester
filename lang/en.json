@@ -109,6 +109,8 @@
   "dialogs.start_failed": "Failed to start",
   "dialogs.values_numbers": "Values must be numbers.",
   "errors.bad_config_value": "Invalid value for '{field}' in the config file: {value}",
+  "errors.config_unknown_setting": "Unknown setting in the config file: {field}. Remove it or correct the spelling.",
+  "errors.config_unknown_setting_hint": "Unknown setting in the config file: {field}. Did you mean '{suggestion}'?",
   "errors.bad_filter_bounds": "Field '{field}': '{term}' is out of the allowed range ({min}-{max}).",
   "errors.bad_filter_compare": "Field '{field}': comparison '{term}' needs a number after the operator.",
   "errors.bad_filter_compare_name": "Field '{field}': comparison operators (>, <, >=, <=) work only with a PID (a number), not a process name - '{term}'.",

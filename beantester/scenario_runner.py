@@ -21,9 +21,16 @@ class ScenarioRunner:
         self.engine = engine
         self._stop = True
         self._thread = None
+        # Set by the runner thread, read by whoever owns the session. A plain
+        # bool on purpose (like ``_stop``): one writer, one transition, never
+        # back. It means ONE thing - the timeline ran out - and deliberately not
+        # "the runner is no longer running": ``stop()`` and a dead engine also
+        # end the loop, and neither of those is a scenario that completed.
+        self.finished = False
 
     def start(self, scenario, base_settings, log=lambda *_: None):
         self._stop = False
+        self.finished = False
         self._thread = threading.Thread(
             target=self._loop, args=(scenario, dict(base_settings), log),
             daemon=True)
@@ -59,6 +66,7 @@ class ScenarioRunner:
                     log(f"{T('log.scenario')} [{at:.0f}s]: {T('log.scenario_reset')}.")
             prev_t = t
             if not scenario.loop and t > scenario.duration + 0.1:
+                self.finished = True
                 log(T("log.scenario_finished"))
                 break
             time.sleep(0.1)

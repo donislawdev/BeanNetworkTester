@@ -4,6 +4,7 @@ The shape of a setting (type, label, bounds, section, profile scope) lives in
 ``fields.FIELD_DEFS`` - this module only turns raw user input into a validated
 settings dict and applies it to an engine.
 """
+import difflib
 import json
 import socket
 
@@ -409,9 +410,30 @@ def load_config_file(path):
         # A settings file that is a JSON ARRAY is not exotic: it is what anything
         # writing one-entry-per-line produces.
         raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+    # A name this build does not know used to be dropped in silence, which is the
+    # worst of the three possible answers: `{"loss": 10, "latancy": 300}` loaded
+    # clean, --dry-run called the file valid, and the run went out with latency 0.
+    # Nothing anywhere said so. ``scenario.py`` closed exactly this hole for its
+    # own keys; this is the same rule one file over, and this is the file people
+    # hand-write (the README has a recipe for validating them in a pipeline).
+    #
+    # The cost, stated plainly because it is real: a file from a NEWER build that
+    # carries a setting this one lacks now fails instead of loading the part it
+    # understands. That trade goes the other way for ``ui.json``, where unknown
+    # keys are kept on purpose - but that file is written by the program and read
+    # key by key, so a typo cannot happen and forward compatibility is the only
+    # thing at stake. Here a typo is the common case. Anything this tool wrote
+    # loads either way: ``save_config_file`` emits exactly the known key set.
+    unknown = [k for k in data if k not in DEFAULT_SETTINGS]
+    if unknown:
+        close = difflib.get_close_matches(unknown[0], DEFAULT_SETTINGS, n=1)
+        if len(unknown) == 1 and close:
+            raise ValueError(translate("errors.config_unknown_setting_hint", None,
+                                       field=unknown[0], suggestion=close[0]))
+        raise ValueError(translate("errors.config_unknown_setting", None,
+                                   field=", ".join(sorted(unknown))))
     s = dict(DEFAULT_SETTINGS)
-    s.update({k: _coerce_setting(k, v) for k, v in data.items()
-              if k in DEFAULT_SETTINGS})
+    s.update({k: _coerce_setting(k, v) for k, v in data.items()})
     return s
 
 

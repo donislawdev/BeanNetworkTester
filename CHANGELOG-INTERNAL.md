@@ -19,6 +19,89 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **`load_config_file` rejects unknown keys** (`settings.py`), the same rule
+  `scenario.py` already applies to step keys and settings names. Was
+  `s.update({... if k in DEFAULT_SETTINGS})` - a silent filter. Touches a frozen on-disk format
+  ("Kontrakty publiczne"), so it needs the owner's version bump.
+  New i18n keys in BOTH files: `errors.config_unknown_setting`,
+  `errors.config_unknown_setting_hint` (the latter used only when there is exactly one unknown key
+  and `difflib.get_close_matches` finds a near miss - `latancy` -> `latency`, which is the whole
+  failure mode this closes).
+  **The recorded counter-argument was checked before changing this, and it is about a different
+  file.** `CHANGELOG-INTERNAL` on the `ui.json` store says unknown keys are kept on purpose,
+  because dropping them "would silently discard state written by a newer version". That reasoning
+  holds THERE: `ui.json` is written by the program and read key by key, so a typo is impossible and
+  forward compatibility is the only thing at stake. The traffic config file is hand-written (README
+  recipe 2 exists to validate hand-written ones in a pipeline), so a typo is the common case and
+  silence is the expensive answer. The forward-compat cost is real and is stated in the public
+  changelog rather than glossed.
+  `save_config_file` emits exactly the `DEFAULT_SETTINGS` key set, so nothing this tool writes is
+  affected - guarded now by `::test_every_file_this_tool_writes_still_loads`, which is what keeps
+  that true when a setting is renamed or dropped.
+  Consumers swept (rule 2): `cli.py:205` (already wraps `ValueError` -> `CONFIG(3)`, so free) and
+  `gui/app.py:1280` (already inside `try/except Exception` -> `dialogs.show_error`, so the dialog
+  path is free too - but it got its own guard, since a hand-written file is most likely to be
+  opened there). Profiles do NOT go through this path (`gui/profiles.py` + `PROFILE_FILE`), so they
+  are untouched.
+  Tests: `test_settings_config_scenario.py::
+  test_a_misspelled_setting_in_a_config_file_is_an_error_not_a_silent_default` (REPLACES
+  `::test_config_file_unknown_keys_ignored`, which pinned the old behaviour - and whose own check
+  message already said "rejected" while the code ignored),
+  `::test_every_file_this_tool_writes_still_loads`;
+  `test_cli_runtime.py::test_dry_run_catches_a_misspelled_setting_in_a_config_file`;
+  `test_gui_file_actions.py::test_a_misspelled_setting_reaches_the_user_as_a_dialog`.
+
+- **BREAKING:** **a finished scenario ends the CLI run** (`stop_reason: "scenario_done"`, a new
+  value of an existing NDJSON field, so it needs the owner's version bump).
+  `ScenarioRunner.finished` is set on the timeline-complete branch only (`scenario_runner.py`),
+  and `BeanEngine.scenario_finished()` exposes it; `cli._report_loop` returns `"scenario_done"`
+  when `cfg["stop_on_scenario"]` is set. **The end of a timeline is ASKED OF THE RUNNER, not
+  recomputed from `Scenario.duration` in the CLI** - the tail past the last step (`duration + 0.1`)
+  lives in the runner, and a second reader of the same fact drifts on the first edit ("Jedno
+  zrodlo prawdy").
+  `finished` deliberately means *the timeline ran out* and NOT *the runner stopped*: `stop()` and a
+  dead engine also end that loop, and reporting either as `scenario_done` would dress a faulted run
+  up as a clean one. `cli._plan_the_end_of_the_scenario` decides and announces; it declines for a
+  looping scenario and for `duration == 0` (a single step at `at: 0` is settings, not a timeline,
+  and would otherwise end the session inside 0.1 s), warning in both cases. An injected engine
+  without `scenario_finished` (public `engine=` seam) falls back to the old behaviour but SAYS so
+  at debug level, because a silent fallback would quietly restore the hang.
+  Measured before: a two-step non-looping scenario with no `--duration` was still sampling when a
+  hard timeout killed it at 12 s (exit 124). After: `exit 0, reason=scenario_done`.
+  Note the detection inherits the report loop's wake-up granularity - the run ends at the first
+  wake AFTER the timeline, so up to `--interval` late. That bound is the sleep-cap item, not this
+  one.
+  New tests: `tests/test_scenario_runner.py::test_a_completed_timeline_reports_that_it_finished`,
+  `::test_a_looping_runner_never_reports_finished`,
+  `::test_a_runner_the_engine_shut_down_did_not_finish`;
+  `tests/test_cli_runtime.py::test_a_finished_scenario_ends_the_run_even_without_a_duration`,
+  `::test_an_explicit_duration_still_wins_over_the_scenario`,
+  `::test_a_scenario_with_no_timeline_does_not_cut_the_run_short`,
+  `::test_a_looping_scenario_runs_to_its_duration_not_to_its_timeline`,
+  `::test_a_scenario_that_cannot_end_the_run_says_so_up_front`,
+  `::test_the_loop_flag_takes_the_derived_ending_away_again` (``--loop`` is folded into
+  ``scen.loop`` BEFORE the end is planned, so reading the file's own flag instead of the effective
+  one would end a run the user asked to repeat),
+  `::test_an_engine_that_cannot_report_the_scenario_end_says_so`.
+  Those last two were written AFTER the code and so were never red; both were verified by mutation
+  instead. The second one paid for itself immediately: `_plan_the_end_of_the_scenario` used to log
+  the injected-engine case and then FALL THROUGH to the shared warning, telling the reader a
+  two-step file "has a single step, so there is no timeline". The branch is now an `if/elif/else`
+  where every reason is true for its case, and the test asserts the reason given is that one rather
+  than merely that some warning appeared. (Mutation also showed the two chunks composing: without
+  the guard the double raises `TypeError` into the new session handler and comes back as a coded
+  `RUNTIME` instead of a traceback.)
+  The CLI tests cannot use `FakeClock` (the runner reads the wall clock on its own thread), so they
+  run on real time with a budgeted `sleep` that raises `_NeverEnded` - a **`BaseException`**, since
+  the new session handler below catches `Exception` and would otherwise swallow the signal and make
+  a hang look like a clean `RUNTIME`. That is a hang turned into a named failure instead of a test
+  that stalls the suite.
+  Stability pass (convention/rule 8, the flag is read off-thread): 4.8M cold reads before any
+  runner exists - all `False`, no exceptions; 30 cycles x 8 concurrent readers - no within-runner
+  `True -> False`; runner swap and `stop_scenario` both leave `False`. (The first version of that
+  check counted transitions ACROSS runners and "found" hundreds of regressions - `start()` resets
+  the flag by design. The script was wrong, not the code.)
+
 - **BREAKING:** **`capture_narrowed` column in the statistics CSV.** New `App.CSV_SESSION_COLUMNS`
   (keyed by `session_info()` key, the way `CSV_COLUMNS` is keyed by counter key) and
   `_csv_session_value`, written between the timestamp and the counters. Booleans go out as
@@ -88,6 +171,17 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   user hunting. Verified by mutation: disabling the two checks turns all three red.
 
 ### Changed
+
+- **`internal_tools/` added to `.gitignore`** - a home for scripts kept between sessions
+  (measurement rigs, probes against the real driver, expensive diagnostics). Not shipped, never a
+  CI dependency, backed up by the owner separately; index and entry rule in
+  `internal_tools/README.md`. Only the `.gitignore` line is in this repo.
+  The alternative was the scratchpad, and the scratchpad does not survive a session: `PROJECT_NOTES`
+  rule 5 has been pointing at "`bench_ab.py` from that session's scratchpad" - a file that no longer
+  existed - so the same A/B rig kept being rebuilt without its interleaving or its drift canary.
+  **`tools/` is deliberately NOT covered by this and stays tracked**: `ci.yml` runs
+  `tools/ci_gui_render.py` on the Linux runner, so ignoring it would break the GUI render check on
+  a fresh clone. A script that becomes a CI dependency moves to `tools/`.
 
 - **Coverage gate raised 80 -> 83** (convention 32). Measured with `COVERAGE_PROCESS_START` on
   2026-08-01: **87.43%**, up from 83.03% on 2026-07-21. The comment above `fail_under` now also
@@ -310,6 +404,34 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Fixed
 
+- **`--dry-run`'s prose narrowed to what it actually checks.** The comment above it called it "the
+  one thing a CI/CD pipeline runs to find out whether the next command will work", and the success
+  line said "Configuration is valid" full stop. Measured with `is_admin()` patched false: exit `0`
+  from the preflight, exit `7` from the very next real run. **The behaviour was deliberately left
+  alone** - `_run_session` keeps the elevation and pydivert gates, because validating a config on a
+  build agent and running it elsewhere is a legitimate pattern that widening the check would break.
+  Only the sentence changed, plus the `--doctor` + `--dry-run` pair in both READMEs.
+  Guard: `test_cli_runtime.py::test_dry_run_says_what_it_did_not_check`.
+- **`run_cli` no longer lets an unforeseen exception escape as a traceback.** Convention 18 and the
+  `CliError` docstring both promise "never a raw traceback", and that held for the parse/validate
+  surface only: `test_cli_fuzz.py` runs every one of its cases under `--dry-run` ("pure contract
+  surface"), so the SESSION path - engine, threads, driver, report loop - had no guard at all.
+  Measured: a `RuntimeError` raised in `_report_loop` escaped `run_cli` with no `[bean] error:`
+  line, no `summary` record, and CPython's exit `1` (colliding with `RUNTIME`).
+  Two layers, deliberately, because they can do different amounts for the caller:
+  1. `except Exception` inside `_run_session` around the report loop - the engine is still alive
+     and the counters readable, so the run sets `RUNTIME`/`"fault"` and **still emits a complete
+     `summary`**, instead of leaving a truncated NDJSON file;
+  2. `except Exception` in `run_cli` as the last resort, for everything outside the session
+     (config load, building the result, a bug in this module) where nothing can be summarised.
+  Both go through `crashlog.record` (convention 30 - the only sanctioned swallow). `CliError` is a
+  `SystemExit`, so it passes both handlers untouched to its own, as before. The outer message names
+  its PHASE ("while finishing the run") because a fault in something the summary also needs trips
+  both handlers, and two identical lines read as two separate bugs.
+  New tests: `tests/test_cli_runtime.py::
+  test_an_unexpected_session_fault_is_a_coded_exit_with_a_full_summary` (asserts the complete
+  summary and `stop_reason == "fault"`) and `::test_a_fault_outside_the_session_is_still_a_coded_
+  exit` (asserts the two messages are distinguishable).
 - **The shared-port warning named the target's own program among the "other processes".** Reported
   from a real session targeting `chrome`. Not a regression from the handle-read change - verified
   field for field on both checkouts (matched pids, target ports, shared ports, co-owners and the

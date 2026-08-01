@@ -3,6 +3,8 @@
 Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
+import json
+
 from beantester import BeanEngine
 from fakes import check
 
@@ -92,18 +94,66 @@ def test_apply_settings_bad_schedule_fallback():
     check("apply: remaining settings applied despite the error", abs(sh.core.loss - 0.05) < 1e-9)
 
 
-def test_config_file_unknown_keys_ignored():
-    from beantester import load_config_file, DEFAULT_SETTINGS
-    import tempfile, os as _os, json as _json
-    path = _os.path.join(tempfile.gettempdir(), "ns_cfg_extra.json")
-    with open(path, "w", encoding="utf-8") as f:
-        _json.dump({"loss": 7, "nieznany_klucz": 123, "evil": "x"}, f)
-    loaded = load_config_file(path)
-    _os.remove(path)
-    check("config: unknown keys rejected",
-          "nieznany_klucz" not in loaded and "evil" not in loaded, f"({sorted(loaded)})")
-    check("config: missing keys filled with defaults",
+def test_a_misspelled_setting_in_a_config_file_is_an_error_not_a_silent_default(tmp_path):
+    """A typo used to be dropped in silence - the worst possible outcome.
+
+    ``{"loss": 10, "latancy": 300}`` loaded clean, ``--dry-run`` answered
+    "Configuration is valid", and the run then went out with latency 0. In a
+    pipeline that is a green job that impaired less than it was asked to, and
+    nothing anywhere says so. The scenario loader closed exactly this hole for
+    step keys and settings names; the config file is the same rule one file over,
+    and it is the one people hand-write (README recipe 2 exists to validate them).
+
+    This REPLACES ``test_config_file_unknown_keys_ignored``, which pinned the old
+    behaviour - and whose own check message already called it "rejected" while
+    the code was ignoring it.
+    """
+    from beantester import DEFAULT_SETTINGS, load_config_file
+    path = tmp_path / "typo.json"
+    path.write_text(json.dumps({"loss": 10, "latancy": 300}), encoding="utf-8")
+    raised = ""
+    try:
+        load_config_file(str(path))
+    except ValueError as e:
+        raised = str(e)
+    check("config: a misspelled setting is an error", raised, "(loaded clean)")
+    check("config: the error names the offending key", "latancy" in raised,
+          f"({raised!r})")
+    check("config: and points at the key that was meant", "latency" in raised,
+          f"({raised!r})")
+
+    many = tmp_path / "many.json"
+    many.write_text(json.dumps({"loss": 7, "zzz": 1, "evil": "x"}), encoding="utf-8")
+    raised = ""
+    try:
+        load_config_file(str(many))
+    except ValueError as e:
+        raised = str(e)
+    check("config: every unknown key is listed, not just the first",
+          "zzz" in raised and "evil" in raised, f"({raised!r})")
+
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps({"loss": 7}), encoding="utf-8")
+    loaded = load_config_file(str(good))
+    check("config: a valid partial file still fills the rest with defaults",
           set(loaded) == set(DEFAULT_SETTINGS) and loaded["loss"] == 7)
+
+
+def test_every_file_this_tool_writes_still_loads(tmp_path):
+    """The strictness above must never reject the tool's own output.
+
+    ``save_config_file`` writes exactly the ``DEFAULT_SETTINGS`` key set, so this
+    holds by construction today - and this test is what keeps it holding when a
+    setting is renamed or dropped, which is the one way the new rule could bite
+    a user who did nothing wrong.
+    """
+    from beantester import (DEFAULT_SETTINGS, load_config_file,
+                            save_config_file)
+    path = str(tmp_path / "written.json")
+    save_config_file(path, dict(DEFAULT_SETTINGS))
+    loaded = load_config_file(path)
+    check("config: a file this tool wrote round-trips",
+          set(loaded) == set(DEFAULT_SETTINGS), f"({sorted(loaded)})")
 
 
 def test_load_missing_files_raise():

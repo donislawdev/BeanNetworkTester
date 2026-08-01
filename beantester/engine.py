@@ -515,6 +515,19 @@ class BeanEngine:
         if self._scenario_runner is not None:
             self._scenario_runner.stop()
 
+    def scenario_finished(self):
+        """True once a non-looping scenario has played its whole timeline.
+
+        The end of a timeline is the runner's fact (it owns the tail past the
+        last step), so callers ask instead of recomputing it from
+        ``Scenario.duration`` - a second reader of the same value drifts on the
+        first edit. False when there is no scenario, when it loops, and when the
+        runner ended for any other reason (``stop()``, or this engine going
+        down): those are endings, but not a scenario that completed.
+        """
+        runner = self._scenario_runner
+        return bool(runner is not None and runner.finished)
+
     # -- statistics / connection log ----------------------------------------- #
     def reset_stats(self):
         with self._slock:

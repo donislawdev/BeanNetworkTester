@@ -7,6 +7,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### BREAKING
 
+- **BREAKING:** **a misspelled setting in a config file is now an error.** `{"loss": 10, "latancy":
+  300}` used to load without a word: `--dry-run` answered *"Configuration is valid"*, exit `0`, and
+  the run then went out with **no latency at all**. In a pipeline that is a green job that impaired
+  less than it was told to, and nothing anywhere says so. An unknown setting is now a `config` (`3`)
+  error naming the key - and where there is an obvious near miss it says so: *"Unknown setting in
+  the config file: latancy. Did you mean 'latency'?"* This is the rule scenario files already
+  follow.
+  **Any file this program saved keeps loading** (`--save-config` writes exactly the settings it
+  knows). The one file that will now be refused is a hand-written one with a name this build does
+  not recognise - including, and this is the cost of the change, a config written by a **newer**
+  version that has a setting this one does not. The message names the key, so removing it is
+  enough.
+
+- **BREAKING:** **a scenario that ends now ends the run.** `--scenario` with a file that does not
+  loop and has a timeline (more than one step) used to print "Scenario finished." and then keep
+  the session going forever: without `--duration` there was nothing left to stop it. In a pipeline
+  that is a job that hangs to its own timeout, exits with a code this tool never produced, writes
+  no `summary` record, and leaves the WinDivert driver loaded. Such a run now stops when the
+  scenario does (`stop_reason: "scenario_done"`), and says so at the start: *"No --duration: this
+  run will stop when the scenario ends (about 85s)."*
+  **`--duration` still wins wherever you pass it**, so any command that already had one behaves
+  exactly as before. Two kinds of scenario have no end to derive - a looping one, and a
+  single-step one (which is settings, not a timeline) - and those keep running until you stop
+  them, but now say so instead of leaving you to find out.
+
 - **BREAKING:** **the statistics CSV has a new `capture_narrowed` column**, right after `time`.
   It says whether that row was measured with "Capture only the targeted traffic" in effect - and
   without it two rows under the same header could count completely different traffic with no way
@@ -45,6 +70,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--dry-run` no longer sounds like it checked more than it did.** It validates the settings; it
+  never asks whether this machine could actually run a capture, so on a box without Administrator
+  rights it answered *"Configuration is valid"* about a command that then exits `7`. Widening the
+  check would have broken a normal habit - validating a config on a build agent and running it
+  somewhere else - so the sentence changed instead: the success line now says it checked the
+  settings and not the machine, and points at `--doctor` for the other half. Both READMEs show the
+  pair.
+- **An unforeseen error during a run is now an exit code, not a stack trace.** The command line
+  promises that every way of ending has its own number - and it kept that promise everywhere
+  except the one place where a session actually runs. An unexpected failure inside the reporting
+  loop escaped as a raw Python traceback with exit code `1`, which is also the code for "the
+  session could not start", so a pipeline could not tell an internal bug from a driver that would
+  not open. Now it is reported as `runtime` (`1`) with a line saying what happened, **and the run
+  still writes its complete `summary` record** - a `--format json` file no longer ends mid-stream.
+  A failure while building the final report (rarer, and it takes the counters with it) says so in
+  its own words, so one fault never reads like two.
 - **The shared-port warning called your own target "another process".** Targeting `chrome` could
   answer *"other processes have port 5353 open too (Spotify.exe, adb.exe, **chrome.exe**,
   msedge.exe, svchost.exe)"* - listing the very program you were targeting among the strangers,

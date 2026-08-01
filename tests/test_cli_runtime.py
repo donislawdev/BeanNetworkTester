@@ -11,6 +11,7 @@ timing tests run in microseconds instead of seconds.
 import io
 import json
 import os
+import time
 
 from beantester import cli as cli_module
 from beantester import exitcodes
@@ -375,6 +376,281 @@ def test_exit_code_runtime_without_pydivert():
           "WinDivert could not be opened" in err.getvalue(), f"({err.getvalue()!r})")
 
 
+class _NeverEnded(BaseException):
+    """The report loop outlived its budget: this run does not end on its own.
+
+    ``BaseException``, not ``Exception``, and for a reason worth keeping: the
+    session now catches ``Exception`` to turn an unforeseen fault into a coded
+    exit (see the fault tests below), which swallowed this signal and made the
+    budget look like a clean RUNTIME. Cancellation-shaped exceptions have to
+    travel the way ``KeyboardInterrupt`` does - straight out.
+    """
+
+
+def _budgeted_sleep(budget=100, nap=0.05):
+    """A real sleep that turns "this run never ends" into a NAMED failure.
+
+    The scenario runner lives on its own thread and reads the wall clock, so the
+    ``FakeClock`` used elsewhere in this file cannot drive it. Real time it is -
+    but the regression under test is an INFINITE run, and a test that hangs
+    reports nothing. Raising ``_NeverEnded`` makes "it never ended" an outcome a
+    test can assert in either direction: a failure where the run should stop, and
+    an expectation where it genuinely cannot.
+    """
+    calls = [0]
+
+    def sleep(seconds):
+        calls[0] += 1
+        if calls[0] > budget:
+            raise _NeverEnded(f"{budget} report-loop naps and still going")
+        time.sleep(min(seconds, nap))
+    return sleep
+
+
+def _scenario_file(tmp_path, name, payload):
+    path = tmp_path / name
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return str(path)
+
+
+def test_a_finished_scenario_ends_the_run_even_without_a_duration(tmp_path):
+    """Regression: it printed "Scenario finished." and then ran forever.
+
+    MEASURED 2026-08-01 before the fix: a two-step, non-looping scenario with no
+    --duration was still reporting samples when a hard timeout killed it at 12 s
+    (exit 124 - a code from `timeout`, not from this tool). In CI that is a job
+    that hangs to its timeout, with no summary record and, on a real run, with
+    the driver still loaded.
+    """
+    scen = _scenario_file(tmp_path, "two-steps.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--simulate", "--scenario", scen, "--interval", "1",
+                    "--format", "json"],
+                   sleep=_budgeted_sleep(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    check("scenario: a finished timeline ends the run", code == exitcodes.OK,
+          f"(code={code})")
+    check("scenario: the last record is the summary",
+          records and records[-1]["event"] == "summary",
+          f"({[r['event'] for r in records]})")
+    check("scenario: and it says WHY the run ended",
+          records[-1]["stop_reason"] == "scenario_done",
+          f"({records[-1]['stop_reason']!r})")
+
+
+def test_an_explicit_duration_still_wins_over_the_scenario(tmp_path):
+    """--duration is the user speaking; a derived end must never override it."""
+    scen = _scenario_file(tmp_path, "long.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 30, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--simulate", "--scenario", scen, "--duration", "0.3",
+                    "--interval", "1", "--format", "json"],
+                   sleep=_budgeted_sleep(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    check("scenario: --duration wins", code == exitcodes.OK, f"(code={code})")
+    check("scenario: and the reason is the deadline, not the timeline",
+          records[-1]["stop_reason"] == "duration",
+          f"({records[-1]['stop_reason']!r})")
+
+
+def test_a_scenario_with_no_timeline_does_not_cut_the_run_short(tmp_path):
+    """A one-step scenario is settings, not a timeline - it must not end the run.
+
+    Degenerate but legal input: ``Scenario.duration`` is the ``at`` of the last
+    step, so a single step at 0 has duration 0 and the runner reports finished
+    within ~0.1 s. Ending the session there would turn "apply these settings"
+    into a run that exits immediately - a new bug in place of the old one.
+    """
+    scen = _scenario_file(tmp_path, "one-step.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}}]})
+    out, err = io.StringIO(), io.StringIO()
+    run_cli(["--simulate", "--scenario", scen, "--duration", "0.4",
+             "--interval", "1", "--format", "json"],
+            sleep=_budgeted_sleep(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    check("scenario: a timeline-less scenario runs to the deadline",
+          records[-1]["stop_reason"] == "duration",
+          f"({records[-1]['stop_reason']!r})")
+
+
+def test_a_looping_scenario_runs_to_its_duration_not_to_its_timeline(tmp_path):
+    """A loop passes its ``duration`` over and over; that must not end the run."""
+    scen = _scenario_file(tmp_path, "looping.json", {"loop": True, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    run_cli(["--simulate", "--scenario", scen, "--duration", "0.5",
+             "--interval", "1", "--format", "json"],
+            sleep=_budgeted_sleep(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    check("scenario: a looping run ends on its deadline",
+          records[-1]["stop_reason"] == "duration",
+          f"({records[-1]['stop_reason']!r})")
+
+
+def test_the_loop_flag_takes_the_derived_ending_away_again(tmp_path):
+    """``--loop`` turns a finite file into an endless one, and it must be read.
+
+    ``_run_session`` does ``scen.loop = scen.loop or cfg["loop"]`` BEFORE the end
+    is planned, so a file that would otherwise stop the run must stop stopping it
+    the moment the flag is passed. Easy to get wrong by reading the file's own
+    ``loop`` instead of the effective one, and the failure would be a run that
+    ends while the user asked for it to repeat.
+    """
+    import pytest
+
+    scen = _scenario_file(tmp_path, "finite.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    with pytest.raises(_NeverEnded):
+        run_cli(["--simulate", "--scenario", scen, "--loop", "--interval", "1"],
+                sleep=_budgeted_sleep(budget=12), out=out, err=err)
+    check("scenario: --loop takes the derived ending away",
+          "will not stop the run on its own" in err.getvalue(),
+          f"({err.getvalue()!r})")
+
+
+def test_an_engine_that_cannot_report_the_scenario_end_says_so(tmp_path):
+    """``engine=`` is a public seam, so the double may predate this feature.
+
+    Falling back to the old behaviour is right - the alternative is crashing on
+    somebody's test harness - but falling back QUIETLY would restore the hang
+    with nothing to explain it. The code claims it reports the fallback; this is
+    that claim being checked rather than believed.
+
+    The reason has to be the RIGHT one, too. The first version of this branch
+    fell through to the shared warning and told the user the scenario "has a
+    single step, so there is no timeline" - about a two-step file with a
+    perfectly good timeline. True-sounding prose next to correct code is the
+    failure this project spends the most effort on, and a test that only asserted
+    "some warning appeared" walked straight past it.
+    """
+    import pytest
+
+    from beantester.engine import BeanEngine
+
+    class _OlderDouble(BeanEngine):
+        scenario_finished = None          # an engine from before this existed
+
+    scen = _scenario_file(tmp_path, "finite.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    with pytest.raises(_NeverEnded):
+        run_cli(["--simulate", "--scenario", scen, "--interval", "1"],
+                sleep=_budgeted_sleep(budget=12), engine=_OlderDouble(),
+                out=out, err=err)
+    log = err.getvalue()
+    check("scenario: an engine that cannot answer falls back to the old ending",
+          "cannot report when a scenario ends" in log, f"({log!r})")
+    check("scenario: and the reason given is that one, not a made-up one",
+          "single step" not in log and "it repeats" not in log, f"({log!r})")
+
+
+def test_a_scenario_that_cannot_end_the_run_says_so_up_front(tmp_path):
+    """Half the fix for the hang is honesty about the half that still hangs.
+
+    A looping scenario has no end to derive and a one-step one has no timeline,
+    so with no --duration these runs genuinely go on forever - as they always
+    have. What was missing is anybody saying so: the run printed "Running.
+    Ctrl+C to stop." and left the reader to find out. ``_NeverEnded`` here is the
+    EXPECTED outcome, which is exactly why the warning has to be there.
+    """
+    import pytest
+
+    for name, payload in (
+            ("loops.json", {"loop": True, "steps": [
+                {"at": 0, "settings": {"loss": 5}},
+                {"at": 0.2, "settings": {"loss": 50}}]}),
+            ("single.json", {"loop": False, "steps": [
+                {"at": 0, "settings": {"loss": 5}}]})):
+        scen = _scenario_file(tmp_path, name, payload)
+        out, err = io.StringIO(), io.StringIO()
+        with pytest.raises(_NeverEnded):
+            run_cli(["--simulate", "--scenario", scen, "--interval", "1"],
+                    sleep=_budgeted_sleep(budget=12), out=out, err=err)
+        check(f"scenario: {name} warns that the run will not stop on its own",
+              "will not stop the run on its own" in err.getvalue(),
+              f"({err.getvalue()!r})")
+
+
+# --- an unforeseen fault is still a coded exit ------------------------------- #
+
+
+def test_an_unexpected_session_fault_is_a_coded_exit_with_a_full_summary():
+    """``cli.py`` promises "never a raw traceback"; the session path had no net.
+
+    ``test_cli_fuzz.py`` proves it for the PARSING surface only - every case
+    there runs under --dry-run. MEASURED 2026-08-01: a RuntimeError raised inside
+    the report loop escaped ``run_cli`` entirely - no ``[bean] error:`` line, no
+    summary record, a Python traceback and CPython's exit 1 (which collides with
+    RUNTIME, so a job could not even tell the two apart).
+    """
+    from beantester.engine import BeanEngine
+
+    class _FaultsMidRun(BeanEngine):
+        def __init__(self):
+            super().__init__()
+            self._passes = 0
+
+        def is_running(self):
+            self._passes += 1
+            if self._passes > 3:
+                raise RuntimeError("driver read failed mid-run")
+            return super().is_running()
+
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--simulate", "--duration", "0", "--interval", "1",
+                    "--format", "json"], sleep=clock.sleep, clock=clock,
+                   engine=_FaultsMidRun(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    check("fault: an unforeseen error is RUNTIME, not a traceback",
+          code == exitcodes.RUNTIME, f"(code={code})")
+    check("fault: it says what happened, on stderr",
+          "driver read failed mid-run" in err.getvalue(), f"({err.getvalue()!r})")
+    check("fault: the data channel still gets a complete summary",
+          records and records[-1]["event"] == "summary"
+          and "counters" in records[-1],
+          f"({[r['event'] for r in records]})")
+    check("fault: and the summary says the run faulted",
+          records[-1]["stop_reason"] == "fault", f"({records[-1]['stop_reason']!r})")
+
+
+def test_a_fault_outside_the_session_is_still_a_coded_exit():
+    """The last-resort backstop: even the summary path itself may not crash out.
+
+    Distinct from the test above: there the session is alive and can still be
+    summarised. Here the failure is in building the result, so there is nothing
+    to report - but a raw traceback and an uncoded exit are still forbidden.
+    """
+    from beantester.engine import BeanEngine
+
+    class _FaultsOnSummary(BeanEngine):
+        def stats_snapshot(self):
+            raise RuntimeError("counters went away")
+
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--simulate", "--duration", "1", "--interval", "1"],
+                   sleep=clock.sleep, clock=clock, engine=_FaultsOnSummary(),
+                   out=out, err=err)
+    check("fault: a broken summary path is RUNTIME, not a traceback",
+          code == exitcodes.RUNTIME, f"(code={code})")
+    check("fault: and it still names the cause",
+          "counters went away" in err.getvalue(), f"({err.getvalue()!r})")
+    # One fault, two failed steps (the loop, then the report it needed the same
+    # broken call for). Both get a line, and the lines have to be TELLABLE APART
+    # or they read as two separate bugs.
+    lines = [l for l in err.getvalue().splitlines() if "unexpected failure" in l]
+    check("fault: each failed step is described as itself",
+          len(set(lines)) == len(lines), f"({lines})")
+
+
 def test_exit_code_interrupted_and_terminated():
     def boom_interrupt(_s):
         raise KeyboardInterrupt()
@@ -480,6 +756,42 @@ def test_dry_run_validates_without_starting_anything():
 
     code, _, _ = cli(["--dry-run", "--dst-ip", "10.0.0.1-2001:db8::1"])
     check("--dry-run: an invalid config still fails", code == exitcodes.CONFIG)
+
+
+def test_dry_run_catches_a_misspelled_setting_in_a_config_file(tmp_path):
+    """The preflight's whole job: find out whether the next command will work.
+
+    MEASURED before: ``{"loss": 10, "latancy": 300}`` passed --dry-run with
+    "Configuration is valid" and exit 0, and the real run then went out with
+    latency 0 - a green pipeline that impaired less than it was told to.
+    """
+    path = tmp_path / "typo.json"
+    path.write_text(json.dumps({"loss": 10, "latancy": 300}), encoding="utf-8")
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--dry-run", "--config", str(path)], out=out, err=err)
+    check("preflight: a typo in the config file is CONFIG(3)",
+          code == exitcodes.CONFIG, f"(code={code})")
+    check("preflight: and the message names the key",
+          "latancy" in err.getvalue(), f"({err.getvalue()!r})")
+    check("preflight: a failed check writes nothing to the data channel",
+          not out.getvalue().strip(), f"({out.getvalue()!r})")
+
+
+def test_dry_run_says_what_it_did_not_check():
+    """It validates the CONFIGURATION; it is documented as answering more.
+
+    MEASURED: with ``is_admin()`` false, --dry-run returns 0 and says
+    "Configuration is valid" while the very next real run exits PERMISSION(7).
+    Widening the check would break validating a config on a build box and running
+    it elsewhere, so the honest fix is the sentence: say which half was checked
+    and name the command that does the other half.
+    """
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--dry-run", "--loss", "10"], out=out, err=err)
+    check("preflight: a good config is still OK", code == exitcodes.OK,
+          f"(code={code})")
+    check("preflight: the success line points at --doctor for the environment",
+          "--doctor" in err.getvalue(), f"({err.getvalue()!r})")
 
 
 def test_print_config_dumps_the_effective_settings():
