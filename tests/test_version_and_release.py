@@ -132,3 +132,128 @@ def test_breaking_sections_come_first():
 
         check(f"{name}: every BREAKING section comes first in its version",
               not problems, f"({problems})")
+
+
+# --- the release itself, not the code in it --------------------------------- #
+#
+# Everything above guards the tree. These three guard the ACT of releasing, which
+# until 0.4.0 had no mechanical enforcement at all: the rules existed in prose
+# ("the owner closes a version by setting VERSION.txt", "the version in
+# release.yml and in ci.yml's build job must be the SAME") and three of them had
+# already been broken in practice. Prose is not a guard.
+
+
+CHANGELOG_FILES = ("CHANGELOG.md", "CHANGELOG-INTERNAL.md")
+DATED_VERSION_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\]\s+-\s+\d{4}-\d{2}-\d{2}\b")
+
+
+def _versions_in(name):
+    """-> {heading -> [section headings]} for every `## [...]` block."""
+    path = os.path.join(ROOT, name)
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    blocks, current = {}, None
+    for line in lines:
+        if line.startswith("## ["):
+            current = line.strip()
+            blocks[current] = []
+        elif line.startswith("### ") and current:
+            blocks[current].append(line.strip())
+    return blocks
+
+
+def test_version_txt_has_a_dated_section_in_both_changelogs():
+    """VERSION.txt must name a released, DATED section in both changelogs.
+
+    The failure this closes is silent by construction: `release.yml` checks the
+    tag against VERSION.txt and nothing else, so a version bumped without its
+    changelog section being opened and dated publishes a release whose notes
+    describe a different version. Nothing on the way there is red.
+
+    It holds during ordinary development too, because VERSION.txt carries the
+    LAST released version while new entries collect under [Unreleased] - so this
+    is safe to run on every commit, not only at release time.
+    """
+    version = _version_txt()
+    for name in CHANGELOG_FILES:
+        headings = [h for h in _versions_in(name) if DATED_VERSION_RE.match(h)]
+        match = [h for h in headings
+                 if DATED_VERSION_RE.match(h).group(1) == version]
+        check(f"{name}: VERSION.txt {version} has a dated `## [{version}] - YYYY-MM-DD` section",
+              len(match) == 1, f"(found {match or headings[:3]})")
+
+
+def test_the_mutable_changelog_sections_have_no_duplicate_headings():
+    """One `### Added` per version, not three.
+
+    Scope is deliberate and narrow:
+
+    * only `CHANGELOG.md`, because `CHANGELOG-INTERNAL.md` is a chronological
+      technical log whose headings carry information a type vocabulary cannot
+      (`### ADR 2026-07-29: Nuitka ...`), and normalising those would delete
+      content;
+    * only the sections still MUTABLE - `[Unreleased]` and the one matching
+      VERSION.txt. Older versions are published release notes: `[0.3.0]` does
+      carry a duplicate `### Changed`, and rewriting notes people have already
+      read is worse than the duplicate.
+
+    Why it exists: the duplicates were merged by hand twice (commits `61601ad`,
+    `0aaa86a`) and came back both times, because the only structural guard
+    (`test_breaking_sections_come_first`) builds the section list and then looks
+    at exactly one index of it.
+    """
+    version = _version_txt()
+    blocks = _versions_in("CHANGELOG.md")
+    mutable = [h for h in blocks
+               if h == "## [Unreleased]"
+               or (DATED_VERSION_RE.match(h)
+                   and DATED_VERSION_RE.match(h).group(1) == version)]
+    check("CHANGELOG.md: there is a mutable section to check", bool(mutable),
+          "(neither [Unreleased] nor the VERSION.txt version was found)")
+
+    for heading in mutable:
+        sections = blocks[heading]
+        dupes = sorted({s for s in sections if sections.count(s) > 1})
+        check(f"CHANGELOG.md {heading}: no section heading appears twice",
+              not dupes, f"({dupes})")
+
+        unknown = sorted(set(sections) - {"### BREAKING", "### Added", "### Changed",
+                                          "### Fixed", "### Removed", "### Docs"})
+        check(f"CHANGELOG.md {heading}: only convention 39's section names",
+              not unknown, f"({unknown})")
+
+
+def test_ci_and_release_freeze_the_same_python():
+    """PyInstaller bakes the interpreter into the bundle, so `ci.yml`'s build job
+    and `release.yml` must use the SAME one - otherwise CI smoke-tests one
+    artefact and users download another.
+
+    That sentence was in PROJECT_NOTES and nothing enforced it. Parsed by line
+    scan rather than a YAML library on purpose: PyYAML is not in
+    requirements-dev.txt, so importing it would make this test an error on a
+    fresh CI checkout. The scan FAILS when it cannot find what it expects - a
+    guard that silently passes when the file moves under it is not a guard.
+    """
+    def python_versions(path, inside_job=None):
+        with open(os.path.join(ROOT, ".github", "workflows", path),
+                  encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        if inside_job is not None:
+            starts = [i for i, ln in enumerate(lines)
+                      if re.match(r"^  [A-Za-z0-9_-]+:\s*$", ln)]
+            wanted = [i for i in starts if lines[i].strip() == f"{inside_job}:"]
+            check(f"{path}: the {inside_job!r} job is still there", len(wanted) == 1,
+                  f"(jobs found: {[lines[i].strip() for i in starts]})")
+            begin = wanted[0]
+            after = [i for i in starts if i > begin]
+            lines = lines[begin:after[0] if after else len(lines)]
+        found = re.findall(r'python-version:\s*"?([0-9][0-9.]*)"?', "\n".join(lines))
+        check(f"{path}: a literal python-version is declared", bool(found),
+              "(none found - did the key move or become a variable?)")
+        return set(found)
+
+    release = python_versions("release.yml")
+    build = python_versions("ci.yml", inside_job="build")
+    check("release.yml freezes exactly one Python", len(release) == 1, f"({release})")
+    check("ci.yml's build job and release.yml freeze the SAME Python",
+          release == build, f"(release={release} ci-build={build})")

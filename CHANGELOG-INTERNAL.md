@@ -996,6 +996,29 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   carries a few lines above - complete with the comment "Wait for the promise, not for the flag".
   That test was fixed after CI caught the same shape; this one was never given the same treatment.
 
+- **Three guards on the ACT of releasing, in `tests/test_version_and_release.py`.** The tree was
+  heavily guarded and the release was not: every rule about it lived in prose, and three of them
+  had already been broken in practice (see the `### CI` entry below and the folded `[Unreleased]`
+  block this version opens with).
+  - `::test_version_txt_has_a_dated_section_in_both_changelogs` - VERSION.txt must name a
+    `## [x.y.z] - YYYY-MM-DD` section in both files. Safe to run on every commit because
+    VERSION.txt carries the LAST released version while new entries collect under `[Unreleased]`.
+  - `::test_the_mutable_changelog_sections_have_no_duplicate_headings` - one `### Added` per
+    version, and only convention 39's names. Scoped to `CHANGELOG.md` and to the sections still
+    mutable (`[Unreleased]` and the VERSION.txt one): this file's headings carry information a type
+    vocabulary cannot hold, and `[0.3.0]` is a published release note whose duplicate `### Changed`
+    is not worth rewriting. The duplicates had been merged by hand twice (`61601ad`, `0aaa86a`) and
+    came back both times, because the only structural guard reads exactly one index of the section
+    list.
+  - `::test_ci_and_release_freeze_the_same_python` - `ci.yml`'s `build` job and `release.yml` must
+    freeze the same interpreter. Parsed by line scan, not PyYAML: PyYAML is not in
+    `requirements-dev.txt`, so importing it would make the test an ERROR on a fresh CI checkout.
+  **All three verified by mutation, seven mutants, all caught**: VERSION.txt bumped without its
+  section, the heading stripped of its date, a second `### Added`, a `### Security` outside the
+  vocabulary, `release.yml` drifted to 3.13, the `build` job renamed, and `python-version` turned
+  into a variable. The last two matter most - a guard that silently passes when the file moves
+  under it is not a guard.
+
 ### Docs
 
 - **Three registries gained a documented mirror, and a guard to keep it honest.** The scenario
@@ -1028,6 +1051,21 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   The two PyInstaller jobs must keep the same interpreter as each other, because PyInstaller
   freezes it into the bundle: letting them drift means CI smoke-tests one artefact and users
   download another.
+  **That last sentence is now a test** - `test_ci_and_release_freeze_the_same_python`. It was a
+  true, load-bearing statement with nothing behind it, which in this project means it survives
+  exactly until a session that never read it edits one of the two files.
+
+- **`release.yml` refuses to publish a release whose changelogs are still open.** The existing
+  step proves the tag is LABELLED right (its base equals VERSION.txt). The new one proves the
+  release NOTES are: both changelogs must carry a dated `## [x.y.z] - YYYY-MM-DD` section for
+  VERSION.txt, and `[Unreleased]` must hold no entries.
+  Placed in the workflow rather than in pytest because the second half cannot be always-on - during
+  ordinary development `[Unreleased]` is supposed to have entries - and because the tag push is the
+  one moment the check must not be skippable. An EMPTY `[Unreleased]` heading passes, since that is
+  the normal shape between releases.
+  Exercised against four trees before landing: the current one (pass), an `[Unreleased]` reopened
+  with one entry (fail), the dated heading stripped of its date (fail), and an empty `[Unreleased]`
+  (pass).
 
 ### Fixed
 
