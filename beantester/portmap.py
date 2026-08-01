@@ -387,11 +387,33 @@ _FILETIME_EPOCH_DELTA = 11644473600.0     # 1601-01-01 -> unix epoch, in seconds
 # test had it off, the native route would then stay off for the whole process.
 _NATIVE_INFO_API = [None]
 
+# Taken only while BINDING, never per lookup. Without it the bind is not just racy in
+# theory: the first arrival used to publish its "in progress" marker before loading
+# the DLLs, so every other thread read it as "unavailable" and silently took the
+# psutil path for the whole window. MEASURED with 8 threads from cold, 3 trials of 3:
+# exactly 200 of 1600 calls got the native route and 1400 fell back - the seven
+# threads that lost the race ran their entire loop inside one DLL load. Harmless for
+# correctness, but it lands at SESSION START, which is the moment this whole change
+# exists to make cheap. A leaf lock: nothing else is held while it is taken (``info``
+# calls ``_process_info`` outside ``self._lock``), and it is uncontended after the
+# first bind because the fast path never reaches it.
+_NATIVE_INFO_LOCK = threading.Lock()
+
 
 def _native_info_api():
     """Bind the entry points and the result structure once. ``None`` if unavailable."""
-    if _NATIVE_INFO_API[0] is None:
-        _NATIVE_INFO_API[0] = False
+    api = _NATIVE_INFO_API[0]
+    if api is not None:
+        return api or None
+    with _NATIVE_INFO_LOCK:
+        if _NATIVE_INFO_API[0] is not None:      # somebody bound it while we waited
+            return _NATIVE_INFO_API[0] or None
+        # Nothing is published until the binding has an ANSWER. An "in progress"
+        # marker here defeats the lock without appearing to: the fast path reads
+        # this slot unlocked, and ``False is not None``, so every other thread took
+        # it as "known unavailable" and returned without ever queueing. That is the
+        # bug the lock was supposed to fix, surviving the lock - measured unchanged
+        # at 200 of 1600 calls, and only the state trace showed why.
         try:
             import ctypes
             from ctypes import wintypes

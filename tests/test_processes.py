@@ -406,6 +406,54 @@ def test_the_native_policy_gate_is_read_per_call_not_cached(monkeypatch):
               portmap._native_process_info(os.getpid()) is not None)
 
 
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="the handle read is Windows-only")
+def test_a_cold_binding_does_not_push_other_threads_onto_the_slow_path(monkeypatch):
+    """Threads arriving while the ctypes surface is being bound must WAIT, not degrade.
+
+    Two threads reach this from the first moments of a session - the watchdog warming
+    names and the resolver matching a target - so the bind window lands exactly where
+    the whole change exists to save time. Silently taking the psutil route there costs
+    9 ms a lookup instead of 0.03 ms, which is what was being fixed.
+
+    A regression test for a fault a LOCK DID NOT FIX. Publishing an "in progress"
+    marker in the shared slot defeated it invisibly: the fast path reads that slot
+    unlocked and ``False is not None``, so every other thread read it as "unavailable"
+    and returned without ever queueing on the lock. Measured before: exactly 200 of
+    1600 calls took the native route, 3 trials of 3 and then 5 of 5 - one thread's
+    worth, every time. After: 1600 of 1600, 5 trials of 5.
+    """
+    import os
+    import threading
+    from beantester import portmap
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API", [None])      # never bound yet
+    threads_n, per_thread = 8, 50
+    resolved, failures = [], []
+    barrier = threading.Barrier(threads_n)
+
+    def hammer():
+        barrier.wait()                    # everybody hits the cold slot together
+        try:
+            for _ in range(per_thread):
+                resolved.append(portmap._native_process_info(os.getpid()) is not None)
+        except Exception as exc:          # noqa: BLE001 - the point is to report it
+            failures.append(repr(exc))
+
+    workers = [threading.Thread(target=hammer) for _ in range(threads_n)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=30)
+
+    check("no thread raised while the surface was being bound", not failures,
+          f"({failures[:2]})")
+    check("every thread got an answer", len(resolved) == threads_n * per_thread,
+          f"({len(resolved)} of {threads_n * per_thread})")
+    check("and none of them was pushed onto the psutil path by the bind",
+          all(resolved), f"({sum(resolved)} of {len(resolved)} took the handle route)")
+
+
 # -- port resolution fails LOUDLY (for us), quietly (for the user) ---------- #
 #
 # All three of these used to swallow. An empty map, a blank process name and a

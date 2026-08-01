@@ -333,6 +333,23 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     measurement; 32-bit/WOW64 and ARM64 are untested. Every failure path returns `None` and falls
     back, so if a future Windows withdraws `NtQueryInformationProcess` this degrades to today's
     behaviour and today's cost, not to a broken tool.
+  - **Stability, since this opens a kernel handle per PID and runs forever.** 20 000 calls over a
+    mix of live, dead and nonsense PIDs: **handles 185 -> 185, RSS flat**, 35.6 us each. The two
+    failure routes leak nothing either (5 000 calls each with the binding dead, and with the query
+    failing *after* `OpenProcess` succeeded: handle count unchanged) - the `finally` gives the
+    handle back on every path. A 5-minute session with traffic and continuous process churn:
+    **handles 231 -> 232** (range 225-234), RSS +1.4 MB, worst wait in any 20 s window **19.8 ms,
+    0 of 15 windows over the warn line, 0 warnings**, names resolved 100% throughout.
+    Degenerate input returns `None` rather than raising: `None`, 0, negative, non-numeric text,
+    values past a DWORD, and dead PIDs.
+  - **A concurrency fault that a lock did NOT fix, found by measuring twice.** The lazy bind
+    published an "in progress" marker in the shared slot before loading the DLLs. The fast path
+    reads that slot unlocked and `False is not None`, so every other thread read it as "unavailable"
+    and returned without ever queueing - **adding a lock changed nothing, 200 of 1600 calls, 5
+    trials of 5**, and only a state trace showed why. Nothing is published now until the binding has
+    an answer: **1600 of 1600**. It matters because the two threads that hit this from cold are the
+    watchdog warming names and the resolver matching a target, i.e. session start - the exact moment
+    this change exists to make cheap.
   - **One bug found by the suite, worth recording.** The first version gated
     `_ALLOW_NATIVE_PROCESSES` while BINDING the ctypes entry points and cached the result, so the
     flag was read once per process: `test_a_target_restarting_onto_a_recycled_pid_is_still_impaired`
@@ -384,6 +401,10 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
     **every platform**, not only where the API exists.
   - `::test_the_native_policy_gate_is_read_per_call_not_cached` - regression test for the bind-time
     gate described above.
+  - `::test_a_cold_binding_does_not_push_other_threads_onto_the_slow_path` - 8 threads released
+    together onto a never-bound surface; every one of the 400 calls must take the handle route.
+    Regression test for the marker-in-the-shared-slot fault, and it catches its mutant (putting the
+    marker back) while the lock alone does not.
   - **Verified by mutation, and one had to be rewritten to earn it.** Four mutants: policy gate
     removed, parent replaced by the process's own pid, creation stamp dropped, empty name cached.
     The first version of the empty-name guard **SURVIVED** its mutant - PID 4 leaves by the
