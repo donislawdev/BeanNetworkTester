@@ -491,6 +491,29 @@ def test_a_looping_scenario_runs_to_its_duration_not_to_its_timeline(tmp_path):
           f"({records[-1]['stop_reason']!r})")
 
 
+def test_the_loop_flag_takes_the_derived_ending_away_again(tmp_path):
+    """``--loop`` turns a finite file into an endless one, and it must be read.
+
+    ``_run_session`` does ``scen.loop = scen.loop or cfg["loop"]`` BEFORE the end
+    is planned, so a file that would otherwise stop the run must stop stopping it
+    the moment the flag is passed. Easy to get wrong by reading the file's own
+    ``loop`` instead of the effective one, and the failure would be a run that
+    ends while the user asked for it to repeat.
+    """
+    import pytest
+
+    scen = _scenario_file(tmp_path, "finite.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 0.2, "settings": {"loss": 50}}]})
+    out, err = io.StringIO(), io.StringIO()
+    with pytest.raises(_NeverEnded):
+        run_cli(["--simulate", "--scenario", scen, "--loop", "--interval", "1"],
+                sleep=_budgeted_sleep(budget=12), out=out, err=err)
+    check("scenario: --loop takes the derived ending away",
+          "will not stop the run on its own" in err.getvalue(),
+          f"({err.getvalue()!r})")
+
+
 def test_a_scenario_that_cannot_end_the_run_says_so_up_front(tmp_path):
     """Half the fix for the hang is honesty about the half that still hangs.
 
@@ -696,6 +719,42 @@ def test_dry_run_validates_without_starting_anything():
 
     code, _, _ = cli(["--dry-run", "--dst-ip", "10.0.0.1-2001:db8::1"])
     check("--dry-run: an invalid config still fails", code == exitcodes.CONFIG)
+
+
+def test_dry_run_catches_a_misspelled_setting_in_a_config_file(tmp_path):
+    """The preflight's whole job: find out whether the next command will work.
+
+    MEASURED before: ``{"loss": 10, "latancy": 300}`` passed --dry-run with
+    "Configuration is valid" and exit 0, and the real run then went out with
+    latency 0 - a green pipeline that impaired less than it was told to.
+    """
+    path = tmp_path / "typo.json"
+    path.write_text(json.dumps({"loss": 10, "latancy": 300}), encoding="utf-8")
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--dry-run", "--config", str(path)], out=out, err=err)
+    check("preflight: a typo in the config file is CONFIG(3)",
+          code == exitcodes.CONFIG, f"(code={code})")
+    check("preflight: and the message names the key",
+          "latancy" in err.getvalue(), f"({err.getvalue()!r})")
+    check("preflight: a failed check writes nothing to the data channel",
+          not out.getvalue().strip(), f"({out.getvalue()!r})")
+
+
+def test_dry_run_says_what_it_did_not_check():
+    """It validates the CONFIGURATION; it is documented as answering more.
+
+    MEASURED: with ``is_admin()`` false, --dry-run returns 0 and says
+    "Configuration is valid" while the very next real run exits PERMISSION(7).
+    Widening the check would break validating a config on a build box and running
+    it elsewhere, so the honest fix is the sentence: say which half was checked
+    and name the command that does the other half.
+    """
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--dry-run", "--loss", "10"], out=out, err=err)
+    check("preflight: a good config is still OK", code == exitcodes.OK,
+          f"(code={code})")
+    check("preflight: the success line points at --doctor for the environment",
+          "--doctor" in err.getvalue(), f"({err.getvalue()!r})")
 
 
 def test_print_config_dumps_the_effective_settings():

@@ -724,13 +724,21 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             log.info(f"Saved settings to {cfg['save_config']}")
             return exitcodes.OK
         if args.dry_run:
-            # The scenario is part of the configuration, and --dry-run is the
-            # "check it before I run it" gate - the one thing a CI/CD pipeline
-            # runs to find out whether the next command will work. It used to be
-            # loaded only once the session started, so --dry-run reported
-            # "Configuration is valid" about a file it had never opened: a
-            # truncated, empty or non-object scenario passed the check with exit
-            # OK and then failed the real run with SCENARIO(4).
+            # What this gate checks is the CONFIGURATION: every value, every
+            # expression, the schedule, and the scenario file. What it does NOT
+            # check is the MACHINE - it never asks about Administrator rights or
+            # about pydivert, so on a box without them it answers OK about a
+            # command that will exit PERMISSION(7) or RUNTIME(1). That is on
+            # purpose: validating a config on a build agent and running it on
+            # another machine is a normal thing to do, and widening the check
+            # would break it. The success line names --doctor for the other half,
+            # so the pair answers the question this one alone cannot.
+            #
+            # The scenario is part of the configuration and used to be loaded
+            # only once the session started, so --dry-run reported "Configuration
+            # is valid" about a file it had never opened: a truncated, empty or
+            # non-object scenario passed the check with exit OK and then failed
+            # the real run with SCENARIO(4).
             if cfg["scenario"]:
                 try:
                     scen = load_scenario_file(cfg["scenario"])
@@ -740,7 +748,9 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                 log.debug(f"scenario: {len(scen.steps)} steps, "
                           f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
             _log_effective_settings(log, cfg)
-            log.info("Configuration is valid (--dry-run: nothing was started).")
+            log.info("Configuration is valid (--dry-run: nothing was started). "
+                     "This checks the settings, not the machine - run --doctor "
+                     "for Administrator rights and the WinDivert driver.")
             return exitcodes.OK
 
         return _run_session(args, cfg, log, sleep, clock, engine)

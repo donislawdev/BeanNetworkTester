@@ -986,7 +986,18 @@ leaves a broken network on the agent.
 ```bat
 BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
 ```
-Code `0` = the file is valid. `3` = there is an error (with a readable message on stderr).
+Code `0` = the file is valid. `3` = there is an error (with a readable message on stderr). A
+misspelled setting counts as an error and says which key it is - it used to be dropped in silence,
+so the check passed and the run then went out without that setting.
+
+`--dry-run` checks the **settings**, not the machine: it never asks about Administrator rights or
+about the driver, so it answers `0` on a build agent that could not actually run a capture. That is
+deliberate - validating a config in one place and running it in another is normal. When you want
+both halves answered, run the pair:
+
+```bat
+BeanNetworkTester.exe --doctor && BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
+```
 
 ### 3. A short, repeatable run with an artifact
 

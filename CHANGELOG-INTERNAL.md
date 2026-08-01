@@ -19,6 +19,38 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### BREAKING
 
+- **BREAKING:** **`load_config_file` rejects unknown keys** (`settings.py`), the same rule
+  `scenario.py` already applies to step keys and settings names. Was
+  `s.update({... if k in DEFAULT_SETTINGS})` - a silent filter. Touches a frozen on-disk format
+  ("Kontrakty publiczne"), so it needs the owner's version bump.
+  New i18n keys in BOTH files: `errors.config_unknown_setting`,
+  `errors.config_unknown_setting_hint` (the latter used only when there is exactly one unknown key
+  and `difflib.get_close_matches` finds a near miss - `latancy` -> `latency`, which is the whole
+  failure mode this closes).
+  **The recorded counter-argument was checked before changing this, and it is about a different
+  file.** `CHANGELOG-INTERNAL` on the `ui.json` store says unknown keys are kept on purpose,
+  because dropping them "would silently discard state written by a newer version". That reasoning
+  holds THERE: `ui.json` is written by the program and read key by key, so a typo is impossible and
+  forward compatibility is the only thing at stake. The traffic config file is hand-written (README
+  recipe 2 exists to validate hand-written ones in a pipeline), so a typo is the common case and
+  silence is the expensive answer. The forward-compat cost is real and is stated in the public
+  changelog rather than glossed.
+  `save_config_file` emits exactly the `DEFAULT_SETTINGS` key set, so nothing this tool writes is
+  affected - guarded now by `::test_every_file_this_tool_writes_still_loads`, which is what keeps
+  that true when a setting is renamed or dropped.
+  Consumers swept (rule 2): `cli.py:205` (already wraps `ValueError` -> `CONFIG(3)`, so free) and
+  `gui/app.py:1280` (already inside `try/except Exception` -> `dialogs.show_error`, so the dialog
+  path is free too - but it got its own guard, since a hand-written file is most likely to be
+  opened there). Profiles do NOT go through this path (`gui/profiles.py` + `PROFILE_FILE`), so they
+  are untouched.
+  Tests: `test_settings_config_scenario.py::
+  test_a_misspelled_setting_in_a_config_file_is_an_error_not_a_silent_default` (REPLACES
+  `::test_config_file_unknown_keys_ignored`, which pinned the old behaviour - and whose own check
+  message already said "rejected" while the code ignored),
+  `::test_every_file_this_tool_writes_still_loads`;
+  `test_cli_runtime.py::test_dry_run_catches_a_misspelled_setting_in_a_config_file`;
+  `test_gui_file_actions.py::test_a_misspelled_setting_reaches_the_user_as_a_dialog`.
+
 - **BREAKING:** **a finished scenario ends the CLI run** (`stop_reason: "scenario_done"`, a new
   value of an existing NDJSON field, so it needs the owner's version bump).
   `ScenarioRunner.finished` is set on the timeline-complete branch only (`scenario_runner.py`),
@@ -349,6 +381,14 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Fixed
 
+- **`--dry-run`'s prose narrowed to what it actually checks.** The comment above it called it "the
+  one thing a CI/CD pipeline runs to find out whether the next command will work", and the success
+  line said "Configuration is valid" full stop. Measured with `is_admin()` patched false: exit `0`
+  from the preflight, exit `7` from the very next real run. **The behaviour was deliberately left
+  alone** - `_run_session` keeps the elevation and pydivert gates, because validating a config on a
+  build agent and running it elsewhere is a legitimate pattern that widening the check would break.
+  Only the sentence changed, plus the `--doctor` + `--dry-run` pair in both READMEs.
+  Guard: `test_cli_runtime.py::test_dry_run_says_what_it_did_not_check`.
 - **`run_cli` no longer lets an unforeseen exception escape as a traceback.** Convention 18 and the
   `CliError` docstring both promise "never a raw traceback", and that held for the parse/validate
   surface only: `test_cli_fuzz.py` runs every one of its cases under `--dry-run` ("pure contract

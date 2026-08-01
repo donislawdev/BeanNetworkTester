@@ -848,7 +848,18 @@ więc żaden „zawieszony” krok nie zostawi zepsutej sieci na agencie.
 ```bat
 BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
 ```
-Kod `0` = plik jest poprawny. `3` = jest błąd (z czytelnym komunikatem na stderr).
+Kod `0` = plik jest poprawny. `3` = jest błąd (z czytelnym komunikatem na stderr). Literówka w
+nazwie ustawienia też jest błędem i program mówi, o który klucz chodzi - wcześniej znikała po
+cichu, więc sprawdzenie przechodziło, a przebieg szedł bez tego ustawienia.
+
+`--dry-run` sprawdza **ustawienia**, nie maszynę: nie pyta ani o uprawnienia administratora, ani o
+sterownik, więc odpowie `0` także na agencie, który realnie nie uruchomiłby przechwytu. Tak ma być
+- walidowanie konfiguracji w jednym miejscu i uruchamianie jej w innym to normalny układ. Gdy
+chcesz odpowiedzi na obie połowy, uruchom parę:
+
+```bat
+BeanNetworkTester.exe --doctor && BeanNetworkTester.exe --dry-run --config profiles/bad-3g.json
+```
 
 ### 3. Krótki, powtarzalny przebieg z artefaktem
 

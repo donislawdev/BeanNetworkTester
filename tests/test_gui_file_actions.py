@@ -147,6 +147,37 @@ def test_a_config_of_the_wrong_shape_is_refused_too():
     """)
 
 
+def test_a_misspelled_setting_reaches_the_user_as_a_dialog():
+    """The CLI is not the only reader of a config file.
+
+    Unknown keys became an error so a typo cannot pass a pipeline's --dry-run in
+    silence. The same raise travels through "Load file" here, and the GUI half of
+    that change is worth its own guard: this window is where a hand-written file
+    is most likely to be opened, and the form must survive the refusal with the
+    values the user already had.
+    """
+    run_gui("""
+        import json, os, tempfile
+        from tkinter import filedialog
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append(message)
+
+        typo = os.path.join(tempfile.mkdtemp(), "typo.json")
+        with open(typo, "w", encoding="utf-8") as f:
+            json.dump({"loss": 10, "latancy": 300}, f)
+        filedialog.askopenfilename = lambda **k: typo
+
+        app.vars["loss"].set("33")
+        app.load_config_file()
+
+        assert shown, "a misspelled setting must be reported, not swallowed"
+        assert "latancy" in shown[0], f"the dialog must name the key: {shown[0]!r}"
+        assert float(app.vars["loss"].get()) == 33.0, "the form must survive it"
+    """)
+
+
 def test_a_repro_report_needs_a_session_before_it_can_be_saved():
     """Without a seed there is nothing to reproduce, so the app says so rather
     than writing a report that cannot be replayed."""
