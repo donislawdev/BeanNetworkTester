@@ -1106,6 +1106,38 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
   with one entry (fail), the dated heading stripped of its date (fail), and an empty `[Unreleased]`
   (pass).
 
+- **The GitHub release body is now the changelog section, not `--generate-notes`.** New
+  `tools/release_notes.py` extracts `## [x.y.z]` from `CHANGELOG.md` (stdlib only - the release job
+  installs `requirements.txt` and PyInstaller, nothing else) and `release.yml` passes it as
+  `--notes-file`. `--generate-notes` lists merged PR titles, so the release page showed something
+  nobody wrote and never showed the changelog at all; for 0.4.0 that would have been 43 PR titles.
+  The same command is what you paste into a blog post, so there is no second copy to drift.
+  🔴 **It crashed on `[0.3.0]` and the crash is the interesting part.** `release.yml` runs on
+  **windows-latest**, where stdout still defaults to the ANSI code page, and `[0.3.0]` carries
+  U+25CF - so writing the notes as `str` raised `UnicodeEncodeError` and would have failed the
+  publish step, at the one moment nobody wants a surprise. `0.4.0` is pure ASCII and printed fine,
+  which is exactly why testing only the current version proves nothing. It writes UTF-8 bytes now.
+
+- **A word cap on user-facing changelog entries: `test_no_user_facing_entry_grows_into_an_essay`.**
+  100 words, `CHANGELOG.md` only, mutable sections only - the same scope and the same reasons as the
+  duplicate-heading guard. 100 rather than the ~40 most entries manage, because the few that carry a
+  behaviour change a reader must act on need the room, and splitting those into three entries is
+  worse than one long one. Verified by mutation both ways: a 130-word entry goes red, and `[0.3.0]`
+  keeps a 171-word entry while the suite stays green, which proves the scoping is real rather than
+  accidental.
+
+- **`test_release_notes_extract_every_released_version`** pins the extractor: every version yields a
+  non-empty body, the `## [x.y.z]` heading is dropped (gh sets the title), the body stops before the
+  next version, an unknown version returns `None` and the script exits non-zero with empty stdout.
+  🔴 **Two mutation-methodology traps, both hit here, both producing a false "caught".**
+  (1) `tools/release_notes.py` was UNTRACKED, so `git checkout -- <file>` restored nothing and the
+  four mutants accumulated - only the first was cleanly attributed. Re-run from an explicit
+  known-good copy, **one of the four turned out to SURVIVE**. (2) That survivor survived because the
+  test ran the subprocess only for `VERSION.txt`, which is ASCII, so it never fed the code the
+  character that breaks it. The test now runs the real process for **every** released version and
+  asserts that at least one section carries non-ASCII, so the encoding path cannot quietly stop
+  being exercised. A surviving mutant is information about the TEST, not only about the code.
+
 ### Fixed
 
 - **`SocketWatcher.reconcile()` let a STALE poller snapshot overwrite a newer SOCKET event

@@ -108,11 +108,20 @@ jobs:
 
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
+      #
+      # The body is this version's section of CHANGELOG.md, not --generate-notes.
+      # --generate-notes lists merged pull request titles, so the release page showed
+      # something nobody wrote and never showed the changelog at all - for 0.4.0 that
+      # would have been 43 PR titles. Extracting the section instead means the release
+      # page, a blog post and CHANGELOG.md are one text that cannot drift apart.
+      # The step above has already proved that section exists and is dated.
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          flags=(--title "$TITLE" --generate-notes)
+          python tools/release_notes.py > RELEASE_NOTES.md
+          head -5 RELEASE_NOTES.md
+          flags=(--title "$TITLE" --notes-file RELEASE_NOTES.md)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
           gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "${flags[@]}"

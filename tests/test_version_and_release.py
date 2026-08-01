@@ -6,6 +6,8 @@ a licence that did not make it into the tree, a VERSION.txt in the wrong shape.
 """
 import os
 import re
+import subprocess
+import sys
 
 from fakes import ROOT, check
 
@@ -183,6 +185,73 @@ def test_version_txt_has_a_dated_section_in_both_changelogs():
               len(match) == 1, f"(found {match or headings[:3]})")
 
 
+def _mutable_headings(blocks):
+    """The `## [...]` blocks still open to editing: [Unreleased] and VERSION.txt's.
+
+    Everything older is a published release note. `[0.3.0]` carries a duplicate
+    `### Changed` and entries far over the length cap below, and rewriting notes
+    people have already read is worse than leaving them.
+    """
+    version = _version_txt()
+    return [h for h in blocks
+            if h == "## [Unreleased]"
+            or (DATED_VERSION_RE.match(h)
+                and DATED_VERSION_RE.match(h).group(1) == version)]
+
+
+def test_no_user_facing_entry_grows_into_an_essay():
+    """A CHANGELOG.md entry is at most 100 words. It is a release note, not an ADR.
+
+    Convention 39 already says this file carries the EFFECT for a tester while
+    CHANGELOG-INTERNAL.md carries the reasoning, and nothing enforced it: the
+    [0.4.0] section reached **11 338 words across 92 entries, median 115, longest
+    342** before it was rewritten to 4 023 / 67 / 65 / 93. The owner's verdict was
+    the plain one - nobody will read that.
+
+    100 rather than the ~40 most entries manage, because the handful that carry a
+    behaviour change a reader must act on (what breaks, what to do instead) really
+    do need the room, and a cap that forces those into three entries is worse than
+    one long one. The cap is the ceiling, not the target.
+
+    CHANGELOG.md only, and only the mutable sections - same scope, same reasons,
+    as the duplicate-heading guard below.
+    """
+    path = os.path.join(ROOT, "CHANGELOG.md")
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+
+    version, entry, offenders, entries = None, None, [], 0
+
+    def close(entry):
+        if not entry:
+            return
+        words = len(" ".join(entry).split())
+        if words > 100:
+            offenders.append((words, entry[0][:70]))
+
+    mutable = set(_mutable_headings(_versions_in("CHANGELOG.md")))
+    inside = False
+    for line in lines:
+        if line.startswith("## ["):
+            close(entry) if inside else None
+            entry, inside = None, line.strip() in mutable
+        elif inside and re.match(r"^- ", line):
+            close(entry)
+            entry = [line]
+            entries += 1
+        elif inside and line.startswith("### "):
+            close(entry)
+            entry = None
+        elif inside and entry is not None:
+            entry.append(line)
+    close(entry)
+
+    check("CHANGELOG.md: the mutable section has entries to measure", entries > 0,
+          "(none found - did the section markers change?)")
+    check(f"CHANGELOG.md: no entry over 100 words ({entries} checked)",
+          not offenders, f"({sorted(offenders, reverse=True)[:3]})")
+
+
 def test_the_mutable_changelog_sections_have_no_duplicate_headings():
     """One `### Added` per version, not three.
 
@@ -202,12 +271,8 @@ def test_the_mutable_changelog_sections_have_no_duplicate_headings():
     (`test_breaking_sections_come_first`) builds the section list and then looks
     at exactly one index of it.
     """
-    version = _version_txt()
     blocks = _versions_in("CHANGELOG.md")
-    mutable = [h for h in blocks
-               if h == "## [Unreleased]"
-               or (DATED_VERSION_RE.match(h)
-                   and DATED_VERSION_RE.match(h).group(1) == version)]
+    mutable = _mutable_headings(blocks)
     check("CHANGELOG.md: there is a mutable section to check", bool(mutable),
           "(neither [Unreleased] nor the VERSION.txt version was found)")
 
@@ -221,6 +286,83 @@ def test_the_mutable_changelog_sections_have_no_duplicate_headings():
                                           "### Fixed", "### Removed", "### Docs"})
         check(f"CHANGELOG.md {heading}: only convention 39's section names",
               not unknown, f"({unknown})")
+
+
+def test_release_notes_extract_every_released_version():
+    """`tools/release_notes.py` is what the release page shows, so it is load-bearing.
+
+    It must produce a non-empty body for every version in CHANGELOG.md, must not
+    repeat the `## [x.y.z]` heading (gh sets the title), and must refuse an
+    unknown version loudly - an empty release body would publish happily and be
+    noticed by users rather than by us.
+
+    The encoding case is not hypothetical. `release.yml` runs on windows-latest,
+    where stdout still defaults to the ANSI code page, and `[0.3.0]` contains
+    U+25CF: writing it as str raised UnicodeEncodeError and would have failed the
+    publish step. The tool writes UTF-8 bytes, and this test reads them back as
+    bytes so a regression cannot hide behind the test's own decoding.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    try:
+        import release_notes
+    finally:
+        sys.path.pop(0)
+
+    with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as f:
+        text = f.read()
+    versions = re.findall(r"^## \[(\d+\.\d+\.\d+)\]", text, re.M)
+    check("CHANGELOG.md declares released versions to extract", bool(versions),
+          f"({versions})")
+
+    for version in versions:
+        body = release_notes.section(version, text)
+        check(f"release notes for {version} are not empty", bool(body and body.strip()))
+        check(f"release notes for {version} drop the version heading",
+              not (body or "").lstrip().startswith("## ["))
+        check(f"release notes for {version} stop before the next version",
+              "## [" not in (body or ""))
+        check(f"release notes for {version} survive a round trip through UTF-8",
+              body.encode("utf-8").decode("utf-8") == body)
+
+    check("an unknown version yields nothing rather than an empty-looking body",
+          release_notes.section("99.99.99", text) is None)
+
+    # Run the real process for EVERY version, not just VERSION.txt's.
+    #
+    # This is the half that matters and the half that was missing. The first
+    # version of this test ran the subprocess once, for VERSION.txt - which is
+    # 0.4.0, and 0.4.0 is pure ASCII. Reverting the UTF-8 byte write therefore
+    # left the test GREEN: it never fed the process the character that breaks it.
+    # Caught by mutation, and only after re-running the mutants from a clean
+    # baseline, because release_notes.py was untracked and `git checkout` had been
+    # silently restoring nothing.
+    script = os.path.join(ROOT, "tools", "release_notes.py")
+    non_ascii_seen = False
+    for version in versions:
+        out = subprocess.run([sys.executable, script, version], capture_output=True)
+        check(f"release_notes.py exits 0 for {version}", out.returncode == 0,
+              f"({out.returncode}, {out.stderr[-200:]!r})")
+        check(f"release_notes.py writes decodable UTF-8 for {version}",
+              bool(out.stdout) and out.stdout.decode("utf-8").strip(),
+              f"({out.stdout[:80]!r})")
+        if any(b > 127 for b in out.stdout):
+            non_ascii_seen = True
+
+    # Without this the encoding guard above can quietly stop guarding anything:
+    # an all-ASCII changelog would pass it on every version while the console
+    # encoding path goes untested. [0.3.0] carries U+25CF and is frozen history,
+    # so this holds today - and says so out loud if it ever stops.
+    check("at least one released section carries non-ASCII, so the encoding path is "
+          "actually exercised", non_ascii_seen,
+          "(every section is ASCII - this test no longer proves the Windows "
+          "console-encoding fix)")
+
+    missing = subprocess.run([sys.executable,
+                              os.path.join(ROOT, "tools", "release_notes.py"), "99.99.99"],
+                             capture_output=True)
+    check("release_notes.py fails loudly on an unknown version",
+          missing.returncode != 0 and not missing.stdout.strip(),
+          f"(rc={missing.returncode}, stdout={missing.stdout[:80]!r})")
 
 
 def test_ci_and_release_freeze_the_same_python():
