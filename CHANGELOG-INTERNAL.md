@@ -31,6 +31,53 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **The hot path's "zero allocations" rule got a gate.** New
+  `tests/test_hot_path_allocations.py` pins that `decide()` RETAINS nothing per packet: at most
+  64 blocks and 4096 bytes over 5000 calls, against a measured floor of 13 blocks and 608 bytes
+  that stays flat with duplication, latency, the NAT flow table and 200 ports. `test_hot_path.py`
+  guards the neighbouring rule (no syscalls on the packet threads); this catches the other class,
+  where something starts being kept once per packet.
+  🔴 **It reads two meters because one of them has a hole, and the hole was found by mutation
+  rather than by reasoning.** The first version counted `sys.getallocatedblocks()` only, and a
+  mutation making `decide()` append to an ever-growing list **survived**: the appended value was
+  a cached small int, so no object was created and blocks moved from 6 to 7. `tracemalloc`
+  current sees the same case as 42 032 bytes against 208. The meter-canary test now proves both
+  meters can rise, including the references-only case specifically. Still not caught, stated in
+  the file: transient garbage, since both meters are net.
+- **Size ceilings, as a ratchet.** New `tests/test_code_shape.py` caps a function at 167 logic
+  lines and a module at 1299 - today's maxima (`theme.py::init_style`, `gui/app.py`), so nothing
+  had to be rewritten to make it pass. Lowering them is routine work, raising either is the
+  owner's call. **Comments and docstrings do not count**, and that is measured rather than
+  assumed: 9 776 of the package's 17 770 lines are logic, so 45% is explanation, and a raw-line
+  cap would have been a cap on explaining. A second test pins that property directly (ninety
+  lines of comment measure the same as none). Both mutation-checked, plus the empty-scan canary.
+- **"Verified by mutation" became checkable.** New `tests/test_mutation_registry.py` holds the
+  claim as data in three states that say three different things: `MUTATIONS` (re-runnable now,
+  five entries), `PROVEN_BY_HAND` (a dated session did it, no patch was written down, so no
+  machine repeats it) and `NOT_PROVEN` (no mutation, said out loud). Until now the phrase
+  appeared over twenty times in the notes and in a dozen docstrings with nothing behind it -
+  convention 5's own evidence was the prose convention 5 warns about. The suite checks the
+  bookkeeping only: every named test exists, none is filed under two states, and every search
+  pattern still occurs exactly once, so a registry entry rots the day the code moves rather
+  than the day someone runs it. The mutations themselves run from `internal_tools/mutate.py`
+  (outside git, one subprocess suite run each), with a mandatory canary entry that must report
+  BROKEN - a tree that fails to compile also exits non-zero, so without it a whole run can
+  report "all caught" and mean nothing. First full run: 5 caught, 0 survived, canary BROKEN.
+- **The repository scanners now prove they read something.**
+  `test_repo_conventions.py::test_the_repository_scanners_actually_read_files` names one file
+  each collector must return plus a floor on the count, for all seven collectors across
+  `test_repo_conventions`, `test_code_hygiene`, `test_layering` and `test_readme_guards`. A
+  glob or walk that comes back EMPTY satisfies every assertion built on it and looks exactly
+  like a working guard, so renaming `beantester/` would have silenced four guards at once in
+  silence. Mutation-checked: emptying a collector and pointing the walk at a missing root each
+  turn it red.
+- **The whole-tree scans stopped measuring files that are not in the repository.**
+  New `repo_text_files()` collector skips `internal_tools/`, `.claude/`, `crashes/` and the
+  private notes, and `::test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository`
+  keeps them out. Measured before the change: the dash scan covered 183 files, 12 of them
+  git-ignored, so the same test measured a different set locally than in CI - including
+  `crashes/latest-crash.txt`, whose text comes from OS exceptions. Convention 33's coverage of
+  the private notes moves to the Stop hook, which runs where those files exist.
 - `tests/test_gui_release_fixes.py::test_start_only_fields_are_locked_while_a_session_runs`
   rewritten to DERIVE its subjects from `fields.FIELD_DEFS` instead of naming `duration` and the
   filter combobox by hand, and to resolve each field to the surface that renders it
