@@ -8,6 +8,38 @@ import os
 
 from fakes import ROOT, check
 
+# Directories a whole-repository walk must not descend into. The first group is
+# generated or vendored; the second is the maintainer's own, kept OUT of git.
+#
+# The second group matters more than it looks. `internal_tools/`, `.claude/`,
+# `crashes/` and the private notes exist on the owner's machine and in NO public
+# checkout, so a guard that scans them measures a different set here than in CI:
+# an em dash typed into PROJECT_NOTES.md would redden the suite locally while CI
+# stayed green, which teaches that a red guard is local noise. Measured 2026-08-02:
+# the dash scan covered 183 files, 12 of them git-ignored - including
+# `crashes/latest-crash.txt`, whose contents are arbitrary text from OS exceptions.
+# The notes keep their own dash check in `.claude/hooks/check_notes.py`, which runs
+# exactly where they exist.
+SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "licenses", "build", "dist",
+             ".hypothesis", "internal_tools", ".claude", "crashes"}
+SKIP_FILES = {"PROJECT_NOTES.md", "HISTORY_NOTES.md", "CLAUDE.md"}
+
+
+def repo_text_files(exts):
+    """Every text file that is actually IN the repository, with the given suffixes.
+
+    Returns a list so a caller can assert it is not empty: a scanner whose walk
+    yields nothing passes every check it makes, and looks exactly like a scanner
+    that works. See test_the_repository_scanners_actually_read_files.
+    """
+    out = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            if name.endswith(exts) and name not in SKIP_FILES:
+                out.append(os.path.join(dirpath, name))
+    return out
+
 
 def _source_files():
     files = [os.path.join(ROOT, "bean_network_tester.py"),
@@ -121,18 +153,11 @@ def test_no_em_or_en_dashes_in_repo_text():
     exts = (".py", ".md", ".json", ".toml", ".spec", ".yml", ".yaml", ".txt",
             ".cfg", ".ini")
     offenders = []
-    for dirpath, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = [d for d in dirnames
-                       if d not in (".git", "__pycache__", ".pytest_cache",
-                                    "licenses", "build", "dist", ".hypothesis")]
-        for name in filenames:
-            if not name.endswith(exts):
-                continue
-            path = os.path.join(dirpath, name)
-            text = open(path, encoding="utf-8", errors="replace").read()
-            for ch, label in banned.items():
-                if ch in text:
-                    offenders.append(f"{os.path.relpath(path, ROOT)}: {label}")
+    for path in repo_text_files(exts):
+        text = open(path, encoding="utf-8", errors="replace").read()
+        for ch, label in banned.items():
+            if ch in text:
+                offenders.append(f"{os.path.relpath(path, ROOT)}: {label}")
     check("no em/en dashes outside licenses/ (use '-')", not offenders,
           f"({offenders[:8]}{'...' if len(offenders) > 8 else ''})")
 
@@ -180,28 +205,22 @@ def test_no_stale_pending_markers():
 
     marker = re.compile(r"PENDING\(([a-z0-9][a-z0-9-]*)\)")
     seen = {}
-    for dirpath, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = [d for d in dirnames
-                       if d not in (".git", "__pycache__", ".pytest_cache",
-                                    "licenses", "build", "dist", ".hypothesis")]
-        for name in filenames:
-            if not name.endswith(PENDING_EXTS):
-                continue
-            if name == os.path.basename(__file__):
-                continue                 # the registry does not scan itself
-            if name.startswith("CHANGELOG"):
-                # A changelog records what HAPPENED and is dated by its nature: an
-                # entry saying "added a marker named X" stays TRUE after X closes, so
-                # it is history, not drift. Found the hard way - the first real
-                # closing (socket-event-fields) tripped over the very entry that
-                # announced the marker.
-                continue
-            path = os.path.join(dirpath, name)
-            text = open(path, encoding="utf-8", errors="replace").read()
-            for lineno, line in enumerate(text.splitlines(), 1):
-                for found in marker.findall(line):
-                    seen.setdefault(found, []).append(
-                        f"{os.path.relpath(path, ROOT)}:{lineno}")
+    for path in repo_text_files(PENDING_EXTS):
+        name = os.path.basename(path)
+        if name == os.path.basename(__file__):
+            continue                     # the registry does not scan itself
+        if name.startswith("CHANGELOG"):
+            # A changelog records what HAPPENED and is dated by its nature: an
+            # entry saying "added a marker named X" stays TRUE after X closes, so
+            # it is history, not drift. Found the hard way - the first real
+            # closing (socket-event-fields) tripped over the very entry that
+            # announced the marker.
+            continue
+        text = open(path, encoding="utf-8", errors="replace").read()
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for found in marker.findall(line):
+                seen.setdefault(found, []).append(
+                    f"{os.path.relpath(path, ROOT)}:{lineno}")
 
     stale = sorted(f"{key} ({', '.join(where)})"
                    for key, where in seen.items() if key not in OPEN_PENDING)
@@ -213,3 +232,67 @@ def test_no_stale_pending_markers():
     check("every id in OPEN_PENDING is still referenced by a marker "
           "(an id nothing points at is a leftover entry, not an open stage)",
           not unmarked, f"({unmarked})")
+
+
+# -- the canary: a scanner that reads nothing passes everything ----------------- #
+def test_the_repository_scanners_actually_read_files():
+    """Every whole-tree scanner proves it saw a file it must have seen.
+
+    A guard built on a glob or a walk has a failure mode that looks identical to
+    success: the collection comes back EMPTY and every assertion over it holds
+    vacuously. Nothing here would notice - `not offenders` is true when there are
+    no files, a rename of `beantester/` would silence four separate guards at once,
+    and the suite would stay green while guarding nothing.
+
+    This is the cheapest possible answer: name one file each collector MUST return,
+    plus a floor on the count. Both halves matter - the anchor catches a collector
+    pointed at the wrong root, the floor catches one that quietly narrowed.
+
+    Mutation-checked 2026-08-02: emptying any collector, and pointing the walk at a
+    non-existent root, each turn this red.
+    """
+    import test_code_hygiene
+    import test_layering
+    import test_readme_guards
+
+    def names(paths):
+        return {os.path.basename(p) for p in paths}
+
+    for label, paths, anchor, floor in (
+            ("_source_files", _source_files(), "core.py", 20),
+            ("_gui_files", _gui_files(), "app.py", 10),
+            ("repo_text_files(.py)", repo_text_files((".py",)), "engine.py", 60),
+            ("repo_text_files(.md)", repo_text_files((".md",)), "README.md", 4),
+            ("code_hygiene._pkg_files", test_code_hygiene._pkg_files(), "core.py", 20),
+            ("layering._top_level_modules",
+             test_layering._top_level_modules(), "engine.py", 15),
+            ("readme_guards._top_level_modules",
+             test_readme_guards._top_level_modules(), "engine.py", 15),
+    ):
+        check(f"{label} returned files at all (an empty scan passes every check "
+              f"it makes and looks exactly like a working guard)", paths, "(empty)")
+        check(f"{label} still reaches {anchor}", anchor in names(paths),
+              f"({sorted(names(paths))[:6]}...)")
+        check(f"{label} did not quietly narrow (expected at least {floor})",
+              len(paths) >= floor, f"(got {len(paths)})")
+
+
+def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
+    """The dash and PENDING scans must measure the REPOSITORY, not this machine.
+
+    `internal_tools/`, `.claude/`, `crashes/` and the private notes live here and in
+    no public checkout, so scanning them makes the guard mean one thing locally and
+    another in CI - and a red that CI cannot reproduce teaches that red is noise.
+    Measured before the fix (2026-08-02): 12 of the 183 files scanned were
+    git-ignored, `crashes/latest-crash.txt` among them, whose text comes from OS
+    exceptions and is nobody's convention to keep.
+    """
+    scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
+               for p in repo_text_files((".py", ".md", ".json", ".txt"))}
+    for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md"):
+        check(f"{stray} is not scanned (it is not in the repository)",
+              stray not in scanned, f"({stray})")
+    for prefix in ("internal_tools/", ".claude/", "crashes/"):
+        leaked = sorted(p for p in scanned if p.startswith(prefix))
+        check(f"nothing under {prefix} is scanned (git-ignored, absent in CI)",
+              not leaked, f"({leaked[:4]})")

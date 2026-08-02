@@ -31,6 +31,21 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **The repository scanners now prove they read something.**
+  `test_repo_conventions.py::test_the_repository_scanners_actually_read_files` names one file
+  each collector must return plus a floor on the count, for all seven collectors across
+  `test_repo_conventions`, `test_code_hygiene`, `test_layering` and `test_readme_guards`. A
+  glob or walk that comes back EMPTY satisfies every assertion built on it and looks exactly
+  like a working guard, so renaming `beantester/` would have silenced four guards at once in
+  silence. Mutation-checked: emptying a collector and pointing the walk at a missing root each
+  turn it red.
+- **The whole-tree scans stopped measuring files that are not in the repository.**
+  New `repo_text_files()` collector skips `internal_tools/`, `.claude/`, `crashes/` and the
+  private notes, and `::test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository`
+  keeps them out. Measured before the change: the dash scan covered 183 files, 12 of them
+  git-ignored, so the same test measured a different set locally than in CI - including
+  `crashes/latest-crash.txt`, whose text comes from OS exceptions. Convention 33's coverage of
+  the private notes moves to the Stop hook, which runs where those files exist.
 - `tests/test_gui_release_fixes.py::test_start_only_fields_are_locked_while_a_session_runs`
   rewritten to DERIVE its subjects from `fields.FIELD_DEFS` instead of naming `duration` and the
   filter combobox by hand, and to resolve each field to the surface that renders it
