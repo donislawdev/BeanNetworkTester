@@ -33,6 +33,7 @@ from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
+from ..matchers import add_term
 from .. import crashlog
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     set_language)
@@ -1235,6 +1236,48 @@ class App:
         self.log(f"{T('log.dest_set')}: {ip}:{port}")
         if self.running:
             self.log(T("log.apply_needed"))
+
+    def _append_to_field(self, key, term, log_key):
+        """Add one term to an expression field, keeping what is already there.
+
+        The row actions below build a field up click by click - block this
+        address, then that one - so they append. Replacing would throw away the
+        addresses blocked a moment ago, which is the opposite of what the second
+        click means. ``matchers.add_term`` owns the syntax (convention 10): it
+        drops repeats, keeps the comma escape of a regex intact and never leaves
+        an empty term behind.
+
+        Like every other row action, this only fills the form: convention 15, and
+        the running session hears about it through the same "apply needed" line.
+        """
+        current = self.vars[key].get()
+        updated = add_term(current, term)
+        self.vars[key].set(updated)
+        self.form.set_values(self._settings_for_form())
+        self.on_form_changed()
+        self.log(f"{T(log_key)}: {updated}")
+        if self.running:
+            self.log(T("log.apply_needed"))
+
+    def block_ip_address(self, ip):
+        """Add an address to the blocking field (pipeline step 2c)."""
+        if not str(ip or "").strip():
+            return
+        self._append_to_field("block_ip", str(ip).strip(), "log.block_ip_added")
+
+    def leave_process_alone(self, name):
+        """Exclude a process from impairment by adding ``!name`` to the target.
+
+        With a target already set this narrows it. With the target EMPTY it turns
+        "impair everything" into "impair everything except this one", because a
+        bare negative means exactly that in this expression language - which is
+        the case the menu entry is really for.
+        """
+        name = str(name or "").strip()
+        if not name or name == "?":
+            self.log(T("log.no_process_for_row"))
+            return
+        self._append_to_field("target", f"!{name}", "log.process_excluded")
 
     # -- scenario / config files ---------------------------------------------------- #
     def _update_scenario_label(self):

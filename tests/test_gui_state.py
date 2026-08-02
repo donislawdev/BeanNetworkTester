@@ -158,6 +158,71 @@ def test_connection_row_feeds_the_targeting_fields():
     """)
 
 
+def test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine():
+    """Convention 15 for the Connections context menu: nothing applies itself.
+
+    The test above proves the FIELDS get the values. It says nothing about the
+    engine, which is the half that matters: these actions are one click away from
+    the running session, and "helpfully" pushing them straight through is the
+    obvious future change that would break the rule while every test stayed green.
+    Same shape as the preset and profile pickers, which have had this guard for
+    longer, and same shape as the bug that made `narrow_filter` stay editable.
+
+    So this asserts BOTH directions - untouched engine before Apply, changed
+    engine after it - because only the pair distinguishes "did not apply" from
+    "did not work at all".
+    """
+    run_gui("""
+        app.running = True
+        app.engine.start("both", divert=bnt.SyntheticDivert(gen_kbps=1))
+        core = app.engine.core
+        assert not core.target_active and not core.dst_active, "engine starts unaimed"
+
+        app.set_target_expression("chrome.exe")
+        app.set_destination("10.0.0.7", "443")
+
+        assert not core.target_active, "targeting reached the engine without Apply"
+        assert not core.dst_active, "destination reached the engine without Apply"
+        s = app._settings_from_widgets()
+        assert s["target"] == "chrome.exe" and s["dst_ip"] == "10.0.0.7"
+        assert app._form_changed, "the Apply button must light up instead"
+
+        app.apply_if_running(announce=False)
+        assert core.target_active and core.dst_active, "Apply did not push them"
+        app.engine.stop()
+    """)
+
+
+def test_blocking_and_excluding_from_a_row_accumulate():
+    """"Block this IP" and "Leave this process alone" ADD, they do not replace.
+
+    Both are used one row at a time - block this address, then that one - so
+    replacing would silently discard the address blocked a moment ago, and the
+    second click would look broken. A repeat is dropped instead of doubled,
+    because `8.8.8.8,8.8.8.8` means the same thing and only reads as a bug.
+
+    The exclusion is `!name` in the target field. With the target empty that is
+    not a narrowing but a flip: "impair everything" becomes "impair everything
+    except this", which is the case the menu entry exists for.
+    """
+    run_gui("""
+        app.block_ip_address("8.8.8.8")
+        app.block_ip_address("1.1.1.1")
+        app.block_ip_address("8.8.8.8")
+        assert app._settings_from_widgets()["block_ip"] == "8.8.8.8,1.1.1.1"
+
+        app.leave_process_alone("chrome.exe")
+        app.leave_process_alone("msedge.exe")
+        assert app._settings_from_widgets()["target"] == "!chrome.exe,!msedge.exe"
+
+        # a row with no known process must not write "!?" into the target
+        before = app._settings_from_widgets()["target"]
+        app.leave_process_alone("?")
+        app.leave_process_alone("")
+        assert app._settings_from_widgets()["target"] == before
+    """)
+
+
 def test_no_section_carries_an_enable_checkbox():
     """The three "Enable" boxes are gone.
 

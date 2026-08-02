@@ -58,6 +58,16 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        "label": "gui: a row action pushes straight through to the running engine",
+        "file": "beantester/gui/app.py",
+        "old": ("        self.on_form_changed()\n"
+                "        self.log(f\"{T('log.target_set')}: {expression}\")"),
+        "new": ("        self.on_form_changed()\n"
+                "        self.apply_if_running(announce=False)\n"
+                "        self.log(f\"{T('log.target_set')}: {expression}\")"),
+        "test": "test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine",
+    },
+    {
         "label": "guards: the repository collector returns nothing",
         "file": "tests/test_repo_conventions.py",
         "old": "    out = []\n    for dirpath, dirnames, filenames in os.walk(ROOT):",

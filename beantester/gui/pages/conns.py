@@ -171,7 +171,10 @@ class ConnsPage:
         self.menu.add_command(label=T("menu.copy_ip"), command=self._copy_ip)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.target_process"), command=self._target_process)
+        self.menu.add_command(label=T("menu.leave_process_alone"),
+                              command=self._leave_process_alone)
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit_dest)
+        self.menu.add_command(label=T("menu.block_ip"), command=self._block_ip)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.reset_widths"),
                               command=self.table.reset_widths)
@@ -239,12 +242,24 @@ class ConnsPage:
             return
         self.app.set_target_expression(name)
 
+    def _leave_process_alone(self):
+        row = self._selected()
+        if not row:
+            return
+        self.app.leave_process_alone(str(row.get("proc") or "").strip())
+
     def _limit_dest(self):
         row = self._selected()
         if not row:
             return
         self.app.set_destination(str(row.get("remote_ip") or ""),
                                  str(row.get("remote_port") or ""))
+
+    def _block_ip(self):
+        row = self._selected()
+        if not row:
+            return
+        self.app.block_ip_address(str(row.get("remote_ip") or ""))
 
     # -- search -------------------------------------------------------------- #
     def _schedule_search(self):

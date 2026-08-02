@@ -264,6 +264,39 @@ def split_terms(text):
     return [p.strip() for p in parts if p.strip()]
 
 
+def add_term(text, term):
+    """Return ``text`` with ``term`` appended, or unchanged if it is already there.
+
+    The Connections context menu builds expressions one row at a time: block this
+    address, then that one, then leave this process alone. Appending is the only
+    behaviour that makes sense there - replacing would silently drop the two
+    addresses the user blocked a moment ago.
+
+    It lives HERE rather than in the GUI because splitting on commas is a question
+    about the FILTER SYNTAX, and this module owns that (convention 10). Naive
+    string concatenation gets three things wrong that ``split_terms`` already
+    knows: an escaped ``\\,`` inside a regex is not a separator, terms carry
+    surrounding whitespace that must not become part of the value, and a trailing
+    comma from an earlier edit would produce an empty term.
+
+    Duplicates are dropped rather than repeated. ``80,80`` means the same as
+    ``80``, so the only thing a repeat changes is that the field looks broken.
+
+    🔴 **The comma escape has to be put back on the way out**, exactly as in
+    ``Matcher.describe``. ``split_terms`` turns ``\\,`` into a literal comma inside
+    the term, so re-joining without escaping emits it as a SEPARATOR and silently
+    splits one regex into two nonsense terms. This function reintroduced that bug
+    when it was first written, on the same day its twin was cited as a solved one -
+    which is why the round trip is now a test, not a promise.
+    """
+    term = str(term or "").strip()
+    if not term:
+        return str(text or "")
+    existing = split_terms(text)
+    terms = existing if term in existing else existing + [term]
+    return ",".join(t.replace(",", "\\,") for t in terms)
+
+
 # -- atom parsers --------------------------------------------------------------- #
 def _check_bounds(number, bounds, field, term):
     if bounds and not (bounds[0] <= number <= bounds[1]):

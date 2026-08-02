@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **Connections: two new right-click actions on a row.** "Block this IP address" adds it to the
+  blocking field, and "Leave this process alone" excludes that process from impairment. Both ADD
+  to what is already in the field, so you can build a list one row at a time, and a repeat is
+  ignored rather than duplicated. Like every other row action they fill the form only - press
+  "Apply changes" to put them into a running session.
+
 ### Docs
 
 - Both READMEs now say in the licence section that **what you make with the tool is yours**.

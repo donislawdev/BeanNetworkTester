@@ -341,3 +341,43 @@ def test_describe_round_trips_an_escaped_comma():
               original.matches(1, name) == reparsed.matches(1, name))
     check("and it still matches what it should", original.matches(1, "aa"))
     check("and rejects what it should", not original.matches(1, "a"))
+
+
+def test_add_term_appends_without_breaking_the_expression():
+    """Row actions build an expression one click at a time, so appending must be safe.
+
+    Replacing would silently drop the two addresses the user blocked a moment ago,
+    which is why the Connections menu appends. The cases below are the ones naive
+    concatenation gets wrong.
+    """
+    from beantester.matchers import add_term
+
+    check("appending to an empty field just sets it", add_term("", "8.8.8.8") == "8.8.8.8")
+    check("a second term is appended", add_term("8.8.8.8", "1.1.1.1") == "8.8.8.8,1.1.1.1")
+    check("a repeat is dropped, not doubled", add_term("8.8.8.8", "8.8.8.8") == "8.8.8.8")
+    check("surrounding spaces do not become part of a value",
+          add_term("8.8.8.8 , 1.1.1.1", "9.9.9.9") == "8.8.8.8,1.1.1.1,9.9.9.9")
+    check("a trailing comma does not produce an empty term",
+          add_term("8.8.8.8,", "1.1.1.1") == "8.8.8.8,1.1.1.1")
+    check("an empty term changes nothing", add_term("x", "  ") == "x")
+    check("an exclusion is just another term",
+          add_term("chrome.exe", "!msedge.exe") == "chrome.exe,!msedge.exe")
+
+
+def test_add_term_keeps_the_comma_escape_of_a_regex():
+    """The bug this function shipped with for about ten minutes, now pinned.
+
+    ``split_terms`` turns ``\,`` into a literal comma INSIDE the term. Re-joining
+    without escaping it emits that comma as a SEPARATOR, so one regex silently
+    becomes two nonsense terms - the same failure a property test once found in
+    ``Matcher.describe``. Appending to a field containing a regex is rare, and
+    "rare plus silent" is exactly what a regression test is for.
+    """
+    from beantester.matchers import add_term, split_terms
+
+    out = add_term(r"re:^a\,b$", "1.1.1.1")
+    check("the escape survives the round trip", r"\," in out, f"({out})")
+    check("the expression still has exactly two terms", len(split_terms(out)) == 2,
+          f"({split_terms(out)})")
+    check("the regex term is intact", split_terms(out)[0] == "re:^a,b$",
+          f"({split_terms(out)[0]!r})")
