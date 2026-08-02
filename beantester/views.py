@@ -6,7 +6,52 @@ virtualised and format only what is on screen.
 """
 import heapq
 
+from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS, parse_matcher
+
 PARTIAL_SORT_RATIO = 10     # use a heap only when the limit is this much smaller
+
+# -- field-qualified search ----------------------------------------------------- #
+#
+# The plain search matches one substring against a blob of process, protocol,
+# direction, addresses and ports. That is 6 of the table's 17 columns: a PID is on
+# screen and cannot be searched for, and neither can "only the impaired rows" or
+# "only rows that dropped something" - which are the questions a tester actually
+# has when the table holds a hundred thousand flows.
+#
+# So a term may name its column: `port:443`, `ip:10.0.0.0/8`, `pid:>4000`. The
+# VALUE is parsed by `matchers.py`, i.e. the same mini-language as the form fields
+# (comma lists, ranges, `!`, `>` `<`, wildcards, `re:`, CIDR). Nothing new to learn
+# and, more to the point, nothing new to maintain: a second syntax for the same job
+# would drift from the first one on its first edit (convention 10).
+#
+# Bare text keeps working exactly as before, so no existing habit breaks.
+#
+# `kind` is what the value is parsed as; `get` pulls the comparable value off a row.
+# PROCESS is the text kind here: it is the one that understands wildcards, `re:` and
+# `!` on names, which is what "search a text column" means.
+SEARCH_FIELDS = {
+    "proc":    (KIND_PROCESS, None),        # special: matched with (pid, name)
+    "pid":     (KIND_INT, lambda c, m: c.get("pid")),
+    "proto":   (KIND_PROCESS, lambda c, m: c.get("proto")),
+    "dir":     (KIND_PROCESS, lambda c, m: c.get("dir")),
+    "ip":      (KIND_IP, lambda c, m: c.get("remote_ip")),
+    "port":    (KIND_INT, lambda c, m: c.get("remote_port")),
+    "lport":   (KIND_INT, lambda c, m: c.get("local_port")),
+    "packets": (KIND_INT, lambda c, m: c.get("packets")),
+    "dropped": (KIND_INT, lambda c, m: c.get("dropped")),
+    "down":    (KIND_INT, lambda c, m: c.get("sent_in")),
+    "up":      (KIND_INT, lambda c, m: c.get("sent_out")),
+    "bytes":   (KIND_INT, lambda c, m: c.get("sent")),
+}
+
+# The one genuine boolean on a row. It gets words rather than an expression because
+# `scoped:yes` reads like a question and `scoped:1` reads like a bug report about the
+# search box. "Has drops" needs no boolean of its own - that is `dropped:>0`.
+BOOL_FIELDS = {"scoped"}
+TRUE_WORDS = {"yes", "y", "true", "1", "tak"}
+FALSE_WORDS = {"no", "n", "false", "0", "nie"}
+
+_BOUNDS = {"port": PORT_BOUNDS, "lport": PORT_BOUNDS}
 
 
 class SearchIndex:
@@ -137,11 +182,71 @@ def _connection_blob(c, proc_map=None):
             f"{c.get('local_port') or ''}").lower()
 
 
+def compile_query(query):
+    """Turn a search string into a list of predicates, ONCE per query.
+
+    Compiling per row would put the expression parser on the path of every one of
+    a hundred thousand rows on every keystroke, which is the shape of the problem
+    ``SearchIndex`` exists to solve, reintroduced one layer up. So parse here and
+    return closures; the row loop then only calls them.
+
+    A term is either ``field:value`` or bare text. Terms are ANDed, because that is
+    what narrowing means and what every search box a tester has used does.
+
+    An unparsable value is NOT an error: the box is typed into character by
+    character, so `port:44` is a valid search on the way to `port:443` and half of
+    `ip:10.0.` must not throw or blank the table. Such a term simply matches
+    nothing until it becomes valid, and a term naming an unknown field falls back
+    to plain text - `http://x` is a URL someone pasted, not a field called `http`.
+    """
+    tests = []
+    for raw in str(query or "").split():
+        field, sep, value = raw.partition(":")
+        field = field.lower()
+        if not sep or (field not in SEARCH_FIELDS and field not in BOOL_FIELDS):
+            text = raw.lower()
+            tests.append(lambda c, m, t=text: t in _connection_blob(c, m))
+            continue
+        if field in BOOL_FIELDS:
+            want = value.strip().lower()
+            if want in TRUE_WORDS:
+                tests.append(lambda c, m, k=field: bool(c.get(k)))
+            elif want in FALSE_WORDS:
+                tests.append(lambda c, m, k=field: not c.get(k))
+            else:                                   # half-typed: match nothing yet
+                tests.append(lambda c, m: False)
+            continue
+        kind, getter = SEARCH_FIELDS[field]
+        try:
+            matcher = parse_matcher(value, kind, f"fields.{field}",
+                                    bounds=_BOUNDS.get(field))
+        except ValueError:
+            tests.append(lambda c, m: False)
+            continue
+        if not matcher:                             # `port:` with nothing after it
+            continue
+        if field == "proc":
+            # The process kind judges (pid, name) together, exactly as the target
+            # field does - so `proc:1234` and `proc:chrome` both work here for the
+            # same reason they both work there.
+            tests.append(lambda c, m, x=matcher: x.matches(c.get("pid"),
+                                                           connection_proc(c, m)))
+        elif kind == KIND_PROCESS:
+            # A text column is a process matcher with no pid: the value goes in the
+            # NAME position. Passing it positionally instead gives it to `pid`,
+            # where a name cannot be evaluated - and an unevaluable term quietly
+            # matches nothing, so `proto:tcp` found zero rows while looking correct.
+            tests.append(lambda c, m, x=matcher, g=getter: x.matches(None, g(c, m)))
+        else:
+            tests.append(lambda c, m, x=matcher, g=getter: x.matches(g(c, m)))
+    return tests
+
+
 def _filter_connections(conns, query, proc_map):
-    q = (query or "").strip().lower()
-    if not q:
+    tests = compile_query(query)
+    if not tests:
         return list(conns)
-    return [c for c in conns if q in _connection_blob(c, proc_map)]
+    return [c for c in conns if all(t(c, proc_map) for t in tests)]
 
 
 def traffic_totals(conns, query="", proc_map=None):

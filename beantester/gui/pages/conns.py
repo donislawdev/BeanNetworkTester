@@ -28,6 +28,7 @@ from tkinter import ttk
 from ...i18n import T
 from ...views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                       traffic_totals)
+from .. import dialogs
 from ..model_worker import AsyncModel
 from ..labels import wrapping_label
 from ..scaling import scaled
@@ -121,6 +122,14 @@ class ConnsPage:
         entry.bind("<KeyRelease>", lambda e: self._schedule_search())
         entry.bind("<Escape>", lambda e: self._clear_search())
         add_tooltip(entry, "tips.conn_search")
+        # The same "?" affordance the expression fields use (gui/form.py): the search
+        # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
+        # read is the only way anyone finds that out. A tooltip cannot be it - it
+        # runs away from the pointer as soon as you click.
+        help_btn = ttk.Button(top, text=T("fields.match_help"), style="Help.TButton",
+                              width=2, command=self._show_search_help)
+        help_btn.pack(side="left", padx=(0, scaled(8)))
+        add_tooltip(help_btn, "tips.conn_search_help")
 
         self.pause_var = tk.BooleanVar(value=False)
         pause = ttk.Checkbutton(top, text=T("buttons.freeze"), variable=self.pause_var,
@@ -241,6 +250,11 @@ class ConnsPage:
             self.app.log(T("log.no_process_for_row"))
             return
         self.app.set_target_expression(name)
+
+    def _show_search_help(self):
+        """The search cheat sheet, opened by the "?" next to the box."""
+        dialogs.show_help(self.app.root, T("dialogs.conn_search_help_title"),
+                          T("dialogs.conn_search_help"))
 
     def _leave_process_alone(self):
         row = self._selected()

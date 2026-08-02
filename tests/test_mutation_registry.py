@@ -68,6 +68,13 @@ MUTATIONS = [
         "test": "test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine",
     },
     {
+        "label": "search: a text column is judged in the pid position again",
+        "file": "beantester/views.py",
+        "old": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(None, g(c, m)))",
+        "new": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(g(c, m)))",
+        "test": "test_a_text_column_is_matched_case_insensitively",
+    },
+    {
         "label": "guards: the repository collector returns nothing",
         "file": "tests/test_repo_conventions.py",
         "old": "    out = []\n    for dirpath, dirnames, filenames in os.walk(ROOT):",

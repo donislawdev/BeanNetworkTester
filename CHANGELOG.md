@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Connections: the search box can search one column at a time.** Plain text works as before,
+  and now a term can name its column: `port:443`, `ip:10.0.0.0/8`, `pid:>4000`, `scoped:yes`,
+  `dropped:>0`. Values use the same notation as the Control page fields, and several terms narrow
+  together. A new "?" button lists the column names with examples. The search used to look at 6 of
+  the table's 17 columns, so a PID was on screen and could not be searched for.
 - **Connections: two new right-click actions on a row.** "Block this IP address" adds it to the
   blocking field, and "Leave this process alone" excludes that process from impairment. Both ADD
   to what is already in the field, so you can build a list one row at a time, and a repeat is
