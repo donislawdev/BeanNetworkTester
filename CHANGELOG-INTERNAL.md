@@ -15,6 +15,32 @@ flags, exit codes, the NDJSON schema, on-disk file formats, or the facade's publ
 a `### BREAKING` section placed FIRST in that version, and each such line is prefixed with
 `**BREAKING:**`. A breaking change also requires a version bump by the owner (convention 34).
 
+## [Unreleased]
+
+### Fixed
+
+- **A START-only field rendered by a WINDOW never locked.** `App._sync_running_ui` refreshed
+  `self.form` only, so `narrow_filter` - which lives on `SettingsWindow`'s own `ControlForm`
+  (`surface="settings"`, convention 42) - stayed `state="normal"` for the whole session whenever
+  the window was open BEFORE START. Opened AFTER a start it came up correctly disabled, because
+  the build path reads `is_locked` and nothing re-read it afterwards. Measured on the fake Tk both
+  ways before and after the fix. Two halves, both guarded: `SettingsWindow.refresh()` now calls
+  `form.refresh_field_states()` (self-healing on the 700 ms tick, whatever moved the state), and
+  `_sync_running_ui` ticks the open windows so the lock is immediate rather than a tick late.
+  Conventions 7, 21 and 42.
+
+### Tests
+
+- `tests/test_gui_release_fixes.py::test_start_only_fields_are_locked_while_a_session_runs`
+  rewritten to DERIVE its subjects from `fields.FIELD_DEFS` instead of naming `duration` and the
+  filter combobox by hand, and to resolve each field to the surface that renders it
+  (`SECTIONS[].surface`, with `CHOICE` belonging to `App`, not to a form). The old shape was a test
+  of two examples, so `narrow_filter` was added to the registry, shipped unlocked and left the
+  suite green - PROJECT_NOTES rule 2.6 (one value, several consumers, a guard on one of them) and
+  the same mistake convention 16 records. It now opens the Settings window BEFORE the session
+  starts, which is the order that was broken. Verified by mutation: removing either half of the
+  fix turns it red.
+
 ## [0.4.0] - 2026-08-01
 
 ### BREAKING

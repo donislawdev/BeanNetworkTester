@@ -3,6 +3,15 @@
 All notable changes to Bean Network Tester.
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
+## [Unreleased]
+
+### Fixed
+
+- In the Settings window, "Capture only the targeted traffic" stayed clickable after you pressed
+  START, if the window was already open at the time. Ticking it did nothing until the next
+  session. It now greys out for as long as the session runs, with the same "locked while running"
+  note as every other option that is only read at start.
+
 ## [0.4.0] - 2026-08-01
 
 **The short version.** This release is about numbers you can trust and targeting that catches what

@@ -198,8 +198,19 @@ class SettingsWindow(PanelWindow):
                 label.pack_forget()
 
     def refresh(self):
-        """Ticked by the App while this window is open (PanelWindow.refresh)."""
+        """Ticked by the App while this window is open (PanelWindow.refresh).
+
+        ``refresh_field_states`` is here because this window renders START-only
+        fields (``narrow_filter``) on its OWN ``ControlForm``, and
+        ``App._sync_running_ui`` only ever refreshed the Control page's form. A
+        window opened BEFORE the session started therefore kept the checkbox
+        clickable for the whole run, while the same field opened AFTER the start
+        came up correctly disabled - the build path reads the registry, nothing
+        re-read it afterwards. Ticking it here heals the state whatever moved it,
+        not just start/stop.
+        """
         with crashlog.quiet("gui.panels.settings"):
+            self.form.refresh_field_states()
             self._sync_scope_status()
 
     # -- preference rows ------------------------------------------------------- #

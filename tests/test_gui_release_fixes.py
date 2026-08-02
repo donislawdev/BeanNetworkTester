@@ -231,21 +231,52 @@ def test_a_target_that_matches_nothing_says_so_on_the_page():
 
 
 def test_start_only_fields_are_locked_while_a_session_runs():
-    """"Run time" is consumed by BeanEngine.start(), exactly like the traffic
-    filter - so, exactly like the filter, it must not look editable mid-session."""
+    """EVERY field the registry marks start_only greys out mid-session, on
+    whichever surface renders it.
+
+    This used to name ``duration`` and the filter combobox by hand, which made it
+    a test of two EXAMPLES rather than of the rule (convention 16's mistake, and
+    PROJECT_NOTES rule 2.6: one value, several consumers, a guard on one of them).
+    ``narrow_filter`` was added to the registry later, landed on the Settings
+    window's own ControlForm, and stayed clickable for an entire session whenever
+    that window was open before START - with this test green throughout. Deriving
+    the list from FIELD_DEFS means the fourth start_only field cannot repeat it.
+
+    The window is opened BEFORE the session starts on purpose: that is the order
+    that was broken. Opened after, the build path already read the registry.
+    """
     run_gui("""
-        assert app.form.entries["duration"].kw.get("state") in (None, "normal")
+        from beantester.fields import CHOICE, FIELD_DEFS, FIELDS, SECTIONS
+
+        surface_of = {key: sec.surface for sec in SECTIONS for key in sec.fields}
+        start_only = [f.key for f in FIELD_DEFS if f.start_only]
+        assert start_only, "no start_only field in the registry - the rule lost its subject"
+
+        app.open_window("settings")
+        settings_form = app.windows._open["settings"].form
+
+        def widget(key):
+            # the traffic filter is a CHOICE and belongs to App, not to a form
+            if FIELDS[key].kind == CHOICE:
+                return app.filter_cb
+            form = settings_form if surface_of[key] == "settings" else app.form
+            return form.entries[key]
+
+        for key in start_only:
+            assert widget(key).kw.get("state") in (None, "normal", "readonly"), key
 
         app.running = True
         app._sync_running_ui()
-        assert app.form.entries["duration"].kw.get("state") == "disabled"
-        assert app.form.labels["duration"].kw.get("style") == "CardOff.TLabel"
-        assert app.filter_cb.kw.get("state") == "disabled"
+        for key in start_only:
+            assert widget(key).kw.get("state") == "disabled", (
+                key + " stayed editable while a session was running")
 
         app.running = False
         app._sync_running_ui()
-        assert app.form.entries["duration"].kw.get("state") == "normal"
-        assert app.filter_cb.kw.get("state") == "readonly"
+        for key in start_only:
+            expected = ("readonly" if FIELDS[key].kind == CHOICE
+                        else "normal")
+            assert widget(key).kw.get("state") == expected, key
     """)
 
 
