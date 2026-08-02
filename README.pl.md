@@ -1209,6 +1209,18 @@ pod warunkiem przekazywania programu dalej na tych samych warunkach GPLv3 i
 udostępnienia odpowiadającego kodu źródłowego. Program dostarczany jest „AS IS”,
 bez gwarancji i bez odpowiedzialności autora. Autorem jest **DonislawDev**.
 
+### To, co nim zrobisz, należy do Ciebie
+
+**GPL obejmuje program, a nie to, co nim wyprodukujesz.** Napisane przez Ciebie scenariusze,
+zapisane profile i pliki konfiguracji, raporty reprodukcji, wyeksportowane pliki CSV, logi
+i zrzuty ekranu są Twoją własną pracą. Użycie Bean Network Testera nie obejmuje ich licencją GPL
+i nie zobowiązuje Cię do publikowania czegokolwiek. Możesz je trzymać u siebie, dołączyć do
+zamkniętego produktu albo sprzedać - to Twoja decyzja.
+
+Jedna rzecz, którą trzeba oddzielić: przykładowe scenariusze dostarczane **razem** z programem,
+w katalogu `scenarios/`, są częścią projektu i podlegają GPLv3 tak samo jak reszta. Scenariusz
+napisany przez Ciebie już nie, nawet jeśli zacząłeś od jednego z nich i zmieniłeś liczby.
+
 ## Komponenty firm trzecich
 
 Program korzysta z bibliotek innych autorów, na ich własnych licencjach - m.in.

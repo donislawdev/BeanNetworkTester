@@ -1350,6 +1350,17 @@ change it, and to redistribute copies - including modified ones - provided you p
 under the same GPLv3 terms and make the corresponding source available. The program is provided
 "AS IS", with no warranty and no liability on the author's part. The author is **DonislawDev**.
 
+### What you make with it is yours
+
+**The GPL covers the program, not your output.** Scenario files you write, saved profiles and
+configuration files, reproduction reports, exported CSVs, log files and screenshots are your own
+work. Using Bean Network Tester does not put them under the GPL and does not oblige you to publish
+anything. Keep them private, ship them with a closed-source product, sell them - your call.
+
+The one thing to keep apart: the example scenarios that come **with** the program, in the
+`scenarios/` directory, are part of the project and are GPLv3 like the rest of it. A scenario you
+write yourself is not, even if you started from one of them and changed the numbers.
+
 ## Third-party components
 
 The program uses libraries by other authors, under their own licenses - among them
