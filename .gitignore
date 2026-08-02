@@ -28,6 +28,7 @@ BeanNetworkTester-*.zip
 
 # Claude config and dev notes - kept in the private BeanNetworkTester-Doc repo
 .claude/
+CLAUDE.md
 PROJECT_NOTES.md
 HISTORY_NOTES.md
 
