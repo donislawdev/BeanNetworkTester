@@ -570,3 +570,30 @@ def test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped(
 
         app._stop(); app._settle_transition()
     """)
+
+
+def test_the_chosen_columns_are_remembered_and_restored():
+    """The column layout survives a restart, and cancelling changes nothing.
+
+    It lands in `ui.json` next to the sort order, which is the established home
+    for per-page view state. A dialog that only works until you close the program
+    is a setting nobody uses twice.
+    """
+    run_gui("""
+        from beantester.gui import dialogs
+        page = app.pages["connections"]
+
+        dialogs.choose_columns = lambda *a, **k: ["proc", "remote_ip", "packets"]
+        page._choose_columns()
+        assert page.table.visible_columns() == ["proc", "remote_ip", "packets"]
+        assert app.ui.get("conn_columns") == ["proc", "remote_ip", "packets"]
+
+        dialogs.choose_columns = lambda *a, **k: None          # cancelled
+        page._choose_columns()
+        assert page.table.visible_columns() == ["proc", "remote_ip", "packets"]
+
+        # what a restart does: the page is built again and reads the saved layout
+        app._build_ui()
+        assert app.pages["connections"].table.visible_columns() == [
+            "proc", "remote_ip", "packets"]
+    """)

@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   `dropped:>0`. Values use the same notation as the Control page fields, and several terms narrow
   together. A new "?" button lists the column names with examples. The search used to look at 6 of
   the table's 17 columns, so a PID was on screen and could not be searched for.
+- **Connections: you can choose which columns the table shows.** Right-click, "Choose
+  columns...", tick what you need. The choice is remembered for next time, and at least one
+  column always stays. The table has seventeen of them, which is more than fits comfortably
+  on a 1366x768 screen.
 - **Connections: two new right-click actions on a row.** "Block this IP address" adds it to the
   blocking field, and "Leave this process alone" excludes that process from impairment. Both ADD
   to what is already in the field, so you can build a list one row at a time, and a repeat is

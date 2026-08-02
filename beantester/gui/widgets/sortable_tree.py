@@ -72,6 +72,7 @@ class SortableTree:
                  height=10, stretch=(), horizontal=False, min_chars=None,
                  tips=None, tags=None, selectmode="extended"):
         self.columns = dict(columns)            # column id -> i18n key of its header
+        self._visible = set(self.columns)       # see set_visible_columns
         self.sort = dict(sort or {"col": next(iter(self.columns)), "reverse": False})
         self.on_sort = on_sort
         self._min_chars = dict(min_chars or {})
@@ -497,6 +498,34 @@ class SortableTree:
             limit = self.max_width(col)
             if width > limit:
                 self.tree.column(col, width=limit)
+
+    def visible_columns(self):
+        """The column ids currently on screen, in table order."""
+        return [c for c in self.columns if c in self._visible]
+
+    def set_visible_columns(self, ids):
+        """Show only these columns, keeping the table's own order.
+
+        Done with ttk's ``displaycolumns`` rather than by rebuilding the tree with
+        fewer columns, and that choice is what keeps this cheap: the model, the
+        render callback and the recycled viewport slots all still deal in the full
+        row, so nothing about virtualisation changes and no data has to be
+        reformatted. Only the header changes.
+
+        **At least one column always survives.** An empty table with no columns is
+        not a view of anything, it is a bug report waiting to happen, and the user
+        who ticks the last box off cannot tick it back on because there is nothing
+        left to right-click. Unknown ids are ignored, so a layout saved by an older
+        build that named a column since removed still opens.
+        """
+        wanted = [c for c in self.columns if c in set(ids or ())]
+        if not wanted:
+            wanted = [next(iter(self.columns))]
+        self._visible = set(wanted)
+        try:
+            self.tree.configure(displaycolumns=tuple(wanted))
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
 
     def reset_widths(self):
         """Back to the widths derived from the header text and the current DPI."""

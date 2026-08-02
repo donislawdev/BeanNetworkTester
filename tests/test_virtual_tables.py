@@ -274,3 +274,40 @@ def test_copying_with_headers_puts_the_column_names_on_the_first_line():
         table.select_keys([])
         assert table.copy_text() == "" and table.copy_text(header=True) == ""
     """)
+
+
+def test_hiding_columns_never_leaves_the_table_with_none():
+    """`set_visible_columns` is how a table hides a column, and it has a floor.
+
+    Hiding is done with ttk's `displaycolumns` rather than by rebuilding the tree
+    with fewer columns, which is what keeps it cheap: the model, the render
+    callback and the recycled slots still deal in the full row, so nothing about
+    virtualisation changes and no data is reformatted.
+
+    The floor matters more than it looks. A table showing no columns is not a
+    narrow view, it is a dead end - the header the user would right-click to get
+    the columns back is gone with them.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        everything = table.visible_columns()
+        assert len(everything) > 10, everything
+
+        table.set_visible_columns(["proc", "remote_ip", "packets"])
+        assert table.visible_columns() == ["proc", "remote_ip", "packets"]
+        assert table.tree.kw.get("displaycolumns") == ("proc", "remote_ip", "packets")
+
+        # the order is the TABLE's, not the caller's
+        table.set_visible_columns(["packets", "proc"])
+        assert table.visible_columns() == ["proc", "packets"]
+
+        table.set_visible_columns([])
+        assert len(table.visible_columns()) == 1, "an empty table is a dead end"
+
+        # a layout saved by an older build may name a column that no longer exists
+        table.set_visible_columns(["nosuchcolumn", "pid"])
+        assert table.visible_columns() == ["pid"]
+
+        table.set_visible_columns(everything)
+        assert table.visible_columns() == everything
+    """)

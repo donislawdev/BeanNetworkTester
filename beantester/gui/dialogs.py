@@ -181,3 +181,76 @@ def ask_string(parent, title, prompt):
     win.bind("<Return>", lambda e: accept())
     _center(win, parent, focus=entry)      # type straight away, no click needed
     return _run(win, None)
+
+
+def choose_columns(parent, title, prompt, columns, visible):
+    """Tick which columns a table shows. Returns the chosen ids, or None if cancelled.
+
+    ``columns`` is ``[(id, label)]`` in table order and ``visible`` the ids ticked
+    on entry. A small modal rather than an entry in the window registry: it is
+    opened, answered and closed, so remembered geometry and raise-instead-of-open
+    would be machinery for nobody. It is also not a menu of checkbuttons - with
+    seventeen columns that is a list you scroll past, and the tkinter double this
+    project tests GUIs on knows only ``add_command``, so a menu version would ship
+    with nothing checking it.
+
+    **The OK button goes disabled when nothing is ticked.** Hiding every column
+    leaves a table that shows nothing and offers no way back, since the header the
+    user would right-click is gone too. Refusing the empty answer at the point of
+    the click is kinder than accepting it and silently keeping one column.
+    """
+    win, body = _shell(parent, title)
+    ttk.Label(body, text=prompt, wraplength=scaled(WRAP), justify="left").pack(anchor="w")
+
+    chosen = set(visible)
+    vars_by_id = {}
+    grid = ttk.Frame(body)
+    grid.pack(fill="both", expand=True, pady=(scaled(10), 0))
+    # Two columns of checkboxes: seventeen in one strip is taller than the minimum
+    # supported window (convention: 1366x768) and would need its own scrollbar.
+    per_column = (len(columns) + 1) // 2
+    ok_holder = {}
+
+    def refresh_ok():
+        button = ok_holder.get("button")
+        if button is not None:
+            with crashlog.quiet("gui.dialogs"):
+                button.config(state=("normal" if chosen else "disabled"))
+
+    def toggle(col_id, var):
+        if var.get():
+            chosen.add(col_id)
+        else:
+            chosen.discard(col_id)
+        refresh_ok()
+
+    for index, (col_id, label) in enumerate(columns):
+        var = tk.BooleanVar(value=col_id in chosen)
+        vars_by_id[col_id] = var
+        box = ttk.Checkbutton(grid, text=label, variable=var,
+                              command=lambda c=col_id, v=var: toggle(c, v))
+        box.grid(row=index % per_column, column=index // per_column,
+                 sticky="w", padx=(0, scaled(18)), pady=scaled(2))
+
+    def select_all():
+        for col_id, var in vars_by_id.items():
+            var.set(True)
+            chosen.add(col_id)
+        refresh_ok()
+
+    bar = ttk.Frame(body)
+    bar.pack(fill="x", pady=(scaled(18), 0))
+    ttk.Button(bar, text=T("buttons.cancel"),
+               command=lambda: _close(win, None)).pack(side="right")
+    ok = ttk.Button(bar, text=T("buttons.ok"), style="Accent.TButton",
+                    command=lambda: _close(win, sorted(chosen, key=[c for c, _ in columns].index)))
+    ok.pack(side="right", padx=(0, scaled(8)))
+    ok_holder["button"] = ok
+    ttk.Button(bar, text=T("buttons.select_all_columns"),
+               command=select_all).pack(side="left")
+    refresh_ok()
+
+    win.protocol("WM_DELETE_WINDOW", lambda: _close(win, None))
+    win.bind("<Escape>", lambda e: _close(win, None))
+    _center(win, parent)
+    return _run(win, None)

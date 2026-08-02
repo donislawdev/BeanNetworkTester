@@ -216,6 +216,12 @@ class ConnsPage:
                                   horizontal=True, tags=CONN_COLORS,
                                   min_chars=MIN_CHARS, tips=COLUMN_TIPS)
         self.table.sort.setdefault("default_reverse", True)
+        # A layout saved by an earlier run. Unknown ids are dropped by the table
+        # (a column may have been removed since), and an empty or missing entry
+        # simply leaves every column showing.
+        saved = app.ui.get("conn_columns")
+        if isinstance(saved, list) and saved:
+            self.table.set_visible_columns(saved)
         self._build_menu()
 
         # footer: summed traffic over the WHOLE filtered set (not just the rows the
@@ -237,6 +243,8 @@ class ConnsPage:
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit_dest)
         self.menu.add_command(label=T("menu.block_ip"), command=self._block_ip)
         self.menu.add_separator()
+        self.menu.add_command(label=T("menu.choose_columns"),
+                              command=self._choose_columns)
         self.menu.add_command(label=T("menu.reset_widths"),
                               command=self.table.reset_widths)
         self.table.tree.bind("<Button-3>", self._popup)
@@ -302,6 +310,18 @@ class ConnsPage:
             self.app.log(T("log.no_process_for_row"))
             return
         self.app.set_target_expression(name)
+
+    def _choose_columns(self):
+        """Ask which columns to show, then remember the answer in ui.json."""
+        chosen = dialogs.choose_columns(
+            self.app.root, T("dialogs.choose_columns_title"),
+            T("dialogs.choose_columns"),
+            [(col, T(key)) for col, key in COLUMNS.items()],
+            self.table.visible_columns())
+        if chosen is None:
+            return                      # cancelled: leave the table as it was
+        self.table.set_visible_columns(chosen)
+        self.app.ui.set("conn_columns", list(self.table.visible_columns()))
 
     def _show_search_help(self):
         """The search cheat sheet, opened by the "?" next to the box."""

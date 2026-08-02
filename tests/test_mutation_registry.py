@@ -68,6 +68,20 @@ MUTATIONS = [
         "test": "test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine",
     },
     {
+        "label": "columns: hiding every column is allowed again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        if not wanted:\n            wanted = [next(iter(self.columns))]",
+        "new": "        if not wanted:\n            pass",
+        "test": "test_hiding_columns_never_leaves_the_table_with_none",
+    },
+    {
+        "label": "columns: the saved layout stops being restored",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            self.table.set_visible_columns(saved)",
+        "new": "            pass",
+        "test": "test_the_chosen_columns_are_remembered_and_restored",
+    },
+    {
         "label": "search: a text column is judged in the pid position again",
         "file": "beantester/views.py",
         "old": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(None, g(c, m)))",
@@ -183,7 +197,14 @@ def test_every_mutation_still_points_at_code_that_exists():
     for entry in MUTATIONS + [CANARY]:
         path = os.path.join(ROOT, entry["file"])
         check(f"{entry['label']}: {entry['file']} exists", os.path.exists(path))
-        text = open(path, encoding="utf-8").read()
+        # Read the way the RUNNER reads - bytes, then normalise - not in text mode.
+        # Text mode applies universal newlines, so a pattern written with `\n` matches
+        # a CRLF file here and does NOT match in a runner that works on raw bytes.
+        # That happened: entries aiming at `sortable_tree.py` (600 CRLF) reported SKIP
+        # while this test called them healthy. Two checks of the same fact must not
+        # read it two different ways.
+        with open(path, "rb") as handle:
+            text = handle.read().decode("utf-8").replace("\r\n", "\n")
         found = text.count(entry["old"])
         check(f"{entry['label']}: its search pattern occurs exactly once "
               f"(a stale pattern proves nothing and reports SKIP)",
