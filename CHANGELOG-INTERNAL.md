@@ -31,6 +31,19 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **The hot path's "zero allocations" rule got a gate.** New
+  `tests/test_hot_path_allocations.py` pins that `decide()` RETAINS nothing per packet: at most
+  64 blocks and 4096 bytes over 5000 calls, against a measured floor of 13 blocks and 608 bytes
+  that stays flat with duplication, latency, the NAT flow table and 200 ports. `test_hot_path.py`
+  guards the neighbouring rule (no syscalls on the packet threads); this catches the other class,
+  where something starts being kept once per packet.
+  🔴 **It reads two meters because one of them has a hole, and the hole was found by mutation
+  rather than by reasoning.** The first version counted `sys.getallocatedblocks()` only, and a
+  mutation making `decide()` append to an ever-growing list **survived**: the appended value was
+  a cached small int, so no object was created and blocks moved from 6 to 7. `tracemalloc`
+  current sees the same case as 42 032 bytes against 208. The meter-canary test now proves both
+  meters can rise, including the references-only case specifically. Still not caught, stated in
+  the file: transient garbage, since both meters are net.
 - **Size ceilings, as a ratchet.** New `tests/test_code_shape.py` caps a function at 167 logic
   lines and a module at 1299 - today's maxima (`theme.py::init_style`, `gui/app.py`), so nothing
   had to be rewritten to make it pass. Lowering them is routine work, raising either is the

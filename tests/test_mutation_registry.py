@@ -92,6 +92,22 @@ MUTATIONS = [
         "new": "        if text:",
         "test": "test_the_ratchet_measures_logic_and_not_explanation",
     },
+    {
+        "label": "hot path: decide() starts keeping one object per packet",
+        "file": "beantester/core.py",
+        "old": "        with self._lock:\n            # 1) process targeting",
+        "new": ("        with self._lock:\n"
+                "            self.__dict__.setdefault(\"_leak\", []).append(size)\n"
+                "            # 1) process targeting"),
+        "test": "test_the_decision_path_retains_nothing_per_packet",
+    },
+    {
+        "label": "hot path: the allocation meter stops seeing retention",
+        "file": "tests/test_hot_path_allocations.py",
+        "old": "        kept = [object() for _ in range(5000)]",
+        "new": "        kept = [object() for _ in range(0)]",
+        "test": "test_the_meter_can_actually_see_retention",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
