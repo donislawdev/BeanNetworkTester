@@ -1708,6 +1708,13 @@ class App:
         if self.form is not None:
             # every other START-only field (today: "Run time") locks with it
             self.form.refresh_field_states()
+        # ...and so do the ones rendered by a WINDOW. The Settings window has its
+        # own ControlForm carrying "narrow_filter", so refreshing only self.form
+        # left that checkbox live for the whole session whenever the window
+        # happened to be open before START. The tick would heal it within 700 ms;
+        # doing it here makes the lock immediate, like every other surface.
+        with crashlog.quiet("gui.app"):
+            self.windows.refresh()
         self._form_changed = True
         self._refresh_dirty()
         self._refresh_start_enabled()
