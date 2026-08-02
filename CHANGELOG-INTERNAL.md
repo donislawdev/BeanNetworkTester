@@ -31,6 +31,18 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **"Verified by mutation" became checkable.** New `tests/test_mutation_registry.py` holds the
+  claim as data in three states that say three different things: `MUTATIONS` (re-runnable now,
+  five entries), `PROVEN_BY_HAND` (a dated session did it, no patch was written down, so no
+  machine repeats it) and `NOT_PROVEN` (no mutation, said out loud). Until now the phrase
+  appeared over twenty times in the notes and in a dozen docstrings with nothing behind it -
+  convention 5's own evidence was the prose convention 5 warns about. The suite checks the
+  bookkeeping only: every named test exists, none is filed under two states, and every search
+  pattern still occurs exactly once, so a registry entry rots the day the code moves rather
+  than the day someone runs it. The mutations themselves run from `internal_tools/mutate.py`
+  (outside git, one subprocess suite run each), with a mandatory canary entry that must report
+  BROKEN - a tree that fails to compile also exits non-zero, so without it a whole run can
+  report "all caught" and mean nothing. First full run: 5 caught, 0 survived, canary BROKEN.
 - **The repository scanners now prove they read something.**
   `test_repo_conventions.py::test_the_repository_scanners_actually_read_files` names one file
   each collector must return plus a floor on the count, for all seven collectors across
