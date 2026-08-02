@@ -365,7 +365,7 @@ def test_add_term_appends_without_breaking_the_expression():
 
 
 def test_add_term_keeps_the_comma_escape_of_a_regex():
-    """The bug this function shipped with for about ten minutes, now pinned.
+    r"""The bug this function shipped with for about ten minutes, now pinned.
 
     ``split_terms`` turns ``\,`` into a literal comma INSIDE the term. Re-joining
     without escaping it emits that comma as a SEPARATOR, so one regex silently
