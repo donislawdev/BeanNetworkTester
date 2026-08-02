@@ -64,7 +64,9 @@ jobs:
           version="$(cat VERSION.txt)"
           escaped="${version//./\\.}"
           fail=0
-          for f in CHANGELOG.md CHANGELOG-INTERNAL.md; do
+          # CHANGELOG-INTERNAL.md is not in the repository, so this job cannot
+          # see it. Its structure is guarded locally by .claude/hooks/check_notes.py.
+          for f in CHANGELOG.md; do
             grep -qE "^## \[${escaped}\] +- +[0-9]{4}-[0-9]{2}-[0-9]{2}" "$f" \
               || { echo "$f: no dated '## [$version] - YYYY-MM-DD' section"; fail=1; }
             open="$(awk '/^## \[Unreleased\]/{u=1;next} /^## \[/{u=0} u && /^- /{n++} END{print n+0}' "$f")"

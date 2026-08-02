@@ -1825,7 +1825,7 @@ class BeanEngine:
                     # will never see it either - without this it just left the
                     # seen/delivered/dropped balance, silently, which is the one
                     # thing keeping these numbers honest. Found while measuring the
-                    # batched injector (rejected, see CHANGELOG-INTERNAL): the hole
+                    # batched injector (built, measured and rejected): the hole
                     # was one packet wide already, and batching would have made it
                     # a whole batch wide.
                     self._bump("drop_shutdown")

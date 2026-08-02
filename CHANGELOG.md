@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Docs
+
+- Both READMEs now say in the licence section that **what you make with the tool is yours**.
+  Scenarios you write, saved profiles and config files, reproduction reports, CSV exports, logs
+  and screenshots are your own work: the GPL covers the program, not its output, and using the
+  tool does not oblige you to publish anything. The example scenarios shipped in `scenarios/`
+  are part of the project and stay GPLv3.
+
 ### Fixed
 
 - In the Settings window, "Capture only the targeted traffic" stayed clickable after you pressed
