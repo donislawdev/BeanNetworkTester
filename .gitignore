@@ -31,6 +31,10 @@ BeanNetworkTester-*.zip
 CLAUDE.md
 PROJECT_NOTES.md
 HISTORY_NOTES.md
+# The technical changelog is ours: it records ADRs, rejected variants and
+# every added test. It stays next to the notes it argues with, not in the
+# release. Its structure is guarded by .claude/hooks/check_notes.py.
+CHANGELOG-INTERNAL.md
 
 # Internal scripts kept between sessions: measurement rigs, probes, diagnostics.
 # Never shipped, never a CI dependency, backed up by the owner separately.

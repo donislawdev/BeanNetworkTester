@@ -114,7 +114,10 @@ def test_breaking_sections_come_first():
     in both changelogs and nothing noticed - the em/en-dash guard reads changelog
     TEXT, never its structure.
     """
-    for name in ("CHANGELOG.md", "CHANGELOG-INTERNAL.md"):
+    # CHANGELOG-INTERNAL.md is not in the repository (it is a maintainer file, kept
+    # in the private notes repo), so no test here can read it. Its structure is
+    # guarded by `.claude/hooks/check_notes.py`, which runs where the file exists.
+    for name in ("CHANGELOG.md",):
         lines = open(os.path.join(ROOT, name), encoding="utf-8").read().splitlines()
         version, sections = None, []
         problems = []
@@ -145,7 +148,9 @@ def test_breaking_sections_come_first():
 # already been broken in practice. Prose is not a guard.
 
 
-CHANGELOG_FILES = ("CHANGELOG.md", "CHANGELOG-INTERNAL.md")
+# Only the shipped changelog. The internal one is a maintainer file kept out
+# of the repository, so its guards live in `.claude/hooks/check_notes.py`.
+CHANGELOG_FILES = ("CHANGELOG.md",)
 DATED_VERSION_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\]\s+-\s+\d{4}-\d{2}-\d{2}\b")
 
 
@@ -164,8 +169,8 @@ def _versions_in(name):
     return blocks
 
 
-def test_version_txt_has_a_dated_section_in_both_changelogs():
-    """VERSION.txt must name a released, DATED section in both changelogs.
+def test_version_txt_has_a_dated_section_in_the_changelog():
+    """VERSION.txt must name a released, DATED section in the changelog.
 
     The failure this closes is silent by construction: `release.yml` checks the
     tag against VERSION.txt and nothing else, so a version bumped without its

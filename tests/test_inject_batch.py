@@ -1,7 +1,7 @@
 """A packet taken off the release heap must never leave the books.
 
-Found while measuring the batched injector (measured and REJECTED - see
-CHANGELOG-INTERNAL). The hole is older than that work and survives it: the inject
+Found while measuring the batched injector, which was built, measured and then
+rejected. The hole is older than that work and survives it: the inject
 loop pops a packet, then finds ``_divert`` gone because STOP cleared it in
 between. The packet is no longer in ``_heap``, so ``stop()``'s stranded sweep
 cannot see it either, and it used to vanish with no counter at all.

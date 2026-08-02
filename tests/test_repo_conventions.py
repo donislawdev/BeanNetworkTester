@@ -22,7 +22,8 @@ from fakes import ROOT, check
 # exactly where they exist.
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "licenses", "build", "dist",
              ".hypothesis", "internal_tools", ".claude", "crashes"}
-SKIP_FILES = {"PROJECT_NOTES.md", "HISTORY_NOTES.md", "CLAUDE.md"}
+SKIP_FILES = {"PROJECT_NOTES.md", "HISTORY_NOTES.md", "CLAUDE.md",
+              "CHANGELOG-INTERNAL.md"}
 
 
 def repo_text_files(exts):
@@ -289,7 +290,8 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
     """
     scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
                for p in repo_text_files((".py", ".md", ".json", ".txt"))}
-    for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md"):
+    for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md",
+                  "CHANGELOG-INTERNAL.md"):
         check(f"{stray} is not scanned (it is not in the repository)",
               stray not in scanned, f"({stray})")
     for prefix in ("internal_tools/", ".claude/", "crashes/"):
