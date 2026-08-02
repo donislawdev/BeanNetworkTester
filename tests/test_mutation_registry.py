@@ -78,6 +78,20 @@ MUTATIONS = [
         "new": "\".claude\", \"crashes\"}",
         "test": "test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository",
     },
+    {
+        "label": "shape: the package walk finds no files to measure",
+        "file": "tests/test_code_shape.py",
+        "old": "        out += [os.path.join(dirpath, n) for n in filenames if n.endswith(\".py\")]",
+        "new": "        out += []",
+        "test": "test_no_function_or_file_has_grown_past_the_ratchet",
+    },
+    {
+        "label": "shape: comments start counting as logic",
+        "file": "tests/test_code_shape.py",
+        "old": "        if text and not text.startswith(\"#\") and number not in doc:",
+        "new": "        if text:",
+        "test": "test_the_ratchet_measures_logic_and_not_explanation",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

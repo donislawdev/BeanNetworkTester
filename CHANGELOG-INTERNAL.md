@@ -31,6 +31,13 @@ a `### BREAKING` section placed FIRST in that version, and each such line is pre
 
 ### Tests
 
+- **Size ceilings, as a ratchet.** New `tests/test_code_shape.py` caps a function at 167 logic
+  lines and a module at 1299 - today's maxima (`theme.py::init_style`, `gui/app.py`), so nothing
+  had to be rewritten to make it pass. Lowering them is routine work, raising either is the
+  owner's call. **Comments and docstrings do not count**, and that is measured rather than
+  assumed: 9 776 of the package's 17 770 lines are logic, so 45% is explanation, and a raw-line
+  cap would have been a cap on explaining. A second test pins that property directly (ninety
+  lines of comment measure the same as none). Both mutation-checked, plus the empty-scan canary.
 - **"Verified by mutation" became checkable.** New `tests/test_mutation_registry.py` holds the
   claim as data in three states that say three different things: `MUTATIONS` (re-runnable now,
   five entries), `PROVEN_BY_HAND` (a dated session did it, no patch was written down, so no
