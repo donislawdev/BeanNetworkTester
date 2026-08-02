@@ -206,19 +206,21 @@ def test_blocking_and_excluding_from_a_row_accumulate():
     except this", which is the case the menu entry exists for.
     """
     run_gui("""
-        app.block_ip_address("8.8.8.8")
-        app.block_ip_address("1.1.1.1")
-        app.block_ip_address("8.8.8.8")
+        from beantester.gui.pages.conns import block_ip_address, leave_process_alone
+
+        block_ip_address(app, "8.8.8.8")
+        block_ip_address(app, "1.1.1.1")
+        block_ip_address(app, "8.8.8.8")
         assert app._settings_from_widgets()["block_ip"] == "8.8.8.8,1.1.1.1"
 
-        app.leave_process_alone("chrome.exe")
-        app.leave_process_alone("msedge.exe")
+        leave_process_alone(app, "chrome.exe")
+        leave_process_alone(app, "msedge.exe")
         assert app._settings_from_widgets()["target"] == "!chrome.exe,!msedge.exe"
 
         # a row with no known process must not write "!?" into the target
         before = app._settings_from_widgets()["target"]
-        app.leave_process_alone("?")
-        app.leave_process_alone("")
+        leave_process_alone(app, "?")
+        leave_process_alone(app, "")
         assert app._settings_from_widgets()["target"] == before
     """)
 
