@@ -289,3 +289,114 @@ def test_search_index_clear_empties_the_cache():
     idx.blob({"id": 1, "t": "x"})
     idx.clear()
     check("clear() empties the cache", idx._cache == {})
+
+
+# --- field-qualified search --------------------------------------------------- #
+def _search_rows():
+    return [
+        {"proc": "chrome.exe", "pid": 100, "proto": "TCP", "dir": "out",
+         "remote_ip": "8.8.8.8", "remote_port": 53, "local_port": 50001,
+         "packets": 10, "dropped": 0, "scoped": True,
+         "sent": 900, "sent_in": 500, "sent_out": 400},
+        {"proc": "chrome.exe", "pid": 100, "proto": "UDP", "dir": "out",
+         "remote_ip": "10.1.2.3", "remote_port": 443, "local_port": 50002,
+         "packets": 99, "dropped": 5, "scoped": False,
+         "sent": 10, "sent_in": 5, "sent_out": 5},
+        {"proc": "msedge.exe", "pid": 900, "proto": "TCP", "dir": "in",
+         "remote_ip": "192.168.0.9", "remote_port": 8080, "local_port": 50003,
+         "packets": 1, "dropped": 0, "scoped": False,
+         "sent": 1, "sent_in": 1, "sent_out": 0},
+    ]
+
+
+def _found(query):
+    from beantester.views import _filter_connections
+    return [f"{r['proc']}:{r['remote_port']}"
+            for r in _filter_connections(_search_rows(), query, None)]
+
+
+def test_plain_text_search_still_works_exactly_as_before():
+    """The old behaviour is the default, so no existing habit breaks."""
+    check("empty query returns everything", len(_found("")) == 3)
+    check("a bare word still matches the blob", _found("chrome") ==
+          ["chrome.exe:53", "chrome.exe:443"], f"({_found('chrome')})")
+    check("a bare word that matches nothing returns nothing", _found("zzz") == [])
+
+
+def test_a_term_can_name_its_column():
+    """The point of the feature: 6 of 17 columns used to be searchable at all.
+
+    A PID is on screen and could not be searched for, and neither could "only the
+    rows this session impaired" - which is the question a tester has when the
+    table holds a hundred thousand flows.
+    """
+    check("port", _found("port:443") == ["chrome.exe:443"])
+    check("pid, which plain text cannot reach", _found("pid:>500") == ["msedge.exe:8080"])
+    check("scoped, which plain text cannot reach", _found("scoped:yes") == ["chrome.exe:53"])
+    check("dropped with a comparison", _found("dropped:>0") == ["chrome.exe:443"])
+    check("a text column", _found("dir:in") == ["msedge.exe:8080"])
+
+
+def test_the_values_use_the_expression_language_the_form_fields_use():
+    """Comma lists, ranges, negation and CIDR - not a second syntax of our own."""
+    check("a comma list", _found("port:53,8080") == ["chrome.exe:53", "msedge.exe:8080"])
+    check("a range", _found("port:8000-8100") == ["msedge.exe:8080"])
+    check("CIDR", _found("ip:10.0.0.0/8") == ["chrome.exe:443"])
+    check("negation with a wildcard",
+          _found("ip:!192.168.*") == ["chrome.exe:53", "chrome.exe:443"])
+    check("a process term takes a PID too, exactly like the target field",
+          _found("proc:100") == ["chrome.exe:53", "chrome.exe:443"])
+
+
+def test_a_text_column_is_matched_case_insensitively():
+    """`proto:tcp` must find rows holding "TCP".
+
+    This failed in the first implementation, and silently: a process matcher
+    judges (pid, name), so passing the value positionally handed it to `pid`,
+    where a name cannot be evaluated - and an unevaluable term matches nothing.
+    The search looked like it worked and found zero rows.
+    """
+    check("lowercase query, uppercase data",
+          _found("proto:tcp") == ["chrome.exe:53", "msedge.exe:8080"])
+    check("uppercase query, uppercase data",
+          _found("proto:TCP") == ["chrome.exe:53", "msedge.exe:8080"])
+    check("the field name itself is case-insensitive",
+          _found("PROC:CHROME") == ["chrome.exe:53", "chrome.exe:443"])
+    check("negation on a text column",
+          _found("proto:!udp") == ["chrome.exe:53", "msedge.exe:8080"])
+
+
+def test_several_terms_narrow_together():
+    check("two columns", _found("proc:chrome port:443") == ["chrome.exe:443"])
+    check("a column and plain text", _found("chrome port:53") == ["chrome.exe:53"])
+    check("three terms", _found("scoped:no dropped:>0") == ["chrome.exe:443"])
+
+
+def test_a_half_typed_query_finds_nothing_instead_of_throwing():
+    """The box is typed into character by character.
+
+    `port:44` on the way to `port:443` and half of `ip:10.0.` must not raise and
+    must not blank the table with a traceback in the crash log. An unknown field
+    is not an error either: `http://x` is a URL someone pasted, not a field.
+    """
+    check("an incomplete port matches nothing", _found("port:44") == [])
+    check("an incomplete address matches nothing", _found("ip:10.0.") == [])
+    check("an unparsable value matches nothing", _found("port:!!!") == [])
+    check("an unknown field falls back to plain text", _found("nosuchfield:x") == [])
+    check("a pasted URL does not explode", _found("http://8.8.8.8") == [])
+    # A lone colon is plain text, so it matches every row whose blob contains one -
+    # which is all of them, since the blob joins an address to its port. Keeping
+    # everything visible is the right answer while someone is halfway through
+    # typing `port:`: blanking the table on the way to a valid query reads as a
+    # bug. Asserted as it BEHAVES rather than as first expected.
+    check("a lone colon is plain text and keeps the table populated",
+          len(_found(":")) == 3, f"({_found(':')})")
+
+
+def test_the_query_is_compiled_once_not_per_row():
+    """Parsing per row would put the expression parser on the path of every one of
+    a hundred thousand rows on every keystroke."""
+    from beantester.views import compile_query
+    tests = compile_query("proc:chrome port:443 dropped:>0")
+    check("one predicate per term", len(tests) == 3, f"({len(tests)})")
+    check("an empty query compiles to nothing to do", compile_query("   ") == [])

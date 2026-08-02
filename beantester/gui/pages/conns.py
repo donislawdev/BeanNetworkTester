@@ -26,8 +26,10 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
+from ...matchers import add_term
 from ...views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                       traffic_totals)
+from .. import dialogs
 from ..model_worker import AsyncModel
 from ..labels import wrapping_label
 from ..scaling import scaled
@@ -97,6 +99,57 @@ SEARCH_DEBOUNCE_MS = 250
 REBUILD_MS = 1000
 
 
+
+def append_to_field(app, key, term, log_key):
+    """Add one term to an expression field, keeping what is already there.
+
+    The row actions build a field up click by click - block this address, then
+    that one - so they append. Replacing would throw away what the previous click
+    put there, which is the opposite of what the second click means.
+    ``matchers.add_term`` owns the syntax (convention 10): it drops repeats, keeps
+    the comma escape of a regex intact and never leaves an empty term behind.
+
+    Like every other row action this only fills the form (convention 15): the
+    running session hears about it through the same "apply needed" line, and
+    nothing reaches the engine until the user presses Apply.
+
+    It lives on the PAGE rather than on ``App`` for a measured reason: ``app.py``
+    was already the largest module in the package and sits on the size ratchet in
+    ``tests/test_code_shape.py``, which went red when these three helpers were
+    added there. The ratchet's answer is to put code where it belongs rather than
+    to raise the number, and a Connections row action belongs to the Connections
+    page.
+    """
+    updated = add_term(app.vars[key].get(), term)
+    app.vars[key].set(updated)
+    app.form.set_values(app._settings_for_form())
+    app.on_form_changed()
+    app.log(f"{T(log_key)}: {updated}")
+    if app.running:
+        app.log(T("log.apply_needed"))
+
+
+def block_ip_address(app, ip):
+    """Add an address to the blocking field (decision pipeline step 2c)."""
+    if str(ip or "").strip():
+        append_to_field(app, "block_ip", str(ip).strip(), "log.block_ip_added")
+
+
+def leave_process_alone(app, name):
+    """Exclude a process from impairment by adding ``!name`` to the target.
+
+    With a target already set this narrows it. With the target EMPTY it turns
+    "impair everything" into "impair everything except this one", because a bare
+    negative means exactly that in this expression language - and that is the case
+    the menu entry is really for.
+    """
+    name = str(name or "").strip()
+    if not name or name == "?":
+        app.log(T("log.no_process_for_row"))
+        return
+    append_to_field(app, "target", f"!{name}", "log.process_excluded")
+
+
 class ConnsPage:
     ID = "connections"
     LABEL = "app.tabs.connections"
@@ -121,6 +174,14 @@ class ConnsPage:
         entry.bind("<KeyRelease>", lambda e: self._schedule_search())
         entry.bind("<Escape>", lambda e: self._clear_search())
         add_tooltip(entry, "tips.conn_search")
+        # The same "?" affordance the expression fields use (gui/form.py): the search
+        # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
+        # read is the only way anyone finds that out. A tooltip cannot be it - it
+        # runs away from the pointer as soon as you click.
+        help_btn = ttk.Button(top, text=T("fields.match_help"), style="Help.TButton",
+                              width=2, command=self._show_search_help)
+        help_btn.pack(side="left", padx=(0, scaled(8)))
+        add_tooltip(help_btn, "tips.conn_search_help")
 
         self.pause_var = tk.BooleanVar(value=False)
         pause = ttk.Checkbutton(top, text=T("buttons.freeze"), variable=self.pause_var,
@@ -171,7 +232,10 @@ class ConnsPage:
         self.menu.add_command(label=T("menu.copy_ip"), command=self._copy_ip)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.target_process"), command=self._target_process)
+        self.menu.add_command(label=T("menu.leave_process_alone"),
+                              command=self._leave_process_alone)
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit_dest)
+        self.menu.add_command(label=T("menu.block_ip"), command=self._block_ip)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.reset_widths"),
                               command=self.table.reset_widths)
@@ -239,12 +303,29 @@ class ConnsPage:
             return
         self.app.set_target_expression(name)
 
+    def _show_search_help(self):
+        """The search cheat sheet, opened by the "?" next to the box."""
+        dialogs.show_help(self.app.root, T("dialogs.conn_search_help_title"),
+                          T("dialogs.conn_search_help"))
+
+    def _leave_process_alone(self):
+        row = self._selected()
+        if not row:
+            return
+        leave_process_alone(self.app, str(row.get("proc") or "").strip())
+
     def _limit_dest(self):
         row = self._selected()
         if not row:
             return
         self.app.set_destination(str(row.get("remote_ip") or ""),
                                  str(row.get("remote_port") or ""))
+
+    def _block_ip(self):
+        row = self._selected()
+        if not row:
+            return
+        block_ip_address(self.app, str(row.get("remote_ip") or ""))
 
     # -- search -------------------------------------------------------------- #
     def _schedule_search(self):
