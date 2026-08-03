@@ -771,6 +771,13 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                 log.debug(f"scenario: {len(scen.steps)} steps, "
                           f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
             _log_effective_settings(log, cfg)
+            # A preview that stays quiet about the dangerous shape is a preview
+            # that misleads: "Configuration is valid" is about each value, and the
+            # warning is about the SHAPE - impairment armed, nothing aimed at,
+            # nothing to end it. This is the cheapest place a user can find that
+            # out, since --dry-run touches neither the driver nor the traffic.
+            if not cfg["simulate"]:
+                warn_if_unbounded(cfg["settings"], log.warn)
             log.info("Configuration is valid (--dry-run: nothing was started). "
                      "This checks the settings, not the machine - run --doctor "
                      "for Administrator rights and the WinDivert driver.")

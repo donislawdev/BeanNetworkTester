@@ -633,4 +633,14 @@ def test_the_gui_says_the_same_thing_before_an_unbounded_start():
 
         log = start_with(loss=0, duration=0, lan_mode=True)
         assert warned(log), "LAN mode alone cuts the internet: %r" % log
+
+        # a session can BECOME unbounded: start aimed, then clear the target
+        log = start_with(loss=50, lan_mode=False, target="probe.exe")
+        assert not warned(log), "warned about a targeted start: %r" % log
+        app.running = True
+        app.clear_log()
+        app.vars["target"].set("")
+        app.apply_if_running()
+        assert warned(list(app._log_lines)), \
+            "clearing the target mid-session went unannounced: %r" % app._log_lines
     """)

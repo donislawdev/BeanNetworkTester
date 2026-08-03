@@ -972,6 +972,20 @@ def test_a_bounded_run_is_not_warned_about(monkeypatch):
               f"({argv})")
 
 
+def test_dry_run_previews_the_shape_and_not_only_the_values():
+    """"Configuration is valid" is about each value. This is about the SHAPE.
+
+    --dry-run is the cheapest place to learn that a config would impair the whole
+    machine with nothing to end it: it opens no driver and passes no traffic, and
+    it needs no elevated token, so a pipeline can ask the question for free.
+    """
+    code, _, err = cli(["--dry-run", "--loss", "50"])
+    check("--dry-run: still exits OK", code == exitcodes.OK, f"(code={code})")
+    check("--dry-run: previews an unbounded config", _warned(err))
+    _, _, err = cli(["--dry-run", "--loss", "50", "--duration", "5"])
+    check("--dry-run: silent on a bounded config", not _warned(err))
+
+
 def test_blocking_bounds_only_its_own_damage(monkeypatch):
     """A block is not a target, and this is the pair that proves the difference.
 

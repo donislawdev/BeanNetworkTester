@@ -1310,6 +1310,11 @@ class App:
             self.log(f"{T('log.error')}: {e}")
             return
         apply_settings(self.engine, s, self.log)
+        # A session can BECOME unbounded: clear the target, press "Apply changes",
+        # and from that moment everything on the machine is in scope. Warning only
+        # at START would mean the one path that reaches this state in silence is
+        # the one the user takes deliberately.
+        warn_if_unbounded(s, self.log)
         self.engine.log_event("CHANGE", settings_summary(s, "en"))
         self.log(f"{T('log.applied_changes')}: {settings_summary(s, self._lang)}")
         self._applied_sig = self._signature(self._raw_settings())

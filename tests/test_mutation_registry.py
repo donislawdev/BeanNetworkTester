@@ -144,9 +144,29 @@ MUTATIONS = [
     {
         "label": "warning: the GUI starts an unbounded run in silence",
         "file": "beantester/gui/app.py",
-        "old": "        warn_if_unbounded(s, self.log)",
-        "new": "        pass",
+        "old": "        warn_if_unbounded(s, self.log)\n"
+               "        # Immediate feedback",
+        "new": "        pass\n"
+               "        # Immediate feedback",
         "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+    },
+    {
+        "label": "warning: a session that BECOMES unbounded says nothing",
+        "file": "beantester/gui/app.py",
+        "old": "        warn_if_unbounded(s, self.log)\n"
+               "        self.engine.log_event(\"CHANGE\"",
+        "new": "        pass\n"
+               "        self.engine.log_event(\"CHANGE\"",
+        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+    },
+    {
+        "label": "warning: --dry-run previews the values but not the shape",
+        "file": "beantester/cli.py",
+        "old": "            if not cfg[\"simulate\"]:\n"
+               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "new": "            if False:\n"
+               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "test": "test_dry_run_previews_the_shape_and_not_only_the_values",
     },
     {
         "label": "guards: a HANDOFF brief falls back into the scanned set",
