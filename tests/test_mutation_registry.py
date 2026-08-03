@@ -169,6 +169,27 @@ MUTATIONS = [
         "test": "test_dry_run_previews_the_shape_and_not_only_the_values",
     },
     {
+        "label": "help: a semicolon creeps back into a flag's help text",
+        "file": "beantester/cli.py",
+        "old": "help=\"which traffic to capture at all (IPv4 and IPv6). Ports are \"",
+        "new": "help=\"which traffic to capture at all (IPv4 and IPv6); ports are \"",
+        "test": "test_no_semicolons_in_the_help_a_user_reads",
+    },
+    {
+        "label": "readme: a semicolon hides inside a nested list again",
+        "file": "README.md",
+        "old": "With nothing set they are equal. The moment",
+        "new": "With nothing set they are equal; the moment",
+        "test": "test_no_semicolons_in_readme_prose",
+    },
+    {
+        "label": "help: the semicolon scan reads an empty parser",
+        "file": "tests/test_cli_docs.py",
+        "old": "    helps = [a for a in parser._actions if a.help]",
+        "new": "    helps = []",
+        "test": "test_no_semicolons_in_the_help_a_user_reads",
+    },
+    {
         "label": "guards: a HANDOFF brief falls back into the scanned set",
         "file": "tests/test_repo_conventions.py",
         "old": "SKIP_PREFIXES = (\"HANDOFF-\",)",

@@ -76,10 +76,10 @@ def build_arg_parser():
     p.add_argument("--config", help="load settings from a JSON file")
     p.add_argument("--save-config", help="save effective settings to a JSON file and exit")
     p.add_argument("--preset", metavar="PRESET",
-                   help="load a preset (canonical id or its name in any UI language; "
-                        "see README for the list)")
+                   help="load a preset by canonical id or by its name in any UI "
+                        "language (the README lists them)")
     p.add_argument("--filter", choices=list(CLI_FILTERS), default=None,
-                   help="which traffic to capture at all (IPv4 and IPv6); ports are "
+                   help="which traffic to capture at all (IPv4 and IPv6). Ports are "
                         "filtered with --dst-port, not here")
     p.add_argument("--loss", type=float, help="packet loss [%%]")
     p.add_argument("--corrupt", type=float, help="corruption [%%]")
@@ -89,7 +89,7 @@ def build_arg_parser():
     p.add_argument("--down", type=float, help="download limit [KB/s]")
     p.add_argument("--up", type=float, help="upload limit [KB/s]")
     p.add_argument("--buffer", type=float,
-                   help="link buffer for the speed limit [ms], 0 = unlimited; "
+                   help="link buffer for the speed limit [ms], 0 = unlimited. It "
                         "bounds the queueing delay a rate-limited link builds up "
                         "before it drops (bufferbloat)")
     p.add_argument("--target",
@@ -97,9 +97,9 @@ def build_arg_parser():
                         "wildcard, re: pattern, ! to exclude "
                         "(e.g. 'chrome.exe,!chromedriver' or 're:^fire')")
     p.add_argument("--dst-ip",
-                   help="affect only traffic to/from these remote IPs: address, list, "
-                        "range a-b, CIDR, wildcard, comparison, re: pattern, ! to exclude "
-                        "(e.g. '10.0.0.1-10.0.0.50,!10.0.0.7'); IPv4 and IPv6")
+                   help="affect only traffic to/from these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, comparison, re: "
+                        "pattern, ! to exclude (e.g. '10.0.0.1-10.0.0.50,!10.0.0.7')")
     p.add_argument("--dst-port",
                    help="affect only these remote ports: number, list, range a-b, "
                         "comparison (>1024), wildcard, re: pattern, ! to exclude "
@@ -113,12 +113,13 @@ def build_arg_parser():
                         "and then statistics and connections cover the narrowed "
                         "traffic only - the summary says when it took effect")
     p.add_argument("--block-ip",
-                   help="block (drop) all traffic to these remote IPs: address, list, "
-                        "range a-b, CIDR, wildcard, re: pattern, ! to exclude; IPv4 and IPv6")
+                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
+                        "! to exclude")
     p.add_argument("--block-port",
                    help="block (drop) all traffic to these remote ports: number, list, "
                         "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
-                        "(blocks on IP OR port; e.g. '--block-port 443')")
+                        "(blocks on IP OR port, for example '--block-port 443')")
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")

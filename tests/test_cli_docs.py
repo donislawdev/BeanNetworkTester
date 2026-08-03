@@ -56,3 +56,38 @@ def test_no_stale_app_flags_in_readmes():
         stale = sorted(_documented_flags(readme) - real - IGNORE)
         check(f"{readme} lists no flag the parser lacks", not stale,
               f"(stale: {stale})")
+
+
+def test_no_semicolons_in_the_help_a_user_reads():
+    """Conventions 1b and 33: people do not write semicolons in ordinary prose.
+
+    ``lang/*.json`` has been guarded since the day 21 tooltips were found to have
+    drifted (``test_i18n.py::test_no_semicolons_in_ui_text``). The CLI's help is
+    the same kind of prose read by the same kind of person, and nothing looked at
+    it - six had accumulated by the time anybody did.
+
+    Read off the PARSER, not off the source: a help string added anywhere, by any
+    future refactor, is covered without this test knowing where it was written.
+    ``description`` and ``epilog`` come along because they are prose too, and the
+    epilog carries the exit-code table users actually script against.
+
+    No exception list. A semicolon is syntax inside a filter expression, a shell
+    line or JSON - none of which live in ``help=`` today, and the convention says
+    the exception is for code, not for prose ABOUT code. If a help string ever
+    genuinely needs one, this test is where that argument gets made.
+    """
+    import beantester.cli as cli_module
+    parser = cli_module.build_arg_parser()
+    helps = [a for a in parser._actions if a.help]
+    # The canary from test_repo_conventions: a scan that reads nothing satisfies
+    # every rule ever written and looks like a guard that works.
+    check("CLI help: the scan actually read the parser", len(helps) >= 30,
+          f"({len(helps)} help strings)")
+    offenders = sorted("/".join(a.option_strings) or a.dest
+                       for a in helps if ";" in a.help)
+    check(f"CLI help: no semicolons in help= ({len(helps)} read)",
+          not offenders, f"({offenders})")
+    for name in ("description", "epilog"):
+        text = getattr(parser, name, None) or ""
+        check(f"CLI help: no semicolons in the parser {name}",
+              ";" not in text)

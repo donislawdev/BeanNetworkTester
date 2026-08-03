@@ -30,6 +30,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
+- **`--help` reads like ordinary writing.** Six flags described themselves with a semicolon
+  joining two halves of a sentence: `--preset`, `--filter`, `--buffer`, `--dst-ip`, `--block-ip`
+  and `--block-port`. They now use a full stop or a comma, like the rest of the program's text.
 - Both READMEs now say in the licence section that **what you make with the tool is yours**.
   Scenarios you write, saved profiles and config files, reproduction reports, CSV exports, logs
   and screenshots are your own work: the GPL covers the program, not its output, and using the
