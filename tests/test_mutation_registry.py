@@ -176,6 +176,37 @@ MUTATIONS = [
         "test": "test_no_semicolons_in_the_help_a_user_reads",
     },
     {
+        "label": "errors: a config value is called invalid and left at that",
+        "file": "beantester/settings.py",
+        "old": "                                       field=key, value=repr(value),\n"
+               "                                       expected=_expected_shape(key)))",
+        "new": "                                       field=key, value=repr(value),\n"
+               "                                       expected=\"\"))",
+        "test": "test_a_config_value_says_what_the_setting_takes",
+    },
+    {
+        "label": "errors: the scenario stops suggesting a correction",
+        "file": "beantester/scenario.py",
+        "old": "            if len(unknown) == 1 and close:",
+        "new": "            if False:",
+        "test": "test_a_misspelled_scenario_setting_gets_the_same_help_as_a_config_one",
+    },
+    {
+        "label": "errors: a blame word creeps back into a message",
+        "file": "lang/en.json",
+        "old": "\"errors.bad_schedule_step\": \"Schedule step '{part}' is not in "
+               "the form dur:down:up.\"",
+        "new": "\"errors.bad_schedule_step\": \"bad schedule step: '{part}'.\"",
+        "test": "test_no_error_blames_the_person_reading_it",
+    },
+    {
+        "label": "errors: a message loses its full stop",
+        "file": "lang/en.json",
+        "old": "\"errors.scenario_bad_json\": \"Not a valid JSON file: {error}.\"",
+        "new": "\"errors.scenario_bad_json\": \"Not a valid JSON file: {error}\"",
+        "test": "test_every_error_reads_like_a_sentence",
+    },
+    {
         "label": "readme: a semicolon hides inside a nested list again",
         "file": "README.md",
         "old": "With nothing set they are equal. The moment",

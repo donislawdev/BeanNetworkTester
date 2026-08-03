@@ -17,6 +17,7 @@ from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
 from .targeting import ports_shared_with_others
+from .utils import number_string
 from .validators import parse_number, parse_seed
 
 DEFAULT_SETTINGS = dict(
@@ -450,6 +451,25 @@ def apply_settings(engine, s, log=lambda *_: None):
     apply_targeting(engine, str(g("target")).strip(), log)
 
 
+def _expected_shape(key, lang=None):
+    """Plain-language description of what a numeric setting accepts.
+
+    Read from the registry, so a field whose bounds change says the new ones
+    without anybody remembering this message exists.
+
+    Under ``fields.`` and not ``errors.`` on purpose: these are sentence
+    FRAGMENTS, pasted into a message that supplies the capital letter and the
+    full stop. Keeping them out of the ``errors.`` namespace is what lets
+    ``test_every_error_reads_like_a_sentence`` run without an exception list.
+    """
+    field = FIELDS.get(key)
+    bounds = field.bounds if field is not None else None
+    if not bounds:
+        return translate("fields.expects_number", lang)
+    return translate("fields.expects_number_range", lang,
+                     min=number_string(bounds[0]), max=number_string(bounds[1]))
+
+
 def _coerce_setting(key, value):
     """Coerce a config-file value to the type of its default.
 
@@ -471,8 +491,13 @@ def _coerce_setting(key, value):
                 raise ValueError
             return float(value)
         except (TypeError, ValueError):
+            # Say what the setting DOES take, not just that this is not it. The
+            # registry already knows - the form has been telling people "must be
+            # between 0 and 100" for as long as it has existed, while the config
+            # loader said only "invalid" for the very same value.
             raise ValueError(translate("errors.bad_config_value", None,
-                                       field=key, value=repr(value)))
+                                       field=key, value=repr(value),
+                                       expected=_expected_shape(key)))
     return str(value)
 
 

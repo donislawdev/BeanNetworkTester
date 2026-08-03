@@ -41,6 +41,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Error messages say what to do instead of who is at fault.** A config file with a bad number
+  used to answer "Invalid value for 'loss'"; it now says the setting needs a number between 0 and
+  100 and quotes back what it got. A misspelled setting inside a scenario file gets the same "did
+  you mean" suggestion that config files have always had, and an unknown scenario action now lists
+  the ones that exist. The line about an expression that could not be read no longer claims
+  targeting was switched off when the expression was a blocking rule.
 - **A broken scenario file no longer starts the session first.** `--scenario` with a file the tool
   cannot read used to open the capture, impair traffic and only then report the problem. The file
   is now read before anything starts, exactly as `--dry-run` already checked it. Same exit code as

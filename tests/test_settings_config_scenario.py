@@ -387,3 +387,58 @@ def test_build_matchers_covers_every_filter_field():
     check("build_matchers compiles one matcher per field", set(matchers) == keys)
     check("empty defaults compile to empty matchers",
           all(m.is_empty for m in matchers.values()))
+
+
+def test_a_misspelled_scenario_setting_gets_the_same_help_as_a_config_one():
+    """One class of mistake, one quality of answer.
+
+    ``load_config_file`` has suggested a correction for a near-miss setting name
+    since it learned to (``difflib``, settings.py); the scenario loader, reading
+    the same names out of the same kind of JSON file, said only "unknown
+    setting" - and which loader helped you depended on which one was written
+    first. The unknown ACTION message had the matching gap: it named what you
+    typed without naming what exists, and there is exactly one action to name.
+
+    Both halves are asserted, because a suggestion that fires for EVERY typo is
+    its own bug: a name close to nothing must still fail plainly.
+    """
+    import pytest
+    from beantester.scenario import parse_scenario
+    with pytest.raises(ValueError) as near:
+        parse_scenario([{"at": 0, "settings": {"losss": 10}}])
+    check("scenario: a near-miss setting is offered the correction",
+          "loss" in str(near.value) and "?" in str(near.value), f"({near.value})")
+
+    with pytest.raises(ValueError) as far:
+        parse_scenario([{"at": 0, "settings": {"zzzzzzzz": 10}}])
+    check("scenario: a name close to nothing still fails plainly",
+          "zzzzzzzz" in str(far.value) and "?" not in str(far.value),
+          f"({far.value})")
+
+    with pytest.raises(ValueError) as action:
+        parse_scenario([{"at": 0, "action": "reset_tpc"}])
+    check("scenario: an unknown action names the ones that exist",
+          "reset_tcp" in str(action.value), f"({action.value})")
+
+
+def test_a_config_value_says_what_the_setting_takes(tmp_path):
+    """"Invalid value for 'loss'" said the value was wrong and stopped there.
+
+    The bounds are in the registry and the form has always used them ("must be
+    between 0 and 100"). The config loader described the same rejected value
+    with the word "invalid" and nothing else, so the interface that could not
+    show you the field was also the one that would not tell you the range.
+    """
+    import json
+    import pytest
+    from beantester.settings import load_config_file
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"loss": "abc"}), encoding="utf-8")
+    with pytest.raises(ValueError) as e:
+        load_config_file(str(path))
+    message = str(e.value)
+    check("config: the message names the setting", "loss" in message, f"({message})")
+    check("config: it names what the setting takes",
+          "0" in message and "100" in message, f"({message})")
+    check("config: it quotes back what was actually given",
+          "abc" in message, f"({message})")

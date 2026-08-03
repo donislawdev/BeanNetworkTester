@@ -6,6 +6,7 @@ say so. It used to be accepted silently - any random ``.json`` loaded as a
 scenario with **zero steps**, which then ran a session that did nothing while
 the UI happily reported "scenario loaded".
 """
+import difflib
 import json
 
 from .i18n import translate
@@ -50,12 +51,22 @@ def _validate_step(index, step):
             raise _err("errors.scenario_step_settings", step=where)
         unknown = [k for k in settings if k not in DEFAULT_SETTINGS]
         if unknown:
+            # The same help the config loader has given since it learned to
+            # (settings.load_config_file): one misspelling gets the correction it
+            # was probably reaching for. It is the same class of mistake made in
+            # the same kind of file, and answering it two different ways was an
+            # accident of which loader was written first.
+            close = difflib.get_close_matches(unknown[0], DEFAULT_SETTINGS, n=1)
+            if len(unknown) == 1 and close:
+                raise _err("errors.scenario_unknown_setting_hint", step=where,
+                           field=unknown[0], suggestion=close[0])
             raise _err("errors.scenario_unknown_setting", step=where,
                        field=", ".join(sorted(unknown)))
 
     action = step.get("action")
     if action is not None and str(action) not in ACTIONS:
-        raise _err("errors.scenario_unknown_action", step=where, action=action)
+        raise _err("errors.scenario_unknown_action", step=where, action=action,
+                   allowed=", ".join(ACTIONS))
 
     if settings is None and action is None:
         raise _err("errors.scenario_step_empty", step=where)

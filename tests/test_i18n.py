@@ -240,7 +240,7 @@ def test_translated_exceptions():
     except ValueError as e:
         msg_en = str(e)
     check("exceptions: English in EN mode (so the CLI stays English)",
-          "bad schedule step" in msg_en, f"({msg_en})")
+          "Schedule step" in msg_en, f"({msg_en})")
     n.set_language("pl")
     check("exceptions: GUI field error translated with the field name",
           "Pole 'Utrata' musi" in n.T("errors.field_number", name=n.T("fields.loss")))
@@ -248,3 +248,66 @@ def test_translated_exceptions():
     check("exceptions: English field error",
           "must be a number" in n.T("errors.field_number", name="Loss"))
     n.set_language("pl")
+
+
+# blame words: the message describes the INPUT, never the person who typed it
+# (NN/g error-message guidance, and the audit brief's section on wording).
+# Deliberately whole words, and deliberately not "not valid" - "X is not a valid
+# IP address" describes the value and tells the reader what shape was wanted,
+# which is the opposite of blame.
+BLAME = {
+    "en": (r"\binvalid\b", r"\billegal\b", r"\bbad\b", r"\bwrong\b"),
+    "pl": (r"nieprawid", r"niepoprawn", r"\bz[lł]y\b", r"\bz[lł]e\b",
+           r"\bz[lł]a\b", r"b[lł][eę]dn"),
+}
+
+
+def _errors_of(code):
+    import json as _json
+    with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+        data = _json.load(f)
+    return {k: v for k, v in data.items()
+            if k.startswith("errors.") and isinstance(v, str)}
+
+
+def test_no_error_blames_the_person_reading_it():
+    """"Invalid value for 'loss'" told the user they were wrong and nothing else.
+
+    The config loader said that about the very same value the form describes as
+    "must be between 0 and 100" - so the tool already knew the useful sentence
+    and used the useless one in the file path. Four texts across the two
+    languages carried a blame word, and one of them ("bad schedule step") was
+    also the only error starting in lower case.
+
+    This scans the ``errors.*`` namespace only. Fragments pasted into a sentence
+    live under ``fields.`` precisely so this rule needs no exception list.
+    """
+    import re as _re
+    for code, patterns in BLAME.items():
+        texts = _errors_of(code)
+        check(f"i18n {code}: the error namespace is not empty", len(texts) >= 20,
+              f"({len(texts)} keys)")
+        offenders = sorted(k for k, v in texts.items()
+                           if any(_re.search(p, v, _re.I) for p in patterns))
+        check(f"i18n {code}: no error blames the reader", not offenders,
+              f"({offenders})")
+
+
+def test_every_error_reads_like_a_sentence():
+    """Capital letter at the front, terminal punctuation at the end.
+
+    Not pedantry: these strings are shown on their own - under a field in the
+    form, in a dialog, after ``[bean] error:`` - so a fragment reads as a
+    truncation. Three were missing their full stop and one began lower case,
+    which is what a namespace with no guardian looks like after a few years.
+    """
+    for code in ("en", "pl"):
+        texts = _errors_of(code)
+        no_stop = sorted(k for k, v in texts.items()
+                         if not v.rstrip().endswith((".", "?", "!")))
+        check(f"i18n {code}: every error ends a sentence", not no_stop,
+              f"({no_stop})")
+        lower = sorted(k for k, v in texts.items()
+                       if v[:1].islower())
+        check(f"i18n {code}: every error starts a sentence", not lower,
+              f"({lower})")

@@ -205,7 +205,11 @@ def config_from_args(args):
         try:
             s.update(load_config_file(args.config))
         except ValueError as e:
-            _fail(exitcodes.CONFIG, f"invalid config file {args.config!r}: {e}")
+            # The translated message already says "in the config file" and which
+            # setting - so this prefix carries the PATH and nothing else. It used
+            # to say "invalid config file", which put the word "invalid" and the
+            # words "config file" on the line twice each.
+            _fail(exitcodes.CONFIG, f"{args.config!r}: {e}")
         except OSError as e:
             _fail(exitcodes.CONFIG, f"cannot read config file {args.config!r}: {e}")
     if args.preset:
