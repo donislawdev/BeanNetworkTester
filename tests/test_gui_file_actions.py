@@ -219,3 +219,26 @@ def test_saving_a_repro_writes_the_report_and_logs_the_command_to_replay_it():
         assert any(report["cli_command"] in line for line in app._log_lines), (
             "the replay command must reach the log: " + str(app._log_lines[-3:]))
     """)
+
+
+def test_saving_a_profile_with_a_bad_value_names_the_field():
+    """The precise message existed and was thrown away.
+
+    ``_settings_from_widgets`` raises a translated ValueError naming the field
+    and its range; this handler caught it and showed "Values must be numbers",
+    which named neither - while ``_start``, in the same file, has always shown
+    ``str(e)`` for the same exception from the same call.
+    """
+    run_gui("""
+        import beantester as bnt
+        seen = []
+        bnt.gui.dialogs.show_error = lambda root, title, body: seen.append(body)
+        bnt.gui.dialogs.ask_string = lambda *a, **k: "my profile"
+
+        app.vars["loss"].set("not a number")
+        app.save_profile()
+
+        assert seen, "no error was shown at all"
+        assert any("Utrata" in body or "Loss" in body for body in seen), \
+            "the message does not name the field: %r" % seen
+    """)

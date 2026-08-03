@@ -197,7 +197,18 @@ MUTATIONS = [
         "old": "\"errors.bad_schedule_step\": \"Schedule step '{part}' is not in "
                "the form dur:down:up.\"",
         "new": "\"errors.bad_schedule_step\": \"bad schedule step: '{part}'.\"",
-        "test": "test_no_error_blames_the_person_reading_it",
+        "test": "test_no_message_blames_the_person_reading_it",
+    },
+    {
+        "label": "errors: saving a profile throws the precise message away again",
+        "file": "beantester/gui/app.py",
+        "old": "            dialogs.show_error(self.root, T(\"log.error\"), str(e))\n"
+               "            return\n"
+               "        self._persist_profiles()",
+        "new": "            dialogs.show_error(self.root, T(\"log.error\"), \"nope\")\n"
+               "            return\n"
+               "        self._persist_profiles()",
+        "test": "test_saving_a_profile_with_a_bad_value_names_the_field",
     },
     {
         "label": "errors: a message loses its full stop",

@@ -995,8 +995,15 @@ class App:
         try:
             values = settings_to_preset(self._settings_from_widgets())
             self.profiles.set(name, {k: float(v) for k, v in values.items()})
-        except ValueError:
-            dialogs.show_error(self.root, T("log.error"), T("dialogs.values_numbers"))
+        except ValueError as e:
+            # The message _settings_from_widgets raises names the field and its
+            # range ("Field 'Loss' must be between 0 and 100"); this used to
+            # throw it away and show "Values must be numbers", which named
+            # neither. _start, four hundred lines down, has always shown str(e)
+            # for the SAME exception from the SAME call. float() below cannot be
+            # the one raising: settings_to_preset reads an already validated
+            # dict, so every value it hands over is a number.
+            dialogs.show_error(self.root, T("log.error"), str(e))
             return
         self._persist_profiles()
         self._set_profile_key(name)      # saving one also SELECTS it - remember that

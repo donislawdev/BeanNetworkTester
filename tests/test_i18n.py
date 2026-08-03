@@ -262,15 +262,15 @@ BLAME = {
 }
 
 
-def _errors_of(code):
+def _texts_of(code, prefix=""):
     import json as _json
     with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
         data = _json.load(f)
     return {k: v for k, v in data.items()
-            if k.startswith("errors.") and isinstance(v, str)}
+            if k.startswith(prefix) and isinstance(v, str) and k != "_meta"}
 
 
-def test_no_error_blames_the_person_reading_it():
+def test_no_message_blames_the_person_reading_it():
     """"Invalid value for 'loss'" told the user they were wrong and nothing else.
 
     The config loader said that about the very same value the form describes as
@@ -279,17 +279,26 @@ def test_no_error_blames_the_person_reading_it():
     languages carried a blame word, and one of them ("bad schedule step") was
     also the only error starting in lower case.
 
-    This scans the ``errors.*`` namespace only. Fragments pasted into a sentence
-    live under ``fields.`` precisely so this rule needs no exception list.
+    EVERY text, not just ``errors.*``. The first version of this guard scanned
+    that namespace alone, which would have missed the very offender that started
+    this: ``log.filter_skipped`` said "Invalid filter expression" and lives under
+    ``log.``. Measured when the scope was widened - zero offenders in any
+    namespace - so the wider rule costs nothing today and is the one that
+    actually holds.
+
+    Deliberately not banned: "is not a valid IP address". It describes the value
+    and names the shape that was wanted, which is the opposite of blame. If a
+    text ever genuinely needs one of these words, this test is where that
+    argument gets made.
     """
     import re as _re
     for code, patterns in BLAME.items():
-        texts = _errors_of(code)
-        check(f"i18n {code}: the error namespace is not empty", len(texts) >= 20,
-              f"({len(texts)} keys)")
+        texts = _texts_of(code)
+        check(f"i18n {code}: the scan actually read the language file",
+              len(texts) >= 200, f"({len(texts)} keys)")
         offenders = sorted(k for k, v in texts.items()
                            if any(_re.search(p, v, _re.I) for p in patterns))
-        check(f"i18n {code}: no error blames the reader", not offenders,
+        check(f"i18n {code}: no message blames the reader", not offenders,
               f"({offenders})")
 
 
@@ -302,7 +311,9 @@ def test_every_error_reads_like_a_sentence():
     which is what a namespace with no guardian looks like after a few years.
     """
     for code in ("en", "pl"):
-        texts = _errors_of(code)
+        texts = _texts_of(code, "errors.")
+        check(f"i18n {code}: the error namespace is not empty", len(texts) >= 20,
+              f"({len(texts)} keys)")
         no_stop = sorted(k for k, v in texts.items()
                          if not v.rstrip().endswith((".", "?", "!")))
         check(f"i18n {code}: every error ends a sentence", not no_stop,

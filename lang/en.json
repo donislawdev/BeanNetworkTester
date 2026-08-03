@@ -112,7 +112,6 @@
   "dialogs.save_repro": "Save repro report",
   "dialogs.scenario_not_loaded": "Scenario not loaded",
   "dialogs.start_failed": "Failed to start",
-  "dialogs.values_numbers": "Values must be numbers.",
   "errors.bad_config_value": "'{field}' in the config file needs {expected}, not {value}.",
   "errors.bad_filter_bounds": "Field '{field}': '{term}' is out of the allowed range ({min}-{max}).",
   "errors.bad_filter_compare": "Field '{field}': comparison '{term}' needs a number after the operator.",

@@ -112,7 +112,6 @@
   "dialogs.save_repro": "Zapisz raport reprodukcji",
   "dialogs.scenario_not_loaded": "Nie wczytano scenariusza",
   "dialogs.start_failed": "Nie udało się uruchomić",
-  "dialogs.values_numbers": "Wartości muszą być liczbami.",
   "errors.bad_config_value": "Pole '{field}' w pliku konfiguracji wymaga {expected}, a nie {value}.",
   "errors.bad_filter_bounds": "Pole '{field}': '{term}' jest poza dozwolonym zakresem ({min}-{max}).",
   "errors.bad_filter_compare": "Pole '{field}': porównanie '{term}' wymaga liczby po operatorze.",
