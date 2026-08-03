@@ -103,6 +103,13 @@ MUTATIONS = [
         "test": "test_the_repository_scanners_actually_read_files",
     },
     {
+        "label": "guards: a HANDOFF brief falls back into the scanned set",
+        "file": "tests/test_repo_conventions.py",
+        "old": "SKIP_PREFIXES = (\"HANDOFF-\",)",
+        "new": "SKIP_PREFIXES = ()",
+        "test": "test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository",
+    },
+    {
         "label": "guards: internal_tools falls back into the scanned set",
         "file": "tests/test_repo_conventions.py",
         "old": "\"internal_tools\", \".claude\", \"crashes\"}",

@@ -24,6 +24,8 @@ SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", "licenses", "build", "dist"
              ".hypothesis", "internal_tools", ".claude", "crashes"}
 SKIP_FILES = {"PROJECT_NOTES.md", "HISTORY_NOTES.md", "CLAUDE.md",
               "CHANGELOG-INTERNAL.md"}
+# Same reason, by prefix: HANDOFF-*.md are maintainer briefs kept out of git.
+SKIP_PREFIXES = ("HANDOFF-",)
 
 
 def repo_text_files(exts):
@@ -37,7 +39,8 @@ def repo_text_files(exts):
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for name in filenames:
-            if name.endswith(exts) and name not in SKIP_FILES:
+            if (name.endswith(exts) and name not in SKIP_FILES
+                    and not name.startswith(SKIP_PREFIXES)):
                 out.append(os.path.join(dirpath, name))
     return out
 
@@ -291,7 +294,7 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
     scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
                for p in repo_text_files((".py", ".md", ".json", ".txt"))}
     for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md",
-                  "CHANGELOG-INTERNAL.md"):
+                  "CHANGELOG-INTERNAL.md", "HANDOFF-UI-CLI.md"):
         check(f"{stray} is not scanned (it is not in the repository)",
               stray not in scanned, f"({stray})")
     for prefix in ("internal_tools/", ".claude/", "crashes/"):

@@ -35,6 +35,8 @@ HISTORY_NOTES.md
 # every added test. It stays next to the notes it argues with, not in the
 # release. Its structure is guarded by .claude/hooks/check_notes.py.
 CHANGELOG-INTERNAL.md
+# Handoff briefs for a next session: ours, and they name our own mistakes.
+HANDOFF-*.md
 
 # Internal scripts kept between sessions: measurement rigs, probes, diagnostics.
 # Never shipped, never a CI dependency, backed up by the owner separately.
