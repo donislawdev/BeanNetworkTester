@@ -103,6 +103,52 @@ MUTATIONS = [
         "test": "test_the_repository_scanners_actually_read_files",
     },
     {
+        "label": "warning: an unbounded run is judged bounded",
+        "file": "beantester/settings.py",
+        "old": "    if not armed_global_impairments(s):\n        return False",
+        "new": "    if armed_global_impairments(s) is not None:\n        return False",
+        "test": "test_a_run_that_impairs_everything_forever_says_so_before_it_starts",
+    },
+    {
+        "label": "warning: LAN mode is demoted from impairment to scenery",
+        "file": "beantester/fields.py",
+        "old": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\", impairs=IMPAIRS_ALL),",
+        "new": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\"),",
+        "test": "test_the_warning_names_lan_mode_which_reads_like_a_scope",
+    },
+    {
+        "label": "warning: blocking counts as a bound for every other impairment",
+        "file": "beantester/fields.py",
+        "old": "          width=26, tip=\"tips.block\", span=True, cli=\"block-ip\",\n"
+               "          impairs=IMPAIRS_MATCHED),",
+        "new": "          width=26, tip=\"tips.block\", span=True, cli=\"block-ip\",\n"
+               "          narrows=True),",
+        "test": "test_blocking_bounds_only_its_own_damage",
+    },
+    {
+        "label": "warning: an expression of pure exclusions passes as a target",
+        "file": "beantester/matchers.py",
+        "old": "        return not self._positives",
+        "new": "        return False",
+        "test": "test_an_exclusion_only_target_is_not_a_bound",
+    },
+    {
+        "label": "scenario: the file is read only after the capture is open again",
+        "file": "beantester/cli.py",
+        "old": "    scen = None\n    if cfg[\"scenario\"]:\n        try:\n"
+               "            scen = load_scenario_file(cfg[\"scenario\"])",
+        "new": "    scen = None\n    if False:\n        try:\n"
+               "            scen = load_scenario_file(cfg[\"scenario\"])",
+        "test": "test_a_broken_scenario_never_opens_the_capture",
+    },
+    {
+        "label": "warning: the GUI starts an unbounded run in silence",
+        "file": "beantester/gui/app.py",
+        "old": "        warn_if_unbounded(s, self.log)",
+        "new": "        pass",
+        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+    },
+    {
         "label": "guards: a HANDOFF brief falls back into the scanned set",
         "file": "tests/test_repo_conventions.py",
         "old": "SKIP_PREFIXES = (\"HANDOFF-\",)",

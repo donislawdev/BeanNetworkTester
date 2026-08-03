@@ -79,6 +79,84 @@ def build_matchers(s):
     return out
 
 
+def armed_global_impairments(s):
+    """Keys of impairments that are ON and damage every captured packet.
+
+    Registry-derived (``fields.GLOBALLY_IMPAIRING_KEYS``), so an impairment added
+    later is covered by declaring it once, in the table where it is defined.
+    """
+    return tuple(key for key in F.GLOBALLY_IMPAIRING_KEYS
+                 if F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key])))
+
+
+def targeting_is_set(s):
+    """True when a targeting field names at least one thing to hit.
+
+    Not a truth test on the fields: an expression made of nothing but exclusions
+    (``!chrome.exe``) is non-empty and still covers the whole machine minus one
+    application, so it does not bound anything (see
+    ``Matcher.selects_nothing_in_particular``). A malformed expression is treated
+    as no scope at all - it is about to be rejected by validation anyway, and the
+    safe reading of "I cannot tell what this narrows to" is "it narrows nothing".
+    """
+    expressions = {key: (kind, field, bounds)
+                   for key, kind, field, bounds in MATCH_FIELDS}
+    for key in F.NARROWING_KEYS:
+        value = s.get(key, DEFAULT_SETTINGS[key])
+        if key not in expressions:
+            # a narrowing field that is not an expression (none today): its plain
+            # on/off reading is the best answer available, and it is still an answer
+            if F.is_active(FIELDS[key], value):
+                return True
+            continue
+        text = setting_expression(key, value)
+        if not text:
+            continue
+        try:
+            matcher = parse_matcher(text, *expressions[key])
+        except ValueError:
+            continue
+        if not matcher.selects_nothing_in_particular:
+            return True
+    return False
+
+
+def unbounded_impairment(s):
+    """True when a run would damage all traffic, with nothing to bound it.
+
+    The condition behind the start-time warning: something is armed that hits
+    every packet, no targeting field says WHERE, and no duration says WHEN it
+    ends. Blocking is deliberately not enough to clear it - a block bounds its
+    own damage and nothing else, so ``--loss 50 --block-ip 10.0.0.1`` is still a
+    machine-wide loss run.
+
+    Total by construction: it reads through ``DEFAULT_SETTINGS`` for missing keys
+    (an older config file), and ``fields.is_active`` never raises on a value that
+    has not been validated yet. A warning that could abort a start would be worse
+    than the mode it warns about.
+    """
+    if not armed_global_impairments(s):
+        return False
+    if targeting_is_set(s):
+        return False
+    try:
+        duration = float(s.get("duration", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    return duration <= 0
+
+
+def warn_if_unbounded(s, log):
+    """Say the start-time warning through ``log``, if the run has earned it.
+
+    Both interfaces call this rather than each testing the condition and picking
+    their own words: one sentence, one condition, so the window and the command
+    line cannot drift into telling the user different things about the same run.
+    """
+    if unbounded_impairment(s):
+        log(T("warn.global_impairment"))
+
+
 def validate_ranges(s, lang=None):
     """Check every numeric setting against the bounds declared in the registry.
 

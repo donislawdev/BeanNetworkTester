@@ -526,6 +526,7 @@
   "tips.syn": "Percent of dropped TCP SYN packets, i.e. those starting a connection. Simulates a connection that won't establish - tests retry logic.",
   "tips.target_process": "Limit the effect to chosen apps: process names, PIDs, ranges, wildcards or re: patterns (comma-separated). Prefix ! to exclude, empty = all traffic. See '?' for the full syntax. Requires psutil.",
   "tips.up_limit": "Max throughput of OUTGOING traffic (upload) in KB/s. 0 = unlimited.",
+  "warn.global_impairment": "This run has no target and no time limit, so it affects every connection on this machine. Set a target or a time limit to narrow it.",
   "warn.not_admin": "Not running as administrator - the WinDivert driver will not load and START will fail. Restart the app as administrator.",
   "warn.queue_overflow": "The latency queue is full: the tool is dropping packets you did not ask to lose. The loss you are measuring is partly ours. Lower the latency or the traffic rate.",
   "warn.send_failed": "The tool cannot put packets back on the wire: they are being lost here, not by the network. Check that the connection is up and that the driver is still loaded.",

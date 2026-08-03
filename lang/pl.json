@@ -526,6 +526,7 @@
   "tips.syn": "Procent gubionych pakietów TCP SYN, czyli tych rozpoczynających połączenie. Symuluje sytuację, gdy połączenie nie chce się nawiązać - test ponawiania prób.",
   "tips.target_process": "Ogranicz działanie do wybranych aplikacji: nazwy procesów, PID-y, zakresy, wildcardy lub wzorce re: (po przecinku). Poprzedź !, aby wykluczyć, puste = cały ruch. Pełna składnia pod „?”. Wymaga psutil.",
   "tips.up_limit": "Maks. przepustowość ruchu WYCHODZĄCEGO (wysyłanie) w KB/s. 0 = bez limitu.",
+  "warn.global_impairment": "Ten przebieg nie ma celu ani limitu czasu, więc dotyczy każdego połączenia na tym komputerze. Zawęzisz go, ustawiając cel albo limit czasu.",
   "warn.not_admin": "Uruchomiono bez uprawnień administratora - sterownik WinDivert się nie załaduje i START się nie powiedzie. Uruchom aplikację ponownie jako administrator.",
   "warn.queue_overflow": "Kolejka opóźnienia jest pełna: narzędzie gubi pakiety, o które nie prosiłeś. Strata, którą mierzysz, jest częściowo nasza. Zmniejsz opóźnienie lub tempo ruchu.",
   "warn.send_failed": "Narzędzie nie potrafi odesłać pakietów do sieci: giną tutaj, a nie w sieci. Sprawdź, czy połączenie działa i czy sterownik jest nadal załadowany.",

@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **A run that would break everything now says so before it starts.** A session that begins with
+  impairment on, nothing to aim it at and no time limit is announced by both the command line and
+  the window: this affects every connection on this machine, set a target or a time limit to
+  narrow it. A warning, not a refusal, so nothing that works today stops working. Silent in
+  `--simulate` and silent once the run is aimed or timed. "LAN mode" counts as impairment here,
+  because on its own it cuts every connection that leaves the local network.
 - **Connections: the search box can search one column at a time.** Plain text works as before,
   and now a term can name its column: `port:443`, `ip:10.0.0.0/8`, `pid:>4000`, `scoped:yes`,
   `dropped:>0`. Values use the same notation as the Control page fields, and several terms narrow
@@ -32,6 +38,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A broken scenario file no longer starts the session first.** `--scenario` with a file the tool
+  cannot read used to open the capture, impair traffic and only then report the problem. The file
+  is now read before anything starts, exactly as `--dry-run` already checked it. Same exit code as
+  before.
 - In the Settings window, "Capture only the targeted traffic" stayed clickable after you pressed
   START, if the window was already open at the time. Ticking it did nothing until the next
   session. It now greys out for as long as the session runs, with the same "locked while running"

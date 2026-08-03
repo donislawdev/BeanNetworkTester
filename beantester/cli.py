@@ -30,7 +30,7 @@ from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
-                       validate_ranges)
+                       validate_ranges, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
 
@@ -532,6 +532,27 @@ def _run_session(args, cfg, log, sleep, clock, engine):
     if cfg["simulate"]:
         log.info("SIMULATION mode (synthetic traffic, no WinDivert).")
 
+    # Said BEFORE the divert opens, while stopping still costs nothing. This is
+    # the mode our own documentation calls the most dangerous, and until now the
+    # tool started it in silence: `--lat 5` alone impaired 11 844 packets of a
+    # live machine for 202 s before anyone noticed (see the audit brief). A
+    # warning, not a refusal - refusing would break every pipeline that already
+    # runs this way. Nothing to warn about in --simulate: there is no real traffic.
+    if not cfg["simulate"]:
+        warn_if_unbounded(cfg["settings"], log.warn)
+
+    # Loaded BEFORE the capture starts, exactly like --dry-run does it. A scenario
+    # file that cannot be read is knowable without touching the driver, and the
+    # old order proved it: the run opened the divert, printed "Start.", impaired
+    # traffic and only then said the file was broken. Failures from RUNNING the
+    # scenario still land below, where the session can report them properly.
+    scen = None
+    if cfg["scenario"]:
+        try:
+            scen = load_scenario_file(cfg["scenario"])
+        except Exception as e:
+            _fail(exitcodes.SCENARIO, f"scenario error in {cfg['scenario']!r}: {e}")
+
     try:
         log.debug("opening the divert...")
         engine.start(cfg["filter"], divert=divert, duration=cfg["duration"],
@@ -560,9 +581,8 @@ def _run_session(args, cfg, log, sleep, clock, engine):
 
     scenario_failed = None
     cfg["stop_on_scenario"] = False
-    if cfg["scenario"]:
+    if scen is not None:
         try:
-            scen = load_scenario_file(cfg["scenario"])
             scen.loop = scen.loop or cfg["loop"]
             engine.start_scenario(scen, cfg["settings"], log=log.info)
             log.debug(f"scenario: {len(scen.steps)} steps, "

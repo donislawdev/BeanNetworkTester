@@ -31,23 +31,30 @@ from hypothesis import strategies as st
 
 from beantester.core import BeanCore, Decision
 from beantester.engine import BeanEngine
+from beantester.fields import (FIELDS, IMPAIRING_KEYS, NARROWING_KEYS, off_value)
 from beantester.presets import PRESETS, SETTING_TO_PRESET, preset_to_settings
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
 from fakes import FakeDivert, FakePacket, check
 
 # Every knob that can make the core do something other than "pass the packet
-# straight through", paired with the value that means "off". If a new impairment
-# is added to the model, add it here too - an omission is exactly how a default
-# could start damaging traffic without a test noticing.
-IMPAIRMENT_OFF = {
-    "loss": 0, "corrupt": 0, "dup": 0, "latency": 0, "jitter": 0,
-    "down": 0, "up": 0, "syn_drop": 0, "max_size": 0, "spike_prob": 0,
-    "spike_ms": 0, "nat_timeout": 0, "rst_prob": 0, "flap_period": 0,
-    "flap_down": 0, "target": "", "dst_ip": "", "dst_port": "",
-    "block_ip": "", "block_port": "",
-    "rate_schedule": "", "lan_mode": False,
-}
+# straight through", paired with the value that means "off".
+#
+# DERIVED from the field registry, not typed out again: a field declares what it
+# does to traffic (``impairs`` / ``narrows``, fields.py), and this invariant reads
+# that declaration. It used to be a hand-written list, which meant a new impairment
+# had to be remembered in two places - and the one that gets forgotten is always
+# the test, so the damage ships looking harmless.
+#
+# The two additions are PARAMETERS, not triggers: `spike_ms` and `flap_down` arm
+# nothing on their own (they sit behind `spike_prob` and `flap_period`), so the
+# registry rightly does not call them impairments - but a default that shipped
+# with either one hot would still be a default nobody chose, and pass-through is
+# the one place that should insist on the whole form being cold.
+IMPAIRMENT_OFF = dict(
+    {key: off_value(FIELDS[key]) for key in IMPAIRING_KEYS + NARROWING_KEYS},
+    spike_ms=0, flap_down=0,
+)
 
 # The profile fields that can impair traffic, and their "no impairment" value.
 # Derived from IMPAIRMENT_OFF (settings keys) so an impairment joining the
