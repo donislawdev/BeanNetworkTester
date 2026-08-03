@@ -13,6 +13,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   refusal. Silent in `--simulate`, and once the run is aimed or timed. The same line appears when
   a running session becomes unbounded, and in `--dry-run`. "LAN mode" counts as impairment here:
   on its own it cuts every connection that leaves the local network.
+- **Numbers in the tables line up on the right.** Packets, bytes, ports, PIDs and times were
+  anchored left, so 9 and 1000000 began at the same pixel and a column of numbers could not be
+  scanned down. Text columns are unchanged, and addresses stay on the left where they read
+  properly. Applies to Connections and to both views of the event log.
+- **An impaired row no longer relies on colour alone.** It is shown in bold as well as in orange,
+  so it stays recognisable whichever columns you have chosen to show - including with the
+  "impaired?" column hidden.
 - **Connections: the search box can search one column at a time.** Plain text works as before,
   and now a term can name its column: `port:443`, `ip:10.0.0.0/8`, `pid:>4000`, `scoped:yes`,
   `dropped:>0`. Values use the same notation as the Control page fields, and several terms narrow

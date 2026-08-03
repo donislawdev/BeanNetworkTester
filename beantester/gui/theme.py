@@ -59,8 +59,22 @@ EVENT_COLORS = {
 # actually narrowing (see ConnsPage._tag_of), so it never floods. A warm amber
 # FOREGROUND reads far cleaner than the old brown background, which went muddy over
 # the blue-grey table and looked like a defect rather than a highlight.
+FONT = "Segoe UI"
+MONO_FONT = "Consolas"
+
+# The impaired row carries TWO signals, and the second one is not decoration.
+# WCAG 1.4.1 (level A): colour must not be the only visual means of conveying
+# information. Until 2026-08-02 the text column "impaired?" was the other
+# carrier - then the column chooser shipped and the user could hide it, which
+# put the row back on colour alone.
+#
+# Weight, not a marker inside a cell: EVERY cell belongs to a column, and every
+# column can be hidden, so a dot in the process cell would have exactly the
+# problem it was meant to fix. A tag's font applies to the row whatever is on
+# screen. Same family and size as the Treeview style above it, so the row height
+# (`rowheight`) still fits and nothing is clipped at 125% scaling.
 CONN_COLORS = {
-    "impaired": {"foreground": "#ffb454"},
+    "impaired": {"foreground": "#ffb454", "font": (FONT, 9, "bold")},
 }
 
 GRID_C = "#333845"        # chart grid lines
@@ -73,10 +87,6 @@ BTN_BG, BTN_HOVER, BTN_BORDER = "#394152", "#4a5468", "#525d73"
 DONATE_C = "#ff8fb1"      # the support button (not a session control - own colour)
 SCROLL_BG = "#3a4150"     # scrollbar thumb
 SCROLL_TROUGH = "#20232b"
-
-FONT = "Segoe UI"
-MONO_FONT = "Consolas"
-
 
 def init_style(root=None):
     """Configure the shared ttk styles for the dark theme."""

@@ -62,6 +62,18 @@ COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "down_seen": "conns.down_seen", "up_seen": "conns.up_seen",
            "avg": "conns.avg", "dur": "conns.time", "idle": "conns.idle"}
 
+# Columns whose cells are numbers, right-aligned so their orders of magnitude
+# line up (Carbon Design System, and Microsoft's typographic guidance). Declared
+# beside the registry rather than derived in the widget, so a numeric column
+# added here is aligned without anybody remembering that alignment exists.
+#
+# `remote_ip` is deliberately absent: an address is read left to right, group by
+# group, and right-aligning it would ragged the leading octets. `scoped` is a
+# word ("yes"/"no"), not a number.
+NUMERIC = frozenset({"pid", "remote_port", "local_port", "packets", "dropped",
+                     "down", "up", "kb", "down_seen", "up_seen", "avg",
+                     "dur", "idle"})
+
 MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6,
              "local_port": 6, "packets": 7, "scoped": 7, "dropped": 8, "down": 8,
              "up": 8, "kb": 8, "down_seen": 11, "up_seen": 11,
@@ -214,7 +226,8 @@ class ConnsPage:
         self.table = SortableTree(holder, COLUMNS, sort=app.conn_sort,
                                   on_sort=self._on_sort, height=18,
                                   horizontal=True, tags=CONN_COLORS,
-                                  min_chars=MIN_CHARS, tips=COLUMN_TIPS)
+                                  min_chars=MIN_CHARS, tips=COLUMN_TIPS,
+                                  numeric=NUMERIC)
         self.table.sort.setdefault("default_reverse", True)
         # A layout saved by an earlier run. Unknown ids are dropped by the table
         # (a column may have been removed since), and an empty or missing entry

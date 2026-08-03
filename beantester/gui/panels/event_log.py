@@ -92,6 +92,9 @@ class EventLogWindow(PanelWindow):
             on_sort=self._on_sort,
             height=20, horizontal=True, tips=TIPS, tags=EVENT_COLORS,
             min_chars={"t": 6, "time": 18, "type": 10, "desc": 40},
+            # "t" is elapsed seconds - a quantity, so it lines up on the right.
+            # "time" is a timestamp and "type"/"desc" are words: all read left.
+            numeric={"t"},
         )
 
         actions = ttk.Frame(body)

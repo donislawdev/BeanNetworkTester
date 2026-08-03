@@ -113,3 +113,61 @@ def test_two_portless_rows_to_one_address_keep_separate_identities():
         index = page.table._ensure_index()
         assert len(index) == 2, ("the key index collapsed a row", index)
     ''')
+
+
+def test_numeric_columns_are_right_aligned_and_the_registry_is_honest():
+    """Numbers line up by order of magnitude, which is why a column of them is
+    worth reading down at all. Everything used to be anchored west, in one loop
+    over the columns, so 9 and 1000000 started at the same pixel.
+
+    Read from the page's NUMERIC registry rather than from a list retyped here:
+    a test that repeats the answer cannot catch the registry drifting from the
+    columns it describes, which is the failure this alignment had in the first
+    place.
+    """
+    run_gui('''
+        from beantester.gui.pages import conns
+
+        page = app.pages["connections"]
+        tree = page.table.tree
+
+        assert conns.NUMERIC <= set(conns.COLUMNS), \
+            "NUMERIC names columns that do not exist: %r" % (
+                conns.NUMERIC - set(conns.COLUMNS))
+
+        for col in conns.COLUMNS:
+            want = "e" if col in conns.NUMERIC else "w"
+            got = tree.column(col, "anchor")
+            assert got == want, "%s anchored %r, wanted %r" % (col, got, want)
+
+        # the ones the audit named, spelled out so a shrinking registry is caught
+        for col in ("pid", "packets", "dropped", "down", "up", "kb", "avg"):
+            assert col in conns.NUMERIC, "%s stopped counting as a number" % col
+        for col in ("proc", "proto", "remote_ip", "scoped"):
+            assert col not in conns.NUMERIC, "%s is not a quantity" % col
+    ''')
+
+
+def test_an_impaired_row_is_not_marked_by_colour_alone():
+    """WCAG 1.4.1 level A: colour may not be the only visual carrier.
+
+    The text column "impaired?" used to be the other one - then the column
+    chooser shipped (2026-08-02) and the user could hide it, which put the row
+    back on colour alone. The second signal therefore has to be something no
+    column setting can remove, which rules out a marker inside a cell: every
+    cell belongs to a column and every column can be hidden.
+    """
+    run_gui('''
+        from beantester.gui import theme
+
+        style = theme.CONN_COLORS["impaired"]
+        assert "foreground" in style, "the colour itself went missing"
+        non_colour = set(style) - {"foreground", "background"}
+        assert non_colour, \
+            "impaired rows carry colour and nothing else: %r" % style
+
+        page = app.pages["connections"]
+        applied = page.table.tree.tag_styles.get("impaired", {})
+        assert set(applied) - {"foreground", "background"}, \
+            "the table did not apply the non-colour signal: %r" % applied
+    ''')

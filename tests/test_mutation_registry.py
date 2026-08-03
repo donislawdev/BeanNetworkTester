@@ -218,6 +218,27 @@ MUTATIONS = [
         "test": "test_every_error_reads_like_a_sentence",
     },
     {
+        "label": "tables: every column goes back to being left-aligned",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self.tree.column(col, anchor=\"e\" if col in self._numeric else \"w\",",
+        "new": "            self.tree.column(col, anchor=\"w\",",
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: the numeric registry quietly loses a column",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "NUMERIC = frozenset({\"pid\", \"remote_port\", \"local_port\", \"packets\", \"dropped\",",
+        "new": "NUMERIC = frozenset({\"remote_port\", \"local_port\", \"packets\", \"dropped\",",
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: an impaired row is marked by colour alone again",
+        "file": "beantester/gui/theme.py",
+        "old": "    \"impaired\": {\"foreground\": \"#ffb454\", \"font\": (FONT, 9, \"bold\")},",
+        "new": "    \"impaired\": {\"foreground\": \"#ffb454\"},",
+        "test": "test_an_impaired_row_is_not_marked_by_colour_alone",
+    },
+    {
         "label": "readme: a semicolon hides inside a nested list again",
         "file": "README.md",
         "old": "With nothing set they are equal. The moment",

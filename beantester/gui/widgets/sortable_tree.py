@@ -70,8 +70,15 @@ class SortableTree:
 
     def __init__(self, parent, columns, sort=None, on_sort=None,
                  height=10, stretch=(), horizontal=False, min_chars=None,
-                 tips=None, tags=None, selectmode="extended"):
+                 tips=None, tags=None, selectmode="extended", numeric=()):
         self.columns = dict(columns)            # column id -> i18n key of its header
+        # Alignment is a property of the COLUMN, so it is declared by the page
+        # that owns the registry and never guessed from a value here. Numbers go
+        # right, because that is what lines up their orders of magnitude - the
+        # whole reason a column of numbers is worth reading down. Text stays left.
+        # Guessing per cell would align a column differently on the row where a
+        # port is empty, which looks like a rendering fault.
+        self._numeric = frozenset(numeric)
         self._visible = set(self.columns)       # see set_visible_columns
         self.sort = dict(sort or {"col": next(iter(self.columns)), "reverse": False})
         self.on_sort = on_sort
@@ -122,7 +129,8 @@ class SortableTree:
         for col, key in self.columns.items():
             width = self._width_for(col, key)
             self._natural[col] = width
-            self.tree.column(col, anchor="w", stretch=(col in stretch),
+            self.tree.column(col, anchor="e" if col in self._numeric else "w",
+                             stretch=(col in stretch),
                              width=width, minwidth=scaled(40))
         for tag, options in (tags or {}).items():
             try:
