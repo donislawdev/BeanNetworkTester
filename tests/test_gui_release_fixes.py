@@ -164,6 +164,11 @@ def test_shortcut_buttons_advertise_their_key():
     It used to assert on btn_start and btn_apply only, so dropping `shortcut=` from
     "Save file" or "Load file" left the suite green (verified by mutation, 2026-07-21).
     Every button that has a binding in `_bind_shortcuts` is listed here.
+
+    And every control that binds its OWN shortcut, which is the half this test did
+    not have when Ctrl+F arrived (2026-08-03): the Connections search box binds it
+    on the root itself, so a control outside `_bind_shortcuts` can advertise
+    nothing and nobody would notice.
     """
     run_gui("""
         for attr, key in (("btn_start", "F5"), ("btn_apply", "Ctrl+Enter"),
@@ -172,6 +177,11 @@ def test_shortcut_buttons_advertise_their_key():
             tip = getattr(widget, "_bnt_tooltip", None)
             assert tip is not None, attr + " lost its tooltip"
             assert key in tip.text, attr + " does not advertise " + key + ": " + tip.text
+
+        entry = app.pages["connections"]._search_entry
+        tip = getattr(entry, "_bnt_tooltip", None)
+        assert tip is not None, "the search box lost its tooltip"
+        assert "Ctrl+F" in tip.text,             "the search box does not advertise Ctrl+F: " + tip.text
     """)
 
 

@@ -102,7 +102,7 @@ class EventLogWindow(PanelWindow):
             # "t" is elapsed seconds - a quantity, so it lines up on the right.
             # "time" is a timestamp and "type"/"desc" are words: all read left.
             numeric={"t"},
-            empty_text="tables.empty_events",
+            empty_text="tables.no_events_yet",
         )
 
         actions = ttk.Frame(body)
@@ -134,6 +134,10 @@ class EventLogWindow(PanelWindow):
         if limit and len(events) > limit:
             events = events[:limit]
 
+        # Same as the Connections page: say WHY it is empty. With no filter typed
+        # an empty log means the session has not logged anything yet.
+        self.table.set_empty_text("tables.no_events_match" if self._query
+                                  else "tables.no_events_yet")
         # (3) LAZY: the raw events go in; _render is called only for what is shown
         self.table.set_model(events, render=self._render, key_of=self._key,
                              tag_of=lambda e: str(e[2]))

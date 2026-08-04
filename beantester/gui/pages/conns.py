@@ -240,7 +240,7 @@ class ConnsPage:
                                   horizontal=True, tags=CONN_COLORS,
                                   min_chars=MIN_CHARS, tips=COLUMN_TIPS,
                                   numeric=NUMERIC,
-                                  empty_text="tables.empty_conns")
+                                  empty_text="tables.no_conns_yet")
         self.table.sort.setdefault("default_reverse", True)
         # A layout saved by an earlier run. Unknown ids are dropped by the table
         # (a column may have been removed since), and an empty or missing entry
@@ -626,6 +626,13 @@ class ConnsPage:
         """Main thread: swap the finished model in whole."""
         rows, total, limit = result["rows"], result["total"], result["limit"]
         self._scope_active = result.get("scope_active", False)
+        # WHY it would be empty, before handing the rows over: an empty table
+        # with nothing typed means no traffic yet, and telling that user that
+        # "nothing matches what you are looking for" is a lie about a search
+        # they never made.
+        self.table.set_empty_text("tables.no_conns_match"
+                                  if self.search_var.get().strip()
+                                  else "tables.no_conns_yet")
         # LAZY: hand over the raw rows; _render runs for the visible ones only
         self.table.set_model(rows, render=self._render, key_of=self._key_of,
                              tag_of=self._tag_of)

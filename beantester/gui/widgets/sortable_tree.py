@@ -306,6 +306,18 @@ class SortableTree:
         self.repaint()
         self._show_empty_note(not self.items)
 
+    def set_empty_text(self, key):
+        """Say WHY the table would be empty. The owner knows, this widget cannot.
+
+        A table with no rows because nothing has been captured yet and one with
+        no rows because a search matched nothing are the same picture and
+        opposite messages - and getting it wrong is worse than saying nothing,
+        because "nothing matches what you are looking for" is a lie to someone
+        who has typed nothing.
+        """
+        self._empty_text = key
+        self._show_empty_note(not self.items)
+
     def _show_empty_note(self, empty):
         """A table with no rows says why, instead of being a blank rectangle.
 

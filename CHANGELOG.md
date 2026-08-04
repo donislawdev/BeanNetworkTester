@@ -17,7 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   caret in its search box, and does the same inside the event-log window. Shift+F10, or the menu
   key, opens the row menu on the selected connection. Nothing in the table needed a mouse before.
 - **An empty table says why it is empty.** "0 of N" under the table was the only sign that a
-  search had simply matched nothing, which reads the same as something being broken.
+  search had simply matched nothing, which reads the same as something being broken. It tells the
+  two cases apart: nothing captured yet, or nothing matching what you typed.
 - **`--help` starts with worked examples.** It used to open with 24 lines listing every flag,
   before a single readable sentence. Four examples now come first - a safe trial run, one aimed
   at an application, one aimed at a destination, and one for a pipeline - and the flag list

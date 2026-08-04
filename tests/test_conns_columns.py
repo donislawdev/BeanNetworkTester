@@ -223,9 +223,19 @@ def test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle():
         note = table._empty_note
         assert note is not None, "the Connections table declares no empty note"
 
-        table.set_model([], render=lambda i: i, key_of=lambda i: i)
+        # nothing typed: an empty table means no traffic YET, and saying
+        # "nothing matches your search" to someone who never searched is a lie
+        page.search_var.set("")
+        page._apply({"rows": [], "total": 0, "limit": 0,
+                     "totals": {"down": 0, "up": 0, "total": 0}, "scope_active": False})
         assert "place" in note.kw, "nothing was shown on an empty table"
-        assert note.kw.get("text"), "the note is placed but empty"
+        assert note.kw.get("text") == bnt.T("tables.no_conns_yet"),             "wrong reason with no search typed: %r" % note.kw.get("text")
+
+        # ...and with a query typed, the other reason
+        page.search_var.set("port:44")
+        page._apply({"rows": [], "total": 9, "limit": 0,
+                     "totals": {"down": 0, "up": 0, "total": 0}, "scope_active": False})
+        assert note.kw.get("text") == bnt.T("tables.no_conns_match"),             "wrong reason with a search typed: %r" % note.kw.get("text")
 
         table.set_model([("k", ("a",) * 17)], render=lambda i: i[1],
                         key_of=lambda i: i[0])

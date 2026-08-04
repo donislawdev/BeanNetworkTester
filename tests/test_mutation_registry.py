@@ -225,6 +225,13 @@ MUTATIONS = [
         "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
     },
     {
+        "label": "keyboard: the search box stops advertising its shortcut",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        add_tooltip(entry, \"tips.conn_search\", shortcut=\"Ctrl+F\")",
+        "new": "        add_tooltip(entry, \"tips.conn_search\")",
+        "test": "test_shortcut_buttons_advertise_their_key",
+    },
+    {
         "label": "keyboard: the context menu goes back to mouse-only",
         "file": "beantester/gui/pages/conns.py",
         "old": "        self.table.tree.bind(\"<Shift-F10>\", self._popup_from_keyboard)",
@@ -234,8 +241,18 @@ MUTATIONS = [
     {
         "label": "tables: an empty table goes back to a blank rectangle",
         "file": "beantester/gui/widgets/sortable_tree.py",
-        "old": "        self._show_empty_note(not self.items)",
-        "new": "        pass",
+        "old": ("        self.repaint()\n"
+                "        self._show_empty_note(not self.items)"),
+        "new": "        self.repaint()",
+        "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
+    },
+    {
+        "label": "tables: an unsearched empty table blames a search nobody made",
+        "file": "beantester/gui/pages/conns.py",
+        "old": ("        self.table.set_empty_text(\"tables.no_conns_match\"\n"
+                "                                  if self.search_var.get().strip()\n"
+                "                                  else \"tables.no_conns_yet\")"),
+        "new": "        self.table.set_empty_text(\"tables.no_conns_match\")",
         "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
     },
     {
@@ -341,7 +358,8 @@ CANARY = {
 # machine can repeat it. This is weaker than MUTATIONS and stronger than nothing -
 # and it is the honest state of most "verified by mutation" lines in the notes.
 PROVEN_BY_HAND = {
-    "test_shortcut_buttons_advertise_their_key": "2026-07-21, dropping shortcut= from Save/Load",
+    # test_shortcut_buttons_advertise_their_key moved to MUTATIONS on 2026-08-03,
+    # when Ctrl+F gave it a patch worth writing down. This list is meant to shrink.
     "test_an_overridden_field_is_visibly_disabled": "2026-07-21, removing the disabled style maps",
     "test_no_stale_pending_markers": "2026-07-25, both directions",
     "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",
