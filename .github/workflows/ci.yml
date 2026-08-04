@@ -26,6 +26,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The suite scans FILES. A commit message and a pull-request description are just
+  # as public and just as permanent - a message cannot be edited away, because the
+  # commit that carried it stays - and nothing in tests/ can see either of them. So
+  # the conventions that govern them (English only, plain hyphens, nothing private
+  # to a machine) were held up by remembering, every time. This is the guard.
+  public-text:
+    name: commit messages and PR description
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # the whole range being merged, not just its tip
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: check the commit messages
+        run: |
+          python tools/check_public_text.py \
+            --commits origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+      - name: check the pull-request description
+        # Passed through the environment rather than interpolated into the shell:
+        # a description is untrusted text and must never become part of a command.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.txt
+          python tools/check_public_text.py --text-file pr-body.txt
+
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}

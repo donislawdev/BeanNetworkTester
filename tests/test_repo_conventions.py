@@ -301,3 +301,109 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
         leaked = sorted(p for p in scanned if p.startswith(prefix))
         check(f"nothing under {prefix} is scanned (git-ignored, absent in CI)",
               not leaked, f"({leaked[:4]})")
+
+
+# Things that must never reach a public repository. Only the mechanical half of
+# the rule lives here - see the note next to the test about the other half.
+PRIVATE_PATTERNS = (
+    (r"[A-Za-z]:[\/]{1,2}Users[\/]", "a Windows user-profile path"),
+    (r"/home/[a-z][\w.-]*/", "a Linux home path"),
+    (r"/Users/[A-Za-z][\w.-]*/", "a macOS home path"),
+    (r"\bgh[pousr]_[A-Za-z0-9]{16,}", "a GitHub token"),
+    (r"\bAKIA[0-9A-Z]{12,}", "an AWS access key id"),
+    (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "a private key"),
+)
+
+# The WinDivert copyright line has to carry its author's address: it is part of
+# the notice we are obliged to reproduce. Nothing else may hold an address.
+EMAIL_ALLOWED_IN = {"THIRD-PARTY-NOTICES.md"}
+
+
+def test_nothing_private_to_this_machine_reaches_the_public_repository():
+    """This repository is public, and so is its history.
+
+    A path, a machine name or a token committed once stays readable after it is
+    deleted, because the commit that added it does not go away. That makes this
+    cheaper to enforce than to clean up, which is the whole argument for a test.
+
+    What this canNOT check is the other half of the rule (convention 45): that a
+    comment explains ITSELF rather than pointing at a document only the
+    maintainers can open. Four comments doing exactly that were found by reading,
+    2026-08-03, and reading is the only thing that finds them. Said out loud so
+    the presence of this test is not mistaken for full coverage.
+    """
+    import re
+    files = repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml"))
+    check("the privacy scan actually read the repository", len(files) >= 30,
+          f"({len(files)} files)")
+    for pattern, what in PRIVATE_PATTERNS:
+        rx = re.compile(pattern)
+        offenders = []
+        for path in files:
+            with open(path, encoding="utf-8", errors="replace") as handle:
+                for number, line in enumerate(handle, 1):
+                    if rx.search(line):
+                        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+                        offenders.append(f"{rel}:{number}")
+        check(f"nothing in the repository looks like {what}", not offenders,
+              f"({offenders[:4]})")
+
+
+def test_no_stray_email_addresses_in_the_public_tree():
+    """An address in a public repository is an address that gets scraped.
+
+    The one exception is deliberate and required: the WinDivert notice reproduces
+    its author's copyright line, address included, because that is the notice we
+    are obliged to pass on.
+    """
+    import re
+    rx = re.compile(r"[\w.+-]+@[\w-]+\.[A-Za-z]{2,}")
+    offenders = []
+    for path in repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml")):
+        name = os.path.basename(path)
+        if name in EMAIL_ALLOWED_IN:
+            continue
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for number, line in enumerate(handle, 1):
+                for hit in rx.findall(line):
+                    rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+                    offenders.append(f"{rel}:{number} {hit}")
+    check("no email addresses outside the notices that must carry one",
+          not offenders, f"({offenders[:4]})")
+
+
+def test_every_script_the_workflows_run_is_actually_in_the_repository():
+    """A CI dependency that git does not carry works here and nowhere else.
+
+    ``internal_tools/`` is deliberately outside git: measurement rigs and probes
+    that never ship and that the owner backs up separately. ``tools/`` is the
+    opposite - it IS carried, because the workflows run it. Put a workflow
+    dependency in the wrong one and nothing fails locally, where the file exists;
+    it fails on a fresh clone, which is to say on somebody else's machine, and
+    the error is a missing file rather than the reason for it.
+
+    So the rule "when a script becomes a CI dependency it moves to ``tools/``"
+    gets a guard instead of a memory: every ``python <path>`` a workflow runs has
+    to exist AND be tracked.
+    """
+    import re
+    import subprocess
+    workflows = glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml"))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+
+    referenced = set()
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            for match in re.finditer(r"python\s+([\w./-]+\.py)", handle.read()):
+                referenced.add(match.group(1))
+    check("the workflow scan found the scripts it runs", len(referenced) >= 3,
+          f"({sorted(referenced)})")
+
+    for script in sorted(referenced):
+        full = os.path.join(ROOT, script)
+        check(f"{script} exists", os.path.exists(full))
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", script],
+                                 cwd=ROOT, capture_output=True, text=True)
+        check(f"{script} is tracked by git (a fresh clone must have it)",
+              tracked.returncode == 0,
+              "(it is ignored or untracked - internal_tools/ cannot hold a CI dependency)")

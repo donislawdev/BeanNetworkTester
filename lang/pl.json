@@ -8,6 +8,7 @@
   "about.license_terms": "Wolne i otwarte oprogramowanie na licencji GNU GPL v3. Wolno używać, zmieniać i udostępniać dalej na tej samej licencji.",
   "about.licenses_dir": "Pełne teksty licencji: {path}",
   "about.no_telemetry": "Ten program nie wysyła nigdzie żadnych danych. Zero telemetrii, brak sprawdzania aktualizacji, brak usług zewnętrznych.",
+  "about.no_warranty": "Program nie ma żadnej gwarancji, w zakresie dozwolonym przez prawo.",
   "about.third_party": "Zbudowany na (każdy składnik na własnej licencji, patrz THIRD-PARTY-NOTICES.md):",
   "about.version": "wersja {version}",
   "app.author": "Autor: {author}",

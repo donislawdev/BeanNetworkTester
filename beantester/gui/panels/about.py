@@ -79,6 +79,13 @@ class AboutWindow(PanelWindow):
         line(text=T("about.license", license=LICENSE_NAME), style="TLabel").pack(
             side="top", fill="x", anchor="w", padx=pad)
         line(text=T("about.license_terms"), style="Muted.TLabel").pack(
+            side="top", fill="x", anchor="w", padx=pad)
+        # The GPL defines "Appropriate Legal Notices" as four things: the
+        # copyright, the absence of a warranty, that the work may be conveyed
+        # under this licence, and how to read it. This window carried three of
+        # them - the disclaimer was only in the README, where a user of the
+        # binary has no reason to look.
+        line(text=T("about.no_warranty"), style="Muted.TLabel").pack(
             side="top", fill="x", anchor="w", padx=pad, pady=(0, scaled(8)))
 
         # The privacy line is the one people came here to read.

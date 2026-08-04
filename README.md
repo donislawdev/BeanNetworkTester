@@ -1372,10 +1372,15 @@ bootloader. The full list, versions and source addresses are in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the full license texts are in the `licenses/`
 directory. From within the program: `--license` (CLI) or the **About** button in the interface.
 
-The LGPL libraries (WinDivert, PyDivert) can be replaced with your own interface-compatible versions -
-which is why the program is built as **onedir**, with the driver and libraries sitting next to the
-.exe file. GPLv3 is compatible with these components' licenses, and nothing in the project's license
-restricts the rights arising from them.
+The LGPL libraries can be replaced with your own interface-compatible versions, and the two are
+replaced differently. **WinDivert** is a DLL and a driver loaded from disk at run time, so you swap
+the files in `_internal\pydivert\windivert_dll\` - which is why the program is built as **onedir**
+rather than as a single file. **PyDivert** is pure Python and is compiled into the .exe, so it is
+replaced by rebuilding the program against your version, or by running it from source. Dropping a
+modified copy next to the .exe does not work, and
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) says so rather than leaving you to find out. GPLv3
+is compatible with these components' licenses, and nothing in the project's license restricts the
+rights arising from them.
 
 ## Privacy: no telemetry
 

@@ -16,7 +16,7 @@ To see the exact versions bundled in the copy you are holding, run:
 
 ---
 
-## WinDivert (`WinDivert.dll`, `WinDivert64.sys`)
+## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`)
 
 * Copyright (c) basil (basil@reqrypt.org)
 * Used under: **GNU Lesser General Public License, version 3 (LGPLv3)**
@@ -25,15 +25,21 @@ To see the exact versions bundled in the copy you are holding, run:
 * Licence text: `licenses/WinDivert-LICENSE.txt` (contains LGPLv3, GPLv3 and GPLv2)
 * Homepage: https://reqrypt.org/windivert.html
 * Source code: https://github.com/basil00/WinDivert
-* Shipped as: a stand-alone DLL and a stand-alone kernel driver, inside
-  `_internal\pydivert\`. They are **not** compiled into `BeanNetworkTester.exe`.
+* Shipped as: a stand-alone DLL and a stand-alone kernel driver, in
+  `_internal\pydivert\windivert_dll\`. They are **not** compiled into
+  `BeanNetworkTester.exe`.
 
 **Your LGPL rights, in practice.** You may modify WinDivert and use your modified
 version with this program: build (or download) an interface-compatible
-`WinDivert.dll` / `WinDivert64.sys` and replace the files shipped in
-`_internal\pydivert\`. The program loads them from that path at run time and will
-use whatever it finds there. You may reverse engineer Bean Network Tester to the
-extent necessary to debug such modifications.
+`WinDivert64.dll` / `WinDivert64.sys` and replace the two files in
+`_internal\pydivert\windivert_dll\`. The program loads them from that folder at
+run time and will use whatever it finds there. You may reverse engineer Bean
+Network Tester to the extent necessary to debug such modifications.
+
+**Where the folder is.** `_internal` sits next to `BeanNetworkTester.exe`. That the
+libraries are separate files you can swap, rather than code melted into the
+executable, is the reason this program is built as a folder and not as a single
+file: it is what makes the paragraph above something you can actually do.
 
 **Driver signing.** The `WinDivert64.sys` driver shipped here is the official,
 digitally signed build from the WinDivert project. If you replace it with a driver
@@ -57,14 +63,29 @@ machine is in test-signing mode). That is a Windows requirement, not ours.
   `BeanNetworkTester.exe --license`)
 * PyDivert is used **unmodified**.
 
-**Your LGPL rights, in practice.** PyDivert is a pure-Python library. It is bundled
-inside this application, and you may replace it with your own modified,
-interface-compatible version: put your modified `pydivert` package in
-`_internal\pydivert\` (Python packages there take precedence over the bundled
-copy), or rebuild the application against your version. **Written offer:** for as
-long as this release is distributed, the Author will supply, on request and at no
-charge beyond the cost of delivery, the complete corresponding source of the
-PyDivert version used in this build. Contact: https://donislawdev.com/
+**Your LGPL rights, in practice.** PyDivert is a pure-Python library, and its code
+is compiled into `BeanNetworkTester.exe` rather than left on disk beside it. That
+matters for how you replace it, so here is the accurate answer rather than the
+convenient one: **dropping a modified `pydivert` package into `_internal\` does
+not work.** The copy inside the executable wins, and it wins quietly - the
+replaced module even reports the path you put your files at, so it looks like it
+was picked up when it was not. (Measured against a frozen build, 2026-08-04.)
+
+What does work, and what the licence entitles you to:
+
+* **Rebuild this application against your version.** The complete source of Bean
+  Network Tester is public at https://github.com/donislawdev/BeanNetworkTester
+  under the GPLv3, and the build is one command (`pyinstaller
+  BeanNetworkTester.spec`). Install your modified PyDivert into the build
+  environment and the result uses it.
+* **Or run it from source**, where PyDivert is an ordinary installed package and
+  replacing it needs nothing but `pip install`.
+
+**Written offer:** for at least three years from the date of this release, the
+Author will supply, on request and at no charge beyond the cost of delivery, the
+complete corresponding source of the PyDivert version used in this build. You do
+not need to take up that offer to get it - the released source of the exact
+version is linked above. Contact: https://donislawdev.com/
 
 ---
 

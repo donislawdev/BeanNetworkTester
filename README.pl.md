@@ -1232,11 +1232,16 @@ adresy źródeł są w [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), a pełn
 teksty licencji w katalogu `licenses/`. Z poziomu programu: `--license` (CLI)
 albo przycisk **O programie** w interfejsie.
 
-Biblioteki LGPL (WinDivert, PyDivert) można podmienić na własne, zgodne
-interfejsowo wersje - dlatego program jest budowany jako **onedir**, ze
-sterownikiem i bibliotekami leżącymi obok pliku .exe. GPLv3 jest zgodna z
-licencjami tych komponentów, a licencja projektu nie ogranicza praw z nich
-wynikających.
+Biblioteki LGPL można podmienić na własne, zgodne interfejsowo wersje, a każdą
+z dwóch podmienia się inaczej. **WinDivert** to DLL i sterownik wczytywane z
+dysku w trakcie działania, więc wymienia się pliki w
+`_internal\pydivert\windivert_dll\` - i właśnie dlatego program jest budowany
+jako **onedir**, a nie jako jeden plik. **PyDivert** jest czystym Pythonem
+i jest wkompilowany w .exe, więc podmienia się go, przebudowując program wobec
+swojej wersji albo uruchamiając go ze źródeł. Podłożenie zmodyfikowanej kopii
+obok .exe nie zadziała, a [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) mówi
+to wprost, zamiast zostawiać to do odkrycia. GPLv3 jest zgodna z licencjami tych
+komponentów, a licencja projektu nie ogranicza praw z nich wynikających.
 
 ## Prywatność: brak telemetrii
 

@@ -106,3 +106,86 @@ def test_license_as_json_is_one_parsable_record_with_every_component():
         check(f"{component['name']} carries source + licence in JSON",
               component.get("source", "").startswith("http")
               and bool(component.get("license")), f"({component})")
+
+
+# -- the replacement instructions have to point at the real files ------------ #
+
+
+def _windivert_binaries():
+    """Where the WinDivert files sit inside the installed pydivert package.
+
+    Returns ``(relative directory, {filenames})`` using forward slashes, or
+    ``None`` when pydivert is absent (it is a Windows-only dependency, so the
+    Linux runner has nothing to check).
+
+    Read from the INSTALLED package rather than from a path typed here, because
+    the whole failure this guards is the package moving its files while our
+    instructions stay where they were.
+    """
+    import os
+    try:
+        import pydivert
+    except ImportError:
+        return None
+    root = os.path.dirname(os.path.dirname(os.path.abspath(pydivert.__file__)))
+    found = {}
+    for dirpath, _dirnames, filenames in os.walk(os.path.dirname(pydivert.__file__)):
+        for name in filenames:
+            if name.lower().startswith("windivert") and name.lower().endswith((".dll", ".sys")):
+                rel = os.path.relpath(dirpath, root).replace(os.sep, "/")
+                found.setdefault(rel, set()).add(name)
+    return next(iter(found.items())) if len(found) == 1 else (None, found)
+
+
+def test_the_notices_name_the_windivert_files_that_are_really_shipped():
+    r"""An LGPL right you cannot follow the directions to is not much of a right.
+
+    Convention 35 exists because these libraries have to be REPLACEABLE by the
+    holder of the binary, and the notices are the instructions for doing it.
+    Measured 2026-08-04: they named ``WinDivert.dll`` in ``_internal\pydivert\``
+    while the build ships ``WinDivert64.dll`` in
+    ``_internal\pydivert\windivert_dll\`` - wrong filename, wrong folder. Nobody
+    noticed because nothing compared the document with the package.
+
+    PyInstaller lays a collected package out exactly as it is installed, so the
+    installed tree is the authority here and no PyInstaller import is needed.
+    """
+    import os
+    result = _windivert_binaries()
+    if result is None:
+        return                      # pydivert is Windows-only; nothing shipped here
+    rel_dir, names = result
+    check("pydivert keeps its WinDivert files in one place", bool(rel_dir),
+          f"(found in several: {names})")
+
+    notices = legal.notices_text()
+    check("notices: the text is readable at all", len(notices) > 500,
+          f"({len(notices)} chars)")
+
+    windows_dir = "_internal\\" + rel_dir.replace("/", "\\")
+    check(f"notices: name the folder the files are really in ({windows_dir})",
+          windows_dir in notices, "(the replacement instructions point elsewhere)")
+    for name in sorted(names):
+        check(f"notices: name the file that is really shipped ({name})",
+              name in notices, "(a user would look for a file that is not there)")
+    # ...and do not still name a file that no longer exists
+    stale = [n for n in ("WinDivert.dll", "WinDivert32.dll")
+             if n not in names and n in notices]
+    check("notices: no longer name a WinDivert file this build does not ship",
+          not stale, f"({stale})")
+
+
+def test_the_written_offer_lasts_as_long_as_the_licence_demands():
+    """GPLv3 section 6(b), which LGPLv3 incorporates: an offer of source must be
+    "valid for at least three years".
+
+    Ours said "for as long as this release is distributed", which is shorter than
+    the licence allows an offer to be. The offer is belt and braces - section 6(d)
+    is already satisfied by naming the exact version and where its source lives -
+    but a promise printed in a public document is one somebody may rely on, so it
+    has to be at least what the licence requires.
+    """
+    notices = legal.notices_text()
+    check("notices: the written offer names the three-year floor",
+          "three years" in notices,
+          "(an offer weaker than GPLv3 section 6(b) allows)")

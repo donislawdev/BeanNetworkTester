@@ -59,6 +59,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The licence notices now point at the files that are actually there.** The instructions for
+  replacing WinDivert with your own build named `WinDivert.dll` in `_internal\pydivert\`; the
+  program ships `WinDivert64.dll` in `_internal\pydivert\windivert_dll\`. Replacing the library
+  is a right the LGPL gives you, and directions you cannot follow are not much of one.
+- **The PyDivert replacement instructions were wrong, and quietly so.** They said you could drop a
+  modified `pydivert` package into `_internal\`. Measured against a real build: the copy inside
+  the executable wins, and the replaced module even reports the path you used, so it looks like it
+  worked. The notices now give the two routes that do work - rebuild the application against your
+  version, or run it from source - and the written offer of source now lasts the three years the
+  licence asks of an offer.
+- **"About" now carries the no-warranty notice.** The GPL defines a legal notice as four things
+  together: copyright, no warranty, your right to pass the program on, and where to read the
+  licence. The window had three of them.
 - **Error messages say what to do instead of who is at fault.** A config file with an unusable
   number answered "Invalid value for 'loss'". It now says the setting needs a number between 0
   and 100, and quotes back what it got. A misspelled setting in a scenario file gets the same
