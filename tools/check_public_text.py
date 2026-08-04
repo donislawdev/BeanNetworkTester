@@ -52,6 +52,26 @@ POLISH = re.compile("[" + "".join(chr(c) for c in (
     0x105, 0x107, 0x119, 0x142, 0x144, 0xF3, 0x15B, 0x17C, 0x17A,
     0x104, 0x106, 0x118, 0x141, 0x143, 0xD3, 0x15A, 0x17B, 0x179)) + "]")
 
+# Quoting the conversation the work came out of. The rule is simple and the reason
+# is not obvious until it is said out loud: a commit or a pull request may quote
+# the PROGRAM - its interface text, its output, its code - and may not quote a
+# PERSON. A maintainer describing a fault in a chat has not published anything;
+# pasting their sentence into a pull request does it for them, in public, for
+# good. It happened here (pull request #95, two sentences in the reporter's own
+# words) and the language rule alone would not have stopped an English one.
+#
+# These are the TELLS, not a detector. A translated report with no attributive
+# phrase reads like ordinary prose and no pattern will find it - which is why the
+# rule sits in the convention as well, for the half a machine cannot do.
+QUOTED_PERSON = (
+    r"(?i)\bthe (owner|maintainer|reporter|user) (said|asked|wrote|reported|put it"
+    r"|noticed|complained|pointed out)\b",
+    r"(?i)\byou (asked me|said|reported|told me|complained|pointed out)\b",
+    r"(?i)\bas (you|he|she|they) (said|put it|wrote|described it)\b",
+    r"(?i)\b(his|her|their) (exact )?words\b",
+    r"(?i)\b(quoting|quote from) (the )?(chat|conversation|discussion|report)\b",
+)
+
 PRIVATE = (
     (re.compile(r"[A-Za-z]:[\\/]{1,2}Users[\\/]"), "a Windows user-profile path"),
     (re.compile(r"/home/[a-z][\w.-]*/"), "a Linux home path"),
@@ -78,6 +98,18 @@ def offences(text, where):
             found.append(f"{where} line {number}: em or en dash - use '-'")
         if POLISH.search(line):
             found.append(f"{where} line {number}: not English")
+        # Code spans are stripped for this check only. Naming a pattern is not
+        # using it: a message explaining this very rule has to be able to write
+        # `the owner said` down, and it was the first thing to trip the guard.
+        # Deliberately NOT done for the language check - a quoted line of Polish
+        # program output is still Polish in a public description, and putting it
+        # in backticks is how that would be smuggled past.
+        prose = re.sub(r"`[^`]*`", "", line)
+        for pattern in QUOTED_PERSON:
+            if re.search(pattern, prose):
+                found.append(f"{where} line {number}: quotes a person, not the "
+                             f"program - say what was found, not who said it")
+                break
         for pattern, what in PRIVATE:
             if pattern.search(line):
                 found.append(f"{where} line {number}: {what}")
