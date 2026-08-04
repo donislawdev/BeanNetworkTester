@@ -314,6 +314,53 @@ def test_the_evidence_map_does_not_grow_with_every_connection_ever_seen():
 
 
 # -- name resolution is delegated, not duplicated ----------------------------- #
+def test_a_listener_is_told_about_each_socket_the_map_gains():
+    """The map is not only a thing to be asked - it can tell.
+
+    Targeting used to discover a new socket at its own next rebuild, up to 0.30 s
+    after the event that announced it, and a short-lived connection was over by
+    then. The engine hands `note_socket` in here so the discovery is driven by the
+    event instead. Only ADD kinds: a CLOSE is not a socket the map GAINED, and
+    telling a listener about one would be inviting it to act on the wrong half.
+    """
+    told = []
+    watcher = SocketWatcher(names=_FakeNames())
+    watcher.on_socket(lambda port, pid: told.append((port, pid)))
+
+    watcher.apply(ev(CONNECT, 100, 5000))
+    watcher.apply(ev(BIND, 101, 5001))
+    watcher.apply(ev(CLOSE, 100, 5000))
+    check("every gained socket is announced", told == [(5000, 100), (5001, 101)],
+          f"({told})")
+
+    watcher.on_socket(None)
+    watcher.apply(ev(CONNECT, 102, 5002))
+    check("detaching stops the calls", len(told) == 2, f"({told})")
+
+
+def test_a_listener_that_throws_cannot_cost_the_map_an_event():
+    """It runs on the watcher thread, between the driver and the packet path's map.
+    A broken consumer must not be able to stop sockets being recorded."""
+    watcher = SocketWatcher(names=_FakeNames())
+
+    def boom(port, pid):
+        raise RuntimeError("the listener is broken")
+
+    watcher.on_socket(boom)
+    raised = None
+    try:
+        watcher.apply(ev(CONNECT, 100, 5000))
+    except Exception as exc:
+        # apply() lets it out; the LOOP's crashlog.quiet is what swallows it, and
+        # that is asserted separately. What must hold here is that the map was
+        # already updated before the listener ever ran.
+        raised = exc
+    check("the map recorded the socket anyway", watcher.snapshot().get(5000) == 100,
+          f"({watcher.snapshot()})")
+    check("and the event was counted", watcher.events == 1, f"({watcher.events})")
+    check("nothing escaped to the caller", raised is None, f"({raised!r})")
+
+
 def test_name_and_ancestors_delegate_to_the_names_table():
     names = _FakeNames()
     w = SocketWatcher(names=names)

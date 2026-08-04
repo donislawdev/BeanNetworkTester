@@ -108,6 +108,43 @@ def test_engine_bootstraps_and_runs_the_watcher_from_an_injected_source():
     check("and stopped its thread", not w.is_running())
 
 
+def test_the_event_source_is_open_before_the_bootstrap_snapshot_is_taken():
+    """Subscribe, THEN snapshot - the other order has a hole a socket falls into.
+
+    A socket created between the snapshot being collected and the source being
+    opened is in neither: the snapshot predates it, and no event announced it. It
+    then stays unknown to the live map until a later reconcile, and a short-lived
+    connection is over by then. REPRODUCED 2026-08-04 against the real driver by
+    opening a connection inside that window: never in scope for its whole life,
+    while the connection table still named an owner for it.
+
+    The order is what closes it, so the order is what this pins: the snapshot is
+    collected only once the source is already delivering.
+    """
+    order = []
+
+    class _WatchingPorts(_FakePorts):
+        def collected(self):
+            order.append("snapshot")
+            return super().collected()
+
+    def factory():
+        # the FACTORY, not __iter__: opening the source happens synchronously
+        # inside watcher.start(), while __iter__ runs on the watcher thread and
+        # would race the assertion instead of ordering it
+        order.append("subscribed")
+        return _FakeSocketSource([])
+
+    eng = BeanEngine()
+    eng._ports = _WatchingPorts({80: 1})
+    eng.start("true", divert=FakeDivert([]), socket_source=factory)
+    try:
+        check("the source was subscribed before the snapshot was collected",
+              order[:2] == ["subscribed", "snapshot"], f"({order})")
+    finally:
+        eng.stop()
+
+
 def test_synthetic_path_starts_no_watcher_and_falls_back_to_the_poller():
     """A fake/synthetic divert has no SOCKET layer to open, so the engine keeps
     the poller - the testable-without-WinDivert contract."""

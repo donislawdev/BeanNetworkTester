@@ -59,6 +59,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Short connections of the process you target are no longer missed.** A browser opens a new
+  connection for almost every page, often from a brand new process, and many of them are over in
+  well under a second. The tool used to notice them a fraction too late, so the shortest ones
+  finished untouched - listed with the right process name and "impaired? no" beside it. It now
+  learns each new connection the moment it appears. Measured with 12 fresh processes opening one
+  short connection each: 4 escaped before, 2 out of 82 after.
 - **Closing one copy of the tool no longer breaks the one that is still running.** The WinDivert
   driver is shared by the whole machine, and the copy that closed was unloading it out from under
   the copy that was working - which is why a second window could not start any more, and said
@@ -71,14 +77,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **`--doctor` no longer calls a machine healthy while nothing can start.** A driver caught
   mid-unload was reported as fine - the one state in which every start fails. It is now a warning
   that says what it means and what to wait for.
-- **A failed START now tells you what actually went wrong.** Whatever the reason, the window
-  answered with "Run as Administrator" - including to people who were already running as
-  Administrator. The most common case has nothing to do with rights: close one copy of the tool
-  while another is still running, and Windows reports "the specified device does not exist"
-  because the shared WinDivert driver is still shutting down. The window and the command line now
-  name that case (wait a few seconds and press START again), and keep the elevation advice for
-  the one error that really means it. A rejected traffic filter, a missing driver file, a blocked
-  or unsigned driver each get their own sentence too.
+- **A failed START now tells you what actually went wrong.** Whatever the reason, the window said
+  "Run as Administrator" - including to people who already were. The commonest case is not about
+  rights at all: close one copy of the tool while another still runs, and Windows reports that the
+  device does not exist, because the shared driver is still shutting down. That case now says so,
+  and says to try again in a few seconds. A rejected traffic filter, a missing driver file and a
+  blocked driver each get their own sentence too.
 - **The licence notices now point at the files that are actually there.** The instructions for
   replacing WinDivert with your own build named `WinDivert.dll` in `_internal\pydivert\`; the
   program ships `WinDivert64.dll` in `_internal\pydivert\windivert_dll\`. Replacing the library

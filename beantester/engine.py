@@ -394,7 +394,29 @@ class BeanEngine:
             with self._target_lock:
                 self._targeting = None
             self._resolver.retarget(None)
+        # EVERY branch, including the two that clear the target: a live socket map
+        # left pointing at a targeting nobody reads any more is the same dangling
+        # callback that retarget() is careful to undo one line above.
+        self._bind_socket_listener()
         self.core.set_target(active, ports)
+
+    def _bind_socket_listener(self):
+        """Let the live socket map tell targeting about a new socket as it happens.
+
+        Called from both places that can change either end of that pair: installing
+        a target (``set_target``) and creating the map (``start``). Whichever comes
+        second wires them together, and a target removed mid-session detaches the
+        listener rather than leaving the watcher calling into an orphan.
+
+        The watcher may not exist at all (``--simulate``, or the SOCKET handle could
+        not open), and then this is a no-op: targeting falls back to what it always
+        did, the resolver's own tick.
+        """
+        watcher = self._socketwatch      # read ONCE: stop() clears it concurrently
+        if watcher is None:
+            return
+        targeting = self._targeting
+        watcher.on_socket(targeting.note_socket if targeting is not None else None)
 
     def targeting(self):
         """The live ``ProcessTargeting`` in use, if any."""
@@ -1045,8 +1067,11 @@ class BeanEngine:
                         targeting.refresh()
                     # Reconcile: whichever path installed the target (target_for
                     # alone, or set_target), the session starts with the resolver
-                    # pointed at it.
+                    # pointed at it - and with the live map talking to it, which
+                    # set_target could not do when it ran before this session had
+                    # a map at all.
                     self._resolver.retarget(targeting)
+                    self._bind_socket_listener()
             # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
             # Starting it only when a target already exists meant that narrowing down
             # mid-run - press START, watch, then type a process - left nobody keeping
@@ -1154,6 +1179,35 @@ class BeanEngine:
             return
         from .socketwatch import SocketWatcher
         watcher = SocketWatcher(names=self._ports, source_factory=factory)
+        # SUBSCRIBE FIRST, THEN SNAPSHOT. The other order looks equally sensible and
+        # has a hole in it: a socket created between the snapshot being collected and
+        # the event source being opened is in NEITHER - the snapshot predates it and
+        # no event announced it - so it stays unknown until a later reconcile, which
+        # for a short-lived connection is for ever. REPRODUCED 2026-08-04 by opening
+        # a connection inside that window: the flow was never in scope, while the
+        # connection table still named an owner for it (from the poller), which is
+        # exactly the reported symptom.
+        #
+        # This order has no hole: anything created before the snapshot is IN the
+        # snapshot, anything created after it is announced by an event. The overlap
+        # is already handled - reconcile applies a snapshot entry only when the
+        # snapshot was collected after whatever an event last said about that port.
+        #
+        # ...and PUBLISHED BEFORE THE THREAD EXISTS, which is what makes that
+        # reordering safe. `stop()` stops whatever `self._socketwatch` points at, so
+        # a watcher running while the attribute is still None is a thread with an
+        # open WinDivert handle that nothing will ever stop - precisely the leak
+        # convention 20 exists to prevent. Assigning after the bootstrap widened
+        # that window from one statement to a whole port-table walk, and
+        # `test_concurrency_chaos.py::test_the_socket_watcher_survives_start_stop_cycles`
+        # caught it. Same shape as `_LIVE_ENGINES.add(self)` in start().
+        self._socketwatch = watcher
+        try:
+            watcher.start()
+        except Exception as exc:
+            crashlog.once("engine.socketwatch.start", exc)
+            self._socketwatch = None
+            return
         # Bootstrap from the current socket table, so connections OPEN before this
         # session are known from the first packet (events only announce NEW sockets).
         with crashlog.quiet("engine.socketwatch.bootstrap"):
@@ -1162,12 +1216,6 @@ class BeanEngine:
             # its own events say, so it needs to know WHEN the data was gathered.
             ports, collected_at = self._ports.collected()
             watcher.reconcile(ports, collected_at)
-        try:
-            watcher.start()
-            self._socketwatch = watcher
-        except Exception as exc:
-            crashlog.once("engine.socketwatch.start", exc)
-            self._socketwatch = None
 
     EVENT_BY_REASON = {"duration": "events.duration_reached",
                        "fault": "events.fault"}

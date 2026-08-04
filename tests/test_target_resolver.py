@@ -208,6 +208,35 @@ def test_an_orphaned_targeting_stops_waking_the_resolver():
     check("the current one is attached", new._on_miss is not None)
 
 
+def test_a_failing_adoption_does_not_kill_the_resolver():
+    """Adoption asks the OS for a process name, so it can fail like any other
+    socket-table call - and this thread must survive it.
+
+    A resolver that has quietly died leaves the port set frozen for the rest of the
+    session, which looks exactly like a session that is impairing and is not. The
+    rebuild below has had this guard since it existed; the adoption path arrived
+    outside it (2026-08-04) and is only one exception away from the same silence.
+    """
+    targeting, _ = _targeting()
+
+    calls = []
+
+    def boom():
+        calls.append(1)
+        raise RuntimeError("the socket table hiccupped")
+
+    targeting.adopt_new_pids = boom
+    resolver = TargetResolver(interval=0.02, min_interval=0.01)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver kept running past the failure",
+              _wait(lambda: len(calls) >= 3), f"({len(calls)} calls)")
+        check("and it is still alive", resolver.is_running())
+    finally:
+        resolver.stop()
+
+
 def test_a_failing_refresh_does_not_kill_the_resolver():
     """A socket table that hiccups leaves the port set stale, not the session dead."""
     class _Broken:

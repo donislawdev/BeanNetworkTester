@@ -141,6 +141,25 @@ class TargetResolver:
                 self._wake.clear()
                 continue
 
+            # BEFORE the floor, deliberately. The floor below rate-limits rebuilds
+            # driven by PACKET misses, which arrive continuously - every packet of
+            # every other application is one. A pid the live SOCKET map has never
+            # seen is a different signal entirely: it happens once per new process,
+            # and answering it costs one name lookup rather than a walk of the whole
+            # socket table. Making it wait behind the packet floor is what left a
+            # freshly spawned process unimpaired for up to 50 ms, and a process that
+            # finished inside that window unimpaired for ever (measured: 4 of 12).
+            #
+            # Guarded like the rebuild below, and for the same reason: this asks the
+            # OS for a process name, so it can fail the way any socket-table call
+            # can. Unguarded, one such failure would end this THREAD, and a resolver
+            # that has quietly died leaves the port set frozen for the rest of the
+            # session - a session that looks like it is impairing and is not.
+            try:
+                targeting.adopt_new_pids()
+            except Exception as exc:
+                crashlog.once("targeting.adopt", exc)
+
             # THE FLOOR, and it is not optional. Targeting narrows traffic to one
             # application, so every packet from every OTHER application is a miss:
             # misses arrive CONTINUOUSLY, not occasionally. Without a minimum gap
@@ -156,7 +175,15 @@ class TargetResolver:
             # up to min_interval. That is the trade the old code made too.
             since = time.monotonic() - self._last_rebuild
             if since < self.min_interval:
-                self._stopping.wait(timeout=self.min_interval - since)
+                # Waited on the DOORBELL, not on a plain sleep. The floor still
+                # holds - no full rebuild happens before it expires - but a pid the
+                # live map has just seen gets its cheap adoption at the top of the
+                # loop instead of queueing behind a limit meant for packet misses.
+                # Sleeping on `_stopping` here made a brand-new process wait the
+                # whole floor, which is the 50 ms this was supposed to remove.
+                # stop() sets both, so shutdown is just as prompt as before.
+                self._wake.wait(timeout=self.min_interval - since)
+                self._wake.clear()
                 continue
 
             # Clear BEFORE consuming and rebuilding: a miss arriving while we are

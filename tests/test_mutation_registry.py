@@ -389,9 +389,9 @@ MUTATIONS = [
     },
     {
         "label": "driver: a start failure goes back to blaming the user's rights",
-        "file": "beantester/gui/app.py",
-        "old": "                hint = T(key) if key else \"\"",
-        "new": "                hint = T(\"dialogs.run_as_admin\")",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    key = open_failure_hint(err, elevated)",
+        "new": "    key = \"dialogs.run_as_admin\"",
         "test": "test_the_start_failure_advice_fits_the_failure_not_every_failure",
     },
     {
@@ -422,6 +422,106 @@ MUTATIONS = [
         "old": "                self._open_divert()",
         "new": "                self._divert.open()",
         "test": "test_a_driver_that_is_still_unloading_is_waited_for_not_reported",
+    },
+    {
+        "label": "targeting: a new socket of a targeted process waits for a rebuild",
+        "file": "beantester/targeting.py",
+        "old": "        if pid in self._pids:\n            with self._ports_lock:",
+        "new": "        if False:\n            with self._ports_lock:",
+        "test": "test_a_new_socket_of_a_targeted_process_is_in_scope_from_its_event",
+    },
+    {
+        "label": "targeting: a brand-new process is never adopted from its event",
+        "file": "beantester/targeting.py",
+        "old": "                if self._pid_matches(pid, name):\n"
+               "                    matched.add(pid)",
+        "new": "                if False:\n"
+               "                    matched.add(pid)",
+        "test": "test_a_brand_new_process_is_adopted_from_its_first_socket_event",
+    },
+    {
+        "label": "targeting: the resolver stops draining pending pids",
+        "file": "beantester/target_resolver.py",
+        "old": "                targeting.adopt_new_pids()",
+        "new": "                pass",
+        "test": "test_the_resolver_adopts_a_new_pid_without_waiting_for_its_floor",
+    },
+    {
+        "label": "targeting: a failed adoption is left to kill the resolver thread",
+        "file": "beantester/target_resolver.py",
+        "old": "            try:\n"
+               "                targeting.adopt_new_pids()\n"
+               "            except Exception as exc:\n"
+               "                crashlog.once(\"targeting.adopt\", exc)",
+        "new": "            targeting.adopt_new_pids()",
+        "test": "test_a_failing_adoption_does_not_kill_the_resolver",
+    },
+    {
+        "label": "targeting: a pid whose name will not resolve is written off",
+        "file": "beantester/targeting.py",
+        "old": "                elif name:\n                    judged.add(pid)",
+        "new": "                else:\n                    judged.add(pid)",
+        "test": "test_a_pid_whose_name_will_not_resolve_yet_is_asked_again_not_written_off",
+    },
+    {
+        "label": "targeting: a rebuild in flight loses a socket the event added",
+        "file": "beantester/targeting.py",
+        "old": "                self._ports = resolved | self._late_ports",
+        "new": "                self._ports = resolved",
+        "test": "test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added",
+    },
+    {
+        "label": "targeting: an adopted pid is kept for ever instead of re-judged",
+        "file": "beantester/targeting.py",
+        "old": "                self._pids = frozenset(pids)",
+        "new": "                self._pids = self._pids | frozenset(pids)",
+        "test": "test_an_adopted_pid_still_falls_out_at_the_next_rebuild",
+    },
+    {
+        "label": "targeting: a ruled-out pid is looked up again on every socket",
+        "file": "beantester/targeting.py",
+        "old": "                with self._ports_lock:\n"
+               "                    self._not_ours = self._not_ours | judged\n"
+               "                return False",
+        "new": "                return False",
+        "test": "test_a_pid_that_does_not_match_is_judged_once_not_once_per_socket",
+    },
+    {
+        "label": "targeting: the live map stops telling anybody about a new socket",
+        "file": "beantester/socketwatch.py",
+        "old": "                with crashlog.quiet(\"socketwatch.listener\"):\n"
+               "                    listener(port, pid)",
+        "new": "                pass",
+        "test": "test_a_listener_is_told_about_each_socket_the_map_gains",
+    },
+    {
+        "label": "targeting: clearing the target leaves the map calling an orphan",
+        "file": "beantester/engine.py",
+        "old": "        self._bind_socket_listener()\n"
+               "        self.core.set_target(active, ports)",
+        "new": "        self.core.set_target(active, ports)",
+        "test": "test_the_engine_wires_the_live_map_to_targeting_and_unwires_it",
+    },
+    {
+        "label": "targeting: a running watcher is not published for stop() to find",
+        "file": "beantester/engine.py",
+        "old": "        self._socketwatch = watcher\n        try:\n            watcher.start()",
+        "new": "        try:\n            watcher.start()",
+        "test": "test_the_socket_watcher_survives_start_stop_cycles",
+    },
+    {
+        "label": "targeting: the bootstrap snapshot is taken before subscribing",
+        "file": "beantester/engine.py",
+        "old": "        try:\n"
+               "            watcher.start()\n"
+               "        except Exception as exc:\n"
+               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+        "new": "        ports, collected_at = self._ports.collected()\n"
+               "        try:\n"
+               "            watcher.start()\n"
+               "        except Exception as exc:\n"
+               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+        "test": "test_the_event_source_is_open_before_the_bootstrap_snapshot_is_taken",
     },
     {
         "label": "driver: a scheduled removal is reported as a failure again",

@@ -140,8 +140,22 @@ class SocketWatcher:
         self._stopping = threading.Event()
         self._events = 0                 # applied-event counter (tests/diagnostics)
         self._reconciles = 0
+        # Told about every socket this map GAINS, so a consumer can act on the
+        # event instead of discovering it at its own next poll. Injected by
+        # BeanEngine (targeting.note_socket) rather than imported, so this module
+        # keeps knowing nothing about targeting.
+        self._on_socket = None
 
     # -- the map --------------------------------------------------------------- #
+    def on_socket(self, callback):
+        """Be told about each socket this map gains (``None`` detaches).
+
+        One slot, set by the engine when it points targeting at this map. A plain
+        attribute on purpose: the reader is the watcher thread, which reads it once
+        per event, and a rebind is atomic.
+        """
+        self._on_socket = callback
+
     def apply(self, ev):
         """Fold one socket event into the map. Never raises on junk input."""
         port, pid = ev.local_port, ev.pid
@@ -167,6 +181,25 @@ class SocketWatcher:
             # snapshot on the strength of something we did not act on would be
             # claiming knowledge we do not have.
             self._events += 1
+        # OUTSIDE the lock, and after the map is already updated. Three reasons, and
+        # the third is the one that would be expensive to rediscover: a listener must
+        # not be able to delay an event reaching the map, a listener that throws must
+        # not lose one, and holding ``_lock`` across a call into somebody else's code
+        # would make the lock ORDER cyclic - targeting's adoption path holds its own
+        # lock while reading this map (``snapshot``), so a listener called under
+        # ``_lock`` would close the circle into a deadlock between the watcher and
+        # the resolver.
+        #
+        # Guarded HERE and not left to the loop's own crashlog.quiet, even though
+        # that would also catch it: this is somebody else's code running on OUR
+        # thread, so its failure deserves its own name in the crash log rather than
+        # arriving as "socketwatch.apply broke" - and `apply()` keeps its promise of
+        # never raising, whoever calls it.
+        if ev.kind in _ADD:
+            listener = self._on_socket
+            if listener is not None:
+                with crashlog.quiet("socketwatch.listener"):
+                    listener(port, pid)
 
     def reconcile(self, port_pid, collected_at):
         """Merge a socket-table snapshot in (bootstrap + safety net).

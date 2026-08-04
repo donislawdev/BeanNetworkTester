@@ -155,6 +155,12 @@ def test_owner_targeted_reads_the_live_map_without_waiting_for_a_rebuild():
     `owner_targeted` is the one path that consults the live map instead, so it answers
     correctly with NO refresh having happened - which is what this asserts by
     never starting a resolver.
+
+    Read it as the NAKED behaviour of these two methods: no resolver, and no
+    listener wired either. In a real session the live map now also PUSHES
+    (`note_socket`, wired by the engine), so a brand-new socket does not wait for
+    the rebuild this test performs by hand - see
+    `test_a_new_socket_of_a_targeted_process_is_in_scope_from_its_event`.
     """
     names = _Names({100: "chrome.exe", 200: "svchost.exe"})
     watcher = SocketWatcher(names=names,
@@ -285,7 +291,243 @@ def test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer():
           targeting.owner_targeted(7000) is False)
 
 
+# -- what the live map TELLS targeting, rather than what targeting polls ------- #
+class _EventTable:
+    """A socket table whose contents a test can change under the code."""
+
+    def __init__(self, ports=None, names=None):
+        self.ports = dict(ports or {})
+        self.names = dict(names or {})
+        self.name_calls = []
+        self.refreshes = 0
+
+    def refresh(self, now=None, force=False):
+        self.refreshes += 1
+        return True
+
+    def snapshot(self):
+        return dict(self.ports)
+
+    def name_of(self, pid, cheap=False):
+        self.name_calls.append(pid)
+        return self.names.get(pid, "")
+
+    def ancestors(self, pid, depth=8):
+        return []
+
+    def pid_for(self, port):
+        return self.ports.get(port)
+
+
+def test_a_new_socket_of_a_targeted_process_is_in_scope_from_its_event():
+    """The reported case: connections that come and go faster than a rebuild.
+
+    ``owner_targeted`` covers the SYN of such a flow, but only when the socket
+    event won its 0.02 ms head start - and when it loses, nothing asks again,
+    because ordinary TCP data never consults the live map (a measured decision).
+    The flow then stayed unimpaired until the next rebuild, up to 0.30 s away,
+    which for a browser's short connection means unimpaired for its whole life.
+    """
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the process is targeted", targeting.pids() == {100})
+
+    # a second socket of the SAME process, announced by the live map. No rebuild.
+    table.ports[5001] = 100
+    before = targeting.refreshes
+    targeting.note_socket(5001, 100)
+    check("the new socket is in scope immediately", 5001 in targeting)
+    check("...without a rebuild having run", targeting.refreshes == before,
+          f"({targeting.refreshes} vs {before})")
+
+
+def test_a_socket_of_an_unrelated_process_is_not_pulled_in_by_its_event():
+    """The same path must not become a way in for everybody else's traffic."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe", 200: "svchost.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    table.ports[6000] = 200
+    targeting.note_socket(6000, 200)
+    check("an unrelated process's socket stays out of scope", 6000 not in targeting)
+    check("and it is queued for the resolver to judge, not judged here",
+          targeting._pending_pids == frozenset({200}), f"({targeting._pending_pids})")
+
+
+def test_a_brand_new_process_is_adopted_from_its_first_socket_event():
+    """MEASURED 2026-08-04, before this existed: 12 fresh processes each opening
+    one short connection against a name target, and **4 of 12 were never in scope
+    at all** - the process appeared and finished between two rebuilds. Judging one
+    pid costs a name lookup, so it does not need the rebuild's rate limit.
+    """
+    table = _EventTable(names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("nothing is targeted yet", targeting.pids() == set())
+
+    # a process appears and connects - this is all the live map knows
+    table.ports[5000] = 100
+    targeting.note_socket(5000, 100)
+    check("the packet path cannot know yet", 5000 not in targeting)
+
+    adopted = targeting.adopt_new_pids()          # what the resolver does on the wake
+    check("the resolver adopts it", adopted is True)
+    check("the pid is targeted", targeting.pids() == {100}, f"({targeting.pids()})")
+    check("and its socket is in scope", 5000 in targeting)
+    check("its name reaches the description too", "chrome.exe" in targeting.describe(),
+          f"({targeting.describe()})")
+
+
+def test_the_resolver_adopts_a_new_pid_without_waiting_for_its_floor():
+    """The wiring, not just the method: the resolver has to drain pending pids
+    BEFORE its rate limit, or the whole point is lost.
+
+    That floor exists for PACKET misses, which arrive continuously - every packet
+    of every other application is one. A pid the live map has never seen arrives
+    once per new process and costs one name lookup, so it must not queue behind
+    them. The floor is pinned shut here (``_last_rebuild`` set to now, both
+    intervals 60 s) so the routine rebuild cannot be what does the work.
+    """
+    table = _EventTable(names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    resolver = TargetResolver(interval=60.0, min_interval=60.0)
+    resolver._last_rebuild = time.monotonic()
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        table.ports[5000] = 100          # a process appears and connects
+        targeting.note_socket(5000, 100)
+        check("the resolver adopted it without a rebuild being due",
+              _wait(lambda: 5000 in targeting), f"({sorted(targeting.ports())})")
+        check("and no routine rebuild ran", targeting.refreshes == 0,
+              f"({targeting.refreshes})")
+    finally:
+        resolver.stop()
+
+
+def test_a_pid_that_does_not_match_is_judged_once_not_once_per_socket():
+    """Every socket event on the machine reaches this path, and most of them belong
+    to processes we will never target. Re-running the matcher for each would put
+    the whole machine's socket churn on the resolver thread."""
+    table = _EventTable(ports={6000: 200}, names={200: "svchost.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.note_socket(6000, 200)
+    targeting.adopt_new_pids()
+    calls = list(table.name_calls)
+    for port in (6001, 6002, 6003):
+        targeting.note_socket(port, 200)
+    check("the second and later sockets of a ruled-out pid ask nothing",
+          targeting._pending_pids == frozenset(), f"({targeting._pending_pids})")
+    targeting.adopt_new_pids()
+    check("...and no further name lookup happens",
+          table.name_calls == calls, f"({table.name_calls} vs {calls})")
+
+
+def test_a_pid_whose_name_will_not_resolve_yet_is_asked_again_not_written_off():
+    """"I could not tell" is not "not ours", and caching it as one costs the whole
+    window this path exists to close.
+
+    A process that has just started does not always resolve its name on the first
+    ask. Writing it off would ignore every later socket it opens until the next full
+    rebuild - i.e. exactly the delay a fresh process was meant to stop paying.
+    """
+    table = _EventTable(ports={5000: 100}, names={})       # no name yet
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.note_socket(5000, 100)
+    targeting.adopt_new_pids()
+    check("a nameless pid is not written off", targeting._not_ours == frozenset(),
+          f"({targeting._not_ours})")
+
+    table.names[100] = "chrome.exe"                        # the name resolves now
+    targeting.note_socket(5001, 100)
+    check("its next socket asks again", targeting._pending_pids == frozenset({100}),
+          f"({targeting._pending_pids})")
+    targeting.adopt_new_pids()
+    check("and the second ask adopts it", targeting.pids() == {100})
+
+    table.names[200] = "svchost.exe"                       # a pid that DID answer
+    targeting.note_socket(6000, 200)
+    targeting.adopt_new_pids()
+    check("a pid that answered and did not match is still cached",
+          targeting._not_ours == frozenset({200}), f"({targeting._not_ours})")
+
+
+def test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added():
+    """The same rule the socket map lives by, one layer up: an older walk must not
+    undo a newer event. A refresh reads the table, spends milliseconds resolving
+    names, and then publishes - and a socket announced during that window is NEWER
+    than everything the walk saw."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+
+    seen = []
+
+    def name_of(pid, cheap=False):
+        # the event lands WHILE the walk is resolving names
+        if not seen:
+            seen.append(pid)
+            targeting.note_socket(5001, 100)
+        return {100: "chrome.exe"}.get(pid, "")
+
+    table.name_of = name_of
+    targeting.refresh()
+    check("the port that arrived mid-walk survives the publish", 5001 in targeting,
+          f"({sorted(targeting.ports())})")
+    check("and the walk's own result is still there", 5000 in targeting)
+
+
+def test_an_adopted_pid_still_falls_out_at_the_next_rebuild():
+    """Adoption must not become a way to accumulate pids for ever - the recycled-pid
+    bound is exactly "until the next rebuild", and a union would erase it."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.note_socket(5000, 100)
+    targeting.adopt_new_pids()
+    check("adopted", targeting.pids() == {100})
+
+    table.names[100] = "innocent.exe"        # the pid now belongs to somebody else
+    targeting.refresh()
+    check("the rebuild drops it, exactly as it drops a polled one",
+          targeting.pids() == set(), f"({targeting.pids()})")
+
+
+def test_the_pending_queue_cannot_grow_without_a_bound():
+    """It is fed by every socket event on the machine. A fork bomb, or simply a
+    busy server, must not turn that into an unbounded queue of OS lookups."""
+    table = _EventTable(names={})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    for pid in range(1, targeting.MAX_PENDING_PIDS + 50):
+        targeting.note_socket(9000 + pid, pid)
+    check("the queue stops at its ceiling",
+          len(targeting._pending_pids) == targeting.MAX_PENDING_PIDS,
+          f"({len(targeting._pending_pids)})")
+
+
 # -- engine binding ----------------------------------------------------------- #
+def test_the_engine_wires_the_live_map_to_targeting_and_unwires_it():
+    """Either end can be installed first (the GUI applies a target before START),
+    so both paths have to do the wiring - and removing the target has to undo it,
+    or the watcher keeps calling into an orphan."""
+    eng = BeanEngine()
+    eng._ports = _FakePorts({})
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)                 # target first, no session yet
+    eng.start("true", divert=FakeDivert([]), socket_source=_Source([]))
+    try:
+        check("start wired the map to the target",
+              eng._socketwatch._on_socket == targeting.note_socket)
+        eng.set_target(False)
+        check("removing the target detaches the listener",
+              eng._socketwatch._on_socket is None)
+        again = eng.target_for(bnt.parse_target("firefox"))
+        eng.set_target(True, again)
+        check("installing one mid-session wires it up",
+              eng._socketwatch._on_socket == again.note_socket)
+    finally:
+        eng.stop()
+
+
 def test_engine_binds_targeting_to_the_watcher_when_present():
     eng = BeanEngine()
     eng._ports = _FakePorts({})
