@@ -322,7 +322,7 @@ class SortableTree:
         return "center" if col in self._centered else "w"
 
     def set_empty_text(self, key):
-        """Say WHY the table would be empty. The owner knows, this widget cannot.
+        """Say WHY the table would be empty - the page knows, this widget cannot.
 
         A table with no rows because nothing has been captured yet and one with
         no rows because a search matched nothing are the same picture and

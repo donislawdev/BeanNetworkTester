@@ -576,8 +576,8 @@ def _run_session(args, cfg, log, sleep, clock, engine):
 
     # Said BEFORE the divert opens, while stopping still costs nothing. This is
     # the mode our own documentation calls the most dangerous, and until now the
-    # tool started it in silence: `--lat 5` alone impaired 11 844 packets of a
-    # live machine for 202 s before anyone noticed (see the audit brief). A
+    # tool started it in silence: measured, `--lat 5` alone impaired 11 844
+    # packets of a live machine for 202 s before anyone noticed. A
     # warning, not a refusal - refusing would break every pipeline that already
     # runs this way. Nothing to warn about in --simulate: there is no real traffic.
     if not cfg["simulate"]:

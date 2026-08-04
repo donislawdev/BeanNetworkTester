@@ -251,7 +251,7 @@ def test_translated_exceptions():
 
 
 # blame words: the message describes the INPUT, never the person who typed it
-# (NN/g error-message guidance, and the audit brief's section on wording).
+# (Nielsen Norman Group's error-message guidance).
 # Deliberately whole words, and deliberately not "not valid" - "X is not a valid
 # IP address" describes the value and tells the reader what shape was wanted,
 # which is the opposite of blame.

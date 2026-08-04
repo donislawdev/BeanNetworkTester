@@ -947,8 +947,8 @@ def test_the_warning_names_lan_mode_which_reads_like_a_scope(monkeypatch):
 
     It is the one flag whose name argues the other way ("only the local
     network"), and on its own, with the whole rest of the form at zero, it cuts
-    the machine's internet. The audit brief that asked for this warning did not
-    list it among the impairments either.
+    the machine's internet. It was found by walking the gates in decide() rather
+    than by reading the field names, which is the only reason it is here.
     """
     _, _, err, _ = _real_run(monkeypatch, ["--lan-mode"])
     check("warning: LAN mode alone is a machine-wide impairment", _warned(err))
