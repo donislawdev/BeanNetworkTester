@@ -72,7 +72,14 @@ class EventLogWindow(PanelWindow):
         #     every keystroke rebuilds the model several times per word typed
         entry.bind("<KeyRelease>", lambda e: self._debounce())
         entry.bind("<Escape>", lambda e: self._clear())
-        add_tooltip(entry, "tips.event_search")
+        add_tooltip(entry, "tips.event_search", shortcut="Ctrl+F")
+        self._search_entry = entry
+        # (4b) The window owns its own toplevel, so it binds its own Ctrl+F - the
+        #      main window's binding cannot reach here, and a search box with no
+        #      keyboard way in is the gap this closes on both tables at once.
+        with crashlog.quiet("gui.windows.event_log"):
+            self.win.bind("<Control-f>", self._focus_search)
+            self.win.bind("<Control-F>", self._focus_search)
 
         clear = ttk.Button(top, text=T("buttons.clear"), command=self._clear)
         clear.pack(side="left", padx=(scaled(6), 0))
@@ -95,6 +102,7 @@ class EventLogWindow(PanelWindow):
             # "t" is elapsed seconds - a quantity, so it lines up on the right.
             # "time" is a timestamp and "type"/"desc" are words: all read left.
             numeric={"t"},
+            empty_text="tables.empty_events",
         )
 
         actions = ttk.Frame(body)
@@ -164,6 +172,13 @@ class EventLogWindow(PanelWindow):
         self._search_job = None
         self._query = self.search_var.get().strip()
         self.refresh(force=True)
+
+    def _focus_search(self, _event=None):
+        """Ctrl+F: put the caret in this window's search box."""
+        with crashlog.quiet("gui.windows.event_log"):
+            self._search_entry.focus_set()
+            self._search_entry.select_range(0, "end")
+        return "break"
 
     def _clear(self):
         self.search_var.set("")

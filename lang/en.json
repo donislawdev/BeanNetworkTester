@@ -417,6 +417,8 @@
   "summary.syn": "{v}% SYN dropped",
   "summary.target": "process only '{v}'",
   "summary.up": "upload <= {v} KB/s",
+  "tables.empty_conns": "No connection matches what you are looking for. The search is working - nothing here fits it yet.",
+  "tables.empty_events": "No event matches what you are looking for. The search is working - nothing here fits it yet.",
   "tips.about": "Version, author, licence and the third-party components this program ships with.",
   "tips.apply": "Applies setting changes WITHOUT stopping (live). The traffic filter can only be changed by restarting.",
   "tips.avg_rate": "Average throughput since start = total MB / duration.",

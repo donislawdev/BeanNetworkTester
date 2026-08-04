@@ -171,3 +171,64 @@ def test_an_impaired_row_is_not_marked_by_colour_alone():
         assert set(applied) - {"foreground", "background"}, \
             "the table did not apply the non-colour signal: %r" % applied
     ''')
+
+
+def test_the_table_is_reachable_and_readable_without_a_mouse():
+    """WCAG 2.1.1, and the way testers actually work.
+
+    Two tables carry a search box and neither had Ctrl+F; the context menu hung
+    on <Button-3> alone, so there was no keyboard path to it at all - while
+    services.msc and the console have had Shift+F10 since forever.
+
+    Ctrl+F is bound on the ROOT rather than on the entry: a shortcut that only
+    works once the caret is already in the box is not a shortcut. It brings the
+    page forward first, so "find" answers the same wherever the user was.
+    """
+    run_gui('''
+        page = app.pages["connections"]
+        app.select_page("control")
+
+        root_binds = set(root.bindings)
+        assert "<Control-f>" in root_binds, \
+            "no Ctrl+F on the main window: %r" % sorted(root_binds)
+
+        page._focus_search()
+        assert app.current_page() is page, \
+            "Ctrl+F did not bring the Connections page forward"
+        assert root.focus_get() is page._search_entry, \
+            "the caret did not land in the search box"
+
+        tree_binds = set(page.table.tree.bindings)
+        for seq in ("<Shift-F10>", "<App>"):
+            assert seq in tree_binds, "no keyboard route to the menu: %s" % seq
+
+        # ...and it refuses when there is no row to act on, exactly as the mouse
+        # route refuses on an empty table
+        page.table.select_keys([])
+        assert page._popup_from_keyboard() == "break"
+    ''')
+
+
+def test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle():
+    """The count underneath read "0 of N"; the table itself said nothing.
+
+    A blank table is equally consistent with "nothing matched" and "something
+    broke". Since the search box learned column qualifiers, the empty view is
+    common rather than rare - a half-typed `port:44` on the way to `port:443`
+    correctly matches nothing.
+    """
+    run_gui('''
+        page = app.pages["connections"]
+        table = page.table
+        note = table._empty_note
+        assert note is not None, "the Connections table declares no empty note"
+
+        table.set_model([], render=lambda i: i, key_of=lambda i: i)
+        assert "place" in note.kw, "nothing was shown on an empty table"
+        assert note.kw.get("text"), "the note is placed but empty"
+
+        table.set_model([("k", ("a",) * 17)], render=lambda i: i[1],
+                        key_of=lambda i: i[0])
+        assert "place" not in note.kw, \
+            "the note stayed over a table that has rows again"
+    ''')

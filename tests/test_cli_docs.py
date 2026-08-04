@@ -91,3 +91,29 @@ def test_no_semicolons_in_the_help_a_user_reads():
         text = getattr(parser, name, None) or ""
         check(f"CLI help: no semicolons in the parser {name}",
               ";" not in text)
+
+
+def test_help_opens_with_examples_and_not_with_a_wall_of_usage():
+    """clig.dev: show the common cases first, then the reference.
+
+    MEASURED before this: 24 lines of generated usage listing about fifty flags,
+    then one sentence, then the flags again in full. The first thing anyone wants
+    from a tool that size is a line to copy, and it was below the fold - as was
+    the error message on a typo, which argparse prints under the same block.
+
+    Asserts ORDER, not wording: the examples have to arrive before the flag list,
+    or this is decoration.
+    """
+    import beantester.cli as cli_module
+    text = cli_module.build_arg_parser().format_help()
+    check("--help: has an examples section", "Examples:" in text)
+    first_block = text.split("\n\n")[0].splitlines()
+    check("--help: the usage block is one line, not fifty flags",
+          first_block[0].startswith("usage:") and len(first_block) == 1,
+          f"({len(first_block)} lines: {first_block[0]!r})")
+    check("--help: examples come before the flag list",
+          text.index("Examples:") < text.index("--simulate  "),
+          "(the reference is above the worked cases)")
+    examples = text.split("Examples:")[1].split("options:")[0]
+    for flag in ("--simulate", "--target", "--duration", "--format json"):
+        check(f"--help: an example actually uses {flag}", flag in examples)

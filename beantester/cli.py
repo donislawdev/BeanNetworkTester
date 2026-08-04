@@ -59,12 +59,49 @@ def _fail(code, message):
     raise CliError(code, message)
 
 
+# Examples BEFORE the flag list, because that is the order a reader needs them in
+# (clig.dev). The usage block alone runs to 24 lines of about fifty flags, and the
+# first thing anyone wants from a tool that size is one line they can copy. Four,
+# chosen to cover the four shapes a run comes in: harmless, aimed, timed and
+# machine-readable - the last two being what a pipeline needs.
+#
+# Kept in the description rather than the epilog: the epilog holds the exit-code
+# table, which is the reference half, and argparse prints the description ABOVE
+# the flags and the epilog below them.
+_DESCRIPTION = """Bean Network Tester - poor network conditions simulator.
+Without arguments it launches the GUI.
+
+Examples:
+  %(prog)s --simulate --loss 20 --duration 10
+      try it out. No driver, no real traffic, nothing to break.
+
+  %(prog)s --target chrome.exe --latency 200 --duration 30
+      impair one application for half a minute, and nothing else.
+
+  %(prog)s --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 60
+      impair one destination. Narrow beats broad: the rest of the
+      machine, including this shell, keeps working.
+
+  %(prog)s --preset 3g --duration 60 --format json --repro-out run.json
+      a named link profile, machine-readable output, and a report that
+      carries the command needed to repeat the run.
+
+A run with impairment turned on, no target and no --duration affects every
+connection on this machine until you stop it, and says so before it starts.
+"""
+
+
 def build_arg_parser():
     p = argparse.ArgumentParser(
         prog=program_name(),
+        # One line, not the 24 argparse generates from about fifty flags. Those
+        # 24 lines sat above every readable thing in --help, and above the message
+        # on a typo too - so the one sentence saying what was wrong arrived at the
+        # bottom of a wall nobody reads. The flags are listed in full immediately
+        # below, which is where a list belongs (clig.dev).
+        usage="%(prog)s [options]",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Bean Network Tester - poor network conditions simulator. "
-                    "Without arguments it launches the GUI.",
+        description=_DESCRIPTION,
         epilog=exitcodes.HELP_TABLE)
     p.add_argument("--version", action="version",
                    version=f"{APP_NAME} {__version__}")

@@ -185,7 +185,19 @@ class ConnsPage:
         entry.pack(side="left", padx=(scaled(4), scaled(8)))
         entry.bind("<KeyRelease>", lambda e: self._schedule_search())
         entry.bind("<Escape>", lambda e: self._clear_search())
-        add_tooltip(entry, "tips.conn_search")
+        add_tooltip(entry, "tips.conn_search", shortcut="Ctrl+F")
+        self._search_entry = entry
+        # Ctrl+F is what every table in every tool does, and this one had no way
+        # in from the keyboard at all. Bound on the ROOT, not on the entry: a
+        # shortcut that only works once the caret is already in the search box is
+        # not a shortcut. It brings the page forward first, so the answer to
+        # "find" is the same wherever the user was (WCAG 2.1.1 asks for the
+        # keyboard path to exist; this is also just how people work).
+        # Bound here rather than in App._bind_shortcuts because the search box
+        # belongs to this page - and because app.py sits on the size ratchet.
+        with crashlog.quiet("gui.pages.conns"):
+            app.root.bind("<Control-f>", self._focus_search)
+            app.root.bind("<Control-F>", self._focus_search)
         # The same "?" affordance the expression fields use (gui/form.py): the search
         # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
         # read is the only way anyone finds that out. A tooltip cannot be it - it
@@ -227,7 +239,8 @@ class ConnsPage:
                                   on_sort=self._on_sort, height=18,
                                   horizontal=True, tags=CONN_COLORS,
                                   min_chars=MIN_CHARS, tips=COLUMN_TIPS,
-                                  numeric=NUMERIC)
+                                  numeric=NUMERIC,
+                                  empty_text="tables.empty_conns")
         self.table.sort.setdefault("default_reverse", True)
         # A layout saved by an earlier run. Unknown ids are dropped by the table
         # (a column may have been removed since), and an empty or missing entry
@@ -262,6 +275,12 @@ class ConnsPage:
                               command=self.table.reset_widths)
         self.table.tree.bind("<Button-3>", self._popup)
         self.table.tree.bind("<Button-2>", self._popup)      # macOS
+        # The same menu, reachable without a mouse. WCAG 2.1.1: anything doable
+        # with the pointer has to be doable from the keyboard - and this is a tool
+        # for testers and admins, where services.msc and the console have had
+        # Shift+F10 forever. <App> is the dedicated menu key on a PC keyboard.
+        self.table.tree.bind("<Shift-F10>", self._popup_from_keyboard)
+        self.table.tree.bind("<App>", self._popup_from_keyboard)
 
     def _popup(self, event):
         """Show the menu only when it has a row to act on.
@@ -276,6 +295,23 @@ class ConnsPage:
         # select by MODEL key: the widget's item ids are recycled viewport slots,
         # so they say nothing about which connection was clicked
         self.table.select_keys([key])
+        return self._show_menu(event.x_root, event.y_root)
+
+    def _popup_from_keyboard(self, _event=None):
+        """Shift+F10 / the menu key, on whatever row is already selected.
+
+        Nothing to position against here - there is no pointer - so the menu
+        opens at the table's own corner. It refuses on an empty selection for the
+        same reason ``_popup`` refuses on an empty table: a menu offering "Copy
+        row" with no row is a menu that lies.
+        """
+        if not self.table.selected_keys():
+            return "break"
+        tree = self.table.tree
+        return self._show_menu(tree.winfo_rootx() + scaled(40),
+                               tree.winfo_rooty() + scaled(40))
+
+    def _show_menu(self, x_root, y_root):
         # a row whose process could not be resolved (no admin rights) cannot be
         # targeted - grey the entry out instead of failing after the click
         selected = self._selected() or {}
@@ -287,7 +323,7 @@ class ConnsPage:
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
         try:
-            self.menu.tk_popup(event.x_root, event.y_root)
+            self.menu.tk_popup(x_root, y_root)
         finally:
             try:
                 self.menu.grab_release()
@@ -335,6 +371,14 @@ class ConnsPage:
             return                      # cancelled: leave the table as it was
         self.table.set_visible_columns(chosen)
         self.app.ui.set("conn_columns", list(self.table.visible_columns()))
+
+    def _focus_search(self, _event=None):
+        """Ctrl+F: show this page and put the caret in its search box."""
+        with crashlog.quiet("gui.pages.conns"):
+            self.app.select_page(self.ID)
+            self._search_entry.focus_set()
+            self._search_entry.select_range(0, "end")
+        return "break"
 
     def _show_search_help(self):
         """The search cheat sheet, opened by the "?" next to the box."""

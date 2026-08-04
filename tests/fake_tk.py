@@ -124,6 +124,9 @@ class W:
     def place(self, **kw):
         self.kw["place"] = dict(kw)
 
+    def place_forget(self):
+        self.kw.pop("place", None)
+
     def columnconfigure(self, *a, **kw):
         pass
 

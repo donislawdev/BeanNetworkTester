@@ -13,6 +13,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   refusal. Silent in `--simulate`, and once the run is aimed or timed. The same line appears when
   a running session becomes unbounded, and in `--dry-run`. "LAN mode" counts as impairment here:
   on its own it cuts every connection that leaves the local network.
+- **Ctrl+F, and the row menu from the keyboard.** Ctrl+F brings Connections forward and puts the
+  caret in its search box, and does the same inside the event-log window. Shift+F10, or the menu
+  key, opens the row menu on the selected connection. Nothing in the table needed a mouse before.
+- **An empty table says why it is empty.** "0 of N" under the table was the only sign that a
+  search had simply matched nothing, which reads the same as something being broken.
+- **`--help` starts with worked examples.** It used to open with 24 lines listing every flag,
+  before a single readable sentence. Four examples now come first - a safe trial run, one aimed
+  at an application, one aimed at a destination, and one for a pipeline - and the flag list
+  follows. A mistyped flag shows the error instead of burying it under the same wall.
 - **Numbers in the tables line up on the right.** Packets, bytes, ports, PIDs and times were
   anchored left, so 9 and 1000000 began at the same pixel and a column of numbers could not be
   scanned down. Text columns are unchanged, and addresses stay on the left where they read

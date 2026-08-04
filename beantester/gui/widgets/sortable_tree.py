@@ -70,7 +70,8 @@ class SortableTree:
 
     def __init__(self, parent, columns, sort=None, on_sort=None,
                  height=10, stretch=(), horizontal=False, min_chars=None,
-                 tips=None, tags=None, selectmode="extended", numeric=()):
+                 tips=None, tags=None, selectmode="extended", numeric=(),
+                 empty_text=""):
         self.columns = dict(columns)            # column id -> i18n key of its header
         # Alignment is a property of the COLUMN, so it is declared by the page
         # that owns the registry and never guessed from a value here. Numbers go
@@ -137,6 +138,12 @@ class SortableTree:
                 self.tree.tag_configure(tag, **options)
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
+        # i18n KEY, translated at display: the window survives a language change
+        # (convention 25), so a text resolved once at build time would stay in the
+        # old language on a table that happened to be empty at the time.
+        self._empty_text = empty_text
+        self._empty_note = ttk.Label(self.frame, text="", style="Hint.TLabel",
+                                     anchor="center") if empty_text else None
         self.refresh_headers()
         self._ensure_slots(self._height + BUFFER_ROWS)
 
@@ -297,6 +304,33 @@ class SortableTree:
         self._index = None                  # invalidated; rebuilt on demand
         self.offset = min(self.offset, self.max_offset())
         self.repaint()
+        self._show_empty_note(not self.items)
+
+    def _show_empty_note(self, empty):
+        """A table with no rows says why, instead of being a blank rectangle.
+
+        The count underneath has always read "0 of N", but the reader is looking
+        at the table, and a blank one is equally consistent with "nothing
+        matched" and "something is broken". Since the search box learned column
+        qualifiers, the empty view is common rather than rare: a half-typed
+        ``port:44`` on the way to ``port:443`` correctly matches nothing.
+
+        Placed rather than gridded, so the tree keeps its geometry and the note
+        cannot change the row area's size. Removed again the moment rows return,
+        because a label left over an empty spot still swallows clicks.
+        """
+        note = getattr(self, "_empty_note", None)
+        if note is None:
+            return
+        from ...i18n import T
+        try:
+            if empty and self._empty_text:
+                note.config(text=T(self._empty_text))
+                note.place(relx=0.5, rely=0.4, anchor="center")
+            else:
+                note.place_forget()
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
 
     @property
     def rows(self):
