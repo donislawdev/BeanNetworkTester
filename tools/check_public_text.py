@@ -85,7 +85,12 @@ PRIVATE = (
 # Co-author trailers carry an address by design. Matched by SHAPE rather than by
 # spelling the address out: a literal here would be an address in the public tree,
 # which is the thing this script exists to keep out of it.
-ALLOWED_LINE = re.compile(r"^Co-Authored-By: .+ <[^>]+>$")
+#
+# Case-insensitive because git trailers are, and because GitHub proves it: a
+# squash merge rewrites "Co-Authored-By" as "Co-authored-by", so the first version
+# of this line passed on every branch and then flagged the merge commit it had
+# just approved. Only running it over master found that.
+ALLOWED_LINE = re.compile(r"^co-authored-by: .+ <[^>]+>$", re.I)
 
 
 def offences(text, where):
