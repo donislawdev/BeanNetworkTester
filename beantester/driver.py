@@ -82,6 +82,17 @@ def driver_used():
 # Skipping the cleanup costs nothing when somebody else is using the driver: the
 # driver stays loaded because of THEIR handle, so the stop could not have freed the
 # .sys file anyway (convention 22). It is only ever effective for the last user.
+#
+# What the marker MEANS, precisely, because the loose reading would be a bug: "this
+# process has opened a real divert and may open another one", NOT "has a handle open
+# at this instant". It is taken at the first real open and held until the process
+# exits. So an idle instance - one that started a session earlier and stopped it -
+# still makes a closing instance stand down, and the driver stays loaded until that
+# idle one leaves too. That is deliberate: the alternative is to drop and re-take it
+# around every session, which would let a start and somebody else's exit interleave
+# in the one way that costs a real 433. The price is a driver left loaded while the
+# user still has a window of this tool open, which is exactly when they are not
+# trying to delete its folder.
 _USE_MARKER = [None]
 _USE_MARKER_NAMES = (r"Global\BeanNetworkTester.WinDivertInUse",
                      "BeanNetworkTester.WinDivertInUse")
