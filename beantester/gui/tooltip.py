@@ -177,8 +177,10 @@ def add_tooltip(widget, key, shortcut=None):
     """Attach a tooltip with the translated text for the i18n ``key``.
 
     ``shortcut`` (e.g. ``"F5"``, ``"Ctrl+Enter"``) is appended so a control that
-    has a keyboard shortcut advertises it in its own tooltip (convention 51). The
-    Tooltip is stored on the widget (``_bnt_tooltip``) so tests can read it back.
+    has a keyboard shortcut advertises it in its own tooltip. A shortcut nobody
+    can discover is a shortcut nobody uses, and the tooltip is the only place a
+    control can say so about itself. The Tooltip is stored on the widget
+    (``_bnt_tooltip``) so tests can read it back.
     """
     if not key:
         return widget
