@@ -239,8 +239,9 @@ def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
     Both callers already knew what to do and neither could ever be reached:
     ``cli._run_session`` wraps start() to report "cannot start the capture: {e}"
     with exit RUNTIME, and the GUI's ``_finish_start`` shows the start-failed
-    dialog WITH the "run as Administrator" hint - precisely what a non-elevated
-    user needs and never saw.
+    dialog with advice - which a non-elevated user needed and never saw. Which
+    advice that is now depends on the error (see the test below): it used to be
+    "run as Administrator" for every one of them.
     """
     divert = UnopenableDivert()
     engine = BeanEngine()
@@ -267,6 +268,52 @@ def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
     check("a later START is not refused", engine.is_running() is True)
     engine.stop()
     check("and the recovered session releases its divert", recover.closed is True)
+
+
+def test_the_start_failure_advice_fits_the_failure_not_every_failure():
+    """Reported from an ELEVATED window: "[WinError 433] ... Run as Administrator."
+
+    433 is not a rights problem. It is what a SECOND instance leaves behind when it
+    exits: its cleanup stops the shared WinDivert service, the service sits in "stop
+    pending" while the first instance still holds a handle, and every open until
+    then fails this way (measured 2026-08-04). The dialog appended the elevation
+    sentence to every failure, so the one user who had already done the right thing
+    was sent to do it again.
+
+    Both directions are asserted, because keeping the advice for the error that
+    really means it is half the fix.
+    """
+    run_gui("""
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append(message)
+
+        class OpenFailed(OSError):
+            def __init__(self, code, text):
+                super().__init__(text)
+                self.winerror = code
+                self._text = text
+            def __str__(self):
+                return self._text
+
+        busy = OpenFailed(433, "[WinError 433] The specified device does not exist.")
+        app._is_admin = True
+        app._finish_start(busy)
+        assert shown, "a failed start has to tell the user something"
+        assert "WinError 433" in shown[-1], shown[-1]
+        assert bnt.T("dialogs.driver_busy") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.run_as_admin") not in shown[-1], (
+            "an elevated window was told to run as Administrator: " + shown[-1])
+
+        # the failure that IS about rights keeps the sentence that helps
+        app._is_admin = False
+        app._finish_start(OpenFailed(5, "[WinError 5] Access is denied."))
+        assert bnt.T("dialogs.run_as_admin") in shown[-1], shown[-1]
+
+        # ...and the button comes back either way, or the window is stuck
+        assert app.running is False
+    """)
 
 
 def test_the_start_banner_is_logged_before_a_worker_can_fault():

@@ -376,6 +376,45 @@ def test_exit_code_runtime_without_pydivert():
           "WinDivert could not be opened" in err.getvalue(), f"({err.getvalue()!r})")
 
 
+def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):
+    """The window and the console answer the same failure, from one table.
+
+    A driver error is not a GUI problem: whoever hits WinError 433 from a script
+    needs the same sentence the window shows ("another copy just closed, wait a
+    few seconds"), and the console used to print the raw Win32 error with nothing
+    to do about it. ``is_admin`` is forced because a non-elevated run never reaches
+    the start at all - it fails earlier, with PERMISSION.
+    """
+    from beantester.i18n import T
+
+    class _BusyDriverEngine:
+        fault = False
+
+        def __getattr__(self, _name):        # every set_* the CLI applies
+            return lambda *_a, **_k: None
+
+        def start(self, *_a, **_k):
+            error = OSError("[WinError 433] The specified device does not exist.")
+            error.winerror = 433
+            raise error
+
+        def stop(self, *_a, **_k): pass
+
+    monkeypatch.setattr(cli_module.winenv, "is_admin", lambda: True)
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep,
+                   clock=clock, engine=_BusyDriverEngine(), out=out, err=err)
+    check("exit: a driver that will not open is still RUNTIME(1)",
+          code == exitcodes.RUNTIME, f"(code={code})")
+    check("the console carries the raw Win32 error",
+          "WinError 433" in err.getvalue(), f"({err.getvalue()!r})")
+    check("...and the advice that fits it",
+          T("dialogs.driver_busy") in err.getvalue(), f"({err.getvalue()!r})")
+    check("...and not the elevation advice, which is about a different error",
+          T("dialogs.run_as_admin") not in err.getvalue(), f"({err.getvalue()!r})")
+
+
 class _NeverEnded(BaseException):
     """The report loop outlived its budget: this run does not end on its own.
 

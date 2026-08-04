@@ -59,6 +59,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A failed START now tells you what actually went wrong.** Whatever the reason, the window
+  answered with "Run as Administrator" - including to people who were already running as
+  Administrator. The most common case has nothing to do with rights: close one copy of the tool
+  while another is still running, and Windows reports "the specified device does not exist"
+  because the shared WinDivert driver is still shutting down. The window and the command line now
+  name that case (wait a few seconds and press START again), and keep the elevation advice for
+  the one error that really means it. A rejected traffic filter, a missing driver file, a blocked
+  or unsigned driver each get their own sentence too.
 - **The licence notices now point at the files that are actually there.** The instructions for
   replacing WinDivert with your own build named `WinDivert.dll` in `_internal\pydivert\`; the
   program ships `WinDivert64.dll` in `_internal\pydivert\windivert_dll\`. Replacing the library

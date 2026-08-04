@@ -304,6 +304,48 @@ def pydivert_available():
         return False
 
 
+# -- why a start failed --------------------------------------------------------- #
+#
+# ``WinDivertOpen`` reports its failures as Win32 error codes, and this tool used
+# to answer every one of them with "Run as Administrator" - the advice for exactly
+# ONE of them. What that costs is not theoretical: MEASURED 2026-08-04 on Windows
+# 11, elevated, two processes and the filter ``false`` (which matches no packet at
+# all), a session holding a handle open while a second instance exits and runs
+# ``release_on_exit`` leaves the service in "stop pending", and every open after
+# that fails with **433** until the first handle closes. The user was elevated,
+# nothing about their rights was wrong, and the window told them to run as
+# Administrator.
+#
+# The mapping lives here rather than in the window because the CLI reports the same
+# failure and must not grow a second copy of these sentences. It yields i18n KEYS,
+# never text: this module translates nothing (convention: only keys in code).
+OPEN_ERROR_HINTS = {
+    2: "dialogs.driver_missing",       # ERROR_FILE_NOT_FOUND - WinDivert*.sys gone
+    5: "dialogs.run_as_admin",         # ERROR_ACCESS_DENIED - the ONE rights problem
+    87: "dialogs.filter_refused",      # ERROR_INVALID_PARAMETER - the filter expression
+    433: "dialogs.driver_busy",        # ERROR_NO_SUCH_DEVICE - measured above
+    577: "dialogs.driver_signature",   # ERROR_INVALID_IMAGE_HASH
+    1275: "dialogs.driver_blocked",    # ERROR_DRIVER_BLOCKED - security software, VMs
+}
+
+
+def open_failure_hint(exc, elevated=None):
+    """The i18n key of the advice that fits THIS failure (``""`` when none does).
+
+    ``elevated`` is injected so the caller can pass what it already knows (the GUI
+    decides its "run as Administrator" banner from the same answer) and so a test
+    can state both worlds without touching the machine it runs on.
+    """
+    key = OPEN_ERROR_HINTS.get(getattr(exc, "winerror", None))
+    if key is not None:
+        return key
+    # An error we do not recognise. Elevation is a fair guess when the process is
+    # NOT elevated - and a falsehood when it is, which is the whole point here.
+    if elevated is None:
+        elevated = is_admin()
+    return "" if elevated else "dialogs.run_as_admin"
+
+
 def doctor():
     """Environment report used by ``--doctor``: ``(ok, [(check, state, detail)])``."""
     import platform

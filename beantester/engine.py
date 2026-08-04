@@ -932,9 +932,10 @@ class BeanEngine:
                 # Both callers already handle this properly and neither could ever
                 # reach that code: `cli._run_session` wraps start() to report
                 # "cannot start the capture: {e}" with exit RUNTIME, and the GUI's
-                # `_finish_start` shows the start-failed dialog WITH the "run as
-                # Administrator" hint - which is exactly what a non-elevated user
-                # needs and never saw. Raising is what wires them up.
+                # `_finish_start` shows the start-failed dialog. Both then add the
+                # advice that fits THIS error code (`driver.open_failure_hint`) -
+                # which for a long time was "run as Administrator" whatever had
+                # failed. Raising is what wires them up.
                 #
                 # Cleared first so the engine is clean for a retry: `_running` is
                 # still False here and this object never reached _LIVE_ENGINES, so

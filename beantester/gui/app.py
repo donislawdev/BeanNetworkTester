@@ -1505,8 +1505,19 @@ class App:
                 dialogs.show_error(self.root, T("dialogs.missing_library"),
                                    T("dialogs.install_pydivert"))
             else:
+                # The advice has to FIT the failure. This used to append "Run as
+                # Administrator" to every one of them, which is right for exactly
+                # one Win32 error and a falsehood for the rest - reported from an
+                # ELEVATED window told to elevate, after a second instance left
+                # the driver service stopping (WinError 433). Both halves of the
+                # answer come from one place, shared with the CLI: which error
+                # this is (driver.open_failure_hint) and whether this process is
+                # already elevated (the same flag that drives the banner above).
+                from ..driver import open_failure_hint
+                key = open_failure_hint(err, self._is_admin)
+                hint = T(key) if key else ""
                 dialogs.show_error(self.root, T("dialogs.start_failed"),
-                                   f"{err}\n\n{T('dialogs.run_as_admin')}")
+                                   f"{err}\n\n{hint}" if hint else str(err))
             self._sync_running_ui()     # button back to START
             return
         if self._closing:

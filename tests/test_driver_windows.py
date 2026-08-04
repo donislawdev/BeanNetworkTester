@@ -296,3 +296,59 @@ def test_cleanup_driver_with_nothing_installed_says_so(monkeypatch):
     lines = driver.cleanup_driver()
     check("nothing installed reports nothing to clean up",
           any("nothing to clean up" in l for l in lines), f"({lines})")
+
+
+# --- open_failure_hint: the advice has to fit the failure --------------------- #
+class _OpenError(OSError):
+    """An OSError carrying a winerror, exactly as pydivert lets one through."""
+
+    def __init__(self, winerror):
+        super().__init__("open failed")
+        self.winerror = winerror
+
+
+def test_a_driver_error_is_never_answered_with_the_elevation_advice(monkeypatch):
+    """433 from an ELEVATED process is the report this exists for.
+
+    A second instance exiting leaves the shared WinDivert service in "stop
+    pending", and every open then fails with 433 until the first handle closes.
+    Answering that with "Run as Administrator" - which is what every start failure
+    used to get - sends the one user who did everything right to check the one
+    thing that was already true.
+    """
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    check("433 explains the driver, not the rights",
+          driver.open_failure_hint(_OpenError(433), elevated=True)
+          == "dialogs.driver_busy")
+    check("the elevation advice is kept for the error that means it",
+          driver.open_failure_hint(_OpenError(5), elevated=True)
+          == "dialogs.run_as_admin")
+    check("a rejected filter points at the filter",
+          driver.open_failure_hint(_OpenError(87), elevated=True)
+          == "dialogs.filter_refused")
+
+
+def test_an_unrecognised_failure_only_suggests_elevation_when_it_could_help():
+    """The fallback is a guess, so it must not be made against the facts."""
+    unknown = _OpenError(1234567)
+    check("elevated: no advice beats false advice",
+          driver.open_failure_hint(unknown, elevated=True) == "")
+    check("not elevated: elevation is worth suggesting",
+          driver.open_failure_hint(unknown, elevated=False) == "dialogs.run_as_admin")
+    check("an exception with no winerror at all is handled",
+          driver.open_failure_hint(RuntimeError("boom"), elevated=True) == "")
+
+
+def test_every_open_failure_hint_is_a_key_both_languages_define():
+    """A hint is an i18n KEY. A key only English defines is a Polish window
+    showing an English sentence, which is what the shared table exists to stop."""
+    import json
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for code in ("en", "pl"):
+        with open(os.path.join(root, "lang", f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        missing = sorted(k for k in driver.OPEN_ERROR_HINTS.values() if k not in texts)
+        check(f"lang/{code}.json defines every open-failure hint", not missing,
+              f"({missing})")
