@@ -21,6 +21,7 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
+import sys
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -285,9 +286,22 @@ class ConnsPage:
         # The same menu, reachable without a mouse. WCAG 2.1.1: anything doable
         # with the pointer has to be doable from the keyboard - and this is a tool
         # for testers and admins, where services.msc and the console have had
-        # Shift+F10 forever. <App> is the dedicated menu key on a PC keyboard.
-        self.table.tree.bind("<Shift-F10>", self._popup_from_keyboard)
-        self.table.tree.bind("<App>", self._popup_from_keyboard)
+        # Shift+F10 forever.
+        #
+        # The dedicated menu key is spelled DIFFERENTLY per platform - "App" on
+        # Windows, "Menu" on X11 - and Tk RAISES on a keysym the platform does
+        # not know rather than ignoring it. Binding "App" unconditionally passed
+        # every Windows test and killed the Linux render check, so the spelling
+        # is chosen here rather than tried blindly. Shift+F10 exists everywhere,
+        # so the keyboard route survives even if the menu key does not.
+        menu_key = "<App>" if sys.platform == "win32" else "<Menu>"
+        for sequence in ("<Shift-F10>", menu_key):
+            try:
+                self.table.tree.bind(sequence, self._popup_from_keyboard)
+            except tk.TclError as _exc:
+                # insurance, not the expected path: the spelling above is the one
+                # this platform should know, so a failure here is worth recording
+                crashlog.note(_exc, "gui.pages.conns")
 
     def _popup(self, event):
         """Show the menu only when it has a row to act on.

@@ -210,8 +210,14 @@ def test_the_table_is_reachable_and_readable_without_a_mouse():
         assert root.focus_get() is page._search_entry, \
             "the caret did not land in the search box"
 
+        # The menu key is spelled per platform and Tk RAISES on a spelling it
+        # does not know, so the test has to ask for the same one the code binds -
+        # asserting "<App>" everywhere is the Windows-only assumption that broke
+        # the Linux render check in the first place.
+        import sys as _sys
         tree_binds = set(page.table.tree.bindings)
-        for seq in ("<Shift-F10>", "<App>"):
+        menu_key = "<App>" if _sys.platform == "win32" else "<Menu>"
+        for seq in ("<Shift-F10>", menu_key):
             assert seq in tree_binds, "no keyboard route to the menu: %s" % seq
 
         # ...and it refuses when there is no row to act on, exactly as the mouse
