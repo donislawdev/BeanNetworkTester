@@ -10,3 +10,12 @@
 - [ ] User-facing changes noted in `CHANGELOG.md`, under `[Unreleased]`.
 - [ ] Commits follow Conventional Commits (`type(scope): summary`).
 - [ ] No version bump - the owner closes a version via `VERSION.txt`.
+- [ ] **Written for a public audience.** This repository is public, and so is
+      everything in it: code comments, commit messages and this description are
+      readable by anyone, forever, including in the history after an edit. So:
+      English throughout, no local file paths or machine names, no personal data
+      of any kind, no credentials, and every comment explains itself rather than
+      pointing at a document only the maintainers can open.
+- [ ] Any new dependency, DLL, font or bundled asset has a licence compatible
+      with the GPLv3, an entry in `THIRD-PARTY-NOTICES.md`, its full licence text
+      in `licenses/` and a row in `beantester/legal.py`.

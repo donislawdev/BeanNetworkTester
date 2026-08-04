@@ -225,6 +225,36 @@ MUTATIONS = [
         "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
     },
     {
+        "label": "public: the privacy scan reads an empty file list",
+        "file": "tests/test_repo_conventions.py",
+        "old": "    files = repo_text_files((\".py\", \".md\", \".json\", \".txt\", \".toml\", \".spec\", \".yml\"))\n"
+               "    check(\"the privacy scan actually read the repository\"",
+        "new": "    files = []\n"
+               "    check(\"the privacy scan actually read the repository\"",
+        "test": "test_nothing_private_to_this_machine_reaches_the_public_repository",
+    },
+    {
+        "label": "licence: the notices name a WinDivert file that is not shipped",
+        "file": "THIRD-PARTY-NOTICES.md",
+        "old": "## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`)",
+        "new": "## WinDivert (`WinDivert.dll`, `WinDivert64.sys`)",
+        "test": "test_the_notices_name_the_windivert_files_that_are_really_shipped",
+    },
+    {
+        "label": "licence: the written offer drops below the three-year floor",
+        "file": "THIRD-PARTY-NOTICES.md",
+        "old": "**Written offer:** for at least three years from the date of this release, the",
+        "new": "**Written offer:** for as long as this release is distributed, the",
+        "test": "test_the_written_offer_lasts_as_long_as_the_licence_demands",
+    },
+    {
+        "label": "licence: the About window drops the no-warranty notice",
+        "file": "beantester/gui/panels/about.py",
+        "old": "        line(text=T(\"about.no_warranty\"), style=\"Muted.TLabel\").pack(",
+        "new": "        line(text=\"\", style=\"Muted.TLabel\").pack(",
+        "test": "test_the_about_window_is_a_complete_legal_notice",
+    },
+    {
         "label": "keyboard: the search box stops advertising its shortcut",
         "file": "beantester/gui/pages/conns.py",
         "old": "        add_tooltip(entry, \"tips.conn_search\", shortcut=\"Ctrl+F\")",

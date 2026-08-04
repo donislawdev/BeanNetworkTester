@@ -8,6 +8,7 @@
   "about.license_terms": "Free and open source under the GNU GPL v3. Use, change and share it under the same licence.",
   "about.licenses_dir": "Full licence texts: {path}",
   "about.no_telemetry": "This program sends no data anywhere. No telemetry, no update checks, no external services.",
+  "about.no_warranty": "There is no warranty of any kind, to the extent the law allows.",
   "about.third_party": "Built on (each under its own licence, see THIRD-PARTY-NOTICES.md):",
   "about.version": "version {version}",
   "app.author": "Author: {author}",

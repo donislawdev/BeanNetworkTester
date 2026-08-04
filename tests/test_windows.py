@@ -420,3 +420,46 @@ def test_every_prose_label_in_the_about_window_can_wrap():
         for key in ("about.license_terms", "about.no_telemetry", "about.third_party"):
             assert bnt.T(key) in texts, (key, texts)
     """)
+
+
+def test_the_about_window_is_a_complete_legal_notice():
+    """The GPL's own definition, applied to the window that claims to be it.
+
+    "Appropriate Legal Notices" (GPLv3 section 0) means four things together: a
+    copyright notice, a notice that there is NO WARRANTY, that licensees may
+    convey the work under this licence, and how to view a copy of it. This window
+    carried three - the disclaimer lived only in the README, which the holder of
+    an .exe has no reason to open.
+
+    Asserted through the rendered widget texts rather than the language file, so
+    a key that exists and is never shown does not pass.
+    """
+    run_gui("""
+        import beantester as bnt
+        panel = app.open_window("about")
+        assert panel is not None, "the About window did not open"
+
+        def texts(widget, out):
+            out.append(str(widget.kw.get("text", "")))
+            # the component list and the path to the licence texts go into a Text
+            # widget, so a walk over `text=` options alone would miss half of what
+            # this window actually shows
+            # `getattr(..., default)` is no use here: the fake widget answers ANY
+            # unknown attribute with a callable, so the default never arrives
+            lines = getattr(widget, "lines", None)
+            if isinstance(lines, list):
+                out.extend(str(l) for l in lines)
+            for child in getattr(widget, "children", []):
+                texts(child, out)
+            return out
+
+        shown = " | ".join(texts(panel.win, []))
+
+        for what, needle in (
+                ("a copyright notice", bnt.appinfo.COPYRIGHT),
+                ("the no-warranty notice", bnt.T("about.no_warranty")),
+                ("the right to convey it", bnt.T("about.license_terms")),
+                ("where to read the licence", "licenses")):
+            assert needle.split("{")[0][:30] in shown or needle in shown, \
+                "the About window does not show %s: %r" % (what, shown[:400])
+    """)
