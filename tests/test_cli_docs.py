@@ -117,3 +117,44 @@ def test_help_opens_with_examples_and_not_with_a_wall_of_usage():
     examples = text.split("Examples:")[1].split("options:")[0]
     for flag in ("--simulate", "--target", "--duration", "--format json"):
         check(f"--help: an example actually uses {flag}", flag in examples)
+
+
+def test_the_examples_name_whatever_this_build_is_called():
+    """Most people get an .exe; some run the .py. The examples must follow.
+
+    ``%(prog)s`` rather than a literal, so a frozen build prints
+    ``BeanNetworkTester.exe ...`` and a source checkout prints
+    ``bean_network_tester.py ...``. A hardcoded name would be a copy-paste line
+    that does not work for the 90% who have the exe, which is the one thing an
+    example exists to be.
+
+    The prog is swapped by patching ``cli.program_name``, NOT by reloading the
+    module. Reloading builds a fresh ``_Terminated`` class, so the ``except``
+    inside the already-imported ``run_cli`` stopped matching the exception other
+    tests raise, and ``test_exit_code_interrupted_and_terminated`` started
+    returning 1 instead of 143 - measured, a test corrupting the suite around it.
+    """
+    from beantester import appinfo
+    import beantester.cli as cli_module
+
+    original = cli_module.program_name
+    try:
+        for name in (appinfo.LAUNCHER, appinfo.EXE_NAME):
+            other = (appinfo.EXE_NAME if name == appinfo.LAUNCHER
+                     else appinfo.LAUNCHER)
+            cli_module.program_name = lambda _n=name: _n
+            text = cli_module.build_arg_parser().format_help()
+            examples = text.split("Examples:")[1].split("options:")[0]
+            lines = [l.strip() for l in examples.splitlines()
+                     if l.strip().startswith((name, other))]
+            check(f"--help: the examples are runnable lines as {name}",
+                  len(lines) >= 4, f"({len(lines)} found)")
+            # EVERY line, not just one of them. The first version asked whether the
+            # right name appeared ANYWHERE, so hardcoding one example still passed -
+            # measured, that mutant survived.
+            wrong = [l for l in lines if not l.startswith(name)]
+            check(f"--help: no example names {other} when run as {name}",
+                  not wrong, f"({wrong})")
+            check("--help: no unexpanded prog token", "%(prog)s" not in text)
+    finally:
+        cli_module.program_name = original

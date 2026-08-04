@@ -136,9 +136,21 @@ def test_numeric_columns_are_right_aligned_and_the_registry_is_honest():
                 conns.NUMERIC - set(conns.COLUMNS))
 
         for col in conns.COLUMNS:
-            want = "e" if col in conns.NUMERIC else "w"
+            want = ("e" if col in conns.NUMERIC
+                    else "center" if col in conns.CENTERED else "w")
             got = tree.column(col, "anchor")
             assert got == want, "%s anchored %r, wanted %r" % (col, got, want)
+
+        # A right-aligned cell sits on its column's right edge and a left-aligned
+        # neighbour on its own left edge, so the two TOUCH - that is how the first
+        # build after this change rendered "67400 TCP" and "550 tak" as one value.
+        # ttk offers no per-cell padding, so nothing but alignment can fix it, and
+        # nothing but this check can stop it coming back with the next column.
+        cols = list(conns.COLUMNS)
+        touching = [(a, b) for a, b in zip(cols, cols[1:])
+                    if a in conns.NUMERIC and b not in conns.NUMERIC
+                    and b not in conns.CENTERED]
+        assert not touching,             "a number is left touching the text beside it: %r" % touching
 
         # the ones the audit named, spelled out so a shrinking registry is caught
         for col in ("pid", "packets", "dropped", "down", "up", "kb", "avg"):

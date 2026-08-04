@@ -71,7 +71,7 @@ class SortableTree:
     def __init__(self, parent, columns, sort=None, on_sort=None,
                  height=10, stretch=(), horizontal=False, min_chars=None,
                  tips=None, tags=None, selectmode="extended", numeric=(),
-                 empty_text=""):
+                 centered=(), empty_text=""):
         self.columns = dict(columns)            # column id -> i18n key of its header
         # Alignment is a property of the COLUMN, so it is declared by the page
         # that owns the registry and never guessed from a value here. Numbers go
@@ -80,6 +80,15 @@ class SortableTree:
         # Guessing per cell would align a column differently on the row where a
         # port is empty, which looks like a rendering fault.
         self._numeric = frozenset(numeric)
+        # Centred columns exist because of what right-alignment DOES to its
+        # neighbour. A right-aligned cell sits on its column's right edge and a
+        # left-aligned one on its own left edge, so the two touch: the first
+        # screenshot after numbers moved right read "67400 TCP" and "550 tak" as
+        # single values. ttk gives no per-cell padding, so alignment is the only
+        # lever. For a column whose values are all the SAME WIDTH - a protocol, a
+        # yes/no, a timestamp - centring looks identical to any other choice and
+        # leaves a margin on both sides, which is exactly what was missing.
+        self._centered = frozenset(centered)
         self._visible = set(self.columns)       # see set_visible_columns
         self.sort = dict(sort or {"col": next(iter(self.columns)), "reverse": False})
         self.on_sort = on_sort
@@ -130,7 +139,7 @@ class SortableTree:
         for col, key in self.columns.items():
             width = self._width_for(col, key)
             self._natural[col] = width
-            self.tree.column(col, anchor="e" if col in self._numeric else "w",
+            self.tree.column(col, anchor=self.anchor_for(col),
                              stretch=(col in stretch),
                              width=width, minwidth=scaled(40))
         for tag, options in (tags or {}).items():
@@ -305,6 +314,12 @@ class SortableTree:
         self.offset = min(self.offset, self.max_offset())
         self.repaint()
         self._show_empty_note(not self.items)
+
+    def anchor_for(self, col):
+        """Where a column's cells sit: numbers right, fixed-width text centred."""
+        if col in self._numeric:
+            return "e"
+        return "center" if col in self._centered else "w"
 
     def set_empty_text(self, key):
         """Say WHY the table would be empty. The owner knows, this widget cannot.

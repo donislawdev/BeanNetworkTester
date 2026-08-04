@@ -102,6 +102,9 @@ class EventLogWindow(PanelWindow):
             # "t" is elapsed seconds - a quantity, so it lines up on the right.
             # "time" is a timestamp and "type"/"desc" are words: all read left.
             numeric={"t"},
+            # the timestamp follows "t" and is always the same width:
+            # centred so a right-aligned number cannot touch it
+            centered={"time"},
             empty_text="tables.no_events_yet",
         )
 

@@ -25,8 +25,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   follows. A mistyped flag shows the error instead of burying it under the same wall.
 - **Numbers in the tables line up on the right.** Packets, bytes, ports, PIDs and times were
   anchored left, so 9 and 1000000 began at the same pixel and a column of numbers could not be
-  scanned down. Text columns are unchanged, and addresses stay on the left where they read
-  properly. Applies to Connections and to both views of the event log.
+  scanned down. Addresses stay on the left where they read properly, and the short columns beside
+  a number - protocol, "impaired?", the timestamp - sit centred so the two never touch. Applies to
+  Connections and to both views of the event log.
 - **An impaired row no longer relies on colour alone.** It is shown in bold as well as in orange,
   so it stays recognisable whichever columns you have chosen to show - including with the
   "impaired?" column hidden.

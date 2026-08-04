@@ -256,6 +256,13 @@ MUTATIONS = [
         "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
     },
     {
+        "label": "help: an example hardcodes the .py name the exe user lacks",
+        "file": "beantester/cli.py",
+        "old": "  %(prog)s --simulate --loss 20 --duration 10",
+        "new": "  bean_network_tester.py --simulate --loss 20 --duration 10",
+        "test": "test_the_examples_name_whatever_this_build_is_called",
+    },
+    {
         "label": "help: the usage wall comes back over the examples",
         "file": "beantester/cli.py",
         "old": "        usage=\"%(prog)s [options]\",",
@@ -265,8 +272,17 @@ MUTATIONS = [
     {
         "label": "tables: every column goes back to being left-aligned",
         "file": "beantester/gui/widgets/sortable_tree.py",
-        "old": "            self.tree.column(col, anchor=\"e\" if col in self._numeric else \"w\",",
-        "new": "            self.tree.column(col, anchor=\"w\",",
+        "old": ("        if col in self._numeric:\n"
+                "            return \"e\""),
+        "new": ("        if False:\n"
+                "            return \"e\""),
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: a number is left touching the text beside it",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "CENTERED = frozenset({\"proto\", \"scoped\"})",
+        "new": "CENTERED = frozenset({\"proto\"})",
         "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
     },
     {

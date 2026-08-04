@@ -251,7 +251,11 @@ class StatsPage:
                                    tags=EVENT_COLORS,
                                    min_chars={"t": 6, "time": 18, "type": 10, "desc": 40},
                                    # elapsed seconds, the one quantity here
-                                   numeric={"t"})
+                                   numeric={"t"},
+                                   # the timestamp follows "t" and is always the
+                                   # same width: centred, so a right-aligned
+                                   # number cannot touch it
+                                   centered={"time"})
         self._event_sig = None
 
     # -- responsive counter grid --------------------------------------------- #

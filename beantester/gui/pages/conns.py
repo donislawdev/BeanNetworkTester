@@ -74,6 +74,13 @@ NUMERIC = frozenset({"pid", "remote_port", "local_port", "packets", "dropped",
                      "down", "up", "kb", "down_seen", "up_seen", "avg",
                      "dur", "idle"})
 
+# Centred, because each of them sits immediately after a number and holds values
+# of one width. `proto` follows `pid` and `scoped` follows `packets`, and with the
+# numbers moved right the first screenshot showed "67400 TCP" and "550 tak" -
+# two columns reading as one value. Centring restores the gap that ttk gives no
+# padding for, and on a column of equal-width values it costs nothing.
+CENTERED = frozenset({"proto", "scoped"})
+
 MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6,
              "local_port": 6, "packets": 7, "scoped": 7, "dropped": 8, "down": 8,
              "up": 8, "kb": 8, "down_seen": 11, "up_seen": 11,
@@ -239,7 +246,7 @@ class ConnsPage:
                                   on_sort=self._on_sort, height=18,
                                   horizontal=True, tags=CONN_COLORS,
                                   min_chars=MIN_CHARS, tips=COLUMN_TIPS,
-                                  numeric=NUMERIC,
+                                  numeric=NUMERIC, centered=CENTERED,
                                   empty_text="tables.no_conns_yet")
         self.table.sort.setdefault("default_reverse", True)
         # A layout saved by an earlier run. Unknown ids are dropped by the table
