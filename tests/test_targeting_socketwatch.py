@@ -492,6 +492,38 @@ def test_an_adopted_pid_still_falls_out_at_the_next_rebuild():
           targeting.pids() == set(), f"({targeting.pids()})")
 
 
+def test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in_time():
+    """Windows hands a dead process's pid number to a new one, and this path now
+    acts on pids sooner - so the exposure it opens has to be stated, not assumed.
+
+    BEFORE the push path, a stranger holding the target's old pid was pulled in for
+    its SYN only: `owner_targeted` answered from the live map, and the flow's
+    ordinary TCP data never asked again, so nothing else of it was impaired until a
+    rebuild (which drops the pid). NOW `note_socket` puts the port itself in scope,
+    so the WHOLE flow is impaired for as long as `_pids` is stale.
+
+    The BOUND is unchanged and is what this pins: the next rebuild ends it. Widening
+    it further - or losing the end of it - is what this test exists to catch. There
+    is no cheaper answer available here: verifying identity means `create_time()`,
+    and this runs on the watcher thread, which has 0.02 ms to spare.
+    """
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the target resolved", targeting.pids() == {100})
+
+    # chrome exits; the number goes to somebody else, who opens a socket
+    table.ports = {7000: 100}
+    table.names = {100: "innocent.exe"}
+    targeting.note_socket(7000, 100)
+    check("inside the window the stranger's socket IS in scope", 7000 in targeting)
+
+    targeting.refresh()          # the resolver's next tick
+    check("the rebuild drops the pid", targeting.pids() == set(), f"({targeting.pids()})")
+    check("...and the stranger's port with it", 7000 not in targeting,
+          f"({sorted(targeting.ports())})")
+
+
 def test_the_pending_queue_cannot_grow_without_a_bound():
     """It is fed by every socket event on the machine. A fork bomb, or simply a
     busy server, must not turn that into an unbounded queue of OS lookups."""
@@ -502,6 +534,50 @@ def test_the_pending_queue_cannot_grow_without_a_bound():
     check("the queue stops at its ceiling",
           len(targeting._pending_pids) == targeting.MAX_PENDING_PIDS,
           f"({len(targeting._pending_pids)})")
+
+
+def test_a_target_that_restarts_under_a_new_pid_is_picked_up_from_its_event():
+    """The lifecycle the field actually has: the app under test is closed and
+    started again while the session runs.
+
+    By NAME this must recover without touching the session - the new pid is a pid
+    nobody has judged, which is the adoption path. (By PID it cannot recover, and
+    that is the expression's property, not this code's - see owner_targeted.)
+    """
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the first life is targeted", targeting.pids() == {100})
+
+    # it exits: no sockets, so the rebuild drops it entirely
+    table.ports, table.names = {}, {}
+    targeting.refresh()
+    check("nothing is targeted between the two lives", targeting.pids() == set())
+
+    # it comes back under a new pid and connects
+    table.ports[5100] = 300
+    table.names[300] = "chrome.exe"
+    targeting.note_socket(5100, 300)
+    targeting.adopt_new_pids()
+    check("the new life is adopted", targeting.pids() == {300}, f"({targeting.pids()})")
+    check("...and its connection is in scope", 5100 in targeting)
+
+
+def test_a_process_already_running_when_the_session_starts_is_in_scope_at_once():
+    """The other order, and the one a user hits most: the app is already open and
+    THEN capture starts. Nothing announces those sockets - events only carry new
+    ones - so the bootstrap snapshot is what has to cover them, before the first
+    packet is judged."""
+    eng = BeanEngine()
+    eng._ports = _FakePorts({5000: 100})          # chrome is already connected
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)
+    eng.start("true", divert=FakeDivert([]), socket_source=_Source([]))
+    try:
+        check("the existing connection is in scope from the start",
+              5000 in targeting, f"({sorted(targeting.ports())})")
+    finally:
+        eng.stop()
 
 
 # -- engine binding ----------------------------------------------------------- #

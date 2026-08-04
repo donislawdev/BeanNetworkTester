@@ -108,11 +108,14 @@ class ProcessTargeting:
         self._names = ()
         self._pids = frozenset()
         self._refreshes = 0
-        # Ports the live map handed us since the last publish. Kept so a refresh
-        # that started BEFORE such an event cannot publish a set computed without
-        # it - the same "an older snapshot must not undo a newer event" rule the
-        # socket map itself lives by, one layer up.
-        self._late_ports = frozenset()
+        # ``{port: pid}`` for every socket the live map handed us since the last
+        # publish. Kept so a refresh that started BEFORE such an event cannot publish
+        # a set computed without it - the same "an older snapshot must not undo a
+        # newer event" rule the socket map itself lives by, one layer up. The OWNER
+        # travels with the port because the rebuild has to be able to ask "is this
+        # still ours?", and the answer belongs to the event, not to whatever the
+        # table happens to say a moment later.
+        self._late_owners = {}
         # pids the live map has seen that we have not judged yet, and the ones we
         # have judged as not ours. Both are cleared at every full rebuild, so
         # neither can grow beyond the churn of one refresh interval.
@@ -169,16 +172,32 @@ class ProcessTargeting:
                     names.add(name or str(pid))
             resolved = frozenset(port for port, pid in port_pid.items() if pid in pids)
             with self._ports_lock:
+                # A late port is rescued only if the owner its EVENT named still
+                # matches. Merging them blindly kept a port whose pid this very walk
+                # had just dropped, so a recycled pid stayed in scope for two
+                # rebuilds instead of one - silently doubling the exposure this class
+                # documents as "until the next rebuild".
+                #
+                # INSIDE the lock, and that is not tidiness either: the watcher
+                # thread writes this dict, so reading it outside was a
+                # "dictionary changed size during iteration" waiting for a busy
+                # machine. Caught by test_concurrency_chaos.py::
+                # test_the_live_map_pushes_into_targeting_while_the_resolver_rebuilds
+                # within seconds - it is a dict of the churn of one interval, so the
+                # comprehension is short and the lock stays a microsecond affair.
+                late = frozenset(port for port, owner in self._late_owners.items()
+                                 if owner in pids)
                 # REPLACED, never unioned: a pid that no longer matches has to fall
                 # out here, and that is the whole bound on the recycled-pid window
                 # (test_targeting_socketwatch.py::
                 #  test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer).
                 self._pids = frozenset(pids)
                 # ...but a port the live map handed us WHILE this walk was running is
-                # newer than the walk, so it survives it. Cleared afterwards: it is
-                # now part of _ports, and the next snapshot judges it like any other.
-                self._ports = resolved | self._late_ports
-                self._late_ports = frozenset()
+                # newer than the walk, so it survives it - if it is still ours (see
+                # `late` above). Cleared afterwards: it is part of _ports now, and the
+                # next snapshot judges it like any other.
+                self._ports = resolved | late
+                self._late_owners = {}
                 self._pending_pids = frozenset()
                 self._not_ours = frozenset()
             self._names = tuple(sorted(n for n in names if n))
@@ -220,7 +239,7 @@ class ProcessTargeting:
             with self._ports_lock:
                 if port not in self._ports:
                     self._ports = self._ports | {port}
-                    self._late_ports = self._late_ports | {port}
+                self._late_owners[port] = pid
             return
         if pid in self._not_ours or pid in self._pending_pids:
             return
@@ -267,12 +286,14 @@ class ProcessTargeting:
                 return False
             # Their ports, from the live map - including sockets this pid opened
             # while we were deciding.
-            ports = frozenset(port for port, owner in self.table.snapshot().items()
-                              if owner in matched)
+            owners = {port: owner for port, owner in self.table.snapshot().items()
+                      if owner in matched}
+            ports = frozenset(owners)
             with self._ports_lock:
                 self._pids = self._pids | matched
                 self._ports = self._ports | ports
-                self._late_ports = self._late_ports | ports
+                for port in ports:
+                    self._late_owners[port] = owners[port]
                 self._not_ours = self._not_ours | judged
             self._names = tuple(sorted(set(self._names) | names))
         return True

@@ -600,8 +600,8 @@ def test_the_live_map_pushes_into_targeting_while_the_resolver_rebuilds():
           f"({len(targeting._pending_pids)})")
     check("a rebuild clears the ruled-out cache", not targeting._not_ours,
           f"({len(targeting._not_ours)})")
-    check("...and the late-port list", not targeting._late_ports,
-          f"({len(targeting._late_ports)})")
+    check("...and the late-port list", not targeting._late_owners,
+          f"({len(targeting._late_owners)})")
 
 
 def test_the_capture_thread_reads_the_live_socket_map_under_churn():

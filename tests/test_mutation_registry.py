@@ -466,9 +466,17 @@ MUTATIONS = [
     {
         "label": "targeting: a rebuild in flight loses a socket the event added",
         "file": "beantester/targeting.py",
-        "old": "                self._ports = resolved | self._late_ports",
+        "old": "                self._ports = resolved | late",
         "new": "                self._ports = resolved",
         "test": "test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added",
+    },
+    {
+        "label": "targeting: a rescued port stops being checked against its owner",
+        "file": "beantester/targeting.py",
+        "old": "                late = frozenset(port for port, owner in self._late_owners.items()\n"
+               "                                 if owner in pids)",
+        "new": "                late = frozenset(self._late_owners)",
+        "test": "test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in_time",
     },
     {
         "label": "targeting: an adopted pid is kept for ever instead of re-judged",

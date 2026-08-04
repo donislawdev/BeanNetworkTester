@@ -315,6 +315,34 @@ def test_a_fresh_socket_stamps_the_connection_row_from_the_live_map():
         eng.stop()
 
 
+def test_a_second_session_gets_a_fresh_watcher_wired_to_the_target():
+    """Sessions are started and stopped repeatedly, and each one builds a NEW
+    watcher - so the wiring has to be redone, not inherited.
+
+    The failure this pins is silent: the second session would run with a live map
+    that tells nobody, so every new socket would wait for a rebuild again and the
+    behaviour would quietly be the pre-2026-08 one, only for people who pressed
+    STOP once.
+    """
+    import bean_network_tester as bnt
+
+    eng = BeanEngine()
+    eng._ports = _FakePorts({})
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)
+
+    first = None
+    for session in range(2):
+        eng.start("true", divert=FakeDivert([]), socket_source=_FakeSocketSource([]))
+        watcher = eng._socketwatch
+        check(f"session {session}: the map is wired to the target",
+              watcher is not None and watcher._on_socket == targeting.note_socket)
+        if session == 0:
+            first = watcher
+        eng.stop()
+    check("each session really got its own watcher", first is not eng._socketwatch)
+
+
 def test_stopping_the_engine_leaves_no_watcher_thread_behind():
     before = {t.name for t in threading.enumerate()}
     eng = BeanEngine()
