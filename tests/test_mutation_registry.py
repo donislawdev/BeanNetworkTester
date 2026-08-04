@@ -404,6 +404,14 @@ CANARY = {
 # machine can repeat it. This is weaker than MUTATIONS and stronger than nothing -
 # and it is the honest state of most "verified by mutation" lines in the notes.
 PROVEN_BY_HAND = {
+    # No re-runnable patch is possible here: in a healthy tree EVERY workflow
+    # script is tracked, so disabling the check has nothing left to fail on - the
+    # mutant survives for the same reason the guard is quiet, which is not a fault
+    # in either. Proven the only way it can be: by committing the mistake. Moving
+    # tools/check_public_text.py into internal_tools/ (2026-08-04) turned the test
+    # red at once, and moving it back turned it green.
+    "test_every_script_the_workflows_run_is_actually_in_the_repository":
+        "2026-08-04, moved a workflow script into internal_tools/ and back",
     # test_shortcut_buttons_advertise_their_key moved to MUTATIONS on 2026-08-03,
     # when Ctrl+F gave it a patch worth writing down. This list is meant to shrink.
     "test_an_overridden_field_is_visibly_disabled": "2026-07-21, removing the disabled style maps",

@@ -370,3 +370,40 @@ def test_no_stray_email_addresses_in_the_public_tree():
                     offenders.append(f"{rel}:{number} {hit}")
     check("no email addresses outside the notices that must carry one",
           not offenders, f"({offenders[:4]})")
+
+
+def test_every_script_the_workflows_run_is_actually_in_the_repository():
+    """A CI dependency that git does not carry works here and nowhere else.
+
+    ``internal_tools/`` is deliberately outside git: measurement rigs and probes
+    that never ship and that the owner backs up separately. ``tools/`` is the
+    opposite - it IS carried, because the workflows run it. Put a workflow
+    dependency in the wrong one and nothing fails locally, where the file exists;
+    it fails on a fresh clone, which is to say on somebody else's machine, and
+    the error is a missing file rather than the reason for it.
+
+    So the rule "when a script becomes a CI dependency it moves to ``tools/``"
+    gets a guard instead of a memory: every ``python <path>`` a workflow runs has
+    to exist AND be tracked.
+    """
+    import re
+    import subprocess
+    workflows = glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml"))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+
+    referenced = set()
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            for match in re.finditer(r"python\s+([\w./-]+\.py)", handle.read()):
+                referenced.add(match.group(1))
+    check("the workflow scan found the scripts it runs", len(referenced) >= 3,
+          f"({sorted(referenced)})")
+
+    for script in sorted(referenced):
+        full = os.path.join(ROOT, script)
+        check(f"{script} exists", os.path.exists(full))
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", script],
+                                 cwd=ROOT, capture_output=True, text=True)
+        check(f"{script} is tracked by git (a fresh clone must have it)",
+              tracked.returncode == 0,
+              "(it is ignored or untracked - internal_tools/ cannot hold a CI dependency)")
