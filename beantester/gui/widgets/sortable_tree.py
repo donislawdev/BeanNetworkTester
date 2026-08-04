@@ -70,8 +70,25 @@ class SortableTree:
 
     def __init__(self, parent, columns, sort=None, on_sort=None,
                  height=10, stretch=(), horizontal=False, min_chars=None,
-                 tips=None, tags=None, selectmode="extended"):
+                 tips=None, tags=None, selectmode="extended", numeric=(),
+                 centered=(), empty_text=""):
         self.columns = dict(columns)            # column id -> i18n key of its header
+        # Alignment is a property of the COLUMN, so it is declared by the page
+        # that owns the registry and never guessed from a value here. Numbers go
+        # right, because that is what lines up their orders of magnitude - the
+        # whole reason a column of numbers is worth reading down. Text stays left.
+        # Guessing per cell would align a column differently on the row where a
+        # port is empty, which looks like a rendering fault.
+        self._numeric = frozenset(numeric)
+        # Centred columns exist because of what right-alignment DOES to its
+        # neighbour. A right-aligned cell sits on its column's right edge and a
+        # left-aligned one on its own left edge, so the two touch: the first
+        # screenshot after numbers moved right read "67400 TCP" and "550 tak" as
+        # single values. ttk gives no per-cell padding, so alignment is the only
+        # lever. For a column whose values are all the SAME WIDTH - a protocol, a
+        # yes/no, a timestamp - centring looks identical to any other choice and
+        # leaves a margin on both sides, which is exactly what was missing.
+        self._centered = frozenset(centered)
         self._visible = set(self.columns)       # see set_visible_columns
         self.sort = dict(sort or {"col": next(iter(self.columns)), "reverse": False})
         self.on_sort = on_sort
@@ -122,13 +139,20 @@ class SortableTree:
         for col, key in self.columns.items():
             width = self._width_for(col, key)
             self._natural[col] = width
-            self.tree.column(col, anchor="w", stretch=(col in stretch),
+            self.tree.column(col, anchor=self.anchor_for(col),
+                             stretch=(col in stretch),
                              width=width, minwidth=scaled(40))
         for tag, options in (tags or {}).items():
             try:
                 self.tree.tag_configure(tag, **options)
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
+        # i18n KEY, translated at display: the window survives a language change
+        # (convention 25), so a text resolved once at build time would stay in the
+        # old language on a table that happened to be empty at the time.
+        self._empty_text = empty_text
+        self._empty_note = ttk.Label(self.frame, text="", style="Hint.TLabel",
+                                     anchor="center") if empty_text else None
         self.refresh_headers()
         self._ensure_slots(self._height + BUFFER_ROWS)
 
@@ -289,6 +313,51 @@ class SortableTree:
         self._index = None                  # invalidated; rebuilt on demand
         self.offset = min(self.offset, self.max_offset())
         self.repaint()
+        self._show_empty_note(not self.items)
+
+    def anchor_for(self, col):
+        """Where a column's cells sit: numbers right, fixed-width text centred."""
+        if col in self._numeric:
+            return "e"
+        return "center" if col in self._centered else "w"
+
+    def set_empty_text(self, key):
+        """Say WHY the table would be empty - the page knows, this widget cannot.
+
+        A table with no rows because nothing has been captured yet and one with
+        no rows because a search matched nothing are the same picture and
+        opposite messages - and getting it wrong is worse than saying nothing,
+        because "nothing matches what you are looking for" is a lie to someone
+        who has typed nothing.
+        """
+        self._empty_text = key
+        self._show_empty_note(not self.items)
+
+    def _show_empty_note(self, empty):
+        """A table with no rows says why, instead of being a blank rectangle.
+
+        The count underneath has always read "0 of N", but the reader is looking
+        at the table, and a blank one is equally consistent with "nothing
+        matched" and "something is broken". Since the search box learned column
+        qualifiers, the empty view is common rather than rare: a half-typed
+        ``port:44`` on the way to ``port:443`` correctly matches nothing.
+
+        Placed rather than gridded, so the tree keeps its geometry and the note
+        cannot change the row area's size. Removed again the moment rows return,
+        because a label left over an empty spot still swallows clicks.
+        """
+        note = getattr(self, "_empty_note", None)
+        if note is None:
+            return
+        from ...i18n import T
+        try:
+            if empty and self._empty_text:
+                note.config(text=T(self._empty_text))
+                note.place(relx=0.5, rely=0.4, anchor="center")
+            else:
+                note.place_forget()
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
 
     @property
     def rows(self):

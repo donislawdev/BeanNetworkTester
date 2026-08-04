@@ -21,6 +21,7 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
+import sys
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -61,6 +62,25 @@ COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "down": "conns.down", "up": "conns.up", "kb": "conns.kb",
            "down_seen": "conns.down_seen", "up_seen": "conns.up_seen",
            "avg": "conns.avg", "dur": "conns.time", "idle": "conns.idle"}
+
+# Columns whose cells are numbers, right-aligned so their orders of magnitude
+# line up (Carbon Design System, and Microsoft's typographic guidance). Declared
+# beside the registry rather than derived in the widget, so a numeric column
+# added here is aligned without anybody remembering that alignment exists.
+#
+# `remote_ip` is deliberately absent: an address is read left to right, group by
+# group, and right-aligning it would ragged the leading octets. `scoped` is a
+# word ("yes"/"no"), not a number.
+NUMERIC = frozenset({"pid", "remote_port", "local_port", "packets", "dropped",
+                     "down", "up", "kb", "down_seen", "up_seen", "avg",
+                     "dur", "idle"})
+
+# Centred, because each of them sits immediately after a number and holds values
+# of one width. `proto` follows `pid` and `scoped` follows `packets`, and with the
+# numbers moved right the first screenshot showed "67400 TCP" and "550 tak" -
+# two columns reading as one value. Centring restores the gap that ttk gives no
+# padding for, and on a column of equal-width values it costs nothing.
+CENTERED = frozenset({"proto", "scoped"})
 
 MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6,
              "local_port": 6, "packets": 7, "scoped": 7, "dropped": 8, "down": 8,
@@ -173,7 +193,19 @@ class ConnsPage:
         entry.pack(side="left", padx=(scaled(4), scaled(8)))
         entry.bind("<KeyRelease>", lambda e: self._schedule_search())
         entry.bind("<Escape>", lambda e: self._clear_search())
-        add_tooltip(entry, "tips.conn_search")
+        add_tooltip(entry, "tips.conn_search", shortcut="Ctrl+F")
+        self._search_entry = entry
+        # Ctrl+F is what every table in every tool does, and this one had no way
+        # in from the keyboard at all. Bound on the ROOT, not on the entry: a
+        # shortcut that only works once the caret is already in the search box is
+        # not a shortcut. It brings the page forward first, so the answer to
+        # "find" is the same wherever the user was (WCAG 2.1.1 asks for the
+        # keyboard path to exist; this is also just how people work).
+        # Bound here rather than in App._bind_shortcuts because the search box
+        # belongs to this page - and because app.py sits on the size ratchet.
+        with crashlog.quiet("gui.pages.conns"):
+            app.root.bind("<Control-f>", self._focus_search)
+            app.root.bind("<Control-F>", self._focus_search)
         # The same "?" affordance the expression fields use (gui/form.py): the search
         # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
         # read is the only way anyone finds that out. A tooltip cannot be it - it
@@ -214,7 +246,9 @@ class ConnsPage:
         self.table = SortableTree(holder, COLUMNS, sort=app.conn_sort,
                                   on_sort=self._on_sort, height=18,
                                   horizontal=True, tags=CONN_COLORS,
-                                  min_chars=MIN_CHARS, tips=COLUMN_TIPS)
+                                  min_chars=MIN_CHARS, tips=COLUMN_TIPS,
+                                  numeric=NUMERIC, centered=CENTERED,
+                                  empty_text="tables.no_conns_yet")
         self.table.sort.setdefault("default_reverse", True)
         # A layout saved by an earlier run. Unknown ids are dropped by the table
         # (a column may have been removed since), and an empty or missing entry
@@ -249,6 +283,25 @@ class ConnsPage:
                               command=self.table.reset_widths)
         self.table.tree.bind("<Button-3>", self._popup)
         self.table.tree.bind("<Button-2>", self._popup)      # macOS
+        # The same menu, reachable without a mouse. WCAG 2.1.1: anything doable
+        # with the pointer has to be doable from the keyboard - and this is a tool
+        # for testers and admins, where services.msc and the console have had
+        # Shift+F10 forever.
+        #
+        # The dedicated menu key is spelled DIFFERENTLY per platform - "App" on
+        # Windows, "Menu" on X11 - and Tk RAISES on a keysym the platform does
+        # not know rather than ignoring it. Binding "App" unconditionally passed
+        # every Windows test and killed the Linux render check, so the spelling
+        # is chosen here rather than tried blindly. Shift+F10 exists everywhere,
+        # so the keyboard route survives even if the menu key does not.
+        menu_key = "<App>" if sys.platform == "win32" else "<Menu>"
+        for sequence in ("<Shift-F10>", menu_key):
+            try:
+                self.table.tree.bind(sequence, self._popup_from_keyboard)
+            except tk.TclError as _exc:
+                # insurance, not the expected path: the spelling above is the one
+                # this platform should know, so a failure here is worth recording
+                crashlog.note(_exc, "gui.pages.conns")
 
     def _popup(self, event):
         """Show the menu only when it has a row to act on.
@@ -263,6 +316,23 @@ class ConnsPage:
         # select by MODEL key: the widget's item ids are recycled viewport slots,
         # so they say nothing about which connection was clicked
         self.table.select_keys([key])
+        return self._show_menu(event.x_root, event.y_root)
+
+    def _popup_from_keyboard(self, _event=None):
+        """Shift+F10 / the menu key, on whatever row is already selected.
+
+        Nothing to position against here - there is no pointer - so the menu
+        opens at the table's own corner. It refuses on an empty selection for the
+        same reason ``_popup`` refuses on an empty table: a menu offering "Copy
+        row" with no row is a menu that lies.
+        """
+        if not self.table.selected_keys():
+            return "break"
+        tree = self.table.tree
+        return self._show_menu(tree.winfo_rootx() + scaled(40),
+                               tree.winfo_rooty() + scaled(40))
+
+    def _show_menu(self, x_root, y_root):
         # a row whose process could not be resolved (no admin rights) cannot be
         # targeted - grey the entry out instead of failing after the click
         selected = self._selected() or {}
@@ -274,7 +344,7 @@ class ConnsPage:
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
         try:
-            self.menu.tk_popup(event.x_root, event.y_root)
+            self.menu.tk_popup(x_root, y_root)
         finally:
             try:
                 self.menu.grab_release()
@@ -322,6 +392,14 @@ class ConnsPage:
             return                      # cancelled: leave the table as it was
         self.table.set_visible_columns(chosen)
         self.app.ui.set("conn_columns", list(self.table.visible_columns()))
+
+    def _focus_search(self, _event=None):
+        """Ctrl+F: show this page and put the caret in its search box."""
+        with crashlog.quiet("gui.pages.conns"):
+            self.app.select_page(self.ID)
+            self._search_entry.focus_set()
+            self._search_entry.select_range(0, "end")
+        return "break"
 
     def _show_search_help(self):
         """The search cheat sheet, opened by the "?" next to the box."""
@@ -569,6 +647,13 @@ class ConnsPage:
         """Main thread: swap the finished model in whole."""
         rows, total, limit = result["rows"], result["total"], result["limit"]
         self._scope_active = result.get("scope_active", False)
+        # WHY it would be empty, before handing the rows over: an empty table
+        # with nothing typed means no traffic yet, and telling that user that
+        # "nothing matches what you are looking for" is a lie about a search
+        # they never made.
+        self.table.set_empty_text("tables.no_conns_match"
+                                  if self.search_var.get().strip()
+                                  else "tables.no_conns_yet")
         # LAZY: hand over the raw rows; _render runs for the visible ones only
         self.table.set_model(rows, render=self._render, key_of=self._key_of,
                              tag_of=self._tag_of)

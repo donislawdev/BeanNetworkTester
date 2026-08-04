@@ -17,6 +17,7 @@ from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
 from .targeting import ports_shared_with_others
+from .utils import number_string
 from .validators import parse_number, parse_seed
 
 DEFAULT_SETTINGS = dict(
@@ -77,6 +78,84 @@ def build_matchers(s):
         value = s.get(key, DEFAULT_SETTINGS[key])
         out[key] = parse_matcher(setting_expression(key, value), kind, field, bounds)
     return out
+
+
+def armed_global_impairments(s):
+    """Keys of impairments that are ON and damage every captured packet.
+
+    Registry-derived (``fields.GLOBALLY_IMPAIRING_KEYS``), so an impairment added
+    later is covered by declaring it once, in the table where it is defined.
+    """
+    return tuple(key for key in F.GLOBALLY_IMPAIRING_KEYS
+                 if F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key])))
+
+
+def targeting_is_set(s):
+    """True when a targeting field names at least one thing to hit.
+
+    Not a truth test on the fields: an expression made of nothing but exclusions
+    (``!chrome.exe``) is non-empty and still covers the whole machine minus one
+    application, so it does not bound anything (see
+    ``Matcher.selects_nothing_in_particular``). A malformed expression is treated
+    as no scope at all - it is about to be rejected by validation anyway, and the
+    safe reading of "I cannot tell what this narrows to" is "it narrows nothing".
+    """
+    expressions = {key: (kind, field, bounds)
+                   for key, kind, field, bounds in MATCH_FIELDS}
+    for key in F.NARROWING_KEYS:
+        value = s.get(key, DEFAULT_SETTINGS[key])
+        if key not in expressions:
+            # a narrowing field that is not an expression (none today): its plain
+            # on/off reading is the best answer available, and it is still an answer
+            if F.is_active(FIELDS[key], value):
+                return True
+            continue
+        text = setting_expression(key, value)
+        if not text:
+            continue
+        try:
+            matcher = parse_matcher(text, *expressions[key])
+        except ValueError:
+            continue
+        if not matcher.selects_nothing_in_particular:
+            return True
+    return False
+
+
+def unbounded_impairment(s):
+    """True when a run would damage all traffic, with nothing to bound it.
+
+    The condition behind the start-time warning: something is armed that hits
+    every packet, no targeting field says WHERE, and no duration says WHEN it
+    ends. Blocking is deliberately not enough to clear it - a block bounds its
+    own damage and nothing else, so ``--loss 50 --block-ip 10.0.0.1`` is still a
+    machine-wide loss run.
+
+    Total by construction: it reads through ``DEFAULT_SETTINGS`` for missing keys
+    (an older config file), and ``fields.is_active`` never raises on a value that
+    has not been validated yet. A warning that could abort a start would be worse
+    than the mode it warns about.
+    """
+    if not armed_global_impairments(s):
+        return False
+    if targeting_is_set(s):
+        return False
+    try:
+        duration = float(s.get("duration", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    return duration <= 0
+
+
+def warn_if_unbounded(s, log):
+    """Say the start-time warning through ``log``, if the run has earned it.
+
+    Both interfaces call this rather than each testing the condition and picking
+    their own words: one sentence, one condition, so the window and the command
+    line cannot drift into telling the user different things about the same run.
+    """
+    if unbounded_impairment(s):
+        log(T("warn.global_impairment"))
 
 
 def validate_ranges(s, lang=None):
@@ -372,6 +451,25 @@ def apply_settings(engine, s, log=lambda *_: None):
     apply_targeting(engine, str(g("target")).strip(), log)
 
 
+def _expected_shape(key, lang=None):
+    """Plain-language description of what a numeric setting accepts.
+
+    Read from the registry, so a field whose bounds change says the new ones
+    without anybody remembering this message exists.
+
+    Under ``fields.`` and not ``errors.`` on purpose: these are sentence
+    FRAGMENTS, pasted into a message that supplies the capital letter and the
+    full stop. Keeping them out of the ``errors.`` namespace is what lets
+    ``test_every_error_reads_like_a_sentence`` run without an exception list.
+    """
+    field = FIELDS.get(key)
+    bounds = field.bounds if field is not None else None
+    if not bounds:
+        return translate("fields.expects_number", lang)
+    return translate("fields.expects_number_range", lang,
+                     min=number_string(bounds[0]), max=number_string(bounds[1]))
+
+
 def _coerce_setting(key, value):
     """Coerce a config-file value to the type of its default.
 
@@ -393,8 +491,13 @@ def _coerce_setting(key, value):
                 raise ValueError
             return float(value)
         except (TypeError, ValueError):
+            # Say what the setting DOES take, not just that this is not it. The
+            # registry already knows - the form has been telling people "must be
+            # between 0 and 100" for as long as it has existed, while the config
+            # loader said only "invalid" for the very same value.
             raise ValueError(translate("errors.bad_config_value", None,
-                                       field=key, value=repr(value)))
+                                       field=key, value=repr(value),
+                                       expected=_expected_shape(key)))
     return str(value)
 
 

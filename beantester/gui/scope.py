@@ -102,3 +102,25 @@ def coverage(capture_narrowed, view_scoped, process_target):
     else:
         state = ALL
     return Coverage(state, capture_narrowed, view_scoped, process_target)
+
+
+def capture_scope_note(settings, capture_narrowed):
+    """i18n key of the line to log about the capture's scope, or ``None``.
+
+    Asked for and got it, or asked for and did NOT: both have to be said, and
+    only the second is easy to miss. "Capture only the targeted traffic"
+    silently does nothing when the destination cannot be expressed as a driver
+    filter - a wildcard, an ``re:`` pattern, only a process target, no
+    destination at all, or a port list too long for the driver's grammar - and
+    the fallback is the safe direction, so nothing else about the session looks
+    unusual. The CLI has warned about this since the option shipped; the window
+    said nothing at all, which left the one interface where the checkbox is
+    actually visible as the one that never mentioned the outcome.
+
+    A key rather than a logged line, and here rather than in the App: this
+    module is where "what do the numbers cover?" is decided for every surface,
+    and the answer stops depending on which one is asking.
+    """
+    if not settings.get("narrow_filter"):
+        return None
+    return "log.narrow_applied" if capture_narrowed else "log.narrow_no_effect"

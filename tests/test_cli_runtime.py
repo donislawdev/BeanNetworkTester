@@ -875,3 +875,158 @@ def test_the_saved_config_round_trips_through_the_cli(tmp_path):
     check("--save-config: stores the settings",
           saved["loss"] == 3 and saved["duration"] == 7, f"({saved})")
     check("--save-config: the file exists", os.path.exists(path))
+
+
+# --- warning: a run that damages everything, with nothing to end it -------- #
+
+
+class _OneTickEngine(_TargetedEngine):
+    """Enough engine to finish a run that has no ``--duration``.
+
+    Without a deadline the report loop ends only when the engine stops itself
+    (``is_running()`` going false), which is exactly the shape of run this
+    warning is about - so a fake that never stops would hang the suite instead
+    of testing it. ``started`` records whether the capture was ever opened.
+    """
+
+    stop_reason = "user"
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.ticks = 0
+        self.started = False
+
+    def start(self, *_a, **_k):
+        self.started = True
+
+    def is_running(self):
+        self.ticks += 1
+        return self.ticks < 2
+
+
+def _real_run(monkeypatch, argv, engine=None):
+    """One NON-simulate CLI run on a fake engine, admin gate forced open.
+
+    The warning is deliberately silent in ``--simulate`` (there is no real
+    traffic to damage), so proving it needs a real-mode run - which on a plain
+    Windows shell has neither an elevated token nor WinDivert. Same seam and the
+    same reason as ``_targeted_run`` above.
+    """
+    monkeypatch.setattr(cli_module.winenv, "is_admin", lambda: True)
+    engine = engine or _OneTickEngine(seen=10)
+    clock = FakeClock()
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(argv, sleep=clock.sleep, clock=clock, engine=engine,
+                   out=out, err=err)
+    return code, out.getvalue(), err.getvalue(), engine
+
+
+def _warned(err):
+    from beantester.i18n import translate
+    return translate("warn.global_impairment", "en") in err
+
+
+def test_a_run_that_impairs_everything_forever_says_so_before_it_starts(monkeypatch):
+    """The accident this whole audit came from: ``--lat 5`` and nothing else.
+
+    A mistyped flag opened a real capture with no target and no deadline and
+    impaired 11 844 packets of a live machine over 202 s before anybody noticed.
+    Nothing warned, because nothing looked at the SHAPE of the run - only at
+    whether each value was in range. The message goes to stderr, so a pipeline
+    reading stdout is untouched (convention 18).
+    """
+    _, out, err, engine = _real_run(monkeypatch, ["--loss", "50"])
+    check("warning: an unscoped, endless impairment is announced", _warned(err))
+    check("warning: it goes to stderr, not to the data channel", not _warned(out))
+    check("warning: the run still happens (a warning, not a refusal)",
+          engine.started)
+
+
+def test_the_warning_names_lan_mode_which_reads_like_a_scope(monkeypatch):
+    """MEASURED in core.decide() step 2b: LAN mode DROPS every public address.
+
+    It is the one flag whose name argues the other way ("only the local
+    network"), and on its own, with the whole rest of the form at zero, it cuts
+    the machine's internet. It was found by walking the gates in decide() rather
+    than by reading the field names, which is the only reason it is here.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--lan-mode"])
+    check("warning: LAN mode alone is a machine-wide impairment", _warned(err))
+
+
+def test_a_bounded_run_is_not_warned_about(monkeypatch):
+    """Three ways to bound a run, and each one has to buy silence.
+
+    A warning that also fires on careful runs is a warning people learn to skip,
+    which would cost exactly the case above.
+    """
+    for argv, why in (
+            (["--loss", "50", "--duration", "5"], "a deadline"),
+            (["--loss", "50", "--target", "probe.exe"], "a process target"),
+            (["--loss", "50", "--dst-ip", "10.0.0.1"], "a destination"),
+            (["--block-ip", "10.0.0.1"], "blocking, which bounds its own damage"),
+            (["--simulate", "--loss", "50"], "--simulate, where nothing is real"),
+    ):
+        _, _, err, _ = _real_run(monkeypatch, argv)
+        check(f"warning: silent when the run has {why}", not _warned(err),
+              f"({argv})")
+
+
+def test_dry_run_previews_the_shape_and_not_only_the_values():
+    """"Configuration is valid" is about each value. This is about the SHAPE.
+
+    --dry-run is the cheapest place to learn that a config would impair the whole
+    machine with nothing to end it: it opens no driver and passes no traffic, and
+    it needs no elevated token, so a pipeline can ask the question for free.
+    """
+    code, _, err = cli(["--dry-run", "--loss", "50"])
+    check("--dry-run: still exits OK", code == exitcodes.OK, f"(code={code})")
+    check("--dry-run: previews an unbounded config", _warned(err))
+    _, _, err = cli(["--dry-run", "--loss", "50", "--duration", "5"])
+    check("--dry-run: silent on a bounded config", not _warned(err))
+
+
+def test_blocking_bounds_only_its_own_damage(monkeypatch):
+    """A block is not a target, and this is the pair that proves the difference.
+
+    ``--block-ip`` alone is bounded: it drops traffic to the address it names and
+    nothing else, so warning about it would be the false alarm that teaches
+    people to ignore the real one. Add ``--loss 50`` and the run is machine-wide
+    again - the block scopes the block, not the loss.
+
+    Written because the mutation "blocking counts as a bound for every other
+    impairment" SURVIVED the first version of these guards: the silent case alone
+    reads identically whether blocking is IMPAIRS_MATCHED or a narrowing field.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--block-ip", "10.0.0.1"])
+    check("warning: a block on its own is already bounded", not _warned(err))
+    _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--block-ip", "10.0.0.1"])
+    check("warning: a block does not bound the loss beside it", _warned(err))
+
+
+def test_an_exclusion_only_target_is_not_a_bound(monkeypatch):
+    """``!chrome.exe`` is non-empty and narrows nothing.
+
+    Every "is a target set?" test written as a truth check reads it as scoped;
+    it means "the whole machine except Chrome". See
+    ``Matcher.selects_nothing_in_particular``.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", "!chrome.exe"])
+    check("warning: an expression of pure exclusions bounds nothing", _warned(err))
+
+
+def test_a_broken_scenario_never_opens_the_capture(monkeypatch, tmp_path):
+    """MEASURED before the fix: the run printed "Start.", impaired traffic and
+    only THEN said the file was broken.
+
+    The file is readable without touching the driver, and ``--dry-run`` already
+    validated it up front - the real path did not. Same exit code as before, so
+    no pipeline changes meaning.
+    """
+    path = tmp_path / "broken.json"
+    path.write_text('{"steps": [{"at": 0, "whatever": 1}]}', encoding="utf-8")
+    code, _, err, engine = _real_run(monkeypatch, ["--loss", "5", "--scenario", str(path)])
+    check("scenario: a broken file still exits SCENARIO",
+          code == exitcodes.SCENARIO, f"(code={code})")
+    check("scenario: a broken file never opens the capture", not engine.started)
+    check("scenario: it says which file", "broken.json" in err, f"({err!r})")

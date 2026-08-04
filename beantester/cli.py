@@ -30,7 +30,7 @@ from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
-                       validate_ranges)
+                       validate_ranges, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
 
@@ -59,12 +59,49 @@ def _fail(code, message):
     raise CliError(code, message)
 
 
+# Examples BEFORE the flag list, because that is the order a reader needs them in
+# (clig.dev). The usage block alone runs to 24 lines of about fifty flags, and the
+# first thing anyone wants from a tool that size is one line they can copy. Four,
+# chosen to cover the four shapes a run comes in: harmless, aimed, timed and
+# machine-readable - the last two being what a pipeline needs.
+#
+# Kept in the description rather than the epilog: the epilog holds the exit-code
+# table, which is the reference half, and argparse prints the description ABOVE
+# the flags and the epilog below them.
+_DESCRIPTION = """Bean Network Tester - poor network conditions simulator.
+Without arguments it launches the GUI.
+
+Examples:
+  %(prog)s --simulate --loss 20 --duration 10
+      try it out. No driver, no real traffic, nothing to break.
+
+  %(prog)s --target chrome.exe --latency 200 --duration 30
+      impair one application for half a minute, and nothing else.
+
+  %(prog)s --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 60
+      impair one destination. Narrow beats broad: the rest of the
+      machine, including this shell, keeps working.
+
+  %(prog)s --preset 3g --duration 60 --format json --repro-out run.json
+      a named link profile, machine-readable output, and a report that
+      carries the command needed to repeat the run.
+
+A run with impairment turned on, no target and no --duration affects every
+connection on this machine until you stop it, and says so before it starts.
+"""
+
+
 def build_arg_parser():
     p = argparse.ArgumentParser(
         prog=program_name(),
+        # One line, not the 24 argparse generates from about fifty flags. Those
+        # 24 lines sat above every readable thing in --help, and above the message
+        # on a typo too - so the one sentence saying what was wrong arrived at the
+        # bottom of a wall nobody reads. The flags are listed in full immediately
+        # below, which is where a list belongs (clig.dev).
+        usage="%(prog)s [options]",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Bean Network Tester - poor network conditions simulator. "
-                    "Without arguments it launches the GUI.",
+        description=_DESCRIPTION,
         epilog=exitcodes.HELP_TABLE)
     p.add_argument("--version", action="version",
                    version=f"{APP_NAME} {__version__}")
@@ -76,10 +113,10 @@ def build_arg_parser():
     p.add_argument("--config", help="load settings from a JSON file")
     p.add_argument("--save-config", help="save effective settings to a JSON file and exit")
     p.add_argument("--preset", metavar="PRESET",
-                   help="load a preset (canonical id or its name in any UI language; "
-                        "see README for the list)")
+                   help="load a preset by canonical id or by its name in any UI "
+                        "language (the README lists them)")
     p.add_argument("--filter", choices=list(CLI_FILTERS), default=None,
-                   help="which traffic to capture at all (IPv4 and IPv6); ports are "
+                   help="which traffic to capture at all (IPv4 and IPv6). Ports are "
                         "filtered with --dst-port, not here")
     p.add_argument("--loss", type=float, help="packet loss [%%]")
     p.add_argument("--corrupt", type=float, help="corruption [%%]")
@@ -89,7 +126,7 @@ def build_arg_parser():
     p.add_argument("--down", type=float, help="download limit [KB/s]")
     p.add_argument("--up", type=float, help="upload limit [KB/s]")
     p.add_argument("--buffer", type=float,
-                   help="link buffer for the speed limit [ms], 0 = unlimited; "
+                   help="link buffer for the speed limit [ms], 0 = unlimited. It "
                         "bounds the queueing delay a rate-limited link builds up "
                         "before it drops (bufferbloat)")
     p.add_argument("--target",
@@ -97,9 +134,9 @@ def build_arg_parser():
                         "wildcard, re: pattern, ! to exclude "
                         "(e.g. 'chrome.exe,!chromedriver' or 're:^fire')")
     p.add_argument("--dst-ip",
-                   help="affect only traffic to/from these remote IPs: address, list, "
-                        "range a-b, CIDR, wildcard, comparison, re: pattern, ! to exclude "
-                        "(e.g. '10.0.0.1-10.0.0.50,!10.0.0.7'); IPv4 and IPv6")
+                   help="affect only traffic to/from these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, comparison, re: "
+                        "pattern, ! to exclude (e.g. '10.0.0.1-10.0.0.50,!10.0.0.7')")
     p.add_argument("--dst-port",
                    help="affect only these remote ports: number, list, range a-b, "
                         "comparison (>1024), wildcard, re: pattern, ! to exclude "
@@ -113,12 +150,13 @@ def build_arg_parser():
                         "and then statistics and connections cover the narrowed "
                         "traffic only - the summary says when it took effect")
     p.add_argument("--block-ip",
-                   help="block (drop) all traffic to these remote IPs: address, list, "
-                        "range a-b, CIDR, wildcard, re: pattern, ! to exclude; IPv4 and IPv6")
+                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
+                        "! to exclude")
     p.add_argument("--block-port",
                    help="block (drop) all traffic to these remote ports: number, list, "
                         "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
-                        "(blocks on IP OR port; e.g. '--block-port 443')")
+                        "(blocks on IP OR port, for example '--block-port 443')")
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")
@@ -204,7 +242,11 @@ def config_from_args(args):
         try:
             s.update(load_config_file(args.config))
         except ValueError as e:
-            _fail(exitcodes.CONFIG, f"invalid config file {args.config!r}: {e}")
+            # The translated message already says "in the config file" and which
+            # setting - so this prefix carries the PATH and nothing else. It used
+            # to say "invalid config file", which put the word "invalid" and the
+            # words "config file" on the line twice each.
+            _fail(exitcodes.CONFIG, f"{args.config!r}: {e}")
         except OSError as e:
             _fail(exitcodes.CONFIG, f"cannot read config file {args.config!r}: {e}")
     if args.preset:
@@ -532,6 +574,27 @@ def _run_session(args, cfg, log, sleep, clock, engine):
     if cfg["simulate"]:
         log.info("SIMULATION mode (synthetic traffic, no WinDivert).")
 
+    # Said BEFORE the divert opens, while stopping still costs nothing. This is
+    # the mode our own documentation calls the most dangerous, and until now the
+    # tool started it in silence: measured, `--lat 5` alone impaired 11 844
+    # packets of a live machine for 202 s before anyone noticed. A
+    # warning, not a refusal - refusing would break every pipeline that already
+    # runs this way. Nothing to warn about in --simulate: there is no real traffic.
+    if not cfg["simulate"]:
+        warn_if_unbounded(cfg["settings"], log.warn)
+
+    # Loaded BEFORE the capture starts, exactly like --dry-run does it. A scenario
+    # file that cannot be read is knowable without touching the driver, and the
+    # old order proved it: the run opened the divert, printed "Start.", impaired
+    # traffic and only then said the file was broken. Failures from RUNNING the
+    # scenario still land below, where the session can report them properly.
+    scen = None
+    if cfg["scenario"]:
+        try:
+            scen = load_scenario_file(cfg["scenario"])
+        except Exception as e:
+            _fail(exitcodes.SCENARIO, f"scenario error in {cfg['scenario']!r}: {e}")
+
     try:
         log.debug("opening the divert...")
         engine.start(cfg["filter"], divert=divert, duration=cfg["duration"],
@@ -560,9 +623,8 @@ def _run_session(args, cfg, log, sleep, clock, engine):
 
     scenario_failed = None
     cfg["stop_on_scenario"] = False
-    if cfg["scenario"]:
+    if scen is not None:
         try:
-            scen = load_scenario_file(cfg["scenario"])
             scen.loop = scen.loop or cfg["loop"]
             engine.start_scenario(scen, cfg["settings"], log=log.info)
             log.debug(f"scenario: {len(scen.steps)} steps, "
@@ -751,6 +813,13 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                 log.debug(f"scenario: {len(scen.steps)} steps, "
                           f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
             _log_effective_settings(log, cfg)
+            # A preview that stays quiet about the dangerous shape is a preview
+            # that misleads: "Configuration is valid" is about each value, and the
+            # warning is about the SHAPE - impairment armed, nothing aimed at,
+            # nothing to end it. This is the cheapest place a user can find that
+            # out, since --dry-run touches neither the driver nor the traffic.
+            if not cfg["simulate"]:
+                warn_if_unbounded(cfg["settings"], log.warn)
             log.info("Configuration is valid (--dry-run: nothing was started). "
                      "This checks the settings, not the machine - run --doctor "
                      "for Administrator rights and the WinDivert driver.")

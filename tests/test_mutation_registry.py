@@ -103,6 +103,224 @@ MUTATIONS = [
         "test": "test_the_repository_scanners_actually_read_files",
     },
     {
+        "label": "warning: an unbounded run is judged bounded",
+        "file": "beantester/settings.py",
+        "old": "    if not armed_global_impairments(s):\n        return False",
+        "new": "    if armed_global_impairments(s) is not None:\n        return False",
+        "test": "test_a_run_that_impairs_everything_forever_says_so_before_it_starts",
+    },
+    {
+        "label": "warning: LAN mode is demoted from impairment to scenery",
+        "file": "beantester/fields.py",
+        "old": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\", impairs=IMPAIRS_ALL),",
+        "new": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\"),",
+        "test": "test_the_warning_names_lan_mode_which_reads_like_a_scope",
+    },
+    {
+        "label": "warning: blocking counts as a bound for every other impairment",
+        "file": "beantester/fields.py",
+        "old": "          width=26, tip=\"tips.block\", span=True, cli=\"block-ip\",\n"
+               "          impairs=IMPAIRS_MATCHED),",
+        "new": "          width=26, tip=\"tips.block\", span=True, cli=\"block-ip\",\n"
+               "          narrows=True),",
+        "test": "test_blocking_bounds_only_its_own_damage",
+    },
+    {
+        "label": "warning: an expression of pure exclusions passes as a target",
+        "file": "beantester/matchers.py",
+        "old": "        return not self._positives",
+        "new": "        return False",
+        "test": "test_an_exclusion_only_target_is_not_a_bound",
+    },
+    {
+        "label": "scenario: the file is read only after the capture is open again",
+        "file": "beantester/cli.py",
+        "old": "    scen = None\n    if cfg[\"scenario\"]:\n        try:\n"
+               "            scen = load_scenario_file(cfg[\"scenario\"])",
+        "new": "    scen = None\n    if False:\n        try:\n"
+               "            scen = load_scenario_file(cfg[\"scenario\"])",
+        "test": "test_a_broken_scenario_never_opens_the_capture",
+    },
+    {
+        "label": "warning: the GUI starts an unbounded run in silence",
+        "file": "beantester/gui/app.py",
+        "old": "        warn_if_unbounded(s, self.log)\n"
+               "        # Immediate feedback",
+        "new": "        pass\n"
+               "        # Immediate feedback",
+        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+    },
+    {
+        "label": "warning: a session that BECOMES unbounded says nothing",
+        "file": "beantester/gui/app.py",
+        "old": "        warn_if_unbounded(s, self.log)\n"
+               "        self.engine.log_event(\"CHANGE\"",
+        "new": "        pass\n"
+               "        self.engine.log_event(\"CHANGE\"",
+        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+    },
+    {
+        "label": "warning: --dry-run previews the values but not the shape",
+        "file": "beantester/cli.py",
+        "old": "            if not cfg[\"simulate\"]:\n"
+               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "new": "            if False:\n"
+               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "test": "test_dry_run_previews_the_shape_and_not_only_the_values",
+    },
+    {
+        "label": "help: a semicolon creeps back into a flag's help text",
+        "file": "beantester/cli.py",
+        "old": "help=\"which traffic to capture at all (IPv4 and IPv6). Ports are \"",
+        "new": "help=\"which traffic to capture at all (IPv4 and IPv6); ports are \"",
+        "test": "test_no_semicolons_in_the_help_a_user_reads",
+    },
+    {
+        "label": "errors: a config value is called invalid and left at that",
+        "file": "beantester/settings.py",
+        "old": "                                       field=key, value=repr(value),\n"
+               "                                       expected=_expected_shape(key)))",
+        "new": "                                       field=key, value=repr(value),\n"
+               "                                       expected=\"\"))",
+        "test": "test_a_config_value_says_what_the_setting_takes",
+    },
+    {
+        "label": "errors: the scenario stops suggesting a correction",
+        "file": "beantester/scenario.py",
+        "old": "            if len(unknown) == 1 and close:",
+        "new": "            if False:",
+        "test": "test_a_misspelled_scenario_setting_gets_the_same_help_as_a_config_one",
+    },
+    {
+        "label": "errors: a blame word creeps back into a message",
+        "file": "lang/en.json",
+        "old": "\"errors.bad_schedule_step\": \"Schedule step '{part}' is not in "
+               "the form dur:down:up.\"",
+        "new": "\"errors.bad_schedule_step\": \"bad schedule step: '{part}'.\"",
+        "test": "test_no_message_blames_the_person_reading_it",
+    },
+    {
+        "label": "errors: saving a profile throws the precise message away again",
+        "file": "beantester/gui/app.py",
+        "old": "            dialogs.show_error(self.root, T(\"log.error\"), str(e))\n"
+               "            return\n"
+               "        self._persist_profiles()",
+        "new": "            dialogs.show_error(self.root, T(\"log.error\"), \"nope\")\n"
+               "            return\n"
+               "        self._persist_profiles()",
+        "test": "test_saving_a_profile_with_a_bad_value_names_the_field",
+    },
+    {
+        "label": "errors: a message loses its full stop",
+        "file": "lang/en.json",
+        "old": "\"errors.scenario_bad_json\": \"Not a valid JSON file: {error}.\"",
+        "new": "\"errors.scenario_bad_json\": \"Not a valid JSON file: {error}\"",
+        "test": "test_every_error_reads_like_a_sentence",
+    },
+    {
+        "label": "keyboard: Ctrl+F is bound on the entry, not on the window",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            app.root.bind(\"<Control-f>\", self._focus_search)",
+        "new": "            entry.bind(\"<Control-f>\", self._focus_search)",
+        "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
+    },
+    {
+        "label": "keyboard: the search box stops advertising its shortcut",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        add_tooltip(entry, \"tips.conn_search\", shortcut=\"Ctrl+F\")",
+        "new": "        add_tooltip(entry, \"tips.conn_search\")",
+        "test": "test_shortcut_buttons_advertise_their_key",
+    },
+    {
+        "label": "keyboard: the context menu goes back to mouse-only",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        for sequence in (\"<Shift-F10>\", menu_key):",
+        "new": "        for sequence in ():",
+        "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
+    },
+    {
+        "label": "tables: an empty table goes back to a blank rectangle",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": ("        self.repaint()\n"
+                "        self._show_empty_note(not self.items)"),
+        "new": "        self.repaint()",
+        "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
+    },
+    {
+        "label": "tables: an unsearched empty table blames a search nobody made",
+        "file": "beantester/gui/pages/conns.py",
+        "old": ("        self.table.set_empty_text(\"tables.no_conns_match\"\n"
+                "                                  if self.search_var.get().strip()\n"
+                "                                  else \"tables.no_conns_yet\")"),
+        "new": "        self.table.set_empty_text(\"tables.no_conns_match\")",
+        "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
+    },
+    {
+        "label": "help: an example hardcodes the .py name the exe user lacks",
+        "file": "beantester/cli.py",
+        "old": "  %(prog)s --simulate --loss 20 --duration 10",
+        "new": "  bean_network_tester.py --simulate --loss 20 --duration 10",
+        "test": "test_the_examples_name_whatever_this_build_is_called",
+    },
+    {
+        "label": "help: the usage wall comes back over the examples",
+        "file": "beantester/cli.py",
+        "old": "        usage=\"%(prog)s [options]\",",
+        "new": "",
+        "test": "test_help_opens_with_examples_and_not_with_a_wall_of_usage",
+    },
+    {
+        "label": "tables: every column goes back to being left-aligned",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": ("        if col in self._numeric:\n"
+                "            return \"e\""),
+        "new": ("        if False:\n"
+                "            return \"e\""),
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: a number is left touching the text beside it",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "CENTERED = frozenset({\"proto\", \"scoped\"})",
+        "new": "CENTERED = frozenset({\"proto\"})",
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: the numeric registry quietly loses a column",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "NUMERIC = frozenset({\"pid\", \"remote_port\", \"local_port\", \"packets\", \"dropped\",",
+        "new": "NUMERIC = frozenset({\"remote_port\", \"local_port\", \"packets\", \"dropped\",",
+        "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
+    },
+    {
+        "label": "tables: an impaired row is marked by colour alone again",
+        "file": "beantester/gui/theme.py",
+        "old": "    \"impaired\": {\"foreground\": \"#ffb454\", \"font\": (FONT, 9, \"bold\")},",
+        "new": "    \"impaired\": {\"foreground\": \"#ffb454\"},",
+        "test": "test_an_impaired_row_is_not_marked_by_colour_alone",
+    },
+    {
+        "label": "readme: a semicolon hides inside a nested list again",
+        "file": "README.md",
+        "old": "With nothing set they are equal. The moment",
+        "new": "With nothing set they are equal; the moment",
+        "test": "test_no_semicolons_in_readme_prose",
+    },
+    {
+        "label": "help: the semicolon scan reads an empty parser",
+        "file": "tests/test_cli_docs.py",
+        "old": "    helps = [a for a in parser._actions if a.help]",
+        "new": "    helps = []",
+        "test": "test_no_semicolons_in_the_help_a_user_reads",
+    },
+    {
+        "label": "guards: a HANDOFF brief falls back into the scanned set",
+        "file": "tests/test_repo_conventions.py",
+        "old": "SKIP_PREFIXES = (\"HANDOFF-\",)",
+        "new": "SKIP_PREFIXES = ()",
+        "test": "test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository",
+    },
+    {
         "label": "guards: internal_tools falls back into the scanned set",
         "file": "tests/test_repo_conventions.py",
         "old": "\"internal_tools\", \".claude\", \"crashes\"}",
@@ -156,7 +374,8 @@ CANARY = {
 # machine can repeat it. This is weaker than MUTATIONS and stronger than nothing -
 # and it is the honest state of most "verified by mutation" lines in the notes.
 PROVEN_BY_HAND = {
-    "test_shortcut_buttons_advertise_their_key": "2026-07-21, dropping shortcut= from Save/Load",
+    # test_shortcut_buttons_advertise_their_key moved to MUTATIONS on 2026-08-03,
+    # when Ctrl+F gave it a patch worth writing down. This list is meant to shrink.
     "test_an_overridden_field_is_visibly_disabled": "2026-07-21, removing the disabled style maps",
     "test_no_stale_pending_markers": "2026-07-25, both directions",
     "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",

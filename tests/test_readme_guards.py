@@ -170,9 +170,19 @@ def test_no_semicolons_in_readme_prose():
     comma, because that is what people write.
 
     Code is exempt and has to be, since a semicolon is syntax there - bash,
-    JSON, PowerShell, filter expressions. So fenced blocks, indented blocks and
-    inline `code spans` are all cut out before looking, which is what keeps this
-    check free of false positives.
+    JSON, PowerShell, filter expressions. So fenced blocks and inline `code
+    spans` are cut out before looking, which is what keeps this check free of
+    false positives.
+
+    It used to skip any line INDENTED by four spaces as well, on the theory that
+    those are indented code blocks. In markdown they are also how a nested list
+    continues, and that is what the exemption actually hid: a semicolon lived in
+    a nested bullet of README.md while this guard reported the file clean.
+    MEASURED before removing it - of the indented lines outside fences, 16 in
+    README.md and 8 in README.pl.md, EVERY one is list text and none is code.
+    Both files fence all their code, so the exemption protected nothing and
+    blinded the check. Should an indented code block ever arrive, this test will
+    say so and the answer is to fence it, which is better markdown regardless.
     """
     for readme in READMES:
         offenders, fenced = [], False
@@ -180,7 +190,7 @@ def test_no_semicolons_in_readme_prose():
             if line.lstrip().startswith("```"):
                 fenced = not fenced
                 continue
-            if fenced or line.startswith("    "):
+            if fenced:
                 continue
             prose = re.sub(r"`[^`]*`", "", line)
             if ";" in prose:

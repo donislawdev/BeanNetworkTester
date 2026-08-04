@@ -597,3 +597,50 @@ def test_the_chosen_columns_are_remembered_and_restored():
         assert app.pages["connections"].table.visible_columns() == [
             "proc", "remote_ip", "packets"]
     """)
+
+
+def test_the_gui_says_the_same_thing_before_an_unbounded_start():
+    """The warning is not a CLI feature: in the GUI the same run is one click.
+
+    Same sentence and the same condition as the CLI
+    (``settings.unbounded_impairment``), logged on the UI thread BEFORE the
+    driver load starts on the worker - so it is on screen while STOP is still
+    the next click rather than a minute of impaired traffic later.
+    """
+    run_gui("""
+        app.engine.start = lambda *a, **k: None
+
+        def start_with(**values):
+            app.clear_log()
+            for key, value in values.items():
+                app.vars[key].set(value)
+            app._start(); app._settle_transition()
+            return list(app._log_lines)
+
+        warning = bnt.T("warn.global_impairment")
+
+        def warned(log):
+            return any(warning in line for line in log)
+
+        log = start_with(loss=50, target="", duration=0)
+        assert warned(log), "no warning for an unscoped, endless run: %r" % log
+
+        log = start_with(loss=50, target="probe.exe")
+        assert not warned(log), "warned about a targeted run: %r" % log
+
+        log = start_with(loss=50, target="", duration=30)
+        assert not warned(log), "warned about a run with a deadline: %r" % log
+
+        log = start_with(loss=0, duration=0, lan_mode=True)
+        assert warned(log), "LAN mode alone cuts the internet: %r" % log
+
+        # a session can BECOME unbounded: start aimed, then clear the target
+        log = start_with(loss=50, lan_mode=False, target="probe.exe")
+        assert not warned(log), "warned about a targeted start: %r" % log
+        app.running = True
+        app.clear_log()
+        app.vars["target"].set("")
+        app.apply_if_running()
+        assert warned(list(app._log_lines)), \
+            "clearing the target mid-session went unannounced: %r" % app._log_lines
+    """)

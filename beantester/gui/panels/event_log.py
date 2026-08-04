@@ -72,7 +72,14 @@ class EventLogWindow(PanelWindow):
         #     every keystroke rebuilds the model several times per word typed
         entry.bind("<KeyRelease>", lambda e: self._debounce())
         entry.bind("<Escape>", lambda e: self._clear())
-        add_tooltip(entry, "tips.event_search")
+        add_tooltip(entry, "tips.event_search", shortcut="Ctrl+F")
+        self._search_entry = entry
+        # (4b) The window owns its own toplevel, so it binds its own Ctrl+F - the
+        #      main window's binding cannot reach here, and a search box with no
+        #      keyboard way in is the gap this closes on both tables at once.
+        with crashlog.quiet("gui.windows.event_log"):
+            self.win.bind("<Control-f>", self._focus_search)
+            self.win.bind("<Control-F>", self._focus_search)
 
         clear = ttk.Button(top, text=T("buttons.clear"), command=self._clear)
         clear.pack(side="left", padx=(scaled(6), 0))
@@ -92,6 +99,13 @@ class EventLogWindow(PanelWindow):
             on_sort=self._on_sort,
             height=20, horizontal=True, tips=TIPS, tags=EVENT_COLORS,
             min_chars={"t": 6, "time": 18, "type": 10, "desc": 40},
+            # "t" is elapsed seconds - a quantity, so it lines up on the right.
+            # "time" is a timestamp and "type"/"desc" are words: all read left.
+            numeric={"t"},
+            # the timestamp follows "t" and is always the same width:
+            # centred so a right-aligned number cannot touch it
+            centered={"time"},
+            empty_text="tables.no_events_yet",
         )
 
         actions = ttk.Frame(body)
@@ -123,6 +137,10 @@ class EventLogWindow(PanelWindow):
         if limit and len(events) > limit:
             events = events[:limit]
 
+        # Same as the Connections page: say WHY it is empty. With no filter typed
+        # an empty log means the session has not logged anything yet.
+        self.table.set_empty_text("tables.no_events_match" if self._query
+                                  else "tables.no_events_yet")
         # (3) LAZY: the raw events go in; _render is called only for what is shown
         self.table.set_model(events, render=self._render, key_of=self._key,
                              tag_of=lambda e: str(e[2]))
@@ -161,6 +179,13 @@ class EventLogWindow(PanelWindow):
         self._search_job = None
         self._query = self.search_var.get().strip()
         self.refresh(force=True)
+
+    def _focus_search(self, _event=None):
+        """Ctrl+F: put the caret in this window's search box."""
+        with crashlog.quiet("gui.windows.event_log"):
+            self._search_entry.focus_set()
+            self._search_entry.select_range(0, "end")
+        return "break"
 
     def _clear(self):
         self.search_var.set("")

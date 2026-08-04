@@ -7,6 +7,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **A run that would break everything now says so first.** Start with impairment on, nothing to
+  aim it at and no time limit, and both the command line and the window say: this affects every
+  connection on this machine, set a target or a time limit to narrow it. A warning, not a
+  refusal. Silent in `--simulate`, and once the run is aimed or timed. The same line appears when
+  a running session becomes unbounded, and in `--dry-run`. "LAN mode" counts as impairment here:
+  on its own it cuts every connection that leaves the local network.
+- **Ctrl+F, and the row menu from the keyboard.** Ctrl+F brings Connections forward and puts the
+  caret in its search box, and does the same inside the event-log window. Shift+F10, or the menu
+  key, opens the row menu on the selected connection. Nothing in the table needed a mouse before.
+- **An empty table says why it is empty.** "0 of N" under the table was the only sign that a
+  search had simply matched nothing, which reads the same as something being broken. It tells the
+  two cases apart: nothing captured yet, or nothing matching what you typed.
+- **`--help` starts with worked examples.** It used to open with 24 lines listing every flag,
+  before a single readable sentence. Four examples now come first - a safe trial run, one aimed
+  at an application, one aimed at a destination, and one for a pipeline - and the flag list
+  follows. A mistyped flag shows the error instead of burying it under the same wall.
+- **Numbers in the tables line up on the right.** Packets, bytes, ports, PIDs and times were
+  anchored left, so 9 and 1000000 began at the same pixel and a column of numbers could not be
+  scanned down. Addresses stay on the left where they read properly, and the short columns beside
+  a number - protocol, "impaired?", the timestamp - sit centred so the two never touch. Applies to
+  Connections and to both views of the event log.
+- **An impaired row no longer relies on colour alone.** It is shown in bold as well as in orange,
+  so it stays recognisable whichever columns you have chosen to show - including with the
+  "impaired?" column hidden.
 - **Connections: the search box can search one column at a time.** Plain text works as before,
   and now a term can name its column: `port:443`, `ip:10.0.0.0/8`, `pid:>4000`, `scoped:yes`,
   `dropped:>0`. Values use the same notation as the Control page fields, and several terms narrow
@@ -24,6 +48,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
+- **`--help` reads like ordinary writing.** Six flags described themselves with a semicolon
+  joining two halves of a sentence: `--preset`, `--filter`, `--buffer`, `--dst-ip`, `--block-ip`
+  and `--block-port`. They now use a full stop or a comma, like the rest of the program's text.
 - Both READMEs now say in the licence section that **what you make with the tool is yours**.
   Scenarios you write, saved profiles and config files, reproduction reports, CSV exports, logs
   and screenshots are your own work: the GPL covers the program, not its output, and using the
@@ -32,6 +59,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Error messages say what to do instead of who is at fault.** A config file with an unusable
+  number answered "Invalid value for 'loss'". It now says the setting needs a number between 0
+  and 100, and quotes back what it got. A misspelled setting in a scenario file gets the same
+  "did you mean" suggestion config files have always had, an unknown scenario action lists the
+  ones that exist, and saving a profile names the field instead of "Values must be numbers".
+- **A skipped expression no longer names the wrong feature.** The line about an expression that
+  could not be read claimed targeting was switched off, even when the expression was a blocking
+  rule.
+- **A broken scenario file no longer starts the session first.** `--scenario` with a file the tool
+  cannot read used to open the capture, impair traffic and only then report the problem. The file
+  is now read before anything starts, exactly as `--dry-run` already checked it. Same exit code as
+  before.
 - In the Settings window, "Capture only the targeted traffic" stayed clickable after you pressed
   START, if the window was already open at the time. Ticking it did nothing until the next
   session. It now greys out for as long as the session runs, with the same "locked while running"

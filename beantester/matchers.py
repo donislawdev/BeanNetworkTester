@@ -160,6 +160,18 @@ class Matcher:
         """True for an empty field - "match everything"."""
         return not self.terms
 
+    @property
+    def selects_nothing_in_particular(self):
+        """True when the expression names no thing to hit - only things to spare.
+
+        ``!chrome.exe`` is not empty, so every "is a target set?" check written as
+        a truth test reads it as narrow. It is the opposite: ``matches()`` skips
+        the positive branch entirely, so the expression covers everything except
+        the exclusions. Callers that care about BLAST RADIUS (see
+        ``settings.unbounded_impairment``) must treat it as unscoped.
+        """
+        return not self._positives
+
     def __bool__(self):
         """A matcher is falsy when empty, so callers can write ``if matcher:``."""
         return not self.is_empty

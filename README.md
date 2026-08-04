@@ -152,7 +152,7 @@ current screen.
   row per address with the port cells left empty.
   - **"down"/"up"/"total" are what the application actually got**, the same quantity the session
     panel calls "Downloaded (MB)". **"down seen"/"up seen" are what the tool captured** before
-    impairing anything. With nothing set they are equal; the moment you add loss or a speed limit
+    impairing anything. With nothing set they are equal. The moment you add loss or a speed limit
     they part, and **the gap between them is the damage on that connection**. Hover any of them for
     the full sentence. (Before this split there was one pair, holding the captured bytes under
     headings that meant delivered: a row could read 5 MB received while its application got 0.4 MB.) Plus a search box (debounced, so it does not churn the table on every keystroke),

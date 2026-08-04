@@ -44,7 +44,7 @@ from ..repro import save_repro_report, settings_to_cli_string
 from ..scenario import load_scenario_file
 from ..settings import (DEFAULT_SETTINGS, apply_settings, apply_targeting,
                         load_config_file, non_profile_active, save_config_file,
-                        settings_from_raw)
+                        settings_from_raw, warn_if_unbounded)
 from ..summary import settings_summary
 from ..utils import number_string
 from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
@@ -995,8 +995,15 @@ class App:
         try:
             values = settings_to_preset(self._settings_from_widgets())
             self.profiles.set(name, {k: float(v) for k, v in values.items()})
-        except ValueError:
-            dialogs.show_error(self.root, T("log.error"), T("dialogs.values_numbers"))
+        except ValueError as e:
+            # The message _settings_from_widgets raises names the field and its
+            # range ("Field 'Loss' must be between 0 and 100"); this used to
+            # throw it away and show "Values must be numbers", which named
+            # neither. _start, four hundred lines down, has always shown str(e)
+            # for the SAME exception from the SAME call. float() below cannot be
+            # the one raising: settings_to_preset reads an already validated
+            # dict, so every value it hands over is a number.
+            dialogs.show_error(self.root, T("log.error"), str(e))
             return
         self._persist_profiles()
         self._set_profile_key(name)      # saving one also SELECTS it - remember that
@@ -1310,6 +1317,11 @@ class App:
             self.log(f"{T('log.error')}: {e}")
             return
         apply_settings(self.engine, s, self.log)
+        # A session can BECOME unbounded: clear the target, press "Apply changes",
+        # and from that moment everything on the machine is in scope. Warning only
+        # at START would mean the one path that reaches this state in silence is
+        # the one the user takes deliberately.
+        warn_if_unbounded(s, self.log)
         self.engine.log_event("CHANGE", settings_summary(s, "en"))
         self.log(f"{T('log.applied_changes')}: {settings_summary(s, self._lang)}")
         self._applied_sig = self._signature(self._raw_settings())
@@ -1463,6 +1475,11 @@ class App:
         self._pending_start_settings = s
         filt = windivert_for(s["filter"])
         duration = s.get("duration", 0)
+        # Same sentence the CLI prints, from the same condition and the same
+        # function: nothing narrows this run and nothing ends it, so every
+        # connection on the machine is in scope. Said before the driver opens, on
+        # the UI thread, while STOP is still one click away.
+        warn_if_unbounded(s, self.log)
         # Immediate feedback: the psutil target resolution and the WinDivert driver
         # load (~0.5-1 s) run on the worker thread below, so without this the click
         # feels dead until the driver is up. Log now, on the UI thread, before work.
@@ -1505,32 +1522,13 @@ class App:
             self._scenario.loop = self.loop_var.get()
             self.engine.start_scenario(self._scenario, s, log=self.log)
         self._snapshot_target()
-        self._log_capture_scope(s)
+        note = scope.capture_scope_note(s, self.engine.capture_narrowed())
+        if note:
+            self.log(T(note))
         # No refresher thread any more: _tick applies a changed expression and the
         # engine's resolver keeps the port set fresh (see _refresh_target).
         self._applied_target = None     # re-apply once, now that the engine is up
         self._sync_running_ui()
-
-    def _log_capture_scope(self, s):
-        """Say whether "Capture only the targeted traffic" actually took effect.
-
-        Asked for and got it, or asked for and did NOT: both have to be said, and
-        only the second is easy to miss. The option silently does nothing when the
-        destination cannot be expressed as a driver filter - a wildcard, an ``re:``
-        pattern, only a process target, no destination at all, or a port list too
-        long for the driver's grammar - and the fallback is the safe direction, so
-        nothing else about the session looks unusual. The CLI has warned about
-        this since the option shipped (``cli._run_session``); the window said
-        nothing at all, which left the one interface where the checkbox is
-        actually visible as the one that never mentioned the outcome.
-
-        Not a dialog: this is information about a session that started fine, and a
-        modal here would interrupt the run the user just asked for.
-        """
-        if not s.get("narrow_filter"):
-            return
-        self.log(T("log.narrow_applied" if self.engine.capture_narrowed()
-                   else "log.narrow_no_effect"))
 
     def _stop(self):
         if self._transition is not None:
