@@ -495,6 +495,20 @@ MUTATIONS = [
         "test": "test_a_pid_that_does_not_match_is_judged_once_not_once_per_socket",
     },
     {
+        "label": "targeting: the System process takes a port off a user process again",
+        "file": "beantester/socketwatch.py",
+        "old": "                if pid == _SYSTEM_PID and self._ports.get(port, _SYSTEM_PID) != _SYSTEM_PID:",
+        "new": "                if False:",
+        "test": "test_the_system_process_does_not_take_a_port_off_a_user_process",
+    },
+    {
+        "label": "targeting: refusing a System event freezes the entry against the snapshot",
+        "file": "beantester/socketwatch.py",
+        "old": "                    self._events += 1\n                    return\n                self._ports[port] = pid",
+        "new": "                    self._evidence[port] = self.clock()\n                    self._events += 1\n                    return\n                self._ports[port] = pid",
+        "test": "test_refusing_the_system_event_leaves_the_snapshot_able_to_heal",
+    },
+    {
         "label": "targeting: the live map stops telling anybody about a new socket",
         "file": "beantester/socketwatch.py",
         "old": "                with crashlog.quiet(\"socketwatch.listener\"):\n"

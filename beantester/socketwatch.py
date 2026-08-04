@@ -113,6 +113,11 @@ SocketEvent = namedtuple("SocketEvent", "kind pid local_port")
 # its own snapshot was too old, and seed nothing at all.
 _NEVER = float("-inf")
 
+# The System process. Windows pins it to 4 (and the Idle process to 0, which is
+# already filtered as "no pid"), and the SOCKET layer reports it for the kernel's
+# own half of an operation a user process started - see `apply`.
+_SYSTEM_PID = 4
+
 
 class SocketWatcher:
     """A live ``local_port -> pid`` map maintained from socket-layer events."""
@@ -163,6 +168,27 @@ class SocketWatcher:
             return                        # no local port yet, or the idle/System 0
         with self._lock:
             if ev.kind in _ADD:
+                if pid == _SYSTEM_PID and self._ports.get(port, _SYSTEM_PID) != _SYSTEM_PID:
+                    # The System process does not take a port off a user process.
+                    #
+                    # MEASURED 2026-08-05, and it is not an edge case: the SOCKET
+                    # layer delivers a SECOND connect for the same local port
+                    # carrying ProcessId 4, in the middle of a live connection -
+                    #     BIND/pid116724, CONNECT/pid116724, CONNECT/pid4, CLOSE...
+                    # Applied blindly, that hands the port to System, targeting drops
+                    # it at the next rebuild, and the rest of the flow is never
+                    # impaired. It is also where the connection table's "System" rows
+                    # came from. Reproduced by instrumentation in
+                    # `internal_tools/probe_scope_gap.py`, which records every event
+                    # per port; before this, 2-4 of 12 fresh processes lost their
+                    # scope this way in every run.
+                    #
+                    # NO evidence is stamped, deliberately: we did not act, and
+                    # claiming knowledge we did not use would stop the poller's
+                    # snapshot from healing the entry (see reconcile). Same rule the
+                    # unmodelled event kinds already follow.
+                    self._events += 1
+                    return
                 self._ports[port] = pid
                 self._evidence[port] = self.clock()
             elif ev.kind == CLOSE:

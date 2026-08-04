@@ -59,12 +59,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A connection could be handed to "System" in the middle of its life.** Windows announces some
+  connections twice - once for the program that opened it, once for the system itself - and the
+  tool believed the second one. From that moment the connection belonged to "System": it stopped
+  being impaired even though your target opened it, and that is the name the Connections tab
+  showed for it. It happened to two to four connections out of every twelve here.
 - **Short connections of the process you target are no longer missed.** A browser opens a new
   connection for almost every page, often from a brand new process, and many of them are over in
   well under a second. The tool used to notice them a fraction too late, so the shortest ones
   finished untouched - listed with the right process name and "impaired? no" beside it. It now
   learns each new connection the moment it appears. Measured with 12 fresh processes opening one
-  short connection each: 4 escaped before, 2 out of 82 after.
+  short connection each: 4 escaped before, 1 out of 96 after.
 - **Closing one copy of the tool no longer breaks the one that is still running.** The WinDivert
   driver is shared by the whole machine, and the copy that closed was unloading it out from under
   the copy that was working - which is why a second window could not start any more, and said

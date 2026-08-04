@@ -26,8 +26,9 @@ So targeting is a live object instead:
   process already targeted is in scope from its event, and a process nobody has
   judged yet is resolved by itself (``adopt_new_pids``) instead of at the next
   tick. MEASURED against the real driver, 12 fresh processes each opening one
-  short connection: **4 of 12 were never in scope at all** before this, 2 of 82
-  after,
+  short connection: **4 of 12 were never in scope at all** before this, 1 of 96
+  after (the residual that remained once the System-event bug below was found and
+  fixed - see ``socketwatch.apply``),
 * a socket belongs to the target when its owning process **or any of its
   ancestors** matches the expression - so a PID (or a name) covers the whole
   process tree. An explicitly EXCLUDED process (``!chromedriver``) is never
@@ -387,16 +388,17 @@ class ProcessTargeting:
           finished sooner was never impaired at all; ``adopt_new_pids`` now
           resolves the new pid off the event, in the milliseconds after it.
           MEASURED with fresh processes each opening ONE short connection
-          (0.15 s): **4 of 12 were never in scope** before, **2 of 82 across
-          seven runs** after.
+          (0.15 s): **4 of 12 were never in scope** before, and **1 of 96 across
+          eight runs** after.
 
-          Those two are NOT explained, and the obvious explanation was measured
-          and refuted: a cold ``name_of`` for a brand-new pid is 0.06-0.24 ms
-          (15 processes), nowhere near a 0.15 s connection. Three instrumented
-          runs - recording when the live map announced the socket and when the
-          port entered scope - caught no miss at all to look at. The
-          instrumentation lives in ``internal_tools/probe_scope_gap.py`` for
-          whoever sees the next one.
+          Getting from "2 of 82" to that took finding a second, older bug, and
+          the instrumentation is what found it: recording when the live map
+          announced each socket, when its port entered scope AND WHEN IT LEFT
+          showed ports falling out of scope 15-32 ms into a 240 ms connection.
+          The cause was not here at all - the SOCKET layer hands the same port a
+          second CONNECT carrying ProcessId 4, and the map applied it (see
+          ``socketwatch.apply``). The rig lives in
+          ``internal_tools/probe_scope_gap.py``.
         * ``_pids`` goes stale when the target exits, and until the next rebuild a
           socket Windows hands that pid number is treated as the target's.
           **MEASURED against the real socket table 2026-07-28** (seven rounds per

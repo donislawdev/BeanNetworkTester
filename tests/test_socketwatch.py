@@ -314,6 +314,56 @@ def test_the_evidence_map_does_not_grow_with_every_connection_ever_seen():
 
 
 # -- name resolution is delegated, not duplicated ----------------------------- #
+def test_the_system_process_does_not_take_a_port_off_a_user_process():
+    """MEASURED 2026-08-05, on a live session, and it happens constantly.
+
+    The SOCKET layer delivers a SECOND connect for the same local port carrying
+    ProcessId 4, in the middle of a connection a user process owns::
+
+        BIND/pid116724, CONNECT/pid116724, CONNECT/pid4, CLOSE/pid116724
+
+    Applied like any other add-event, that hands the port to System. Targeting
+    drops it at its next rebuild (System does not match the target), the rest of
+    the flow is never impaired, and the connection table shows "System" as the
+    owner of a row belonging to the targeted application. Both symptoms, one
+    cause: 2 to 4 of 12 fresh processes lost their scope this way in every run.
+
+    Not a blanket ban on pid 4: System genuinely owns sockets (SMB on 139/445),
+    and a port it holds first stays its own.
+    """
+    watcher = _watcher()
+    watcher.apply(ev(CONNECT, 100, 5000))
+    watcher.apply(ev(CONNECT, 4, 5000))                 # the kernel's second half
+    check("the user process keeps its port", watcher.snapshot().get(5000) == 100,
+          f"({watcher.snapshot()})")
+    check("but the event is still counted", watcher.events == 2, f"({watcher.events})")
+
+    watcher.apply(ev(LISTEN, 4, 445))                   # System's own socket
+    check("a port System takes first is System's", watcher.snapshot().get(445) == 4,
+          f"({watcher.snapshot()})")
+    watcher.apply(ev(CONNECT, 4, 445))
+    check("...and it may keep it", watcher.snapshot().get(445) == 4)
+
+
+def test_refusing_the_system_event_leaves_the_snapshot_able_to_heal():
+    """The refusal must not also block the safety net.
+
+    An event this map does not act on leaves no evidence - that is the existing
+    rule for unmodelled kinds, and it matters here: if the refusal stamped the
+    port as "freshly known", a later snapshot could no longer correct the entry,
+    and a genuinely stale owner would be frozen in.
+    """
+    clock = _Clock()
+    watcher = _watcher(clock)
+    watcher.apply(ev(CONNECT, 100, 5000))               # evidence: the real owner
+    collected = clock.tick()                            # the poller walks the table HERE
+    clock.tick()
+    watcher.apply(ev(CONNECT, 4, 5000))                 # refused, and must leave no mark
+    watcher.reconcile({5000: 777}, collected)
+    check("a snapshot older than the refusal still heals the port",
+          watcher.snapshot().get(5000) == 777, f"({watcher.snapshot()})")
+
+
 def test_a_listener_is_told_about_each_socket_the_map_gains():
     """The map is not only a thing to be asked - it can tell.
 
