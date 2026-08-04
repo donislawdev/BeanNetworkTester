@@ -387,6 +387,51 @@ MUTATIONS = [
         "new": "        kept = [object() for _ in range(0)]",
         "test": "test_the_meter_can_actually_see_retention",
     },
+    {
+        "label": "driver: a start failure goes back to blaming the user's rights",
+        "file": "beantester/gui/app.py",
+        "old": "                hint = T(key) if key else \"\"",
+        "new": "                hint = T(\"dialogs.run_as_admin\")",
+        "test": "test_the_start_failure_advice_fits_the_failure_not_every_failure",
+    },
+    {
+        "label": "driver: the console drops the advice and prints the raw error",
+        "file": "beantester/cli.py",
+        "old": "        _fail(exitcodes.RUNTIME, f\"cannot start the capture: {e}\"\n"
+               "              + (f\"\\n{T(hint)}\" if hint else \"\"))",
+        "new": "        _fail(exitcodes.RUNTIME, f\"cannot start the capture: {e}\")",
+        "test": "test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open",
+    },
+    {
+        "label": "driver: the exit path stops a driver another instance is using",
+        "file": "beantester/driver.py",
+        "old": "        if _drop_use_marker():",
+        "new": "        if _drop_use_marker() and False:",
+        "test": "test_the_exit_path_stands_down_when_another_instance_is_using_the_driver",
+    },
+    {
+        "label": "driver: --doctor calls a machine mid-unload healthy again",
+        "file": "beantester/driver.py",
+        "old": "                           \"warn\" if (running or blocked or stopping) else \"ok\",",
+        "new": "                           \"warn\" if (running or blocked) else \"ok\",",
+        "test": "test_doctor_does_not_call_a_machine_healthy_while_nothing_can_start",
+    },
+    {
+        "label": "driver: a start no longer waits for a driver that is unloading",
+        "file": "beantester/engine.py",
+        "old": "                self._open_divert()",
+        "new": "                self._divert.open()",
+        "test": "test_a_driver_that_is_still_unloading_is_waited_for_not_reported",
+    },
+    {
+        "label": "driver: a scheduled removal is reported as a failure again",
+        "file": "beantester/driver.py",
+        "old": "            if err == _ERROR_SERVICE_MARKED_FOR_DELETE:\n"
+               "                return f\"{name}: stopped (removal was already scheduled)\"",
+        "new": "            if False:\n"
+               "                return f\"{name}: stopped (removal was already scheduled)\"",
+        "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

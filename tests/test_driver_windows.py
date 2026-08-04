@@ -91,6 +91,22 @@ def test_doctor_says_it_could_not_look_rather_than_not_loaded(monkeypatch):
           "would not report" in row[2], f"({row})")
 
 
+def test_doctor_does_not_call_a_machine_healthy_while_nothing_can_start(monkeypatch):
+    """"stop pending" was the one state that read as "ok".
+
+    It is also the state in which every WinDivertOpen on the machine fails with 433
+    (measured 2026-08-04), i.e. the exact moment somebody runs --doctor to find out
+    why nothing starts. Reporting "ok" there sent them looking somewhere else.
+    """
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "stop pending"})
+    _, checks = driver.doctor()
+    row = next(c for c in checks if c[0] == "windivert driver")
+    check("doctor: a driver mid-unload is a warning", row[1] == "warn", f"({row})")
+    check("doctor: and it names the failure the user is about to hit",
+          "433" in row[2], f"({row})")
+
+
 def test_doctor_still_calls_a_clean_machine_not_loaded(monkeypatch):
     """The other direction: no driver must not start warning people for nothing."""
     monkeypatch.setattr(driver, "is_windows", lambda: True)
@@ -206,10 +222,28 @@ def test_stop_and_remove_stops_then_deletes_and_closes_every_handle(monkeypatch)
 
 def test_stop_and_remove_reports_a_removal_that_would_not_take(monkeypatch):
     fake = _FakeAdvapi(scm=1, service=42, deleted=False)
-    _fake_scm(monkeypatch, fake)
+    _fake_scm(monkeypatch, fake, last_error=1234)
     result = driver.stop_and_remove("WinDivert")
-    check("a service that stops but will not delete says so",
-          "stopped (removal failed" in result, f"({result})")
+    check("a service that stops but will not delete says so, with the code",
+          "stopped (removal failed, Windows error 1234)" in result, f"({result})")
+
+
+def test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure(monkeypatch):
+    """1072 is what a HEALTHY single-instance exit returns.
+
+    WinDivert marks its own service for deletion when it installs it, so ours can
+    only ever come second - MEASURED 2026-08-04: DeleteService returns 1072 three
+    times running while the service goes on to disappear by itself. The line the
+    user sees on every close therefore called a success "removal failed - it may be
+    in use", which is also the sentence they would search for when a start later
+    failed for a completely different reason.
+    """
+    fake = _FakeAdvapi(scm=1, service=42, deleted=False)
+    _fake_scm(monkeypatch, fake, last_error=driver._ERROR_SERVICE_MARKED_FOR_DELETE)
+    result = driver.stop_and_remove("WinDivert")
+    check("an already-scheduled removal reads as the normal path",
+          result == "WinDivert: stopped (removal was already scheduled)", f"({result})")
+    check("and it does not say anything failed", "fail" not in result, f"({result})")
 
 
 def test_stop_and_remove_without_a_manager_asks_for_administrator(monkeypatch):
@@ -296,6 +330,68 @@ def test_cleanup_driver_with_nothing_installed_says_so(monkeypatch):
     lines = driver.cleanup_driver()
     check("nothing installed reports nothing to clean up",
           any("nothing to clean up" in l for l in lines), f"({lines})")
+
+
+# --- the exit path must not stop a driver somebody else is using -------------- #
+def test_the_exit_path_stands_down_when_another_instance_is_using_the_driver(monkeypatch):
+    """The bug: our own cleanup broke our own other window.
+
+    The WinDivert service is machine-wide. MEASURED 2026-08-04 (two processes, the
+    filter `false`): with instance A holding a handle, instance B exiting left the
+    service in "stop pending" and every open on the machine failed with 433 until A
+    closed. Standing down costs nothing - A's handle keeps the driver loaded, so
+    the stop could not have freed the .sys file anyway.
+    """
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: True)
+    cleaned = []
+    monkeypatch.setattr(driver, "cleanup_driver", lambda: cleaned.append(1) or [])
+    driver.mark_driver_used()
+    lines = driver.release_on_exit()
+    check("the driver is left alone for the other instance", not cleaned, f"({cleaned})")
+    check("...and the log says why, instead of going quiet",
+          any("still using" in line for line in lines), f"({lines})")
+
+
+def test_the_last_instance_out_still_unloads_the_driver(monkeypatch):
+    """The other half, and the one convention 22 is about: nobody else is left, so
+    the .sys file has to be released or the program's own folder stays undeletable."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
+    monkeypatch.setattr(driver, "cleanup_driver", lambda: ["WinDivert: stopped and removed"])
+    driver.mark_driver_used()
+    lines = driver.release_on_exit()
+    check("the last one out unloads the driver",
+          lines == ["WinDivert: stopped and removed"], f"({lines})")
+    check("and the run no longer claims to hold a driver",
+          driver.driver_used() is False)
+
+
+def test_cleanup_driver_warns_before_interrupting_another_instance(monkeypatch):
+    """`--cleanup-driver` is typed on purpose, so it still runs - but the person
+    typing it deserves to know whose session they are about to end."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "running"})
+    monkeypatch.setattr(driver, "stop_and_remove", lambda name: f"{name}: stopped and removed")
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: True)
+    lines = driver.cleanup_driver()
+    check("the warning comes first, before the work it describes",
+          "WARNING" in lines[0], f"({lines})")
+    check("and the cleanup still happens, because it was asked for",
+          any("stopped and removed" in line for line in lines), f"({lines})")
+
+
+def test_the_use_marker_is_a_noop_off_windows(monkeypatch):
+    """Linux CI runs every one of these paths; none of them may reach for ctypes."""
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    driver._USE_MARKER[0] = None
+    driver._take_use_marker()
+    check("nothing is taken off Windows", driver._USE_MARKER[0] is None)
+    check("and nobody is reported as holding it", driver._drop_use_marker() is False)
+    check("...including the read-only question",
+          driver._another_instance_holds_the_driver() is False)
 
 
 # --- open_failure_hint: the advice has to fit the failure --------------------- #

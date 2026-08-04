@@ -916,7 +916,7 @@ class BeanEngine:
         self._divert = divert
         if hasattr(self._divert, "open"):
             try:
-                self._divert.open()
+                self._open_divert()
             except BaseException:
                 # A handle that will not open is NOT a session. This used to be
                 # swallowed into a debug crash record, and the damage was entirely
@@ -1093,6 +1093,40 @@ class BeanEngine:
             self.log(T("log.engine_fault", e=str(exc)))
             self.stop(reason="fault")
             raise
+
+    # Two extra tries, ~0.45 s in total, and ONLY for "the device does not exist".
+    # Short on purpose: this is for a driver that is finishing an unload started
+    # milliseconds ago (another program closing), which is over as soon as the last
+    # handle goes. It cannot rescue a start blocked by a session that is still
+    # RUNNING somewhere - that lasts as long as the session does, and the dialog
+    # says so instead of stalling the window.
+    OPEN_RETRY_DELAYS_S = (0.15, 0.30)
+
+    def _open_divert(self):
+        """Open the handle, letting a driver that is mid-unload finish first.
+
+        MEASURED 2026-08-04: stopping the WinDivert service while another handle is
+        open leaves it in "stop pending", and every open until that finishes fails
+        with 433. Our own exits no longer do that to each other (see
+        ``driver.release_on_exit``), but nothing stops ANOTHER program that uses
+        WinDivert from doing it, and a start that fails because it arrived 100 ms
+        early is a start that should simply have waited.
+        """
+        from .driver import ERROR_NO_SUCH_DEVICE
+        said = False
+        for delay in self.OPEN_RETRY_DELAYS_S + (None,):
+            try:
+                self._divert.open()
+                return
+            except BaseException as exc:
+                if (delay is None
+                        or getattr(exc, "winerror", None) != ERROR_NO_SUCH_DEVICE):
+                    raise
+                if not said:
+                    # A pause the user can see needs a reason the user can read.
+                    self.log(T("log.driver_still_unloading"))
+                    said = True
+            time.sleep(delay)
 
     def _start_socketwatch(self, real_windivert, socket_source):
         """Start the live socket-event map for this session, when one is available.

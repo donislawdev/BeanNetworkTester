@@ -260,6 +260,7 @@
   "log.driver": "WinDivert driver",
   "log.driver_queue": "WinDivert queue: {n} packets / {t} ms / {kb} KB. This is the driver's own buffer, before this tool's - packets wait in it and that wait lands on your latency, and when it fills the driver drops what does not fit. Neither shows up in any counter here.",
   "log.driver_wait": "WARNING: WinDivert held a packet for {ms} ms before this tool even saw it. The driver's queue is backing up, and that is not only added delay: once the queue is full the driver throws away whatever does not fit, before this tool can see it. That loss appears in no counter here, and it comes on top of anything you configured. Narrow the traffic filter so less goes through the tool.",
+  "log.driver_still_unloading": "The WinDivert driver is still unloading after another program closed. Waiting for it...",
   "log.duration_reached": "Time limit reached ({v} s) - session stopped.",
   "log.engine_fault": "Engine fault: {e} - the session was stopped, your network is back to normal.",
   "log.error": "Error",

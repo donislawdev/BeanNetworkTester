@@ -59,6 +59,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Closing one copy of the tool no longer breaks the one that is still running.** The WinDivert
+  driver is shared by the whole machine, and the copy that closed was unloading it out from under
+  the copy that was working - which is why a second window could not start any more, and said
+  "run as Administrator" while doing it. Whoever leaves last now does the unloading, and a copy
+  that leaves early says so in its log. The driver still gets unloaded, so the program's folder
+  can still be deleted afterwards.
+- **A start that arrives a moment too early now waits instead of failing.** If another program
+  using WinDivert is still shutting the driver down, START waits up to half a second for it
+  rather than reporting an error you would fix by trying again.
+- **`--doctor` no longer calls a machine healthy while nothing can start.** A driver caught
+  mid-unload was reported as fine - the one state in which every start fails. It is now a warning
+  that says what it means and what to wait for.
 - **A failed START now tells you what actually went wrong.** Whatever the reason, the window
   answered with "Run as Administrator" - including to people who were already running as
   Administrator. The most common case has nothing to do with rights: close one copy of the tool

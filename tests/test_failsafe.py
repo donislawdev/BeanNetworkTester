@@ -14,6 +14,7 @@ These tests pin down the three guarantees:
 import time
 
 from beantester.engine import _LIVE_ENGINES, BeanEngine, deadline_reached
+from beantester.i18n import T
 from fakes import FakePacket, check
 from gui_harness import run_gui
 
@@ -268,6 +269,72 @@ def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
     check("a later START is not refused", engine.is_running() is True)
     engine.stop()
     check("and the recovered session releases its divert", recover.closed is True)
+
+
+class _UnloadingDivert:
+    """A divert that answers 433 for its first ``fails`` opens, like a driver that
+    another program is still unloading."""
+
+    def __init__(self, fails):
+        self.fails = fails
+        self.opens = 0
+        self.closed = False
+
+    def open(self):
+        self.opens += 1
+        if self.opens <= self.fails:
+            error = OSError("[WinError 433] The specified device does not exist.")
+            error.winerror = 433
+            raise error
+
+    def recv(self):
+        time.sleep(0.01)
+        raise RuntimeError("stopped")
+
+    def send(self, *_a, **_k):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+def test_a_driver_that_is_still_unloading_is_waited_for_not_reported(monkeypatch):
+    """A start that arrived 100 ms early should wait, not fail.
+
+    433 means the WinDivert service is mid-unload, which finishes as soon as the
+    last program using it lets go. Our own instances no longer do that to each
+    other (driver.release_on_exit stands down), but another WinDivert program can,
+    and that case is over in milliseconds.
+    """
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    lines = []
+    engine = BeanEngine(log_fn=lines.append)
+    divert = _UnloadingDivert(fails=2)
+    engine.start("test", divert=divert)
+    check("the start survives a driver that was still unloading",
+          engine.is_running() is True)
+    check("it took exactly the retries it needed", divert.opens == 3, f"({divert.opens})")
+    check("and the pause is explained in the log, not silent",
+          any(T("log.driver_still_unloading") == line for line in lines), f"({lines})")
+    engine.stop()
+
+
+def test_a_driver_that_never_comes_back_still_fails_instead_of_hanging(monkeypatch):
+    """The retry is a courtesy, not a loop: a session blocked by somebody else's
+    RUNNING session lasts as long as that session, and the window must say so."""
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    engine = BeanEngine()
+    divert = _UnloadingDivert(fails=99)
+    raised = None
+    try:
+        engine.start("test", divert=divert)
+    except Exception as exc:
+        raised = exc
+    check("the start gives up", raised is not None)
+    check("with the REAL error, which is what the dialog explains",
+          getattr(raised, "winerror", None) == 433, f"({raised!r})")
+    check("after a bounded number of tries", divert.opens == 3, f"({divert.opens})")
+    check("and nothing is left running", engine.is_running() is False)
 
 
 def test_the_start_failure_advice_fits_the_failure_not_every_failure():
