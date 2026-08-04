@@ -30,7 +30,12 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
 ## Conventions (enforced by tests)
 
 - Everything is named **BeanNetworkTester**; no references to legacy names.
-- Code, comments and docstrings are in **English**.
+- Code, comments and docstrings are in **English**, and so are commit messages and pull
+  request descriptions. This repository is public and its history is permanent: a comment or
+  a message cannot be unpublished, because the commit carrying it stays. Keep local paths,
+  machine names, addresses and credentials out of all of them. Quote the program - interface
+  text, command output, code - and not a person: a sentence from a chat or an issue is
+  somebody else's words. CI checks the mechanical half of this on every pull request.
 - UI texts appear in code **only as i18n keys** (`lang/<code>.json` holds the
   texts; English is the fallback). Adding a language = adding a JSON file.
 - The CLI is always English and logs with the `[bean]` prefix.
