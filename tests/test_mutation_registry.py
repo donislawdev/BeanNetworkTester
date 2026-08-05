@@ -44,6 +44,25 @@ from fakes import ROOT, check
 # be unambiguous and short enough to survive unrelated edits nearby.
 MUTATIONS = [
     {
+        "label": "upgrade: a config file stops getting defaults for keys it omits",
+        "file": "beantester/settings.py",
+        "old": "    s = dict(DEFAULT_SETTINGS)\n"
+               "    s.update({k: _coerce_setting(k, v) for k, v in data.items()})\n"
+               "    return s",
+        "new": "    return {k: _coerce_setting(k, v) for k, v in data.items()}",
+        "test": "test_a_config_file_from_every_release_still_loads",
+    },
+    {
+        # The historical bug in miniature: absence collapsing into zero, where
+        # zero on `buffer` means an UNBOUNDED queue.
+        "label": "upgrade: an absent profile field zero-fills instead of "
+                 "taking its own default",
+        "file": "beantester/gui/profiles.py",
+        "old": "                raw = PRESET_DEFAULTS[key]",
+        "new": "                raw = 0",
+        "test": "test_a_profile_from_every_release_still_loads_with_its_own_defaults",
+    },
+    {
         "label": "gui: the settings form stops refreshing its field states",
         "file": "beantester/gui/panels/settings.py",
         "old": "            self.form.refresh_field_states()\n",

@@ -1,0 +1,1 @@
+python bean_network_tester.py --loss 7 --latency 120 --jitter 30 --down 512 --up 128 --target firefox.exe --dst-ip 10.0.0.0/8 --dst-port "443,8080"

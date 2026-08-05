@@ -1,0 +1,9 @@
+{
+  "tag": "v0.3.0",
+  "written": {
+    "config": true,
+    "profiles": true,
+    "repro cli": true,
+    "ui": true
+  }
+}

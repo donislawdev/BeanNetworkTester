@@ -1,0 +1,16 @@
+{
+  "slow office wifi": {
+    "loss": 2,
+    "latency": 80,
+    "jitter": 40
+  },
+  "everything at once": {
+    "loss": 5,
+    "corrupt": 1,
+    "dup": 2,
+    "latency": 200,
+    "jitter": 90,
+    "down": 256,
+    "up": 64
+  }
+}
