@@ -448,7 +448,7 @@
   "tips.col_local_port": "Port on this machine. It is what links the connection to a process. Empty for traffic that has no ports (ping/ICMP), which is also why those rows usually have no process name.",
   "tips.col_packets": "Packets seen on this connection since it appeared.",
   "tips.col_pid": "Process id owning the local port, resolved when the packet was captured.",
-  "tips.col_process": "The process that owns the local port. '?' means the name could not be resolved - run as Administrator.",
+  "tips.col_process": "The program that opened this connection. Read once, when the connection first appeared, so a row can still name a program that has since closed. '?' means the name could not be read - try starting as Administrator.",
   "tips.col_proto": "Transport protocol of the connection (TCP / UDP / ICMP / IP).",
   "tips.col_remote_ip": "Address this machine is talking to. Right-click a row to limit the impairments to it.",
   "tips.col_remote_port": "Port on the remote side (443 = HTTPS, 53 = DNS, 80 = HTTP). Empty for traffic that has no ports at all, such as ping (ICMP) - those rows are grouped by the address instead.",

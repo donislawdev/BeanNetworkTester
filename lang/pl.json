@@ -448,7 +448,7 @@
   "tips.col_local_port": "Port na tej maszynie. To on wiąże połączenie z procesem. Pusty dla ruchu bez portów (ping/ICMP) - i dlatego takie wiersze zwykle nie mają nazwy procesu.",
   "tips.col_packets": "Pakiety zaobserwowane na tym połączeniu od jego pojawienia się.",
   "tips.col_pid": "Identyfikator procesu (PID) właściciela portu lokalnego, ustalony przy przechwyceniu pakietu.",
-  "tips.col_process": "Proces, do którego należy port lokalny. '?' oznacza, że nie udało się rozwiązać nazwy - uruchom jako Administrator.",
+  "tips.col_process": "Program, który otworzył to połączenie. Odczytany raz, przy pierwszym pakiecie, więc wiersz może nadal pokazywać program, który już się zamknął. '?' oznacza, że nie udało się odczytać nazwy - spróbuj uruchomić jako Administrator.",
   "tips.col_proto": "Protokół transportowy połączenia (TCP / UDP / ICMP / IP).",
   "tips.col_remote_ip": "Adres, z którym rozmawia ta maszyna. Kliknij wiersz prawym przyciskiem, aby ograniczyć do niego zakłócenia.",
   "tips.col_remote_port": "Port po stronie zdalnej (443 = HTTPS, 53 = DNS, 80 = HTTP). Pusty dla ruchu, który w ogóle nie ma portów, jak ping (ICMP) - takie wiersze są grupowane po adresie.",

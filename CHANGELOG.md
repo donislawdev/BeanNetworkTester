@@ -64,6 +64,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The "process" column now says when its answer was taken.** The name is read once, when the
+  connection first shows up, and never again - which is why a row can still name a program that
+  has since closed. The tooltip said none of that, so a name that outlived its program looked
+  like a mistake.
+
 - **Two unsafe things the window did while closing.** A tooltip could build a new, invisible
   window at the exact moment its own window was being taken apart, and the tool kept a reference
   to every tooltip window it had ever made, including the closed ones. Neither has been shown to
