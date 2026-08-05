@@ -63,6 +63,15 @@ MUTATIONS = [
         "test": "test_a_profile_from_every_release_still_loads_with_its_own_defaults",
     },
     {
+        # Names a field instead of reading the registry - the exact shape the
+        # guard used to have, and the one that let narrow_filter through.
+        "label": "gui: is_locked names a field instead of reading start_only",
+        "file": "beantester/gui/form.py",
+        "old": '        return bool(FIELDS[key].start_only and getattr(self.app, "running", False))',
+        "new": '        return bool(key == "duration" and getattr(self.app, "running", False))',
+        "test": "test_start_only_fields_are_locked_while_a_session_runs",
+    },
+    {
         "label": "gui: the settings form stops refreshing its field states",
         "file": "beantester/gui/panels/settings.py",
         "old": "            self.form.refresh_field_states()\n",
