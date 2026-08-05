@@ -877,6 +877,19 @@ def _run_gui(argv):
             return exitcodes.OK               # the elevated copy took over
     if is_frozen():
         winenv.detach_console()               # no black window behind the GUI
+    # Arm hard-crash capture for the GUI too, not only for a real capture session
+    # (engine.start does that). A Tk process can die at the C level without any
+    # Python frame - measured: an access violation inside `tkinter mainloop` with
+    # nothing above it - and until this line such a crash was recorded NOWHERE
+    # unless the same process happened to have started a session earlier. See
+    # crashlog.arm_native for what this costs.
+    #
+    # BEFORE the import, not after: importing Tk is itself a native surface, and a
+    # machine without tkinter simply exits cleanly below, at which point the atexit
+    # `_cleanup_native` removes the empty file and the directory again. Arming after
+    # the import would also make the guard for this line untestable anywhere Tk is
+    # missing, i.e. green here and vacuous on the Linux runner.
+    crashlog.arm_native()
     try:
         import tkinter as tk
 

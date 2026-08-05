@@ -71,6 +71,7 @@ CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
 LATEST_NAME = "latest-crash.txt"
 NATIVE_NAME = "native-crash.txt"
+BREADCRUMB_NAME = "breadcrumb.json"
 
 MAX_LOG_BYTES = 5 * 1024 * 1024     # rotate past this
 MAX_ROTATIONS = 5                   # keep this many old logs
@@ -402,19 +403,36 @@ _native_stream = None       # the open faulthandler sink, kept for cleanup
 _native_path = None
 _arm_wanted = [False]       # native capture was requested at install()
 _armed = [False]            # faulthandler is actually enabled (a file now exists)
+_breadcrumb_last = None     # the state last written, so an unchanged one costs no disk
 
 
 def arm_native():
-    """Enable native (segfault) capture - lazily, when it can actually happen.
+    """Enable native (segfault) capture. Idempotent - armed once per process.
 
     faulthandler must hold its file open BEFORE a hard crash, so it genuinely
-    cannot be created only "once a problem occurs". But a native crash can only
-    come from the WinDivert KERNEL DRIVER, which nothing touches until a real
-    capture starts - so it is armed THEN, not at launch. The effect the user
-    asked for: opening the GUI, or a ``--simulate`` run, creates no ``crashes/``
-    folder at all; ``native-crash.txt`` appears only once the driver is in play,
-    and a clean exit removes it again if nothing was written (see _cleanup_native).
-    Idempotent - a start/stop/start cycle arms it once.
+    cannot be created only "once a problem occurs". It is therefore armed at the
+    two moments a hard crash becomes possible: when a real capture starts (the
+    WinDivert kernel driver comes into play - ``engine.start``) and when the GUI
+    starts (``cli._run_gui``).
+
+    The GUI half was added on 2026-08-05, after a crash that this design had
+    recorded only by luck. The docstring here used to say a native crash "can only
+    come from the WinDivert KERNEL DRIVER", and that is simply not true of a Tk
+    process: the crash in question was ``access violation`` inside ``tkinter
+    mainloop`` with no Python frame above it and no session running. It was
+    captured at all only because that process had run a capture EARLIER and this
+    function never disarms - a GUI that had never started a session would have left
+    nothing behind at all.
+
+    What it costs, said out loud because it is the reason the old design was
+    lazier: ``_cleanup_native`` deletes the empty file and the empty directory on a
+    CLEAN exit, so a healthy run still leaves nothing - but a GUI killed from Task
+    Manager, or one that loses power, now leaves an empty ``crashes/native-crash.txt``
+    next to the executable where before it only could after a real session.
+    That is the price of recording the next one.
+
+    A ``--simulate`` run or a plain CLI session still arms only at ``engine.start``,
+    so nothing changes for them.
     """
     if not _arm_wanted[0] or _armed[0]:
         return
@@ -444,6 +462,65 @@ def _install_faulthandler():
         pass
 
 
+def breadcrumb(**state):
+    """Leave the current UI state on disk, for a crash that cannot write anything.
+
+    ``faulthandler`` can only write STACKS. Everything that makes a crash report
+    useful - which page was open, whether a session was running, which windows -
+    lives in :func:`set_context_provider`, and that is only ever consulted from
+    :func:`record`, i.e. from a Python-level failure. A native crash reaches
+    neither. The reported one is exactly that shape: a C-level access violation in
+    Tk's own display phase, whose report says nothing about what the tool was
+    doing.
+
+    So the state is written BEFORE it is needed, next to the native-crash file and
+    removed with it (see ``_cleanup_native``), which keeps the "a healthy run
+    leaves nothing behind" property in one place.
+
+    **The de-duplication is what makes this a state hook rather than a heartbeat,
+    and it is deliberate that it lives HERE and not in the caller.** The GUI calls
+    this from its tick, because that is the one place that cannot forget a new
+    piece of state the way three hand-placed call sites would; an unchanged state
+    therefore costs a dict comparison and no disk at all. Writing 1.4 times a
+    second for the life of the process is precisely the unbounded-disk failure this
+    module's own docstring names.
+
+    Best-effort by definition: this must never turn a crash into two, so nothing
+    here raises and nothing here is required to have worked.
+    """
+    global _breadcrumb_last
+    if not _armed[0] or not _enabled:
+        return False
+    if state == _breadcrumb_last:
+        return False
+    _breadcrumb_last = dict(state)
+    directory = _ensure_dir()
+    if directory is None:
+        return False
+    payload = dict(state)
+    payload["written"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    payload["version"] = __version__
+    payload["pid"] = os.getpid()
+    payload["threads"] = [t.name for t in threading.enumerate()]
+    path = os.path.join(directory, BREADCRUMB_NAME)
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+        return True
+    except (OSError, TypeError, ValueError):
+        # TypeError/ValueError as well as OSError: the state comes from the UI and
+        # a value json cannot serialise must not take the process down on the way
+        # to describing a crash.
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        return False
+
+
 def _cleanup_native():
     """On a CLEAN exit, drop the empty native-crash file (and dir, if empty).
 
@@ -455,12 +532,23 @@ def _cleanup_native():
     ``crashes/`` directory is removed too, but only when it is now empty (a run
     that recorded nothing leaves nothing behind; a run that logged a real fault
     keeps its ``crashes.ndjson`` and the directory with it).
+
+    The breadcrumb goes the same way and for the same reason: it describes the
+    state a native crash happened IN, so a clean exit means nobody wants it. Its
+    ``.tmp`` is removed too - a process killed mid-write leaves one, and a stray
+    temp file would stop the directory from ever being cleaned up again.
     """
-    global _native_stream, _native_path
+    global _native_stream, _native_path, _breadcrumb_last
     try:
         faulthandler.disable()
     except Exception:
         pass
+    _breadcrumb_last = None
+    for name in (BREADCRUMB_NAME, BREADCRUMB_NAME + ".tmp"):
+        try:
+            os.remove(os.path.join(crash_dir(), name))
+        except OSError:
+            pass
     stream, path = _native_stream, _native_path
     _native_stream = _native_path = None
     if stream is not None:
@@ -515,12 +603,13 @@ def summary():
 
 def reset():
     """Forget everything (tests)."""
-    global _native_stream, _native_path
+    global _native_stream, _native_path, _breadcrumb_last
     with _lock:
         _seen.clear()
     _arm_wanted[0] = False
     _armed[0] = False
     _native_stream = _native_path = None
+    _breadcrumb_last = None
 
 
 def set_enabled(value):

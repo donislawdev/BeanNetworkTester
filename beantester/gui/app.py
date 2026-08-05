@@ -48,6 +48,7 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, apply_targeting,
 from ..summary import settings_summary
 from ..utils import number_string
 from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
+from . import crash as gui_crash
 from . import dialogs
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
@@ -112,7 +113,7 @@ class App:
         self.windows = WindowManager(self)
         # Every crash from now on carries the seed, the settings and the counters,
         # so a report is one step away from a reproduction rather than a story.
-        crashlog.set_context_provider(self._crash_context)
+        gui_crash.install(self)
         self._restore_geometry()
 
         # Log lines are queued here and applied to the tkinter widget only from
@@ -1649,27 +1650,6 @@ class App:
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 
-    def _crash_context(self):
-        """App state attached to every crash report (see crashlog.set_context_provider).
-
-        The point is that a crash report should be one step away from a REPRO, not
-        just something to read: the seed and the settings are what make the failure
-        happen again.
-        """
-        context = {"page": self._page_id, "running": self.running}
-        try:
-            context["seed"] = self.engine.effective_seed()
-            context["counters"] = dict(self.engine.stats_snapshot())
-            settings = self._settings_from_widgets()
-            context["settings"] = settings
-            context["repro_command"] = settings_to_cli_string(
-                settings, seed=self.engine.effective_seed())
-            context["log_tail"] = list(self._log_lines[-crashlog.MAX_LOG_TAIL:])
-            context["open_windows"] = self.windows.open_ids()
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        return context
-
     def _sync_running_ui(self):
         """Make the chrome tell the truth about the session.
 
@@ -1897,6 +1877,7 @@ class App:
         """
         try:
             self._drain_ui_queue()      # finished async start/stop (main thread only)
+            gui_crash.leave_breadcrumb(self)   # state a NATIVE crash cannot write
             self._drain_log()           # worker-thread log lines (main thread only)
             self._drain_target_warning()   # render the target verdict (main thread)
             self._drain_engine_warning()   # "the tool itself is dropping packets"

@@ -64,6 +64,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A crash of the window itself used to leave nothing behind.** Some crashes happen below
+  Python, where no error message exists to show you - and the file that catches those was only
+  ever switched on when a capture started. So the window could die during an ordinary session
+  with nothing running, and there was no record of it anywhere. It is switched on when the
+  window opens now. Alongside it the tool keeps a small note of what it was doing - which tab
+  was open, whether a session was running, which extra windows - because that kind of crash
+  cannot write anything itself. A normal exit still removes both, so a healthy run leaves no
+  files behind.
+
 - **A connection could be handed to "System" in the middle of its life.** Windows announces some
   connections twice - once for the program that opened it, once for the system itself - and the
   tool believed the second one. From that moment the connection belonged to "System": it stopped

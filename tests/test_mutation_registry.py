@@ -72,6 +72,26 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The GUI half of native-crash capture. Without it a hard crash in a
+        # process that never started a session is recorded NOWHERE - which is how
+        # the 2026-08-04 access violation in `tkinter mainloop` came within one
+        # earlier session of leaving nothing at all behind.
+        "label": "crash: the GUI entry point stops arming native capture",
+        "file": "beantester/cli.py",
+        "old": "    crashlog.arm_native()\n    try:\n        import tkinter as tk",
+        "new": "    try:\n        import tkinter as tk",
+        "test": "test_the_gui_arms_native_capture_without_ever_starting_a_capture",
+    },
+    {
+        # The mechanism can be perfect and still record nothing if the one caller
+        # stops calling. This is the half that rots silently.
+        "label": "crash: the GUI tick stops leaving a breadcrumb",
+        "file": "beantester/gui/app.py",
+        "old": "            gui_crash.leave_breadcrumb(self)   # state a NATIVE crash cannot write\n",
+        "new": "",
+        "test": "test_the_running_gui_actually_leaves_one",
+    },
+    {
         "label": "gui: the settings form stops refreshing its field states",
         "file": "beantester/gui/panels/settings.py",
         "old": "            self.form.refresh_field_states()\n",
