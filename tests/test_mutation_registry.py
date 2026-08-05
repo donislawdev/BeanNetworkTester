@@ -72,6 +72,50 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The display's source order. Reversed, a connection row names whatever a
+        # snapshot taken a few times a second last saw, while the gate is judging
+        # by the live map - the exact reported shape, from the other direction.
+        "label": "attribution: the display asks the poller before the live map",
+        "file": "beantester/engine.py",
+        "old": "        watcher = self._socketwatch      # read ONCE: stop() clears it concurrently\n"
+               "        if watcher is not None:\n"
+               "            pid = watcher.pid_for(local_port)\n"
+               "            if pid is not None:\n"
+               "                return pid\n"
+               "        return self._ports.pid_for(local_port)\n",
+        "new": "        pid = self._ports.pid_for(local_port)\n"
+               "        if pid is not None:\n"
+               "            return pid\n"
+               "        watcher = self._socketwatch\n"
+               "        return watcher.pid_for(local_port) if watcher is not None else None\n",
+        "test": "test_the_gate_and_the_display_agree_whenever_the_live_map_knows_the_port",
+    },
+    {
+        # A fifth consumer inherits the fallback silently. This is the entry that
+        # makes the guard a RULE rather than a check on two functions.
+        "label": "attribution: a new consumer of the owner lookup appears",
+        "file": "beantester/engine.py",
+        "old": "    def stats_snapshot(self):\n",
+        "new": "    def owner_hint(self, port):\n"
+               "        return self._live_pid(port)\n\n"
+               "    def stats_snapshot(self):\n",
+        "test": "test_every_consumer_of_the_owner_lookup_is_one_this_file_knows_about",
+    },
+    {
+        # The gate's side of the same rule. It SURVIVED at first: the real
+        # process-wide poller answers None for an unused port, so the fallback was
+        # invisible until the test made that poller answer.
+        "label": "attribution: the gate grows a second source underneath",
+        "file": "beantester/targeting.py",
+        "old": "        pid = pid_for(port)\n        return pid is not None and pid in self._pids\n",
+        "new": "        pid = pid_for(port)\n"
+               "        if pid is None:\n"
+               "            from . import portmap\n"
+               "            pid = portmap.default_table().pid_for(port)\n"
+               "        return pid is not None and pid in self._pids\n",
+        "test": "test_the_gate_resolves_against_exactly_one_table",
+    },
+    {
         # Widget creation during Tk's destroy cascade, on a path bound to
         # <Destroy>. Reproduced on real Tk before the fix (see _hide_bubble).
         "label": "gui: hiding a bubble goes back to the path that CREATES one",
