@@ -48,6 +48,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
+- **The buffer help sheet no longer promises more lag than the buffer can give.** It told you to
+  enter how many ms of lag you want, which is right for a small buffer and optimistic for a large
+  one: the number is the most the queue can add, and one small download may never fill it.
+  Measured against a real link, 2000 ms gives a single ordinary download about a quarter of that,
+  and several downloads at once nearly all of it. The sheet now says so in one added line.
 - **`--help` reads like ordinary writing.** Six flags described themselves with a semicolon
   joining two halves of a sentence: `--preset`, `--filter`, `--buffer`, `--dst-ip`, `--block-ip`
   and `--block-port`. They now use a full stop or a comma, like the rest of the program's text.
