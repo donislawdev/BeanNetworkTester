@@ -44,6 +44,151 @@ from fakes import ROOT, check
 # be unambiguous and short enough to survive unrelated edits nearby.
 MUTATIONS = [
     {
+        "label": "upgrade: a config file stops getting defaults for keys it omits",
+        "file": "beantester/settings.py",
+        "old": "    s = dict(DEFAULT_SETTINGS)\n"
+               "    s.update({k: _coerce_setting(k, v) for k, v in data.items()})\n"
+               "    return s",
+        "new": "    return {k: _coerce_setting(k, v) for k, v in data.items()}",
+        "test": "test_a_config_file_from_every_release_still_loads",
+    },
+    {
+        # The historical bug in miniature: absence collapsing into zero, where
+        # zero on `buffer` means an UNBOUNDED queue.
+        "label": "upgrade: an absent profile field zero-fills instead of "
+                 "taking its own default",
+        "file": "beantester/gui/profiles.py",
+        "old": "                raw = PRESET_DEFAULTS[key]",
+        "new": "                raw = 0",
+        "test": "test_a_profile_from_every_release_still_loads_with_its_own_defaults",
+    },
+    {
+        # Names a field instead of reading the registry - the exact shape the
+        # guard used to have, and the one that let narrow_filter through.
+        "label": "gui: is_locked names a field instead of reading start_only",
+        "file": "beantester/gui/form.py",
+        "old": '        return bool(FIELDS[key].start_only and getattr(self.app, "running", False))',
+        "new": '        return bool(key == "duration" and getattr(self.app, "running", False))',
+        "test": "test_start_only_fields_are_locked_while_a_session_runs",
+    },
+    {
+        # The display's source order. Reversed, a connection row names whatever a
+        # snapshot taken a few times a second last saw, while the gate is judging
+        # by the live map - the exact reported shape, from the other direction.
+        "label": "attribution: the display asks the poller before the live map",
+        "file": "beantester/engine.py",
+        "old": "        watcher = self._socketwatch      # read ONCE: stop() clears it concurrently\n"
+               "        if watcher is not None:\n"
+               "            pid = watcher.pid_for(local_port)\n"
+               "            if pid is not None:\n"
+               "                return pid\n"
+               "        return self._ports.pid_for(local_port)\n",
+        "new": "        pid = self._ports.pid_for(local_port)\n"
+               "        if pid is not None:\n"
+               "            return pid\n"
+               "        watcher = self._socketwatch\n"
+               "        return watcher.pid_for(local_port) if watcher is not None else None\n",
+        "test": "test_the_gate_and_the_display_agree_whenever_the_live_map_knows_the_port",
+    },
+    {
+        # A fifth consumer inherits the fallback silently. This is the entry that
+        # makes the guard a RULE rather than a check on two functions.
+        "label": "attribution: a new consumer of the owner lookup appears",
+        "file": "beantester/engine.py",
+        "old": "    def stats_snapshot(self):\n",
+        "new": "    def owner_hint(self, port):\n"
+               "        return self._live_pid(port)\n\n"
+               "    def stats_snapshot(self):\n",
+        "test": "test_every_consumer_of_the_owner_lookup_is_one_this_file_knows_about",
+    },
+    {
+        # The gate's side of the same rule. It SURVIVED at first: the real
+        # process-wide poller answers None for an unused port, so the fallback was
+        # invisible until the test made that poller answer.
+        "label": "attribution: the gate grows a second source underneath",
+        "file": "beantester/targeting.py",
+        "old": "        pid = pid_for(port)\n        return pid is not None and pid in self._pids\n",
+        "new": "        pid = pid_for(port)\n"
+               "        if pid is None:\n"
+               "            from . import portmap\n"
+               "            pid = portmap.default_table().pid_for(port)\n"
+               "        return pid is not None and pid in self._pids\n",
+        "test": "test_the_gate_resolves_against_exactly_one_table",
+    },
+    {
+        # Widget creation during Tk's destroy cascade, on a path bound to
+        # <Destroy>. Reproduced on real Tk before the fix (see _hide_bubble).
+        "label": "gui: hiding a bubble goes back to the path that CREATES one",
+        "file": "beantester/gui/tooltip.py",
+        "old": "        entry = _BUBBLES.get(str(widget.winfo_toplevel()))",
+        "new": "        entry = _bubble_for(widget)",
+        "test": "test_hiding_a_bubble_never_builds_a_window",
+    },
+    {
+        # The cache is keyed by toplevel NAME and Tk does not reuse names.
+        "label": "gui: dead bubble windows stop being pruned",
+        "file": "beantester/gui/tooltip.py",
+        "old": "    for dead in [k for k, e in _BUBBLES.items() if not _alive(e)]:\n"
+               "        del _BUBBLES[dead]\n",
+        "new": "",
+        "test": "test_dead_bubbles_do_not_pile_up_across_windows",
+    },
+    {
+        # The class that already crashed this project once (driver._advapi). The
+        # generic half of the guard: argtypes is the only part of a prototype that
+        # ctypes leaves as None, so it is the only part a walk can check.
+        "label": "native: a declared binding loses its argtypes",
+        "file": "beantester/winenv.py",
+        "old": "        lib.SetWindowPos.argtypes = [H, H, ctypes.c_int, ctypes.c_int,\n"
+               "                                     ctypes.c_int, ctypes.c_int, wintypes.UINT]\n",
+        "new": "",
+        "test": "test_every_declared_native_function_has_a_full_prototype",
+    },
+    {
+        # The specific half: a result that must be pointer-sized. Checked by name
+        # because `restype` defaults to c_long and `c_long is c_int is BOOL` on
+        # Windows, so "a restype was declared" is not a checkable statement.
+        "label": "native: a handle-returning call is truncated to 32 bits",
+        "file": "beantester/winenv.py",
+        "old": "        lib.GetParent.restype = H\n",
+        "new": "        lib.GetParent.restype = ctypes.c_int\n",
+        "test": "test_every_declared_native_function_has_a_full_prototype",
+    },
+    {
+        # What forces the NEXT native call into a factory instead of repeating
+        # the history in a third module.
+        "label": "native: a direct ctypes.windll call comes back into the theme",
+        "file": "beantester/gui/theme.py",
+        # Anchored on the line after it: the GetParent call itself appears in BOTH
+        # theme functions, and the registry rightly refuses an ambiguous pattern.
+        "old": "        hwnd = user32.GetParent(window.winfo_id())\n"
+               "        get_long = ",
+        "new": "        import ctypes\n"
+               "        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())\n"
+               "        get_long = ",
+        "test": "test_no_new_native_call_bypasses_a_prototype",
+    },
+    {
+        # The GUI half of native-crash capture. Without it a hard crash in a
+        # process that never started a session is recorded NOWHERE - which is how
+        # the 2026-08-04 access violation in `tkinter mainloop` came within one
+        # earlier session of leaving nothing at all behind.
+        "label": "crash: the GUI entry point stops arming native capture",
+        "file": "beantester/cli.py",
+        "old": "    crashlog.arm_native()\n    try:\n        import tkinter as tk",
+        "new": "    try:\n        import tkinter as tk",
+        "test": "test_the_gui_arms_native_capture_without_ever_starting_a_capture",
+    },
+    {
+        # The mechanism can be perfect and still record nothing if the one caller
+        # stops calling. This is the half that rots silently.
+        "label": "crash: the GUI tick stops leaving a breadcrumb",
+        "file": "beantester/gui/app.py",
+        "old": "            gui_crash.leave_breadcrumb(self)   # state a NATIVE crash cannot write\n",
+        "new": "",
+        "test": "test_the_running_gui_actually_leaves_one",
+    },
+    {
         "label": "gui: the settings form stops refreshing its field states",
         "file": "beantester/gui/panels/settings.py",
         "old": "            self.form.refresh_field_states()\n",
@@ -386,6 +531,173 @@ MUTATIONS = [
         "old": "        kept = [object() for _ in range(5000)]",
         "new": "        kept = [object() for _ in range(0)]",
         "test": "test_the_meter_can_actually_see_retention",
+    },
+    {
+        "label": "driver: a start failure goes back to blaming the user's rights",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    key = open_failure_hint(err, elevated)",
+        "new": "    key = \"dialogs.run_as_admin\"",
+        "test": "test_the_start_failure_advice_fits_the_failure_not_every_failure",
+    },
+    {
+        "label": "driver: the console drops the advice and prints the raw error",
+        "file": "beantester/cli.py",
+        "old": "        _fail(exitcodes.RUNTIME, f\"cannot start the capture: {e}\"\n"
+               "              + (f\"\\n{T(hint)}\" if hint else \"\"))",
+        "new": "        _fail(exitcodes.RUNTIME, f\"cannot start the capture: {e}\")",
+        "test": "test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open",
+    },
+    {
+        "label": "driver: the exit path stops a driver another instance is using",
+        "file": "beantester/driver.py",
+        "old": "        if _drop_use_marker():",
+        "new": "        if _drop_use_marker() and False:",
+        "test": "test_the_exit_path_stands_down_when_another_instance_is_using_the_driver",
+    },
+    {
+        "label": "driver: --doctor calls a machine mid-unload healthy again",
+        "file": "beantester/driver.py",
+        "old": "                           \"warn\" if (running or blocked or stopping) else \"ok\",",
+        "new": "                           \"warn\" if (running or blocked) else \"ok\",",
+        "test": "test_doctor_does_not_call_a_machine_healthy_while_nothing_can_start",
+    },
+    {
+        "label": "driver: a start no longer waits for a driver that is unloading",
+        "file": "beantester/engine.py",
+        "old": "                self._open_divert()",
+        "new": "                self._divert.open()",
+        "test": "test_a_driver_that_is_still_unloading_is_waited_for_not_reported",
+    },
+    {
+        "label": "targeting: a new socket of a targeted process waits for a rebuild",
+        "file": "beantester/targeting.py",
+        "old": "        if pid in self._pids:\n            with self._ports_lock:",
+        "new": "        if False:\n            with self._ports_lock:",
+        "test": "test_a_new_socket_of_a_targeted_process_is_in_scope_from_its_event",
+    },
+    {
+        "label": "targeting: a brand-new process is never adopted from its event",
+        "file": "beantester/targeting.py",
+        "old": "                if self._pid_matches(pid, name):\n"
+               "                    matched.add(pid)",
+        "new": "                if False:\n"
+               "                    matched.add(pid)",
+        "test": "test_a_brand_new_process_is_adopted_from_its_first_socket_event",
+    },
+    {
+        "label": "targeting: the resolver stops draining pending pids",
+        "file": "beantester/target_resolver.py",
+        "old": "                targeting.adopt_new_pids()",
+        "new": "                pass",
+        "test": "test_the_resolver_adopts_a_new_pid_without_waiting_for_its_floor",
+    },
+    {
+        "label": "targeting: a failed adoption is left to kill the resolver thread",
+        "file": "beantester/target_resolver.py",
+        "old": "            try:\n"
+               "                targeting.adopt_new_pids()\n"
+               "            except Exception as exc:\n"
+               "                crashlog.once(\"targeting.adopt\", exc)",
+        "new": "            targeting.adopt_new_pids()",
+        "test": "test_a_failing_adoption_does_not_kill_the_resolver",
+    },
+    {
+        "label": "targeting: a pid whose name will not resolve is written off",
+        "file": "beantester/targeting.py",
+        "old": "                elif name:\n                    judged.add(pid)",
+        "new": "                else:\n                    judged.add(pid)",
+        "test": "test_a_pid_whose_name_will_not_resolve_yet_is_asked_again_not_written_off",
+    },
+    {
+        "label": "targeting: a rebuild in flight loses a socket the event added",
+        "file": "beantester/targeting.py",
+        "old": "                self._ports = resolved | late",
+        "new": "                self._ports = resolved",
+        "test": "test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added",
+    },
+    {
+        "label": "targeting: a rescued port stops being checked against its owner",
+        "file": "beantester/targeting.py",
+        "old": "                late = frozenset(port for port, owner in self._late_owners.items()\n"
+               "                                 if owner in pids)",
+        "new": "                late = frozenset(self._late_owners)",
+        "test": "test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in_time",
+    },
+    {
+        "label": "targeting: an adopted pid is kept for ever instead of re-judged",
+        "file": "beantester/targeting.py",
+        "old": "                self._pids = frozenset(pids)",
+        "new": "                self._pids = self._pids | frozenset(pids)",
+        "test": "test_an_adopted_pid_still_falls_out_at_the_next_rebuild",
+    },
+    {
+        "label": "targeting: a ruled-out pid is looked up again on every socket",
+        "file": "beantester/targeting.py",
+        "old": "                with self._ports_lock:\n"
+               "                    self._not_ours = self._not_ours | judged\n"
+               "                return False",
+        "new": "                return False",
+        "test": "test_a_pid_that_does_not_match_is_judged_once_not_once_per_socket",
+    },
+    {
+        "label": "targeting: the System process takes a port off a user process again",
+        "file": "beantester/socketwatch.py",
+        "old": "                if pid == _SYSTEM_PID and self._ports.get(port, _SYSTEM_PID) != _SYSTEM_PID:",
+        "new": "                if False:",
+        "test": "test_the_system_process_does_not_take_a_port_off_a_user_process",
+    },
+    {
+        "label": "targeting: refusing a System event freezes the entry against the snapshot",
+        "file": "beantester/socketwatch.py",
+        "old": "                    self._events += 1\n                    return\n                self._ports[port] = pid",
+        "new": "                    self._evidence[port] = self.clock()\n                    self._events += 1\n                    return\n                self._ports[port] = pid",
+        "test": "test_refusing_the_system_event_leaves_the_snapshot_able_to_heal",
+    },
+    {
+        "label": "targeting: the live map stops telling anybody about a new socket",
+        "file": "beantester/socketwatch.py",
+        "old": "                with crashlog.quiet(\"socketwatch.listener\"):\n"
+               "                    listener(port, pid)",
+        "new": "                pass",
+        "test": "test_a_listener_is_told_about_each_socket_the_map_gains",
+    },
+    {
+        "label": "targeting: clearing the target leaves the map calling an orphan",
+        "file": "beantester/engine.py",
+        "old": "        self._bind_socket_listener()\n"
+               "        self.core.set_target(active, ports)",
+        "new": "        self.core.set_target(active, ports)",
+        "test": "test_the_engine_wires_the_live_map_to_targeting_and_unwires_it",
+    },
+    {
+        "label": "targeting: a running watcher is not published for stop() to find",
+        "file": "beantester/engine.py",
+        "old": "        self._socketwatch = watcher\n        try:\n            watcher.start()",
+        "new": "        try:\n            watcher.start()",
+        "test": "test_the_socket_watcher_survives_start_stop_cycles",
+    },
+    {
+        "label": "targeting: the bootstrap snapshot is taken before subscribing",
+        "file": "beantester/engine.py",
+        "old": "        try:\n"
+               "            watcher.start()\n"
+               "        except Exception as exc:\n"
+               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+        "new": "        ports, collected_at = self._ports.collected()\n"
+               "        try:\n"
+               "            watcher.start()\n"
+               "        except Exception as exc:\n"
+               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+        "test": "test_the_event_source_is_open_before_the_bootstrap_snapshot_is_taken",
+    },
+    {
+        "label": "driver: a scheduled removal is reported as a failure again",
+        "file": "beantester/driver.py",
+        "old": "            if err == _ERROR_SERVICE_MARKED_FOR_DELETE:\n"
+               "                return f\"{name}: stopped (removal was already scheduled)\"",
+        "new": "            if False:\n"
+               "                return f\"{name}: stopped (removal was already scheduled)\"",
+        "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
 ]
 

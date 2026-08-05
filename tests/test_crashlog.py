@@ -350,9 +350,10 @@ def test_summary_is_empty_when_nothing_has_gone_wrong(isolated):
 
 # -- 8) crashes/ is not created until it can actually be needed -------------- #
 def test_launch_creates_no_crash_folder_until_a_capture_arms_it(isolated):
-    """Just launching must NOT leave a crashes/ folder - that looked to users like
-    something had crashed. Native capture is requested at install but armed lazily,
-    the first time a real capture starts."""
+    """Importing the package must NOT leave a crashes/ folder - that looked to users
+    like something had crashed. Native capture is requested at install() and armed
+    later, at the two points a hard crash becomes possible: a real capture starting
+    (engine.start) and the GUI starting (cli._run_gui)."""
     crashlog._arm_wanted[0] = True          # what install(native=True) records
     crashlog._armed[0] = False
     assert not os.path.isdir(crashlog.crash_dir()), "crashes/ appeared before arming"
@@ -401,3 +402,139 @@ def test_cleanup_keeps_a_non_empty_native_file(isolated):
     crashlog._cleanup_native()
 
     assert os.path.exists(path), "a native crash report must survive a clean exit"
+
+
+# -- 9) the GUI arms too, and leaves a breadcrumb the C stack cannot carry ---- #
+def test_the_gui_arms_native_capture_without_ever_starting_a_capture(isolated, monkeypatch):
+    """The reported crash: ``access violation`` in ``tkinter mainloop``, no Python
+    frame above it, no session running.
+
+    It was recorded ONLY because that process had started a capture earlier in its
+    life (arm_native never disarms). A GUI that never starts a session would have
+    left nothing at all, which is the hole this closes.
+
+    Driven with tkinter made un-importable on purpose, so the test asserts the same
+    thing on the Linux runner as on this machine - see the comment in cli._run_gui.
+    Reaching a real Tk root here would make it a Windows-only guard pretending to
+    be a general one.
+    """
+    from beantester import cli, exitcodes, winenv
+
+    monkeypatch.setattr(winenv, "is_windows", lambda: False)   # skip the elevation dance
+    monkeypatch.setattr(cli, "is_frozen", lambda: False)
+    monkeypatch.setitem(sys.modules, "tkinter", None)          # import tkinter -> ImportError
+    crashlog._arm_wanted[0] = True                             # what install(native=True) records
+
+    try:
+        code = cli._run_gui([])
+        assert code == exitcodes.RUNTIME, "a GUI with no tkinter still reports RUNTIME"
+        assert crashlog._armed[0], (
+            "the GUI entry point must arm native capture; without this a hard crash "
+            "in a process that never ran a capture is recorded NOWHERE")
+        assert os.path.exists(os.path.join(crashlog.crash_dir(), crashlog.NATIVE_NAME)), (
+            "arming must actually open the native-crash file - faulthandler cannot "
+            "create it after the crash")
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_a_breadcrumb_records_what_a_native_crash_report_cannot(isolated):
+    """faulthandler writes STACKS. Which page was open is nowhere in one."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        assert crashlog.breadcrumb(page="stats", running=True, windows=["help"])
+        path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["page"] == "stats", f"the open page must be in it (got {data!r})"
+        assert data["running"] is True, "whether a session was running must be in it"
+        assert data["windows"] == ["help"], "the open windows must be in it"
+        assert data["threads"], "the thread names are what say 'no session was running'"
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_an_unchanged_breadcrumb_costs_no_disk_write(isolated):
+    """The GUI calls this from its TICK, so the de-duplication is what stops it
+    being 1.4 disk writes a second for the life of the process - the unbounded-disk
+    failure this module's own docstring names."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        assert crashlog.breadcrumb(page="control", running=False, windows=[])
+        assert not crashlog.breadcrumb(page="control", running=False, windows=[]), (
+            "an unchanged state must not be rewritten")
+        assert crashlog.breadcrumb(page="conns", running=False, windows=[]), (
+            "a CHANGED state must still be written")
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_no_breadcrumb_before_anything_is_armed(isolated):
+    """Same rule as the native file: nothing appears until a hard crash is possible,
+    or a plain `import beantester` leaves a crashes/ folder behind again."""
+    crashlog._arm_wanted[0] = False
+    crashlog._armed[0] = False
+    assert not crashlog.breadcrumb(page="control", running=False, windows=[])
+    assert not os.path.isdir(crashlog.crash_dir()), "crashes/ appeared before arming"
+
+
+def test_a_breadcrumb_that_cannot_be_serialised_is_swallowed(isolated):
+    """The state comes from the UI. A value json cannot write must not take the
+    process down ON THE WAY TO DESCRIBING A CRASH - and must not leave the half
+    written temp file behind either, because a stray .tmp keeps the directory from
+    ever being cleaned up again."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        assert not crashlog.breadcrumb(page=object(), running=False, windows=[])
+        tmp = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME + ".tmp")
+        assert not os.path.exists(tmp), "a failed write left its temp file behind"
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_the_running_gui_actually_leaves_one(isolated):
+    """The wiring, not just the mechanism.
+
+    Everything above proves ``breadcrumb()`` works if somebody calls it. This is
+    the half that rots: the App calls it from ``_tick``, and a tick that stopped
+    doing so would leave every test above green and every real crash unexplained.
+    """
+    from gui_harness import run_gui
+
+    out = run_gui("""
+        import json, os
+        from beantester import crashlog
+        crashlog._arm_wanted[0] = True
+        crashlog.arm_native()
+
+        app.select_page("statistics")     # the page the reported crash happened on
+        app._tick()
+
+        path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+        assert os.path.exists(path), "a tick left no breadcrumb"
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["page"] == "statistics", data
+        assert data["running"] is False, data
+        print("BREADCRUMB_OK", data["page"])
+        crashlog._cleanup_native()
+    """)
+    assert "BREADCRUMB_OK statistics" in out, out
+
+
+def test_a_clean_exit_takes_the_breadcrumb_with_it(isolated):
+    """It describes the state a crash happened IN. No crash, nobody wants it - and
+    the 'a healthy run leaves nothing behind' promise stays true for both files."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    crashlog.breadcrumb(page="stats", running=True, windows=[])
+    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    assert os.path.exists(path)
+
+    crashlog._cleanup_native()
+
+    assert not os.path.exists(path), "the breadcrumb outlived a clean exit"
+    assert not os.path.isdir(crashlog.crash_dir()), "the now-empty crashes dir was left"

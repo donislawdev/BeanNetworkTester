@@ -551,8 +551,12 @@ class BeanCore:
                 # within noise. It also keeps the recycled-PID exposure where it
                 # already was instead of widening it to every packet (see
                 # ``targeting.owner_targeted``). What it gives up is a TCP flow
-                # whose SYN predates the target being set; the resolver adopts that
-                # socket by itself at the next rebuild, within 0.30 s.
+                # whose SYN was judged before anything knew the owner - its later
+                # packets never ask again. That used to mean waiting for the next
+                # rebuild (up to 0.30 s, and for ever if the flow ended first);
+                # since 2026-08-04 the live map PUSHES a new socket into the port
+                # set as its event arrives, so the wait is the width of one
+                # cross-thread hand-off (``ProcessTargeting.note_socket``).
                 if not ((is_syn or not is_tcp) and self._owner_targeted is not None
                         and self._owner_targeted(local_port)):
                     return Decision(False, False, [now], scoped=False)

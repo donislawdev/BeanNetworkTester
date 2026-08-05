@@ -113,6 +113,11 @@ SocketEvent = namedtuple("SocketEvent", "kind pid local_port")
 # its own snapshot was too old, and seed nothing at all.
 _NEVER = float("-inf")
 
+# The System process. Windows pins it to 4 (and the Idle process to 0, which is
+# already filtered as "no pid"), and the SOCKET layer reports it for the kernel's
+# own half of an operation a user process started - see `apply`.
+_SYSTEM_PID = 4
+
 
 class SocketWatcher:
     """A live ``local_port -> pid`` map maintained from socket-layer events."""
@@ -140,8 +145,22 @@ class SocketWatcher:
         self._stopping = threading.Event()
         self._events = 0                 # applied-event counter (tests/diagnostics)
         self._reconciles = 0
+        # Told about every socket this map GAINS, so a consumer can act on the
+        # event instead of discovering it at its own next poll. Injected by
+        # BeanEngine (targeting.note_socket) rather than imported, so this module
+        # keeps knowing nothing about targeting.
+        self._on_socket = None
 
     # -- the map --------------------------------------------------------------- #
+    def on_socket(self, callback):
+        """Be told about each socket this map gains (``None`` detaches).
+
+        One slot, set by the engine when it points targeting at this map. A plain
+        attribute on purpose: the reader is the watcher thread, which reads it once
+        per event, and a rebind is atomic.
+        """
+        self._on_socket = callback
+
     def apply(self, ev):
         """Fold one socket event into the map. Never raises on junk input."""
         port, pid = ev.local_port, ev.pid
@@ -149,6 +168,27 @@ class SocketWatcher:
             return                        # no local port yet, or the idle/System 0
         with self._lock:
             if ev.kind in _ADD:
+                if pid == _SYSTEM_PID and self._ports.get(port, _SYSTEM_PID) != _SYSTEM_PID:
+                    # The System process does not take a port off a user process.
+                    #
+                    # MEASURED 2026-08-05, and it is not an edge case: the SOCKET
+                    # layer delivers a SECOND connect for the same local port
+                    # carrying ProcessId 4, in the middle of a live connection -
+                    #     BIND/pid116724, CONNECT/pid116724, CONNECT/pid4, CLOSE...
+                    # Applied blindly, that hands the port to System, targeting drops
+                    # it at the next rebuild, and the rest of the flow is never
+                    # impaired. It is also where the connection table's "System" rows
+                    # came from. Reproduced by instrumentation in
+                    # `internal_tools/probe_scope_gap.py`, which records every event
+                    # per port; before this, 2-4 of 12 fresh processes lost their
+                    # scope this way in every run.
+                    #
+                    # NO evidence is stamped, deliberately: we did not act, and
+                    # claiming knowledge we did not use would stop the poller's
+                    # snapshot from healing the entry (see reconcile). Same rule the
+                    # unmodelled event kinds already follow.
+                    self._events += 1
+                    return
                 self._ports[port] = pid
                 self._evidence[port] = self.clock()
             elif ev.kind == CLOSE:
@@ -167,6 +207,25 @@ class SocketWatcher:
             # snapshot on the strength of something we did not act on would be
             # claiming knowledge we do not have.
             self._events += 1
+        # OUTSIDE the lock, and after the map is already updated. Three reasons, and
+        # the third is the one that would be expensive to rediscover: a listener must
+        # not be able to delay an event reaching the map, a listener that throws must
+        # not lose one, and holding ``_lock`` across a call into somebody else's code
+        # would make the lock ORDER cyclic - targeting's adoption path holds its own
+        # lock while reading this map (``snapshot``), so a listener called under
+        # ``_lock`` would close the circle into a deadlock between the watcher and
+        # the resolver.
+        #
+        # Guarded HERE and not left to the loop's own crashlog.quiet, even though
+        # that would also catch it: this is somebody else's code running on OUR
+        # thread, so its failure deserves its own name in the crash log rather than
+        # arriving as "socketwatch.apply broke" - and `apply()` keeps its promise of
+        # never raising, whoever calls it.
+        if ev.kind in _ADD:
+            listener = self._on_socket
+            if listener is not None:
+                with crashlog.quiet("socketwatch.listener"):
+                    listener(port, pid)
 
     def reconcile(self, port_pid, collected_at):
         """Merge a socket-table snapshot in (bootstrap + safety net).

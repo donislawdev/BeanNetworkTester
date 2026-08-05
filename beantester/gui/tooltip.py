@@ -20,17 +20,36 @@ from .. import crashlog
 _BUBBLES = {}          # toplevel name -> (window, label)
 
 
+def _alive(entry):
+    """True when this cache entry's window still exists. Never raises."""
+    if entry is None:
+        return False
+    try:
+        return bool(entry[0].winfo_exists())
+    except Exception as _exc:
+        crashlog.note(_exc, "gui.tooltip")
+        return False
+
+
 def _bubble_for(widget):
-    """The shared (hidden) bubble window of this widget's toplevel."""
+    """The shared (hidden) bubble window of this widget's toplevel.
+
+    CREATES one when there is none. Only the SHOW path may call this - see
+    ``_hide_bubble`` for why hiding must not.
+    """
     root = widget.winfo_toplevel()
     key = str(root)
     entry = _BUBBLES.get(key)
-    if entry is not None:
-        try:
-            if entry[0].winfo_exists():
-                return entry
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.tooltip")
+    if _alive(entry):
+        return entry
+    # Drop the windows that have died since the last time we built one. The cache
+    # is keyed by toplevel NAME and Tk does not reuse names within a session, so
+    # without this every window ever opened leaves an entry behind holding a dead
+    # Toplevel and Label. MEASURED 2026-08-05 on real Tk: 25 open/close cycles left
+    # 25 entries, all of them dead. Small, but it is unbounded, and it costs one
+    # pass per bubble CREATION - which happens once per window, not per hover.
+    for dead in [k for k, e in _BUBBLES.items() if not _alive(e)]:
+        del _BUBBLES[dead]
     window = tk.Toplevel(root)
     try:
         window.withdraw()                    # never mapped while it has no text
@@ -99,9 +118,35 @@ def _show_bubble(widget, text, x_root, y_root, height=0):
 
 
 def _hide_bubble(widget):
+    """Withdraw this widget's bubble if there is one. NEVER creates a window.
+
+    It used to go through ``_bubble_for``, which BUILDS a Toplevel when the cached
+    one is gone - and one of the things that calls this is the ``<Destroy>``
+    binding in :class:`Tooltip`. Creating a widget while Tk is running its destroy
+    cascade is not safe, and there is no reason to: hiding something that no longer
+    exists is already done.
+
+    REPRODUCED on real Tk, 2026-08-05, because "widget creation during teardown is
+    unsafe" is a claim like any other. Destroying a window with its bubble showing
+    creates nothing - the bubble is still alive when the widget's <Destroy> fires.
+    Destroy the BUBBLE first and then the window, and a fresh Toplevel is built
+    inside the cascade, every time. That ordering needs no special setup: the
+    bubble is a child of the toplevel it belongs to, so any teardown that reaches
+    it first gets there.
+
+    Not proven to be the cause of anything. It is an unsafe operation on a path
+    that runs during teardown, removed because it has no reason to exist.
+    """
     try:
-        window, _ = _bubble_for(widget)
-        window.withdraw()
+        entry = _BUBBLES.get(str(widget.winfo_toplevel()))
+    except Exception as _exc:
+        # winfo_toplevel() on a widget Tk has already taken apart
+        crashlog.note(_exc, "gui.tooltip")
+        return
+    if not _alive(entry):
+        return
+    try:
+        entry[0].withdraw()
     except Exception as _exc:
         crashlog.note(_exc, "gui.tooltip")
 

@@ -493,6 +493,117 @@ def test_the_socket_watcher_survives_start_stop_cycles():
         restore()
 
 
+def test_the_live_map_pushes_into_targeting_while_the_resolver_rebuilds():
+    """The stability pass for the push path (convention: a new primitive gets one).
+
+    ``note_socket`` runs on the WATCHER thread, ``refresh``/``adopt_new_pids`` on
+    the resolver's, and ``__contains__`` on the capture thread - three threads on
+    one object, two of them writing. The dangerous outcomes are not "an assertion
+    fails" but the quiet ones, so this looks for those:
+
+    * a port announced for a targeted process is LOST because a rebuild that
+      started earlier published a set computed without it (the same class of bug
+      the socket map's evidence rule exists for),
+    * a set that grows without bound - the pending queue is fed by every socket
+      event on the machine, and the ruled-out cache by every process that is not
+      the target,
+    * a deadlock between the two locks, or an exception on any of the threads.
+
+    Short and deliberately brutal: no sleeps in the writers, so they interleave as
+    hard as the GIL allows.
+    """
+    from beantester.targeting import ProcessTargeting
+
+    class _Table:
+        """Every pid is chrome, so anything announced SHOULD end up in scope."""
+
+        def __init__(self):
+            self.ports = {}
+            self.lock = threading.Lock()
+
+        def refresh(self, now=None, force=False):
+            return True
+
+        def snapshot(self):
+            with self.lock:
+                return dict(self.ports)
+
+        def name_of(self, pid, cheap=False):
+            return "chrome.exe"
+
+        def ancestors(self, pid, depth=8):
+            return []
+
+        def pid_for(self, port):
+            with self.lock:
+                return self.ports.get(port)
+
+    table = _Table()
+    targeting = ProcessTargeting(parse_matcher("chrome", KIND_PROCESS), table=table)
+    stop = threading.Event()
+    problems, announced = [], []
+
+    def watcher():                       # the live map, announcing new sockets
+        port = 20000
+        while not stop.is_set():
+            port += 1
+            pid = 1000 + (port % 7)
+            with table.lock:
+                table.ports[port] = pid
+            try:
+                targeting.note_socket(port, pid)
+                announced.append(port)
+            except Exception as exc:     # pragma: no cover - the bug
+                problems.append(f"note_socket: {type(exc).__name__}: {exc}")
+                return
+
+    def resolver():                      # the rebuild, and the adoption path
+        while not stop.is_set():
+            try:
+                targeting.adopt_new_pids()
+                targeting.refresh()
+            except Exception as exc:     # pragma: no cover - the bug
+                problems.append(f"resolver: {type(exc).__name__}: {exc}")
+                return
+
+    def reader():                        # the packet path
+        while not stop.is_set():
+            try:
+                19999 in targeting
+            except Exception as exc:     # pragma: no cover - the bug
+                problems.append(f"reader: {type(exc).__name__}: {exc}")
+                return
+
+    threads = [threading.Thread(target=fn, daemon=True)
+               for fn in (watcher, resolver, reader)]
+    for thread in threads:
+        thread.start()
+    time.sleep(STRESS_SECONDS)
+    stop.set()
+    for thread in threads:
+        thread.join(timeout=10)
+    check("no thread was left running", not [t for t in threads if t.is_alive()])
+    check("nothing raised on any of the three threads", not problems, f"({problems[:3]})")
+    check("the run was conclusive (sockets really were announced)",
+          len(announced) > 200, f"({len(announced)} announced)")
+
+    # The last announced port must be in scope: it belongs to a matching process and
+    # nothing has closed it. This is the "an older rebuild ate a newer event" check.
+    targeting.adopt_new_pids()
+    targeting.refresh()
+    check("a port announced during the storm is in scope", announced[-1] in targeting,
+          f"(port {announced[-1]})")
+    # Bounds. Both are cleared by every rebuild, so after one they must be empty,
+    # and the pending queue may never exceed its ceiling whatever happens.
+    check("the pending queue stayed inside its ceiling",
+          len(targeting._pending_pids) <= targeting.MAX_PENDING_PIDS,
+          f"({len(targeting._pending_pids)})")
+    check("a rebuild clears the ruled-out cache", not targeting._not_ours,
+          f"({len(targeting._not_ours)})")
+    check("...and the late-port list", not targeting._late_owners,
+          f"({len(targeting._late_owners)})")
+
+
 def test_the_capture_thread_reads_the_live_socket_map_under_churn():
     """The connection log resolves the owning pid from the live SOCKET map, and it
     does so ON THE CAPTURE THREAD, without a lock, while the watcher thread mutates

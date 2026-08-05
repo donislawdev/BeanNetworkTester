@@ -24,6 +24,7 @@ from . import crashlog
 from .engine import BeanEngine
 from .fields import BOOL, FIELD_DEFS
 from .filters import CLI_FILTERS
+from .i18n import T
 from .paths import is_frozen
 from .presets import PRESETS, preset_to_settings, resolve_preset
 from .repro import save_repro_report, settings_to_cli_string
@@ -603,7 +604,14 @@ def _run_session(args, cfg, log, sleep, clock, engine):
         _fail(exitcodes.RUNTIME,
               "pydivert is missing. Install it:  pip install pydivert  (or use --simulate)")
     except Exception as e:
-        _fail(exitcodes.RUNTIME, f"cannot start the capture: {e}")
+        # Same advice the window gives, from the same table (driver.py), because a
+        # driver that will not open is not a GUI problem - and the console used to
+        # print the raw Win32 error with nothing to do about it. Elevation is known
+        # here for certain: a non-elevated run never reaches this line (it fails
+        # above with PERMISSION), so the hint can only be about the driver itself.
+        hint = driver.open_failure_hint(e, elevated=True)
+        _fail(exitcodes.RUNTIME, f"cannot start the capture: {e}"
+              + (f"\n{T(hint)}" if hint else ""))
 
     # Asked for and got it, or asked for and did NOT: both have to be said. A user
     # who turned this on wanted the throughput, and silently falling back to the
@@ -869,6 +877,19 @@ def _run_gui(argv):
             return exitcodes.OK               # the elevated copy took over
     if is_frozen():
         winenv.detach_console()               # no black window behind the GUI
+    # Arm hard-crash capture for the GUI too, not only for a real capture session
+    # (engine.start does that). A Tk process can die at the C level without any
+    # Python frame - measured: an access violation inside `tkinter mainloop` with
+    # nothing above it - and until this line such a crash was recorded NOWHERE
+    # unless the same process happened to have started a session earlier. See
+    # crashlog.arm_native for what this costs.
+    #
+    # BEFORE the import, not after: importing Tk is itself a native surface, and a
+    # machine without tkinter simply exits cleanly below, at which point the atexit
+    # `_cleanup_native` removes the empty file and the directory again. Arming after
+    # the import would also make the guard for this line untestable anywhere Tk is
+    # missing, i.e. green here and vacuous on the Linux runner.
+    crashlog.arm_native()
     try:
         import tkinter as tk
 

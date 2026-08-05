@@ -48,6 +48,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
+- **The buffer help sheet no longer promises more lag than the buffer can give.** It told you to
+  enter how many ms of lag you want, which is right for a small buffer and optimistic for a large
+  one: the number is the most the queue can add, and one small download may never fill it.
+  Measured against a real link, 2000 ms gives a single ordinary download about a quarter of that,
+  and several downloads at once nearly all of it. The sheet now says so in one added line.
 - **`--help` reads like ordinary writing.** Six flags described themselves with a semicolon
   joining two halves of a sentence: `--preset`, `--filter`, `--buffer`, `--dst-ip`, `--block-ip`
   and `--block-port`. They now use a full stop or a comma, like the rest of the program's text.
@@ -59,6 +64,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The "process" column now says when its answer was taken.** The name is read once, when the
+  connection first shows up, and never again - which is why a row can still name a program that
+  has since closed. The tooltip said none of that, so a name that outlived its program looked
+  like a mistake.
+
+- **Two unsafe things the window did while closing.** A tooltip could build a new, invisible
+  window at the exact moment its own window was being taken apart, and the tool kept a reference
+  to every tooltip window it had ever made, including the closed ones. Neither has been shown to
+  cause the crash they were found while looking for - both are simply wrong, and both are gone.
+
+- **A crash of the window itself used to leave nothing behind.** Some crashes happen below
+  Python, and the file that catches those was only switched on once a capture started - so the
+  window could die with nothing running and leave no record anywhere. It is switched on when the
+  window opens now, and beside it the tool keeps a short note of what it was doing: which tab was
+  open, whether a session was running, which extra windows. A normal exit still removes both.
+
+- **A connection could be handed to "System" in the middle of its life.** Windows announces some
+  connections twice - once for the program that opened it, once for the system itself - and the
+  tool believed the second one. From that moment the connection belonged to "System": it stopped
+  being impaired even though your target opened it, and that is the name the Connections tab
+  showed for it. It happened to two to four connections out of every twelve here.
+- **Short connections of the process you target are no longer missed.** A browser opens a new
+  connection for almost every page, often from a brand new process, and many of them are over in
+  well under a second. The tool used to notice them a fraction too late, so the shortest ones
+  finished untouched - listed with the right process name and "impaired? no" beside it. It now
+  learns each new connection the moment it appears. Measured with 12 fresh processes opening one
+  short connection each: 4 escaped before, 1 out of 96 after.
+- **Closing one copy of the tool no longer breaks the one that is still running.** The WinDivert
+  driver is shared by the whole machine, and the copy that closed was unloading it out from under
+  the copy that was working - which is why a second window could not start any more, and said
+  "run as Administrator" while doing it. Whoever leaves last now does the unloading, and a copy
+  that leaves early says so in its log. The driver still gets unloaded, so the program's folder
+  can still be deleted afterwards.
+- **A start that arrives a moment too early now waits instead of failing.** If another program
+  using WinDivert is still shutting the driver down, START waits up to half a second for it
+  rather than reporting an error you would fix by trying again.
+- **`--doctor` no longer calls a machine healthy while nothing can start.** A driver caught
+  mid-unload was reported as fine - the one state in which every start fails. It is now a warning
+  that says what it means and what to wait for.
+- **A failed START now tells you what actually went wrong.** Whatever the reason, the window said
+  "Run as Administrator" - including to people who already were. The commonest case is not about
+  rights at all: close one copy of the tool while another still runs, and Windows reports that the
+  device does not exist, because the shared driver is still shutting down. That case now says so,
+  and says to try again in a few seconds. A rejected traffic filter, a missing driver file and a
+  blocked driver each get their own sentence too.
 - **The licence notices now point at the files that are actually there.** The instructions for
   replacing WinDivert with your own build named `WinDivert.dll` in `_internal\pydivert\`; the
   program ships `WinDivert64.dll` in `_internal\pydivert\windivert_dll\`. Replacing the library

@@ -126,6 +126,21 @@ def show_warning(parent, title, message):
                     [("buttons.ok", True, "Accent.TButton")], default=True)
 
 
+def start_failure_message(err, elevated):
+    """What the start-failed dialog says: the error, plus advice that FITS it.
+
+    Here rather than in ``App`` because it is dialog CONTENT, and because the
+    advice comes from a table the command line reads too (``driver.py``) - the
+    window and the console must not grow two opinions about the same Win32 error.
+    The elevation hint is one entry in that table, not the answer to everything:
+    it used to be appended to every failure, including to a window that was
+    already elevated (WinError 433, which is about the driver, not about rights).
+    """
+    from ..driver import open_failure_hint
+    key = open_failure_hint(err, elevated)
+    return f"{err}\n\n{T(key)}" if key else str(err)
+
+
 def show_error(parent, title, message):
     return _message(parent, title, message, WARN,
                     [("buttons.ok", True, "Accent.TButton")], default=True)

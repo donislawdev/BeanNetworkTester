@@ -108,6 +108,43 @@ def test_engine_bootstraps_and_runs_the_watcher_from_an_injected_source():
     check("and stopped its thread", not w.is_running())
 
 
+def test_the_event_source_is_open_before_the_bootstrap_snapshot_is_taken():
+    """Subscribe, THEN snapshot - the other order has a hole a socket falls into.
+
+    A socket created between the snapshot being collected and the source being
+    opened is in neither: the snapshot predates it, and no event announced it. It
+    then stays unknown to the live map until a later reconcile, and a short-lived
+    connection is over by then. REPRODUCED 2026-08-04 against the real driver by
+    opening a connection inside that window: never in scope for its whole life,
+    while the connection table still named an owner for it.
+
+    The order is what closes it, so the order is what this pins: the snapshot is
+    collected only once the source is already delivering.
+    """
+    order = []
+
+    class _WatchingPorts(_FakePorts):
+        def collected(self):
+            order.append("snapshot")
+            return super().collected()
+
+    def factory():
+        # the FACTORY, not __iter__: opening the source happens synchronously
+        # inside watcher.start(), while __iter__ runs on the watcher thread and
+        # would race the assertion instead of ordering it
+        order.append("subscribed")
+        return _FakeSocketSource([])
+
+    eng = BeanEngine()
+    eng._ports = _WatchingPorts({80: 1})
+    eng.start("true", divert=FakeDivert([]), socket_source=factory)
+    try:
+        check("the source was subscribed before the snapshot was collected",
+              order[:2] == ["subscribed", "snapshot"], f"({order})")
+    finally:
+        eng.stop()
+
+
 def test_synthetic_path_starts_no_watcher_and_falls_back_to_the_poller():
     """A fake/synthetic divert has no SOCKET layer to open, so the engine keeps
     the poller - the testable-without-WinDivert contract."""
@@ -276,6 +313,34 @@ def test_a_fresh_socket_stamps_the_connection_row_from_the_live_map():
               row["proc"] == "chrome.exe", f"({row})")
     finally:
         eng.stop()
+
+
+def test_a_second_session_gets_a_fresh_watcher_wired_to_the_target():
+    """Sessions are started and stopped repeatedly, and each one builds a NEW
+    watcher - so the wiring has to be redone, not inherited.
+
+    The failure this pins is silent: the second session would run with a live map
+    that tells nobody, so every new socket would wait for a rebuild again and the
+    behaviour would quietly be the pre-2026-08 one, only for people who pressed
+    STOP once.
+    """
+    import bean_network_tester as bnt
+
+    eng = BeanEngine()
+    eng._ports = _FakePorts({})
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)
+
+    first = None
+    for session in range(2):
+        eng.start("true", divert=FakeDivert([]), socket_source=_FakeSocketSource([]))
+        watcher = eng._socketwatch
+        check(f"session {session}: the map is wired to the target",
+              watcher is not None and watcher._on_socket == targeting.note_socket)
+        if session == 0:
+            first = watcher
+        eng.stop()
+    check("each session really got its own watcher", first is not eng._socketwatch)
 
 
 def test_stopping_the_engine_leaves_no_watcher_thread_behind():

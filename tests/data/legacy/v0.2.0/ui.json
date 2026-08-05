@@ -1,0 +1,17 @@
+{
+  "geometry": "1200x800+40+40",
+  "page": "statistics",
+  "stats_page": "live",
+  "language": "pl",
+  "collapsed": [],
+  "log_height": 0,
+  "conn_sort": [
+    "packets",
+    true
+  ],
+  "event_sort": {
+    "col": "t",
+    "reverse": false
+  },
+  "profile": ""
+}

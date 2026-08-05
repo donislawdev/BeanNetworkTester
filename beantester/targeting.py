@@ -21,6 +21,14 @@ So targeting is a live object instead:
   which also owns the pacing - this class holds no timing knobs of its own,
 * an **unknown port asks for an early rebuild**, which shrinks the "new socket
   slips through" window from seconds to tens of milliseconds,
+* since 2026-08-04 the live socket map does not wait to be asked at all: it
+  **pushes** each new socket in (``note_socket``), so a new connection of a
+  process already targeted is in scope from its event, and a process nobody has
+  judged yet is resolved by itself (``adopt_new_pids``) instead of at the next
+  tick. MEASURED against the real driver, 12 fresh processes each opening one
+  short connection: **4 of 12 were never in scope at all** before this, 1 of 96
+  after (the residual that remained once the System-event bug below was found and
+  fixed - see ``socketwatch.apply``),
 * a socket belongs to the target when its owning process **or any of its
   ancestors** matches the expression - so a PID (or a name) covers the whole
   process tree. An explicitly EXCLUDED process (``!chromedriver``) is never
@@ -91,10 +99,29 @@ class ProcessTargeting:
         self.table = table if table is not None else portmap.default_table()
         self.clock = clock
         self._lock = threading.RLock()
+        # A SECOND, deliberately tiny lock, held for microseconds and never across
+        # anything that can block. `_lock` is held by refresh() for the whole walk
+        # of the socket table (milliseconds), and the WATCHER thread must never
+        # queue behind that: it is the thread that has to apply a SOCKET event
+        # before the SYN it precedes by ~0.02 ms.
+        self._ports_lock = threading.Lock()
         self._ports = frozenset()
         self._names = ()
         self._pids = frozenset()
         self._refreshes = 0
+        # ``{port: pid}`` for every socket the live map handed us since the last
+        # publish. Kept so a refresh that started BEFORE such an event cannot publish
+        # a set computed without it - the same "an older snapshot must not undo a
+        # newer event" rule the socket map itself lives by, one layer up. The OWNER
+        # travels with the port because the rebuild has to be able to ask "is this
+        # still ours?", and the answer belongs to the event, not to whatever the
+        # table happens to say a moment later.
+        self._late_owners = {}
+        # pids the live map has seen that we have not judged yet, and the ones we
+        # have judged as not ours. Both are cleared at every full rebuild, so
+        # neither can grow beyond the churn of one refresh interval.
+        self._pending_pids = frozenset()
+        self._not_ours = frozenset()
         # Set by the packet path when it is asked about a port it does not know;
         # cleared by the resolver before each rebuild. A plain bool on purpose -
         # reads and writes are atomic under the GIL, so the hot path pays nothing.
@@ -108,6 +135,23 @@ class ProcessTargeting:
     def _excluded(self, pid, name):
         excluded = getattr(self.matcher, "excluded", None)
         return bool(excluded(pid, name)) if excluded else False
+
+    def _pid_matches(self, pid, name):
+        """Does this pid belong to the target - itself, or through its tree?
+
+        THE rule, in one place. It used to be inline in ``refresh``'s loop, and
+        ``adopt_new_pids`` needs exactly the same answer: two copies of "what counts
+        as the target" would drift at the first edit, and the drift would be silent
+        (one path would impair a process the other does not).
+        """
+        if self._matches(pid, name):
+            return True
+        if self._excluded(pid, name):
+            return False          # an explicit "!" wins over an inherited match
+        for ancestor_pid, ancestor_name in self.table.ancestors(pid):
+            if self._matches(ancestor_pid, ancestor_name):
+                return True
+        return False
 
     def refresh(self, now=None, force=True):
         """Rebuild the port set from the current socket table."""
@@ -124,23 +168,136 @@ class ProcessTargeting:
                 # not the ~2 s psutil.process_iter that used to make the first
                 # target-start crawl (see portmap._process_table).
                 name = self.table.name_of(pid)
-                if self._matches(pid, name):
+                if self._pid_matches(pid, name):
                     pids.add(pid)
                     names.add(name or str(pid))
-                    continue
-                if self._excluded(pid, name):
-                    continue      # an explicit "!" wins over an inherited match
-                for ancestor_pid, ancestor_name in self.table.ancestors(pid):
-                    if self._matches(ancestor_pid, ancestor_name):
-                        pids.add(pid)
-                        names.add(name or str(pid))
-                        break
-            self._pids = frozenset(pids)
-            self._ports = frozenset(port for port, pid in port_pid.items()
-                                    if pid in pids)
+            resolved = frozenset(port for port, pid in port_pid.items() if pid in pids)
+            with self._ports_lock:
+                # A late port is rescued only if the owner its EVENT named still
+                # matches. Merging them blindly kept a port whose pid this very walk
+                # had just dropped, so a recycled pid stayed in scope for two
+                # rebuilds instead of one - silently doubling the exposure this class
+                # documents as "until the next rebuild".
+                #
+                # INSIDE the lock, and that is not tidiness either: the watcher
+                # thread writes this dict, so reading it outside was a
+                # "dictionary changed size during iteration" waiting for a busy
+                # machine. Caught by test_concurrency_chaos.py::
+                # test_the_live_map_pushes_into_targeting_while_the_resolver_rebuilds
+                # within seconds - it is a dict of the churn of one interval, so the
+                # comprehension is short and the lock stays a microsecond affair.
+                late = frozenset(port for port, owner in self._late_owners.items()
+                                 if owner in pids)
+                # REPLACED, never unioned: a pid that no longer matches has to fall
+                # out here, and that is the whole bound on the recycled-pid window
+                # (test_targeting_socketwatch.py::
+                #  test_a_recycled_pid_is_in_scope_until_the_next_rebuild_and_no_longer).
+                self._pids = frozenset(pids)
+                # ...but a port the live map handed us WHILE this walk was running is
+                # newer than the walk, so it survives it - if it is still ours (see
+                # `late` above). Cleared afterwards: it is part of _ports now, and the
+                # next snapshot judges it like any other.
+                self._ports = resolved | late
+                self._late_owners = {}
+                self._pending_pids = frozenset()
+                self._not_ours = frozenset()
             self._names = tuple(sorted(n for n in names if n))
             self._refreshes += 1
             return self._ports
+
+    # -- what the live socket map tells us, as it happens ---------------------- #
+    # A ceiling on the queue below, because it is fed by every socket event on the
+    # machine and a burst of new processes must not turn into an unbounded queue of
+    # OS lookups. Whatever spills is picked up by the routine rebuild, which is
+    # where all of this lived before.
+    MAX_PENDING_PIDS = 256
+
+    def note_socket(self, port, pid):
+        """A socket-layer ADD event: one new socket, its owner, right now.
+
+        THE WATCHER THREAD CALLS THIS, once per socket event on the machine. It
+        must not block, must not touch the OS and must not raise - it sits between
+        the driver and the map that the packet path reads.
+
+        Two cases, and they are different problems:
+
+        * **a process we already target opens a socket.** Its port goes into scope
+          immediately instead of at the next rebuild. ``owner_targeted`` already
+          covers the SYN of such a flow, but only if the event beat the SYN by the
+          0.02 ms it usually has - and when it loses that race NOTHING asks again,
+          because ordinary TCP data deliberately never consults the live map
+          (``BeanCore.decide`` step 1). So the flow used to stay unimpaired until a
+          rebuild, up to 0.30 s later, which for a browser's short-lived connection
+          means for ever. This is the path that closes that.
+        * **a pid we have never judged.** Deciding needs a name lookup and the
+          matcher, which is OS work and cannot happen here. The pid is queued and
+          the resolver is woken; see ``adopt_new_pids``. MEASURED 2026-08-04 on why
+          this matters: 12 fresh processes each opening one short connection, target
+          by name, **4 of 12 were never in scope at all** - the process appeared and
+          finished between two rebuilds.
+        """
+        if pid in self._pids:
+            with self._ports_lock:
+                if port not in self._ports:
+                    self._ports = self._ports | {port}
+                self._late_owners[port] = pid
+            return
+        if pid in self._not_ours or pid in self._pending_pids:
+            return
+        with self._ports_lock:
+            if len(self._pending_pids) < self.MAX_PENDING_PIDS:
+                self._pending_pids = self._pending_pids | {pid}
+        wake = self._on_miss
+        if wake is not None:
+            wake()
+
+    def adopt_new_pids(self):
+        """Judge the pids the live map has just seen. RESOLVER THREAD. Returns
+        whether anything was adopted.
+
+        One name lookup and one matcher run per NEW pid - not a walk of the whole
+        socket table, which is what a full ``refresh`` costs and what the miss floor
+        exists to rate-limit. That is the point: a brand-new process can be adopted
+        in the milliseconds after its first socket event instead of waiting for the
+        next tick, without making the tick itself any cheaper to trigger.
+        """
+        with self._ports_lock:
+            pending, self._pending_pids = self._pending_pids, frozenset()
+        if not pending:
+            return False
+        with self._lock:              # serialise with refresh(): same table reads
+            matched, names, judged = set(), set(), set()
+            for pid in pending:
+                name = self.table.name_of(pid)
+                if self._pid_matches(pid, name):
+                    matched.add(pid)
+                    names.add(name or str(pid))
+                elif name:
+                    judged.add(pid)
+                # An EMPTY name is "I could not tell", not "not ours", and the two
+                # must not share an answer (the same distinction driver.py draws
+                # between NO_ACCESS and "not installed"). A process that has just
+                # started does not always resolve on the first ask, and caching that
+                # as a refusal would ignore every later socket it opens until the
+                # next full rebuild - which is the exact window this path exists to
+                # close. Left unjudged, it is asked again at its next socket.
+            if not matched:
+                with self._ports_lock:
+                    self._not_ours = self._not_ours | judged
+                return False
+            # Their ports, from the live map - including sockets this pid opened
+            # while we were deciding.
+            owners = {port: owner for port, owner in self.table.snapshot().items()
+                      if owner in matched}
+            ports = frozenset(owners)
+            with self._ports_lock:
+                self._pids = self._pids | matched
+                self._ports = self._ports | ports
+                for port in ports:
+                    self._late_owners[port] = owners[port]
+                self._not_ours = self._not_ours | judged
+            self._names = tuple(sorted(set(self._names) | names))
+        return True
 
     def set_table(self, table):
         """Swap the socket table this resolves against (poller <-> live watcher).
@@ -189,7 +346,10 @@ class ProcessTargeting:
         (name, PID, list, range, ``!`` exclusion, ancestor match) is already
         resolved into it. This does not re-run the matcher.
 
-        Two limits, both deliberate, both measured rather than assumed:
+        Two limits, both deliberate, both measured rather than assumed. The FIRST
+        of them is what ``note_socket``/``adopt_new_pids`` were added for in
+        2026-08: they do not make this function cleverer, they make ``_pids``
+        (and ``_ports``) arrive sooner, which is where both limits come from.
 
         * ``_pids`` is rebuilt from the pids owning CURRENTLY OPEN sockets, so a
           target that has none when a rebuild runs drops out of it and its next
@@ -214,13 +374,31 @@ class ProcessTargeting:
           probe, targeting the pid, killed and restarted: **5 of 5** fresh
           connections untouched.
 
-          Closing the one-connection gap is not a tuning question. The SOCKET
-          event beats the SYN by 0.018-0.027 ms; covering a brand-new process
-          would mean resolving pid -> name and running the matcher inside that
-          window, and a COLD name resolve is milliseconds. Moving it to the
-          watcher thread does not help - the window is the same. The only design
-          that closes it holds the SYN until the answer is in, i.e. adds delay
-          inside a tool whose job is to inject a PRECISE amount of it.
+          Closing the one-connection gap for the FIRST PACKET is not a tuning
+          question, and that has not changed. The SOCKET event beats the SYN by
+          0.018-0.027 ms; deciding a brand-new pid inside that window means a
+          name resolve and the matcher, and a COLD name resolve is milliseconds.
+          Moving it to the watcher thread does not help - the window is the same.
+          The only design that closes it holds the SYN until the answer is in,
+          i.e. adds delay inside a tool whose job is to inject a PRECISE amount
+          of it.
+
+          What DID change (2026-08-04) is everything after that first packet.
+          The answer used to arrive at the next rebuild, so a connection that
+          finished sooner was never impaired at all; ``adopt_new_pids`` now
+          resolves the new pid off the event, in the milliseconds after it.
+          MEASURED with fresh processes each opening ONE short connection
+          (0.15 s): **4 of 12 were never in scope** before, and **1 of 96 across
+          eight runs** after.
+
+          Getting from "2 of 82" to that took finding a second, older bug, and
+          the instrumentation is what found it: recording when the live map
+          announced each socket, when its port entered scope AND WHEN IT LEFT
+          showed ports falling out of scope 15-32 ms into a 240 ms connection.
+          The cause was not here at all - the SOCKET layer hands the same port a
+          second CONNECT carrying ProcessId 4, and the map applied it (see
+          ``socketwatch.apply``). The rig lives in
+          ``internal_tools/probe_scope_gap.py``.
         * ``_pids`` goes stale when the target exits, and until the next rebuild a
           socket Windows hands that pid number is treated as the target's.
           **MEASURED against the real socket table 2026-07-28** (seven rounds per

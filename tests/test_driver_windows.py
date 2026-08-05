@@ -39,9 +39,16 @@ def test_advapi_declares_pointer_sized_prototypes():
                  "ControlService", "DeleteService", "CloseServiceHandle"):
         fn = getattr(lib, name)
         check(f"{name} declares argtypes", fn.argtypes is not None)
-        check(f"{name} declares a restype", fn.restype is not None)
+    # There used to be a `fn.restype is not None` beside that line, and it could
+    # NEVER fail: ctypes defaults restype to c_long, and on Windows
+    # `c_long is c_int is wintypes.BOOL`, so a truncated handle and a correctly
+    # declared BOOL are the same object. Half of this test's headline property was
+    # therefore unguarded from the day the access violation was fixed. The width of
+    # a result is checkable, and that is what the two lines below do; the general
+    # form of the rule now lives in tests/test_native_prototypes.py.
     check("handle-returning calls return a pointer-sized HANDLE",
           lib.OpenSCManagerW.restype is handle)
+    check("...and so does the other one", lib.OpenServiceW.restype is handle)
 
 
 def test_reading_a_service_state_asks_only_for_the_right_to_read():
@@ -91,6 +98,22 @@ def test_doctor_says_it_could_not_look_rather_than_not_loaded(monkeypatch):
           "would not report" in row[2], f"({row})")
 
 
+def test_doctor_does_not_call_a_machine_healthy_while_nothing_can_start(monkeypatch):
+    """"stop pending" was the one state that read as "ok".
+
+    It is also the state in which every WinDivertOpen on the machine fails with 433
+    (measured 2026-08-04), i.e. the exact moment somebody runs --doctor to find out
+    why nothing starts. Reporting "ok" there sent them looking somewhere else.
+    """
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "stop pending"})
+    _, checks = driver.doctor()
+    row = next(c for c in checks if c[0] == "windivert driver")
+    check("doctor: a driver mid-unload is a warning", row[1] == "warn", f"({row})")
+    check("doctor: and it names the failure the user is about to hit",
+          "433" in row[2], f"({row})")
+
+
 def test_doctor_still_calls_a_clean_machine_not_loaded(monkeypatch):
     """The other direction: no driver must not start warning people for nothing."""
     monkeypatch.setattr(driver, "is_windows", lambda: True)
@@ -112,9 +135,18 @@ def test_release_on_exit_never_raises_and_is_a_noop_without_a_driver():
 
 
 def test_release_on_exit_swallows_a_cleanup_fault(monkeypatch):
-    """Even if cleanup blows up, exit must not crash (crashlog.quiet catches it)."""
+    """Even if cleanup blows up, exit must not crash (crashlog.quiet catches it).
+
+    ``_drop_use_marker`` is faked out, and that is not tidiness: it opens a REAL
+    process-wide named mutex, so with any BeanNetworkTester session live anywhere
+    on the machine this test took the stand-down path and never reached the fault
+    it exists to exercise. It failed for that reason on this machine, on a commit
+    that predates the change being tested - a test that reads global state is a
+    test that answers a different question depending on the day.
+    """
     driver._DRIVER_USED[0] = True
     monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
 
     def boom():
         raise RuntimeError("SCM exploded")
@@ -206,10 +238,28 @@ def test_stop_and_remove_stops_then_deletes_and_closes_every_handle(monkeypatch)
 
 def test_stop_and_remove_reports_a_removal_that_would_not_take(monkeypatch):
     fake = _FakeAdvapi(scm=1, service=42, deleted=False)
-    _fake_scm(monkeypatch, fake)
+    _fake_scm(monkeypatch, fake, last_error=1234)
     result = driver.stop_and_remove("WinDivert")
-    check("a service that stops but will not delete says so",
-          "stopped (removal failed" in result, f"({result})")
+    check("a service that stops but will not delete says so, with the code",
+          "stopped (removal failed, Windows error 1234)" in result, f"({result})")
+
+
+def test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure(monkeypatch):
+    """1072 is what a HEALTHY single-instance exit returns.
+
+    WinDivert marks its own service for deletion when it installs it, so ours can
+    only ever come second - MEASURED 2026-08-04: DeleteService returns 1072 three
+    times running while the service goes on to disappear by itself. The line the
+    user sees on every close therefore called a success "removal failed - it may be
+    in use", which is also the sentence they would search for when a start later
+    failed for a completely different reason.
+    """
+    fake = _FakeAdvapi(scm=1, service=42, deleted=False)
+    _fake_scm(monkeypatch, fake, last_error=driver._ERROR_SERVICE_MARKED_FOR_DELETE)
+    result = driver.stop_and_remove("WinDivert")
+    check("an already-scheduled removal reads as the normal path",
+          result == "WinDivert: stopped (removal was already scheduled)", f"({result})")
+    check("and it does not say anything failed", "fail" not in result, f"({result})")
 
 
 def test_stop_and_remove_without_a_manager_asks_for_administrator(monkeypatch):
@@ -253,8 +303,13 @@ def test_stop_and_remove_is_a_noop_off_windows(monkeypatch):
 
 # --- cleanup_driver: the --cleanup-driver / release_on_exit orchestration ----- #
 def test_cleanup_driver_stops_every_installed_service(monkeypatch):
+    """Same real-mutex trap as test_release_on_exit_swallows_a_cleanup_fault: with
+    a session live anywhere on the machine, cleanup prepends its "another instance
+    is using the driver" warning and the per-service assertion fails on a machine
+    state that has nothing to do with the code."""
     monkeypatch.setattr(driver, "is_windows", lambda: True)
     monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: False)
     monkeypatch.setattr(driver, "installed_drivers",
                         lambda: {"WinDivert": "running", "WinDivert1.4": "stopped"})
     visited = []
@@ -296,3 +351,121 @@ def test_cleanup_driver_with_nothing_installed_says_so(monkeypatch):
     lines = driver.cleanup_driver()
     check("nothing installed reports nothing to clean up",
           any("nothing to clean up" in l for l in lines), f"({lines})")
+
+
+# --- the exit path must not stop a driver somebody else is using -------------- #
+def test_the_exit_path_stands_down_when_another_instance_is_using_the_driver(monkeypatch):
+    """The bug: our own cleanup broke our own other window.
+
+    The WinDivert service is machine-wide. MEASURED 2026-08-04 (two processes, the
+    filter `false`): with instance A holding a handle, instance B exiting left the
+    service in "stop pending" and every open on the machine failed with 433 until A
+    closed. Standing down costs nothing - A's handle keeps the driver loaded, so
+    the stop could not have freed the .sys file anyway.
+    """
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: True)
+    cleaned = []
+    monkeypatch.setattr(driver, "cleanup_driver", lambda: cleaned.append(1) or [])
+    driver.mark_driver_used()
+    lines = driver.release_on_exit()
+    check("the driver is left alone for the other instance", not cleaned, f"({cleaned})")
+    check("...and the log says why, instead of going quiet",
+          any("still using" in line for line in lines), f"({lines})")
+
+
+def test_the_last_instance_out_still_unloads_the_driver(monkeypatch):
+    """The other half, and the one convention 22 is about: nobody else is left, so
+    the .sys file has to be released or the program's own folder stays undeletable."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
+    monkeypatch.setattr(driver, "cleanup_driver", lambda: ["WinDivert: stopped and removed"])
+    driver.mark_driver_used()
+    lines = driver.release_on_exit()
+    check("the last one out unloads the driver",
+          lines == ["WinDivert: stopped and removed"], f"({lines})")
+    check("and the run no longer claims to hold a driver",
+          driver.driver_used() is False)
+
+
+def test_cleanup_driver_warns_before_interrupting_another_instance(monkeypatch):
+    """`--cleanup-driver` is typed on purpose, so it still runs - but the person
+    typing it deserves to know whose session they are about to end."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "running"})
+    monkeypatch.setattr(driver, "stop_and_remove", lambda name: f"{name}: stopped and removed")
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: True)
+    lines = driver.cleanup_driver()
+    check("the warning comes first, before the work it describes",
+          "WARNING" in lines[0], f"({lines})")
+    check("and the cleanup still happens, because it was asked for",
+          any("stopped and removed" in line for line in lines), f"({lines})")
+
+
+def test_the_use_marker_is_a_noop_off_windows(monkeypatch):
+    """Linux CI runs every one of these paths; none of them may reach for ctypes."""
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    driver._USE_MARKER[0] = None
+    driver._take_use_marker()
+    check("nothing is taken off Windows", driver._USE_MARKER[0] is None)
+    check("and nobody is reported as holding it", driver._drop_use_marker() is False)
+    check("...including the read-only question",
+          driver._another_instance_holds_the_driver() is False)
+
+
+# --- open_failure_hint: the advice has to fit the failure --------------------- #
+class _OpenError(OSError):
+    """An OSError carrying a winerror, exactly as pydivert lets one through."""
+
+    def __init__(self, winerror):
+        super().__init__("open failed")
+        self.winerror = winerror
+
+
+def test_a_driver_error_is_never_answered_with_the_elevation_advice(monkeypatch):
+    """433 from an ELEVATED process is the report this exists for.
+
+    A second instance exiting leaves the shared WinDivert service in "stop
+    pending", and every open then fails with 433 until the first handle closes.
+    Answering that with "Run as Administrator" - which is what every start failure
+    used to get - sends the one user who did everything right to check the one
+    thing that was already true.
+    """
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    check("433 explains the driver, not the rights",
+          driver.open_failure_hint(_OpenError(433), elevated=True)
+          == "dialogs.driver_busy")
+    check("the elevation advice is kept for the error that means it",
+          driver.open_failure_hint(_OpenError(5), elevated=True)
+          == "dialogs.run_as_admin")
+    check("a rejected filter points at the filter",
+          driver.open_failure_hint(_OpenError(87), elevated=True)
+          == "dialogs.filter_refused")
+
+
+def test_an_unrecognised_failure_only_suggests_elevation_when_it_could_help():
+    """The fallback is a guess, so it must not be made against the facts."""
+    unknown = _OpenError(1234567)
+    check("elevated: no advice beats false advice",
+          driver.open_failure_hint(unknown, elevated=True) == "")
+    check("not elevated: elevation is worth suggesting",
+          driver.open_failure_hint(unknown, elevated=False) == "dialogs.run_as_admin")
+    check("an exception with no winerror at all is handled",
+          driver.open_failure_hint(RuntimeError("boom"), elevated=True) == "")
+
+
+def test_every_open_failure_hint_is_a_key_both_languages_define():
+    """A hint is an i18n KEY. A key only English defines is a Polish window
+    showing an English sentence, which is what the shared table exists to stop."""
+    import json
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for code in ("en", "pl"):
+        with open(os.path.join(root, "lang", f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        missing = sorted(k for k in driver.OPEN_ERROR_HINTS.values() if k not in texts)
+        check(f"lang/{code}.json defines every open-failure hint", not missing,
+              f"({missing})")

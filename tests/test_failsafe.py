@@ -14,6 +14,7 @@ These tests pin down the three guarantees:
 import time
 
 from beantester.engine import _LIVE_ENGINES, BeanEngine, deadline_reached
+from beantester.i18n import T
 from fakes import FakePacket, check
 from gui_harness import run_gui
 
@@ -239,8 +240,9 @@ def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
     Both callers already knew what to do and neither could ever be reached:
     ``cli._run_session`` wraps start() to report "cannot start the capture: {e}"
     with exit RUNTIME, and the GUI's ``_finish_start`` shows the start-failed
-    dialog WITH the "run as Administrator" hint - precisely what a non-elevated
-    user needs and never saw.
+    dialog with advice - which a non-elevated user needed and never saw. Which
+    advice that is now depends on the error (see the test below): it used to be
+    "run as Administrator" for every one of them.
     """
     divert = UnopenableDivert()
     engine = BeanEngine()
@@ -267,6 +269,118 @@ def test_a_divert_that_cannot_open_fails_the_start_instead_of_faulting_later():
     check("a later START is not refused", engine.is_running() is True)
     engine.stop()
     check("and the recovered session releases its divert", recover.closed is True)
+
+
+class _UnloadingDivert:
+    """A divert that answers 433 for its first ``fails`` opens, like a driver that
+    another program is still unloading."""
+
+    def __init__(self, fails):
+        self.fails = fails
+        self.opens = 0
+        self.closed = False
+
+    def open(self):
+        self.opens += 1
+        if self.opens <= self.fails:
+            error = OSError("[WinError 433] The specified device does not exist.")
+            error.winerror = 433
+            raise error
+
+    def recv(self):
+        time.sleep(0.01)
+        raise RuntimeError("stopped")
+
+    def send(self, *_a, **_k):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+def test_a_driver_that_is_still_unloading_is_waited_for_not_reported(monkeypatch):
+    """A start that arrived 100 ms early should wait, not fail.
+
+    433 means the WinDivert service is mid-unload, which finishes as soon as the
+    last program using it lets go. Our own instances no longer do that to each
+    other (driver.release_on_exit stands down), but another WinDivert program can,
+    and that case is over in milliseconds.
+    """
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    lines = []
+    engine = BeanEngine(log_fn=lines.append)
+    divert = _UnloadingDivert(fails=2)
+    engine.start("test", divert=divert)
+    check("the start survives a driver that was still unloading",
+          engine.is_running() is True)
+    check("it took exactly the retries it needed", divert.opens == 3, f"({divert.opens})")
+    check("and the pause is explained in the log, not silent",
+          any(T("log.driver_still_unloading") == line for line in lines), f"({lines})")
+    engine.stop()
+
+
+def test_a_driver_that_never_comes_back_still_fails_instead_of_hanging(monkeypatch):
+    """The retry is a courtesy, not a loop: a session blocked by somebody else's
+    RUNNING session lasts as long as that session, and the window must say so."""
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    engine = BeanEngine()
+    divert = _UnloadingDivert(fails=99)
+    raised = None
+    try:
+        engine.start("test", divert=divert)
+    except Exception as exc:
+        raised = exc
+    check("the start gives up", raised is not None)
+    check("with the REAL error, which is what the dialog explains",
+          getattr(raised, "winerror", None) == 433, f"({raised!r})")
+    check("after a bounded number of tries", divert.opens == 3, f"({divert.opens})")
+    check("and nothing is left running", engine.is_running() is False)
+
+
+def test_the_start_failure_advice_fits_the_failure_not_every_failure():
+    """Reported from an ELEVATED window: "[WinError 433] ... Run as Administrator."
+
+    433 is not a rights problem. It is what a SECOND instance leaves behind when it
+    exits: its cleanup stops the shared WinDivert service, the service sits in "stop
+    pending" while the first instance still holds a handle, and every open until
+    then fails this way (measured 2026-08-04). The dialog appended the elevation
+    sentence to every failure, so the one user who had already done the right thing
+    was sent to do it again.
+
+    Both directions are asserted, because keeping the advice for the error that
+    really means it is half the fix.
+    """
+    run_gui("""
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append(message)
+
+        class OpenFailed(OSError):
+            def __init__(self, code, text):
+                super().__init__(text)
+                self.winerror = code
+                self._text = text
+            def __str__(self):
+                return self._text
+
+        busy = OpenFailed(433, "[WinError 433] The specified device does not exist.")
+        app._is_admin = True
+        app._finish_start(busy)
+        assert shown, "a failed start has to tell the user something"
+        assert "WinError 433" in shown[-1], shown[-1]
+        assert bnt.T("dialogs.driver_busy") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.run_as_admin") not in shown[-1], (
+            "an elevated window was told to run as Administrator: " + shown[-1])
+
+        # the failure that IS about rights keeps the sentence that helps
+        app._is_admin = False
+        app._finish_start(OpenFailed(5, "[WinError 5] Access is denied."))
+        assert bnt.T("dialogs.run_as_admin") in shown[-1], shown[-1]
+
+        # ...and the button comes back either way, or the window is stuck
+        assert app.running is False
+    """)
 
 
 def test_the_start_banner_is_logged_before_a_worker_can_fault():

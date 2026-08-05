@@ -394,7 +394,29 @@ class BeanEngine:
             with self._target_lock:
                 self._targeting = None
             self._resolver.retarget(None)
+        # EVERY branch, including the two that clear the target: a live socket map
+        # left pointing at a targeting nobody reads any more is the same dangling
+        # callback that retarget() is careful to undo one line above.
+        self._bind_socket_listener()
         self.core.set_target(active, ports)
+
+    def _bind_socket_listener(self):
+        """Let the live socket map tell targeting about a new socket as it happens.
+
+        Called from both places that can change either end of that pair: installing
+        a target (``set_target``) and creating the map (``start``). Whichever comes
+        second wires them together, and a target removed mid-session detaches the
+        listener rather than leaving the watcher calling into an orphan.
+
+        The watcher may not exist at all (``--simulate``, or the SOCKET handle could
+        not open), and then this is a no-op: targeting falls back to what it always
+        did, the resolver's own tick.
+        """
+        watcher = self._socketwatch      # read ONCE: stop() clears it concurrently
+        if watcher is None:
+            return
+        targeting = self._targeting
+        watcher.on_socket(targeting.note_socket if targeting is not None else None)
 
     def targeting(self):
         """The live ``ProcessTargeting`` in use, if any."""
@@ -916,7 +938,7 @@ class BeanEngine:
         self._divert = divert
         if hasattr(self._divert, "open"):
             try:
-                self._divert.open()
+                self._open_divert()
             except BaseException:
                 # A handle that will not open is NOT a session. This used to be
                 # swallowed into a debug crash record, and the damage was entirely
@@ -932,9 +954,10 @@ class BeanEngine:
                 # Both callers already handle this properly and neither could ever
                 # reach that code: `cli._run_session` wraps start() to report
                 # "cannot start the capture: {e}" with exit RUNTIME, and the GUI's
-                # `_finish_start` shows the start-failed dialog WITH the "run as
-                # Administrator" hint - which is exactly what a non-elevated user
-                # needs and never saw. Raising is what wires them up.
+                # `_finish_start` shows the start-failed dialog. Both then add the
+                # advice that fits THIS error code (`driver.open_failure_hint`) -
+                # which for a long time was "run as Administrator" whatever had
+                # failed. Raising is what wires them up.
                 #
                 # Cleared first so the engine is clean for a retry: `_running` is
                 # still False here and this object never reached _LIVE_ENGINES, so
@@ -1044,8 +1067,11 @@ class BeanEngine:
                         targeting.refresh()
                     # Reconcile: whichever path installed the target (target_for
                     # alone, or set_target), the session starts with the resolver
-                    # pointed at it.
+                    # pointed at it - and with the live map talking to it, which
+                    # set_target could not do when it ran before this session had
+                    # a map at all.
                     self._resolver.retarget(targeting)
+                    self._bind_socket_listener()
             # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
             # Starting it only when a target already exists meant that narrowing down
             # mid-run - press START, watch, then type a process - left nobody keeping
@@ -1093,6 +1119,40 @@ class BeanEngine:
             self.stop(reason="fault")
             raise
 
+    # Two extra tries, ~0.45 s in total, and ONLY for "the device does not exist".
+    # Short on purpose: this is for a driver that is finishing an unload started
+    # milliseconds ago (another program closing), which is over as soon as the last
+    # handle goes. It cannot rescue a start blocked by a session that is still
+    # RUNNING somewhere - that lasts as long as the session does, and the dialog
+    # says so instead of stalling the window.
+    OPEN_RETRY_DELAYS_S = (0.15, 0.30)
+
+    def _open_divert(self):
+        """Open the handle, letting a driver that is mid-unload finish first.
+
+        MEASURED 2026-08-04: stopping the WinDivert service while another handle is
+        open leaves it in "stop pending", and every open until that finishes fails
+        with 433. Our own exits no longer do that to each other (see
+        ``driver.release_on_exit``), but nothing stops ANOTHER program that uses
+        WinDivert from doing it, and a start that fails because it arrived 100 ms
+        early is a start that should simply have waited.
+        """
+        from .driver import ERROR_NO_SUCH_DEVICE
+        said = False
+        for delay in self.OPEN_RETRY_DELAYS_S + (None,):
+            try:
+                self._divert.open()
+                return
+            except BaseException as exc:
+                if (delay is None
+                        or getattr(exc, "winerror", None) != ERROR_NO_SUCH_DEVICE):
+                    raise
+                if not said:
+                    # A pause the user can see needs a reason the user can read.
+                    self.log(T("log.driver_still_unloading"))
+                    said = True
+            time.sleep(delay)
+
     def _start_socketwatch(self, real_windivert, socket_source):
         """Start the live socket-event map for this session, when one is available.
 
@@ -1119,6 +1179,35 @@ class BeanEngine:
             return
         from .socketwatch import SocketWatcher
         watcher = SocketWatcher(names=self._ports, source_factory=factory)
+        # SUBSCRIBE FIRST, THEN SNAPSHOT. The other order looks equally sensible and
+        # has a hole in it: a socket created between the snapshot being collected and
+        # the event source being opened is in NEITHER - the snapshot predates it and
+        # no event announced it - so it stays unknown until a later reconcile, which
+        # for a short-lived connection is for ever. REPRODUCED 2026-08-04 by opening
+        # a connection inside that window: the flow was never in scope, while the
+        # connection table still named an owner for it (from the poller), which is
+        # exactly the reported symptom.
+        #
+        # This order has no hole: anything created before the snapshot is IN the
+        # snapshot, anything created after it is announced by an event. The overlap
+        # is already handled - reconcile applies a snapshot entry only when the
+        # snapshot was collected after whatever an event last said about that port.
+        #
+        # ...and PUBLISHED BEFORE THE THREAD EXISTS, which is what makes that
+        # reordering safe. `stop()` stops whatever `self._socketwatch` points at, so
+        # a watcher running while the attribute is still None is a thread with an
+        # open WinDivert handle that nothing will ever stop - precisely the leak
+        # convention 20 exists to prevent. Assigning after the bootstrap widened
+        # that window from one statement to a whole port-table walk, and
+        # `test_concurrency_chaos.py::test_the_socket_watcher_survives_start_stop_cycles`
+        # caught it. Same shape as `_LIVE_ENGINES.add(self)` in start().
+        self._socketwatch = watcher
+        try:
+            watcher.start()
+        except Exception as exc:
+            crashlog.once("engine.socketwatch.start", exc)
+            self._socketwatch = None
+            return
         # Bootstrap from the current socket table, so connections OPEN before this
         # session are known from the first packet (events only announce NEW sockets).
         with crashlog.quiet("engine.socketwatch.bootstrap"):
@@ -1127,12 +1216,6 @@ class BeanEngine:
             # its own events say, so it needs to know WHEN the data was gathered.
             ports, collected_at = self._ports.collected()
             watcher.reconcile(ports, collected_at)
-        try:
-            watcher.start()
-            self._socketwatch = watcher
-        except Exception as exc:
-            crashlog.once("engine.socketwatch.start", exc)
-            self._socketwatch = None
 
     EVENT_BY_REASON = {"duration": "events.duration_reached",
                        "fault": "events.fault"}
