@@ -42,6 +42,16 @@ from fakes import ROOT, check
 # a HANDLE (the actual historical bug), this one asserts the general property.
 FACTORIES = dict(winenv.NATIVE_FACTORIES, advapi32=driver._advapi)
 
+# The three do NOT fail the same way off Windows, and assuming they did is what
+# made the first version of this file red on the Linux runner and green here:
+# `winenv.user32` / `winenv.dwmapi` check `is_windows()` and return None, while
+# `driver._advapi` goes straight to `ctypes.WinDLL` and raises AttributeError.
+# That is not a defect - every caller of `_advapi` is behind an `is_windows()`
+# guard of its own, which `test_driver_windows.py` asserts - but it means the
+# off-Windows branch here has to check the right property per factory instead of
+# one property for all three.
+SELF_GUARDING = tuple(winenv.NATIVE_FACTORIES)
+
 # Direct `ctypes.windll.<lib>.<Func>` uses that predate this guard, with the
 # reason each is harmless. Adding a line here is a decision, not a formality:
 # the question to answer is "does this call pass a pointer or receive a handle?".
@@ -108,10 +118,11 @@ def test_every_declared_native_function_has_a_full_prototype():
     import ctypes
 
     if not hasattr(ctypes, "windll"):
-        # Not Windows: every factory must degrade to None rather than raise, which
-        # is the property that keeps the package importable off Windows at all.
-        for name, factory in FACTORIES.items():
-            check(f"{name} is None off Windows", factory() is None)
+        # Not Windows. See SELF_GUARDING for why this is two checks and not one.
+        for name in SELF_GUARDING:
+            check(f"{name} degrades to None off Windows", FACTORIES[name]() is None)
+        check("the advapi32 binding is guarded by its CALLERS instead",
+              driver.service_state("WinDivert") is None)
         return
 
     pointer = ctypes.sizeof(ctypes.c_void_p)
