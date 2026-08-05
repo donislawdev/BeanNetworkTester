@@ -64,6 +64,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A target that means "everything" no longer counts as aiming at something.** Start with
+  impairment on and a target of `*`, and the tool stayed quiet, because a target was set - to
+  every program on the machine. The warning about affecting every connection now appears for any
+  expression that does not narrow anything: `*`, a regular expression matching all, a PID range
+  covering all, or a destination of `0.0.0.0/0`. A real target is unaffected and still silences
+  it, and so does a real target with an exclusion beside it.
+
 - **The "process" column now says when its answer was taken.** The name is read once, when the
   connection first shows up, and never again - which is why a row can still name a program that
   has since closed. The tooltip said none of that, so a name that outlived its program looked

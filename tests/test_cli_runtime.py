@@ -1054,6 +1054,37 @@ def test_an_exclusion_only_target_is_not_a_bound(monkeypatch):
     check("warning: an expression of pure exclusions bounds nothing", _warned(err))
 
 
+def test_a_target_that_matches_everything_is_not_a_bound_either(monkeypatch):
+    """The other half of the same question, and it went the other way.
+
+    ``!chrome.exe`` has no positive term, which the check above already caught.
+    ``*`` HAS one - so every truth test, including the one this warning stood on,
+    read it as a scope. MEASURED before the fix: ``--loss 100 --target *``
+    printed no warning while ``--loss 100`` alone did, i.e. the expression that
+    bounds nothing looked safer than no expression at all.
+
+    Both halves now go through ``Matcher.bounds_nothing``. The pairs below are
+    the point: each unbounded form is checked beside a genuinely narrow one, so a
+    fix that simply warns more often does not pass.
+    """
+    for expression in ("*", "**", "re:.*", ">0", "0-999999"):
+        _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
+        check(f"warning: --target {expression} bounds nothing", _warned(err), f"({err!r})")
+
+    for expression in ("chrome.exe", "chrome.exe, !chromedriver", "?", "*.exe"):
+        _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
+        check(f"no warning: --target {expression} really does narrow",
+              not _warned(err), f"({err!r})")
+
+    # The same rule on a destination, where "everything" is spelled differently.
+    for expression in ("0.0.0.0/0", "::/0"):
+        _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--dst-ip", expression])
+        check(f"warning: --dst-ip {expression} covers a whole family",
+              _warned(err), f"({err!r})")
+    _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--dst-ip", "10.0.0.0/8"])
+    check("no warning: a real CIDR still bounds", not _warned(err), f"({err!r})")
+
+
 def test_a_broken_scenario_never_opens_the_capture(monkeypatch, tmp_path):
     """MEASURED before the fix: the run printed "Start.", impaired traffic and
     only THEN said the file was broken.

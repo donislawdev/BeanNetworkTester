@@ -93,12 +93,23 @@ def armed_global_impairments(s):
 def targeting_is_set(s):
     """True when a targeting field names at least one thing to hit.
 
-    Not a truth test on the fields: an expression made of nothing but exclusions
-    (``!chrome.exe``) is non-empty and still covers the whole machine minus one
-    application, so it does not bound anything (see
-    ``Matcher.selects_nothing_in_particular``). A malformed expression is treated
-    as no scope at all - it is about to be rejected by validation anyway, and the
-    safe reading of "I cannot tell what this narrows to" is "it narrows nothing".
+    Not a truth test on the fields, and not a truth test on the POSITIVE terms
+    either - both readings have been wrong here, in opposite directions:
+
+    * an expression made of nothing but exclusions (``!chrome.exe``) is non-empty
+      and still covers the whole machine minus one application;
+    * an expression whose positive term covers everything (``*``, ``re:.*``,
+      ``>0``) reads as narrow to any truth test and bounds nothing. MEASURED:
+      ``--target *`` silenced this warning while ``--loss 100`` alone raised it,
+      so the expression that bounded nothing looked safer than no expression.
+
+    ``Matcher.bounds_nothing`` answers both halves, and it is deliberately the
+    only thing asked here - reaching for either half alone is how the second case
+    got through.
+
+    A malformed expression is treated as no scope at all - it is about to be
+    rejected by validation anyway, and the safe reading of "I cannot tell what
+    this narrows to" is "it narrows nothing".
     """
     expressions = {key: (kind, field, bounds)
                    for key, kind, field, bounds in MATCH_FIELDS}
@@ -117,7 +128,7 @@ def targeting_is_set(s):
             matcher = parse_matcher(text, *expressions[key])
         except ValueError:
             continue
-        if not matcher.selects_nothing_in_particular:
+        if not matcher.bounds_nothing:
             return True
     return False
 
