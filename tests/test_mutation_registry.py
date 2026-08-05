@@ -72,6 +72,41 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The class that already crashed this project once (driver._advapi). The
+        # generic half of the guard: argtypes is the only part of a prototype that
+        # ctypes leaves as None, so it is the only part a walk can check.
+        "label": "native: a declared binding loses its argtypes",
+        "file": "beantester/winenv.py",
+        "old": "        lib.SetWindowPos.argtypes = [H, H, ctypes.c_int, ctypes.c_int,\n"
+               "                                     ctypes.c_int, ctypes.c_int, wintypes.UINT]\n",
+        "new": "",
+        "test": "test_every_declared_native_function_has_a_full_prototype",
+    },
+    {
+        # The specific half: a result that must be pointer-sized. Checked by name
+        # because `restype` defaults to c_long and `c_long is c_int is BOOL` on
+        # Windows, so "a restype was declared" is not a checkable statement.
+        "label": "native: a handle-returning call is truncated to 32 bits",
+        "file": "beantester/winenv.py",
+        "old": "        lib.GetParent.restype = H\n",
+        "new": "        lib.GetParent.restype = ctypes.c_int\n",
+        "test": "test_every_declared_native_function_has_a_full_prototype",
+    },
+    {
+        # What forces the NEXT native call into a factory instead of repeating
+        # the history in a third module.
+        "label": "native: a direct ctypes.windll call comes back into the theme",
+        "file": "beantester/gui/theme.py",
+        # Anchored on the line after it: the GetParent call itself appears in BOTH
+        # theme functions, and the registry rightly refuses an ambiguous pattern.
+        "old": "        hwnd = user32.GetParent(window.winfo_id())\n"
+               "        get_long = ",
+        "new": "        import ctypes\n"
+               "        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())\n"
+               "        get_long = ",
+        "test": "test_no_new_native_call_bypasses_a_prototype",
+    },
+    {
         # The GUI half of native-crash capture. Without it a hard crash in a
         # process that never started a session is recorded NOWHERE - which is how
         # the 2026-08-04 access violation in `tkinter mainloop` came within one

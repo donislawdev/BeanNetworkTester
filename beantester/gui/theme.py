@@ -25,7 +25,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .scaling import scaled
-from .. import crashlog
+from .. import crashlog, winenv
 
 # surfaces (page -> card -> input): three depths, so panels and fields read as
 # separate things instead of one flat blob
@@ -353,19 +353,21 @@ def disable_maximize(window):
     "works" by snapping the window to the cap - which looks like a bug. Removing
     the style bit removes the promise.
     """
-    if not sys.platform.startswith("win"):
+    user32 = winenv.user32()
+    if user32 is None:
         return False
     try:
-        import ctypes
         window.update_idletasks()
-        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
-        user32 = ctypes.windll.user32
-        get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
-        set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+        hwnd = user32.GetParent(window.winfo_id())
+        get_long = getattr(user32, "GetWindowLongPtrW", None) or user32.GetWindowLongW
+        set_long = getattr(user32, "SetWindowLongPtrW", None) or user32.SetWindowLongW
+        # Reads and writes a STYLE, which is the one thing here that a missing
+        # prototype was measured to get wrong (a WS_POPUP style comes back negative
+        # under ctypes' default signed 32-bit restype) - see winenv.user32.
         style = get_long(hwnd, _GWL_STYLE)
         set_long(hwnd, _GWL_STYLE, style & ~_WS_MAXIMIZEBOX)
         # SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
-        user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0004 | 0x0020)
+        user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0004 | 0x0020)
         return True
     except Exception:
         return False
@@ -418,7 +420,8 @@ def apply_dark_titlebar(window):
     after makes DWM repaint the bar dark immediately - call this once the window is
     actually mapped (see PanelWindow.open).
     """
-    if not sys.platform.startswith("win"):
+    user32, dwmapi = winenv.user32(), winenv.dwmapi()
+    if user32 is None or dwmapi is None:
         return False
     # Piggy-backed here (it is a no-op after the first call) so that no window can
     # ever ask for a dark frame and still get a white system menu inside it.
@@ -426,15 +429,14 @@ def apply_dark_titlebar(window):
     try:
         import ctypes
         window.update_idletasks()
-        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+        hwnd = user32.GetParent(window.winfo_id())
         value = ctypes.c_int(1)
         for attribute in (DWMWA_USE_IMMERSIVE_DARK_MODE, 19):
-            if ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                    hwnd, attribute, ctypes.byref(value),
-                    ctypes.sizeof(value)) == 0:
+            if dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value),
+                                            ctypes.sizeof(value)) == 0:
                 # SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
-                ctypes.windll.user32.SetWindowPos(
-                    hwnd, 0, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0004 | 0x0020)
+                user32.SetWindowPos(hwnd, None, 0, 0, 0, 0,
+                                    0x0002 | 0x0001 | 0x0004 | 0x0020)
                 return True
     except Exception as _exc:
         crashlog.note(_exc, "gui.theme")

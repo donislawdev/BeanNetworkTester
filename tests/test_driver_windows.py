@@ -39,9 +39,16 @@ def test_advapi_declares_pointer_sized_prototypes():
                  "ControlService", "DeleteService", "CloseServiceHandle"):
         fn = getattr(lib, name)
         check(f"{name} declares argtypes", fn.argtypes is not None)
-        check(f"{name} declares a restype", fn.restype is not None)
+    # There used to be a `fn.restype is not None` beside that line, and it could
+    # NEVER fail: ctypes defaults restype to c_long, and on Windows
+    # `c_long is c_int is wintypes.BOOL`, so a truncated handle and a correctly
+    # declared BOOL are the same object. Half of this test's headline property was
+    # therefore unguarded from the day the access violation was fixed. The width of
+    # a result is checkable, and that is what the two lines below do; the general
+    # form of the rule now lives in tests/test_native_prototypes.py.
     check("handle-returning calls return a pointer-sized HANDLE",
           lib.OpenSCManagerW.restype is handle)
+    check("...and so does the other one", lib.OpenServiceW.restype is handle)
 
 
 def test_reading_a_service_state_asks_only_for_the_right_to_read():

@@ -56,6 +56,100 @@ def elevation_disabled():
     return str(os.environ.get("BEAN_NO_ELEVATE", "")).strip() not in ("", "0")
 
 
+# -- window-manager bindings, with FULL prototypes --------------------------- #
+# These live here and not in ``gui/theme.py`` for two reasons: they are Win32,
+# not Tk (this module is where the process-level Windows knobs already are), and
+# a test that walks them must not need tkinter, or the guard is vacuous on a
+# runner without it.
+#
+# WHY the prototypes, and what is actually measured. ctypes defaults every
+# argument and the return value to C ``int`` (32-bit). That already crashed this
+# project once - see ``driver._advapi``, where a truncated 64-bit SC_HANDLE took
+# the interpreter down with an access violation on CI. The calls below were
+# written without prototypes for a long time, and the honest answer about THEM,
+# measured on this machine 2026-08-05 rather than reasoned about, is narrower:
+#
+#   * ``GetParent`` returned the SAME value both ways. A window handle is
+#     documented as a 32-bit-safe value, so truncating it is harmless in practice.
+#   * ``GetWindowLongPtrW(GWL_STYLE)`` returned the same value for the root window
+#     (0x16cf0008) and for a withdrawn Toplevel (0x06cf0008) - the only two shapes
+#     ``disable_maximize`` is ever called on, replayed in its exact call order.
+#   * It returned a DIFFERENT value for a WS_POPUP window: a transient dialog
+#     (0x94cc0008) and the tooltip bubble (0x96000008) both have the top bit set,
+#     so the default signed 32-bit restype reads them as NEGATIVE - and writing
+#     that back through ``SetWindowLongPtr`` would pass a sign-extended value
+#     where a 64-bit LONG_PTR is expected.
+#
+# So the hazard is REACHABLE but not currently REACHED: no call site today both
+# reads a popup's style and writes it back. That is a property of today's call
+# sites, not of this code, and one transient non-resizable window would end it.
+# Declaring the prototypes costs nothing and removes the whole question.
+_USER32 = [None]
+_DWMAPI = [None]
+
+
+def user32():
+    """user32 with full prototypes, or None off Windows. Cached."""
+    if _USER32[0] is not None:
+        return _USER32[0] or None
+    _USER32[0] = False
+    if not is_windows():
+        return None
+    with crashlog.quiet("winenv.user32"):
+        import ctypes
+        from ctypes import wintypes
+
+        lib = ctypes.WinDLL("user32", use_last_error=True)
+        H = wintypes.HWND
+        lib.GetParent.argtypes = [H]
+        lib.GetParent.restype = H
+        lib.SetWindowPos.argtypes = [H, H, ctypes.c_int, ctypes.c_int,
+                                     ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        lib.SetWindowPos.restype = wintypes.BOOL
+        # 64-bit Windows has the ...Ptr forms; 32-bit has only the plain ones, and
+        # there LONG_PTR is a LONG. Declared for whichever this build actually has,
+        # so the guard walks what exists instead of a list somebody wrote down.
+        for name, result in (("GetWindowLongPtrW", ctypes.c_ssize_t),
+                             ("GetWindowLongW", ctypes.c_long)):
+            if hasattr(lib, name):
+                fn = getattr(lib, name)
+                fn.argtypes = [H, ctypes.c_int]
+                fn.restype = result
+        for name, value in (("SetWindowLongPtrW", ctypes.c_ssize_t),
+                            ("SetWindowLongW", ctypes.c_long)):
+            if hasattr(lib, name):
+                fn = getattr(lib, name)
+                fn.argtypes = [H, ctypes.c_int, value]
+                fn.restype = value
+        _USER32[0] = lib
+    return _USER32[0] or None
+
+
+def dwmapi():
+    """dwmapi with full prototypes, or None off Windows (and pre-Vista). Cached."""
+    if _DWMAPI[0] is not None:
+        return _DWMAPI[0] or None
+    _DWMAPI[0] = False
+    if not is_windows():
+        return None
+    with crashlog.quiet("winenv.dwmapi"):
+        import ctypes
+        from ctypes import wintypes
+
+        lib = ctypes.WinDLL("dwmapi", use_last_error=True)
+        lib.DwmSetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD,
+                                              ctypes.c_void_p, wintypes.DWORD]
+        lib.DwmSetWindowAttribute.restype = ctypes.c_long        # HRESULT
+        _DWMAPI[0] = lib
+    return _DWMAPI[0] or None
+
+
+# What the prototype guard walks. A factory added here without an entry is a
+# factory nothing checks, so the list is the registry and the test reads it -
+# rather than the test naming six function names that drift the day one moves.
+NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi}
+
+
 # QueryPerformanceCounter, because that is the clock WinDivert stamps its packets
 # with: ``Packet.timestamp`` is a raw QPC value, so the ONLY way to turn it into
 # "how long did this packet wait in the driver" is to read the same counter. Not
