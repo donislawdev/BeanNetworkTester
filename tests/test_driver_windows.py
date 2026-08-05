@@ -135,9 +135,18 @@ def test_release_on_exit_never_raises_and_is_a_noop_without_a_driver():
 
 
 def test_release_on_exit_swallows_a_cleanup_fault(monkeypatch):
-    """Even if cleanup blows up, exit must not crash (crashlog.quiet catches it)."""
+    """Even if cleanup blows up, exit must not crash (crashlog.quiet catches it).
+
+    ``_drop_use_marker`` is faked out, and that is not tidiness: it opens a REAL
+    process-wide named mutex, so with any BeanNetworkTester session live anywhere
+    on the machine this test took the stand-down path and never reached the fault
+    it exists to exercise. It failed for that reason on this machine, on a commit
+    that predates the change being tested - a test that reads global state is a
+    test that answers a different question depending on the day.
+    """
     driver._DRIVER_USED[0] = True
     monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
 
     def boom():
         raise RuntimeError("SCM exploded")
@@ -294,8 +303,13 @@ def test_stop_and_remove_is_a_noop_off_windows(monkeypatch):
 
 # --- cleanup_driver: the --cleanup-driver / release_on_exit orchestration ----- #
 def test_cleanup_driver_stops_every_installed_service(monkeypatch):
+    """Same real-mutex trap as test_release_on_exit_swallows_a_cleanup_fault: with
+    a session live anywhere on the machine, cleanup prepends its "another instance
+    is using the driver" warning and the per-service assertion fails on a machine
+    state that has nothing to do with the code."""
     monkeypatch.setattr(driver, "is_windows", lambda: True)
     monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: False)
     monkeypatch.setattr(driver, "installed_drivers",
                         lambda: {"WinDivert": "running", "WinDivert1.4": "stopped"})
     visited = []

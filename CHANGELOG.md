@@ -75,13 +75,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   cause the crash they were found while looking for - both are simply wrong, and both are gone.
 
 - **A crash of the window itself used to leave nothing behind.** Some crashes happen below
-  Python, where no error message exists to show you - and the file that catches those was only
-  ever switched on when a capture started. So the window could die during an ordinary session
-  with nothing running, and there was no record of it anywhere. It is switched on when the
-  window opens now. Alongside it the tool keeps a small note of what it was doing - which tab
-  was open, whether a session was running, which extra windows - because that kind of crash
-  cannot write anything itself. A normal exit still removes both, so a healthy run leaves no
-  files behind.
+  Python, and the file that catches those was only switched on once a capture started - so the
+  window could die with nothing running and leave no record anywhere. It is switched on when the
+  window opens now, and beside it the tool keeps a short note of what it was doing: which tab was
+  open, whether a session was running, which extra windows. A normal exit still removes both.
 
 - **A connection could be handed to "System" in the middle of its life.** Windows announces some
   connections twice - once for the program that opened it, once for the system itself - and the

@@ -1036,6 +1036,7 @@ beantester/              pakiet z implementacją
     dialogs.py           ciemne, wbudowane odpowiedniki messagebox/simpledialog
     rates.py             uśrednianie przepustowości (czysty, testowalny helper)
     scope.py             co obejmują liczby na ekranie (jeden czysty werdykt)
+    crash.py             co GUI mówi logowi awarii: kontekst raportu i okruszek
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    tłumaczenia (en, pl)
 tests/                   testy pytest
