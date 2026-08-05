@@ -112,6 +112,23 @@ class W:
     def winfo_ismapped(self):
         return 1 if self.pack_info is not None else 0
 
+    def winfo_toplevel(self):
+        """The window this widget lives in: the nearest Root/Toplevel ancestor.
+
+        Explicit for the reason the module docstring gives about ``winfo_exists``,
+        and this one had already gone wrong the same way: ``W.__getattr__`` answers
+        any unknown attribute with a no-op returning ``None``, and ``gui/tooltip.py``
+        uses ``str()`` OF THE RESULT as its bubble-cache key. Every widget in the
+        program therefore shared the key ``"None"``, which made "one bubble per
+        window" true by accident - and hid a cache that never pruned dead windows.
+        MEASURED 2026-08-05: with this method absent, twelve windows left ONE cache
+        entry here while real Tk left twelve.
+        """
+        node = self
+        while node.master is not None and not isinstance(node, Root):
+            node = node.master
+        return node
+
     def pack_propagate(self, flag=True):
         self.kw["propagate"] = flag
 

@@ -72,6 +72,24 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # Widget creation during Tk's destroy cascade, on a path bound to
+        # <Destroy>. Reproduced on real Tk before the fix (see _hide_bubble).
+        "label": "gui: hiding a bubble goes back to the path that CREATES one",
+        "file": "beantester/gui/tooltip.py",
+        "old": "        entry = _BUBBLES.get(str(widget.winfo_toplevel()))",
+        "new": "        entry = _bubble_for(widget)",
+        "test": "test_hiding_a_bubble_never_builds_a_window",
+    },
+    {
+        # The cache is keyed by toplevel NAME and Tk does not reuse names.
+        "label": "gui: dead bubble windows stop being pruned",
+        "file": "beantester/gui/tooltip.py",
+        "old": "    for dead in [k for k, e in _BUBBLES.items() if not _alive(e)]:\n"
+               "        del _BUBBLES[dead]\n",
+        "new": "",
+        "test": "test_dead_bubbles_do_not_pile_up_across_windows",
+    },
+    {
         # The class that already crashed this project once (driver._advapi). The
         # generic half of the guard: argtypes is the only part of a prototype that
         # ctypes leaves as None, so it is the only part a walk can check.

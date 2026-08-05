@@ -64,6 +64,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Two unsafe things the window did while closing.** A tooltip could build a new, invisible
+  window at the exact moment its own window was being taken apart, and the tool kept a reference
+  to every tooltip window it had ever made, including the closed ones. Neither has been shown to
+  cause the crash they were found while looking for - both are simply wrong, and both are gone.
+
 - **A crash of the window itself used to leave nothing behind.** Some crashes happen below
   Python, where no error message exists to show you - and the file that catches those was only
   ever switched on when a capture started. So the window could die during an ordinary session

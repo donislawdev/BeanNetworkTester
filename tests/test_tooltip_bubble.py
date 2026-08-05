@@ -134,3 +134,80 @@ def test_a_shortcut_is_advertised_on_its_own_line():
         assert tooltip.tooltip_text("", shortcut="F5") == "[F5]"
         assert tooltip.tooltip_text("") == ""
     """)
+
+
+def test_hiding_a_bubble_never_builds_a_window():
+    """``_hide`` is bound to <Destroy>, so this path runs during Tk's teardown.
+
+    It used to go through ``_bubble_for``, which BUILDS a Toplevel when the cached
+    one is gone. REPRODUCED on real Tk before the fix: destroying a window with the
+    bubble still alive creates nothing, but destroying the BUBBLE first and then the
+    window built a fresh Toplevel inside the destroy cascade, every time.
+    """
+    run_gui("""
+        from beantester.gui import tooltip
+        from tkinter import ttk
+        import tkinter as tk
+
+        tooltip._BUBBLES.clear()
+        label = ttk.Label(root, text="a")
+        window, _ = tooltip._bubble_for(label)
+        window.destroy()                      # the bubble dies before its widget
+
+        built = []
+        real = tk.Toplevel
+        tk.Toplevel = lambda *a, **kw: (built.append(1), real(*a, **kw))[1]
+        tooltip.tk.Toplevel = tk.Toplevel
+        try:
+            tooltip._hide_bubble(label)        # what <Destroy> reaches
+        finally:
+            tk.Toplevel = real
+            tooltip.tk.Toplevel = real
+        assert not built, "hiding a dead bubble built a window during teardown"
+    """)
+
+
+def test_hiding_still_withdraws_a_live_bubble():
+    """The other half: the fix must not turn hiding into a no-op.
+
+    Asserted on the CALL rather than on ``state()`` - the fake tkinter answers
+    "normal" unconditionally, so a state assertion here would pass whatever the
+    code did, which is the kind of green that hides a broken fix.
+    """
+    run_gui("""
+        from beantester.gui import tooltip
+        from tkinter import ttk
+
+        tooltip._BUBBLES.clear()
+        label = ttk.Label(root, text="a")
+        window = tooltip._show_bubble(label, "text", 10, 10, 20)
+        assert window is not None
+        hidden = []
+        window.withdraw = lambda *a, **kw: hidden.append(1)
+        tooltip._hide_bubble(label)
+        assert hidden, "a live bubble was not withdrawn"
+    """)
+
+
+def test_dead_bubbles_do_not_pile_up_across_windows():
+    """The cache is keyed by toplevel NAME and Tk does not reuse names, so without
+    pruning every window ever opened leaves an entry holding a dead Toplevel and
+    Label. MEASURED on real Tk: 25 open/close cycles left 25 entries, all dead."""
+    run_gui("""
+        from beantester.gui import tooltip
+        from tkinter import ttk
+        import tkinter as tk
+
+        tooltip._BUBBLES.clear()
+        for _ in range(12):
+            win = tk.Toplevel(root)
+            label = ttk.Label(win, text="x")
+            tooltip._show_bubble(label, "text", 10, 10, 20)
+            win.destroy()
+
+        alive = [k for k, e in tooltip._BUBBLES.items() if tooltip._alive(e)]
+        assert len(tooltip._BUBBLES) <= 1, (
+            "dead bubble entries accumulate: %d left after 12 windows"
+            % len(tooltip._BUBBLES))
+        assert not alive or len(alive) == 1, alive
+    """)
