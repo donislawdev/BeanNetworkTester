@@ -26,7 +26,8 @@ from .fields import BOOL, FIELD_DEFS
 from .filters import CLI_FILTERS
 from .i18n import T
 from .paths import is_frozen
-from .presets import PRESETS, preset_to_settings, resolve_preset
+from .presets import (PRESETS, closest_preset, preset_to_settings,
+                      resolve_preset)
 from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
@@ -253,7 +254,13 @@ def config_from_args(args):
     if args.preset:
         canon = resolve_preset(args.preset)
         if canon is None:
-            _fail(exitcodes.CONFIG, f"unknown preset: {args.preset!r} "
+            # Nearest match first, the full list second. The tool already does
+            # this for a mistyped config key and for a scenario key; a preset
+            # name was the one closed vocabulary left answering with seventeen
+            # ids and no hint, which is the longest list of the three.
+            close = closest_preset(args.preset)
+            hint = f" (did you mean {close!r}?)" if close else ""
+            _fail(exitcodes.CONFIG, f"unknown preset: {args.preset!r}{hint} "
                                     f"(canonical ids: {', '.join(PRESETS)})")
         # Through the SHARED mapping, not a copy of it. This used to hand-write
         # the seven classic keys, which meant the GUI (which has always gone

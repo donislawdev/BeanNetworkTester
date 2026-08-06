@@ -69,6 +69,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   All of them come back in one message. The window still reports the field you are typing in and
   nothing else, which is what you want while typing.
 
+- **A mistyped preset suggests the one you probably meant.** It used to answer with the full list
+  of seventeen ids and leave you to find the difference. The tool already did this for a mistyped
+  setting in a config file, so preset names were the odd one out.
+
 - **A target that means "everything" no longer counts as aiming at something.** Start with
   impairment on and a target of `*`, and the tool stayed quiet, because a target was set - to
   every program on the machine. The warning about affecting every connection now appears for any

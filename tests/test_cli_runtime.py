@@ -1118,3 +1118,24 @@ def test_every_bad_value_is_reported_in_one_run(monkeypatch):
     check("a bad value still exits CONFIG", code == exitcodes.CONFIG, f"(code={code})")
     for field in ("Loss", "Latency", "Duplication"):
         check(f"the message names {field}", field in err, f"({err!r})")
+
+
+def test_a_mistyped_preset_is_offered_the_nearest_one(monkeypatch):
+    """A closed vocabulary answers a typo with the nearest value, not only the list.
+
+    Seventeen canonical ids is a long list to read, and this tool already
+    suggests a nearest match for a mistyped config key and a mistyped scenario
+    key - a preset name was the one closed vocabulary left without it.
+
+    The suggestion has to come from what a person can TYPE: searching the ids
+    alone finds nothing close to "modemm", because the id carries a prefix the
+    user never writes.
+    """
+    code, _, err, _ = _real_run(monkeypatch, ["--preset", "modemm"])
+    check("an unknown preset still exits CONFIG", code == exitcodes.CONFIG, f"(code={code})")
+    check("and suggests something", "did you mean" in err, f"({err!r})")
+    check("and the suggestion mentions the modem preset", "56k" in err, f"({err!r})")
+
+    # A name close to a translated one resolves through the same vocabulary.
+    _, _, err, _ = _real_run(monkeypatch, ["--preset", "satelite"])
+    check("a misspelt English name is matched too", "did you mean" in err, f"({err!r})")
