@@ -172,6 +172,60 @@ class Matcher:
         """
         return not self._positives
 
+    # Values a term is tried against to answer "does this name anything in
+    # particular?". Deliberately unlike one another, so an expression that
+    # matches all of them is one that would match nearly anything.
+    #
+    # GROUPS, not one flat list, because of address families: a rule can cover
+    # the whole of IPv4 and none of IPv6, and that still bounds nothing worth
+    # having. Covering any ONE group completely is enough. Kinds without such a
+    # split declare a single group.
+    BLAST_PROBES = ()
+
+    @property
+    def covers_everything(self):
+        """True when the positive terms hit every probe - i.e. they bound nothing.
+
+        ``selects_nothing_in_particular`` catches an expression with no positive
+        term at all. This catches the other half, which reads as narrow to every
+        truth test and is not: ``*`` and ``re:.*`` are positive terms that select
+        the whole machine. MEASURED before this existed: ``--target *`` set
+        ``targeting_is_set`` to True and silenced the start-time warning, while
+        ``--loss 100`` on its own warned - so the expression that bounds nothing
+        was treated as safer than no expression at all.
+
+        A heuristic, and named as one. It answers by ASKING the compiled terms
+        rather than by inspecting their text, because "matches everything" is not
+        a syntactic property: ``>0`` on pids and ``0-999999`` cover every process
+        without a wildcard in sight, and ``*.*`` covers only names containing a
+        dot despite looking universal.
+
+        What it cannot see, written down rather than left to be discovered:
+
+        * an expression matching every probe by coincidence. The probes are few,
+          so this is possible - and it is the SAFE direction: the caller only
+          raises an advisory warning, so a false positive costs one line of text
+          and a false negative costs the user's network.
+        """
+        if not self._positives:
+            return False
+        for group in self.BLAST_PROBES:
+            if group and all(
+                    any(t.matches(self._context(*probe)) for t in self._positives)
+                    for probe in group):
+                return True
+        return False
+
+    @property
+    def bounds_nothing(self):
+        """True when this expression does not narrow the blast radius at all.
+
+        The two halves belong together and are exposed as one property on
+        purpose: a caller reaching for either alone gets half a guard, and half a
+        guard on this question is what let ``--target *`` through.
+        """
+        return self.selects_nothing_in_particular or self.covers_everything
+
     def __bool__(self):
         """A matcher is falsy when empty, so callers can write ``if matcher:``."""
         return not self.is_empty
@@ -221,6 +275,7 @@ class Matcher:
 class IntMatcher(Matcher):
     """Numbers - ports today, any numeric field tomorrow."""
     kind = KIND_INT
+    BLAST_PROBES = (((1,), (443,), (49152,), (65535,)),)
 
     @staticmethod
     def _context(value):
@@ -230,6 +285,10 @@ class IntMatcher(Matcher):
 class IpMatcher(Matcher):
     """IPv4/IPv6 addresses. Rules only ever match their own address family."""
     kind = KIND_IP
+    # Both families on purpose: a rule that covers one of them entirely is not
+    # flagged, which is stated in Matcher.covers_everything rather than hidden.
+    BLAST_PROBES = ((("127.0.0.1",), ("8.8.8.8",), ("192.168.1.1",)),
+                    (("::1",), ("2001:db8::1",), ("fe80::1",)))
 
     @staticmethod
     def _context(value):
@@ -239,6 +298,9 @@ class IpMatcher(Matcher):
 class ProcessMatcher(Matcher):
     """Processes, matched on ``(pid, name)``."""
     kind = KIND_PROCESS
+    # Unlike each other in both halves a term can look at: the pid and the name.
+    BLAST_PROBES = (((4, "System"), (1234, "chrome.exe"),
+                     (2, "svchost.exe"), (65000, "a")),)
 
     @staticmethod
     def _context(pid, name=""):

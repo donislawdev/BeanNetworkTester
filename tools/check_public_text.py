@@ -31,6 +31,7 @@ USAGE
     request description.
 """
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -92,8 +93,50 @@ PRIVATE = (
 # just approved. Only running it over master found that.
 ALLOWED_LINE = re.compile(r"^co-authored-by: .+ <[^>]+>$", re.I)
 
+# -- this machine's own strings, kept OUT of this file ------------------------ #
+#
+# The convention forbids addresses as well as paths and tokens, and this script
+# did not check for them. MEASURED before adding it: a canary fed the scanner a
+# path, an e-mail, a quoted person and a token - all four caught - and a LAN
+# address, which sailed through. A guard the convention names and the code does
+# not implement is worse than one nobody wrote down, because somebody relies on
+# it.
+#
+# 🔴 The obvious fix - a pattern for private-range addresses - was measured and
+# REJECTED. Those addresses are legitimate documentation: 36 tracked files carry
+# one, including the CIDR examples in both READMEs, the help text, the error
+# messages and this project's own test probes. A guard that fires on correct
+# content is switched off within a week, and takes the true hits with it.
+#
+# So the split this needs is the one a leak-detector always needs: the ENGINE is
+# public and knows only the shape of the check, while the LIST OF LITERALS lives
+# outside version control and is read at run time. A literal here would put the
+# very strings this script exists to keep out of the public tree INTO it.
+PRIVATE_STRINGS = os.path.join("internal_tools", "private-strings.txt")
 
-def offences(text, where):
+
+def private_strings(path):
+    """Literal strings that must never reach public text, from outside git.
+
+    Returns ``(strings, note)``. The note is printed whether or not the file is
+    there: a missing list means this half of the check did not run, and a check
+    that goes quiet when its input is absent looks exactly like a check that
+    passed - which on a fresh clone would be every time.
+    """
+    if not os.path.exists(path):
+        return (), ("no private-strings list at %s - the literal check did NOT "
+                    "run (see the comment in this file)" % path)
+    values = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                values.append(line.lower())
+    return tuple(values), "private-strings list: %d entries from %s" % (
+        len(values), path)
+
+
+def offences(text, where, literals=()):
     """Every rule broken by one block of text, as readable lines."""
     found = []
     for number, line in enumerate(text.splitlines(), 1):
@@ -118,6 +161,14 @@ def offences(text, where):
         for pattern, what in PRIVATE:
             if pattern.search(line):
                 found.append(f"{where} line {number}: {what}")
+        # The report names the LINE and never the value. A leak detector that
+        # prints what it matched becomes the leak it was meant to prevent - and
+        # its output goes into CI logs, which are as public as the commit.
+        low = line.lower()
+        if any(value in low for value in literals):
+            found.append(f"{where} line {number}: a string from the private list "
+                         f"(this machine's own; the value is deliberately not "
+                         f"printed)")
     return found
 
 
@@ -143,6 +194,9 @@ def main():
                         help="a git revision range, e.g. origin/master..HEAD")
     parser.add_argument("--text-file", metavar="PATH",
                         help="a file holding one block of text (a PR description)")
+    parser.add_argument("--private-strings", metavar="PATH", default=PRIVATE_STRINGS,
+                        help="literals that must never reach public text "
+                             "(outside git; default: %(default)s)")
     args = parser.parse_args()
 
     blocks = []
@@ -154,9 +208,12 @@ def main():
     if not blocks:
         parser.error("nothing to check: pass --commits or --text-file")
 
+    literals, note = private_strings(args.private_strings)
+    print(note)
+
     found = []
     for text, where in blocks:
-        found.extend(offences(text, where))
+        found.extend(offences(text, where, literals))
 
     if found:
         print("This text becomes public and stays public. Fix before pushing:\n")

@@ -134,6 +134,37 @@ MUTATIONS = [
         "test": "test_dead_bubbles_do_not_pile_up_across_windows",
     },
     {
+        # A ratchet frozen one above the truth allows the next arrival in
+        # silence - which is the drift it exists to catch, wearing its badge.
+        "label": "ratchet: the crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "FILES_NEAR_CEILING = 1          # beantester/gui/app.py",
+        "new": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
+    },
+    {
+        # The leak guard's newest half. It runs in CI and had never been shown
+        # able to fail - the canary that finally did found it blind to exactly
+        # the class the convention names first.
+        "label": "leak: the private-literal check drops out of the scanner",
+        "file": "tools/check_public_text.py",
+        "old": "        low = line.lower()\n"
+               "        if any(value in low for value in literals):",
+        "new": "        low = line.lower()\n"
+               "        if False and any(value in low for value in literals):",
+        "test": "test_a_literal_from_the_private_list_is_caught_without_being_printed",
+    },
+    {
+        # Half the predicate is what shipped, and half a guard on this question
+        # let `--target *` silence the warning about damaging every connection
+        # on the machine.
+        "label": "blast radius: the narrowing check reads only half the question",
+        "file": "beantester/settings.py",
+        "old": "        if not matcher.bounds_nothing:",
+        "new": "        if not matcher.selects_nothing_in_particular:",
+        "test": "test_a_target_that_matches_everything_is_not_a_bound_either",
+    },
+    {
         # The class that already crashed this project once (driver._advapi). The
         # generic half of the guard: argtypes is the only part of a prototype that
         # ctypes leaves as None, so it is the only part a walk can check.

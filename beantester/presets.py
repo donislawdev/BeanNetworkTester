@@ -142,6 +142,34 @@ def resolve_preset(name):
     return None
 
 
+def closest_preset(name):
+    """The preset name a typo most likely meant, or ``None``.
+
+    Suggests what a person can actually TYPE, which is why it searches the
+    translated names and not only the canonical ids: a user reaching for
+    "modem56k" writes that, not "presets.modem56k", and a suggestion drawn from
+    the id list would find nothing close and stay silent exactly when it is
+    needed. The tool already answers a mistyped config key and a mistyped
+    scenario key this way - a preset was the one closed vocabulary still
+    replying with seventeen ids and no hint.
+    """
+    import difflib
+
+    candidates = {}
+    for key in PRESETS:
+        candidates[key] = key
+        for lang in loaded_language_codes():
+            candidates[translate(key, lang)] = key
+    match = difflib.get_close_matches(name, list(candidates), n=1, cutoff=0.6)
+    if match:
+        return match[0]
+    # Second pass folded, so a near-miss differing only in diacritics or case
+    # still lands - the same tolerance resolve_preset gives an exact match.
+    folded = {fold_name(text): text for text in candidates}
+    match = difflib.get_close_matches(fold_name(name), list(folded), n=1, cutoff=0.6)
+    return folded[match[0]] if match else None
+
+
 # Presets store their fields under short keys ("lat", "jit") and the settings
 # model uses the long ones. Which is which is DERIVED from the field registry
 # (``Field.in_profile`` + ``Field.preset_key``), so a field joins the profile

@@ -93,12 +93,23 @@ def armed_global_impairments(s):
 def targeting_is_set(s):
     """True when a targeting field names at least one thing to hit.
 
-    Not a truth test on the fields: an expression made of nothing but exclusions
-    (``!chrome.exe``) is non-empty and still covers the whole machine minus one
-    application, so it does not bound anything (see
-    ``Matcher.selects_nothing_in_particular``). A malformed expression is treated
-    as no scope at all - it is about to be rejected by validation anyway, and the
-    safe reading of "I cannot tell what this narrows to" is "it narrows nothing".
+    Not a truth test on the fields, and not a truth test on the POSITIVE terms
+    either - both readings have been wrong here, in opposite directions:
+
+    * an expression made of nothing but exclusions (``!chrome.exe``) is non-empty
+      and still covers the whole machine minus one application;
+    * an expression whose positive term covers everything (``*``, ``re:.*``,
+      ``>0``) reads as narrow to any truth test and bounds nothing. MEASURED:
+      ``--target *`` silenced this warning while ``--loss 100`` alone raised it,
+      so the expression that bounded nothing looked safer than no expression.
+
+    ``Matcher.bounds_nothing`` answers both halves, and it is deliberately the
+    only thing asked here - reaching for either half alone is how the second case
+    got through.
+
+    A malformed expression is treated as no scope at all - it is about to be
+    rejected by validation anyway, and the safe reading of "I cannot tell what
+    this narrows to" is "it narrows nothing".
     """
     expressions = {key: (kind, field, bounds)
                    for key, kind, field, bounds in MATCH_FIELDS}
@@ -117,7 +128,7 @@ def targeting_is_set(s):
             matcher = parse_matcher(text, *expressions[key])
         except ValueError:
             continue
-        if not matcher.selects_nothing_in_particular:
+        if not matcher.bounds_nothing:
             return True
     return False
 
@@ -171,6 +182,33 @@ def validate_ranges(s, lang=None):
             continue
         parse_number(s[f.key], f.label, f.bounds, lang)
     return True
+
+
+def range_errors(s, lang=None):
+    """EVERY out-of-range value, as a list of messages. Empty when all are fine.
+
+    The same question as :func:`validate_ranges` asked for the other kind of
+    channel, and the difference is not a preference:
+
+    * a form is typed into LIVE, so it reports the field under the cursor and
+      nothing else - a list of complaints about fields the user has not reached
+      yet is noise;
+    * a command line arrives FINISHED. Reporting one problem per run means the
+      user fixes it, runs again, and learns about the next one - which is the
+      cheapest way to make somebody give up on a tool.
+
+    ``validate_ranges`` keeps raising on the first, unchanged, because that is
+    what the form wants and what its callers already expect.
+    """
+    found = []
+    for f in FIELD_DEFS:
+        if f.kind != F.NUMBER or f.key not in s:
+            continue
+        try:
+            parse_number(s[f.key], f.label, f.bounds, lang)
+        except ValueError as exc:
+            found.append(str(exc))
+    return found
 
 
 def settings_from_raw(raw, lang=None):
