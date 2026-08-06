@@ -44,6 +44,23 @@ from fakes import ROOT, check
 FUNCTION_CEILING = 167          # beantester/gui/theme.py::init_style
 FILE_CEILING = 1299             # beantester/gui/app.py
 
+# 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
+# to a record and is blind to everything creeping upward together: five files at
+# ninety percent of the limit pass it exactly as cleanly as five files at ten.
+#
+# So the count of items already in the top band is a ratchet of its own. It may
+# fall, and raising it is the same act as raising a ceiling - a decision, not a
+# way to get unblocked.
+#
+# The band is 70%, measured rather than picked (2026-08-06). The distribution
+# here is steeply skewed: one file sits at the ceiling and the next is at 60% of
+# it, so a tighter band would be a constant 1 and would say nothing. At 70% the
+# counts are small and the next candidate is real - `engine.py` has about 130
+# lines of headroom before it joins the count.
+CROWD_BAND = 0.70
+FILES_NEAR_CEILING = 1          # beantester/gui/app.py
+FUNCTIONS_NEAR_CEILING = 4      # init_style, _run_session, _build_ui, build_arg_parser
+
 
 def _logic_lines(source):
     """Line numbers that carry executable code: no blanks, comments or docstrings.
@@ -75,24 +92,30 @@ def _package_files():
     return out
 
 
-def _measure():
-    """(worst function, worst file) as (name, count) pairs, plus how many files."""
-    worst_function = ("", 0)
-    worst_file = ("", 0)
+def _sizes():
+    """Every file and every function with its logic-line count, biggest first."""
+    files, functions = [], []
     paths = _package_files()
     for path in paths:
         tree, live = _logic_lines(open(path, encoding="utf-8").read())
         rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
-        count = len(live)
-        if count > worst_file[1]:
-            worst_file = (rel, count)
+        files.append((len(live), rel))
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             span = sum(1 for n in live if node.lineno <= n <= (node.end_lineno or 0))
-            if span > worst_function[1]:
-                worst_function = (f"{rel}::{node.name}", span)
-    return worst_function, worst_file, len(paths)
+            functions.append((span, f"{rel}::{node.name}"))
+    files.sort(reverse=True)
+    functions.sort(reverse=True)
+    return files, functions, len(paths)
+
+
+def _measure():
+    """(worst function, worst file) as (name, count) pairs, plus how many files."""
+    files, functions, seen = _sizes()
+    worst_file = (files[0][1], files[0][0]) if files else ("", 0)
+    worst_function = (functions[0][1], functions[0][0]) if functions else ("", 0)
+    return worst_function, worst_file, seen
 
 
 def test_no_function_or_file_has_grown_past_the_ratchet():
@@ -112,10 +135,12 @@ def test_no_function_or_file_has_grown_past_the_ratchet():
     check(f"no function exceeds {FUNCTION_CEILING} logic lines "
           f"(split it - do not raise the ceiling)",
           worst_function[1] <= FUNCTION_CEILING,
-          f"(worst: {worst_function[0]} at {worst_function[1]})")
+          f"(worst: {worst_function[0]} at {worst_function[1]}, "
+          f"{FUNCTION_CEILING - worst_function[1]} lines of headroom left)")
     check(f"no module exceeds {FILE_CEILING} logic lines",
           worst_file[1] <= FILE_CEILING,
-          f"(worst: {worst_file[0]} at {worst_file[1]})")
+          f"(worst: {worst_file[0]} at {worst_file[1]}, "
+          f"{FILE_CEILING - worst_file[1]} lines of headroom left)")
 
 
 def test_the_ratchet_measures_logic_and_not_explanation():
@@ -134,3 +159,64 @@ def test_the_ratchet_measures_logic_and_not_explanation():
     check("ninety lines of comment and a docstring do not count as logic",
           len(live_padded) == len(live_bare),
           f"(bare {len(live_bare)}, padded {len(live_padded)})")
+
+
+def test_the_metric_still_counts_code(tmp_path):
+    """The other half of the test above, and it is not decoration.
+
+    "Comments do not move the number" is satisfied perfectly by a metric that
+    counts NOTHING - and a ceiling standing on a metric stuck at zero passes for
+    ever while the code grows underneath it. The rule the neighbouring rule set
+    states is symmetric on purpose: add N lines of comment and N lines of code to
+    the same function, and only the second may move the measure.
+    """
+    bare = "def f():\n" + "    x = 1\n" * 5
+    with_code = "def f():\n" + "    x = 1\n" * 5 + "    y = 2\n" * 7
+    _, live_bare = _logic_lines(bare)
+    _, live_code = _logic_lines(with_code)
+    check("seven more lines of code move the measure by exactly seven",
+          len(live_code) - len(live_bare) == 7,
+          f"(bare {len(live_bare)}, with code {len(live_code)})")
+
+
+def test_nothing_else_is_creeping_up_on_the_ceilings():
+    """THE SECOND KNOB - see CROWD_BAND for why one is not enough.
+
+    A ceiling on the worst item watches one thing. It cannot see the shape this
+    project actually drifts into: several files climbing together, none of them a
+    record, all of them past the point where a person can follow them. The count
+    of items already in the top band is the ratchet for that, and like every
+    ratchet here it may fall and may not rise without a decision.
+    """
+    files, functions, seen = _sizes()
+    check("the shape scan actually read the package", seen >= 30, f"({seen} files)")
+
+    file_band = FILE_CEILING * CROWD_BAND
+    crowded_files = [f"{name} ({n})" for n, name in files if n >= file_band]
+    check(f"at most {FILES_NEAR_CEILING} module(s) within {CROWD_BAND:.0%} of the "
+          f"ceiling ({file_band:.0f} lines) - split one before adding another",
+          len(crowded_files) <= FILES_NEAR_CEILING, f"({crowded_files})")
+
+    function_band = FUNCTION_CEILING * CROWD_BAND
+    crowded_functions = [f"{name} ({n})" for n, name in functions if n >= function_band]
+    check(f"at most {FUNCTIONS_NEAR_CEILING} function(s) within {CROWD_BAND:.0%} of "
+          f"the ceiling ({function_band:.0f} lines)",
+          len(crowded_functions) <= FUNCTIONS_NEAR_CEILING, f"({crowded_functions})")
+
+
+def test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire():
+    """A ratchet parked far above the current state is a ratchet that never moves.
+
+    The counts above are today's measurements, so they must be EXACT, not
+    generous. Frozen one above the truth, the guard would allow the next arrival
+    silently - which is the failure it exists to prevent, wearing its own badge.
+    """
+    files, functions, _ = _sizes()
+    actual_files = sum(1 for n, _ in files if n >= FILE_CEILING * CROWD_BAND)
+    actual_functions = sum(1 for n, _ in functions if n >= FUNCTION_CEILING * CROWD_BAND)
+    check("the module count is today's measurement, not a looser number",
+          actual_files == FILES_NEAR_CEILING,
+          f"(measured {actual_files}, frozen at {FILES_NEAR_CEILING} - lower it)")
+    check("the function count is today's measurement, not a looser number",
+          actual_functions == FUNCTIONS_NEAR_CEILING,
+          f"(measured {actual_functions}, frozen at {FUNCTIONS_NEAR_CEILING} - lower it)")

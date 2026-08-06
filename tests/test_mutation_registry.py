@@ -134,6 +134,15 @@ MUTATIONS = [
         "test": "test_dead_bubbles_do_not_pile_up_across_windows",
     },
     {
+        # A ratchet frozen one above the truth allows the next arrival in
+        # silence - which is the drift it exists to catch, wearing its badge.
+        "label": "ratchet: the crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "FILES_NEAR_CEILING = 1          # beantester/gui/app.py",
+        "new": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.
