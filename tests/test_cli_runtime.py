@@ -1100,3 +1100,21 @@ def test_a_broken_scenario_never_opens_the_capture(monkeypatch, tmp_path):
           code == exitcodes.SCENARIO, f"(code={code})")
     check("scenario: a broken file never opens the capture", not engine.started)
     check("scenario: it says which file", "broken.json" in err, f"({err!r})")
+
+
+def test_every_bad_value_is_reported_in_one_run(monkeypatch):
+    """A command line arrives FINISHED, so one problem per run is the cheapest
+    way to make somebody give up on a tool.
+
+    MEASURED before the fix: `--loss 500 --latency -5 --dup 900` named the
+    latency and stopped. Three mistakes, three runs.
+
+    The form deliberately still fails on the first field - it is typed into live,
+    and complaints about fields nobody has reached yet are noise. The split is
+    the point, not an inconsistency (see settings.range_errors).
+    """
+    code, _, err, _ = _real_run(monkeypatch, ["--loss", "500", "--latency", "-5",
+                                              "--dup", "900"])
+    check("a bad value still exits CONFIG", code == exitcodes.CONFIG, f"(code={code})")
+    for field in ("Loss", "Latency", "Duplication"):
+        check(f"the message names {field}", field in err, f"({err!r})")

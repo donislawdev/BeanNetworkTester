@@ -31,7 +31,7 @@ from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
-                       validate_ranges, warn_if_unbounded)
+                       range_errors, validate_ranges, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
 
@@ -297,10 +297,14 @@ def config_from_args(args):
         build_matchers(s)          # --target / --dst-ip / --dst-port expressions
     except ValueError as e:
         _fail(exitcodes.CONFIG, str(e))
-    try:
-        validate_ranges(s)         # --loss 250 (and --duration -5) are mistakes
-    except ValueError as e:
-        _fail(exitcodes.CONFIG, str(e))
+    # ALL of them, not the first. A command line arrives finished, so reporting
+    # one problem per run means the user fixes it, runs again and meets the next
+    # one - measured here: `--loss 500 --latency -5 --dup 900` named only the
+    # latency. The form keeps failing on the first, which is right for a field
+    # being typed into (see settings.range_errors).
+    bad = range_errors(s)          # --loss 250 (and --duration -5) are mistakes
+    if bad:
+        _fail(exitcodes.CONFIG, "; ".join(bad))
 
     interval = float(getattr(args, "interval", 2.0) or 0)
     if interval <= 0:

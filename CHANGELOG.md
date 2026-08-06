@@ -64,6 +64,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A run with several bad values now names them all at once.** `--loss 500 --latency -5
+  --dup 900` reported the latency and stopped, so you fixed one, ran again, and met the next.
+  All of them come back in one message. The window still reports the field you are typing in and
+  nothing else, which is what you want while typing.
+
 - **A target that means "everything" no longer counts as aiming at something.** Start with
   impairment on and a target of `*`, and the tool stayed quiet, because a target was set - to
   every program on the machine. The warning about affecting every connection now appears for any
