@@ -1,3 +1,8 @@
+For certifcate:
+Project Link: https://github.com/donislawdev/BeanNetworkTester
+Name: Dominik Babiarz
+e-mail: dominik.babiarz[at]donislawdev.com
+
 # Security Policy
 
 ## Supported versions
