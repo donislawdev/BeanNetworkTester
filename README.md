@@ -18,6 +18,9 @@ exists.
 
 > This is the English documentation. Polish version: [README.pl.md](README.pl.md).
 
+For certifacte verfication, link project: https://github.com/donislawdev/BeanNetworkTester
+e-mail: dominik.babiarz@donislawdev.com
+
 **What it can do**
 
 - **Add lag and jitter** - fixed or random delay.
