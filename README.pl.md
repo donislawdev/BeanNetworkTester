@@ -240,7 +240,7 @@ jest martwe przez podany procent czasu. Symuluje migające połączenie.
 
 **Profile** - gotowe presety **posortowane od najlepszego (góra) do najgorszego (dół)**: Idealna sieć, Dobre WiFi, Sieć 5G, DSL domowy (VDSL), Sieć LTE/4G, Satelita niskoorbitalny, Odległy serwer (inny kontynent), Słabe WiFi, Kawiarnia (zatłoczone WiFi), Zapchane łącze domowe (bufferbloat), Pociąg / metro (tunele), Sieć 3G, Roaming zagraniczny, Satelita geostacjonarny, Wi-Fi w samolocie, Modem 56k, Fatalna sieć - oraz Twoje własne (zapis pod nazwą). Program **startuje zawsze na „Idealnej sieci”** (nic nie jest psute, dopóki sam czegoś nie ustawisz). Presetów wbudowanych nie da się usunąć - przycisk „Usuń” jest wtedy nieaktywny.
 
-Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary istnieją (mediany Ookla dla satelity i sieci komórkowych, prace naukowe o 15-sekundowym przełączaniu Starlinka i o Wi-Fi w samolotach). Tam, gdzie takiej liczby nie ma - „słabe WiFi” nie jest wielkością mierzalną - mówi o tym wprost komentarz przy wartości w `beantester/presets.py`. Kilka zasługuje na zdanie:
+Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary istnieją (mediany Ookla® Speedtest® dla satelity i sieci komórkowych, recenzowane prace naukowe o 15-sekundowym przełączaniu Starlinka i o Wi-Fi w samolocie). Każda liczba jest przypisana do źródła w komentarzu na górze `beantester/presets.py` - z autorami, miejscem publikacji i numerem DOI - żebyś mógł ją sprawdzić, a nie tylko nam uwierzyć. Tam, gdzie takiej liczby nie ma - „słabe Wi-Fi" nie jest wielkością mierzalną - komentarz przy wartości mówi to wprost, zamiast wymyślać źródło.
 
 - **Satelita niskoorbitalny** - wzorowany na Starlinku. W stanie ustalonym jest dobry (około 40 ms pingu, 100 Mb/s). Wyróżnia go przełączanie satelity co 15 sekund, które na chwilę wstrzymuje transmisję i objawia się okazjonalnym skokiem pingu, a nie stratą pakietów.
 - **Odległy serwer (inny kontynent)** - szybkie łącze, w którym nic nie jest zepsute, tylko jest daleko (~120 ms pingu). To ten preset obnaża gadatliwe protokoły i kod pisany przy założeniu, że serwer stoi obok.
@@ -1209,6 +1209,14 @@ działa i zmieniać go, a także rozpowszechniać kopie - również zmodyfikowan
 pod warunkiem przekazywania programu dalej na tych samych warunkach GPLv3 i
 udostępnienia odpowiadającego kodu źródłowego. Program dostarczany jest „AS IS”,
 bez gwarancji i bez odpowiedzialności autora. Autorem jest **DonislawDev**.
+
+### Znaki towarowe i liczby w presetach
+
+Ookla, Speedtest, Starlink, HughesNet i Viasat są znakami towarowymi swoich właścicieli.
+Pojawiają się w tym projekcie z jednego powodu: żeby powiedzieć, **czyje opublikowane pomiary**
+stoją za liczbami w presetach. Bean Network Tester nie jest z nimi powiązany, przez nich
+wspierany ani sponsorowany, i nie rozpowszechnia ich danych - są tu wyłącznie pojedyncze liczby,
+z podanym źródłem, tak jak cytuje je każdy dokument techniczny.
 
 ### To, co nim zrobisz, należy do Ciebie
 

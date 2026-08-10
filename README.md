@@ -316,10 +316,12 @@ Terrible network - plus your own (saved under a name). The program **always star
 network"** (nothing is impaired until you set something). Built-in presets cannot be deleted - the
 "Delete" button is disabled for them.
 
-Their numbers come from published measurements wherever measurements exist (Ookla medians for
-satellite and mobile, academic studies for Starlink's 15-second reconfiguration and for in-flight
-Wi-Fi). Where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment next
-to the value in `beantester/presets.py` says so. A few of them are worth a sentence:
+Their numbers come from published measurements wherever measurements exist (Ookla® Speedtest®
+medians for satellite and mobile, peer-reviewed studies for Starlink's 15-second reconfiguration
+and for in-flight Wi-Fi). Every figure is attributed in the comment block at the top of
+`beantester/presets.py`, with the authors, the venue and a DOI, so you can check it rather than
+trust it. Where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment
+next to the value says so instead of inventing a source. A few of them are worth a sentence:
 
 - **Satellite (low orbit)** - modelled on Starlink. Its steady state is good (about 40 ms of ping,
   100 Mbit/s). What makes it distinctive is the reconfiguration every 15 seconds, which briefly
@@ -1350,6 +1352,14 @@ In short: you are free to use it for any purpose (private or commercial), to stu
 change it, and to redistribute copies - including modified ones - provided you pass the program on
 under the same GPLv3 terms and make the corresponding source available. The program is provided
 "AS IS", with no warranty and no liability on the author's part. The author is **DonislawDev**.
+
+### Trademarks and the figures in the presets
+
+Ookla, Speedtest, Starlink, HughesNet and Viasat are trademarks of their respective owners. They
+are named in this project for one reason only: to say **whose published measurements** a preset's
+numbers came from. Bean Network Tester is not affiliated with, endorsed by or sponsored by any of
+them, and none of their data is redistributed here - only individual figures, cited to their
+source, the way any technical document cites one.
 
 ### What you make with it is yours
 

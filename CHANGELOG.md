@@ -47,7 +47,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
-
+- **Every number in the presets says where it came from.** The comment block in
+  `beantester/presets.py` now carries authors, venue and a DOI for each study, and the Ookla
+  figures name the period and the date they were read. Three entries looked like citations without
+  being ones - the bufferbloat figures are marked as a typical range and the 3G latencies as
+  general knowledge, rather than dressed up as sourced. Both READMEs gained a trademark note: the
+  names say whose measurements these are, and the project is not affiliated with them.
 - **The buffer help sheet no longer promises more lag than the buffer can give.** It told you to
   enter how many ms of lag you want, which is right for a small buffer and optimistic for a large
   one: the number is the most the queue can add, and one small download may never fill it.
