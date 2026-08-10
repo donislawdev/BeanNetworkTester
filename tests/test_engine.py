@@ -254,6 +254,27 @@ def test_block_integration():
           s["drop_block"] == 2, f"(drop_block={s['drop_block']}, seen={s['seen']})")
 
 
+def test_block_integration_with_a_wildcard():
+    """The same path as above, but the expression is a wildcard prefix.
+
+    `test_block_integration` uses a CIDR and a literal port, so the wildcard
+    branch of the matcher had never reached `drop_block` through a running
+    engine - the counter the GUI and the CSV both read. `172.*` is the short form
+    people actually type.
+    """
+    pkts = [FakePacket(size=150, is_outbound=True, port=80, dst_addr="172.16.0.9"),
+            FakePacket(size=150, is_outbound=True, port=80, dst_addr="172.31.255.1"),
+            FakePacket(size=150, is_outbound=True, port=80, dst_addr="173.16.0.9")]
+    sh = BeanEngine()
+    sh.set_block(True, "172.*", "")
+    sh.start("test", divert=FakeDivert(pkts))
+    wait_until(lambda: sh.stats_snapshot()["drop_block"] == 2)
+    s = sh.stats_snapshot()
+    sh.stop()
+    check("block wildcard: both addresses in the prefix are counted, the third is not",
+          s["drop_block"] == 2, f"(drop_block={s['drop_block']}, seen={s['seen']})")
+
+
 def test_connection_records_scope_and_dropped():
     """Per-flow bookkeeping behind the "impaired?" and "dropped" columns: with
     process targeting on one port and 100% loss, only the targeted flow is in

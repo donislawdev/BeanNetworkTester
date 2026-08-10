@@ -985,6 +985,41 @@ def test_block_ip_and_port_combine_with_or():
     check("block OR: neither passes", neither.drop is False)
 
 
+def test_block_by_wildcard_drops_the_prefix_and_nothing_else():
+    """A wildcard in a BLOCK expression, which nothing covered until 2026-08-10.
+
+    Wildcards were tested in `test_matchers.py` and blocking was tested with
+    literals and CIDRs, and the two were never tested together - at any layer,
+    including the real-driver rig. That is a gap between two green areas, which
+    is where they hide.
+
+    `172.*` is deliberately the short form. People write a one-octet prefix and
+    expect it to mean the whole /8; the parser has to agree, and `172.16.0.1`
+    matching while `173.16.0.1` does not is the whole claim.
+    """
+    core = BeanCore()
+    core.set_block(True, ip="172.*")
+    rng = random.Random(1)
+    inside = core.decide(100, True, 5000, 0.0, rng, remote_ip="172.16.0.1", remote_port=80)
+    edge = core.decide(100, True, 5000, 0.0, rng, remote_ip="172.255.255.254", remote_port=80)
+    outside = core.decide(100, True, 5000, 0.0, rng, remote_ip="173.16.0.1", remote_port=80)
+    check("block 172.*: an address in the prefix is dropped",
+          inside.drop is True and inside.reason == "block")
+    check("block 172.*: the far end of the same prefix is dropped too", edge.drop is True)
+    check("block 172.*: the next prefix passes", outside.drop is False)
+
+    core = BeanCore()
+    core.set_block(True, port="44*")
+    rng = random.Random(1)
+    kw = dict(remote_ip="8.8.8.8")
+    p443 = core.decide(100, True, 5000, 0.0, rng, remote_port=443, **kw)
+    p4400 = core.decide(100, True, 5000, 0.0, rng, remote_port=4400, **kw)
+    p80 = core.decide(100, True, 5000, 0.0, rng, remote_port=80, **kw)
+    check("block 44*: 443 dropped", p443.drop is True and p443.reason == "block")
+    check("block 44*: 4400 dropped", p4400.drop is True)
+    check("block 44*: 80 passes", p80.drop is False)
+
+
 def test_block_respects_process_targeting():
     """Block sits after the targeting gate: a process target scopes it, so a flow
     that is not the target passes even when its destination is on the block list."""

@@ -64,6 +64,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Blocking everything now warns you, like every other way of affecting everything.** A block
+  normally limits its own damage, because it names an address or a port - so it never raised the
+  "this affects every connection" warning. But `*` names everything: it cut the whole machine and
+  said nothing, while a 50% loss, which only slows things down, warned. Any blocking expression
+  that matches everything now counts as affecting everything. A real block - `172.*`, one subnet,
+  one port - is unchanged and still silent, and so is a block with a target or a time limit.
+
 - **The labels on the Control page are punctuated the same way now.** Ten of them were missing
   the colon the others had, so "Loss", "Corruption" and "Duplication" sat directly beside
   "Latency:" and "Jitter:", and the link-drop section contradicted itself in two adjacent

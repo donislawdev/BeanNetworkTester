@@ -350,6 +350,10 @@ NON_PROFILE_FIELDS = tuple((f.key, f.label) for f in FIELD_DEFS if not f.in_prof
 # them, so a new impairment is declared once instead of remembered twice.
 IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs)
 GLOBALLY_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs == IMPAIRS_ALL)
+# Damages only what it NAMES - which stops being a limit the moment the expression
+# names everything. `settings.armed_global_impairments` promotes one of these to a
+# global impairment when its expression covers the whole space; see it for why.
+MATCHED_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs == IMPAIRS_MATCHED)
 NARROWING_KEYS = tuple(f.key for f in FIELD_DEFS if f.narrows)
 
 
