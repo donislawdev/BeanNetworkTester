@@ -46,7 +46,7 @@ import ipaddress
 import re
 import warnings
 
-from .i18n import translate
+from .i18n import field_name, translate
 
 KIND_INT = "int"
 KIND_IP = "ip"
@@ -59,8 +59,12 @@ PORT_BOUNDS = (0, 65535)                 # usable as the ``bounds`` of a port fi
 
 # -- errors ------------------------------------------------------------------ #
 def _err(key, field, term, **fmt):
-    """Build a translated ValueError for a bad term (``field`` is an i18n key)."""
-    return ValueError(translate(key, None, field=translate(field), term=term, **fmt))
+    """Build a translated ValueError for a bad term (``field`` is an i18n key).
+
+    ``field_name``, not ``translate``: the label ends with a colon for the form,
+    and this pastes it into a sentence.
+    """
+    return ValueError(translate(key, None, field=field_name(field), term=term, **fmt))
 
 
 # -- value contexts (normalised once per matches() call, not per term) -------- #

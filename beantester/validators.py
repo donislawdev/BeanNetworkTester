@@ -5,7 +5,7 @@ place, raises a *translated* ``ValueError`` (keys ``errors.*``) and never
 depends on tkinter. The GUI shows the message under the field, the CLI turns
 it into ``error: ...`` and the config loader into ``errors.bad_config_value``.
 """
-from .i18n import translate
+from .i18n import field_name, translate
 from .utils import number_string
 
 
@@ -16,7 +16,9 @@ def parse_number(value, field_key=None, bounds=None, lang=None):
     ``bounds`` is an inclusive ``(min, max)`` pair (either side may be None).
     Returns a ``float``. Raises a translated ``ValueError``.
     """
-    name = translate(field_key, lang) if field_key else ""
+    # The label carries a colon for the form ("Latency:"); a sentence naming the
+    # field must not (`Field 'Latency:' must be...`). One place strips it.
+    name = field_name(field_key, lang) if field_key else ""
     text = str("" if value is None else value).strip().replace(",", ".")
     try:
         number = float(text)

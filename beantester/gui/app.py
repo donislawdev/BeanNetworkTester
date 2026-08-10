@@ -35,7 +35,7 @@ from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import crashlog
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
-                    set_language)
+                    field_name, set_language)
 from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, scenarios_dir
 from ..presets import (PRESETS, preset_to_settings, resolve_preset,
                        settings_to_preset)
@@ -874,8 +874,9 @@ class App:
     # -- profiles ---------------------------------------------------------------- #
     @staticmethod
     def _short_label(key):
-        """Short form of a field label: drop the trailing colon/explanations."""
-        return T(key).split("(")[0].strip().rstrip(":").strip()
+        """Short form of a field label: no colon (``i18n.field_name``), and no
+        parenthetical either - a comma-separated list wants the bare name."""
+        return field_name(key).split("(")[0].strip().rstrip(":").strip()
 
     def _active_non_profile_settings(self, s):
         """Translated labels of active settings a profile will NOT store."""

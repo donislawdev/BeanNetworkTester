@@ -64,6 +64,65 @@ def test_labels_and_tips_exist_in_every_language():
     set_language("pl")
 
 
+def test_a_label_ends_with_a_colon_exactly_when_it_precedes_a_box():
+    """The form's punctuation rule, in both languages.
+
+    `form.py::_place_one` draws a BOOL as a Checkbutton whose caption IS the label,
+    and a CHOICE as a bare Combobox with no label widget at all. Everything else
+    gets a `ttk.Label` immediately to the left of an Entry - and that is the only
+    shape a trailing colon belongs to.
+
+    Measured before this test existed: 16 fields followed the rule and 10 did not
+    (`Loss`, `Corruption`, `Duplication` sat beside `Latency:` and `Jitter:`), and
+    the flapping section contradicted itself in adjacent cells - `Period:` next to
+    `Downtime percent`. Nothing enforced either half, in either direction.
+    """
+    for lang in ("en", "pl"):
+        for field in F.FIELD_DEFS:
+            takes_a_box = field.kind not in (F.BOOL, F.CHOICE)
+            text = translate(field.label, lang)
+            check(f"label {lang}/{field.key}: colon iff it precedes a box",
+                  text.rstrip().endswith(":") == takes_a_box,
+                  f"({text!r}, kind={field.kind})")
+    set_language("pl")
+
+
+def test_no_message_repeats_the_label_colon():
+    """A label goes into running text WITHOUT the colon it wears on the form.
+
+    `Field 'Latency:' must be between 0 and 600000.` is what the CLI printed, and
+    the quotes make the stray colon look like part of the field's name. One helper
+    strips it (`i18n.field_name`) and all three readers go through it - the range
+    error, the expression error and the profile-scope warning - so adding a colon
+    to a label can never leak into a sentence again.
+    """
+    from beantester.i18n import field_name
+    from beantester.matchers import KIND_INT, parse_matcher
+    from beantester.validators import parse_number
+
+    for lang in ("en", "pl"):
+        check(f"field_name strips the colon ({lang})",
+              not field_name("fields.latency", lang).endswith(":"),
+              f"({field_name('fields.latency', lang)!r})")
+
+        try:
+            parse_number("999999", "fields.latency", (0, 600000), lang)
+        except ValueError as exc:
+            check(f"range error names the field cleanly ({lang})",
+                  "':'" not in str(exc) and ":'" not in str(exc), f"({exc})")
+        else:
+            check(f"range error was raised at all ({lang})", False)
+
+    try:
+        parse_matcher("abc", KIND_INT, "fields.port")
+    except ValueError as exc:
+        check("expression error names the field cleanly",
+              ":'" not in str(exc).split("'")[0] + "'", f"({exc})")
+    else:
+        check("expression error was raised at all", False)
+    set_language("pl")
+
+
 def test_every_field_has_a_cli_flag():
     parser = build_arg_parser()
     known = set()
