@@ -8,11 +8,17 @@ testable on any OS.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests            # full suite (no Windows/admin needed)
+python -m pytest tests            # full suite - the engine needs no Windows and no driver
 python smoke_gui.py               # GUI smoke with a fake tkinter
 python bean_network_tester.py --simulate --loss 10 --duration 3   # CLI demo
 python bean_network_tester.py --doctor                            # environment report
 ```
+
+**One exception, on Windows only:** two tests in `tests/test_cli_runtime.py` check what
+the CLI does once it is allowed to open the driver. In a shell without administrator
+rights the permission check answers first, so those two - and only those two - fail.
+Run the suite from an elevated prompt, or read a run with exactly those two failures as
+green. Everywhere else the suite passes with no special rights.
 
 The shipped build is ONE executable (`BeanNetworkTester.exe`, built from
 `BeanNetworkTester.spec`) that serves both the GUI and the CLI: console subsystem,
