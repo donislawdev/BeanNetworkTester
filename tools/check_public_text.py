@@ -205,8 +205,18 @@ def main():
     if args.text_file:
         with open(args.text_file, encoding="utf-8", errors="replace") as handle:
             blocks.append((handle.read(), "description"))
+    # Two different empties, and conflating them made this guard cry wolf. Being
+    # ASKED for nothing is a usage error; being asked about a range that HOLDS
+    # nothing is a clean result - a branch with no commits of its own carries no
+    # public text, which is exactly what we wanted to hear. `preflight.py` ran
+    # this on a fresh branch and reported FAIL, and a guard that fails for no
+    # reason teaches people to skip it.
     if not blocks:
-        parser.error("nothing to check: pass --commits or --text-file")
+        if not (args.commits or args.text_file):
+            parser.error("nothing to check: pass --commits or --text-file")
+        print(f"public text: 0 block(s) in {args.commits or args.text_file!r} "
+              f"- nothing to check, which is not a failure")
+        return 0
 
     literals, note = private_strings(args.private_strings)
     print(note)

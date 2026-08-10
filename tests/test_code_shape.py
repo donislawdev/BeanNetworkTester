@@ -41,7 +41,11 @@ import os
 from fakes import ROOT, check
 
 # Today's maxima, measured 2026-08-02. Ratchet: down is routine, up is a decision.
-FUNCTION_CEILING = 167          # beantester/gui/theme.py::init_style
+# Lowered 2026-08-10 from 167 (`gui/theme.py::init_style`) after that function was
+# split by style family. The ceiling had been pinned to it exactly, so ANY change to
+# the theme reddened the suite - and the ratchet's own answer to that is to move code
+# out, not to raise the number. Down is routine: this took the routine door.
+FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
 FILE_CEILING = 1299             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
@@ -59,7 +63,7 @@ FILE_CEILING = 1299             # beantester/gui/app.py
 # lines of headroom before it joins the count.
 CROWD_BAND = 0.70
 FILES_NEAR_CEILING = 1          # beantester/gui/app.py
-FUNCTIONS_NEAR_CEILING = 4      # init_style, _run_session, _build_ui, build_arg_parser
+FUNCTIONS_NEAR_CEILING = 3      # _run_session, _build_ui, build_arg_parser
 
 
 def _logic_lines(source):

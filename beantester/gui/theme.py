@@ -88,15 +88,8 @@ DONATE_C = "#ff8fb1"      # the support button (not a session control - own colo
 SCROLL_BG = "#3a4150"     # scrollbar thumb
 SCROLL_TROUGH = "#20232b"
 
-def init_style(root=None):
-    """Configure the shared ttk styles for the dark theme."""
-    s = ttk.Style()
-    try:
-        s.theme_use("clam")
-    except Exception as _exc:
-        crashlog.note(_exc, "gui.theme")
-
-    # -- surfaces ---------------------------------------------------------- #
+def _style_surfaces(s):
+    """Frames, labels and label-frames: the flat colours everything else sits on."""
     s.configure("TFrame", background=BG)
     s.configure("Card.TFrame", background=BG2)
     s.configure("Line.TFrame", background=LINE_C)
@@ -129,7 +122,14 @@ def init_style(root=None):
                 bordercolor=LINE_C, lightcolor=LINE_C, darkcolor=LINE_C)
     s.configure("TLabelframe.Label", background=BG, foreground=ACC, font=(FONT, 9, "bold"))
 
-    # -- buttons ------------------------------------------------------------ #
+
+def _style_buttons(s):
+    """Every button variant, and the checkbutton indicator built from images.
+
+    The longest of these by far, and the one with the most paid-for reasoning in
+    its comments - which is why the split put it in its own function rather than
+    spreading it.
+    """
     # FOCUS AND HOVER MUST NOT LOOK THE SAME (see the module docstring). Hover is
     # the fill; focus is the ring clam's ``Button.focus`` element draws INSIDE the
     # button - every clam button layout has it, and at thickness 1 it costs no
@@ -207,7 +207,9 @@ def init_style(root=None):
           lightcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)],
           darkcolor=[("active", BTN_BG), ("pressed", BTN_HOVER)])
 
-    # -- checkbuttons ------------------------------------------------------- #
+
+def _style_checkbuttons(s):
+    """The tick itself is drawn, not a font glyph - see `_check_image`."""
     # clam's built-in indicator is a flat, tiny, badly aligned square that no
     # amount of option juggling fixes. Draw the box ourselves instead.
     s.configure("TCheckbutton", background=BG2, foreground=FG, font=(FONT, 9),
@@ -217,7 +219,9 @@ def init_style(root=None):
           foreground=[("disabled", DIS_FG)])
     _install_check_indicator(s)
 
-    # -- entries ------------------------------------------------------------ #
+
+def _style_entries(s):
+    """Text fields, including the read-only and invalid states."""
     s.configure("TEntry", fieldbackground=FIELD, foreground=FG, insertcolor=FG,
                 borderwidth=1, bordercolor=BORDER, lightcolor=BORDER,
                 darkcolor=BORDER, padding=scaled(2))
@@ -234,7 +238,9 @@ def init_style(root=None):
           fieldbackground=[("disabled", DIS_BG)],
           foreground=[("disabled", DIS_FG)])
 
-    # -- comboboxes --------------------------------------------------------- #
+
+def _style_comboboxes(s):
+    """The closed combobox. Its POPDOWN is a classic Tk listbox - see below."""
     s.configure("TCombobox", fieldbackground=FIELD, background=BG2, foreground=FG,
                 arrowcolor=MUT, borderwidth=1, bordercolor=BORDER,
                 lightcolor=BORDER, darkcolor=BORDER, padding=scaled(2))
@@ -254,7 +260,9 @@ def init_style(root=None):
     # frame, its width and the highlight on the current entry are outside Tk's
     # reach. Two dropdowns on the same page must be the same widget.
 
-    # -- scrollbars --------------------------------------------------------- #
+
+def _style_scrollbars(s):
+    """Scrollbars, which clam draws with three separate colours."""
     for orient in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
         s.configure(orient, background=SCROLL_BG, troughcolor=SCROLL_TROUGH,
                     bordercolor=SCROLL_TROUGH, arrowcolor=MUT,
@@ -265,7 +273,9 @@ def init_style(root=None):
               background=[("disabled", DIS_BG), ("active", "#4b5468")],
               arrowcolor=[("disabled", DIS_BG)])
 
-    # -- notebook / tables --------------------------------------------------- #
+
+def _style_notebook_and_tables(s):
+    """Page tabs and every Treeview: the two surfaces that carry data."""
     # clam paints a tab from several elements (Notebook.tab -> Notebook.padding ->
     # Notebook.focus -> Notebook.label) and marks the selected one by GROWING it
     # (an `expand` map). Recolouring the style alone only tinted the inner element,
@@ -305,7 +315,13 @@ def init_style(root=None):
     s.map("Treeview.Heading", background=[("active", BG2)])
     s.map("Treeview", background=[("selected", "#33455f")], foreground=[("selected", FG)])
 
-    # -- the combobox popdown is a classic Tk listbox: style it via options --- #
+
+def _style_popdown(root):
+    """The combobox popdown is a classic Tk listbox, so ttk styles do NOT reach it.
+
+    It is configured through the option database instead, which needs a root -
+    hence the odd signature: this is the one block that styles nothing on `s`.
+    """
     if root is not None:
         try:
             root.option_add("*TCombobox*Listbox.background", FIELD)
@@ -317,6 +333,34 @@ def init_style(root=None):
             root.option_add("*TCombobox*Listbox.font", (FONT, 9))
         except Exception as _exc:
             crashlog.note(_exc, "gui.theme")
+
+
+def init_style(root=None):
+    """Configure the shared ttk styles for the dark theme.
+
+    A list of calls, in the order the blocks were written in. Split out of one
+    167-line function on 2026-08-10: the size ratchet had pinned its ceiling to
+    exactly this function, so any styling change reddened the suite, and the
+    ratchet's documented answer is to move code out rather than raise the number.
+
+    Proved to be a pure move: every ttk style's `configure`, `map` and `layout`
+    plus the popdown's option entries were dumped before and after - 173 styles,
+    byte-identical.
+    """
+    s = ttk.Style()
+    try:
+        s.theme_use("clam")
+    except Exception as _exc:
+        crashlog.note(_exc, "gui.theme")
+
+    _style_surfaces(s)
+    _style_buttons(s)
+    _style_checkbuttons(s)
+    _style_entries(s)
+    _style_comboboxes(s)
+    _style_scrollbars(s)
+    _style_notebook_and_tables(s)
+    _style_popdown(root)
     return s
 
 

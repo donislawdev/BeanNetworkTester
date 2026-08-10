@@ -105,6 +105,32 @@ def test_a_missing_private_list_is_announced_rather_than_silent(tmp_path):
           "did NOT run" in output, f"({output.strip()[:120]!r})")
 
 
+def test_an_empty_commit_range_is_a_clean_result_not_a_usage_error(tmp_path):
+    """Two different empties, and conflating them made the guard cry wolf.
+
+    `preflight.py` runs `--commits origin/master..HEAD`. On a branch with no
+    commits of its own that range is empty, and the scanner used to answer
+    "nothing to check: pass --commits or --text-file" with exit 2 - a usage error
+    naming a flag that HAD been passed. Preflight reported FAIL on a clean tree,
+    and a guard that fails for no reason is a guard people learn to skip.
+
+    Being asked for nothing is still a usage error. Being asked about a range
+    that holds nothing is a clean answer.
+    """
+    empty = subprocess.run(
+        [sys.executable, SCANNER, "--commits", "HEAD..HEAD"],
+        capture_output=True, text=True, cwd=ROOT)
+    check("an empty range exits clean", empty.returncode == 0,
+          f"(code={empty.returncode}, {(empty.stdout + empty.stderr).strip()[:120]!r})")
+    check("and says why it had nothing to do",
+          "0 block(s)" in empty.stdout, f"({empty.stdout.strip()[:120]!r})")
+
+    asked_for_nothing = subprocess.run(
+        [sys.executable, SCANNER], capture_output=True, text=True, cwd=ROOT)
+    check("but passing no source at all is still a usage error",
+          asked_for_nothing.returncode == 2, f"(code={asked_for_nothing.returncode})")
+
+
 def test_polish_written_without_diacritics_goes_straight_through(tmp_path):
     """A KNOWN gap, pinned so it stays known.
 
