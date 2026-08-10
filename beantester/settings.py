@@ -80,14 +80,51 @@ def build_matchers(s):
     return out
 
 
+def _expression_covers_everything(key, value):
+    """Does this filter expression accept the WHOLE space it is written against?
+
+    Total by design: an expression that does not compile is answered ``False``
+    rather than raised on. This runs on the path to a start-time WARNING, and a
+    warning that could abort a start would be worse than the mode it warns about
+    (same reasoning as ``unbounded_impairment``). The form and the CLI both
+    validate expressions up front, so a broken one has already been reported.
+    """
+    field = FIELDS[key]
+    text = setting_expression(key, value)
+    if not text:
+        return False
+    try:
+        matcher = parse_matcher(text, field.expr_kind, field.label, field.bounds)
+    except ValueError:
+        return False
+    return bool(matcher.covers_everything)
+
+
 def armed_global_impairments(s):
     """Keys of impairments that are ON and damage every captured packet.
 
     Registry-derived (``fields.GLOBALLY_IMPAIRING_KEYS``), so an impairment added
     later is covered by declaring it once, in the table where it is defined.
+
+    🔴 Plus the case the registry cannot state statically. A field marked
+    ``IMPAIRS_MATCHED`` damages only what its expression names - which is a limit
+    right up until the expression names EVERYTHING, and then it is a machine-wide
+    impairment wearing a narrow-looking label. MEASURED before this existed:
+    ``--block-ip '*'`` dropped every packet to every address and raised NO
+    warning, while ``--loss 50``, which merely degrades the link, raised one. The
+    blocking expression that cut the network looked safer than the one that
+    slowed it down.
+
+    This is the same hole as ``--target *`` (fixed 2026-08-06) seen from the other
+    side, and it is answered by the same property: ``Matcher.covers_everything``.
+    A narrow block - ``10.*``, ``172.16.0.0/12``, one port - is untouched and
+    still bounds its own damage, which is what makes it not a narrowing.
     """
-    return tuple(key for key in F.GLOBALLY_IMPAIRING_KEYS
-                 if F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key])))
+    armed = [key for key in F.GLOBALLY_IMPAIRING_KEYS
+             if F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key]))]
+    armed += [key for key in F.MATCHED_IMPAIRING_KEYS
+              if _expression_covers_everything(key, s.get(key, DEFAULT_SETTINGS[key]))]
+    return tuple(armed)
 
 
 def targeting_is_set(s):

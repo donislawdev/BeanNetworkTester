@@ -1075,6 +1075,44 @@ def test_blocking_bounds_only_its_own_damage(monkeypatch):
     check("warning: a block does not bound the loss beside it", _warned(err))
 
 
+def test_a_block_that_matches_everything_is_not_a_bounded_block(monkeypatch):
+    """The other side of the test above, and the one that was missing.
+
+    A block bounds its own damage BECAUSE it names something. `--block-ip '*'`
+    names everything, so it cuts every connection on this machine - and this is
+    the machine Claude Code runs on. MEASURED before the fix: it dropped 5 of 5
+    addresses and raised no warning at all, while `--loss 50`, which only
+    degrades the link, raised one. The expression that severed the network looked
+    safer than the one that slowed it down.
+
+    Same hole as `--target *` (fixed 2026-08-06) seen from the other side, and
+    answered by the same `Matcher.covers_everything`.
+
+    The narrow cases below are the half that matters most: they are what makes
+    this a fix rather than a new false alarm. `172.*` is included because that is
+    how people actually write a prefix.
+    """
+    for argv, why in (
+            (["--block-ip", "*"], "an IP wildcard covering everything"),
+            (["--block-port", "*"], "a port wildcard covering everything"),
+            (["--block-ip", "re:.*"], "a regular expression matching all"),
+            (["--block-ip", "0.0.0.0/0"], "the whole address space as a CIDR"),
+    ):
+        _, _, err, _ = _real_run(monkeypatch, argv)
+        check(f"warning: a block by {why} is machine-wide", _warned(err), f"({argv})")
+
+    for argv, why in (
+            (["--block-ip", "172.*"], "a one-octet prefix, the way people write it"),
+            (["--block-ip", "10.0.0.1"], "a single address"),
+            (["--block-ip", "172.16.0.0/12"], "a real subnet"),
+            (["--block-port", "443"], "a single port"),
+            (["--block-ip", "*", "--duration", "5"], "everything, but with a deadline"),
+            (["--block-ip", "*", "--target", "probe.exe"], "everything, but one process"),
+    ):
+        _, _, err, _ = _real_run(monkeypatch, argv)
+        check(f"warning: silent for {why}", not _warned(err), f"({argv})")
+
+
 def test_an_exclusion_only_target_is_not_a_bound(monkeypatch):
     """``!chrome.exe`` is non-empty and narrows nothing.
 

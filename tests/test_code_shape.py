@@ -45,8 +45,16 @@ from fakes import ROOT, check
 # split by style family. The ceiling had been pinned to it exactly, so ANY change to
 # the theme reddened the suite - and the ratchet's own answer to that is to move code
 # out, not to raise the number. Down is routine: this took the routine door.
+#
+# 🔴 BOTH ARE PINNED TO TODAY'S MEASUREMENT, and a test below enforces that. A
+# ceiling standing ABOVE the truth is a knob that has quietly loosened: it grants
+# headroom nobody decided to grant, and the next arrival slips in under it in
+# silence. This one had drifted - `FILE_CEILING` stayed at 1299 after `gui/crash.py`
+# was carved out of `app.py` and left it at 1287, so twelve lines of allowance sat
+# there for a week and were found only because somebody printed the numbers. That is
+# the same defect the crowd counts below exist to catch, one level up.
 FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
-FILE_CEILING = 1299             # beantester/gui/app.py
+FILE_CEILING = 1287             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -224,3 +232,33 @@ def test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire():
     check("the function count is today's measurement, not a looser number",
           actual_functions == FUNCTIONS_NEAR_CEILING,
           f"(measured {actual_functions}, frozen at {FUNCTIONS_NEAR_CEILING} - lower it)")
+
+
+def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
+    """The same rule as above, applied one level up: to the CEILINGS themselves.
+
+    "Down is routine, up is a decision" only holds if down actually happens. A
+    ceiling left above the truth grants headroom nobody decided to grant, and the
+    next arrival slips in under it silently - so the number has to BE the
+    measurement, not merely be above it.
+
+    Measured, not hypothetical: `FILE_CEILING` stayed at 1299 after `gui/crash.py`
+    was carved out of `app.py` and left it at 1287. Twelve lines of allowance sat
+    there for a week, and nothing was watching that gap - the crowd counts guard
+    the population of the top band, not the height of the band. This test is the
+    missing half.
+
+    Shrinking something therefore comes with a two-line chore: bring the ceiling
+    down with it. That is the routine door, and it is meant to be routine.
+    """
+    files, functions, _ = _sizes()
+    biggest_file = max(files)
+    biggest_function = max(functions)
+    check("the file ceiling IS the largest module, not a number above it",
+          biggest_file[0] == FILE_CEILING,
+          f"({biggest_file[1]} is {biggest_file[0]}, ceiling is {FILE_CEILING} - "
+          f"move the ceiling to {biggest_file[0]})")
+    check("the function ceiling IS the largest function, not a number above it",
+          biggest_function[0] == FUNCTION_CEILING,
+          f"({biggest_function[1]} is {biggest_function[0]}, ceiling is "
+          f"{FUNCTION_CEILING} - move the ceiling to {biggest_function[0]})")
