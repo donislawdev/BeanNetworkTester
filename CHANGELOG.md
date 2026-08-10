@@ -64,6 +64,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The labels on the Control page are punctuated the same way now.** Ten of them were missing
+  the colon the others had, so "Loss", "Corruption" and "Duplication" sat directly beside
+  "Latency:" and "Jitter:", and the link-drop section contradicted itself in two adjacent
+  boxes - "Period:" next to "Downtime percent". Tickboxes keep their plain caption, which is
+  right: nothing follows them. Messages that name a field drop the colon, so an out-of-range
+  value now reads `Field 'Latency' must be between 0 and 600000` instead of `Field 'Latency:'`.
+
 - **A run with several bad values now names them all at once.** `--loss 500 --latency -5
   --dup 900` reported the latency and stopped, so you fixed one, ran again, and met the next.
   All of them come back in one message. The window still reports the field you are typing in and

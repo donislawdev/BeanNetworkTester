@@ -23,8 +23,8 @@ from .fields import FIELD_DEFS, FIELDS, SECTIONS, Field, Section
 from .filters import (CLI_FILTERS, FILTER_DEFS, FILTERS, cli_key_for,
                       i18n_key_for, i18n_keys, windivert_for)
 from .i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
-                   detect_language, event_kind_label, load_languages,
-                   set_language, translate)
+                   detect_language, event_kind_label, field_name,
+                   load_languages, set_language, translate)
 from .matchers import (KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS, Matcher,
                        parse_matcher, port_expression, split_terms,
                        validate_matcher)
@@ -54,7 +54,8 @@ from .views import filter_sort_connections, sort_events
 __all__ = [
     "APP_NAME", "AUTHOR", "SUPPORT_URL", "TOOL_ID", "__version__",
     "BeanCore", "BeanEngine", "Decision", "SyntheticDivert",
-    "T", "translate", "set_language", "current_language", "available_languages",
+    "T", "translate", "field_name", "set_language", "current_language",
+    "available_languages",
     "load_languages", "detect_language", "event_kind_label", "FALLBACK_LANGUAGE",
     "DEFAULT_SETTINGS", "parse_schedule", "apply_settings",
     "load_config_file", "save_config_file",

@@ -242,8 +242,11 @@ def test_translated_exceptions():
     check("exceptions: English in EN mode (so the CLI stays English)",
           "Schedule step" in msg_en, f"({msg_en})")
     n.set_language("pl")
+    # Through `field_name`, which is how every real caller builds it - the label
+    # is "Utrata:" for the form, and a sentence naming the field drops the colon.
     check("exceptions: GUI field error translated with the field name",
-          "Pole 'Utrata' musi" in n.T("errors.field_number", name=n.T("fields.loss")))
+          "Pole 'Utrata' musi" in n.T("errors.field_number",
+                                      name=n.field_name("fields.loss")))
     n.set_language("en")
     check("exceptions: English field error",
           "must be a number" in n.T("errors.field_number", name="Loss"))

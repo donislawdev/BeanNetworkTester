@@ -157,6 +157,22 @@ def T(key, **fmt):
     return translate(key, None, **fmt)
 
 
+def field_name(key, lang=None):
+    """A field label for use INSIDE a sentence: the same text, without its colon.
+
+    A field label is written for the form, where it stands to the left of the box
+    you type in and ends with a colon ("Latency:"). Every other reader puts that
+    same string into running text - an error message names the field, the profile
+    warning lists several - and there the colon is punctuation from a different
+    sentence: ``Field 'Latency:' must be between 0 and 600000.``
+
+    So the colon belongs to the label and stripping it belongs HERE, in one place,
+    rather than in each message. The GUI's own short form builds on this and drops
+    the parenthetical too, which only a compact list wants.
+    """
+    return str(translate(key, lang)).rstrip().rstrip(":").rstrip()
+
+
 def event_kind_label(kind, lang=None):
     """Human-readable label for a canonical event kind (START, CHANGE, ...)."""
     key = "events.kind_" + str(kind).lower()
