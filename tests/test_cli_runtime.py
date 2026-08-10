@@ -14,7 +14,7 @@ import os
 import time
 
 from beantester import cli as cli_module
-from beantester import exitcodes
+from beantester import exitcodes, winenv
 from beantester.cli import (_Terminated, _print_conns, build_arg_parser,
                             config_from_args, run_cli)
 from fakes import check
@@ -329,6 +329,27 @@ def test_fail_on_no_traffic_is_shorthand_for_min_packets_one():
           config_from_args(args)["min_packets"] == 1)
 
 
+def _needs_permission_to_answer(what):
+    """Skip, with a reason, when the CLI would refuse before reaching the point.
+
+    Two tests here assert what the CLI does once it is ALLOWED to open the driver.
+    On Windows without an elevated shell the permission check answers first, so
+    they used to fail - a permanent pair of red lines that this project
+    re-diagnosed every few sessions and that a contributor met with no
+    explanation. They are skipped instead, so "green means green" holds
+    everywhere.
+
+    A skip is not silence: pytest names it and prints the reason. That matters,
+    because the alternative - deleting the assertion - would leave the elevated
+    run proving less than it does today.
+    """
+    import pytest
+
+    if os.name == "nt" and not winenv.is_admin():
+        pytest.skip("%s needs an elevated shell on Windows: the CLI answers "
+                    "PERMISSION(7) before it gets this far" % what)
+
+
 def test_exit_code_runtime_without_pydivert():
     """A capture that cannot start is RUNTIME, not 0.
 
@@ -337,7 +358,14 @@ def test_exit_code_runtime_without_pydivert():
     and admin rights), where a real capture started, saw no traffic and exited 0.
     So the failure is forced deterministically instead: an injected engine whose
     ``start`` raises, exactly as a missing/unopenable driver would.
+
+    The injected engine is still not enough on its own: ``run_cli`` refuses on
+    PERMISSION before it ever reaches the engine, so an unelevated Windows shell
+    never gets here. Measured, not assumed - forcing ``is_admin()`` False still
+    produced ``code=7``.
     """
+    _needs_permission_to_answer("a capture that cannot start")
+
     class _CannotStartEngine:
         fault = False
 
@@ -849,8 +877,12 @@ def test_print_config_dumps_the_effective_settings():
 
 def test_doctor_reports_the_environment():
     code, out, _ = cli(["--doctor"])
+    # The two lines it prints are true on any machine, elevated or not.
     check("--doctor: reports python", "python" in out)
     check("--doctor: reports the platform", "platform" in out)
+    # The VERDICT is not: without admin rights `driver.doctor()` reports a box
+    # that cannot capture, and exit 1 is the right answer there, not a defect.
+    _needs_permission_to_answer("--doctor's healthy-box verdict")
     check("--doctor: exits OK on a healthy (simulate-capable) box",
           code == exitcodes.OK, f"({code})")
 
