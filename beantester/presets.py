@@ -30,21 +30,55 @@ from .settings import DEFAULT_SETTINGS
 # bandwidth and 3G latency wrong, each badly enough to reverse a design decision
 # (see PROJECT_NOTES, rule 5, the sources bullet).
 #
-# Sources (measured, not recalled):
-#   [OOKLA25]  Ookla Q1 2025 medians: HughesNet 683 ms / 47.8 Mbit/s, Viasat
-#              684 ms / 49.1 Mbit/s; Starlink US ~105 Mbit/s down, 14.8 up.
-#   [STAR-WWW] Mohan et al., "A Multifaceted Look at Starlink Performance"
-#              (WWW 2024): reconfiguration every 15 s, latency peak averaging
-#              +74 ms at the interval boundary.
-#   [STAR-CON] "Making Sense of Constellations" - during a reconfiguration the
-#              GSL interfaces stop transmitting for 100 ms, but packets are
-#              QUEUED, not dropped. This is why LEO carries a spike and no flap.
-#   [MILEHIGH] Rula et al., "Mile High WiFi" (WWW 2018), 45 flight-hours over
-#              16 flights: RTT ~750 ms and 7% median loss for satellite (MSS),
-#              ~40% loss at the 90th percentile; ~200 ms / 3.3% for air-to-ground.
-#   [BLOAT]    Bufferbloat surveys: >70% of home links affected; idle 14 ms ->
-#              320 ms under a sustained upload, extremes 200-2000 ms.
-#   [3GPP-RTT] UMTS 100-200 ms RTT, HSPA 80-150 ms; real throughput 0.384-2 Mbit/s.
+# Sources (measured, not recalled). Every entry carries enough to be looked up:
+# a citation nobody can check is decoration, and three of these used to be exactly
+# that. Figures are FACTS quoted with attribution, which is what the sources are
+# for - no wording is reproduced from any of them.
+#
+#   [OOKLA25]  Ookla(R) Speedtest(R) analysis of US satellite providers, Q1 2025
+#              (published July 2025; figures as reported, accessed 2026-08-11):
+#              HughesNet median multi-server latency 683 ms and 47.79 Mbit/s
+#              down; Viasat 684 ms and 49.12 Mbit/s; Starlink 45 ms, 104.71 down
+#              and 14.84 up. NOT from Ookla's Open Data tiles - see the note at
+#              the bottom of this block before reaching for those.
+#   [STAR-WWW] Mohan, Ferguson, Cech, Bose, Renatin, Marina and Ott, "A
+#              Multifaceted Look at Starlink Performance", ACM Web Conference
+#              (WWW) 2024, doi:10.1145/3589334.3645328, arXiv:2310.09242:
+#              reconfiguration every 15 s, latency peak averaging +74 ms at the
+#              interval boundary.
+#   [STAR-CON] Tanveer, Puchol, Singh, Bianchi and Nithyanand, "Making Sense of
+#              Constellations: Methodologies for Understanding Starlink's
+#              Scheduling Algorithms", CoNEXT 2023 Companion,
+#              doi:10.1145/3624354.3630586, arXiv:2307.00402: during a
+#              reconfiguration the GSL interfaces stop transmitting for 100 ms,
+#              but packets are QUEUED, not dropped. Hence a spike and no flap.
+#   [MILEHIGH] Rula, Newman, Bustamante, Molavi Kakhki and Choffnes, "Mile High
+#              WiFi: A First Look At In-Flight Internet Connectivity", WWW 2018,
+#              doi:10.1145/3178876.3186057. 45 flight-hours over 16 flights:
+#              RTT ~750 ms and 7% median loss for satellite (MSS), ~40% loss at
+#              the 90th percentile; ~200 ms / 3.3% for air-to-ground.
+#   [BLOAT]    The PHENOMENON is Gettys and Nichols, "Bufferbloat: Dark Buffers
+#              in the Internet", ACM Queue 9(11), 2011 (also CACM 55(1), 2012),
+#              doi:10.1145/2063166.2071893. 🔴 The NUMBERS beside it here - idle
+#              14 ms rising to ~320 ms under a sustained upload, extremes
+#              200-2000 ms, "most home links affected" - are a typical range
+#              assembled from general reporting, NOT figures from that paper.
+#              Treat them as a shaped default, not as a measurement.
+#   [3GPP-RTT] GENERAL KNOWLEDGE, deliberately not dressed as a citation: UMTS
+#              round trips of roughly 100-200 ms, HSPA 80-150 ms, real
+#              throughput 0.384-2 Mbit/s. Widely reported engineering ranges; no
+#              single document is being leaned on, and inventing a specification
+#              number to make it look sourced would be worse than saying this.
+#
+# 🔴 LICENSING, before somebody improves this: the figures above are FACTS with
+# attribution, which is exactly what is allowed - facts carry no copyright and a
+# handful of them is not a substantial part of any database. That stops being
+# true if anyone ingests **Ookla's Open Data tiles**: those are CC BY-NC-SA 4.0,
+# and both the NonCommercial and the ShareAlike terms conflict with this
+# project's GPLv3. Cite published findings; do not import the dataset.
+# Ookla, Speedtest, Starlink, HughesNet and Viasat are trademarks of their
+# respective owners, named here only to identify whose measurements these are.
+# This project is not affiliated with, endorsed by or sponsored by any of them.
 # --------------------------------------------------------------------------- #
 PRESETS = {
     # ordered best -> worst (top = best network, bottom = worst)
