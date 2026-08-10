@@ -1,0 +1,28 @@
+# Blocks a pull request that introduces a dependency with a known vulnerability.
+#
+# Why a separate workflow and not a step in ci.yml: this action compares the
+# dependency manifests of the BASE and the HEAD of a pull request, so it is
+# meaningful on `pull_request` only - a push has nothing to diff against. Wiring
+# it into the main matrix would make it run (and be skipped) three more times per
+# push for no benefit.
+name: dependency review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: review new dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          # A tool that loads a kernel driver has no business gaining a
+          # vulnerable dependency quietly. Anything at or above "moderate"
+          # fails the pull request rather than warning in a log nobody reads.
+          fail-on-severity: moderate
+          comment-summary-in-pr: always
