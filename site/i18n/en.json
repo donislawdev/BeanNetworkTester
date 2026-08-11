@@ -10,6 +10,8 @@
   "nav.primary": "Site",
   "nav.language": "Language",
 
+  "og.image_alt": "The Bean Network Tester window, showing a session in progress",
+
   "cta.download": "Download for Windows",
   "cta.source": "See the code on GitHub",
   "cta.note": "Free and open source under the GPLv3. Windows 10 and 11, 64-bit. No account, no telemetry.",

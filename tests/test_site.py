@@ -294,8 +294,41 @@ def test_the_social_card_says_the_same_thing_as_the_page(tmp_path):
             check(f"{rel}: {key} matches the page", meta.get(key) == value,
                   f"(got {meta.get(key)!r})")
         for key in ("og:type", "og:site_name", "og:image", "og:locale", "twitter:card",
-                    "twitter:image"):
+                    "twitter:image", "og:image:alt", "twitter:image:alt"):
             check(f"{rel}: {key} is set", meta.get(key), "(missing)")
+
+
+def test_the_card_image_reports_the_size_the_file_really_has(tmp_path):
+    """Dimensions read from the PNG, not typed next to it.
+
+    A number typed into a registry beside an image is a number that stops being true
+    the day the image is replaced, and a card with wrong dimensions reflows or crops
+    in somebody else's timeline, where we never see it.
+    """
+    out, written = _build(tmp_path, "card")
+    registry = build_site.load_registry(ROOT)
+    source = build_site.asset_source(registry, ROOT, registry["og_image"])
+    width, height = build_site._png_size(source)
+    check("the icon is a PNG with real dimensions", width > 0 and height > 0,
+          f"({width}x{height})")
+    for rel in [p for p in written if p.endswith("index.html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: the declared width is the file's width",
+              f'content="{width}"' in page, f"({width})")
+        check(f"{rel}: the declared height is the file's height",
+              f'content="{height}"' in page, f"({height})")
+
+
+def test_the_browser_chrome_colour_comes_from_the_programs_palette(tmp_path):
+    """`theme-color` paints the address bar on a phone, so it is a colour like any
+    other: it lives in theme.py or it becomes a second dark theme."""
+    out, written = _build(tmp_path, "chrome")
+    registry = build_site.load_registry(ROOT)
+    expected = build_site.palette(ROOT, registry["palette"])["--bg"]
+    for rel in [p for p in written if p.endswith(".html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: theme-color is the page background from theme.py",
+              f'<meta name="theme-color" content="{expected}">' in page, f"({expected})")
 
 
 def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
@@ -359,6 +392,26 @@ def test_robots_lets_everything_in_and_names_the_sitemap(tmp_path):
     text = _read(os.path.join(out, "robots.txt"))
     check("robots.txt allows crawling", "Disallow: /\n" not in text, f"({text})")
     check("robots.txt names the sitemap", f"Sitemap: {base}/sitemap.xml" in text, f"({text})")
+
+
+def test_the_error_page_works_from_an_address_that_does_not_exist(tmp_path):
+    """The one page whose own address is unknown when it is served.
+
+    GitHub Pages returns `404.html` AT the path that missed and does not redirect, so
+    a relative reference resolves against that path: a miss at `/pl/x/y/` would fetch
+    `/pl/x/y/assets/style.css` and the error page would render unstyled, with a home
+    button pointing back at the address that had just failed. Measured on the built
+    file, because the first version of this page did exactly that.
+    """
+    out, _ = _build(tmp_path, "notfound")
+    page = _read(os.path.join(out, "404.html"))
+    prefix = build_site._root_prefix(build_site.load_registry(ROOT))
+    refs = re.findall(r'(?:href|src)="([^"]+)"', page)
+    check("the error page has links to check", refs, "(none)")
+    for ref in refs:
+        ok = ref.startswith(("http://", "https://", "#")) or ref.startswith(prefix)
+        check(f"404.html: {ref} does not depend on where the page was served from", ok,
+              f"(expected an absolute URL, a fragment, or a path under {prefix})")
 
 
 def test_the_error_page_is_a_file_pages_serves_and_asks_not_to_be_indexed(tmp_path):
@@ -452,7 +505,7 @@ def test_the_sandbox_the_rejection_tests_use_is_itself_valid(tmp_path):
     """An UNMUTATED sandbox has to build, or every rejection test below is vacuous.
 
     ``_fails`` accepts any ``SiteError``, so a sandbox missing one file of its own
-    would make all seven mutations "pass" while proving nothing - the same shape as
+    would make every mutation below "pass" while proving nothing - the same shape as
     the fake packet whose two ports were equal, which made assertions about
     direction hold without checking anything. Measured, not assumed: this builds,
     and each mutation then fails with its own message.
@@ -463,7 +516,7 @@ def test_the_sandbox_the_rejection_tests_use_is_itself_valid(tmp_path):
 
 
 def test_the_build_refuses_a_source_that_would_publish_a_broken_page(tmp_path):
-    """Seven ways to be wrong, each of which still renders a plausible page.
+    """Ten ways to be wrong, each of which still renders a plausible page.
 
     This is the half of the guard that matters: every one of these would go
     unnoticed for months, because the page would look fine.
@@ -503,6 +556,11 @@ def test_the_build_refuses_a_source_that_would_publish_a_broken_page(tmp_path):
     root = _sandbox(tmp_path / "missing_asset")
     os.remove(os.path.join(root, "bean.png"))
     _fails(root, out, "a listed asset is not in the repository")
+
+    root = _sandbox(tmp_path / "card_image_nothing_produces")
+    _edit_json(os.path.join(root, "site", "site.json"),
+               lambda d: d.update({"og_image": "assets/nothing-makes-this.png"}))
+    _fails(root, out, "the social card names an image the build does not produce")
 
     root = _sandbox(tmp_path / "unknown_schema")
     _edit_json(os.path.join(root, "site", "pages", "home", "page.json"),

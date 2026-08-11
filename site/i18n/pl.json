@@ -10,6 +10,8 @@
   "nav.primary": "Witryna",
   "nav.language": "Język",
 
+  "og.image_alt": "Okno programu Bean Network Tester w trakcie sesji",
+
   "cta.download": "Pobierz na Windows",
   "cta.source": "Zobacz kod na GitHubie",
   "cta.note": "Darmowe i otwarte na licencji GPLv3. Windows 10 i 11, 64-bit. Bez konta, bez telemetrii.",

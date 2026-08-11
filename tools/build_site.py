@@ -44,7 +44,9 @@ import os
 import posixpath
 import re
 import shutil
+import struct
 import sys
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -347,7 +349,62 @@ def _absolute(base_url, dir_path):
     return "%s/%s" % (base_url, dir_path + "/" if dir_path else "")
 
 
-def head_meta(page, code, registry, texts, description):
+def _root_prefix(registry):
+    """Path prefix for a document that can be served from ANY address.
+
+    Everything else on this site uses relative references, which keeps the output
+    working under a domain root and under a project path alike. The error document
+    cannot: GitHub Pages returns ``404.html`` AT the address that missed, without
+    redirecting, so a relative reference resolves against the missing path. A miss at
+    ``/pl/x/y/`` would look for ``/pl/x/y/assets/style.css`` and render the error page
+    with no styling, and its "home" button would point back at the address that had
+    just failed - the page would be broken exactly when it is used.
+
+    Taken from the configured address rather than hard-coded to "/", so a deployment
+    under a project path keeps working.
+    """
+    path = urlsplit(registry["base_url"]).path.rstrip("/")
+    return (path + "/") if path else "/"
+
+
+def asset_source(registry, root, target):
+    """The repository file that produces an output asset, or a loud failure.
+
+    ``og_image`` names a path on the SITE (``assets/bean.png``), while the file lives
+    somewhere else in the repository (``bean.png``), and the asset list is what ties
+    the two together. Looking it up instead of guessing means an ``og:image`` that
+    names a file nothing produces fails the build rather than the card: a social
+    preview pointing at a 404 is invisible until somebody shares the link.
+    """
+    for asset in registry.get("assets", []):
+        if asset["target"] == target:
+            path = os.path.join(root, asset["source"].replace("/", os.sep))
+            if not os.path.isfile(path):
+                # Reached before the copy step, so it has to say the same thing that
+                # step would: a missing source is a missing source, not an OSError
+                # from whoever happened to open it first.
+                raise SiteError("site.json lists an asset that is not there: %s"
+                                % asset["source"])
+            return path
+    raise SiteError("site.json: og_image is %r, which no entry in 'assets' produces "
+                    "(so the card would point at a missing file)" % target)
+
+
+def _png_size(path):
+    """(width, height) from a PNG header, or None for anything else.
+
+    Social cards render faster when the dimensions arrive with the tag, and the file
+    itself is the only honest source for them - a number typed into a registry beside
+    the image is a number that stops being true when the image is replaced.
+    """
+    with open(path, "rb") as handle:
+        head = handle.read(24)
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return struct.unpack(">II", head[16:24])
+
+
+def head_meta(page, code, registry, texts, description, root):
     """Canonical, hreflang, social cards and structured data, as HTML.
 
     Composed here and not in the template because the set differs per page and the
@@ -381,18 +438,23 @@ def head_meta(page, code, registry, texts, description):
     # it: `summary_large_image` wants roughly 2:1 and would crop or letterbox this.
     # A dedicated banner is a drawing job, not a build job.
     image = "%s/%s" % (base, registry["og_image"].lstrip("/"))
+    size = _png_size(asset_source(registry, root, registry["og_image"]))
     lang = _language(registry, code)
     social = [("og:type", "website"), ("og:site_name", texts[code]["site.name"]),
               ("og:title", entry["title"]), ("og:description", description),
               ("og:url", canonical), ("og:image", image),
-              ("og:locale", lang.get("og_locale", code))]
+              ("og:locale", lang.get("og_locale", code)),
+              ("og:image:alt", texts[code]["og.image_alt"])]
+    if size:
+        social += [("og:image:width", size[0]), ("og:image:height", size[1])]
     social += [("og:locale:alternate", other.get("og_locale", other["code"]))
                for other in registry["languages"] if other["code"] != code]
     for prop, value in social:
         lines.append('<meta property="%s" content="%s">'
                      % (prop, html.escape(str(value), quote=True)))
     for name, value in (("twitter:card", "summary"), ("twitter:title", entry["title"]),
-                        ("twitter:description", description), ("twitter:image", image)):
+                        ("twitter:description", description), ("twitter:image", image),
+                        ("twitter:image:alt", texts[code]["og.image_alt"])):
         lines.append('<meta name="%s" content="%s">'
                      % (name, html.escape(str(value), quote=True)))
 
@@ -534,7 +596,7 @@ def language_switcher(page, current_code, registry, label):
                % (html.escape(label, quote=True), "".join(parts)))
 
 
-def page_context(page, code, registry, texts, home_dir):
+def page_context(page, code, registry, texts, home_dir, colours, root):
     """Everything a page's template and body may refer to, for one language."""
     entry = page["languages"][code]
     lang = _language(registry, code)
@@ -551,11 +613,14 @@ def page_context(page, code, registry, texts, home_dir):
         "page.lang": code,
         "page.url": "%s/%s" % (registry["base_url"],
                                entry["dir_path"] + "/" if entry["dir_path"] else ""),
-        "page.asset_prefix": _asset_prefix(entry["dir_path"]),
-        "page.home_url": _relative_url(entry["dir_path"], home_dir),
+        "site.theme_color": colours["--bg"],
+        "page.asset_prefix": (_root_prefix(registry) if page["output"]
+                              else _asset_prefix(entry["dir_path"])),
+        "page.home_url": (_root_prefix(registry) if page["output"]
+                          else _relative_url(entry["dir_path"], home_dir)),
         "page.language_switcher": language_switcher(page, code, registry,
                                                     texts[code]["nav.language"]),
-        "page.head_meta": head_meta(page, code, registry, texts, entry["description"]),
+        "page.head_meta": head_meta(page, code, registry, texts, entry["description"], root),
     }, "page %s [%s]" % (page["id"], code))
     return context
 
@@ -606,6 +671,7 @@ def build(root=ROOT, out=None):
     registry = load_registry(root)
     texts = load_i18n(root, language_codes(registry), registry["default_language"])
     pages = load_pages(root, registry)
+    colours = palette(root, registry["palette"])
     template = _read_text(os.path.join(root, SITE_DIR, "templates", "base.html"))
 
     home = next((p for p in pages if p["id"] == "home"), pages[0])
@@ -614,7 +680,7 @@ def build(root=ROOT, out=None):
         for code in page["codes"]:
             entry = page["languages"][code]
             home_dir = home["languages"][code]["dir_path"]
-            context = page_context(page, code, registry, texts, home_dir)
+            context = page_context(page, code, registry, texts, home_dir, colours, root)
             body = render(entry["body"], context,
                           "pages/%s/%s.html" % (page["id"], code))
             context["page.body"] = Raw(body)
@@ -630,7 +696,7 @@ def build(root=ROOT, out=None):
     # ever switched to a branch: Jekyll would then drop every path starting with an
     # underscore, silently.
     written.append(_write(out, ".nojekyll", ""))
-    written.append(_write(out, "assets/style.css", _stylesheet(root, registry)))
+    written.append(_write(out, "assets/style.css", _stylesheet(root, colours)))
     for asset in registry.get("assets", []):
         source = os.path.join(root, asset["source"].replace("/", os.sep))
         if not os.path.isfile(source):
@@ -641,13 +707,12 @@ def build(root=ROOT, out=None):
     return sorted(written)
 
 
-def _stylesheet(root, registry):
+def _stylesheet(root, colours):
     """The palette from theme.py, in front of the hand-written CSS, in one file.
 
     One file rather than two: a second stylesheet is a second request for no
     benefit, and the variables have to arrive before the rules that use them.
     """
-    colours = palette(root, registry["palette"])
     lines = ["/* Generated by tools/build_site.py from beantester/gui/theme.py.",
              "   Do not edit: change the colour in theme.py, where the program reads it too. */",
              ":root {"]
