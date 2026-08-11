@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Zrywanie połączeń na życzenie</h1>
+  <p class="lead">Wolno to jeden rodzaj awarii. Brak łącza to drugi, i właśnie on znajduje ścieżkę
+  kodu, której nikt nie napisał: ponowne połączenie, ponowienie próby, komunikat mówiący
+  użytkownikowi, co się stało.</p>
+</section>
+
+<section>
+  <h2>Pięć różnych sposobów na brak łącza</h2>
+  <table>
+    <tr><th>Ustawienie</th><th>Co widzi aplikacja</th></tr>
+    <tr><td><strong>Zrywanie połączeń</strong></td><td>Połączenia padają w środku transferu, tak jak
+    je zabija firewall albo load balancer. Ustawiasz, jak często, w procentach.</td></tr>
+    <tr><td><strong>Łącze na przemian</strong></td><td>Sieć znika na chwilę i wraca, w kółko.
+    Ustawiasz długość cyklu i jaka jego część to przestój.</td></tr>
+    <tr><td><strong>Blokada portu</strong></td><td>Wszystko na ten port przepada. Nic innego nie jest
+    ruszane.</td></tr>
+    <tr><td><strong>Blokada adresu</strong></td><td>Jeden serwer staje się nieosiągalny, a reszta
+    internetu działa.</td></tr>
+    <tr><td><strong>Tryb LAN</strong></td><td>Sieć lokalna działa, internet nie. Dokładnie kształt
+    portalu logowania w hotelu albo padniętego łącza operatora.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Z linii komend</h2>
+  <p>Zabij mniej więcej co dziesiąte połączenie jednej aplikacji:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Cykle dziesięciosekundowe, cztery sekundy przestoju - łącze, które ciągle znika i wraca:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Jeden serwer nieosiągalny, wszystko inne w porządku:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Blokada rusza tylko to, co nazywa</h2>
+  <p>W odróżnieniu od straty czy opóźnienia, blokada portu albo adresu dotyczy <strong>wyłącznie</strong>
+  ruchu, który do niej pasuje. To czyni ją najbezpieczniejszą z tej piątki do uruchomienia bez celu
+  procesowego i dlatego "niech ta jedna zależność zniknie" to komenda w jednej linii.</p>
+</section>
+
+<section>
+  <h2>Pułapka martwego pobierania</h2>
+  <p>Jest też maksymalny rozmiar pakietu. Zmniejsz go trochę i duże transfery zwolnią. Zmniejsz do
+  wartości w rodzaju 576 i pobieranie stanie całkowicie, na zawsze, bez żadnego błędu - bo to już nie
+  jest mniejszy rozmiar pakietu, tylko klasyczna czarna dziura, w której sieć wyrzuca to, co za duże,
+  i nigdy o tym nie mówi.</p>
+  <p>To realny tryb awarii, wart odtworzenia specjalnie, i naprawdę mylący, gdy spotka się go
+  przypadkiem. Jeśli pobieranie zdechło po cichu zaraz po zmianie tego ustawienia - to jest powód.</p>
+</section>
+
+<section>
+  <h2>Powrót do normy</h2>
+  <p>STOP przywraca wszystko. Tak samo zamknięcie programu, tak samo limit czasu, jeśli go ustawisz.
+  Gdyby samo narzędzie kiedyś padło w środku sesji, jego wewnętrzny nadzorca zatrzymuje przechwyt,
+  zamiast zostawiać Twoją sieć w zepsutym stanie.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

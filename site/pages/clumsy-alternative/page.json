@@ -1,0 +1,18 @@
+{
+  "id": "clumsy-alternative",
+  "order": 70,
+  "languages": {
+    "en": {
+      "slug": "clumsy-alternative",
+      "link_text": "A Clumsy alternative",
+      "title": "A Clumsy alternative for Windows",
+      "description": "What to look for in a network impairment tool for Windows, what this one adds over an interactive-only tool, and when to use something else."
+    },
+    "pl": {
+      "slug": "alternatywa-dla-clumsy",
+      "link_text": "Alternatywa dla Clumsy",
+      "title": "Alternatywa dla Clumsy na Windows",
+      "description": "Na co patrzeć w narzędziu do psucia sieci na Windows, co to daje ponad narzędzie tylko z okienkiem, i kiedy wybrać coś innego."
+    }
+  }
+}

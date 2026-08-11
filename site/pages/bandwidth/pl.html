@@ -1,0 +1,64 @@
+<section class="hero">
+  <h1>Limit prędkości pobierania i wysyłania</h1>
+  <p class="lead">Ustawiasz sufit w kilobajtach na sekundę i aplikacja nie dostaje więcej. Oba
+  kierunki są osobne, więc możesz dać jej szybkie pobieranie i beznadziejne wysyłanie - a tak
+  właśnie wygląda większość łączy domowych i mobilnych.</p>
+</section>
+
+<section>
+  <h2>W oknie programu</h2>
+  <ol class="steps">
+    <li>Ustaw <strong>{{app.fields.target_process}}</strong> na swoją aplikację.</li>
+    <li>Wypełnij <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> albo oba, w KB/s. Pole
+    zostawione na 0 nie rusza tego kierunku.</li>
+    <li>Wciśnij <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Co znaczą te liczby</h2>
+  <table>
+    <tr><th>KB/s</th><th>W przybliżeniu</th><th>Co to jest</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Modem wdzwaniany. Profil "{{app.presets.modem56k}}".</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>WiFi w samolocie, zapchany hotel, słaby zasięg.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Skromne łącze domowe. Wystarczy na jeden strumień wideo.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Normalne dzisiejsze łącze stacjonarne.</td></tr>
+  </table>
+  <p>Kilobajty, nie kilobity - więc mnóż przez osiem, żeby porównać z tym, co reklamuje dostawca
+  internetu.</p>
+</section>
+
+<section>
+  <h2>Kolejka znaczy tyle samo, co sam limit</h2>
+  <p>Limit prędkości musi mieć gdzie odłożyć pakiety, które jeszcze się nie mieszczą. To jest
+  ustawienie <strong>{{app.fields.buffer}}</strong>, w milisekundach, i działa jak kolejka do kasy:</p>
+  <ul>
+    <li><strong>Krótka kolejka</strong> znaczy, że pakiety lecą do kosza, gdy tylko się zapełni.
+    Aplikacja widzi stratę i reaguje szybko.</li>
+    <li><strong>Długa kolejka</strong> znaczy, że nic nie ginie, ale wszystko czeka. Aplikacja widzi
+    łącze coraz wolniejsze, zamiast padającego - i to jest efekt zapchanego łącza domowego, powód,
+    dla którego rozmowa wideo się rozsypuje, a pobieranie leci dalej.</li>
+  </ul>
+  <p>Profil "{{app.presets.bufferbloat}}" to dokładnie to: limit z długą kolejką. Spróbuj
+  tej samej prędkości z krótką i z długą kolejką, i popatrz, jak inaczej zachowa się aplikacja.</p>
+</section>
+
+<section>
+  <h2>Jedna rzecz, której należy się spodziewać</h2>
+  <p>Przy działającym limicie licznik odrzuconych pakietów może zostać na zerze. To nie usterka:
+  limit najpierw każe pakietom czekać, a odrzuca je dopiero, gdy kolejka naprawdę się zapełni. Daj
+  mu mały bufor i odrzucenia się pojawią.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

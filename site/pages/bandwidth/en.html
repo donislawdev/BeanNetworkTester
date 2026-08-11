@@ -1,0 +1,64 @@
+<section class="hero">
+  <h1>Limit download and upload speed</h1>
+  <p class="lead">Set a ceiling in kilobytes per second and the app gets no more than that. The two
+  directions are separate, so you can give it a fast download and a hopeless upload - which is
+  exactly what most home and mobile connections look like.</p>
+</section>
+
+<section>
+  <h2>In the window</h2>
+  <ol class="steps">
+    <li>Set <strong>{{app.fields.target_process}}</strong> to your application.</li>
+    <li>Fill <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> or both, in KB/s. Leave a field at 0
+    to leave that direction alone.</li>
+    <li>Press <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>What the numbers mean</h2>
+  <table>
+    <tr><th>KB/s</th><th>Roughly</th><th>What it is</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>A dial-up modem. The "{{app.presets.modem56k}}" profile.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>In-flight WiFi, a busy hotel, a bad mobile signal.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>A modest home line. Enough for one video stream.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>A normal fixed connection today.</td></tr>
+  </table>
+  <p>Kilobytes, not kilobits - so multiply by eight to compare with what an internet provider
+  advertises.</p>
+</section>
+
+<section>
+  <h2>The queue matters as much as the limit</h2>
+  <p>A speed limit needs somewhere to put the packets that do not fit yet. That is the
+  <strong>{{app.fields.buffer}}</strong> setting, in milliseconds, and it behaves like the queue at a checkout:</p>
+  <ul>
+    <li><strong>A short queue</strong> means packets get thrown away as soon as the line is full.
+    Your app sees loss and reacts quickly.</li>
+    <li><strong>A long queue</strong> means nothing is thrown away, but everything waits. Your app
+    sees the connection getting slower and slower instead of failing - the effect a congested home
+    line has, and the reason a video call degrades while a download keeps going.</li>
+  </ul>
+  <p>The "{{app.presets.bufferbloat}}" profile is exactly this: a limit with a long queue.
+  Try the same speed with a short queue and a long one, and watch how differently the app behaves.</p>
+</section>
+
+<section>
+  <h2>One thing to expect</h2>
+  <p>With a limit running, the counter for dropped packets can stay at zero. That is not a bug: a
+  limit first makes packets wait, and it only drops them when the queue is genuinely full. Give it a
+  small buffer and the drops appear.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

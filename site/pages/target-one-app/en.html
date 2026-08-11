@@ -1,0 +1,64 @@
+<section class="hero">
+  <h1>Aim at one app, not the machine</h1>
+  <p class="lead">Without a target, every connection on the computer is affected - including the
+  remote desktop you are using and the download of the fix. With a target, one process gets the bad
+  network and everything else carries on.</p>
+</section>
+
+<section>
+  <h2>By process</h2>
+  <p>Type a name into <strong>{{app.fields.target_process}}</strong>, or pass <code>--target</code>. A bare name
+  matches as a fragment, so <code>chrome</code> covers <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>It follows the process tree, which matters for anything that spawns children: a browser opens a
+  process per tab, and those are hit too.</p>
+  <p>The field takes more than one name, and more than one kind of thing at once:</p>
+  <table>
+    <tr><th>What you type</th><th>What it means</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Two applications.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, but never the driver. Exclusions
+    win.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Everything starting with "my".</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>A regular expression, when a wildcard is not
+    enough.</td></tr>
+    <tr><td><code>4812</code></td><td>A single process id.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Every process id above 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>By address or port</h2>
+  <p>Sometimes the app is not the unit of interest - one server is. These take the same list,
+  range and exclusion syntax, and understand CIDR and IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>The second one is worth knowing: everything except DNS. Aiming <em>away</em> from a port is
+  often easier than listing the ones you want.</p>
+</section>
+
+<section>
+  <h2>Targeting a process by name survives its restart</h2>
+  <p>Restart the application while a session is running and a target by <strong>name</strong> picks
+  the new process up again. A target by <strong>process id</strong> cannot - the id belonged to the
+  process that exited. If your test restarts the thing under test, target it by name.</p>
+</section>
+
+<section>
+  <h2>The warning you should not ignore</h2>
+  <p>Start with impairment on, nothing to aim at and no time limit, and both the window and the
+  command line say so: this affects every connection on this machine. It is a warning, not a
+  refusal - sometimes that is what you want. If it is not, set a target or a
+  <code>--duration</code>, and STOP always puts everything back.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,18 @@
+{
+  "id": "bandwidth",
+  "order": 30,
+  "languages": {
+    "en": {
+      "slug": "bandwidth-limit",
+      "link_text": "Speed limit",
+      "title": "Limit download and upload speed",
+      "description": "Hold one Windows app to a set number of KB per second, in either direction, and see what a 56k modem or in-flight WiFi does to it."
+    },
+    "pl": {
+      "slug": "limit-predkosci",
+      "link_text": "Limit prędkości",
+      "title": "Limit prędkości pobierania i wysyłania",
+      "description": "Utrzymaj jedną aplikację na Windows przy zadanej liczbie KB na sekundę, w wybranym kierunku, i sprawdź, co robi z nią modem 56k."
+    }
+  }
+}

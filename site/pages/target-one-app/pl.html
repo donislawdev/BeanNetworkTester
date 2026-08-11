@@ -1,0 +1,63 @@
+<section class="hero">
+  <h1>Celuj w jedną aplikację, nie w komputer</h1>
+  <p class="lead">Bez celu zaburzenie dotyka każdego połączenia na komputerze - w tym pulpitu
+  zdalnego, na którym pracujesz, i pobierania poprawki. Z celem złą sieć dostaje jeden proces, a
+  reszta pracuje normalnie.</p>
+</section>
+
+<section>
+  <h2>Po procesie</h2>
+  <p>Wpisz nazwę w <strong>{{app.fields.target_process}}</strong> albo podaj <code>--target</code>. Sama nazwa
+  dopasowuje się jako fragment, więc <code>chrome</code> obejmuje <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Celowanie idzie po drzewie procesów, co ma znaczenie dla wszystkiego, co tworzy potomków:
+  przeglądarka otwiera proces na kartę i te też są objęte.</p>
+  <p>Pole przyjmuje więcej niż jedną nazwę i więcej niż jeden rodzaj rzeczy naraz:</p>
+  <table>
+    <tr><th>Co wpisujesz</th><th>Co to znaczy</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Dwie aplikacje.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, ale nigdy driver. Wykluczenia
+    wygrywają.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Wszystko, co zaczyna się na "my".</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Wyrażenie regularne, gdy wildcard nie wystarcza.</td></tr>
+    <tr><td><code>4812</code></td><td>Jeden identyfikator procesu.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Każdy proces o identyfikatorze powyżej 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Po adresie albo porcie</h2>
+  <p>Czasem jednostką zainteresowania nie jest aplikacja, tylko jeden serwer. Te pola przyjmują tę
+  samą składnię list, zakresów i wykluczeń, rozumieją CIDR i IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Ta druga komenda jest warta zapamiętania: wszystko poza DNS. Celowanie <em>obok</em> portu
+  bywa łatwiejsze niż wypisywanie tych, które chcesz objąć.</p>
+</section>
+
+<section>
+  <h2>Cel po nazwie przeżywa restart aplikacji</h2>
+  <p>Zrestartuj aplikację w trakcie sesji, a cel po <strong>nazwie</strong> podłapie nowy proces.
+  Cel po <strong>identyfikatorze</strong> nie ma jak - ten numer należał do procesu, który się
+  zakończył. Jeśli Twój test restartuje badaną rzecz, celuj po nazwie.</p>
+</section>
+
+<section>
+  <h2>Ostrzeżenie, którego nie warto ignorować</h2>
+  <p>Wystartuj z włączonym psuciem, bez celu i bez limitu czasu, a i okno, i linia komend powiedzą
+  to wprost: dotyczy to każdego połączenia na tym komputerze. To ostrzeżenie, nie odmowa - czasem
+  właśnie tego chcesz. Jeśli nie, ustaw cel albo <code>--duration</code>, a STOP zawsze przywraca
+  wszystko do normy.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

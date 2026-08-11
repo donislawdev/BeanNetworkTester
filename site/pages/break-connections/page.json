@@ -1,0 +1,18 @@
+{
+  "id": "break-connections",
+  "order": 50,
+  "languages": {
+    "en": {
+      "slug": "break-connections",
+      "link_text": "Break connections",
+      "title": "Break connections on purpose",
+      "description": "Kill connections, block a port or an address, cut the link for a while, or shrink packets until nothing gets through - and see how the app recovers."
+    },
+    "pl": {
+      "slug": "zrywanie-polaczen",
+      "link_text": "Zrywanie połączeń",
+      "title": "Zrywanie połączeń na życzenie",
+      "description": "Zabijaj połączenia, blokuj port albo adres, wyłączaj łącze na chwilę lub zmniejsz pakiety tak, że nic nie przechodzi, i patrz, jak aplikacja wraca."
+    }
+  }
+}

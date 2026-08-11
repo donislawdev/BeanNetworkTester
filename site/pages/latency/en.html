@@ -1,0 +1,62 @@
+<section class="hero">
+  <h1>Add latency and jitter to an app</h1>
+  <p class="lead">Everything works on a fast local connection. Give the app 300 ms of ping and you
+  find out which screens were written as if the answer arrives instantly.</p>
+</section>
+
+<section>
+  <h2>Three different things</h2>
+  <table>
+    <tr><th>Setting</th><th>What it does</th><th>Where it comes from in real life</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Adds the same delay to every packet, in
+    milliseconds.</td><td>Distance. A server on another continent, or a satellite.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Adds a random amount on top, so the delay keeps
+    changing.</td><td>Shared WiFi, mobile networks, anything congested.</td></tr>
+    <tr><td><strong>Spikes</strong></td><td>Occasional long stalls, set by how often and how
+    long.</td><td>A handover between cell towers, a router under load.</td></tr>
+  </table>
+  <p>All three are in milliseconds and can run together. Both delay figures accept anything from 0
+  up, so you can go from a believable 40 ms to an absurd 60 seconds.</p>
+</section>
+
+<section>
+  <h2>From the command line</h2>
+  <p>A steady 200 ms with 80 ms of jitter, on one application:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Rare, long stalls instead - roughly one packet in twenty waits an extra second:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Numbers worth trying</h2>
+  <ul>
+    <li><strong>40 ms</strong> - a server in the same country. Nothing should change.</li>
+    <li><strong>150 ms</strong> - another continent. Anything chatty starts to feel slow, because
+    each round trip costs.</li>
+    <li><strong>600 ms and up</strong> - geostationary satellite or in-flight WiFi. This is where
+    progress bars stall and retry logic finally runs.</li>
+  </ul>
+  <p>The ready profiles carry measured figures: "{{app.presets.distant}}",
+  "{{app.presets.leo}}", "{{app.presets.satellite}}", "{{app.presets.inflight}}", "{{app.presets.lte}}".</p>
+</section>
+
+<section>
+  <h2>Measuring it: look at the worst case, not the average</h2>
+  <p>Jitter barely moves an average, and it barely moves a median. A run with 30 ms of jitter and a
+  run without it can report almost the same "typical" ping while feeling completely different.</p>
+  <p>Compare the <strong>95th percentile against the median</strong> instead. The gap between them
+  is the jitter, and that gap is what makes a voice call choppy or a game unplayable while the
+  average still looks fine.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

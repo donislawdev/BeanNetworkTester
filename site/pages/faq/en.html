@@ -1,0 +1,71 @@
+<section class="hero">
+  <h1>Questions people ask first</h1>
+  <p class="lead">The ones worth answering before you download rather than after.</p>
+</section>
+
+<section>
+  <h2>Why does it need administrator rights?</h2>
+  <p>Because packets are intercepted by a kernel driver, and Windows does not load one for a normal
+  user. The program asks for the rights itself when it starts. From the command line it refuses with
+  a specific exit code instead of failing halfway through.</p>
+</section>
+
+<section>
+  <h2>Will it break the whole machine or just my app?</h2>
+  <p>Whatever you point it at. Set a target and only that application is affected. Leave the target
+  empty and every connection on the computer is - which the program warns you about, in the window
+  and on the command line, before you can wonder why the video call dropped.</p>
+</section>
+
+<section>
+  <h2>How do I undo it?</h2>
+  <p>STOP. Closing the program does the same, and so does a time limit if you set one. If the tool
+  itself dies mid-session, a watchdog inside it shuts the capture down rather than leaving your
+  network impaired - a session must never outlive the program that started it.</p>
+</section>
+
+<section>
+  <h2>Does it send anything anywhere?</h2>
+  <p>No. There is no analytics, no crash reporting to a service and no update check. The program has
+  no network client at all. The only outgoing connection it can make is opening the support page in
+  your browser, after you click it. It intercepts your traffic, so that traffic must never leave your
+  machine, and this page you are reading loads nothing from anyone else either.</p>
+</section>
+
+<section>
+  <h2>Windows warned me about the download. Why?</h2>
+  <p>Because the executable is new and unsigned, and SmartScreen flags anything it has not seen
+  before. A code-signing certificate is a yearly cost, not a statement about the file. Every release
+  publishes a SHA-256 checksum, a list of components, and a signature tying the two to the build that
+  produced them, so you can verify what you downloaded instead of trusting a green tick.</p>
+</section>
+
+<section>
+  <h2>My download died completely and nothing says why</h2>
+  <p>Check the maximum packet size. Set low enough, it is not a smaller packet, it is a black hole:
+  the network drops what is too big and never reports it. Set it back and the transfer returns.</p>
+</section>
+
+<section>
+  <h2>Does it work on Linux or macOS?</h2>
+  <p>No, and it will not. It stands on a Windows kernel driver. On Linux, <code>tc</code> with
+  <code>netem</code> does this job and is already installed.</p>
+</section>
+
+<section>
+  <h2>Is it really free? Can I use it at work?</h2>
+  <p>Yes. It is free and open source under the GNU GPL v3, including at work, with the source
+  available for anyone to read or change. The download is the same file for everybody.</p>
+</section>
+
+<section>
+  <h2>More</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

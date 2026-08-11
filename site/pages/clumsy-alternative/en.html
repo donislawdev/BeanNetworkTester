@@ -1,0 +1,71 @@
+<section class="hero">
+  <h1>A Clumsy alternative for Windows</h1>
+  <p class="lead">Clumsy is the tool most people find first, and it is a good one: free, MIT
+  licensed, interactive, and built on the same WinDivert driver this tool uses. If it does what you
+  need, use it. This page is about the cases where it does not.</p>
+</section>
+
+<section>
+  <h2>What to look for, whichever you pick</h2>
+  <table>
+    <tr><th>Question</th><th>Why it decides the tool</th></tr>
+    <tr><td>Can it hit <strong>one application</strong>?</td><td>Otherwise you impair the machine
+    you are working on, including the remote session and the browser you are reading the docs in.</td></tr>
+    <tr><td>Does it have a <strong>command line</strong>?</td><td>A pipeline cannot click a
+    checkbox. Without one, a network test can never be part of the build.</td></tr>
+    <tr><td>Is a run <strong>repeatable</strong>?</td><td>Random loss that cannot be replayed
+    produces bug reports nobody else can reproduce.</td></tr>
+    <tr><td>Does it <strong>stop by itself</strong>?</td><td>A tool that needs you to remember to
+    switch it off will be left running.</td></tr>
+    <tr><td>Can you tell what it <strong>actually did</strong>?</td><td>Counters and a connection
+    list turn "it felt slow" into numbers.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>What this one brings</h2>
+  <ul>
+    <li><strong>Targeting by process, PID, address or port</strong>, following the process tree, so a
+    browser with thirty child processes is still one target.</li>
+    <li><strong>The same executable is the command line</strong>, with an exit code for every
+    outcome and NDJSON output, so it works in CI.</li>
+    <li><strong>Seeded runs</strong>: the same seed replays the same random loss and jitter.</li>
+    <li><strong>Ready profiles</strong> - 3G, LTE, satellite, a crowded cafe, in-flight WiFi, a 56k
+    modem - so you start from something believable instead of guessing numbers.</li>
+    <li><strong>Timed sessions and scripted scenarios</strong>, so impairment can change on its own
+    while you watch the app.</li>
+    <li><strong>A live view</strong>: chart, counters and a connections table showing which
+    connection was hit.</li>
+    <li><strong>English and Polish</strong> interface, and no telemetry of any kind.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>When to use something else</h2>
+  <p>Being honest about this is cheaper than a disappointed download.</p>
+  <ul>
+    <li><strong>You are on Linux or macOS.</strong> This is Windows only, and it always will be - it
+    is built on a Windows driver. On Linux, <code>tc</code> with <code>netem</code> is the standard
+    answer and needs no extra software.</li>
+    <li><strong>You want permanent bandwidth management</strong> for the whole machine, per
+    application, as a product feature rather than a test. That is what commercial traffic-shaping
+    tools like NetLimiter are for. This one is a test instrument: it is meant to be switched on for a
+    while and then off.</li>
+    <li><strong>You cannot get administrator rights.</strong> Capturing packets needs them. There is
+    no way around that, and a tool claiming otherwise is not capturing your traffic.</li>
+    <li><strong>You need to inspect and rewrite application data</strong> rather than degrade the
+    link. That is a proxy's job.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

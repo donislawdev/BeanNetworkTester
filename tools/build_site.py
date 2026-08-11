@@ -63,9 +63,12 @@ THEME_FILE = os.path.join("beantester", "gui", "theme.py")
 # invisible from the source.
 TITLE_LEN = (15, 65)
 DESC_LEN = (50, 160)
+# A nav label, not a title: long enough to say what the page is, short enough that
+# nine of them fit in a footer without wrapping into a wall.
+LINK_LEN = (4, 42)
 
 SLUG_RE = re.compile(r"^$|^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$")
-PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\}\}")
+PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}\}")
 
 
 class SiteError(Exception):
@@ -213,6 +216,35 @@ def load_i18n(root, codes, default_code):
     return texts
 
 
+def load_app_strings(root, code):
+    """The PROGRAM's own language file, exposed to the pages as ``app.<key>``.
+
+    The site names things the reader will see on screen - field labels, preset names -
+    and those strings live in ``lang/<code>.json``, which is where the program itself
+    reads them. Writing them out by hand got three preset names and two field labels
+    wrong on the first attempt, in a way nothing could catch: the prose read
+    perfectly, and only a comparison against the language file found it. A guide that
+    tells somebody to fill in a field that does not exist under that name is worse
+    than no guide.
+
+    Trailing colons are stripped for the same reason ``i18n.field_name`` strips them:
+    a label is written to sit in front of an input, and a sentence quoting it is not a
+    form (convention 17a).
+
+    A missing key raises through ``render``, so a renamed string breaks the build
+    instead of quietly publishing yesterday's name.
+    """
+    data = _read_json(os.path.join(root, "lang", "%s.json" % code))
+    out = {}
+    for key, value in data.items():
+        if key == "_meta" or not isinstance(value, str):
+            continue
+        out["app." + key] = value[:-1] if value.endswith(":") else value
+    if not out:
+        raise SiteError("lang/%s.json holds no strings" % code)
+    return out
+
+
 def load_pages(root, registry):
     """Every page directory under ``site/pages/``, with its metadata and bodies.
 
@@ -264,6 +296,7 @@ def load_pages(root, registry):
             slug = entry.get("slug", None)
             title = (entry.get("title") or "").strip()
             description = (entry.get("description") or "").strip()
+            link_text = (entry.get("link_text") or "").strip()
             if slug is None or not SLUG_RE.match(slug):
                 raise SiteError("pages/%s [%s]: %r is not a valid slug "
                                 "(lower case, digits and '-', '/' between segments)"
@@ -274,6 +307,10 @@ def load_pages(root, registry):
             if not DESC_LEN[0] <= len(description) <= DESC_LEN[1]:
                 raise SiteError("pages/%s [%s]: the description is %d characters, allowed %d..%d"
                                 % (page_id, code, len(description), *DESC_LEN))
+            if not LINK_LEN[0] <= len(link_text) <= LINK_LEN[1]:
+                raise SiteError("pages/%s [%s]: link_text is %d characters, allowed %d..%d "
+                                "(it is a nav label, not a title)"
+                                % (page_id, code, len(link_text), *LINK_LEN))
 
             lang = _language(registry, code)
             if page["output"]:
@@ -289,6 +326,7 @@ def load_pages(root, registry):
 
             page["languages"][code] = {
                 "slug": slug, "title": title, "description": description,
+                "link_text": link_text,
                 "dir_path": dir_path,
                 "body": _read_text(os.path.join(page_dir, "%s.html" % code)),
             }
@@ -563,6 +601,44 @@ def _relative_url(from_dir, to_dir):
     return rel if rel.endswith("/") else rel + "/"
 
 
+def page_links(pages, current, code, css_class, skip_home=False, root_prefix=None):
+    """Links to the site's other pages, as HTML.
+
+    Generated from the page registry for the same reason the language row is: a
+    hand-written list is a list that forgets the page added after it. This is also
+    what keeps a page from becoming an orphan - a page nothing links to is a page a
+    crawler reaches only through the sitemap, and a reader never.
+
+    ``skip_home`` is for the landing page's own list of guides, where a link back to
+    the page you are standing on is noise.
+
+    ``root_prefix`` exists for the error document, and it is not a detail: 404.html is
+    served AT the address that missed, so a relative link from it resolves against a
+    path that does not exist. The stylesheet was fixed for this once already, and this
+    list reintroduced the same bug by another route until the guard from that fix
+    caught it. Anything that can be served from an unknown address addresses the site
+    from its root.
+    """
+    here = current["languages"][code]["dir_path"]
+    items = []
+    for page in pages:
+        if page["output"] or page["id"] == current["id"]:
+            continue
+        if skip_home and page["id"] == "home":
+            continue
+        entry = page["languages"][code]
+        if root_prefix is not None:
+            href = root_prefix + (entry["dir_path"] + "/" if entry["dir_path"] else "")
+        else:
+            href = _relative_url(here, entry["dir_path"])
+        items.append('<li><a href="%s">%s</a></li>'
+                     % (html.escape(href, quote=True),
+                        html.escape(entry["link_text"], quote=True)))
+    if not items:
+        return Raw("")
+    return Raw('<ul class="%s">%s</ul>' % (css_class, "".join(items)))
+
+
 def language_switcher(page, current_code, registry, label):
     """The language row in the header, as HTML.
 
@@ -596,12 +672,13 @@ def language_switcher(page, current_code, registry, label):
                % (html.escape(label, quote=True), "".join(parts)))
 
 
-def page_context(page, code, registry, texts, home_dir, colours, root):
+def page_context(page, code, registry, texts, home_dir, colours, root, pages):
     """Everything a page's template and body may refer to, for one language."""
     entry = page["languages"][code]
     lang = _language(registry, code)
     repo = registry["repo_url"].rstrip("/")
     context = dict(texts[code])
+    _merge(context, load_app_strings(root, code), "program strings [%s]" % code)
     _merge(context, {
         "site.base_url": registry["base_url"],
         "site.repo_url": repo,
@@ -620,6 +697,12 @@ def page_context(page, code, registry, texts, home_dir, colours, root):
                           else _relative_url(entry["dir_path"], home_dir)),
         "page.language_switcher": language_switcher(page, code, registry,
                                                     texts[code]["nav.language"]),
+        "page.nav_links": page_links(pages, page, code, "foot-nav",
+                                     root_prefix=_root_prefix(registry) if page["output"]
+                                     else None),
+        "page.guide_links": page_links(pages, page, code, "guides", skip_home=True,
+                                       root_prefix=_root_prefix(registry) if page["output"]
+                                       else None),
         "page.head_meta": head_meta(page, code, registry, texts, entry["description"], root),
     }, "page %s [%s]" % (page["id"], code))
     return context
@@ -680,7 +763,8 @@ def build(root=ROOT, out=None):
         for code in page["codes"]:
             entry = page["languages"][code]
             home_dir = home["languages"][code]["dir_path"]
-            context = page_context(page, code, registry, texts, home_dir, colours, root)
+            context = page_context(page, code, registry, texts, home_dir, colours,
+                                   root, pages)
             body = render(entry["body"], context,
                           "pages/%s/%s.html" % (page["id"], code))
             context["page.body"] = Raw(body)

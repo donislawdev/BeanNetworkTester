@@ -1,0 +1,18 @@
+{
+  "id": "latency",
+  "order": 20,
+  "languages": {
+    "en": {
+      "slug": "latency-and-jitter",
+      "link_text": "Latency and jitter",
+      "title": "Add latency and jitter to an app",
+      "description": "Give one Windows app the ping of a distant server or a train tunnel, with steady delay, random jitter or occasional spikes."
+    },
+    "pl": {
+      "slug": "opoznienie-i-jitter",
+      "link_text": "Opóźnienie i jitter",
+      "title": "Dodawanie opóźnienia i jittera",
+      "description": "Nadaj jednej aplikacji na Windows ping odległego serwera albo tunelu w pociągu: stałe opóźnienie, losowy jitter lub skoki."
+    }
+  }
+}
