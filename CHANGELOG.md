@@ -53,6 +53,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
+- **The project has a website: <https://beannetworktester.donislawdev.com/>** In English and
+  Polish, dark like the program, with the download one click away. It says what the tool does to a
+  network and how to start in three steps. It loads nothing from anywhere else - no trackers, no
+  cookies, no outside fonts - and sets no cookies of its own. Polish version: `/pl/`.
 - **The licence notices now list everything the download actually contains.** Scanning the built
   package turned up three things shipping in every release that no list mentioned: zlib, libffi and
   Microsoft's C runtime - 42 files of the latter, over half the bundle. All permissive or
