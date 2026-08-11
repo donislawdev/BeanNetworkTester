@@ -238,6 +238,30 @@ jobs:
           find dist/BeanNetworkTester -iname "WinDivert*" -print | tee found.txt
           test -s found.txt || { echo "WinDivert.dll/.sys is missing from the bundle"; exit 1; }
 
+      # 🔴 The scanner guards the REGISTRY, not the other way round. `legal.py` is
+      # the reviewed list of what we ship and the SBOM is generated from it, so the
+      # question worth asking on every build is "does the bundle contain something
+      # that list does not know?". It already has an answer: on 2026-08-11 this
+      # comparison found zlib, libffi and 42 Microsoft runtime files shipping in
+      # every release while every list claimed to be complete.
+      #
+      # Here rather than in release.yml deliberately. This job has `contents: read`
+      # and cuts no tag, so a third-party action costs far less here - and a hole
+      # found at PR time is cheaper than one found while publishing. Syft is pinned
+      # by SHA; the tag it stood at is in the comment.
+      - name: Scan the bundle and hold the licence registry to it
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: dist/BeanNetworkTester
+          format: syft-json
+          output-file: bundle-scan.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: The registry must account for everything the scan found
+        shell: bash
+        run: python tools/sbom.py --audit-bundle bundle-scan.json
+
       - uses: actions/upload-artifact@v7
         with:
           name: BeanNetworkTester-windows

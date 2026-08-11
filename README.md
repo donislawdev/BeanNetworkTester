@@ -1130,8 +1130,8 @@ in English.
 
 Releases go out through a second workflow (`.github/workflows/release.yml`) on a `v*` tag. It
 checks the tag against `VERSION.txt`, refuses to publish while the changelogs are still open,
-builds and smoke-tests the exe, then publishes the zip together with the `SHA256SUMS.txt` this
-README tells you to verify.
+builds and smoke-tests the exe, then publishes three assets: the zip, the `SHA256SUMS.txt` this
+README tells you to verify, and an SPDX SBOM signed against the archive it describes.
 
 ## Project layout
 
@@ -1407,3 +1407,18 @@ rights and loads a network driver - so Windows SmartScreen may show an "Unknown 
 and some antivirus tools may raise a false alarm. The **WinDivert driver itself is digitally signed
 by its author**. You can compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to confirm the
 file has not been modified.
+
+### What is inside the download, and how to check it
+
+Every release carries an **SBOM** - a list, in the standard SPDX format, of every third-party
+component in the build with its version, licence and where its source lives. It is the same list
+`BeanNetworkTester.exe --license` prints, in a form a tool can read.
+
+The SBOM is **signed against the archive it describes**, so the two cannot be separated:
+
+```bash
+gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester
+```
+
+A checksum tells you the file arrived unchanged. The attestation tells you that *this* build,
+with *this* bill of materials, came out of this repository's release workflow.

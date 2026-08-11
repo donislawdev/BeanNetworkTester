@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ## [Unreleased]
 
 ### Added
+- **Every release now carries an SBOM, signed against the download.** A standard SPDX file listing
+  each third-party component with its version, licence and source - the same list `--license`
+  prints, in a form tools can read. It is signed together with the archive, so
+  `gh attestation verify` can prove that this build and this list belong to each other and came
+  out of this repository. A checksum says the file arrived unchanged; the attestation says where
+  it came from. Both READMEs show the command.
 
 - **A run that would break everything now says so first.** Start with impairment on, nothing to
   aim it at and no time limit, and both the command line and the window say: this affects every

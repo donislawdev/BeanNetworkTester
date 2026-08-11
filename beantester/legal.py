@@ -25,7 +25,11 @@ WINDIVERT_VERSION = "2.2"
 # import name used to report the real version at run time (None = not a Python
 # package, so the version is fixed or reported by other means).
 COMPONENTS = (
-    # (name, module, licence used, where the source lives)
+    # (name, module, licence used, where the source lives, SPDX expression)
+    # The prose licence is for a person reading `--license`; the SPDX expression is
+    # for `tools/sbom.py`. Both, because neither serves the other's reader: a scanner
+    # cannot parse "dual LGPL-3.0 / GPL-2.0" and a person should not have to read
+    # "LGPL-3.0-only OR GPL-2.0-only".
     # WinDivert has no importable module, and its DLL carries no version resource -
     # only the DRIVER does. `WinDivert64.sys` reports FileVersion "2.2" (company
     # "Basil"), read from the shipped file on 2026-08-11. Pinned here rather than
@@ -33,32 +37,41 @@ COMPONENTS = (
     # honest: `test_license_surface.py` compares this string against the version
     # the installed pydivert's driver actually reports, so it cannot rot silently.
     ("WinDivert", None, "LGPL-3.0 (dual LGPL-3.0 / GPL-2.0)",
-     "https://github.com/basil00/WinDivert"),
+     "https://github.com/basil00/WinDivert",
+     "LGPL-3.0-only OR GPL-2.0-only"),
     ("PyDivert", "pydivert", "LGPL-3.0-or-later (dual with GPL-2.0-or-later)",
-     "https://github.com/ffalcinelli/pydivert"),
+     "https://github.com/ffalcinelli/pydivert",
+     "LGPL-3.0-or-later OR GPL-2.0-or-later"),
     ("psutil", "psutil", "BSD-3-Clause",
-     "https://github.com/giampaolo/psutil"),
+     "https://github.com/giampaolo/psutil",
+     "BSD-3-Clause"),
     ("Python", None, "PSF License",
-     "https://www.python.org/downloads/source/"),
+     "https://www.python.org/downloads/source/",
+     "PSF-2.0"),
     ("Tcl/Tk", None, "Tcl/Tk licence (BSD-style)",
-     "https://www.tcl-lang.org/software/tcltk/"),
+     "https://www.tcl-lang.org/software/tcltk/",
+     "TCL"),
     ("PyInstaller (bootloader)", None, "GPL-2.0+ with the bootloader exception",
-     "https://github.com/pyinstaller/pyinstaller"),
+     "https://github.com/pyinstaller/pyinstaller",
+     "GPL-2.0-or-later WITH Bootloader-exception"),
     # 🔴 The three below were found by SCANNING THE BUILT BUNDLE (Syft, 2026-08-11),
     # not by reading a manifest - they arrive with the CPython Windows runtime and
     # no requirements file mentions them. They shipped in every release so far while
     # this list claimed to be complete. Permissive or redistributable every one, so
     # nothing was breached; the defect was the claim, not the licences.
     ("zlib", None, "zlib licence",
-     "https://www.zlib.net/"),
+     "https://www.zlib.net/",
+     "Zlib"),
     ("libffi", None, "MIT-style (text inside Python-LICENSE.txt)",
-     "https://github.com/libffi/libffi"),
+     "https://github.com/libffi/libffi",
+     "MIT"),
     # 42 files, over half the bundle by count: ucrtbase, VCRUNTIME140(_1) and 39
     # `api-ms-win-*` ApiSet stubs. The stubs were nearly missed - they are easy to
     # read as Windows itself rather than as something we redistribute.
     ("Microsoft C Runtime", None,
      "Microsoft redistributable (ucrtbase, VCRUNTIME140, api-ms-win-* stubs)",
-     "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files"),
+     "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+     "LicenseRef-Microsoft-Redistributable"),
 )
 
 
@@ -102,7 +115,7 @@ def _zlib_version():
 def component_rows():
     """``(name, version, licence, source_url)`` for every third-party component."""
     rows = []
-    for name, module, licence, url in COMPONENTS:
+    for name, module, licence, url, _spdx in COMPONENTS:
         if module:
             version = _module_version(module)
         elif name == "Python":

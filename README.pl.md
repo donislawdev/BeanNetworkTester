@@ -985,8 +985,8 @@ uszkodzenia niewidoczne po angielsku.
 
 Wydania wychodzą drugim workflow (`.github/workflows/release.yml`), po wypchnięciu tagu `v*`.
 Sprawdza on tag wobec `VERSION.txt`, odmawia publikacji, dopóki changelogi są otwarte, buduje exe
-i robi jego smoke, a potem publikuje zip razem z plikiem `SHA256SUMS.txt`, którego weryfikację
-opisuje to README.
+i robi jego smoke, a potem publikuje trzy zasoby: zip, plik `SHA256SUMS.txt`, którego
+weryfikację opisuje to README, oraz SBOM w formacie SPDX, podpisany razem z archiwum.
 
 ## Struktura projektu
 
@@ -1269,5 +1269,22 @@ SmartScreen może pokazać ostrzeżenie „Nieznany wydawca”, a niektóre anty
 mogą zgłosić fałszywy alarm. Sam sterownik **WinDivert jest podpisany cyfrowo
 przez jego autora**. Sumę kontrolną SHA-256 wydania (`SHA256SUMS.txt`) możesz
 porównać, żeby potwierdzić, że plik nie został zmodyfikowany.
+
+### Co jest w środku pobranego pliku i jak to sprawdzić
+
+Każde wydanie niesie **SBOM** - listę, w standardowym formacie SPDX, wszystkich
+składników firm trzecich w tej wersji: z wersją, licencją i adresem źródeł. To ta
+sama lista, którą wypisuje `BeanNetworkTester.exe --license`, tylko w postaci
+czytelnej dla narzędzi.
+
+SBOM jest **podpisany razem z archiwum, które opisuje**, więc nie da się ich
+rozdzielić:
+
+```bash
+gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester
+```
+
+Suma kontrolna mówi, że plik dotarł niezmieniony. Atestacja mówi, że **ta** wersja,
+z **tym** wykazem składników, wyszła z workflow wydania tego repozytorium.
 
 Dokumentacja po angielsku: [README.md](README.md).
