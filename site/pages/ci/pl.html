@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Symulacja słabej sieci w CI</h1>
+  <p class="lead">Okno jest opcjonalne. Ten sam plik wykonywalny działa jako narzędzie linii komend,
+  kończy się sam po zadanym czasie i raportuje wynik w formie, którą pipeline umie przeczytać.</p>
+</section>
+
+<section>
+  <h2>Kształt kroku</h2>
+  <p>Psuj sieć na czas testu i pozwól narzędziu zatrzymać się samo. Nie ma kroku sprzątającego, o
+  którym można zapomnieć:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>W zadaniu GitHub Actions, na własnym runnerze z Windows:</p>
+<pre><code>- name: Test aplikacji na słabym łączu
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Dwie rzeczy o runnerze: przechwytywanie ruchu wymaga praw administratora, a runner hostowany
+  przez GitHuba ich nie da, więc to zadanie należy do własnej maszyny z Windows.</p>
+</section>
+
+<section>
+  <h2>Każde zakończenie ma kod wyjścia</h2>
+  <p>Nic nie kończy się tracebackiem. Każdy sposób zakończenia przebiegu ma numer, więc pipeline
+  rozróżni "Twoja aplikacja padła" od "narzędzie nie mogło wystartować":</p>
+  <table>
+    <tr><th>Kod</th><th>Znaczenie</th></tr>
+    <tr><td>0</td><td>Skończyło się tak, jak zamówiono.</td></tr>
+    <tr><td>1</td><td>Coś padło w trakcie działania.</td></tr>
+    <tr><td>2</td><td>Błąd w linii komend.</td></tr>
+    <tr><td>3</td><td>Nieprawidłowa konfiguracja albo wartość.</td></tr>
+    <tr><td>4</td><td>Plik scenariusza został odrzucony.</td></tr>
+    <tr><td>5</td><td>Nie udało się odczytać albo zapisać pliku.</td></tr>
+    <tr><td>6</td><td>Założenie o przebiegu się nie potwierdziło.</td></tr>
+    <tr><td>7</td><td>Brak praw administratora, więc sterownik się nie wczyta.</td></tr>
+    <tr><td>130 / 143</td><td>Przerwane albo zakończone z zewnątrz.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Wyjście do czytania maszyną</h2>
+  <p><code>--format json</code> wypisuje jeden obiekt JSON na linię - próbki w trakcie przebiegu,
+  podsumowanie na końcu - więc kolejny krok może na tym asertować:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Linie logu idą na standardowe wyjście błędu, a dane na standardowe wyjście, więc przekierowanie
+  danych nigdy nie miesza jednego z drugim. <code>--seed</code> czyni przebieg powtarzalnym, a tego
+  potrzebuje niestabilny test, zanim ktokolwiek zacznie się o niego spierać.</p>
+</section>
+
+<section>
+  <h2>Przebieg na próbę, który niczego nie rusza</h2>
+  <p>Dwie flagi pozwalają wpiąć to, zanim zaczniesz temu ufać: <code>--dry-run</code> mówi, co
+  zrobiłyby ustawienia, i kończy pracę, a <code>--simulate</code> uruchamia cały silnik na sztucznym
+  ruchu, bez wczytywania sterownika i bez dotykania sieci. Obie są przydatne w buildzie, który nie
+  może zepsuć maszyny, na której chodzi.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

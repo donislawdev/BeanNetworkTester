@@ -53,6 +53,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
+- **Eight guides on the website, in English and Polish.** Packet loss, latency and jitter, speed
+  limits, breaking connections, aiming at one application, running network tests in a pipeline, how
+  this compares with other Windows tools, and the questions people ask before downloading. Each one
+  says which numbers are worth trying and gives the command that does it. The field and profile names
+  in them come from the program's own language files, so they cannot drift from what the window
+  actually says.
 - **The project has a website: <https://beannetworktester.donislawdev.com/>** In English and
   Polish, dark like the program, with the download one click away. It says what the tool does to a
   network and how to start in three steps. It loads nothing from anywhere else - no trackers, no

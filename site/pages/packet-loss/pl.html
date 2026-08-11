@@ -1,0 +1,64 @@
+<section class="hero">
+  <h1>Symulacja utraty pakietów na Windows</h1>
+  <p class="lead">Utrata pakietów to ta usterka, którą użytkownicy opisują jako "wisi". Ustawiasz
+  procent, narzędzie wyrzuca tyle pakietów, a Twoja aplikacja musi się z tym uporać.</p>
+</section>
+
+<section>
+  <h2>W oknie programu</h2>
+  <ol class="steps">
+    <li>Wypełnij <strong>{{app.fields.target_process}}</strong>, żeby zaburzenie dotknęło tylko Twojej aplikacji, a
+    nie całego komputera.</li>
+    <li>Ustaw <strong>{{app.fields.loss}}</strong> na procent od 0 do 100. Zacznij od 5.</li>
+    <li>Wciśnij <strong>{{app.buttons.start}}</strong> i korzystaj z aplikacji.</li>
+  </ol>
+  <p>Pasek na górze okna streszcza, co jest włączone, a zakładka <strong>{{app.app.tabs.statistics}}</strong> liczy
+  odrzucone pakiety.</p>
+</section>
+
+<section>
+  <h2>Z linii komend</h2>
+  <p>Ten sam plik wykonywalny działa bez okna. Pięć procent straty na jednej przeglądarce, na dwie
+  minuty, potem wszystko samo wraca do normy:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Dodaj <code>--simulate</code>, żeby przećwiczyć komendę bez ruszania prawdziwego ruchu.</p>
+</section>
+
+<section>
+  <h2>Jaki procent wybrać</h2>
+  <table>
+    <tr><th>Utrata</th><th>Jak to wygląda</th></tr>
+    <tr><td>1 procent</td><td>Dobre łącze w słabszej minucie. Większość aplikacji to ukryje.</td></tr>
+    <tr><td>5 procent</td><td>Słabe wifi. Strony wczytują się wolniej, wideo traci jakość.</td></tr>
+    <tr><td>20 procent</td><td>Zatłoczona kawiarnia albo tunel w pociągu. Pojawiają się timeouty.</td></tr>
+    <tr><td>60 procent i więcej</td><td>Prawie nieużywalne. Dobre do znalezienia komunikatu błędu,
+    którego nikt nigdy nie przetestował.</td></tr>
+  </table>
+  <p>Gotowe profile ustawiają to za Ciebie. "{{app.presets.weak_wifi}}", "{{app.presets.cafe}}" i
+  "{{app.presets.3g}}" mają wpisaną stratę razem z opóźnieniem i limitem prędkości.</p>
+</section>
+
+<section>
+  <h2>Dwie rzeczy, które zaskakują</h2>
+  <p><strong>Na TCP możesz nie zobaczyć niczego.</strong> TCP retransmituje to, co zgubi, więc
+  pobieranie po HTTPS po prostu zwalnia, zamiast paść. Jeśli chcesz zobaczyć stratę jako stratę,
+  testuj coś, co idzie po UDP: rozmowę głosową, grę, strumień wideo albo DNS.</p>
+  <p><strong>Strata jest losowa, więc dwa przebiegi się różnią.</strong> Ustaw ziarno, a ten sam
+  przebieg powtórzy się dokładnie - i to zamienia "raz się zepsuło" w zgłoszenie, które ktoś inny
+  odtworzy:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  <p>Sama strata jest rzadka. Prawdziwe słabe łącza gubią pakiety <em>i</em> dokładają opóźnienie
+  <em>i</em> nie mają prędkości - i właśnie to odtwarzają profile.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

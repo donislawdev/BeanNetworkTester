@@ -1,0 +1,63 @@
+<section class="hero">
+  <h1>Simulate packet loss on Windows</h1>
+  <p class="lead">Packet loss is the fault users describe as "it just hangs". You set a percentage,
+  the tool throws away that share of the packets, and your app has to deal with it.</p>
+</section>
+
+<section>
+  <h2>In the window</h2>
+  <ol class="steps">
+    <li>Fill in <strong>{{app.fields.target_process}}</strong> so only your application is affected, not the whole
+    machine.</li>
+    <li>Set <strong>{{app.fields.loss}}</strong> to a percentage between 0 and 100. Start at 5.</li>
+    <li>Press <strong>{{app.buttons.start}}</strong> and use the app.</li>
+  </ol>
+  <p>The bar at the top of the window summarises what is running, and the
+  <strong>{{app.app.tabs.statistics}}</strong> tab counts the packets that were dropped.</p>
+</section>
+
+<section>
+  <h2>From the command line</h2>
+  <p>The same executable runs without the window. Five percent loss on one browser, for two
+  minutes, then everything back to normal on its own:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Add <code>--simulate</code> to rehearse the command without touching real traffic.</p>
+</section>
+
+<section>
+  <h2>What percentage to pick</h2>
+  <table>
+    <tr><th>Loss</th><th>What it feels like</th></tr>
+    <tr><td>1 percent</td><td>A good connection having a bad minute. Most apps hide it.</td></tr>
+    <tr><td>5 percent</td><td>Weak wifi. Slow page loads, video drops quality.</td></tr>
+    <tr><td>20 percent</td><td>A crowded cafe or a train tunnel. Timeouts start appearing.</td></tr>
+    <tr><td>60 percent and up</td><td>Almost unusable. Good for finding the error message nobody
+    ever tested.</td></tr>
+  </table>
+  <p>The ready profiles set this for you. "{{app.presets.weak_wifi}}", "{{app.presets.cafe}}" and "{{app.presets.3g}}" all
+  carry a loss figure along with delay and a speed limit.</p>
+</section>
+
+<section>
+  <h2>Two things that surprise people</h2>
+  <p><strong>On TCP you may see nothing at all.</strong> TCP retransmits what it loses, so a
+  download over HTTPS just gets slower instead of failing. If you want to see loss as loss, test
+  something that runs over UDP: a voice call, a game, a video stream, or DNS.</p>
+  <p><strong>Loss is random, so two runs differ.</strong> Set a seed and the same run repeats
+  exactly, which is what turns "it broke once" into a bug report somebody else can reproduce:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Next</h2>
+  <p>Loss on its own is rare. Real bad connections lose packets <em>and</em> add delay
+  <em>and</em> run out of speed, which is what the profiles reproduce.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

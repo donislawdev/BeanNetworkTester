@@ -241,3 +241,64 @@ h3 {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* -- guides and the footer's page list ----------------------------------- */
+/* Both lists are GENERATED from the page registry (see tools/build_site.py):
+   a hand-written list forgets the page added after it, and a page nothing links
+   to is reachable only through the sitemap. */
+.guides {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: .75rem;
+}
+.guides li a {
+  display: block;
+  padding: 1rem 1.15rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.guides li a:hover { background: color-mix(in srgb, var(--bg-card) 80%, var(--fg)); }
+
+.foot-nav {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1.25rem;
+}
+.foot-nav a { text-decoration: none; }
+.foot-nav a:hover { text-decoration: underline; }
+
+/* -- command examples ---------------------------------------------------- */
+pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .9rem 1rem;
+  overflow-x: auto;
+  font-family: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+pre code { background: none; border: 0; padding: 0; font-size: 1em; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: .5rem .7rem;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--bg-card); }

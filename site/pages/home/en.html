@@ -53,7 +53,7 @@
     <li>Download the zip from the releases page and unpack it anywhere.</li>
     <li>Start <code>BeanNetworkTester.exe</code>. It asks for administrator rights by itself, because
     capturing traffic needs them.</li>
-    <li>Pick a ready profile such as "3G network", press START, and use your app.</li>
+    <li>Pick a ready profile such as "{{app.presets.3g}}", press START, and use your app.</li>
   </ol>
   <p>There is a text mode in the same file, so the whole thing also runs in a pipeline.
   One command is enough to check that your service survives 10 percent packet loss.</p>
@@ -64,6 +64,12 @@
   <p>Testers who have to reproduce "it works on my machine". Developers who need a timeout to
   actually happen. Game developers checking what lag does to their netcode. Anyone who has ever
   been asked whether the app works on a weak connection and had no honest way to find out.</p>
+</section>
+
+<section>
+  <h2>How to do a specific thing</h2>
+  <p>Short guides, each with the numbers worth trying and the command that does it.</p>
+  {{page.guide_links}}
 </section>
 
 <section class="closing">

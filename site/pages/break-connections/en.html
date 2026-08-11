@@ -1,0 +1,68 @@
+<section class="hero">
+  <h1>Break connections on purpose</h1>
+  <p class="lead">Slow is one kind of bad. Gone is another, and it is the one that finds the code
+  path nobody wrote: the reconnect, the retry, the message that tells the user what happened.</p>
+</section>
+
+<section>
+  <h2>Five different ways to be gone</h2>
+  <table>
+    <tr><th>Setting</th><th>What the app sees</th></tr>
+    <tr><td><strong>Reset connections</strong></td><td>Connections die mid-transfer, the way a
+    firewall or a load balancer kills them. Set how often, in percent.</td></tr>
+    <tr><td><strong>Link on and off</strong></td><td>The network disappears for a while, then comes
+    back, over and over. You set the cycle length and how much of it is downtime.</td></tr>
+    <tr><td><strong>Block a port</strong></td><td>Everything to that port vanishes. Nothing else is
+    touched.</td></tr>
+    <tr><td><strong>Block an address</strong></td><td>One server becomes unreachable while the rest
+    of the internet works.</td></tr>
+    <tr><td><strong>LAN mode</strong></td><td>The local network keeps working, the internet does
+    not. Exactly the shape of a captive portal or a dead uplink.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>From the command line</h2>
+  <p>Kill roughly one connection in ten, on one app:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Ten second cycles, down for four of them - a link that keeps coming and going:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>One server unreachable, everything else fine:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Blocking only hits what it names</h2>
+  <p>Unlike loss or delay, blocking a port or an address affects <strong>only</strong> the traffic
+  matching it. That makes it the safest of these to run without a process target, and it is why
+  "make this one dependency disappear" is a one-line command.</p>
+</section>
+
+<section>
+  <h2>The dead-download trap</h2>
+  <p>There is also a maximum packet size. Lower it a little and large transfers slow down. Lower it
+  to a value like 576 and downloads stop completely, forever, with no error - because that is no
+  longer a smaller packet size, it is the classic black hole where the network drops what is too big
+  and never says so.</p>
+  <p>That is a real failure mode worth reproducing on purpose, and it is a genuinely confusing one
+  to meet by accident. If a download dies silently right after you changed this setting, that is why.</p>
+</section>
+
+<section>
+  <h2>Getting back to normal</h2>
+  <p>STOP restores everything. So does closing the program, and so does the time limit if you set
+  one. If the tool itself were ever to die mid-session, a watchdog inside it stops the capture rather
+  than leaving your network in a broken state.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

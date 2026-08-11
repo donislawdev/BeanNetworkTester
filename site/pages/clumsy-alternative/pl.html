@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Alternatywa dla Clumsy na Windows</h1>
+  <p class="lead">Clumsy to narzędzie, które większość ludzi znajduje pierwsze, i jest dobre:
+  darmowe, na licencji MIT, interaktywne i zbudowane na tym samym sterowniku WinDivert, z którego
+  korzysta ten program. Jeśli robi to, czego potrzebujesz - używaj go. Ta strona jest o
+  przypadkach, w których nie wystarcza.</p>
+</section>
+
+<section>
+  <h2>Na co patrzeć, niezależnie od wyboru</h2>
+  <table>
+    <tr><th>Pytanie</th><th>Dlaczego rozstrzyga o narzędziu</th></tr>
+    <tr><td>Czy trafia w <strong>jedną aplikację</strong>?</td><td>Inaczej psujesz komputer, na
+    którym pracujesz, razem z sesją zdalną i przeglądarką, w której czytasz dokumentację.</td></tr>
+    <tr><td>Czy ma <strong>linię komend</strong>?</td><td>Pipeline nie kliknie w checkbox. Bez niej
+    test sieciowy nigdy nie stanie się częścią builda.</td></tr>
+    <tr><td>Czy przebieg jest <strong>powtarzalny</strong>?</td><td>Losowa strata, której nie da się
+    odtworzyć, produkuje zgłoszenia, których nikt inny nie powtórzy.</td></tr>
+    <tr><td>Czy <strong>zatrzymuje się samo</strong>?</td><td>Narzędzie, które wymaga pamiętania o
+    wyłączeniu, zostanie włączone na noc.</td></tr>
+    <tr><td>Czy widać, co <strong>naprawdę zrobiło</strong>?</td><td>Liczniki i lista połączeń
+    zamieniają "wydawało się wolne" w liczby.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Co daje ten program</h2>
+  <ul>
+    <li><strong>Celowanie po procesie, PID-zie, adresie albo porcie</strong>, idące po drzewie
+    procesów, więc przeglądarka z trzydziestoma procesami potomnymi to nadal jeden cel.</li>
+    <li><strong>Ten sam plik wykonywalny jest linią komend</strong>, z kodem wyjścia dla każdego
+    zakończenia i wyjściem NDJSON, więc działa w CI.</li>
+    <li><strong>Przebiegi z ziarnem</strong>: to samo ziarno odtwarza tę samą losową stratę i
+    jitter.</li>
+    <li><strong>Gotowe profile</strong> - 3G, LTE, satelita, zatłoczona kawiarnia, WiFi w samolocie,
+    modem 56k - żeby startować z czegoś wiarygodnego, a nie z wymyślonych liczb.</li>
+    <li><strong>Sesje na czas i scenariusze</strong>, więc zaburzenie może zmieniać się samo, gdy Ty
+    patrzysz na aplikację.</li>
+    <li><strong>Widok na żywo</strong>: wykres, liczniki i tabela połączeń pokazująca, które
+    połączenie zostało trafione.</li>
+    <li><strong>Interfejs polski i angielski</strong>, i zero telemetrii.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Kiedy wybrać coś innego</h2>
+  <p>Uczciwość w tej sprawie jest tańsza niż rozczarowane pobranie.</p>
+  <ul>
+    <li><strong>Jesteś na Linuksie albo macOS.</strong> To narzędzie jest tylko na Windows i zawsze
+    będzie - stoi na sterowniku dla Windows. Na Linuksie standardową odpowiedzią jest
+    <code>tc</code> z <code>netem</code> i nie wymaga instalowania niczego.</li>
+    <li><strong>Chcesz stałego zarządzania przepustowością</strong> całego komputera, per aplikacja,
+    jako funkcji na codzień, a nie jako testu. Do tego są komercyjne narzędzia do kształtowania
+    ruchu, na przykład NetLimiter. To tutaj jest przyrząd testowy: ma być włączony na chwilę i
+    wyłączony.</li>
+    <li><strong>Nie możesz dostać praw administratora.</strong> Przechwytywanie pakietów ich wymaga.
+    Nie da się tego obejść, a narzędzie twierdzące inaczej nie przechwytuje Twojego ruchu.</li>
+    <li><strong>Chcesz oglądać i przepisywać dane aplikacji</strong>, a nie psuć łącze. To zadanie
+    dla proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

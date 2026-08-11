@@ -1,0 +1,68 @@
+<section class="hero">
+  <h1>Simulate a bad network in CI</h1>
+  <p class="lead">The window is optional. The same executable runs as a command-line tool, ends by
+  itself after a set time, and reports what happened in a way a pipeline can read.</p>
+</section>
+
+<section>
+  <h2>The shape of a step</h2>
+  <p>Impair for the length of the test, then let it stop on its own. No cleanup step to forget:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>In a GitHub Actions job, on a self-hosted Windows runner:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Two things about the runner: capturing traffic needs administrator rights, and a hosted runner
+  will not give you those, so this belongs on a self-hosted Windows machine.</p>
+</section>
+
+<section>
+  <h2>Every ending has an exit code</h2>
+  <p>Nothing ends with a traceback. Each way a run can finish has a number, so a pipeline can tell
+  "your app failed" from "the tool could not start":</p>
+  <table>
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>Finished as asked.</td></tr>
+    <tr><td>1</td><td>Something failed at runtime.</td></tr>
+    <tr><td>2</td><td>The command line was wrong.</td></tr>
+    <tr><td>3</td><td>The configuration or a value was invalid.</td></tr>
+    <tr><td>4</td><td>A scenario file was rejected.</td></tr>
+    <tr><td>5</td><td>A file could not be read or written.</td></tr>
+    <tr><td>6</td><td>An assertion about the run did not hold.</td></tr>
+    <tr><td>7</td><td>No administrator rights, so the driver cannot load.</td></tr>
+    <tr><td>130 / 143</td><td>Interrupted, or terminated.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Machine-readable output</h2>
+  <p><code>--format json</code> writes one JSON object per line - samples while the run goes, a
+  summary at the end - so a later step can assert on it:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Log lines go to standard error and data to standard output, so redirecting the data never mixes
+  the two. <code>--seed</code> makes the run repeatable, which is what a flaky test needs before
+  anybody can argue about it.</p>
+</section>
+
+<section>
+  <h2>A dry run that touches nothing</h2>
+  <p>Two flags make this safe to wire up before you trust it: <code>--dry-run</code> reports what
+  the settings would do and exits, and <code>--simulate</code> runs the whole engine against
+  synthetic traffic, without loading the driver and without touching the network. Both are useful in
+  a build that must not impair the machine it runs on.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

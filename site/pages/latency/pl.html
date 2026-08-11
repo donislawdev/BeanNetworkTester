@@ -1,0 +1,62 @@
+<section class="hero">
+  <h1>Dodawanie opóźnienia i jittera</h1>
+  <p class="lead">Na szybkim lokalnym łączu działa wszystko. Daj aplikacji 300 ms pingu i okaże
+  się, które ekrany napisano tak, jakby odpowiedź przychodziła natychmiast.</p>
+</section>
+
+<section>
+  <h2>Trzy różne rzeczy</h2>
+  <table>
+    <tr><th>Ustawienie</th><th>Co robi</th><th>Skąd się bierze w realu</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Dokłada to samo opóźnienie każdemu pakietowi, w
+    milisekundach.</td><td>Odległość. Serwer na innym kontynencie albo satelita.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Dokłada losową wartość na wierzchu, więc opóźnienie
+    cały czas się zmienia.</td><td>Współdzielone WiFi, sieci mobilne, wszystko przeciążone.</td></tr>
+    <tr><td><strong>Skoki</strong></td><td>Sporadyczne długie zacięcia, ustawiane przez to, jak
+    często i jak długo.</td><td>Przełączenie między nadajnikami, router pod obciążeniem.</td></tr>
+  </table>
+  <p>Wszystkie trzy są w milisekundach i mogą działać razem. Obie wartości opóźnienia przyjmują
+  cokolwiek od 0 w górę, więc możesz zejść od wiarygodnych 40 ms do absurdalnych 60 sekund.</p>
+</section>
+
+<section>
+  <h2>Z linii komend</h2>
+  <p>Stałe 200 ms z 80 ms jittera, na jednej aplikacji:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Albo rzadkie, długie zacięcia - mniej więcej co dwudziesty pakiet czeka dodatkową sekundę:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Wartości warte wypróbowania</h2>
+  <ul>
+    <li><strong>40 ms</strong> - serwer w tym samym kraju. Nic nie powinno się zmienić.</li>
+    <li><strong>150 ms</strong> - inny kontynent. Wszystko, co gada z serwerem często, zaczyna być
+    ślamazarne, bo każda podróż w obie strony kosztuje.</li>
+    <li><strong>600 ms i więcej</strong> - satelita geostacjonarny albo WiFi w samolocie. Tu paski
+    postępu stają, a logika ponawiania wreszcie się uruchamia.</li>
+  </ul>
+  <p>Gotowe profile mają wpisane zmierzone wartości: "{{app.presets.distant}}",
+  "{{app.presets.leo}}", "{{app.presets.satellite}}", "{{app.presets.inflight}}", "{{app.presets.lte}}".</p>
+</section>
+
+<section>
+  <h2>Jak to mierzyć: patrz na najgorszy przypadek, nie na średnią</h2>
+  <p>Jitter prawie nie rusza średniej i prawie nie rusza mediany. Przebieg z 30 ms jittera i
+  przebieg bez niego mogą pokazać niemal ten sam "typowy" ping, a odczucie będzie zupełnie inne.</p>
+  <p>Porównuj zamiast tego <strong>95. percentyl z medianą</strong>. Różnica między nimi to właśnie
+  jitter, i to ona sprawia, że rozmowa się rwie albo gra staje się niegrywalna, gdy średnia dalej
+  wygląda dobrze.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

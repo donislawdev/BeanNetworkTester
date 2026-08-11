@@ -17,6 +17,7 @@ on the two failure modes that are invisible:
   the URLs out of one registry, and these check that it stayed that way.
 """
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -47,7 +48,7 @@ def _read(path):
 
 
 def _sandbox(base):
-    """A copy of ``site/`` plus the two files the builder reads outside it.
+    """A copy of ``site/`` plus the files the builder reads outside it.
 
     The listed assets are only copied, never parsed, so a one-byte stand-in keeps a
     sandbox cheap enough to make one per mutation.
@@ -58,6 +59,9 @@ def _sandbox(base):
     gui = os.path.join(root, "beantester", "gui")
     os.makedirs(gui)
     shutil.copyfile(os.path.join(ROOT, build_site.THEME_FILE), os.path.join(gui, "theme.py"))
+    # The pages name field labels and preset names through the program's own language
+    # files, so a sandbox without them is not a copy of the real inputs.
+    shutil.copytree(os.path.join(ROOT, "lang"), os.path.join(root, "lang"))
     for asset in build_site.load_registry(ROOT).get("assets", []):
         target = os.path.join(root, asset["source"].replace("/", os.sep))
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -231,6 +235,203 @@ def test_the_builder_runs_as_a_script(tmp_path):
     check("the page is there", os.path.isfile(os.path.join(out, "index.html")))
 
 
+# -- more than one page: reachability, uniqueness, links ------------------------ #
+
+def test_no_page_is_an_orphan(tmp_path):
+    """Every page is linked from every other page, in its own language.
+
+    A page nothing links to is reachable through the sitemap and nowhere else: a
+    reader never finds it, and a crawler treats it as an afterthought. The footer
+    list is generated from the page registry precisely so that adding a page cannot
+    forget to link it, and this is the check that the generation really happened.
+    """
+    out, written = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    pages = build_site.load_pages(ROOT, registry)
+    indexable = [p for p in pages if not p["output"]]
+    check("there is more than one page to link", len(indexable) > 1, f"({len(indexable)})")
+
+    for code in build_site.language_codes(registry):
+        for page in indexable:
+            rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+            text = _read(os.path.join(out, rel.replace("/", os.sep)))
+            for other in indexable:
+                if other["id"] == page["id"]:
+                    continue
+                label = other["languages"][code]["link_text"]
+                check(f"{rel} links to {other['id']} ({label})",
+                      f">{label}</a>" in text, "(missing from the footer list)")
+
+
+def test_no_two_pages_claim_the_same_title_or_description(tmp_path):
+    """Duplicate titles and descriptions are a real defect, not untidiness.
+
+    Two pages with one title compete for the same result, and a search engine picks
+    one and quietly discounts the other. It is also the most likely mistake when a
+    page is created by copying its neighbour, which is exactly how these were made.
+    """
+    registry = build_site.load_registry(ROOT)
+    pages = build_site.load_pages(ROOT, registry)
+    for code in build_site.language_codes(registry):
+        for field in ("title", "description", "link_text"):
+            values = [p["languages"][code][field] for p in pages if code in p["languages"]]
+            duplicates = sorted({v for v in values if values.count(v) > 1})
+            check(f"{code}: every page has its own {field}", not duplicates,
+                  f"({duplicates})")
+
+
+def test_the_polish_pages_have_polish_addresses(tmp_path):
+    """A localised page with an English address is a half-translated page.
+
+    Not cosmetic: the words in a URL are read by both a person deciding whether to
+    click and a search engine deciding what the page is about. The home page is
+    exempt - its slug is empty in every language by design.
+    """
+    registry = build_site.load_registry(ROOT)
+    pages = build_site.load_pages(ROOT, registry)
+    default = registry["default_language"]
+    for page in pages:
+        if page["output"] or page["id"] == "home":
+            continue
+        for code in page["codes"]:
+            if code == default:
+                continue
+            own = page["languages"][code]["slug"]
+            english = page["languages"][default]["slug"]
+            check(f"{page['id']} [{code}]: the address is translated, not copied",
+                  own and own != english, f"({own!r} vs {english!r})")
+
+
+def test_every_internal_link_reaches_a_page_that_exists(tmp_path):
+    """A broken internal link is invisible from the source and obvious to a visitor.
+
+    Resolved against the built tree the way a browser would: relative to the
+    directory the page sits in, with a directory link meaning its index.html. This is
+    the guard that makes localised slugs safe to hand-write - get one wrong and the
+    link that names it fails here instead of in production.
+    """
+    out, written = _build(tmp_path)
+    pages = [p for p in written if p.endswith(".html")]
+    checked = 0
+    for rel in pages:
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        here = posixpath.dirname(rel)
+        for href in re.findall(r'(?:href|src)="([^"]+)"', text):
+            if href.startswith(("http://", "https://", "mailto:", "#", "data:")):
+                continue
+            target = href.split("#")[0].split("?")[0]
+            if not target:
+                continue
+            full = posixpath.normpath(posixpath.join(here, target.lstrip("/"))
+                                      if target.startswith("/")
+                                      else posixpath.join(here, target))
+            if target.startswith("/"):
+                full = posixpath.normpath(target.lstrip("/"))
+            candidates = [full, posixpath.join(full, "index.html")]
+            exists = any(os.path.exists(os.path.join(out, c.replace("/", os.sep)))
+                         for c in candidates)
+            check(f"{rel}: {href} reaches something", exists, f"(looked for {candidates})")
+            checked += 1
+    check("the link scan actually followed links", checked >= 20, f"({checked})")
+
+
+def test_the_pages_never_write_a_name_from_the_program_by_hand(tmp_path):
+    """A preset name in the prose must come from ``lang/<code>.json``, not from memory.
+
+    Measured, not feared: the first draft of these guides invented three Polish preset
+    names and two field labels. The prose read perfectly and no test could see it,
+    because a guide that tells somebody to fill in a field nobody can find is wrong in
+    the same way a correct sentence is right. The pages now name them through
+    ``{{app.<key>}}``, so a rename in the program either follows or fails the build.
+
+    Preset names are checked strictly - they are distinctive phrases and cannot appear
+    by accident. Field labels are not: "Buffer" and "Jitter" are ordinary words that
+    start sentences, so the placeholder mechanism carries them and the test below only
+    proves the wiring works. That half is deliberately not airtight, and saying so is
+    better than a guard with false alarms nobody trusts.
+    """
+    import json as jsonlib
+    from beantester import presets
+    registry = build_site.load_registry(ROOT)
+    for code in build_site.language_codes(registry):
+        strings = jsonlib.load(open(os.path.join(ROOT, "lang", "%s.json" % code),
+                                    encoding="utf-8"))
+        names = [strings[key] for key in presets.PRESETS if key in strings]
+        check(f"{code}: there are preset names to look for", len(names) > 10, f"({len(names)})")
+        for path in sorted(glob_pages(code)):
+            text = _read(path)
+            for name in names:
+                check(f"{os.path.basename(os.path.dirname(path))} [{code}]: "
+                      f"{name!r} is written by hand instead of {{{{app.presets.*}}}}",
+                      name not in text, "(use the placeholder)")
+
+
+def glob_pages(code):
+    import glob
+    return glob.glob(os.path.join(SITE, "pages", "*", "%s.html" % code))
+
+
+def test_the_program_strings_really_reach_the_built_pages(tmp_path):
+    """The other half: every ``{{app.*}}`` a page uses resolves to the program's text.
+
+    Proves the wiring rather than the absence of hand-written copies - so a renamed
+    field label shows up on the site, and a key that stops existing fails the build.
+    """
+    out, _ = _build(tmp_path, "appstrings")
+    registry = build_site.load_registry(ROOT)
+    pages = build_site.load_pages(ROOT, registry)
+    used = 0
+    for code in build_site.language_codes(registry):
+        strings = build_site.load_app_strings(ROOT, code)
+        for page in pages:
+            if code not in page["languages"]:
+                continue
+            body = page["languages"][code]["body"]
+            keys = re.findall(r"\{\{(app\.[a-z0-9_.]+)\}\}", body)
+            if not keys:
+                continue
+            rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+            target = page["output"] or rel
+            text = _read(os.path.join(out, target.replace("/", os.sep)))
+            for key in keys:
+                check(f"{target}: {key} is a real key in lang/{code}.json", key in strings,
+                      "(missing)")
+                check(f"{target}: the page shows {strings[key]!r} for {key}",
+                      strings[key] in text, "(not in the built page)")
+                used += 1
+    check("the pages use the program's strings at all", used >= 10, f"({used})")
+
+
+def test_the_exit_codes_on_the_page_are_the_programs_exit_codes(tmp_path):
+    """A hand-written table of exit codes is a second copy of ``exitcodes.py``.
+
+    It is on the site because a pipeline author needs it, and it is guarded because
+    the whole point of that table is that a build can trust the numbers. Until the
+    table is generated (which is the honest fix), this is what stands between it and
+    a silent divergence.
+    """
+    from beantester import exitcodes
+    out, written = _build(tmp_path, "codes")
+    codes = {value for name, value in vars(exitcodes).items()
+             if name.isupper() and isinstance(value, int)}
+    check("there are exit codes to look for", len(codes) >= 8, f"({sorted(codes)})")
+    # Selected through the registry, not by substring: the first version matched
+    # "limit-predkosci" because it contains "ci", and then asserted that a page about
+    # speed limits lists every exit code.
+    registry = build_site.load_registry(ROOT)
+    ci = [p for p in build_site.load_pages(ROOT, registry) if p["id"] == "ci"]
+    check("the CI page is in the registry", len(ci) == 1, f"({[p['id'] for p in ci]})")
+    pages = [posixpath.join(ci[0]["languages"][code]["dir_path"], "index.html").lstrip("/")
+             for code in ci[0]["codes"]]
+    for rel in pages:
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        listed = {int(n) for n in re.findall(r"<td>(\d+)(?:\s*/\s*\d+)?</td>", text)}
+        listed |= {int(n) for n in re.findall(r"<td>\d+\s*/\s*(\d+)</td>", text)}
+        missing = sorted(codes - listed)
+        check(f"{rel}: every exit code the program can return is on the page", not missing,
+              f"(missing {missing}, found {sorted(listed)})")
+
+
 # -- the layer search engines read ---------------------------------------------- #
 
 def test_every_indexable_page_declares_itself_canonical(tmp_path):
@@ -259,23 +460,31 @@ def test_the_language_annotations_are_reciprocal_with_one_x_default(tmp_path):
     that one generator wrote them all the same way. And exactly one ``x-default``,
     because two is undefined behaviour dressed as thoroughness.
     """
-    out, written = _build(tmp_path)
+    out, _ = _build(tmp_path)
     registry = build_site.load_registry(ROOT)
     base = registry["base_url"]
-    pages = [p for p in written if p.endswith("index.html")]
-    expected = {lang["code"]: "%s/%s" % (base, lang["dir"] + "/" if lang["dir"] else "")
-                for lang in registry["languages"]}
-    for rel in pages:
-        page = _read(os.path.join(out, rel.replace("/", os.sep)))
-        pairs = dict(re.findall(r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">',
-                                page))
-        for code, url in expected.items():
-            check(f"{rel}: lists {code} (including itself)", pairs.get(code) == url,
-                  f"(got {pairs.get(code)}, expected {url})")
-        x_default = re.findall(r'hreflang="x-default" href="([^"]+)"', page)
-        check(f"{rel}: exactly one x-default", len(x_default) == 1, f"({x_default})")
-        check(f"{rel}: x-default is the default language",
-              x_default[0] == expected[registry["default_language"]], f"({x_default[0]})")
+    default = registry["default_language"]
+    # Derived per PAGE, not per language: every page has its own localised address in
+    # each language, so a set of expectations built from the language directories
+    # alone would only ever have described the home page. The first version of this
+    # test did exactly that and passed until a second page existed.
+    pages = [p for p in build_site.load_pages(ROOT, registry) if not p["output"]]
+    check("there are pages to compare", len(pages) >= 2, f"({len(pages)})")
+    for page in pages:
+        expected = {code: "%s/%s" % (base, entry["dir_path"] + "/" if entry["dir_path"] else "")
+                    for code, entry in page["languages"].items()}
+        for code in page["codes"]:
+            rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+            text = _read(os.path.join(out, rel.replace("/", os.sep)))
+            pairs = dict(re.findall(
+                r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">', text))
+            for other, url in expected.items():
+                check(f"{rel}: lists {other} (including itself)", pairs.get(other) == url,
+                      f"(got {pairs.get(other)}, expected {url})")
+            x_default = re.findall(r'hreflang="x-default" href="([^"]+)"', text)
+            check(f"{rel}: exactly one x-default", len(x_default) == 1, f"({x_default})")
+            check(f"{rel}: x-default is the default language",
+                  x_default[0] == expected[default], f"({x_default[0]})")
 
 
 def test_the_social_card_says_the_same_thing_as_the_page(tmp_path):
@@ -351,8 +560,15 @@ def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
             check(f"{rel}: the block does not close its own script element",
                   "</script>" not in raw)
             data = jsonlib.loads(raw.replace("\\u003c", "<"))
-            check(f"{rel}: it is a SoftwareApplication",
-                  data.get("@type") == "SoftwareApplication", f"({data.get('@type')})")
+            # Two kinds are expected now, and an unexpected third one is a finding:
+            # this test used to assert that EVERY block is a SoftwareApplication, which
+            # was true until the breadcrumbs arrived and then failed for the right
+            # reason. The allow list keeps that signal instead of dropping the check.
+            kind = data.get("@type")
+            check(f"{rel}: {kind} is a kind this site publishes on purpose",
+                  kind in ("SoftwareApplication", "BreadcrumbList"), f"({kind})")
+            if kind != "SoftwareApplication":
+                continue
             for field in ("name", "url", "operatingSystem", "downloadUrl"):
                 check(f"{rel}: {field} is set", data.get(field), "(missing)")
             check(f"{rel}: a free app declares the price Google requires",
@@ -360,6 +576,62 @@ def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
             for invented in ("aggregateRating", "review", "ratingValue", "softwareVersion"):
                 check(f"{rel}: no {invented} (nobody gave us one)", invented not in data)
     check("the site carries structured data at all", blocks >= 1, f"({blocks})")
+
+
+def test_every_guide_carries_the_trail_back_to_the_home_page(tmp_path):
+    """A breadcrumb, in the language of the page, generated from the registry.
+
+    Found by measuring the built output rather than by reading the plan: the guides
+    carried no structured data at all, because the idea had been waved off with "flat
+    pages have no hierarchy". Home -> page is the hierarchy, and it is what a search
+    result shows instead of a bare URL.
+
+    The home page must NOT have one (a trail of length one says nothing) and neither
+    must the error page, which asks not to be indexed at all.
+    """
+    import json as jsonlib
+    out, _ = _build(tmp_path, "crumbs")
+    registry = build_site.load_registry(ROOT)
+    base = registry["base_url"]
+    pages = build_site.load_pages(ROOT, registry)
+    home = next(p for p in pages if p["id"] == "home")
+
+    def trails(rel):
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        found = []
+        for raw in re.findall(r'<script type="application/ld\+json">\n(.*?)\n</script>',
+                              text, re.S):
+            data = jsonlib.loads(raw.replace("\\u003c", "<"))
+            if data.get("@type") == "BreadcrumbList":
+                found.append(data["itemListElement"])
+        return found
+
+    check("the home page has no trail",
+          not trails("index.html"), "(a one-step trail says nothing)")
+    check("the error page has no trail", not trails("404.html"), "(it is noindex)")
+
+    seen = 0
+    for page in pages:
+        if page["output"] or page["id"] == "home":
+            continue
+        for code in page["codes"]:
+            rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+            found = trails(rel)
+            check(f"{rel}: exactly one breadcrumb trail", len(found) == 1, f"({len(found)})")
+            steps = found[0]
+            check(f"{rel}: the trail is home then this page", len(steps) == 2, f"({steps})")
+            check(f"{rel}: it starts at the home page of this language",
+                  steps[0]["item"] == "%s/%s" % (
+                      base, home["languages"][code]["dir_path"] + "/"
+                      if home["languages"][code]["dir_path"] else ""),
+                  f"({steps[0]['item']})")
+            check(f"{rel}: it names the page with its own label",
+                  steps[1]["name"] == page["languages"][code]["link_text"],
+                  f"({steps[1]['name']!r})")
+            check(f"{rel}: both steps are absolute",
+                  all(step["item"].startswith(base) for step in steps), f"({steps})")
+            seen += 1
+    check("there were trails to check", seen >= 4, f"({seen})")
 
 
 def test_the_sitemap_lists_exactly_the_pages_that_may_be_indexed(tmp_path):

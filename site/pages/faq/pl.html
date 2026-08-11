@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Pytania, które padają najpierw</h1>
+  <p class="lead">Te, na które warto odpowiedzieć przed pobraniem, a nie po.</p>
+</section>
+
+<section>
+  <h2>Dlaczego wymaga praw administratora?</h2>
+  <p>Bo pakiety przechwytuje sterownik jądra, a Windows nie wczyta go dla zwykłego użytkownika.
+  Program sam prosi o te prawa przy starcie. Z linii komend odmawia z konkretnym kodem wyjścia,
+  zamiast paść w połowie roboty.</p>
+</section>
+
+<section>
+  <h2>Zepsuje cały komputer czy tylko moją aplikację?</h2>
+  <p>To, na co go skierujesz. Ustaw cel i dotknięta będzie tylko ta aplikacja. Zostaw cel pusty i
+  objęte będzie każde połączenie na komputerze - o czym program ostrzega, w oknie i w linii komend,
+  jeszcze zanim zaczniesz się zastanawiać, dlaczego zerwało rozmowę wideo.</p>
+</section>
+
+<section>
+  <h2>Jak to cofnąć?</h2>
+  <p>STOP. Zamknięcie programu działa tak samo, tak samo limit czasu, jeśli go ustawisz. Jeśli samo
+  narzędzie padnie w środku sesji, jego wewnętrzny nadzorca zamyka przechwyt, zamiast zostawiać
+  zepsutą sieć - sesja nie może przeżyć programu, który ją zaczął.</p>
+</section>
+
+<section>
+  <h2>Czy program cokolwiek gdzieś wysyła?</h2>
+  <p>Nie. Nie ma analityki, nie ma raportowania awarii do usługi, nie ma sprawdzania aktualizacji.
+  Program nie ma w ogóle klienta sieciowego. Jedyne połączenie wychodzące, jakie może wykonać, to
+  otwarcie strony wsparcia w Twojej przeglądarce, po Twoim kliknięciu. Przechwytuje Twój ruch, więc
+  ten ruch nie może opuścić Twojej maszyny - a strona, którą właśnie czytasz, też nie ładuje niczego
+  z obcych serwerów.</p>
+</section>
+
+<section>
+  <h2>Windows ostrzegł mnie przy pobieraniu. Dlaczego?</h2>
+  <p>Bo plik jest nowy i niepodpisany, a SmartScreen oznacza wszystko, czego wcześniej nie widział.
+  Certyfikat do podpisywania kodu to koszt roczny, nie opinia o pliku. Każde wydanie publikuje sumę
+  kontrolną SHA-256, listę komponentów i podpis wiążący jedno z drugim z buildem, który je wytworzył
+  - więc możesz sprawdzić, co pobrałeś, zamiast wierzyć zielonemu znaczkowi.</p>
+</section>
+
+<section>
+  <h2>Pobieranie zdechło całkowicie i nic nie mówi dlaczego</h2>
+  <p>Sprawdź maksymalny rozmiar pakietu. Ustawiony dość nisko nie jest mniejszym pakietem, tylko
+  czarną dziurą: sieć wyrzuca to, co za duże, i nigdy tego nie zgłasza. Przywróć wartość i transfer
+  wraca.</p>
+</section>
+
+<section>
+  <h2>Działa na Linuksie albo macOS?</h2>
+  <p>Nie i nie będzie. Stoi na sterowniku jądra Windows. Na Linuksie tę robotę wykonuje
+  <code>tc</code> z <code>netem</code> i jest już zainstalowany.</p>
+</section>
+
+<section>
+  <h2>Naprawdę darmowy? Mogę używać w pracy?</h2>
+  <p>Tak. Jest darmowy i otwarty na licencji GNU GPL v3, także w pracy, z kodem dostępnym dla
+  każdego do czytania i zmieniania. Pobierany plik jest ten sam dla wszystkich.</p>
+</section>
+
+<section>
+  <h2>Więcej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
