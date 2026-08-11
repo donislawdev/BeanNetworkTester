@@ -47,6 +47,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
+- **The licence notices now list everything the download actually contains.** Scanning the built
+  package turned up three things shipping in every release that no list mentioned: zlib, libffi and
+  Microsoft's C runtime - 42 files of the latter, over half the bundle. All permissive or
+  redistributable, so nothing was ever breached; the notices simply were not complete. The bundled
+  Python licence was also a truncated copy, missing the part covering software Python itself
+  includes; it is now the full text. `--license` reports the WinDivert driver version instead of
+  the word "bundled".
 - **Every number in the presets says where it came from.** The comment block in
   `beantester/presets.py` now carries authors, venue and a DOI for each study, and the Ookla
   figures name the period and the date they were read. Three entries looked like citations without

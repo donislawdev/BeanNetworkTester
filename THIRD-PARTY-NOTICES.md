@@ -135,6 +135,52 @@ version is linked above. Contact: https://donislawdev.com/
 
 ---
 
+## zlib
+
+* Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler
+* Used under: **zlib licence** (permissive)
+* Licence text: `licenses/zlib-LICENSE.txt`
+* Source code: https://www.zlib.net/
+* Ships as `zlib1.dll` beside the executable, as part of the CPython Windows
+  runtime. `--license` reports the version the build links against; note that it
+  can read `1.3.1.zlib-ng`, because the `zlib` MODULE is built against zlib-ng
+  while the DLL itself is genuine zlib. Both are under this licence.
+
+---
+
+## libffi
+
+* Copyright (c) 1996-2022 Anthony Green, Red Hat, Inc and others
+* Used under: **MIT-style licence**
+* Licence text: inside `licenses/Python-LICENSE.txt`, in CPython's section for
+  incorporated software - libffi arrives with CPython and is licensed there
+* Source code: https://github.com/libffi/libffi
+* Ships as `libffi-8.dll`; it is what `ctypes` calls into, and this project
+  reaches the WinDivert driver and several Windows APIs through `ctypes`.
+
+---
+
+## Microsoft C Runtime (`ucrtbase.dll`, `VCRUNTIME140*.dll`, `api-ms-win-*.dll`)
+
+* Copyright (c) Microsoft Corporation
+* Used under: **Microsoft's redistributable terms** for the Visual C++ runtime
+  and the Universal CRT, which permit shipping these files alongside an
+  application
+* Licence text: not bundled - Microsoft distributes the terms rather than a text
+  to include; see the link below
+* Terms: https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files
+* These arrive with the CPython Windows runtime, not from this project directly.
+  They are the C runtime the interpreter and its extension modules are built
+  against.
+* It is a larger set than it looks: **42 files, more than half the bundle by
+  count** - `ucrtbase.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll` and 39
+  `api-ms-win-core-*` / `api-ms-win-crt-*` ApiSet stubs (version 10.0.26100.8249,
+  Microsoft Corporation). The stubs are easy to mistake for Windows itself rather
+  than for something shipped alongside the program, which is exactly why they are
+  named here.
+
+---
+
 ## Artwork and everything else
 
 The application icon, the drawn-in-code widgets (the checkbox indicator, the bean

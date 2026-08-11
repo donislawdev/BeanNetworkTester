@@ -61,7 +61,8 @@ def test_legal_files_are_present():
     licenses = os.path.join(ROOT, "licenses")
     check("licenses/ directory ships", os.path.isdir(licenses))
     for text in ("LGPL-3.0.txt", "GPL-2.0.txt", "psutil-LICENSE.txt",
-                 "Python-LICENSE.txt", "PyInstaller-COPYING.txt"):
+                 "Python-LICENSE.txt", "PyInstaller-COPYING.txt",
+                 "zlib-LICENSE.txt"):
         check(f"licenses/{text} is present",
               os.path.exists(os.path.join(licenses, text)))
 
