@@ -403,11 +403,30 @@ MUTATIONS = [
     {
         "label": "public: the privacy scan reads an empty file list",
         "file": "tests/test_repo_conventions.py",
-        "old": "    files = repo_text_files((\".py\", \".md\", \".json\", \".txt\", \".toml\", \".spec\", \".yml\"))\n"
+        "old": "    files = repo_text_files((\".py\", \".md\", \".json\", \".txt\", \".toml\", \".spec\", \".yml\")\n"
+               "                            + WEB_EXTS)\n"
                "    check(\"the privacy scan actually read the repository\"",
         "new": "    files = []\n"
                "    check(\"the privacy scan actually read the repository\"",
         "test": "test_nothing_private_to_this_machine_reaches_the_public_repository",
+    },
+    {
+        # The site exists to produce this one click. A generator that points it a
+        # level up still builds, still renders and still looks right.
+        "label": "site: the download button stops at the releases list",
+        "file": "tools/build_site.py",
+        "old": "        \"site.download_url\": \"%s/releases/latest\" % repo,",
+        "new": "        \"site.download_url\": \"%s/releases\" % repo,",
+        "test": "test_the_download_button_points_at_the_release_page",
+    },
+    {
+        # Two dark themes drifting apart is the failure nobody reports: each page
+        # looks fine on its own, and only a side-by-side would show it.
+        "label": "site: the palette stops coming from theme.py",
+        "file": "tools/build_site.py",
+        "old": "    colours = palette(root, registry[\"palette\"])",
+        "new": "    colours = {var: \"#010203\" for var in registry[\"palette\"]}",
+        "test": "test_the_palette_is_read_out_of_the_theme_module",
     },
     {
         "label": "licence: the notices name a WinDivert file that is not shipped",

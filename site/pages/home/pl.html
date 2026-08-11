@@ -1,0 +1,78 @@
+<section class="hero">
+  <h1>Sprawdź swoją aplikację na słabej sieci</h1>
+  <p class="lead">Bean Network Tester dokłada opóźnienie, utratę pakietów i limit prędkości jednej
+  aplikacji na Windows. Zobaczysz to, co widzą Twoi użytkownicy w pociągu, na hotelowym WiFi albo
+  na telefonie z jedną kreską zasięgu.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Działający ping traci pakiety i dostaje opóźnienie w trakcie pracy narzędzia">
+  <figcaption>Dokładanie opóźnienia i utraty pakietów do trwającego połączenia.</figcaption>
+</figure>
+
+<section>
+  <h2>Co robi z siecią</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Zwalnia ją</h3>
+      <p>Dokłada stałe albo losowe opóźnienie. Zobaczysz, co 300 ms pingu robi z Twoim ekranem
+      ładowania.</p>
+    </article>
+    <article class="card">
+      <h3>Gubi pakiety</h3>
+      <p>Odrzuca je, duplikuje albo psuje. Wtedy widać, czy aplikacja się podnosi, czy tylko wisi.</p>
+    </article>
+    <article class="card">
+      <h3>Ogranicza prędkość</h3>
+      <p>Trzyma pobieranie albo wysyłanie na zadanej liczbie KB na sekundę, jak słabe łącze
+      mobilne.</p>
+    </article>
+    <article class="card">
+      <h3>Zrywa łącze</h3>
+      <p>Zamyka połączenia, blokuje port albo adres, potrafi też włączać i wyłączać sieć na
+      przemian.</p>
+    </article>
+    <article class="card">
+      <h3>Celuje w jedną aplikację</h3>
+      <p>Wskazujesz proces, PID, adres albo port. Reszta komputera pracuje normalnie.</p>
+    </article>
+    <article class="card">
+      <h3>Powtarza dokładnie</h3>
+      <p>To samo ziarno losowości odtwarza ten sam przebieg. Na tym polega różnica między
+      zgłoszeniem błędu a opowieścią.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Uruchomienie to trzy kroki</h2>
+  <ol class="steps">
+    <li>Pobierz archiwum ze strony wydań i rozpakuj je w dowolnym miejscu.</li>
+    <li>Uruchom <code>BeanNetworkTester.exe</code>. Sam poprosi o prawa administratora, bo
+    przechwytywanie ruchu ich wymaga.</li>
+    <li>Wybierz gotowy profil, na przykład "Sieć 3G", wciśnij START i korzystaj z aplikacji.</li>
+  </ol>
+  <p>W tym samym pliku jest tryb tekstowy, więc całość działa też w pipeline. Jedna komenda
+  wystarczy, żeby sprawdzić, czy Twoja usługa przetrwa 10 procent utraty pakietów.</p>
+</section>
+
+<section>
+  <h2>Kto z tego korzysta</h2>
+  <p>Testerzy, którzy muszą odtworzyć "u mnie działa". Programiści, którym timeout ma się wreszcie
+  wydarzyć. Twórcy gier sprawdzający, co lag robi z ich siecią. Każdy, kto usłyszał pytanie, czy
+  aplikacja działa na słabym połączeniu, i nie miał uczciwego sposobu, żeby to stwierdzić.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

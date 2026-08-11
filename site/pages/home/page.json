@@ -1,0 +1,17 @@
+{
+  "id": "home",
+  "order": 1,
+  "in_nav": true,
+  "languages": {
+    "en": {
+      "slug": "",
+      "title": "Bean Network Tester - simulate a bad network on Windows",
+      "description": "Free Windows tool that adds lag, packet loss and speed limits to one app, so you can test how it behaves on a bad connection."
+    },
+    "pl": {
+      "slug": "",
+      "title": "Bean Network Tester - symulator słabego internetu (Windows)",
+      "description": "Darmowe narzędzie dla Windows. Dodaje opóźnienie, utratę pakietów i limit prędkości wybranej aplikacji, żeby sprawdzić, jak działa przy słabym połączeniu."
+    }
+  }
+}

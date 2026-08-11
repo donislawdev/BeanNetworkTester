@@ -1,0 +1,74 @@
+<section class="hero">
+  <h1>Test your app on a bad network</h1>
+  <p class="lead">Bean Network Tester adds lag, packet loss and speed limits to a single Windows
+  application. You get to see what your users see on a train, on hotel WiFi, or on a phone with
+  one bar of signal.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="A live ping losing packets and gaining delay while the tool is running">
+  <figcaption>Adding delay and packet loss to a running connection.</figcaption>
+</figure>
+
+<section>
+  <h2>What it does to your network</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Slows it down</h3>
+      <p>Add a fixed or random delay. Find out what 300 ms of ping does to your loading spinner.</p>
+    </article>
+    <article class="card">
+      <h3>Loses packets</h3>
+      <p>Drop, duplicate or corrupt them, then watch whether your app recovers or just hangs.</p>
+    </article>
+    <article class="card">
+      <h3>Caps the speed</h3>
+      <p>Hold download or upload to a set number of KB per second, the way a weak mobile link does.</p>
+    </article>
+    <article class="card">
+      <h3>Breaks the link</h3>
+      <p>Tear connections down, block a port or an address, or make the network come and go.</p>
+    </article>
+    <article class="card">
+      <h3>Aims at one app</h3>
+      <p>Pick a process, a PID, an address or a port. The rest of the machine keeps working normally.</p>
+    </article>
+    <article class="card">
+      <h3>Repeats exactly</h3>
+      <p>The same seed replays the same run. That is the difference between a bug report and a story.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Running it takes three steps</h2>
+  <ol class="steps">
+    <li>Download the zip from the releases page and unpack it anywhere.</li>
+    <li>Start <code>BeanNetworkTester.exe</code>. It asks for administrator rights by itself, because
+    capturing traffic needs them.</li>
+    <li>Pick a ready profile such as "3G network", press START, and use your app.</li>
+  </ol>
+  <p>There is a text mode in the same file, so the whole thing also runs in a pipeline.
+  One command is enough to check that your service survives 10 percent packet loss.</p>
+</section>
+
+<section>
+  <h2>Who uses it</h2>
+  <p>Testers who have to reproduce "it works on my machine". Developers who need a timeout to
+  actually happen. Game developers checking what lag does to their netcode. Anyone who has ever
+  been asked whether the app works on a weak connection and had no honest way to find out.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

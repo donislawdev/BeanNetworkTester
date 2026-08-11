@@ -27,6 +27,14 @@ SKIP_FILES = {"PROJECT_NOTES.md", "HISTORY_NOTES.md", "CLAUDE.md",
 # Same reason, by prefix: HANDOFF-*.md are maintainer briefs kept out of git.
 SKIP_PREFIXES = ("HANDOFF-",)
 
+# The website sources under site/ are public text like any other, and until they
+# existed every scanner below stopped at the extensions a Python project has. The
+# conventions do not stop there: a dash, a machine path or an address in a page
+# template is published to a browser instead of to a reader of the repository,
+# which is worse, not better. Kept as its own tuple so the addition is visible
+# rather than buried in three separate literals.
+WEB_EXTS = (".html", ".css", ".js", ".xml", ".svg")
+
 
 def repo_text_files(exts):
     """Every text file that is actually IN the repository, with the given suffixes.
@@ -155,7 +163,7 @@ def test_no_em_or_en_dashes_in_repo_text():
     banned = {"\u2014": "em dash", "\u2013": "en dash", "\u2012": "figure dash",
               "\u2212": "minus sign", "\u2015": "horizontal bar"}
     exts = (".py", ".md", ".json", ".toml", ".spec", ".yml", ".yaml", ".txt",
-            ".cfg", ".ini")
+            ".cfg", ".ini") + WEB_EXTS
     offenders = []
     for path in repo_text_files(exts):
         text = open(path, encoding="utf-8", errors="replace").read()
@@ -267,6 +275,10 @@ def test_the_repository_scanners_actually_read_files():
             ("_gui_files", _gui_files(), "app.py", 10),
             ("repo_text_files(.py)", repo_text_files((".py",)), "engine.py", 60),
             ("repo_text_files(.md)", repo_text_files((".md",)), "README.md", 4),
+            # The website sources: without this line the three scans above would
+            # keep passing if site/ vanished or moved, which is the exact failure
+            # this test exists for - an empty collection satisfies every check.
+            ("repo_text_files(web)", repo_text_files(WEB_EXTS), "style.css", 4),
             ("code_hygiene._pkg_files", test_code_hygiene._pkg_files(), "core.py", 20),
             ("layering._top_level_modules",
              test_layering._top_level_modules(), "engine.py", 15),
@@ -306,7 +318,16 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
 # Things that must never reach a public repository. Only the mechanical half of
 # the rule lives here - see the note next to the test about the other half.
 PRIVATE_PATTERNS = (
-    (r"[A-Za-z]:[\/]{1,2}Users[\/]", "a Windows user-profile path"),
+    # The backslash spelling is the one that actually leaks - it is what cmd,
+    # PowerShell and a Python traceback print - and until 2026-08-11 this pattern did
+    # not match it. Inside a character class, an escaped forward slash is just a
+    # forward slash, so the class held ONE character and the guard only ever caught
+    # the URL-style spelling. Found by mutation while extending these scans to the
+    # website sources: a probe file carrying a profile path in backslash form passed
+    # this test. After the fix both spellings match and the tracked tree has no hit.
+    # No example is written out here on purpose: this file is repository text, so it
+    # is scanned by the rule it defines, and a literal one would fail the suite.
+    (r"[A-Za-z]:[\\/]{1,2}Users[\\/]", "a Windows user-profile path"),
     (r"/home/[a-z][\w.-]*/", "a Linux home path"),
     (r"/Users/[A-Za-z][\w.-]*/", "a macOS home path"),
     (r"\bgh[pousr]_[A-Za-z0-9]{16,}", "a GitHub token"),
@@ -333,7 +354,8 @@ def test_nothing_private_to_this_machine_reaches_the_public_repository():
     the presence of this test is not mistaken for full coverage.
     """
     import re
-    files = repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml"))
+    files = repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml")
+                            + WEB_EXTS)
     check("the privacy scan actually read the repository", len(files) >= 30,
           f"({len(files)} files)")
     for pattern, what in PRIVATE_PATTERNS:
@@ -359,7 +381,8 @@ def test_no_stray_email_addresses_in_the_public_tree():
     import re
     rx = re.compile(r"[\w.+-]+@[\w-]+\.[A-Za-z]{2,}")
     offenders = []
-    for path in repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml")):
+    for path in repo_text_files((".py", ".md", ".json", ".txt", ".toml", ".spec", ".yml")
+                                + WEB_EXTS):
         name = os.path.basename(path)
         if name in EMAIL_ALLOWED_IN:
             continue
