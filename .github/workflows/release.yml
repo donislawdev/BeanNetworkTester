@@ -12,6 +12,13 @@ on:
 # needs write. Scoped to this workflow, not the whole repository.
 permissions:
   contents: write
+  # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
+  # signs it, `attestations` writes the result to the repository's attestation
+  # store. Both are required by actions/attest-sbom and neither grants anything
+  # else; a release that skipped them would still publish an SBOM, just an
+  # unsigned one that anybody could swap.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -108,6 +115,38 @@ jobs:
           cat SHA256SUMS.txt
           echo "ASSET=${name}.zip" >> "$GITHUB_ENV"
 
+      # The SBOM is generated from `beantester/legal.py`, the reviewed list of what
+      # this build ships - not from a scan. Measured 2026-08-11: a scanner reading
+      # the built bundle finds CPython, Tcl and Tk with versions but misses psutil,
+      # PyDivert and PyInstaller (PyInstaller strips `.dist-info`), never sees
+      # `WinDivert64.sys`, and attaches no licence to anything. The registry has the
+      # licences; the scanner's job is to guard it, which is a separate step below.
+      #
+      # The tag seeds the document namespace, so re-running this workflow on the
+      # same tag produces the same URI instead of a fresh random one.
+      - name: Generate the SBOM (SPDX 2.3)
+        shell: bash
+        run: |
+          python tools/sbom.py --namespace-seed "$GITHUB_REF_NAME" \
+                 -o "BeanNetworkTester-${GITHUB_REF_NAME}.spdx.json"
+          python -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); \
+                     print('packages:', len(d['packages']))" \
+                 "BeanNetworkTester-${GITHUB_REF_NAME}.spdx.json"
+          echo "SBOM=BeanNetworkTester-${GITHUB_REF_NAME}.spdx.json" >> "$GITHUB_ENV"
+
+      # Signs the SBOM against the zip a user downloads, so `gh attestation verify`
+      # can prove the pair belongs together. Without this the SBOM is a text file
+      # anybody could replace, which is the difference between a bill of materials
+      # and a note claiming to be one.
+      - name: Attest the SBOM against the release archive
+        # Pinned by SHA, not by tag. This is the first third-party-shaped action in
+        # the workflow that publishes the release, and a tag can be moved; the SHA
+        # below is what `v4.1.0` pointed at on 2026-08-11, read from the API.
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e  # v4.1.0
+        with:
+          subject-path: ${{ env.ASSET }}
+          sbom-path: ${{ env.SBOM }}
+
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
       #
@@ -126,4 +165,4 @@ jobs:
           head -5 RELEASE_NOTES.md
           flags=(--title "$TITLE" --notes-file RELEASE_NOTES.md)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
-          gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "$SBOM" "${flags[@]}"

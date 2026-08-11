@@ -55,7 +55,101 @@ def test_every_shipped_component_is_named_with_a_version_and_a_source():
         check(f"{name} carries a source URL", str(url).startswith("http"), f"({url})")
 
 
-def test_the_report_carries_the_licence_the_components_and_the_no_telemetry_line():
+def test_the_declared_windivert_version_matches_the_driver_we_ship():
+    """The LGPL obligation is to name the EXACT version the user was given.
+
+    Until 2026-08-11 the report said "bundled", which is true and useless to
+    somebody trying to fetch that source and rebuild it. The number is pinned in
+    `legal.WINDIVERT_VERSION` because it is a property of the build, and this test
+    is what stops it rotting: it reads the version resource of the driver in the
+    INSTALLED pydivert and requires the two to agree.
+
+    Note which file is asked. `WinDivert64.dll` carries NO version resource at all
+    - only `WinDivert64.sys` does - which is also why a bundle scanner reports the
+    DLL with an unknown version.
+    """
+    import os
+    import sys as _sys
+
+    from beantester import legal as _legal
+
+    found = _windivert_binaries()
+    if found is None or not _sys.platform.startswith("win"):
+        return                      # Linux runner: the Windows-only dep is absent
+    relative, _names = found
+    import pydivert
+    root = os.path.dirname(os.path.dirname(os.path.abspath(pydivert.__file__)))
+    driver = os.path.join(root, relative.replace("/", os.sep), "WinDivert64.sys")
+    if not os.path.exists(driver):
+        return
+
+    import ctypes
+    import ctypes.wintypes as wintypes
+    version_dll = ctypes.WinDLL("version")
+    size = version_dll.GetFileVersionInfoSizeW(driver, None)
+    check("the driver carries a version resource at all", size > 0, f"({size})")
+    if not size:
+        return
+    buffer = ctypes.create_string_buffer(size)
+    version_dll.GetFileVersionInfoW(driver, 0, size, buffer)
+    block = ctypes.c_void_p()
+    length = wintypes.UINT()
+
+    # 🔴 The STRING block, not the numeric one. A version resource carries both,
+    # and for this driver they DISAGREE: VS_FIXEDFILEINFO says 2.0.0.0 while
+    # StringFileInfo says "2.2", which is the version WinDivert is released and
+    # documented under. The first draft of this test read the numeric field and
+    # reported a mismatch that did not exist - the instrument, not the data.
+    version_dll.VerQueryValueW(buffer, "\\VarFileInfo\\Translation",
+                               ctypes.byref(block), ctypes.byref(length))
+    codes = ctypes.cast(block, ctypes.POINTER(ctypes.c_uint16 * 2)).contents
+    key = "\\StringFileInfo\\%04x%04x\\FileVersion" % (codes[0], codes[1])
+    text = ctypes.c_wchar_p()
+    found_string = version_dll.VerQueryValueW(buffer, key,
+                                              ctypes.byref(text), ctypes.byref(length))
+    check("the driver's version resource carries a FileVersion string",
+          bool(found_string) and bool(text.value), f"({key})")
+    if not found_string:
+        return
+    reported = str(text.value).strip()
+
+    check("the declared WinDivert version is the one on disk",
+          reported == _legal.WINDIVERT_VERSION,
+          f"(driver says {reported!r}, registry says {_legal.WINDIVERT_VERSION!r})")
+
+
+def test_the_registry_and_the_notices_describe_the_same_set():
+    """Three lists have to agree, and until 2026-08-11 they silently did not.
+
+    `legal.COMPONENTS` is what `--license` reports, THIRD-PARTY-NOTICES.md is what
+    the user reads, and `licenses/` is what they can open. Scanning the BUILT
+    BUNDLE with Syft found three components shipping in every release so far that
+    no list mentioned: zlib, libffi and the Microsoft C runtime. All permissive or
+    redistributable, so nothing was breached - the defect was the CLAIM of
+    completeness, which is the kind that survives review because each file looks
+    fine on its own.
+
+    This test cannot see the bundle, so it cannot find the next unlisted DLL. What
+    it does is cheaper and still worth having: it stops the three lists drifting
+    apart once somebody adds a component to one of them.
+    """
+    import os
+    from fakes import ROOT
+
+    notices = open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"),
+                   encoding="utf-8").read()
+    for name, *_ in legal.COMPONENTS:
+        # The notices head each component with "## <name>", sometimes followed by
+        # the file names - so match the start, not the whole line.
+        stem = name.split(" (")[0]
+        check(f"the notices have a section for {stem}",
+              ("## " + stem) in notices, f"({stem})")
+
+    texts = sorted(f for f in os.listdir(os.path.join(ROOT, "licenses"))
+                   if f.endswith(".txt"))
+    for text in texts:
+        check(f"licenses/{text} is referenced by the notices",
+              text in notices, f"({text} ships but nothing points at it)")
     report = legal.cli_report()
     check("report opens with the licence itself",
           "GNU GENERAL PUBLIC LICENSE" in report)
