@@ -53,6 +53,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
+- **The website has a download page and reference tables.** The download page says the price, the
+  system, the rights it needs and what is in the release, with the two commands that check the
+  archive is the file we built. The reference page lists all seventeen profiles with the values they
+  set, every setting with its flag, unit and range, and every exit code - generated from the program
+  itself, so they cannot disagree with it. The footer now links the project's accounts.
 - **Eight guides on the website, in English and Polish.** Packet loss, latency and jitter, speed
   limits, breaking connections, aiming at one application, running network tests in a pipeline, how
   this compares with other Windows tools, and the questions people ask before downloading. Each one

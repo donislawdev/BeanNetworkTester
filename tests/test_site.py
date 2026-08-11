@@ -148,29 +148,63 @@ def test_the_page_asks_nothing_of_a_third_party(tmp_path):
     would contradict it, and every third-party request is a request that can be
     slow, blocked or gone.
 
-    Checked by HOST, not by string prefix: a first version compared the start of the
-    URL against ours, which a host like `github.com.example.net` satisfies. And the
-    CSS is scanned too - `@import` and `url()` are requests as much as a `src` is,
-    and the first version could not see a web font at all.
+    🔴 A REQUEST is not a LINK, and the first version of this test conflated them. It
+    matched `href` and `src` together, so adding the owner's accounts to the footer
+    made it fail - correctly by its own wording, wrongly by its purpose. What must be
+    ours is everything the page FETCHES: images, stylesheets, scripts, and whatever CSS
+    pulls in with `url()` or `@import`. Where a visitor can CLICK is a different
+    question, answered by the test below.
+
+    Checked by HOST, not by string prefix: an earlier version compared the start of the
+    URL against ours, which a host like `github.com.example.net` satisfies.
     """
     from urllib.parse import urlsplit
     out, written = _build(tmp_path)
     registry = build_site.load_registry(ROOT)
-    allowed = {urlsplit(registry["base_url"]).netloc.lower(),
-               urlsplit(registry["repo_url"]).netloc.lower()}
-    check("the allow list resolved to real hosts", all(allowed) and len(allowed) == 2,
-          f"({allowed})")
+    ours = urlsplit(registry["base_url"]).netloc.lower()
 
-    urls = []
+    fetched = []
     for rel in written:
         if not rel.endswith((".html", ".css")):
             continue
         text = _read(os.path.join(out, rel.replace("/", os.sep)))
-        urls += [(rel, u) for u in EXTERNAL.findall(text)]
-        urls += [(rel, u) for u in CSS_EXTERNAL.findall(text)]
-    for rel, url in urls:
+        fetched += [(rel, u) for u in re.findall(r'(?:src|srcset)="([^"]+)"', text)]
+        fetched += [(rel, u) for u in re.findall(r'<link\b[^>]*href="([^"]+)"', text)]
+        fetched += [(rel, u) for u in CSS_EXTERNAL.findall(text)]
+    check("the scan found things the page fetches", len(fetched) >= 10, f"({len(fetched)})")
+    for rel, url in fetched:
+        if not url.startswith(("http://", "https://", "//")):
+            continue                      # relative: served from this site by definition
         host = urlsplit(url if "//" in url else "//" + url).netloc.lower()
-        check(f"{rel}: {url} is one of ours", host in allowed, f"(allowed: {sorted(allowed)})")
+        check(f"{rel}: fetches {url} from somebody else", host == ours,
+              f"(only {ours} may be fetched)")
+
+
+def test_every_outbound_link_goes_somewhere_we_named(tmp_path):
+    """Links may leave the site - but only to hosts the registry lists.
+
+    The other half of the split above. A page is allowed to point at GitHub and at the
+    owner's accounts, because those are in `site.json`. Anything else absolute is
+    either a typo or something nobody decided to publish, and both should fail here
+    rather than ship.
+    """
+    from urllib.parse import urlsplit
+    out, written = _build(tmp_path, "links")
+    registry = build_site.load_registry(ROOT)
+    allowed = {urlsplit(registry["base_url"]).netloc.lower(),
+               urlsplit(registry["repo_url"]).netloc.lower()}
+    allowed |= {urlsplit(entry["url"]).netloc.lower() for entry in registry.get("social", [])}
+    check("the allow list came from the registry", len(allowed) >= 4, f"({sorted(allowed)})")
+
+    seen = 0
+    for rel in [p for p in written if p.endswith(".html")]:
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for url in re.findall(r'<a\b[^>]*href="((?:https?:)?//[^"]+)"', text):
+            host = urlsplit(url if "//" in url else "//" + url).netloc.lower()
+            check(f"{rel}: {url} is a host the registry names", host in allowed,
+                  f"(allowed: {sorted(allowed)})")
+            seen += 1
+    check("there were outbound links to check", seen >= 10, f"({seen})")
 
 
 def test_every_page_has_one_headline_and_no_image_without_a_description(tmp_path):
@@ -655,6 +689,183 @@ def test_the_sitemap_lists_exactly_the_pages_that_may_be_indexed(tmp_path):
     check("the 404 page is not offered as a destination",
           not any("404" in loc for loc in listed), f"({listed})")
     check("every entry is absolute", all(loc.startswith(base) for loc in listed))
+
+
+def test_the_sitemap_is_the_shape_a_validator_will_accept(tmp_path):
+    """Nothing in the file except the sitemap namespace - no foreign elements.
+
+    🔴 This is a fixed bug with a guard, not a precaution. The first sitemap carried
+    the language alternates as ``xhtml:link``, which is the form Google documents, and
+    it made the file **fail XSD validation**: ``tUrl`` in the official schema ends with
+    ``<xsd:any namespace="##other" processContents="strict"/>``, and *strict* means a
+    validator must resolve a schema for the foreign element. Nothing imports an XHTML
+    schema, so validators reject the document while Google accepts it - and a file a
+    validator calls broken is a signal nobody can tell apart from a real fault.
+
+    The alternates were removed rather than defended: the reciprocal ``hreflang`` set
+    already sits in the head of every page, and one method is what Google asks for.
+    """
+    from xml.etree import ElementTree
+    out, written = _build(tmp_path, "sitemapshape")
+    registry = build_site.load_registry(ROOT)
+    ns = "http://www.sitemaps.org/schemas/sitemap/0.9"
+    root = ElementTree.fromstring(_read(os.path.join(out, "sitemap.xml")))
+    check("the root is a urlset in the sitemap namespace", root.tag == "{%s}urlset" % ns,
+          f"({root.tag})")
+
+    allowed = {"{%s}%s" % (ns, name) for name in ("loc", "lastmod", "changefreq", "priority")}
+    urls = list(root)
+    check("there are url entries", urls, "(none)")
+    for url in urls:
+        check("every child of urlset is a url", url.tag == "{%s}url" % ns, f"({url.tag})")
+        kinds = [child.tag for child in url]
+        foreign = [tag for tag in kinds if tag not in allowed]
+        check("no foreign-namespace elements inside url (strict validation rejects them)",
+              not foreign, f"({foreign})")
+        check("exactly one loc", kinds.count("{%s}loc" % ns) == 1, f"({kinds})")
+
+    locs = [url.find("{%s}loc" % ns).text for url in urls]
+    check("every address is absolute",
+          all(loc.startswith(registry["base_url"]) for loc in locs), f"({locs[:3]})")
+    check("no address is listed twice", len(set(locs)) == len(locs),
+          f"({len(locs) - len(set(locs))} duplicates)")
+    pages = [p for p in build_site.load_pages(ROOT, registry) if not p["output"]]
+    expected = len(pages) * len(build_site.language_codes(registry))
+    check(f"every page in every language is listed ({expected})", len(locs) == expected,
+          f"(got {len(locs)})")
+
+
+def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
+    """The three tables on the reference page come from the program, not from prose.
+
+    This is the drift the site could not otherwise avoid: seventeen profiles,
+    twenty-nine flags and ten exit codes are exactly the kind of list that is copied
+    once and then quietly disagrees with the program for years.
+    """
+    from beantester import exitcodes, fields, presets
+    out, written = _build(tmp_path, "tables")
+    registry = build_site.load_registry(ROOT)
+    ref = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "reference")
+    for code in ref["codes"]:
+        app = build_site.load_app_strings(ROOT, code)
+        rel = posixpath.join(ref["languages"][code]["dir_path"], "index.html").lstrip("/")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for key in presets.PRESETS:
+            name = app["app." + key]
+            check(f"{rel}: the profile {name!r} is in the table", f"<td>{name}</td>" in text,
+                  "(missing row)")
+        for field in fields.FIELD_DEFS:
+            if getattr(field, "cli", None):
+                check(f"{rel}: --{field.cli} is in the table",
+                      f"<code>--{field.cli}</code>" in text, "(missing row)")
+        for name, value in vars(exitcodes).items():
+            if name.isupper() and isinstance(value, int):
+                check(f"{rel}: exit code {value} is in the table", f"<td>{value}</td>" in text,
+                      "(missing row)")
+
+
+def test_no_page_writes_its_own_table_of_exit_codes(tmp_path):
+    """The CI page used to carry a hand-typed copy. It uses the generated one now.
+
+    Kept as a guard rather than as a memory: a second table is easy to add and hard to
+    notice, and the whole argument for generating this one was that a pipeline author
+    trusts the numbers.
+    """
+    import glob
+    from beantester import exitcodes
+    codes = sorted(str(value) for name, value in vars(exitcodes).items()
+                   if name.isupper() and isinstance(value, int))
+    offenders = []
+    for path in glob.glob(os.path.join(SITE, "pages", "*", "??.html")):
+        text = _read(path)
+        rows = re.findall(r"<td>(\d+)</td>", text)
+        if len([c for c in rows if c in codes]) >= 3:
+            offenders.append(os.path.relpath(path, ROOT))
+    check("no page body lists exit codes by hand (use {{page.exit_code_table}})",
+          not offenders, f"({offenders})")
+
+
+def test_every_exit_code_has_a_sentence_in_every_language():
+    """A new exit code must not reach the site as a blank row.
+
+    The program prints its own table in English only (convention 3), so the sentence
+    lives in the site's language files - which means it needs the same completeness
+    rule as everything else there.
+    """
+    import json as jsonlib
+    from beantester import exitcodes
+    registry = build_site.load_registry(ROOT)
+    names = [name for name, value in vars(exitcodes).items()
+             if name.isupper() and isinstance(value, int)]
+    check("there are exit codes to describe", len(names) >= 8, f"({names})")
+    for code in build_site.language_codes(registry):
+        strings = jsonlib.load(open(os.path.join(SITE, "i18n", "%s.json" % code),
+                                    encoding="utf-8"))
+        for name in names:
+            key = "exit.%s" % name.lower()
+            check(f"{code}: {key} has a sentence", strings.get(key, "").strip(), "(missing)")
+
+
+def test_the_footer_names_the_accounts_and_carries_no_brand_mark(tmp_path):
+    """Accounts as text plus a glyph we drew - never somebody else's mark.
+
+    Checked at the source (2026-08-11): the GitHub logo and the Octocat are trademarks
+    with no open-source licence and modification forbidden, and the other networks are
+    the same. Convention 35 requires every third-party asset here to be
+    GPLv3-compatible with a notice, a licence text and a registry entry, which a
+    trademark-restricted file cannot be - and a fork would be redistributing it. So
+    this asserts both halves: the links are there, and no vendored mark is.
+    """
+    import glob
+    out, written = _build(tmp_path, "footer")
+    registry = build_site.load_registry(ROOT)
+    accounts = registry.get("social", [])
+    check("there are accounts to link", len(accounts) >= 3, f"({accounts})")
+    for rel in [p for p in written if p.endswith("index.html")]:
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for entry in accounts:
+            check(f"{rel}: links {entry['name']}", f'href="{entry["url"]}"' in text, "(missing)")
+            check(f"{rel}: names {entry['name']} in words", f">{entry['name']}</a>" in text,
+                  "(missing)")
+        check(f"{rel}: carries the drawn glyph", 'class="glyph"' in text, "(missing)")
+
+    vendored = [os.path.relpath(p, ROOT) for p in
+                glob.glob(os.path.join(SITE, "**", "*.svg"), recursive=True)]
+    check("no vendored mark or icon file under site/", not vendored, f"({vendored})")
+    for path in glob.glob(os.path.join(SITE, "**", "*.*"), recursive=True):
+        lowered = _read(path).lower() if path.endswith((".html", ".css", ".json")) else ""
+        check(f"{os.path.basename(path)}: no brand mark by name",
+              "octocat" not in lowered and "invertocat" not in lowered, "(found)")
+
+
+def test_llms_txt_describes_the_site_it_was_built_from(tmp_path):
+    """One file per language, listing every page, generated from the registry.
+
+    Verified before adding it: llms.txt is a proposal at version 2 (August 2026), not a
+    standard, but it is published by OpenAI, Anthropic and Google for their own docs,
+    generated by several documentation platforms and audited by Lighthouse. It earns a
+    generated file here because people ask an assistant which tool to use, and an
+    assistant has to extract what this is, what it costs, what it runs on and where to
+    get it - facts a page for humans spreads across a layout.
+    """
+    out, written = _build(tmp_path, "llms")
+    registry = build_site.load_registry(ROOT)
+    base = registry["base_url"]
+    pages = [p for p in build_site.load_pages(ROOT, registry) if not p["output"]]
+    for lang in registry["languages"]:
+        rel = posixpath.join(lang["dir"], "llms.txt").lstrip("/")
+        check(f"{rel} was written", rel in written, f"({[w for w in written if 'llms' in w]})")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: starts with the site name as an H1", text.startswith("# "),
+              f"({text[:40]!r})")
+        check(f"{rel}: carries the one-blockquote summary the format asks for",
+              "\n> " in text, "(no blockquote)")
+        for page in pages:
+            url = "%s/%s" % (base, page["languages"][lang["code"]]["dir_path"] + "/"
+                             if page["languages"][lang["code"]]["dir_path"] else "")
+            check(f"{rel}: lists {page['id']}", url in text, f"(missing {url})")
+        check(f"{rel}: points at the download", "/releases/latest" in text, "(missing)")
+        check(f"{rel}: says what it runs on", "Windows" in text, "(missing)")
 
 
 def test_robots_lets_everything_in_and_names_the_sitemap(tmp_path):

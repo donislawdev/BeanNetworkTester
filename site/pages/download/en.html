@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Download Bean Network Tester</h1>
+  <p class="lead">One archive, no installer. Unpack it, run the executable, and it asks for
+  administrator rights itself.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>The facts, in one place</h2>
+  <ul class="facts">
+    <li><strong>Price:</strong> free, and free software - GNU GPL v3.</li>
+    <li><strong>Runs on:</strong> Windows 10 and Windows 11, 64-bit.</li>
+    <li><strong>Needs:</strong> administrator rights, because traffic is captured by a driver.</li>
+    <li><strong>Install:</strong> none. Unpack the archive anywhere and run it.</li>
+    <li><strong>Sends data:</strong> nowhere. No telemetry, no update check, no network client.</li>
+    <li><strong>Modes:</strong> a window, and the same file as a command-line tool.</li>
+    <li><strong>Source:</strong> <a href="{{site.repo_url}}">on GitHub</a>, under the same licence.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What is in the release</h2>
+  <p>Every release publishes three files, and the two beside the archive are there so you do not
+  have to take the download on trust:</p>
+  <ul>
+    <li><strong>the zip</strong> - the program and the driver it uses, together in one folder;</li>
+    <li><strong>SHA256SUMS.txt</strong> - the checksum of that archive;</li>
+    <li><strong>an SBOM</strong> - a standard list of every component inside, with versions and
+    licences, signed against the archive.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Checking that you got what we built</h2>
+  <p>The checksum answers "did this arrive unchanged". In PowerShell, compare the output with the
+  line in <code>SHA256SUMS.txt</code>:</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>The signature answers a different question - "did this come out of that repository" - and needs
+  the GitHub command-line tool:</p>
+<pre><code>gh attestation verify .\BeanNetworkTester-*.zip --repo donislawdev/BeanNetworkTester</code></pre>
+  <p>A checksum you copy from the same page as the download proves less than a signature. Both are
+  published, so both are worth a moment.</p>
+</section>
+
+<section>
+  <h2>Windows may warn you</h2>
+  <p>The executable is not signed with a paid certificate, so SmartScreen flags it as something it
+  has not seen before. That is a statement about the certificate, not about the file - which is
+  exactly why the checksum and the signature are published. The
+  <a href="../faq/">questions page</a> covers this and what the driver needs.</p>
+</section>
+
+<section>
+  <h2>Where to start after it runs</h2>
+  {{page.guide_links}}
+</section>

@@ -1,0 +1,41 @@
+<section class="hero">
+  <h1>Profiles, settings and exit codes</h1>
+  <p class="lead">Three tables, none of them typed by hand. They are generated from the program's own
+  registries when this page is built, so they cannot say something the program does not.</p>
+</section>
+
+<section>
+  <h2>Ready profiles</h2>
+  <p>Pick one of these and the form fills itself in. A dash means the profile leaves that setting
+  alone. Speeds are in kilobytes per second - multiply by eight to compare with what a provider
+  advertises.</p>
+  {{page.preset_table}}
+  <p>Selecting a profile only fills the fields. Nothing changes on the network until you press
+  {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Every setting, and the flag that sets it</h2>
+  <p>The window and the command line take the same settings. This is the whole list, with the unit
+  and the range each one accepts.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Exit codes</h2>
+  <p>The command line never ends with a traceback. Each way a run can finish has a number, so a
+  pipeline can tell a failing application from a tool that could not start.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Related</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

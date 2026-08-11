@@ -302,3 +302,39 @@ th, td {
   vertical-align: top;
 }
 th { background: var(--bg-card); }
+
+/* -- the drawn glyph and the accounts list -------------------------------- */
+/* The glyph is ours, drawn in the generator: the marks of GitHub and of the
+   social networks are trademarks with no open-source licence, so this
+   repository carries none of them (convention 35). */
+.glyph {
+  vertical-align: -2px;
+  margin-right: .4rem;
+}
+
+.social-label {
+  margin: 1.25rem 0 .35rem;
+  color: var(--muted);
+}
+.social {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1rem;
+}
+.social a { text-decoration: none; }
+.social a:hover { text-decoration: underline; }
+
+/* A short block of plain facts, for a reader in a hurry and for anything that
+   reads this page without eyes. */
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.facts li { margin: .25rem 0; }

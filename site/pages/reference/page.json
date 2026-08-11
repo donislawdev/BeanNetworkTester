@@ -1,0 +1,18 @@
+{
+  "id": "reference",
+  "order": 90,
+  "languages": {
+    "en": {
+      "slug": "reference",
+      "link_text": "Reference tables",
+      "title": "Profiles, settings and exit codes",
+      "description": "Every ready profile with the numbers it sets, every setting with its flag, unit and range, and every exit code the command line can return."
+    },
+    "pl": {
+      "slug": "tabele",
+      "link_text": "Tabele referencyjne",
+      "title": "Profile, ustawienia i kody wyjścia",
+      "description": "Każdy gotowy profil z wartościami, które ustawia, każde ustawienie z flagą, jednostką i zakresem, oraz każdy kod wyjścia linii komend."
+    }
+  }
+}

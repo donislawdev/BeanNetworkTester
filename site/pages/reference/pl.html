@@ -1,0 +1,41 @@
+<section class="hero">
+  <h1>Profile, ustawienia i kody wyjścia</h1>
+  <p class="lead">Trzy tabele, żadna pisana ręcznie. Powstają z rejestrów samego programu przy
+  budowaniu tej strony, więc nie mogą mówić czegoś, czego program nie robi.</p>
+</section>
+
+<section>
+  <h2>Gotowe profile</h2>
+  <p>Wybierz jeden i formularz wypełni się sam. Kreska znaczy, że profil nie rusza tego ustawienia.
+  Prędkości są w kilobajtach na sekundę - mnóż przez osiem, żeby porównać z tym, co reklamuje
+  dostawca.</p>
+  {{page.preset_table}}
+  <p>Wybór profilu tylko wypełnia pola. W sieci nic się nie zmienia, dopóki nie wciśniesz
+  {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Każde ustawienie i flaga, która je ustawia</h2>
+  <p>Okno i linia komend przyjmują te same ustawienia. To jest cała lista, z jednostką i zakresem,
+  jaki każde z nich przyjmuje.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Kody wyjścia</h2>
+  <p>Linia komend nigdy nie kończy się tracebackiem. Każdy sposób zakończenia przebiegu ma numer,
+  więc pipeline rozróżni padającą aplikację od narzędzia, które nie mogło wystartować.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Powiązane</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

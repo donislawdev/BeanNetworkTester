@@ -1,0 +1,18 @@
+{
+  "id": "download",
+  "order": 5,
+  "languages": {
+    "en": {
+      "slug": "download",
+      "link_text": "Download",
+      "title": "Download Bean Network Tester for Windows",
+      "description": "Free download for Windows 10 and 11, no installer. What is in the archive, how to check it is the file we built, and what it needs to run."
+    },
+    "pl": {
+      "slug": "pobieranie",
+      "link_text": "Pobieranie",
+      "title": "Pobierz Bean Network Tester na Windows",
+      "description": "Darmowe pobranie na Windows 10 i 11, bez instalatora. Co jest w archiwum, jak sprawdzić, że to nasz plik, i czego program potrzebuje."
+    }
+  }
+}
