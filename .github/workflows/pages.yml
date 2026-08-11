@@ -1,0 +1,158 @@
+name: Pages
+
+# Publishes the website in `site/` to GitHub Pages. It has nothing to do with the
+# program's release path: this builds static files and deploys them, and it is the
+# only workflow allowed to write to Pages.
+#
+# Requires two things done ONCE by the owner, outside this file:
+#   * Settings -> Pages, source "GitHub Actions" (without it, the first step that
+#     talks to the Pages API fails, and says so);
+#   * the custom domain, in the same settings, plus its DNS record. The build below
+#     REFUSES to publish to an address the pages do not claim as their own, so this
+#     is enforced rather than remembered - see the step that compares the two.
+on:
+  push:
+    branches: [master]
+    # Everything the page is built FROM. Miss one and the site keeps serving the
+    # previous version of it, which looks exactly like a page nobody edited. The
+    # asset sources are here because `site/site.json` lists them, and a test derives
+    # this list from that file so the two cannot drift.
+    paths:
+      - "site/**"
+      - "tools/build_site.py"
+      - "tests/test_site.py"
+      - "beantester/gui/theme.py"
+      - "beantester/appinfo.py"
+      - "bean.png"
+      - "docs/demo.gif"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# Least privilege, same rule as ci.yml: the token reads the repository, and the one
+# job that has to write to Pages raises it for itself.
+permissions:
+  contents: read
+
+# One deployment at a time, and never cancel one in flight. A half-replaced site is
+# worse than a late one, and there is no way to roll back a partial upload.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # READ, not write. This job asks the Pages API which address the repository
+    # publishes to, and nothing more - it never deploys. GitHub's own starter
+    # workflow grants `pages: write` to the whole file instead, which would hand
+    # that power to every job here.
+    # 🔴 Not verifiable off the runner: the action's own documentation does not state
+    # the scope it needs, and the API call is a plain GET, so read should be enough.
+    # If the first run fails with 403 on "Read the Pages configuration", this is the
+    # line to raise to `write` - not the workflow-level permissions.
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      # Reads the Pages configuration and tells us the address this repository
+      # publishes to. It runs HERE, before anything is uploaded, so a mismatch stops
+      # the run instead of publishing a site whose every canonical points elsewhere.
+      - name: Read the Pages configuration
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: The address it publishes to must be the address the pages claim
+        env:
+          # The action publishes the host on its own, so nothing here has to parse
+          # a URL that GitHub already took apart.
+          DEPLOY_HOST: ${{ steps.pages.outputs.host }}
+          DEPLOY_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from urllib.parse import urlsplit
+          claimed = json.load(open("site/site.json"))["base_url"]
+          deployed = os.environ["DEPLOY_URL"]
+          claimed_host = urlsplit(claimed).netloc.lower()
+          deployed_host = (os.environ.get("DEPLOY_HOST")
+                           or urlsplit(deployed).netloc).lower()
+          print("pages claim %s, this repository publishes to %s (%s)"
+                % (claimed_host, deployed_host, deployed))
+          if claimed_host != deployed_host:
+              print("::error::Every canonical, hreflang and sitemap entry names %s, "
+                    "but this repository publishes to %s. Set the custom domain in "
+                    "Settings -> Pages (and its DNS record) before publishing, or "
+                    "change base_url in site/site.json to match."
+                    % (claimed_host, deployed_host))
+              sys.exit(1)
+          PY
+
+      - name: Install the test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      # The generator refuses to build a broken page, but "it did not crash" is a
+      # weaker claim than "the guards agree". These read the OUTPUT: the canonical,
+      # the reciprocal hreflang, the download link, the palette, the error page.
+      - name: Let the site guards have a say before anything is published
+        run: python -m pytest tests/test_site.py
+
+      - name: Build
+        run: python tools/build_site.py --out _site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy and read it back
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Raised on THIS job only: the deployment writes to Pages and mints an OIDC
+    # token, and nothing else in this workflow needs either.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v5
+        id: deployment
+
+      # A deployment that reports success proves the upload happened, not that the
+      # site answers. This fetches the published page and checks the two things a
+      # crawler needs and a screenshot cannot show.
+      - name: Read the published page back
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in 1 2 3; do
+            if curl -sSfL --max-time 20 "$PAGE_URL" -o page.html; then break; fi
+            echo "attempt $attempt did not answer, waiting"
+            sleep 15
+          done
+          if [ ! -s page.html ]; then
+            echo "::error::$PAGE_URL did not answer. If the custom domain is new, its"
+            echo "DNS record or its certificate may not be ready yet - the deployment"
+            echo "itself succeeded, so re-run this job once the address resolves."
+            exit 1
+          fi
+          grep -q '<link rel="canonical"' page.html \
+            || { echo "::error::the published page carries no canonical"; exit 1; }
+          grep -q 'hreflang="x-default"' page.html \
+            || { echo "::error::the published page carries no x-default"; exit 1; }
+          curl -sSfL --max-time 20 "${PAGE_URL}sitemap.xml" -o sitemap.xml
+          grep -q "<loc>" sitemap.xml \
+            || { echo "::error::the published sitemap lists nothing"; exit 1; }
+          echo "published and readable: $PAGE_URL"

@@ -426,6 +426,151 @@ def test_the_error_page_is_a_file_pages_serves_and_asks_not_to_be_indexed(tmp_pa
     check(".nojekyll is written", ".nojekyll" in written)
 
 
+# -- the workflow that publishes it --------------------------------------------- #
+# Read as text, not through a YAML library: PyYAML is not in requirements-dev.txt, so
+# importing it would make these tests an error on a fresh checkout. Every scan below
+# fails when it cannot find what it expects - a guard that passes vacuously because
+# the file moved under it is not a guard. Same approach as
+# test_version_and_release.py::test_ci_and_release_freeze_the_same_python.
+
+WORKFLOW = os.path.join(ROOT, ".github", "workflows", "pages.yml")
+
+
+def _workflow():
+    """The workflow with its comment lines removed.
+
+    A comment is not configuration, and a scan over raw text cannot tell them apart.
+    Found immediately: the first version of the permissions check below failed on this
+    very workflow, because a comment explaining why `pages: write` is NOT granted to
+    the whole file contains those two words. Reading the prose as settings would have
+    been the other failure too - a guard satisfied by a comment claiming the right
+    thing while the setting says something else.
+    """
+    raw = _read(WORKFLOW)
+    check("the Pages workflow is still there and non-trivial", len(raw) > 500,
+          f"({len(raw)} bytes)")
+    return "\n".join(line for line in raw.splitlines()
+                     if not line.lstrip().startswith("#"))
+
+
+def _jobs(text):
+    """The workflow's jobs, as {name: block}. Only what follows the `jobs:` line."""
+    lines = text.splitlines()
+    start = [i for i, line in enumerate(lines) if line.rstrip() == "jobs:"]
+    check("the workflow declares jobs", len(start) == 1, f"({start})")
+    body = lines[start[0] + 1:]
+    heads = [i for i, line in enumerate(body) if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line)]
+    check("the jobs are named", heads, "(none found)")
+    out = {}
+    for position, index in enumerate(heads):
+        end = heads[position + 1] if position + 1 < len(heads) else len(body)
+        out[body[index].strip().rstrip(":")] = "\n".join(body[index:end])
+    return out
+
+
+def test_the_workflow_uploads_exactly_what_it_built(tmp_path):
+    """The directory the generator writes and the directory Pages takes are one.
+
+    A mismatch here is the quietest failure in the whole chain: the build is green,
+    the deployment is green, and the site that goes live is whatever was in the other
+    directory - which is nothing.
+    """
+    text = _workflow()
+    built = re.findall(r"build_site\.py --out (\S+)", text)
+    uploaded = re.findall(r"^\s+path:\s*(\S+)\s*$", text, re.M)
+    check("the workflow builds the site", len(built) == 1, f"({built})")
+    check("the workflow uploads one directory", len(uploaded) == 1, f"({uploaded})")
+    check("it uploads what it built", built[0] == uploaded[0],
+          f"(built {built[0]}, uploaded {uploaded[0]})")
+
+
+def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
+    """Every input the page is built from is in the paths filter.
+
+    Derived from the registry rather than typed twice: the asset list in
+    `site/site.json` names the files the page ships, and an asset missing from the
+    filter means replacing the icon or the screenshot changes nothing on the live
+    site - and looks exactly like a page nobody edited.
+    """
+    text = _workflow()
+    registry = build_site.load_registry(ROOT)
+    needed = ["site/**", "tools/build_site.py", build_site.THEME_FILE.replace(os.sep, "/")]
+    needed += [asset["source"] for asset in registry.get("assets", [])]
+    for path in needed:
+        check(f"the paths filter covers {path}", f'"{path}"' in text, "(missing)")
+
+
+def test_only_the_job_that_deploys_may_write_to_pages():
+    """Least privilege, and the comment in ci.yml said where it belongs.
+
+    A workflow-level `pages: write` would hand that power to every job in the file,
+    including the one that runs a build and could one day run something else.
+    """
+    text = _workflow()
+    jobs = _jobs(text)
+    top = text.split("jobs:")[0]
+    check("the workflow token only reads the repository by default",
+          re.search(r"(?m)^permissions:\s*$\s+contents: read\s*$", top), f"({top[-200:]})")
+    for scope in ("pages: write", "id-token: write"):
+        check(f"{scope} is not granted at the top of the file", scope not in top)
+        owners = [name for name, block in jobs.items() if scope in block]
+        check(f"exactly one job asks for {scope}", len(owners) == 1, f"({owners})")
+        check(f"{scope} belongs to the job that deploys",
+              "deploy-pages" in jobs[owners[0]], f"({owners})")
+    builders = [name for name, block in jobs.items() if "build_site.py --out" in block]
+    check("the building job asks to READ the Pages configuration, not to write it",
+          "pages: read" in jobs[builders[0]], "(missing)")
+
+
+def test_the_site_guards_run_before_anything_is_published():
+    """The tests in this file gate the publication, in the job that builds it."""
+    text = _workflow()
+    jobs = _jobs(text)
+    builders = [name for name, block in jobs.items() if "build_site.py --out" in block]
+    check("one job builds the site", len(builders) == 1, f"({builders})")
+    block = jobs[builders[0]]
+    check("it runs the site guards", "pytest tests/test_site.py" in block, "(missing)")
+    check("the guards run before the build, not after",
+          block.index("pytest tests/test_site.py") < block.index("build_site.py --out"))
+
+
+def test_a_deployment_is_never_cancelled_half_way():
+    """Cancelling a deploy in flight can leave a half-replaced site, and Pages has
+    no rollback. Late is better."""
+    text = _workflow()
+    check("the workflow serialises deployments",
+          re.search(r"(?m)^concurrency:\s*$\s+group: pages\s*$", text), "(missing)")
+    check("a running deployment is not cancelled",
+          re.search(r"(?m)^\s+cancel-in-progress: false\s*$", text), "(missing)")
+
+
+def test_the_workflow_refuses_to_publish_to_an_address_the_pages_do_not_claim():
+    """The owner's DNS step, enforced instead of remembered.
+
+    Every canonical, hreflang and sitemap entry in the output names `base_url`. If the
+    repository publishes somewhere else - because the custom domain is not set yet -
+    the pages would point at an address that does not serve them, and Google would be
+    reading a set of canonicals aimed into the dark. So the build compares the two and
+    stops, before anything is uploaded.
+    """
+    text = _workflow()
+    jobs = _jobs(text)
+    builders = [name for name, block in jobs.items() if "build_site.py --out" in block]
+    block = jobs[builders[0]]
+    check("the build reads the Pages configuration",
+          "actions/configure-pages@" in block, "(missing)")
+    check("it compares that address with base_url", "base_url" in block, "(missing)")
+    check("the comparison happens before the upload",
+          block.index("base_url") < block.index("upload-pages-artifact"))
+    check("a mismatch stops the run", "sys.exit(1)" in block, "(missing)")
+    deployers = [name for name, b in jobs.items() if "deploy-pages@" in b]
+    check("one job deploys", len(deployers) == 1, f"({deployers})")
+    after = jobs[deployers[0]]
+    for evidence in ('<link rel="canonical"', 'hreflang="x-default"', "sitemap.xml"):
+        check(f"the deployed site is read back for {evidence}", evidence in after,
+              "(missing)")
+
+
 # -- the single sources --------------------------------------------------------- #
 
 def test_the_palette_is_read_out_of_the_theme_module(tmp_path):
