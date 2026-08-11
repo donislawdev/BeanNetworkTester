@@ -41,6 +41,31 @@
 </section>
 
 <section>
+  <h2>If you came from another tool</h2>
+  <p>Four names come up whenever this is discussed, and they are not interchangeable.</p>
+  <table>
+    <tr><th>You know</th><th>What it is</th><th>What to expect here</th></tr>
+    <tr><td><strong>tc with netem</strong></td><td>The Linux answer, built into the kernel and
+    driven from the command line. Often what a search for WAN emulation returns.</td><td>There is no
+    <code>tc</code> on Windows. This is the closest thing in spirit: the same kinds of impairment, a
+    command line with exit codes, and a driver instead of a queueing discipline.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>A free, MIT-licensed, interactive Windows tool on the
+    same WinDivert driver.</td><td>Reach for it when a window and a filter are all you need. Come
+    here for per-process targeting, seeded runs and a command line a pipeline can call.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>A commercial Windows product for managing bandwidth
+    per application, permanently.</td><td>A different job. This is a test instrument: switched on for
+    a while, then off, and it degrades far more than speed.</td></tr>
+    <tr><td><strong>Fiddler or Charles</strong></td><td>Proxies that can inspect, rewrite and
+    throttle the traffic that goes through them.</td><td>Also a different job. A proxy shapes what it
+    proxies and sees the data. This shapes the connection itself, including UDP and anything that
+    never touches a proxy.</td></tr>
+  </table>
+  <p>Put plainly: if you want a network emulator for one Windows application, with a command line,
+  this is the shape of tool you are looking for. If you want to read and modify application data,
+  you want a proxy, and if you are on Linux you already have netem.</p>
+</section>
+
+<section>
   <h2>When to use something else</h2>
   <p>Being honest about this is cheaper than a disappointed download.</p>
   <ul>

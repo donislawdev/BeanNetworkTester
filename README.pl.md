@@ -6,9 +6,6 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
-🌐 **Strona projektu: [beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/pl/)** -
-krótko o tym, co program robi, i pobieranie w jednym kliknięciu.
-
 **Bean Network Tester** to narzędzie dla testerów i deweloperów: sprawdź, jak aplikacja zachowuje
 się przy słabym internecie. Podobnie jak Clumsy czy NetLimiter, pozwala celowo pogarszać sieć -
 dodać ping, gubić pakiety, ograniczyć prędkość, zrywać połączenia i więcej. Działa przez
@@ -87,6 +84,9 @@ dowolne pole pojawia się dymek z wyjaśnieniem, co ono robi.
 
 > Uwaga: samo wybranie presetu tylko wypełnia pola - zakłócenia włącza dopiero **START**.
 > Bez uprawnień administratora sterownik WinDivert się nie załaduje.
+
+🌐 Strona projektu - krótko o tym, co program robi, i pobieranie w jednym kliknięciu:
+**[beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/pl/)**
 
 ## Język / Language
 

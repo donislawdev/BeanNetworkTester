@@ -23,18 +23,7 @@
   <h2>Every ending has an exit code</h2>
   <p>Nothing ends with a traceback. Each way a run can finish has a number, so a pipeline can tell
   "your app failed" from "the tool could not start":</p>
-  <table>
-    <tr><th>Code</th><th>Meaning</th></tr>
-    <tr><td>0</td><td>Finished as asked.</td></tr>
-    <tr><td>1</td><td>Something failed at runtime.</td></tr>
-    <tr><td>2</td><td>The command line was wrong.</td></tr>
-    <tr><td>3</td><td>The configuration or a value was invalid.</td></tr>
-    <tr><td>4</td><td>A scenario file was rejected.</td></tr>
-    <tr><td>5</td><td>A file could not be read or written.</td></tr>
-    <tr><td>6</td><td>An assertion about the run did not hold.</td></tr>
-    <tr><td>7</td><td>No administrator rights, so the driver cannot load.</td></tr>
-    <tr><td>130 / 143</td><td>Interrupted, or terminated.</td></tr>
-  </table>
+  {{page.exit_code_table}}
 </section>
 
 <section>

@@ -1,0 +1,61 @@
+<section class="hero">
+  <h1>Pobierz Bean Network Tester</h1>
+  <p class="lead">Jedno archiwum, bez instalatora. Rozpakuj, uruchom plik wykonywalny, a on sam
+  poprosi o prawa administratora.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Fakty w jednym miejscu</h2>
+  <ul class="facts">
+    <li><strong>Cena:</strong> darmowy, i wolne oprogramowanie - GNU GPL v3.</li>
+    <li><strong>Działa na:</strong> Windows 10 i Windows 11, 64-bit.</li>
+    <li><strong>Wymaga:</strong> praw administratora, bo ruch przechwytuje sterownik.</li>
+    <li><strong>Instalacja:</strong> żadna. Rozpakuj archiwum gdziekolwiek i uruchom.</li>
+    <li><strong>Wysyła dane:</strong> nigdzie. Bez telemetrii, bez sprawdzania aktualizacji, bez
+    klienta sieciowego.</li>
+    <li><strong>Tryby:</strong> okno i ten sam plik jako narzędzie linii komend.</li>
+    <li><strong>Kod źródłowy:</strong> <a href="{{site.repo_url}}">na GitHubie</a>, na tej samej
+    licencji.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Co jest w wydaniu</h2>
+  <p>Każde wydanie publikuje trzy pliki, a te dwa obok archiwum są po to, żebyś nie musiał brać
+  pobrania na wiarę:</p>
+  <ul>
+    <li><strong>archiwum zip</strong> - program i sterownik, którego używa, razem w jednym
+    katalogu;</li>
+    <li><strong>SHA256SUMS.txt</strong> - suma kontrolna tego archiwum;</li>
+    <li><strong>SBOM</strong> - standardowa lista każdego komponentu w środku, z wersjami i
+    licencjami, podpisana wobec archiwum.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sprawdzenie, że dostałeś to, co zbudowaliśmy</h2>
+  <p>Suma kontrolna odpowiada na pytanie „czy plik dotarł niezmieniony". W PowerShellu porównaj
+  wynik z linią w <code>SHA256SUMS.txt</code>:</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>Podpis odpowiada na inne pytanie - „czy to wyszło z tego repozytorium" - i wymaga narzędzia
+  linii komend GitHuba:</p>
+<pre><code>gh attestation verify .\BeanNetworkTester-*.zip --repo donislawdev/BeanNetworkTester</code></pre>
+  <p>Suma kontrolna skopiowana z tej samej strony, z której pobierasz plik, dowodzi mniej niż
+  podpis. Publikujemy oba, więc oba są warte chwili.</p>
+</section>
+
+<section>
+  <h2>Windows może ostrzegać</h2>
+  <p>Plik wykonywalny nie jest podpisany płatnym certyfikatem, więc SmartScreen oznacza go jako
+  coś, czego wcześniej nie widział. To zdanie o certyfikacie, nie o pliku - i właśnie dlatego suma
+  kontrolna i podpis są opublikowane. <a href="../najczestsze-pytania/">Strona z pytaniami</a>
+  opisuje to oraz czego potrzebuje sterownik.</p>
+</section>
+
+<section>
+  <h2>Od czego zacząć po uruchomieniu</h2>
+  {{page.guide_links}}
+</section>

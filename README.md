@@ -6,9 +6,6 @@
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
-🌐 **Website: [beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/)** -
-what it does, in short, with the download one click away.
-
 **Bean Network Tester** is a tool for testers and developers: check how your application behaves
 on a poor connection. Like Clumsy or NetLimiter, it lets you deliberately degrade the network -
 add ping, drop packets, cap the speed, tear connections down, and more. It works by intercepting
@@ -89,6 +86,9 @@ tooltip explaining what it does.
 
 > Note: selecting a preset only fills in the fields - impairment starts only on **START**.
 > Without administrator rights the WinDivert driver will not load.
+
+🌐 The project website - what it does in short, with the download one click away:
+**[beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/)**
 
 ## Language
 

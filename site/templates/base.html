@@ -25,7 +25,7 @@
   </a>
   <nav class="bar-nav" aria-label="{{nav.primary}}">
     {{page.language_switcher}}
-    <a class="bar-link" href="{{site.repo_url}}">{{nav.source}}</a>
+    <a class="bar-link" href="{{site.repo_url}}">{{page.source_glyph}}{{nav.source}}</a>
   </nav>
 </header>
 
@@ -40,6 +40,10 @@
   <p>{{footer.license}}</p>
   <p>{{footer.no_telemetry}}</p>
   <p>{{footer.author}} <a href="{{site.issues_url}}">{{footer.issues}}</a></p>
+  <!-- Names as text, never a brand mark: the marks are trademarked and carry no
+       open-source licence, so a GPLv3 repository must not redistribute them
+       (convention 35). Nominative use is exactly what is allowed. -->
+  {{page.social_links}}
   <p class="copy">{{site.copyright}}</p>
 </footer>
 </body>

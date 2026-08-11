@@ -24,18 +24,7 @@
   <h2>Każde zakończenie ma kod wyjścia</h2>
   <p>Nic nie kończy się tracebackiem. Każdy sposób zakończenia przebiegu ma numer, więc pipeline
   rozróżni "Twoja aplikacja padła" od "narzędzie nie mogło wystartować":</p>
-  <table>
-    <tr><th>Kod</th><th>Znaczenie</th></tr>
-    <tr><td>0</td><td>Skończyło się tak, jak zamówiono.</td></tr>
-    <tr><td>1</td><td>Coś padło w trakcie działania.</td></tr>
-    <tr><td>2</td><td>Błąd w linii komend.</td></tr>
-    <tr><td>3</td><td>Nieprawidłowa konfiguracja albo wartość.</td></tr>
-    <tr><td>4</td><td>Plik scenariusza został odrzucony.</td></tr>
-    <tr><td>5</td><td>Nie udało się odczytać albo zapisać pliku.</td></tr>
-    <tr><td>6</td><td>Założenie o przebiegu się nie potwierdziło.</td></tr>
-    <tr><td>7</td><td>Brak praw administratora, więc sterownik się nie wczyta.</td></tr>
-    <tr><td>130 / 143</td><td>Przerwane albo zakończone z zewnątrz.</td></tr>
-  </table>
+  {{page.exit_code_table}}
 </section>
 
 <section>

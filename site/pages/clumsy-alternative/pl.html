@@ -43,6 +43,32 @@
 </section>
 
 <section>
+  <h2>Jeśli przychodzisz od innego narzędzia</h2>
+  <p>Przy tym temacie wracają cztery nazwy i nie są wymienne.</p>
+  <table>
+    <tr><th>Znasz</th><th>Czym to jest</th><th>Czego oczekiwać tutaj</th></tr>
+    <tr><td><strong>tc z netem</strong></td><td>Odpowiedź linuksowa, wbudowana w jądro i sterowana
+    z linii komend. Często to właśnie zwraca szukanie emulacji WAN.</td><td>Na Windows nie ma
+    <code>tc</code>. To jest najbliższa rzecz duchem: te same rodzaje zaburzeń, linia komend z
+    kodami wyjścia i sterownik zamiast dyscypliny kolejkowania.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Darmowe, interaktywne narzędzie dla Windows na licencji
+    MIT, na tym samym sterowniku WinDivert.</td><td>Bierz je, gdy wystarcza okno i filtr. Tu
+    przychodź po celowanie w proces, powtarzalne przebiegi i linię komend, którą wywoła
+    pipeline.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Komercyjny produkt dla Windows do stałego
+    zarządzania przepustowością per aplikacja.</td><td>Inna robota. To tutaj jest przyrząd testowy:
+    włączony na chwilę i wyłączony, a psuje znacznie więcej niż prędkość.</td></tr>
+    <tr><td><strong>Fiddler albo Charles</strong></td><td>Proxy, które umieją oglądać, przepisywać i
+    dławić ruch przechodzący przez nie.</td><td>Też inna robota. Proxy kształtuje to, co przez nie
+    idzie, i widzi dane. To kształtuje samo łącze, razem z UDP i wszystkim, co proxy nigdy nie
+    dotyka.</td></tr>
+  </table>
+  <p>Wprost: jeśli szukasz emulatora sieci dla jednej aplikacji na Windows, z linią komend, to jest
+  ten rodzaj narzędzia. Jeśli chcesz czytać i zmieniać dane aplikacji, potrzebujesz proxy, a jeśli
+  jesteś na Linuksie, netem już masz.</p>
+</section>
+
+<section>
   <h2>Kiedy wybrać coś innego</h2>
   <p>Uczciwość w tej sprawie jest tańsza niż rozczarowane pobranie.</p>
   <ul>

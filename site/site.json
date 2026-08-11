@@ -3,8 +3,18 @@
   "repo_url": "https://github.com/donislawdev/BeanNetworkTester",
   "default_language": "en",
   "languages": [
-    {"code": "en", "name": "English", "dir": "", "og_locale": "en_US"},
-    {"code": "pl", "name": "Polski", "dir": "pl", "og_locale": "pl_PL"}
+    {
+      "code": "en",
+      "name": "English",
+      "dir": "",
+      "og_locale": "en_US"
+    },
+    {
+      "code": "pl",
+      "name": "Polski",
+      "dir": "pl",
+      "og_locale": "pl_PL"
+    }
   ],
   "og_image": "assets/bean.png",
   "software": {
@@ -27,7 +37,27 @@
     "--donate": "DONATE_C"
   },
   "assets": [
-    {"source": "bean.png", "target": "assets/bean.png"},
-    {"source": "docs/demo.gif", "target": "assets/demo.gif"}
+    {
+      "source": "bean.png",
+      "target": "assets/bean.png"
+    },
+    {
+      "source": "docs/demo.gif",
+      "target": "assets/demo.gif"
+    }
+  ],
+  "social": [
+    {
+      "name": "Bluesky",
+      "url": "https://bsky.app/profile/donislawdev.bsky.social"
+    },
+    {
+      "name": "Facebook",
+      "url": "https://www.facebook.com/donislawdev/"
+    },
+    {
+      "name": "Twitter",
+      "url": "https://twitter.com/donislawdev"
+    }
   ]
 }
