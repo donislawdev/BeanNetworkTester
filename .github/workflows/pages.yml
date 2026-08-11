@@ -22,6 +22,10 @@ on:
       - "tools/build_site.py"
       - "tests/test_site.py"
       - "beantester/gui/theme.py"
+      # The site reads the shipped scenario corpus for the table on the scenarios
+      # page, so editing a scenario changes the site. Without this line the page would
+      # keep serving the previous list and look like a page nobody edited.
+      - "scenarios/**"
       - "beantester/appinfo.py"
       - "bean.png"
       - "docs/demo.gif"

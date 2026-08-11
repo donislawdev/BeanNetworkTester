@@ -62,6 +62,9 @@ def _sandbox(base):
     # The pages name field labels and preset names through the program's own language
     # files, so a sandbox without them is not a copy of the real inputs.
     shutil.copytree(os.path.join(ROOT, "lang"), os.path.join(root, "lang"))
+    # The scenarios page reads the shipped corpus, so a sandbox without it is not a
+    # copy of the real inputs.
+    shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(root, "scenarios"))
     for asset in build_site.load_registry(ROOT).get("assets", []):
         target = os.path.join(root, asset["source"].replace("/", os.sep))
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -764,6 +767,29 @@ def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
                       "(missing row)")
 
 
+def test_the_scenario_table_lists_exactly_what_ships(tmp_path):
+    """Every scenario file appears, and nothing that is not a file does.
+
+    The numbers - steps, length, whether it repeats - are read out of the JSON rather
+    than described, because a sentence about a timeline is exactly the kind of prose
+    that survives the timeline being edited. Both directions: a new scenario has to show
+    up, and a row cannot name a file that is gone.
+    """
+    import glob
+    out, _ = _build(tmp_path, "scenarios")
+    registry = build_site.load_registry(ROOT)
+    page = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "scenarios")
+    shipped = sorted(os.path.basename(p) for p in
+                     glob.glob(os.path.join(ROOT, "scenarios", "*.json")))
+    check("the program ships scenarios to list", len(shipped) >= 5, f"({shipped})")
+    for code in page["codes"]:
+        rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        listed = re.findall(r"<td><code>([^<]+\.json)</code></td>", text)
+        check(f"{rel}: every shipped scenario is in the table", sorted(listed) == shipped,
+              f"(only in one: {set(listed) ^ set(shipped)})")
+
+
 def test_no_page_writes_its_own_table_of_exit_codes(tmp_path):
     """The CI page used to carry a hand-typed copy. It uses the generated one now.
 
@@ -979,6 +1005,12 @@ def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
     registry = build_site.load_registry(ROOT)
     needed = ["site/**", "tools/build_site.py", build_site.THEME_FILE.replace(os.sep, "/")]
     needed += [asset["source"] for asset in registry.get("assets", [])]
+    # Derived, not typed: if the generator reads the scenario corpus - and it does, for
+    # the table on the scenarios page - then editing a scenario changes the site, so the
+    # filter has to fire on it. Without this the page would keep serving the previous
+    # list and look like a page nobody edited.
+    if "scenarios" in _read(os.path.join(ROOT, "tools", "build_site.py")):
+        needed.append("scenarios/**")
     for path in needed:
         check(f"the paths filter covers {path}", f'"{path}"' in text, "(missing)")
 
@@ -1189,6 +1221,15 @@ def test_the_build_refuses_a_source_that_would_publish_a_broken_page(tmp_path):
     _edit_json(os.path.join(root, "site", "site.json"),
                lambda d: d.update({"og_image": "assets/nothing-makes-this.png"}))
     _fails(root, out, "the social card names an image the build does not produce")
+
+    root = _sandbox(tmp_path / "scenario_without_steps")
+    _edit_json(os.path.join(root, "scenarios", "cafe-wifi.json"),
+               lambda d: d.update({"steps": []}))
+    _fails(root, out, "a shipped scenario has no steps")
+
+    root = _sandbox(tmp_path / "no_scenarios_at_all")
+    shutil.rmtree(os.path.join(root, "scenarios"))
+    _fails(root, out, "the scenario corpus is missing entirely")
 
     root = _sandbox(tmp_path / "unknown_schema")
     _edit_json(os.path.join(root, "site", "pages", "home", "page.json"),

@@ -1,0 +1,68 @@
+<section class="hero">
+  <h1>Change network conditions over time</h1>
+  <p class="lead">A fixed 10 percent loss is a lab condition. Real connections get worse, recover,
+  stall for four seconds and come back - and the bug you are chasing usually lives in the change,
+  not in the steady state.</p>
+</section>
+
+<section>
+  <h2>A scenario is a timeline</h2>
+  <p>One JSON file. Each step says <em>at this second, these settings</em>, and anything you do not
+  mention keeps its value:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Times are seconds from the start of the run, not gaps between steps. With
+  <code>"loop": true</code> the timeline starts over when it ends, which is what you want for a long
+  soak: leave it running and use the app.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Seven of them ship with the program</h2>
+  <p>In the <code>scenarios</code> folder next to the executable. Read from those files, so this is
+  what you actually have:</p>
+  {{page.scenario_table}}
+  <p>They are ordinary text - open one, change a number, save. The names say what they reproduce:
+  a crowded cafe, a mobile connection dropping from LTE to 3G, an upload that dies half way, a
+  server that gets overloaded, DNS that stops answering.</p>
+</section>
+
+<section>
+  <h2>Two simpler ways to get change</h2>
+  <p>A scenario is worth writing when the sequence matters. When it does not, two settings vary on
+  their own:</p>
+  <ul>
+    <li><strong>Link on and off</strong> - a cycle length and how much of it is downtime. Ten second
+    cycles, four seconds down, forever.</li>
+    <li><strong>A speed schedule</strong> - a series of speeds the limit walks through, so the
+    connection degrades and recovers without a file.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Why it works while the app is running</h2>
+  <p>Every setting a scenario touches is applied live, to the session already in progress - the app
+  does not need restarting and neither does the tool. The event log records each step as it happens,
+  so when something breaks you can see which change it followed. Pair that with a seed and the whole
+  sequence, including the random loss inside it, repeats exactly.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,18 @@
+{
+  "id": "offline",
+  "order": 45,
+  "languages": {
+    "en": {
+      "slug": "test-app-offline",
+      "link_text": "No internet",
+      "title": "Test an app with no internet on Windows",
+      "description": "Take the internet away from one app while the local network keeps working, make a single service unreachable, or break DNS - without unplugging anything."
+    },
+    "pl": {
+      "slug": "test-bez-internetu",
+      "link_text": "Bez internetu",
+      "title": "Test aplikacji bez internetu na Windows",
+      "description": "Zabierz internet jednej aplikacji, zostawiając sieć lokalną, uczyń jedną usługę nieosiągalną albo zepsuj DNS - bez wyciągania żadnej wtyczki."
+    }
+  }
+}

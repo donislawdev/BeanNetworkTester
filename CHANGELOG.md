@@ -53,6 +53,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Apply changes" to put them into a running session.
 
 ### Docs
+- **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**
+  How to take the internet away from one app while the local network keeps working, how a scenario
+  file changes conditions on a timeline (with the seven that ship listed straight from the folder),
+  what to set when testing a game client, and how to inject network faults repeatably in a pipeline.
+  Each one also says what it cannot do.
 - **The comparison page now answers "I came from another tool".** A table putting this next to
   netem on Linux, Clumsy, NetLimiter and proxies like Fiddler, with what each one is for and what to
   expect here - including the cases where one of them is the better answer.

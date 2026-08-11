@@ -1,0 +1,72 @@
+<section class="hero">
+  <h1>Simulate game lag and packet loss</h1>
+  <p class="lead">Netcode is written on a local connection with 1 ms of ping and tested by players on
+  hotel WiFi. This closes that gap on your own machine, on the game process only, while the rest of
+  the computer stays usable.</p>
+</section>
+
+<section>
+  <h2>Start here</h2>
+  <p>Aim at the game client, give it a realistic bad connection, and let it stop itself after five
+  minutes:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>There is a ready timeline for this too - <code>overloaded-game-server.json</code> in the
+  <code>scenarios</code> folder walks a connection into congestion and back out, so you can watch
+  the client handle both directions of the change. See
+  <a href="../scenarios-over-time/">timed scenarios</a>.</p>
+</section>
+
+<section>
+  <h2>Why a game shows loss when a browser does not</h2>
+  <p>Most game traffic is UDP, and UDP has nothing to hide loss behind. A web page over TCP quietly
+  retransmits and just takes longer, which is why a browser can feel fine at 5 percent loss while a
+  match at the same 5 percent stutters, rubber-bands and desynchronises.</p>
+  <p>That makes a game the honest place to test loss: what you set is what the client actually
+  experiences.</p>
+</section>
+
+<section>
+  <h2>What to set, and what it looks for</h2>
+  <table>
+    <tr><th>Setting</th><th>Try</th><th>What it exposes</th></tr>
+    <tr><td>Latency</td><td>80 to 250 ms</td><td>Prediction and interpolation. Does your character
+    slide back after a shot?</td></tr>
+    <tr><td>Jitter</td><td>40 to 100 ms</td><td>Buffering. A steady 200 ms is easier to hide than a
+    ping that keeps moving.</td></tr>
+    <tr><td>Loss</td><td>2 to 10 percent</td><td>Missing state updates, and whether the client
+    recovers or drifts.</td></tr>
+    <tr><td>Spikes</td><td>1 second, rarely</td><td>The stall a tower handover causes. Usually the
+    ugliest one.</td></tr>
+    <tr><td>Link on and off</td><td>10 s cycle, 30 percent down</td><td>Reconnect and rejoin.</td></tr>
+  </table>
+  <p>Measure jitter as the gap between the 95th percentile and the median rather than as an average -
+  jitter barely moves an average, which is why a run can look identical on paper and play
+  differently.</p>
+</section>
+
+<section>
+  <h2>Comparing two builds needs a seed</h2>
+  <p>Random loss makes two runs different, so "the new build feels worse" is not evidence. The same
+  seed replays the same loss and the same jitter, which turns a feeling into a comparison:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>What it cannot do</h2>
+  <p>This shapes the traffic of <em>your</em> machine. It does not slow the server down, it does not
+  change its tick rate, and it does not put other players on a bad connection - so it tests your
+  client against a bad link, not your server under load. For the server side you want load testing,
+  and for a lobby full of bad connections you want more than one machine.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

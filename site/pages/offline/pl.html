@@ -1,0 +1,72 @@
+<section class="hero">
+  <h1>Test aplikacji bez internetu</h1>
+  <p class="lead">Wyciągnięcie kabla testuje jedną rzecz: komputer bez sieci. Większość błędów
+  offline nie jest tym przypadkiem. Zdarzają się, gdy karta sieciowa działa, ikona WiFi wygląda
+  normalnie, a to, czego aplikacja potrzebuje, jest po prostu nieosiągalne.</p>
+</section>
+
+<section>
+  <h2>Trzy różne rodzaje "offline"</h2>
+  <table>
+    <tr><th>Co włączasz</th><th>Co widzi aplikacja</th><th>Jaki błąd to znajduje</th></tr>
+    <tr><td><strong>Tryb LAN</strong></td><td>Sieć lokalna działa. Cokolwiek poza nią - nie.</td>
+    <td>Hotelowe WiFi przed zalogowaniem, padnięte łącze operatora, firmowa sieć bez wyjścia na
+    świat.</td></tr>
+    <tr><td><strong>Blokada adresu</strong></td><td>Jeden serwer jest nieosiągalny. Wszystko inne
+    działa.</td><td>Jedna zależność padła, gdy sama aplikacja jest zdrowa - przypadek, który
+    health check zwykle przegapia.</td></tr>
+    <tr><td><strong>Blokada portu 53</strong></td><td>Nazwy przestają się rozwiązywać, połączenia po
+    adresie nadal działają.</td><td>Zepsuty DNS, który dla użytkownika wygląda jak "nie ma
+    internetu", a w logach jak coś zupełnie innego.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Z linii komend</h2>
+  <p>Internet znika dla jednej aplikacji, sieć lokalna nietknięta, na dwie minuty:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Jedna usługa nieosiągalna, wszystko inne normalnie:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Nazwy przestają się rozwiązywać:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Jest też gotowa linia czasu, która psuje DNS i sama go przywraca -
+  <code>failing-dns.json</code> w katalogu <code>scenarios</code> obok programu. Zobacz
+  <a href="../scenariusze-w-czasie/">scenariusze w czasie</a>.</p>
+</section>
+
+<section>
+  <h2>Na co naprawdę patrzeć</h2>
+  <ul>
+    <li><strong>Komunikat.</strong> Czy aplikacja mówi, co się stało, czy kręci kółkiem bez
+    końca?</li>
+    <li><strong>Ponowienie.</strong> Czy odpuszcza coraz rzadziej, czy wali w ten sam adres w
+    pętli?</li>
+    <li><strong>Kolejka.</strong> Czy praca wykonana bez łącza zostaje zachowana i wysłana potem, czy
+    przepada?</li>
+    <li><strong>Powrót.</strong> STOP przywraca sieć. Czy aplikacja zauważy to sama, czy trzeba ją
+    zrestartować?</li>
+  </ul>
+  <p>To ostatnie jest najcenniejsze. Zniknięcie łącza łatwo obsłużyć źle i łatwo przetestować.
+  Dopiero powrót jest miejscem, w którym stan robi się nieprawdziwy.</p>
+</section>
+
+<section>
+  <h2>Czym to nie jest</h2>
+  <p>Karta sieciowa zostaje włączona i komputer trzyma swój adres, więc aplikacja, która pyta
+  Windows tylko "czy jest sieć", dostaje tak. To jest zamierzone i jest ciekawszym testem: prawdziwi
+  użytkownicy rzadko są rozłączeni, oni są połączeni z czymś, co nie umie dosięgnąć tego, czego
+  potrzebują. Jeśli chcesz właśnie przypadku "nie ma karty", wyłącz kartę - do tego nie trzeba
+  narzędzia.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
