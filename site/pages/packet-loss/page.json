@@ -5,13 +5,13 @@
     "en": {
       "slug": "packet-loss",
       "link_text": "Packet loss",
-      "title": "Simulate packet loss on Windows",
+      "title": "Simulate packet loss on Windows for one app",
       "description": "Drop a set percentage of one app's packets on Windows, watch what breaks, and replay the same run with a seed."
     },
     "pl": {
       "slug": "utrata-pakietow",
       "link_text": "Utrata pakietów",
-      "title": "Symulacja utraty pakietów na Windows",
+      "title": "Jak symulować utratę pakietów na Windows",
       "description": "Odrzucaj ustalony procent pakietów jednej aplikacji na Windows, patrz co się psuje i powtórz ten sam przebieg z ziarnem."
     }
   }

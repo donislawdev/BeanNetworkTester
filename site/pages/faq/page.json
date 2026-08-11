@@ -5,13 +5,13 @@
     "en": {
       "slug": "faq",
       "link_text": "Questions and answers",
-      "title": "Questions people ask first",
+      "title": "Common questions about Bean Network Tester",
       "description": "Administrator rights, whether it touches the whole machine, how to undo it, the SmartScreen warning, and what it does with your data."
     },
     "pl": {
       "slug": "najczestsze-pytania",
       "link_text": "Pytania i odpowiedzi",
-      "title": "Pytania, które padają najpierw",
+      "title": "Częste pytania o Bean Network Tester",
       "description": "Prawa administratora, czy rusza cały komputer, jak to cofnąć, ostrzeżenie SmartScreen i co program robi z Twoimi danymi."
     }
   }

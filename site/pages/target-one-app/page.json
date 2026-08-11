@@ -5,13 +5,13 @@
     "en": {
       "slug": "target-one-app",
       "link_text": "Aim at one app",
-      "title": "Aim at one app, not the machine",
+      "title": "Target one app on Windows, not the machine",
       "description": "Point the impairment at one process, PID, address or port, so your test breaks the app under test and leaves the rest of the machine alone."
     },
     "pl": {
       "slug": "celowanie-w-jedna-aplikacje",
       "link_text": "Celowanie w aplikację",
-      "title": "Celuj w jedną aplikację, nie w komputer",
+      "title": "Celuj w jedną aplikację, nie w cały komputer",
       "description": "Skieruj zaburzenie na jeden proces, PID, adres albo port, żeby test psuł badaną aplikację, a resztę komputera zostawił w spokoju."
     }
   }

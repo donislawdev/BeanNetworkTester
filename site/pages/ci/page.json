@@ -5,13 +5,13 @@
     "en": {
       "slug": "network-tests-in-ci",
       "link_text": "Network tests in CI",
-      "title": "Simulate a bad network in CI",
+      "title": "Simulate a bad network in CI on Windows",
       "description": "The same executable runs without a window, reports through exit codes and NDJSON, and stops on its own, so a pipeline can test a bad connection."
     },
     "pl": {
       "slug": "testy-sieciowe-w-ci",
       "link_text": "Testy sieciowe w CI",
-      "title": "Symulacja słabej sieci w CI",
+      "title": "Symulacja słabej sieci w CI na Windows",
       "description": "Ten sam plik działa bez okna, raportuje kodami wyjścia i NDJSON, i zatrzymuje się sam, więc pipeline może testować słabe połączenie."
     }
   }

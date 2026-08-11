@@ -442,7 +442,7 @@ def _png_size(path):
     return struct.unpack(">II", head[16:24])
 
 
-def head_meta(page, code, registry, texts, description, root):
+def head_meta(page, code, registry, texts, description, root, home):
     """Canonical, hreflang, social cards and structured data, as HTML.
 
     Composed here and not in the template because the set differs per page and the
@@ -498,7 +498,38 @@ def head_meta(page, code, registry, texts, description, root):
 
     if page.get("schema") == "software_application":
         lines.append(_software_json_ld(registry, texts[code], canonical, description, code))
+    if page["id"] != home["id"]:
+        lines.append(_breadcrumb_json_ld(registry, page, home, code, canonical))
     return Raw("\n".join(lines))
+
+
+def _breadcrumb_json_ld(registry, page, home, code, canonical):
+    """The trail from the home page to this one.
+
+    Added after MEASURING the built output, which found every guide carrying no
+    structured data at all. The idea had been dismissed once with "nine flat pages
+    have no hierarchy", and that was wrong: home -> page IS the hierarchy, it is the
+    trail a search result shows in place of a raw URL, and it costs one generated
+    block per page.
+
+    Built from the registry, so the names are the same labels the navigation uses and
+    a renamed page cannot leave a stale trail behind.
+    """
+    base = registry["base_url"]
+    data = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1,
+             "name": home["languages"][code]["link_text"],
+             "item": _absolute(base, home["languages"][code]["dir_path"])},
+            {"@type": "ListItem", "position": 2,
+             "name": page["languages"][code]["link_text"],
+             "item": canonical},
+        ],
+    }
+    body = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+    return '<script type="application/ld+json">\n%s\n</script>' % body.replace("<", "\\u003c")
 
 
 def _software_json_ld(registry, texts, canonical, description, code):
@@ -672,7 +703,7 @@ def language_switcher(page, current_code, registry, label):
                % (html.escape(label, quote=True), "".join(parts)))
 
 
-def page_context(page, code, registry, texts, home_dir, colours, root, pages):
+def page_context(page, code, registry, texts, home, colours, root, pages):
     """Everything a page's template and body may refer to, for one language."""
     entry = page["languages"][code]
     lang = _language(registry, code)
@@ -694,7 +725,8 @@ def page_context(page, code, registry, texts, home_dir, colours, root, pages):
         "page.asset_prefix": (_root_prefix(registry) if page["output"]
                               else _asset_prefix(entry["dir_path"])),
         "page.home_url": (_root_prefix(registry) if page["output"]
-                          else _relative_url(entry["dir_path"], home_dir)),
+                          else _relative_url(entry["dir_path"],
+                                             home["languages"][code]["dir_path"])),
         "page.language_switcher": language_switcher(page, code, registry,
                                                     texts[code]["nav.language"]),
         "page.nav_links": page_links(pages, page, code, "foot-nav",
@@ -703,7 +735,8 @@ def page_context(page, code, registry, texts, home_dir, colours, root, pages):
         "page.guide_links": page_links(pages, page, code, "guides", skip_home=True,
                                        root_prefix=_root_prefix(registry) if page["output"]
                                        else None),
-        "page.head_meta": head_meta(page, code, registry, texts, entry["description"], root),
+        "page.head_meta": head_meta(page, code, registry, texts, entry["description"], root,
+                                    home),
     }, "page %s [%s]" % (page["id"], code))
     return context
 
@@ -762,8 +795,7 @@ def build(root=ROOT, out=None):
     for page in pages:
         for code in page["codes"]:
             entry = page["languages"][code]
-            home_dir = home["languages"][code]["dir_path"]
-            context = page_context(page, code, registry, texts, home_dir, colours,
+            context = page_context(page, code, registry, texts, home, colours,
                                    root, pages)
             body = render(entry["body"], context,
                           "pages/%s/%s.html" % (page["id"], code))

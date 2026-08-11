@@ -560,8 +560,15 @@ def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
             check(f"{rel}: the block does not close its own script element",
                   "</script>" not in raw)
             data = jsonlib.loads(raw.replace("\\u003c", "<"))
-            check(f"{rel}: it is a SoftwareApplication",
-                  data.get("@type") == "SoftwareApplication", f"({data.get('@type')})")
+            # Two kinds are expected now, and an unexpected third one is a finding:
+            # this test used to assert that EVERY block is a SoftwareApplication, which
+            # was true until the breadcrumbs arrived and then failed for the right
+            # reason. The allow list keeps that signal instead of dropping the check.
+            kind = data.get("@type")
+            check(f"{rel}: {kind} is a kind this site publishes on purpose",
+                  kind in ("SoftwareApplication", "BreadcrumbList"), f"({kind})")
+            if kind != "SoftwareApplication":
+                continue
             for field in ("name", "url", "operatingSystem", "downloadUrl"):
                 check(f"{rel}: {field} is set", data.get(field), "(missing)")
             check(f"{rel}: a free app declares the price Google requires",
@@ -569,6 +576,62 @@ def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
             for invented in ("aggregateRating", "review", "ratingValue", "softwareVersion"):
                 check(f"{rel}: no {invented} (nobody gave us one)", invented not in data)
     check("the site carries structured data at all", blocks >= 1, f"({blocks})")
+
+
+def test_every_guide_carries_the_trail_back_to_the_home_page(tmp_path):
+    """A breadcrumb, in the language of the page, generated from the registry.
+
+    Found by measuring the built output rather than by reading the plan: the guides
+    carried no structured data at all, because the idea had been waved off with "flat
+    pages have no hierarchy". Home -> page is the hierarchy, and it is what a search
+    result shows instead of a bare URL.
+
+    The home page must NOT have one (a trail of length one says nothing) and neither
+    must the error page, which asks not to be indexed at all.
+    """
+    import json as jsonlib
+    out, _ = _build(tmp_path, "crumbs")
+    registry = build_site.load_registry(ROOT)
+    base = registry["base_url"]
+    pages = build_site.load_pages(ROOT, registry)
+    home = next(p for p in pages if p["id"] == "home")
+
+    def trails(rel):
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        found = []
+        for raw in re.findall(r'<script type="application/ld\+json">\n(.*?)\n</script>',
+                              text, re.S):
+            data = jsonlib.loads(raw.replace("\\u003c", "<"))
+            if data.get("@type") == "BreadcrumbList":
+                found.append(data["itemListElement"])
+        return found
+
+    check("the home page has no trail",
+          not trails("index.html"), "(a one-step trail says nothing)")
+    check("the error page has no trail", not trails("404.html"), "(it is noindex)")
+
+    seen = 0
+    for page in pages:
+        if page["output"] or page["id"] == "home":
+            continue
+        for code in page["codes"]:
+            rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+            found = trails(rel)
+            check(f"{rel}: exactly one breadcrumb trail", len(found) == 1, f"({len(found)})")
+            steps = found[0]
+            check(f"{rel}: the trail is home then this page", len(steps) == 2, f"({steps})")
+            check(f"{rel}: it starts at the home page of this language",
+                  steps[0]["item"] == "%s/%s" % (
+                      base, home["languages"][code]["dir_path"] + "/"
+                      if home["languages"][code]["dir_path"] else ""),
+                  f"({steps[0]['item']})")
+            check(f"{rel}: it names the page with its own label",
+                  steps[1]["name"] == page["languages"][code]["link_text"],
+                  f"({steps[1]['name']!r})")
+            check(f"{rel}: both steps are absolute",
+                  all(step["item"].startswith(base) for step in steps), f"({steps})")
+            seen += 1
+    check("there were trails to check", seen >= 4, f"({seen})")
 
 
 def test_the_sitemap_lists_exactly_the_pages_that_may_be_indexed(tmp_path):
