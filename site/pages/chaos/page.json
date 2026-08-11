@@ -1,0 +1,18 @@
+{
+  "id": "chaos",
+  "order": 75,
+  "languages": {
+    "en": {
+      "slug": "network-chaos-testing",
+      "link_text": "Chaos testing",
+      "title": "Network chaos testing on Windows",
+      "description": "Inject network faults on purpose, repeat them exactly with a seed, and let a pipeline decide from the exit code whether the application survived."
+    },
+    "pl": {
+      "slug": "chaos-testing-sieci",
+      "link_text": "Chaos testing",
+      "title": "Chaos testing sieci na Windows",
+      "description": "Wstrzykuj awarie sieci celowo, powtarzaj je dokładnie z ziarnem i pozwól pipeline'owi ocenić z kodu wyjścia, czy aplikacja przeżyła."
+    }
+  }
+}

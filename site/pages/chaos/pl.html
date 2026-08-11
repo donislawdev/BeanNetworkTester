@@ -1,0 +1,70 @@
+<section class="hero">
+  <h1>Chaos testing sieci na Windows</h1>
+  <p class="lead">Chaos testing to psucie czegoś celowo, gdy patrzysz, żeby dowiedzieć się, co Twoje
+  oprogramowanie z tym zrobi. Na warstwie sieci to dokładnie to, czym jest ten program: sposób na
+  wstrzyknięcie awarii jednej aplikacji i sprawdzenie, czy przeżyje.</p>
+</section>
+
+<section>
+  <h2>Awarie, które można wstrzyknąć</h2>
+  <table>
+    <tr><th>Awaria</th><th>Co odwzorowuje</th></tr>
+    <tr><td>Strata, uszkodzenie, duplikacja</td><td>Zdegradowaną ścieżkę. Pakiety znikają, docierają
+    popsute albo docierają dwa razy.</td></tr>
+    <tr><td>Opóźnienie, jitter, skoki</td><td>Wolną albo niestabilną ścieżkę, razem z
+    wielosekundowym zacięciem, które psuje timeouty.</td></tr>
+    <tr><td>Zrywanie połączeń</td><td>Firewall albo load balancer zabijający połączenia w środku
+    transferu.</td></tr>
+    <tr><td>Przerwy w łączu</td><td>Ścieżkę, która znika i wraca, cyklicznie.</td></tr>
+    <tr><td>Zablokowany adres albo port</td><td>Jedną zależność nieosiągalną, gdy wszystko inne
+    działa.</td></tr>
+    <tr><td>Brak internetu przy żywym LAN-ie</td><td>Kształt portalu logowania: lokalnie działa,
+    świat nie.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Co odróżnia chaos od szumu: powtarzalność</h2>
+  <p>Losowa awaria, której nie da się odtworzyć, produkuje opowieść, nie zgłoszenie błędu. Każda
+  losowa decyzja pochodzi tu z ziarna, więc ta sama komenda odtwarza ten sam przebieg - te same
+  zgubione pakiety, ten sam jitter, w tej samej kolejności:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>To jest różnica między "wywaliło się raz w zeszły wtorek" a czerwonym testem, który ktoś inny
+  potrafi uruchomić.</p>
+</section>
+
+<section>
+  <h2>W pipeline</h2>
+  <p>Linia komend raportuje kodami wyjścia, więc build rozróżni "aplikacja padła" od "narzędzie nie
+  mogło wystartować", a sesja kończy się sama - nie ma kroku sprzątającego, o którym można
+  zapomnieć:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Ciąg awarii zamiast jednej to plik scenariusza, i on też jest powtarzalny. Zobacz
+  <a href="../scenariusze-w-czasie/">scenariusze w czasie</a> oraz
+  <a href="../testy-sieciowe-w-ci/">testy sieciowe w CI</a> po kody wyjścia i po to, jakiego runnera
+  to wymaga.</p>
+</section>
+
+<section>
+  <h2>Gdzie kończy się promień rażenia</h2>
+  <p>Dwa ograniczenia i oba są zamierzone. Zaburzenie sięga jednego procesu, PID-u, adresu albo
+  portu, gdy je wycelujesz, więc maszyna, na której pracujesz, dalej działa. I jest to jedna maszyna:
+  to jest wstrzykiwanie awarii klientowi i jego łączu, nie klastrowi. Jeśli szukasz chaosu w wielu
+  usługach i węzłach, to inny rodzaj narzędzia, a to tutaj jest elementem, który psuje sieć pod
+  jedną aplikacją na Windows.</p>
+  <p>Wszystko jest odwracalne na miejscu. STOP przywraca sieć, limit czasu robi to samo, a wewnętrzny
+  nadzorca zamyka przechwyt, jeśli samo narzędzie padnie - awaria, którą wstrzyknąłeś, nie może
+  przeżyć przebiegu, który ją wstrzyknął.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

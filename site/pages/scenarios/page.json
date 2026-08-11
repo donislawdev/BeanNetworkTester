@@ -1,0 +1,18 @@
+{
+  "id": "scenarios",
+  "order": 55,
+  "languages": {
+    "en": {
+      "slug": "scenarios-over-time",
+      "link_text": "Timed scenarios",
+      "title": "Change network conditions over time",
+      "description": "A scenario file is a timeline: at these seconds, these settings. Seven ready ones ship with the program, and it repeats them for as long as you watch."
+    },
+    "pl": {
+      "slug": "scenariusze-w-czasie",
+      "link_text": "Scenariusze w czasie",
+      "title": "Zmieniaj warunki sieci w czasie",
+      "description": "Plik scenariusza to linia czasu: w tych sekundach takie ustawienia. Siedem gotowych jest z programem, a on powtarza je tak długo, jak patrzysz."
+    }
+  }
+}

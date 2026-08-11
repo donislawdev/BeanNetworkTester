@@ -37,9 +37,15 @@
   "site.tagline": "Symulator słabego internetu dla Windows",
   "table.code": "Kod",
   "table.flag": "Flaga",
+  "table.length": "Długość",
   "table.meaning": "Co znaczy",
+  "table.no": "nie",
   "table.preset": "Profil",
   "table.range": "Zakres",
+  "table.repeats": "Powtarza się",
+  "table.scenario": "Plik",
   "table.setting": "Ustawienie",
-  "table.unit": "Jednostka"
+  "table.steps": "Kroków",
+  "table.unit": "Jednostka",
+  "table.yes": "tak"
 }

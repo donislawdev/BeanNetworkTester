@@ -1,0 +1,18 @@
+{
+  "id": "game-lag",
+  "order": 65,
+  "languages": {
+    "en": {
+      "slug": "game-lag-simulator",
+      "link_text": "Game lag",
+      "title": "Simulate game lag and packet loss",
+      "description": "Give a game client the ping, jitter and packet loss of a bad connection, aimed at that process only, and replay the same run with a seed."
+    },
+    "pl": {
+      "slug": "symulator-lagow-w-grach",
+      "link_text": "Lagi w grach",
+      "title": "Symulator lagów i utraty pakietów w grach",
+      "description": "Daj klientowi gry ping, jitter i utratę pakietów słabego łącza, celując tylko w ten proces, i powtórz ten sam przebieg z ziarnem."
+    }
+  }
+}

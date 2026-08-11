@@ -1,0 +1,67 @@
+<section class="hero">
+  <h1>Zmieniaj warunki sieci w czasie</h1>
+  <p class="lead">Stałe 10 procent straty to warunek laboratoryjny. Prawdziwe łącza pogarszają się,
+  wracają, stają na cztery sekundy i znów działają - a błąd, którego szukasz, zwykle siedzi w
+  zmianie, nie w stanie ustalonym.</p>
+</section>
+
+<section>
+  <h2>Scenariusz to linia czasu</h2>
+  <p>Jeden plik JSON. Każdy krok mówi <em>w tej sekundzie takie ustawienia</em>, a wszystko, czego
+  nie wymienisz, zachowuje swoją wartość:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Czasy są sekundami od startu przebiegu, nie odstępami między krokami. Przy
+  <code>"loop": true</code> linia czasu zaczyna się od nowa, gdy się skończy - i tego właśnie chcesz
+  przy długim wygrzewaniu: zostaw to włączone i korzystaj z aplikacji.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Siedem jest dostarczanych z programem</h2>
+  <p>W katalogu <code>scenarios</code> obok pliku wykonywalnego. Odczytane z tych plików, więc to
+  jest to, co naprawdę masz:</p>
+  {{page.scenario_table}}
+  <p>To zwykły tekst - otwórz jeden, zmień liczbę, zapisz. Nazwy mówią, co odtwarzają: zatłoczoną
+  kawiarnię, łącze mobilne spadające z LTE na 3G, wysyłanie, które umiera w połowie, przeciążony
+  serwer, DNS, który przestaje odpowiadać.</p>
+</section>
+
+<section>
+  <h2>Dwa prostsze sposoby na zmienność</h2>
+  <p>Scenariusz warto pisać, gdy liczy się kolejność. Gdy nie, dwa ustawienia zmieniają się same:</p>
+  <ul>
+    <li><strong>Łącze na przemian</strong> - długość cyklu i jaka jego część to przestój. Cykle
+    dziesięciosekundowe, cztery sekundy przerwy, bez końca.</li>
+    <li><strong>Harmonogram prędkości</strong> - ciąg prędkości, po których chodzi limit, więc łącze
+    pogarsza się i wraca bez żadnego pliku.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Dlaczego to działa na żywo</h2>
+  <p>Każde ustawienie, którego dotyka scenariusz, stosuje się do trwającej już sesji - aplikacji nie
+  trzeba restartować i narzędzia też nie. Dziennik zdarzeń zapisuje każdy krok w chwili, gdy
+  następuje, więc gdy coś pęknie, widzisz, po której zmianie. Dołóż do tego ziarno losowości i cała
+  sekwencja, razem z losową stratą w środku, powtórzy się dokładnie.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

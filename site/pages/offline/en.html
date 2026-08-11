@@ -1,0 +1,70 @@
+<section class="hero">
+  <h1>Test an app with no internet</h1>
+  <p class="lead">Pulling the network cable tests one thing: a machine with no network. Most offline
+  bugs are not that. They happen when the adapter is up, the WiFi icon looks fine, and the thing the
+  app needs is simply not reachable.</p>
+</section>
+
+<section>
+  <h2>Three different kinds of "offline"</h2>
+  <table>
+    <tr><th>What you switch on</th><th>What the app sees</th><th>The bug it finds</th></tr>
+    <tr><td><strong>LAN mode</strong></td><td>The local network works. Anything beyond it does
+    not.</td><td>Hotel WiFi before you log in, a dead uplink, a company network with no route
+    out.</td></tr>
+    <tr><td><strong>Block an address</strong></td><td>One server is unreachable. Everything else
+    works.</td><td>One dependency down while the app itself is fine - the case a health check
+    usually misses.</td></tr>
+    <tr><td><strong>Block port 53</strong></td><td>Names stop resolving, connections by address
+    still work.</td><td>Broken DNS, which looks like "the internet is down" to a user and like
+    something else entirely in the logs.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>From the command line</h2>
+  <p>Internet gone for one application, local network untouched, for two minutes:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>One service unreachable, everything else normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Names stop resolving:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>There is also a ready timeline that breaks DNS and puts it back on its own -
+  <code>failing-dns.json</code> in the <code>scenarios</code> folder next to the program. See
+  <a href="../scenarios-over-time/">timed scenarios</a>.</p>
+</section>
+
+<section>
+  <h2>What to actually look for</h2>
+  <ul>
+    <li><strong>The message.</strong> Does the app say what happened, or show a spinner for
+    ever?</li>
+    <li><strong>The retry.</strong> Does it back off, or hammer the same address in a loop?</li>
+    <li><strong>The queue.</strong> Is work the user did while offline kept and sent later, or
+    lost?</li>
+    <li><strong>The recovery.</strong> STOP puts the network back. Does the app notice on its own,
+    or does it need a restart?</li>
+  </ul>
+  <p>That last one is where most of the value is. Going offline is easy to handle badly and easy to
+  test. Coming back is where the state gets wrong.</p>
+</section>
+
+<section>
+  <h2>What this is not</h2>
+  <p>The adapter stays up and the machine keeps its address, so an application that only asks
+  Windows "is there a network" still gets yes. That is deliberate, and it is the more interesting
+  test: real users are rarely disconnected, they are connected to something that cannot reach what
+  they need. If you specifically want the "no adapter" case, disable the adapter - no tool needed.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

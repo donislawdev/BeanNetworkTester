@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Network chaos testing on Windows</h1>
+  <p class="lead">Chaos testing means breaking something on purpose, while you are watching, to find
+  out what your software does about it. At the network layer that is exactly what this tool is: a way
+  to inject a fault into one application and see whether it survives.</p>
+</section>
+
+<section>
+  <h2>The faults you can inject</h2>
+  <table>
+    <tr><th>Fault</th><th>What it models</th></tr>
+    <tr><td>Loss, corruption, duplication</td><td>A degraded path. Packets vanish, arrive damaged, or
+    arrive twice.</td></tr>
+    <tr><td>Latency, jitter, spikes</td><td>A slow or unstable path, including the multi-second stall
+    that breaks timeouts.</td></tr>
+    <tr><td>Connection resets</td><td>A firewall or a load balancer killing connections
+    mid-transfer.</td></tr>
+    <tr><td>Link outages</td><td>The path disappearing and coming back, on a cycle.</td></tr>
+    <tr><td>Blocked address or port</td><td>One dependency unreachable while everything else
+    works.</td></tr>
+    <tr><td>Internet gone, LAN alive</td><td>The captive-portal shape: local works, the world does
+    not.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>What separates chaos from noise: repeatability</h2>
+  <p>A random failure that cannot be replayed produces a story, not a bug report. Every random
+  decision here comes from a seed, so the same command reproduces the same run - the same packets
+  lost, the same jitter, in the same order:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>That is the difference between "it fell over once last Tuesday" and a failing test somebody else
+  can run.</p>
+</section>
+
+<section>
+  <h2>In a pipeline</h2>
+  <p>The command line reports through exit codes, so a build can tell "the application failed" from
+  "the tool could not start", and the session ends by itself - there is no cleanup step to forget:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>A sequence of faults instead of one is a scenario file, and those are also repeatable. See
+  <a href="../scenarios-over-time/">timed scenarios</a> and
+  <a href="../network-tests-in-ci/">network tests in CI</a> for the exit codes and the runner it
+  needs.</p>
+</section>
+
+<section>
+  <h2>Where the blast radius stops</h2>
+  <p>Two limits, and both are deliberate. The impairment reaches one process, PID, address or port
+  when you aim it, so the machine you are working on keeps working. And it is one machine: this is
+  fault injection for a client and its connection, not for a cluster. If you are looking for chaos
+  across services and nodes, that is a different kind of tool, and this one is the piece that breaks
+  the network under a single Windows application.</p>
+  <p>Everything is reversible on the spot. STOP restores the network, a time limit does the same, and
+  a watchdog inside the tool shuts the capture down if the tool itself dies - a fault you injected
+  must never outlive the run that injected it.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

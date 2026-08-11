@@ -1,0 +1,74 @@
+<section class="hero">
+  <h1>Symulator lagów i utraty pakietów w grach</h1>
+  <p class="lead">Kod sieciowy pisze się na lokalnym łączu z pingiem 1 ms, a testują go gracze na
+  hotelowym WiFi. To zamyka tę różnicę na Twojej maszynie, tylko na procesie gry, gdy reszta
+  komputera zostaje używalna.</p>
+</section>
+
+<section>
+  <h2>Zacznij tutaj</h2>
+  <p>Wyceluj w klienta gry, daj mu wiarygodnie słabe łącze i pozwól zatrzymać się samo po pięciu
+  minutach:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Jest też gotowa linia czasu - <code>overloaded-game-server.json</code> w katalogu
+  <code>scenarios</code> wprowadza łącze w przeciążenie i z niego wyprowadza, więc widzisz, jak
+  klient radzi sobie z oboma kierunkami zmiany. Zobacz
+  <a href="../scenariusze-w-czasie/">scenariusze w czasie</a>.</p>
+</section>
+
+<section>
+  <h2>Dlaczego gra pokazuje stratę, a przeglądarka nie</h2>
+  <p>Większość ruchu gier to UDP, a UDP nie ma czym zasłonić straty. Strona po TCP po cichu
+  retransmituje i po prostu ładuje się dłużej - dlatego przeglądarka może działać znośnie przy 5
+  procentach straty, gdy mecz przy tych samych 5 procentach się tnie, cofa postacie i traci
+  synchronizację.</p>
+  <p>To czyni grę uczciwym miejscem do testowania straty: to, co ustawisz, jest tym, czego klient
+  naprawdę doświadcza.</p>
+</section>
+
+<section>
+  <h2>Co ustawić i czego to szuka</h2>
+  <table>
+    <tr><th>Ustawienie</th><th>Spróbuj</th><th>Co obnaża</th></tr>
+    <tr><td>Latencja</td><td>80 do 250 ms</td><td>Predykcję i interpolację. Czy postać cofa się po
+    strzale?</td></tr>
+    <tr><td>Jitter</td><td>40 do 100 ms</td><td>Buforowanie. Stałe 200 ms łatwiej ukryć niż ping,
+    który ciągle się rusza.</td></tr>
+    <tr><td>Utrata</td><td>2 do 10 procent</td><td>Gubione aktualizacje stanu i to, czy klient wraca,
+    czy odjeżdża.</td></tr>
+    <tr><td>Skoki</td><td>1 sekunda, rzadko</td><td>Zacięcie przy przełączeniu nadajnika. Zwykle
+    najbrzydsze.</td></tr>
+    <tr><td>Łącze na przemian</td><td>cykl 10 s, 30 procent przerwy</td><td>Ponowne łączenie i powrót
+    do rozgrywki.</td></tr>
+  </table>
+  <p>Jitter mierz jako różnicę między 95. percentylem a medianą, nie jako średnią - jitter prawie nie
+  rusza średniej, dlatego przebieg może wyglądać identycznie na papierze i grać się inaczej.</p>
+</section>
+
+<section>
+  <h2>Porównanie dwóch buildów wymaga ziarna</h2>
+  <p>Losowa strata sprawia, że dwa przebiegi się różnią, więc "nowy build wydaje się gorszy" nie jest
+  dowodem. To samo ziarno odtwarza tę samą stratę i ten sam jitter, co zamienia wrażenie w
+  porównanie:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Czego to nie potrafi</h2>
+  <p>To kształtuje ruch <em>Twojej</em> maszyny. Nie zwalnia serwera, nie zmienia jego tick rate i
+  nie wsadza innych graczy na słabe łącze - więc testuje Twojego klienta przy złym łączu, a nie
+  serwer pod obciążeniem. Do strony serwerowej służą testy obciążeniowe, a do lobby pełnego słabych
+  łączy potrzebujesz więcej niż jednej maszyny.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

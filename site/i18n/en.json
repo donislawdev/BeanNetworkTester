@@ -37,9 +37,15 @@
   "site.tagline": "Simulate a bad network on Windows",
   "table.code": "Code",
   "table.flag": "Flag",
+  "table.length": "Length",
   "table.meaning": "What it means",
+  "table.no": "no",
   "table.preset": "Profile",
   "table.range": "Range",
+  "table.repeats": "Repeats",
+  "table.scenario": "File",
   "table.setting": "Setting",
-  "table.unit": "Unit"
+  "table.steps": "Steps",
+  "table.unit": "Unit",
+  "table.yes": "yes"
 }

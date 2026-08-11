@@ -823,6 +823,41 @@ def exit_code_table(texts):
     return Raw("<table>%s</table>" % "".join(rows))
 
 
+def scenario_table(root, texts):
+    """The scenario files that ship next to the program, read from ``scenarios/``.
+
+    A scenario is a timeline: ``{"loop": bool, "steps": [{"at": seconds, "settings":
+    {...}}]}``. What a reader wants before opening one is how long it runs, how many
+    times conditions change and whether it repeats - and those are facts in the file,
+    so they are read rather than described.
+
+    This is the point where the SITE starts depending on the scenario corpus, which is
+    why ``pages.yml`` had to gain ``scenarios/**`` in its paths filter: without it,
+    editing a scenario would change this table and never redeploy, which looks exactly
+    like a page nobody edited.
+    """
+    folder = os.path.join(root, "scenarios")
+    files = sorted(f for f in os.listdir(folder) if f.endswith(".json")) \
+        if os.path.isdir(folder) else []
+    if not files:
+        raise SiteError("no scenario files in %s (the table would be empty and the page "
+                        "would claim the program ships none)" % folder)
+    heads = [texts["table.scenario"], texts["table.steps"], texts["table.length"],
+             texts["table.repeats"]]
+    rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
+    for name in files:
+        data = _read_json(os.path.join(folder, name))
+        steps = data.get("steps") or []
+        if not steps:
+            raise SiteError("scenarios/%s has no steps" % name)
+        last = max(int(step.get("at", 0)) for step in steps)
+        rows.append("<tr><td><code>%s</code></td><td>%d</td><td>%d s</td><td>%s</td></tr>"
+                    % (html.escape(name, quote=True), len(steps), last,
+                       html.escape(texts["table.yes"] if data.get("loop") else texts["table.no"],
+                                   quote=True)))
+    return Raw("<table>%s</table>" % "".join(rows))
+
+
 def social_links(registry, texts):
     """The owner's accounts, as text with a drawn glyph - never a brand mark.
 
@@ -887,6 +922,7 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.preset_table": preset_table(load_app_strings(root, code), texts[code]),
         "page.settings_table": settings_table(load_app_strings(root, code), texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
+        "page.scenario_table": scenario_table(root, texts[code]),
         "page.social_links": social_links(registry, texts[code]),
         "page.source_glyph": Raw(SOURCE_GLYPH),
         "page.nav_links": page_links(pages, page, code, "foot-nav",
