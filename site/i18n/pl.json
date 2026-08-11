@@ -1,0 +1,24 @@
+{
+  "_meta": {"code": "pl", "name": "Polski"},
+
+  "site.name": "Bean Network Tester",
+  "site.tagline": "Symulator słabego internetu dla Windows",
+
+  "nav.skip": "Przejdź do treści",
+  "nav.home": "Strona główna",
+  "nav.source": "Kod na GitHubie",
+  "nav.primary": "Witryna",
+  "nav.language": "Język",
+
+  "og.image_alt": "Okno programu Bean Network Tester w trakcie sesji",
+
+  "cta.download": "Pobierz na Windows",
+  "cta.source": "Zobacz kod na GitHubie",
+  "cta.note": "Darmowe i otwarte na licencji GPLv3. Windows 10 i 11, 64-bit. Bez konta, bez telemetrii.",
+  "cta.closing": "Chcesz zepsuć sobie sieć specjalnie?",
+
+  "footer.license": "Darmowe i otwarte oprogramowanie na licencji GNU General Public License v3.0.",
+  "footer.no_telemetry": "Program nie wysyła nigdzie żadnych danych. Ta strona nie ładuje niczego z obcych serwerów.",
+  "footer.author": "Autor: DonislawDev.",
+  "footer.issues": "Znalazłeś błąd? Zgłoś go na GitHubie."
+}

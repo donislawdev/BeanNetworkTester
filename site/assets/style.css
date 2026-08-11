@@ -1,0 +1,243 @@
+/* Bean Network Tester website: dark theme, system fonts, nothing loaded from
+   anywhere else.
+
+   COLOURS ARE NOT DECLARED HERE. The custom properties this file uses are written
+   in front of it by tools/build_site.py, straight out of beantester/gui/theme.py -
+   so the page and the program cannot drift into two different dark themes. That is
+   also why a hex literal anywhere under site/ fails the suite: it would be a second
+   place where a colour lives. Derived shades come from color-mix, not from a second
+   hand-picked value. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* Keyboard users must be able to see where they are. The program follows the same
+   rule: hover is the fill, focus is the ring. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 10;
+  padding: .6rem 1rem;
+  background: var(--bg-card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+a { color: var(--accent); }
+a:hover { color: color-mix(in srgb, var(--accent) 75%, var(--fg)); }
+
+code {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .1em .35em;
+  font-family: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  font-size: .92em;
+}
+
+/* -- top bar ------------------------------------------------------------- */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.bar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem 1rem;
+}
+
+.bar-link { text-decoration: none; }
+.bar-link:hover { text-decoration: underline; }
+
+.langs {
+  display: inline-flex;
+  gap: .35rem;
+  align-items: center;
+}
+.langs a, .langs span {
+  padding: .15rem .5rem;
+  border-radius: 4px;
+  font-size: .92rem;
+  text-decoration: none;
+}
+.langs span[aria-current] {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* -- page body ----------------------------------------------------------- */
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1.25rem 4rem;
+}
+
+section { margin: 3.5rem 0; }
+
+h1 {
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  letter-spacing: -.01em;
+}
+
+h2 {
+  font-size: clamp(1.4rem, 3.5vw, 1.9rem);
+  margin: 0 0 1.25rem;
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin: 0 0 .5rem;
+}
+
+.hero { margin-top: 3rem; }
+
+.lead {
+  font-size: 1.15rem;
+  max-width: 62ch;
+  color: color-mix(in srgb, var(--fg) 88%, var(--muted));
+}
+
+.note {
+  color: var(--muted);
+  font-size: .95rem;
+  max-width: 62ch;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin: 1.75rem 0 1rem;
+}
+
+.btn {
+  display: inline-block;
+  padding: .8rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--fg));
+  color: var(--fg);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-input);
+}
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--fg));
+  color: var(--bg-input);
+}
+
+/* -- cards and lists ----------------------------------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+.card p { margin: 0; color: color-mix(in srgb, var(--fg) 85%, var(--muted)); }
+
+.steps {
+  margin: 0;
+  padding-left: 1.4rem;
+  max-width: 70ch;
+}
+.steps li { margin-bottom: .6rem; }
+
+.shot {
+  margin: 2.5rem 0;
+  text-align: center;
+}
+.shot img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.shot figcaption {
+  color: var(--muted);
+  font-size: .9rem;
+  margin-top: .6rem;
+}
+
+.closing {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.closing h2 { margin-bottom: 0; }
+.closing .actions { justify-content: center; margin-bottom: 0; }
+
+/* -- footer -------------------------------------------------------------- */
+.foot {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .95rem;
+}
+.foot p { margin: .35rem 0; }
+.foot .copy { margin-top: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

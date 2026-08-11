@@ -1,0 +1,13 @@
+{
+  "id": "404",
+  "order": 900,
+  "output": "404.html",
+  "noindex": true,
+  "languages": {
+    "en": {
+      "slug": "404",
+      "title": "Page not found - Bean Network Tester",
+      "description": "That address does not exist on this site. The links below reach the home page and the download."
+    }
+  }
+}

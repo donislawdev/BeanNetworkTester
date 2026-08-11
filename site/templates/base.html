@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="{{page.lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="{{site.theme_color}}">
+<title>{{page.title}}</title>
+<meta name="description" content="{{page.description}}">
+<!-- Canonical, hreflang, social cards and structured data. Composed by
+     tools/build_site.py because they differ per page: an indexable page carries all
+     of them, and the 404 carries a noindex instead. One placeholder rather than a
+     template with conditionals it cannot express. -->
+{{page.head_meta}}
+<link rel="icon" href="{{page.asset_prefix}}assets/bean.png" type="image/png">
+<link rel="stylesheet" href="{{page.asset_prefix}}assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">{{nav.skip}}</a>
+
+<header class="bar">
+  <a class="brand" href="{{page.home_url}}">
+    <img src="{{page.asset_prefix}}assets/bean.png" width="28" height="28" alt="">
+    <span>{{site.name}}</span>
+  </a>
+  <nav class="bar-nav" aria-label="{{nav.primary}}">
+    {{page.language_switcher}}
+    <a class="bar-link" href="{{site.repo_url}}">{{nav.source}}</a>
+  </nav>
+</header>
+
+<main id="main">
+{{page.body}}
+</main>
+
+<footer class="foot">
+  <p>{{footer.license}}</p>
+  <p>{{footer.no_telemetry}}</p>
+  <p>{{footer.author}} <a href="{{site.issues_url}}">{{footer.issues}}</a></p>
+  <p class="copy">{{site.copyright}}</p>
+</footer>
+</body>
+</html>
