@@ -1,11 +1,16 @@
 <!doctype html>
-<html lang="{{page.html_lang}}">
+<html lang="{{page.lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>{{page.title}}</title>
 <meta name="description" content="{{page.description}}">
+<!-- Canonical, hreflang, social cards and structured data. Composed by
+     tools/build_site.py because they differ per page: an indexable page carries all
+     of them, and the 404 carries a noindex instead. One placeholder rather than a
+     template with conditionals it cannot express. -->
+{{page.head_meta}}
 <link rel="icon" href="{{page.asset_prefix}}assets/bean.png" type="image/png">
 <link rel="stylesheet" href="{{page.asset_prefix}}assets/style.css">
 </head>
@@ -17,7 +22,7 @@
     <img src="{{page.asset_prefix}}assets/bean.png" width="28" height="28" alt="">
     <span>{{site.name}}</span>
   </a>
-  <nav class="bar-nav" aria-label="{{nav.language}}">
+  <nav class="bar-nav" aria-label="{{nav.primary}}">
     {{page.language_switcher}}
     <a class="bar-link" href="{{site.repo_url}}">{{nav.source}}</a>
   </nav>

@@ -109,9 +109,15 @@ def load_registry(root):
     if reg["base_url"].endswith("/"):
         raise SiteError("site.json: base_url must not end with '/' (it is joined with paths)")
 
+    # One code per language, used for THREE things: the directory, the `lang`
+    # attribute and `hreflang`. There used to be a separate `html_lang` field
+    # holding the same value in both languages, which is a second place for one
+    # fact and would have drifted the day somebody edited one of them. The code is
+    # the BCP-47 tag (`pt-BR` if it ever comes to that), and tag matching is
+    # case-insensitive, so the lower-case directory name is the same tag.
     codes, dirs = [], []
     for lang in reg["languages"]:
-        for key in ("code", "name", "html_lang", "dir"):
+        for key in ("code", "name", "dir"):
             if key not in lang:
                 raise SiteError("site.json: language %r has no '%s'" % (lang, key))
         codes.append(lang["code"])
@@ -211,11 +217,18 @@ def load_pages(root, registry):
     A page exists in EVERY declared language or the build fails. Adding a language
     is meant to be a directory of files, and the honest moment to find out that a
     translation is missing is here, not in a search result.
+
+    Two declared exceptions, both data rather than a magic page name:
+    * ``output`` writes the page to one exact path (``404.html``, which is the file
+      GitHub Pages serves for a miss) in the default language only. Pages serves one
+      error document per site, so a translated set of them would be dead weight.
+    * ``noindex`` keeps the page out of the sitemap and gives it a robots meta
+      instead of a canonical. An error page that advertises itself as a destination
+      is an error page in search results.
     """
     base = os.path.join(root, SITE_DIR, "pages")
     if not os.path.isdir(base):
         raise SiteError("no page directory: %s" % base)
-    codes = language_codes(registry)
 
     pages, seen = [], {}
     for page_id in sorted(os.listdir(base)):
@@ -226,13 +239,24 @@ def load_pages(root, registry):
         if meta.get("id") != page_id:
             raise SiteError("pages/%s/page.json: 'id' must be %r, not %r"
                             % (page_id, page_id, meta.get("id")))
+        if meta.get("schema") not in (None, "software_application"):
+            raise SiteError("pages/%s/page.json: unknown schema %r "
+                            "(the only kind today is 'software_application')"
+                            % (page_id, meta.get("schema")))
+        codes = ([registry["default_language"]] if meta.get("output")
+                 else language_codes(registry))
         per_lang = meta.get("languages") or {}
         missing = [c for c in codes if c not in per_lang]
         if missing:
             raise SiteError("pages/%s: no metadata for language(s) %s" % (page_id, missing))
+        if meta.get("output") and sorted(per_lang) != codes:
+            raise SiteError("pages/%s: a page with 'output' is written once, in %s only, "
+                            "so it must declare exactly that language (declares %s)"
+                            % (page_id, codes[0], sorted(per_lang)))
 
-        page = {"id": page_id, "order": meta.get("order", 999),
-                "in_nav": bool(meta.get("in_nav", False)), "languages": {}}
+        page = {"id": page_id, "order": meta.get("order", 999), "languages": {},
+                "output": meta.get("output"), "noindex": bool(meta.get("noindex")),
+                "schema": meta.get("schema"), "codes": codes}
         for code in codes:
             entry = per_lang[code]
             slug = entry.get("slug", None)
@@ -250,11 +274,16 @@ def load_pages(root, registry):
                                 % (page_id, code, len(description), *DESC_LEN))
 
             lang = _language(registry, code)
-            dir_path = posixpath.join(lang["dir"], slug).strip("/")
-            if dir_path in seen:
-                raise SiteError("pages/%s [%s]: '%s' is already taken by %s"
-                                % (page_id, code, dir_path or "/", seen[dir_path]))
-            seen[dir_path] = "%s [%s]" % (page_id, code)
+            if page["output"]:
+                # Written to one exact file at the root, so it owns no directory and
+                # cannot collide with a page that does.
+                dir_path = ""
+            else:
+                dir_path = posixpath.join(lang["dir"], slug).strip("/")
+                if dir_path in seen:
+                    raise SiteError("pages/%s [%s]: '%s' is already taken by %s"
+                                    % (page_id, code, dir_path or "/", seen[dir_path]))
+                seen[dir_path] = "%s [%s]" % (page_id, code)
 
             page["languages"][code] = {
                 "slug": slug, "title": title, "description": description,
@@ -313,6 +342,147 @@ def _merge(context, extra, where):
     return context
 
 
+def _absolute(base_url, dir_path):
+    """The public address of a page directory, with the trailing slash Pages serves."""
+    return "%s/%s" % (base_url, dir_path + "/" if dir_path else "")
+
+
+def head_meta(page, code, registry, texts, description):
+    """Canonical, hreflang, social cards and structured data, as HTML.
+
+    Composed here and not in the template because the set differs per page and the
+    template language has no conditionals - and because every one of these is a
+    claim a test can then read back out of the output.
+
+    Two decisions worth keeping straight:
+    * ``hreflang`` is emitted for EVERY language including this one, which is what
+      makes the annotations reciprocal - Google ignores a set where a version does
+      not list itself. Exactly one ``x-default``, pointing at the default language.
+    * a page marked ``noindex`` (the 404) gets that and nothing else. A canonical or
+      an alternate on an error page tells a crawler the error page is a destination.
+    """
+    entry = page["languages"][code]
+    base = registry["base_url"]
+    if page.get("noindex"):
+        return Raw('<meta name="robots" content="noindex">')
+
+    canonical = _absolute(base, entry["dir_path"])
+    lines = ['<link rel="canonical" href="%s">' % html.escape(canonical, quote=True)]
+    for lang in registry["languages"]:
+        target = _absolute(base, page["languages"][lang["code"]]["dir_path"])
+        lines.append('<link rel="alternate" hreflang="%s" href="%s">'
+                     % (html.escape(lang["code"], quote=True),
+                        html.escape(target, quote=True)))
+    default_url = _absolute(base, page["languages"][registry["default_language"]]["dir_path"])
+    lines.append('<link rel="alternate" hreflang="x-default" href="%s">'
+                 % html.escape(default_url, quote=True))
+
+    # A square 256 px icon is what the project has. `summary` is the card that fits
+    # it: `summary_large_image` wants roughly 2:1 and would crop or letterbox this.
+    # A dedicated banner is a drawing job, not a build job.
+    image = "%s/%s" % (base, registry["og_image"].lstrip("/"))
+    lang = _language(registry, code)
+    social = [("og:type", "website"), ("og:site_name", texts[code]["site.name"]),
+              ("og:title", entry["title"]), ("og:description", description),
+              ("og:url", canonical), ("og:image", image),
+              ("og:locale", lang.get("og_locale", code))]
+    social += [("og:locale:alternate", other.get("og_locale", other["code"]))
+               for other in registry["languages"] if other["code"] != code]
+    for prop, value in social:
+        lines.append('<meta property="%s" content="%s">'
+                     % (prop, html.escape(str(value), quote=True)))
+    for name, value in (("twitter:card", "summary"), ("twitter:title", entry["title"]),
+                        ("twitter:description", description), ("twitter:image", image)):
+        lines.append('<meta name="%s" content="%s">'
+                     % (name, html.escape(str(value), quote=True)))
+
+    if page.get("schema") == "software_application":
+        lines.append(_software_json_ld(registry, texts[code], canonical, description, code))
+    return Raw("\n".join(lines))
+
+
+def _software_json_ld(registry, texts, canonical, description, code):
+    """``SoftwareApplication``, honestly: no rating, and no version.
+
+    Google's rich result for a software app needs ``aggregateRating`` or ``review``.
+    This project has neither - there is no rating to report - and inventing one
+    would be a fabricated review, so the markup describes the application and does
+    not become rich-result eligible. That is a deliberate trade, and the test
+    ``test_the_structured_data_invents_neither_a_rating_nor_a_version`` keeps a
+    later session from "fixing" it with a number nobody gave us.
+
+    ``softwareVersion`` is left out for the same reason the page does not print a
+    version: VERSION.txt names the next release from the moment it is bumped, which
+    is before that release exists.
+    """
+    software = registry.get("software") or {}
+    data = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "applicationCategory": software.get("application_category", "DeveloperApplication"),
+        "author": {"@type": "Person", "name": appinfo.AUTHOR},
+        "description": description,
+        "downloadUrl": "%s/releases/latest" % registry["repo_url"].rstrip("/"),
+        "inLanguage": code,
+        "isAccessibleForFree": True,
+        "license": software.get("license_url", ""),
+        "name": texts["site.name"],
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+        "operatingSystem": software.get("operating_system", ""),
+        "url": canonical,
+    }
+    # `</script>` inside the block would end the element early, so the one character
+    # that can do that is escaped. sort_keys keeps two builds byte-identical.
+    body = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+    return '<script type="application/ld+json">\n%s\n</script>' % body.replace("<", "\\u003c")
+
+
+def sitemap(pages, registry):
+    """Every indexable page, with its language alternates.
+
+    No ``lastmod``: it would need a clock, which would make two builds differ, and a
+    date that is not the real date of the change is worse than none. Sitemaps carry
+    the alternates as well as the pages do, which is what Google asks for when a set
+    of localised pages is meant to be read as one.
+    """
+    base = registry["base_url"]
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+           '        xmlns:xhtml="http://www.w3.org/1999/xhtml">']
+    for page in pages:
+        if page.get("noindex") or page.get("output"):
+            continue
+        for code in language_codes(registry):
+            out.append("  <url>")
+            out.append("    <loc>%s</loc>"
+                       % html.escape(_absolute(base, page["languages"][code]["dir_path"])))
+            for lang in registry["languages"]:
+                target = _absolute(base, page["languages"][lang["code"]]["dir_path"])
+                out.append('    <xhtml:link rel="alternate" hreflang="%s" href="%s"/>'
+                           % (html.escape(lang["code"], quote=True),
+                              html.escape(target, quote=True)))
+            default = _absolute(
+                base, page["languages"][registry["default_language"]]["dir_path"])
+            out.append('    <xhtml:link rel="alternate" hreflang="x-default" href="%s"/>'
+                       % html.escape(default, quote=True))
+            out.append("  </url>")
+    out.append("</urlset>")
+    return "\n".join(out) + "\n"
+
+
+def robots(registry):
+    """Open to everything, and it names the sitemap.
+
+    There is nothing here worth hiding, and the one line that earns its place is the
+    sitemap pointer: it is the only way a crawler finds the file without being told
+    in Search Console.
+    """
+    return ("User-agent: *\n"
+            "Allow: /\n"
+            "\n"
+            "Sitemap: %s/sitemap.xml\n" % registry["base_url"])
+
+
 def _asset_prefix(dir_path):
     depth = len([part for part in dir_path.split("/") if part])
     return "../" * depth
@@ -331,28 +501,37 @@ def _relative_url(from_dir, to_dir):
     return rel if rel.endswith("/") else rel + "/"
 
 
-def language_switcher(page, current_code, registry):
+def language_switcher(page, current_code, registry, label):
     """The language row in the header, as HTML.
 
     Built here rather than in the template because the template language has no
     loops, and a hand-written row would go stale the moment a third language is
     added - which is exactly the drift this project keeps losing to.
+
+    A page that exists in one language only (the 404) gets no row at all. Offering a
+    language this page does not have would be a link to a miss, from the page that
+    exists because of a miss.
     """
+    if len(page["codes"]) < 2:
+        return Raw("")
     parts = []
     here = page["languages"][current_code]["dir_path"]
     for lang in registry["languages"]:
         code = lang["code"]
+        if code not in page["languages"]:
+            continue
         name = html.escape(lang["name"], quote=True)
         if code == current_code:
             parts.append('<span aria-current="page" lang="%s">%s</span>'
-                         % (html.escape(lang["html_lang"], quote=True), name))
+                         % (html.escape(code, quote=True), name))
         else:
             target = page["languages"][code]["dir_path"]
             parts.append('<a href="%s" hreflang="%s" lang="%s">%s</a>'
                          % (html.escape(_relative_url(here, target), quote=True),
                             html.escape(code, quote=True),
-                            html.escape(lang["html_lang"], quote=True), name))
-    return Raw('<span class="langs">%s</span>' % "".join(parts))
+                            html.escape(code, quote=True), name))
+    return Raw('<span class="langs" role="group" aria-label="%s">%s</span>'
+               % (html.escape(label, quote=True), "".join(parts)))
 
 
 def page_context(page, code, registry, texts, home_dir):
@@ -369,13 +548,14 @@ def page_context(page, code, registry, texts, home_dir):
         "site.copyright": appinfo.COPYRIGHT,
         "page.title": entry["title"],
         "page.description": entry["description"],
-        "page.html_lang": lang["html_lang"],
         "page.lang": code,
         "page.url": "%s/%s" % (registry["base_url"],
                                entry["dir_path"] + "/" if entry["dir_path"] else ""),
         "page.asset_prefix": _asset_prefix(entry["dir_path"]),
         "page.home_url": _relative_url(entry["dir_path"], home_dir),
-        "page.language_switcher": language_switcher(page, code, registry),
+        "page.language_switcher": language_switcher(page, code, registry,
+                                                    texts[code]["nav.language"]),
+        "page.head_meta": head_meta(page, code, registry, texts, entry["description"]),
     }, "page %s [%s]" % (page["id"], code))
     return context
 
@@ -431,7 +611,7 @@ def build(root=ROOT, out=None):
     home = next((p for p in pages if p["id"] == "home"), pages[0])
     written = []
     for page in pages:
-        for code in language_codes(registry):
+        for code in page["codes"]:
             entry = page["languages"][code]
             home_dir = home["languages"][code]["dir_path"]
             context = page_context(page, code, registry, texts, home_dir)
@@ -439,9 +619,17 @@ def build(root=ROOT, out=None):
                           "pages/%s/%s.html" % (page["id"], code))
             context["page.body"] = Raw(body)
             document = render(template, context, "templates/base.html")
-            target = posixpath.join(entry["dir_path"], "index.html").lstrip("/")
+            target = page["output"] or posixpath.join(
+                entry["dir_path"], "index.html").lstrip("/")
             written.append(_write(out, target, document))
 
+    written.append(_write(out, "sitemap.xml", sitemap(pages, registry)))
+    written.append(_write(out, "robots.txt", robots(registry)))
+    # Pages built by a workflow are served as they are, so this changes nothing today.
+    # It costs one empty file and removes a whole class of surprise if the source is
+    # ever switched to a branch: Jekyll would then drop every path starting with an
+    # underscore, silently.
+    written.append(_write(out, ".nojekyll", ""))
     written.append(_write(out, "assets/style.css", _stylesheet(root, registry)))
     for asset in registry.get("assets", []):
         source = os.path.join(root, asset["source"].replace("/", os.sep))

@@ -3,9 +3,15 @@
   "repo_url": "https://github.com/donislawdev/BeanNetworkTester",
   "default_language": "en",
   "languages": [
-    {"code": "en", "name": "English", "html_lang": "en", "dir": ""},
-    {"code": "pl", "name": "Polski", "html_lang": "pl", "dir": "pl"}
+    {"code": "en", "name": "English", "dir": "", "og_locale": "en_US"},
+    {"code": "pl", "name": "Polski", "dir": "pl", "og_locale": "pl_PL"}
   ],
+  "og_image": "assets/bean.png",
+  "software": {
+    "application_category": "DeveloperApplication",
+    "operating_system": "Windows 10, Windows 11",
+    "license_url": "https://www.gnu.org/licenses/gpl-3.0.html"
+  },
   "palette": {
     "--bg": "BG",
     "--bg-card": "BG2",

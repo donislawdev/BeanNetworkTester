@@ -29,7 +29,10 @@ import build_site                                                   # noqa: E402
 
 SITE = os.path.join(ROOT, "site")
 HEX = re.compile(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b")
-EXTERNAL = re.compile(r'(?:href|src)="((?:https?:)?//[^"]+)"')
+EXTERNAL = re.compile(r'(?:href|src|srcset|content)="((?:https?:)?//[^"]+)"')
+# A stylesheet reaches the network too, and a web font is exactly how a page starts
+# telling somebody else who is reading it.
+CSS_EXTERNAL = re.compile(r'(?:@import\s+|url\()\s*["\']?((?:https?:)?//[^"\')\s]+)')
 
 
 def _build(tmp_path, name="out"):
@@ -96,7 +99,7 @@ def test_the_builder_writes_a_page_for_every_language(tmp_path):
               os.path.isfile(target), f"({target})")
         html = _read(target)
         check(f"{lang['code']}: the document declares its language",
-              f'<html lang="{lang["html_lang"]}"' in html)
+              f'<html lang="{lang["code"]}"' in html)
         check(f"{lang['code']}: nothing is left unsubstituted",
               "{{" not in html, f"({[m for m in re.findall(r'{{.*?}}', html)][:3]})")
 
@@ -104,7 +107,7 @@ def test_the_builder_writes_a_page_for_every_language(tmp_path):
 def test_every_page_carries_a_title_and_a_description_search_engines_can_show(tmp_path):
     """Bounds, not presence: a description cut in half is invisible from the source."""
     out, written = _build(tmp_path)
-    pages = [p for p in written if p.endswith("index.html")]
+    pages = [p for p in written if p.endswith(".html")]
     check("there are pages to measure", pages, "(none)")
     for rel in pages:
         html = _read(os.path.join(out, rel.replace("/", os.sep)))
@@ -140,15 +143,47 @@ def test_the_page_asks_nothing_of_a_third_party(tmp_path):
     data anywhere, so a page that quietly reports its visitors to somebody else
     would contradict it, and every third-party request is a request that can be
     slow, blocked or gone.
+
+    Checked by HOST, not by string prefix: a first version compared the start of the
+    URL against ours, which a host like `github.com.example.net` satisfies. And the
+    CSS is scanned too - `@import` and `url()` are requests as much as a `src` is,
+    and the first version could not see a web font at all.
     """
+    from urllib.parse import urlsplit
     out, written = _build(tmp_path)
     registry = build_site.load_registry(ROOT)
-    allowed = (registry["base_url"], registry["repo_url"].rstrip("/"))
+    allowed = {urlsplit(registry["base_url"]).netloc.lower(),
+               urlsplit(registry["repo_url"]).netloc.lower()}
+    check("the allow list resolved to real hosts", all(allowed) and len(allowed) == 2,
+          f"({allowed})")
+
+    urls = []
+    for rel in written:
+        if not rel.endswith((".html", ".css")):
+            continue
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        urls += [(rel, u) for u in EXTERNAL.findall(text)]
+        urls += [(rel, u) for u in CSS_EXTERNAL.findall(text)]
+    for rel, url in urls:
+        host = urlsplit(url if "//" in url else "//" + url).netloc.lower()
+        check(f"{rel}: {url} is one of ours", host in allowed, f"(allowed: {sorted(allowed)})")
+
+
+def test_every_page_has_one_headline_and_no_image_without_a_description(tmp_path):
+    """Two mechanical rules that no screenshot shows.
+
+    A page with two ``h1`` elements, or none, tells a crawler nothing about what it
+    is. An image without ``alt`` is invisible to a screen reader and to image search
+    alike, and it is the easiest thing in the world to leave out.
+    """
+    out, written = _build(tmp_path)
     for rel in [p for p in written if p.endswith(".html")]:
-        html = _read(os.path.join(out, rel.replace("/", os.sep)))
-        for url in EXTERNAL.findall(html):
-            check(f"{rel}: {url} is one of ours", url.startswith(allowed),
-                  f"(allowed: {allowed})")
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: exactly one h1", len(re.findall(r"<h1[\s>]", page)) == 1,
+              f"({len(re.findall(r'<h1[\\s>]', page))})")
+        for tag in re.findall(r"<img\b[^>]*>", page):
+            check(f"{rel}: every image describes itself ({tag[:60]})",
+                  re.search(r'\balt="', tag))
 
 
 def test_the_language_switcher_reaches_every_language_and_marks_the_current_one(tmp_path):
@@ -159,7 +194,7 @@ def test_the_language_switcher_reaches_every_language_and_marks_the_current_one(
         rel = os.path.join(lang["dir"], "index.html") if lang["dir"] else "index.html"
         html = _read(os.path.join(out, rel))
         check(f"{lang['code']}: the current language is marked, not linked",
-              f'<span aria-current="page" lang="{lang["html_lang"]}">{lang["name"]}</span>' in html)
+              f'<span aria-current="page" lang="{lang["code"]}">{lang["name"]}</span>' in html)
         for other in registry["languages"]:
             if other["code"] == lang["code"]:
                 continue
@@ -194,6 +229,148 @@ def test_the_builder_runs_as_a_script(tmp_path):
     check("the builder exits clean", proc.returncode == 0, f"({proc.stderr[-400:]})")
     check("it says what it wrote", "wrote" in proc.stdout, f"({proc.stdout[:200]})")
     check("the page is there", os.path.isfile(os.path.join(out, "index.html")))
+
+
+# -- the layer search engines read ---------------------------------------------- #
+
+def test_every_indexable_page_declares_itself_canonical(tmp_path):
+    """One canonical, absolute, and pointing at the page it sits on.
+
+    A relative or missing canonical lets a crawler pick which of several addresses
+    is the real one, and a canonical copied from another page hands the ranking to
+    that page. Both are silent.
+    """
+    out, written = _build(tmp_path)
+    base = build_site.load_registry(ROOT)["base_url"]
+    for rel in [p for p in written if p.endswith("index.html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        found = re.findall(r'<link rel="canonical" href="([^"]+)">', page)
+        check(f"{rel}: exactly one canonical", len(found) == 1, f"({found})")
+        expected = "%s/%s" % (base, rel[:-len("index.html")])
+        check(f"{rel}: the canonical is this page, absolute", found[0] == expected,
+              f"(got {found[0]}, expected {expected})")
+
+
+def test_the_language_annotations_are_reciprocal_with_one_x_default(tmp_path):
+    """Google's two hard requirements for hreflang, checked across the real files.
+
+    Each version must list ITSELF as well as every other, or the whole set can be
+    ignored - so this reads every page and compares the sets, rather than trusting
+    that one generator wrote them all the same way. And exactly one ``x-default``,
+    because two is undefined behaviour dressed as thoroughness.
+    """
+    out, written = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    base = registry["base_url"]
+    pages = [p for p in written if p.endswith("index.html")]
+    expected = {lang["code"]: "%s/%s" % (base, lang["dir"] + "/" if lang["dir"] else "")
+                for lang in registry["languages"]}
+    for rel in pages:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        pairs = dict(re.findall(r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">',
+                                page))
+        for code, url in expected.items():
+            check(f"{rel}: lists {code} (including itself)", pairs.get(code) == url,
+                  f"(got {pairs.get(code)}, expected {url})")
+        x_default = re.findall(r'hreflang="x-default" href="([^"]+)"', page)
+        check(f"{rel}: exactly one x-default", len(x_default) == 1, f"({x_default})")
+        check(f"{rel}: x-default is the default language",
+              x_default[0] == expected[registry["default_language"]], f"({x_default[0]})")
+
+
+def test_the_social_card_says_the_same_thing_as_the_page(tmp_path):
+    """A card that contradicts the page is what gets shared, not the page."""
+    out, written = _build(tmp_path)
+    for rel in [p for p in written if p.endswith("index.html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        title = re.search(r"<title>(.*?)</title>", page, re.S).group(1)
+        desc = re.search(r'<meta name="description" content="(.*?)">', page, re.S).group(1)
+        canonical = re.search(r'<link rel="canonical" href="([^"]+)">', page).group(1)
+        meta = dict(re.findall(r'<meta (?:property|name)="((?:og|twitter):[^"]+)" '
+                               r'content="([^"]*)">', page))
+        for key, value in (("og:title", title), ("og:description", desc),
+                           ("og:url", canonical), ("twitter:title", title),
+                           ("twitter:description", desc)):
+            check(f"{rel}: {key} matches the page", meta.get(key) == value,
+                  f"(got {meta.get(key)!r})")
+        for key in ("og:type", "og:site_name", "og:image", "og:locale", "twitter:card",
+                    "twitter:image"):
+            check(f"{rel}: {key} is set", meta.get(key), "(missing)")
+
+
+def test_the_structured_data_invents_neither_a_rating_nor_a_version(tmp_path):
+    """The honest half of the schema, and the half a later session might "fix".
+
+    Google's software-app rich result needs ``aggregateRating`` or ``review``. This
+    project has neither, so the markup is not rich-result eligible - and the fix for
+    that is NOT to write a number down. A rating nobody gave is a fabricated review.
+    ``softwareVersion`` is absent for the same reason the page prints no version: the
+    file naming it names the NEXT release from the moment it is bumped.
+    """
+    import json as jsonlib
+    out, written = _build(tmp_path)
+    blocks = 0
+    for rel in [p for p in written if p.endswith(".html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for raw in re.findall(r'<script type="application/ld\+json">\n(.*?)\n</script>',
+                              page, re.S):
+            blocks += 1
+            check(f"{rel}: the block does not close its own script element",
+                  "</script>" not in raw)
+            data = jsonlib.loads(raw.replace("\\u003c", "<"))
+            check(f"{rel}: it is a SoftwareApplication",
+                  data.get("@type") == "SoftwareApplication", f"({data.get('@type')})")
+            for field in ("name", "url", "operatingSystem", "downloadUrl"):
+                check(f"{rel}: {field} is set", data.get(field), "(missing)")
+            check(f"{rel}: a free app declares the price Google requires",
+                  data.get("offers", {}).get("price") == "0", f"({data.get('offers')})")
+            for invented in ("aggregateRating", "review", "ratingValue", "softwareVersion"):
+                check(f"{rel}: no {invented} (nobody gave us one)", invented not in data)
+    check("the site carries structured data at all", blocks >= 1, f"({blocks})")
+
+
+def test_the_sitemap_lists_exactly_the_pages_that_may_be_indexed(tmp_path):
+    """Both directions: every indexable page is in it, and nothing else is.
+
+    A missing page is a page Google finds late. An extra entry is worse - a sitemap
+    that lists a 404 or a noindex page is a sitemap Search Console reports as broken,
+    and the report is about the sitemap, not about the page.
+    """
+    from xml.etree import ElementTree
+    out, written = _build(tmp_path)
+    base = build_site.load_registry(ROOT)["base_url"]
+    xml = _read(os.path.join(out, "sitemap.xml"))
+    root = ElementTree.fromstring(xml)
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    listed = sorted(node.text for node in root.findall("s:url/s:loc", ns))
+    indexable = sorted("%s/%s" % (base, rel[:-len("index.html")])
+                       for rel in written if rel.endswith("index.html"))
+    check("the sitemap lists every indexable page", listed == indexable,
+          f"(only in one: {set(listed) ^ set(indexable)})")
+    check("the 404 page is not offered as a destination",
+          not any("404" in loc for loc in listed), f"({listed})")
+    check("every entry is absolute", all(loc.startswith(base) for loc in listed))
+
+
+def test_robots_lets_everything_in_and_names_the_sitemap(tmp_path):
+    """The pointer is the only line here that does any work."""
+    out, _ = _build(tmp_path)
+    base = build_site.load_registry(ROOT)["base_url"]
+    text = _read(os.path.join(out, "robots.txt"))
+    check("robots.txt allows crawling", "Disallow: /\n" not in text, f"({text})")
+    check("robots.txt names the sitemap", f"Sitemap: {base}/sitemap.xml" in text, f"({text})")
+
+
+def test_the_error_page_is_a_file_pages_serves_and_asks_not_to_be_indexed(tmp_path):
+    """GitHub Pages serves `/404.html` on a miss, and only that path."""
+    out, written = _build(tmp_path)
+    check("404.html sits at the root", "404.html" in written, f"({written})")
+    page = _read(os.path.join(out, "404.html"))
+    check("it asks not to be indexed", '<meta name="robots" content="noindex">' in page)
+    check("it carries no canonical", "rel=\"canonical\"" not in page)
+    check("it carries no language alternates", 'rel="alternate"' not in page)
+    check("it offers a way out", "href=" in page)
+    check(".nojekyll is written", ".nojekyll" in written)
 
 
 # -- the single sources --------------------------------------------------------- #
@@ -326,6 +503,16 @@ def test_the_build_refuses_a_source_that_would_publish_a_broken_page(tmp_path):
     root = _sandbox(tmp_path / "missing_asset")
     os.remove(os.path.join(root, "bean.png"))
     _fails(root, out, "a listed asset is not in the repository")
+
+    root = _sandbox(tmp_path / "unknown_schema")
+    _edit_json(os.path.join(root, "site", "pages", "home", "page.json"),
+               lambda d: d.update({"schema": "Prodcut"}))
+    _fails(root, out, "a page asks for a kind of structured data that does not exist")
+
+    root = _sandbox(tmp_path / "translated_error_page")
+    _edit_json(os.path.join(root, "site", "pages", "404", "page.json"),
+               lambda d: d["languages"].update({"pl": dict(d["languages"]["en"])}))
+    _fails(root, out, "a single-output page declares a language that will never be written")
 
 
 def test_two_pages_may_not_claim_one_address(tmp_path):
