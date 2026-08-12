@@ -72,6 +72,35 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # Without this field WinGet reaches the exe through a symlink, which severs
+        # it from the _internal directory it cannot run without. The package would
+        # install cleanly and then fail to start.
+        "label": "packaging: the winget manifest drops ArchiveBinariesDependOnPath",
+        "file": "packaging/winget/installer.yaml.in",
+        "old": "ArchiveBinariesDependOnPath: true\n",
+        "new": "",
+        "test": "test_the_winget_manifest_keeps_the_exe_with_its_siblings",
+    },
+    {
+        # Convention 34 in the place it is easiest to break: a manifest with a
+        # hand-typed version still parses, and still points at the wrong build.
+        "label": "packaging: a version number is typed into a manifest",
+        "file": "packaging/winget/version.yaml.in",
+        "old": "PackageVersion: {{VERSION}}",
+        "new": "PackageVersion: 0.4.0",
+        "test": "test_no_package_source_carries_a_version_number",
+    },
+    {
+        # This one SURVIVED at first: the guard searched the whole file, so the
+        # comment explaining the call satisfied it after the call itself was gone.
+        # The fix was to the test, which now reads only lines that invoke the exe.
+        "label": "packaging: the chocolatey hook stops releasing the driver",
+        "file": "packaging/chocolatey/tools/chocolateybeforemodify.ps1.in",
+        "old": "& $exe --cleanup-driver | Write-Host",
+        "new": "& $exe --version | Write-Host",
+        "test": "test_the_chocolatey_scripts_release_the_driver_before_a_change",
+    },
+    {
         # The message that answers "where is my file". It was the basename while the
         # file sat next to the exe, and nothing else on screen names the directory.
         "label": "csv: the export log names the file but not where it went",

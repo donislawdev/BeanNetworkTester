@@ -1,0 +1,28 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+#
+# Chocolatey runs this from the EXISTING package before an upgrade or an uninstall.
+# It exists for one reason: the WinDivert driver.
+#
+# While the driver is loaded the kernel holds WinDivert64.sys open, and a file that
+# is open cannot be deleted - so the file removal that upgrading does would fail
+# part-way through and leave a half-replaced package. The program already releases
+# the driver when the last instance exits, so this only matters when a session is
+# still running or a previous run died hard. `--cleanup-driver` is the supported way
+# to ask for that cleanup, and it is a no-op when there is nothing to clean.
+#
+# Nothing here may throw: this script runs BEFORE the operation the user asked for,
+# and refusing to upgrade because a cleanup failed would be worse than the leftover.
+# Windows PowerShell 5.1 syntax only - that is what Chocolatey runs.
+$ErrorActionPreference = 'Continue'
+$toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$exe = Join-Path $toolsDir '{{TOOL_ID}}\{{EXE_NAME}}'
+
+if (Test-Path $exe) {
+    Write-Host 'Releasing the WinDivert driver before changing the package...'
+    try {
+        & $exe --cleanup-driver | Write-Host
+    } catch {
+        Write-Host "Could not release the driver: $($_.Exception.Message)"
+        Write-Host 'If the upgrade complains about a file in use, close the program and retry.'
+    }
+}
