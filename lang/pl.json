@@ -4,6 +4,7 @@
     "name": "Polski"
   },
   "about.author": "Autor: {author}",
+  "about.data_dir": "Twoje profile, stan okna i eksporty CSV:\n{path}",
   "about.license": "Licencja: {license}",
   "about.license_terms": "Wolne i otwarte oprogramowanie na licencji GNU GPL v3. Wolno używać, zmieniać i udostępniać dalej na tej samej licencji.",
   "about.licenses_dir": "Pełne teksty licencji: {path}",

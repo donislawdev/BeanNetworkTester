@@ -695,6 +695,14 @@ Leżą poza folderem programu po to, żeby aktualizacja - ręczna albo przez men
 ten folder podmienia - nie zabrała Twoich plików razem z nim. Ustaw `BEAN_DATA_DIR` na wybrany
 folder, żeby trzymać wszystko gdzie indziej, na przykład na tym samym pendrivie co kopia programu.
 
+Folder należy do konta Windows, na którym program działa. Na koncie bez uprawnień administratora
+zgoda na pytanie o podniesienie uprawnień uruchamia program jako to konto administratora, którego
+hasło zostało podane, więc używa TAMTEGO folderu - profile zapisane bez podniesienia uprawnień to
+nie są te, które widzisz z nim. Okno „O programie" i `--doctor` pokazują folder, z którego program
+właśnie korzysta, więc zawsze wiadomo, na który patrzysz. Żeby wszystkie konta na maszynie miały
+jeden wspólny folder, administrator może ustawić `BEAN_DATA_DIR` jako systemową zmienną
+środowiskową.
+
 | | **Statystyki** („Eksportuj CSV", Statystyki → Na żywo) | **Połączenia** („Eksportuj połączenia CSV") |
 |---|---|---|
 | plik | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |

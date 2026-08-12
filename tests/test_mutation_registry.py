@@ -72,6 +72,33 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The only place the interface answers "where are my profiles". This guard
+        # was VACUOUS at first: it asserted the path alone, and from sources the
+        # data directory is the project root, which is a prefix of the licence-texts
+        # path shown two lines below - so another line satisfied it. It now asserts
+        # the whole rendered sentence.
+        "label": "about: the window stops naming the user's data directory",
+        "file": "beantester/gui/panels/about.py",
+        "old": '        text.insert("end", "\\n" + T("about.data_dir", '
+               'path=user_data_dir()) + "\\n")\n',
+        "new": "",
+        "test": "test_the_about_window_says_where_the_users_files_are",
+    },
+    {
+        "label": "doctor: stops printing where the user's files are",
+        "file": "beantester/cli.py",
+        "old": '        log.data(dict(), f"user files: {where}")\n',
+        "new": "",
+        "test": "test_doctor_says_where_the_users_own_files_are",
+    },
+    {
+        "label": "doctor: the JSON report loses the data_dir field",
+        "file": "beantester/cli.py",
+        "old": 'log.data(dict(event="doctor", ok=ok, data_dir=where,',
+        "new": 'log.data(dict(event="doctor", ok=ok,',
+        "test": "test_doctor_says_where_the_users_own_files_are",
+    },
+    {
         # Without this field WinGet reaches the exe through a symlink, which severs
         # it from the _internal directory it cannot run without. The package would
         # install cleanly and then fail to start.

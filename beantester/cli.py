@@ -25,7 +25,7 @@ from .engine import BeanEngine
 from .fields import BOOL, FIELD_DEFS
 from .filters import CLI_FILTERS
 from .i18n import T
-from .paths import is_frozen
+from .paths import is_frozen, user_data_dir
 from .presets import (PRESETS, closest_preset, preset_to_settings,
                       resolve_preset)
 from .repro import save_repro_report, settings_to_cli_string
@@ -438,12 +438,19 @@ def _run_license(log):
 
 def _run_doctor(log):
     ok, checks = driver.doctor()
+    # Where the user's own files are is an environment fact like the rest of this
+    # report, and it is the only one a person cannot look up: the folder follows
+    # the ACCOUNT the program runs as, so it moves when the same person starts it
+    # elevated onto another account. Not a check - it has no pass or fail - so it
+    # is a line of its own rather than a made-up state in the status column.
+    where = user_data_dir()
     if log.fmt == clilog.JSON:
-        log.data(dict(event="doctor", ok=ok,
+        log.data(dict(event="doctor", ok=ok, data_dir=where,
                       checks=[dict(check=c, state=st, detail=d) for c, st, d in checks]), "")
     else:
         for check, state, detail in checks:
             log.data(dict(), f"{state.upper():<4} {check:<18} {detail}")
+        log.data(dict(), f"user files: {where}")
     return exitcodes.OK if ok else exitcodes.RUNTIME
 
 

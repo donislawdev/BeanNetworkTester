@@ -837,6 +837,14 @@ by hand or through a package manager, which replaces that folder - cannot take y
 it. Set `BEAN_DATA_DIR` to a folder of your choosing to keep everything somewhere else, for
 example on the same stick as a portable copy.
 
+The folder belongs to the Windows account the program is running as. On an account without
+administrator rights, agreeing to the elevation prompt runs the program as the administrator
+account whose password was entered, and it then uses THAT account's folder - so the profiles you
+saved without elevation are not the ones you see with it. "About" and `--doctor` both print the
+folder in use, so you can always tell which one you are looking at. To give every account on the
+machine one shared folder, an administrator can set `BEAN_DATA_DIR` as a system-wide environment
+variable.
+
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
 | file | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |

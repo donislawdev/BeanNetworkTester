@@ -59,6 +59,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   to an older build still finds them. The reason is updates: a package manager owns the program
   folder and replaces it, which would take your profiles with it. Both CSV exports now log the
   whole path. Set `BEAN_DATA_DIR` to keep everything somewhere else, for example on a stick.
+- **"About" and `--doctor` now tell you which folder your files are in.** The folder belongs to
+  the Windows account the program runs as, so starting it elevated on an account that is not an
+  administrator uses that administrator's folder instead of yours. Nothing used to say so, which
+  made saved profiles look lost. Both READMEs explain it, and an administrator can set
+  `BEAN_DATA_DIR` system-wide to give every account one shared folder.
 
 ### Docs
 - **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**
