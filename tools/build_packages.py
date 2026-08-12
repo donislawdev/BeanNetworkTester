@@ -142,6 +142,13 @@ def build(sums_path, version=None):
         raise SystemExit(f"{asset} is not the asset for v{version} - wrong SHA256SUMS.txt?")
     table = values(version, digest, asset)
 
+    found = [rel for _, rel in templates() if rel.endswith(TEMPLATE_SUFFIX)]
+    if not found:
+        # Saying this out loud beats writing nothing and letting the caller wonder.
+        # The way to get here is a checkout without packaging/ - which is why a test
+        # keeps those files tracked.
+        raise SystemExit(f"{PACKAGING_DIR}: no {TEMPLATE_SUFFIX} templates found")
+
     written = []
     for path, relative in templates():
         # Only templates become package files. Everything else under packaging/ is

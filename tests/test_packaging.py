@@ -43,6 +43,10 @@ def _rendered(tmp_path, monkeypatch):
     """Render into a throwaway directory and return {relative name: text}."""
     out = tmp_path / "out"
     monkeypatch.setattr(bp, "OUT_DIR", str(out))
+    # A fixed date, so these tests answer "does it render" and not "is the changelog
+    # closed for this version". The changelog reader has its own test below, which is
+    # the one that should redden when a version is bumped before its section is dated.
+    monkeypatch.setattr(bp, "release_date", lambda version: "2026-01-01")
     bp.build(_sums(tmp_path, appinfo.__version__))
     files = {}
     for base, _, names in os.walk(out):
@@ -143,3 +147,40 @@ def test_an_unknown_placeholder_is_an_error_not_an_empty_string():
         bp.render("id: {{NOT_A_REAL_KEY}}", table, "made-up.yaml")
     check("the failure names the placeholder", "NOT_A_REAL_KEY" in str(refused.value),
           f"({refused.value})")
+
+
+def test_the_release_date_comes_from_the_changelog():
+    """One reader, not a second answer typed into a manifest.
+
+    This is also the test that reddens if a version is bumped before its changelog
+    section is dated - deliberately alone, so that failure names itself instead of
+    taking the rendering tests down with it.
+    """
+    date = bp.release_date(appinfo.__version__)
+    check("the date looks like a date", re.fullmatch(r"\d{4}-\d{2}-\d{2}", date), f"({date})")
+
+
+def test_the_package_sources_are_tracked_by_git():
+    """These files are not internal tooling, and three separate things need them.
+
+    Chocolatey's moderation asks for `packageSourceUrl` to point at where the
+    package source lives (rule CPMR0040, a Guideline), so a private path there
+    would be a dead link - worse than the field being absent. The tests above read
+    these files, and CI runs them on a fresh clone. And the whole point of a
+    package source is that somebody other than us can see what the package does to
+    their machine.
+
+    So `packaging/` belongs where `tools/` is, not where `internal_tools/` is: the
+    failure of getting this wrong does not show up here, where the files exist. It
+    shows up on somebody else's clone, as a missing file rather than a reason.
+    """
+    import subprocess
+    sources = [rel for _, rel in bp.templates()]
+    check("there are package sources to check", len(sources) >= 6, f"({sources})")
+    for relative in sorted(sources):
+        path = f"packaging/{relative}".replace(os.sep, "/")
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", path],
+                                 cwd=ROOT, capture_output=True, text=True)
+        check(f"{path} is tracked by git", tracked.returncode == 0,
+              "(ignored or untracked - a fresh clone and the Chocolatey moderators "
+              "would both find nothing)")
