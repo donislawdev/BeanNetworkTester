@@ -463,3 +463,54 @@ def test_the_about_window_is_a_complete_legal_notice():
             assert needle.split("{")[0][:30] in shown or needle in shown, \
                 "the About window does not show %s: %r" % (what, shown[:400])
     """)
+
+
+def test_the_about_window_says_where_the_users_files_are():
+    """The only place in the interface that answers "where are my profiles".
+
+    They stopped living next to the executable, because a package manager owns
+    that directory and replaces it on upgrade. The window is also the only place
+    that can make the other half visible: the folder follows the ACCOUNT, so the
+    same person elevating onto a different account gets a different one.
+
+    Asserted through the rendered widget contents, not the language file, so a key
+    that exists and is never shown does not pass. It goes into the selectable Text
+    box on purpose - a path is only an answer if it can be copied.
+    """
+    run_gui("""
+        import beantester as bnt
+        from beantester.paths import user_data_dir
+
+        panel = app.open_window("about")
+        assert panel is not None, "the About window did not open"
+
+        def contents(widget, out):
+            out.append(str(widget.kw.get("text", "")))
+            lines = getattr(widget, "lines", None)
+            if isinstance(lines, list):
+                out.extend(str(l) for l in lines)
+            for child in getattr(widget, "children", []):
+                contents(child, out)
+            return out
+
+        items = [str(i) for i in contents(panel.win, [])]
+        shown = " | ".join(items)
+
+        # The path gets a line of its OWN, and that is load-bearing rather than
+        # tidy: the box is `wrap="none"` with no horizontal scrollbar, so a line
+        # wider than the box is cut and unreachable. Measured on real Tk with a
+        # realistic frozen path - label and path together came to 644 px in a
+        # 583 px box, hiding the end of the path, which is the part that matters.
+        # Split, the widest line is 413 px.
+        label, newline, path = bnt.T("about.data_dir", path=user_data_dir()).partition(chr(10))
+        assert newline and path, "the path must sit on its own line or it gets cut off"
+        assert label.strip() in shown, \
+            "the About window does not say where the user's files are: %r" % shown[:400]
+
+        # Compared as a WHOLE entry, not as a substring: from sources the data
+        # directory is the project root, which is also a prefix of the licence-texts
+        # path shown right below - so a substring check passed with this line
+        # deleted, satisfied by somebody else's line. The mutation said so.
+        assert any(i.strip() == path for i in items), \
+            "the path is not shown on its own: %r" % shown[:400]
+    """)

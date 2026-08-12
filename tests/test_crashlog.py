@@ -29,7 +29,7 @@ from beantester import crashlog
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     """Point the logger at a temp dir; never touch the real crash folder."""
-    monkeypatch.setattr(crashlog, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(crashlog, "user_data_dir", lambda: str(tmp_path))
     crashlog.reset()
     crashlog.set_enabled(True)
     crashlog.set_context_provider(None)

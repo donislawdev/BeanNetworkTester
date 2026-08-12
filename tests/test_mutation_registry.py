@@ -72,6 +72,92 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The one defect in this work that CI found and this machine could not:
+        # relpath raises across drives, and the Windows runner keeps the repo and
+        # the temp directory on different ones.
+        "label": "packaging: the renderer raises when its output is on another drive",
+        "file": "tools/build_packages.py",
+        "old": "    try:\n        return os.path.relpath(path, ROOT)\n"
+               "    except ValueError:\n        return path\n",
+        "new": "    return os.path.relpath(path, ROOT)\n",
+        "test": "test_rendering_onto_another_drive_is_not_a_crash",
+    },
+    {
+        # The only place the interface answers "where are my profiles". This guard
+        # was VACUOUS at first: it asserted the path alone, and from sources the
+        # data directory is the project root, which is a prefix of the licence-texts
+        # path shown two lines below - so another line satisfied it. It now asserts
+        # the whole rendered sentence.
+        "label": "about: the window stops naming the user's data directory",
+        "file": "beantester/gui/panels/about.py",
+        "old": '        text.insert("end", "\\n" + T("about.data_dir", '
+               'path=user_data_dir()) + "\\n")\n',
+        "new": "",
+        "test": "test_the_about_window_says_where_the_users_files_are",
+    },
+    {
+        "label": "doctor: stops printing where the user's files are",
+        "file": "beantester/cli.py",
+        "old": '        log.data(dict(), f"user files: {where}")\n',
+        "new": "",
+        "test": "test_doctor_says_where_the_users_own_files_are",
+    },
+    {
+        "label": "doctor: the JSON report loses the data_dir field",
+        "file": "beantester/cli.py",
+        "old": 'log.data(dict(event="doctor", ok=ok, data_dir=where,',
+        "new": 'log.data(dict(event="doctor", ok=ok,',
+        "test": "test_doctor_says_where_the_users_own_files_are",
+    },
+    {
+        # Without this field WinGet reaches the exe through a symlink, which severs
+        # it from the _internal directory it cannot run without. The package would
+        # install cleanly and then fail to start.
+        "label": "packaging: the winget manifest drops ArchiveBinariesDependOnPath",
+        "file": "packaging/winget/installer.yaml.in",
+        "old": "ArchiveBinariesDependOnPath: true\n",
+        "new": "",
+        "test": "test_the_winget_manifest_keeps_the_exe_with_its_siblings",
+    },
+    {
+        # Convention 34 in the place it is easiest to break: a manifest with a
+        # hand-typed version still parses, and still points at the wrong build.
+        "label": "packaging: a version number is typed into a manifest",
+        "file": "packaging/winget/version.yaml.in",
+        "old": "PackageVersion: {{VERSION}}",
+        "new": "PackageVersion: 0.4.0",
+        "test": "test_no_package_source_carries_a_version_number",
+    },
+    {
+        # This one SURVIVED at first: the guard searched the whole file, so the
+        # comment explaining the call satisfied it after the call itself was gone.
+        # The fix was to the test, which now reads only lines that invoke the exe.
+        "label": "packaging: the chocolatey hook stops releasing the driver",
+        "file": "packaging/chocolatey/tools/chocolateybeforemodify.ps1.in",
+        "old": "& $exe --cleanup-driver | Write-Host",
+        "new": "& $exe --version | Write-Host",
+        "test": "test_the_chocolatey_scripts_release_the_driver_before_a_change",
+    },
+    {
+        # The message that answers "where is my file". It was the basename while the
+        # file sat next to the exe, and nothing else on screen names the directory.
+        "label": "csv: the export log names the file but not where it went",
+        "file": "beantester/gui/csv_export.py",
+        "old": "app.log(f\"{T('log.conns_saved_to')} {path} ({len(rows)})\")",
+        "new": "app.log(f\"{T('log.conns_saved_to')} {os.path.basename(path)} ({len(rows)})\")",
+        "test": "test_both_exports_tell_the_user_the_whole_path",
+    },
+    {
+        # The whole point of moving the user files: a package manager owns the
+        # install directory and wipes it on upgrade. This is the old behaviour
+        # put back, which is also what any writability probe would degrade into.
+        "label": "paths: a frozen build writes user files next to the executable again",
+        "file": "beantester/paths.py",
+        "old": "    return os.path.join(_local_app_data(), TOOL_ID)",
+        "new": "    return executable_dir()",
+        "test": "test_a_frozen_build_keeps_no_user_file_next_to_the_executable",
+    },
+    {
         # The display's source order. Reversed, a connection row names whatever a
         # snapshot taken a few times a second last saw, while the gate is judging
         # by the live map - the exact reported shape, from the other direction.

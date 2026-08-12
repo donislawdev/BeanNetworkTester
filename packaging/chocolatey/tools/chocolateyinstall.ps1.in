@@ -1,0 +1,28 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+#
+# The package DOWNLOADS the release archive instead of carrying it. Two reasons:
+# the archive is the same file, checksum and all, that the release page publishes,
+# and a package with binaries inside it owes the moderators a VERIFICATION.txt
+# explaining where those binaries came from.
+#
+# Windows PowerShell 5.1 is what Chocolatey runs package scripts with, so nothing
+# here uses PowerShell 7 syntax (convention 46 is about the shells WE choose).
+$ErrorActionPreference = 'Stop'
+$toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+# Unzipping into the tools directory leaves the exe inside tools\{{TOOL_ID}}\,
+# next to the _internal folder it cannot run without. Chocolatey shims the exe
+# from where it lies, so the siblings stay
+# reachable - unlike a symlink, which would sever them.
+Install-ChocolateyZipPackage `
+    -PackageName '{{CHOCO_ID}}' `
+    -Url64bit '{{URL}}' `
+    -Checksum64 '{{SHA256}}' `
+    -ChecksumType64 'sha256' `
+    -UnzipLocation $toolsDir
+
+Write-Host ''
+Write-Host '{{APP_NAME}} needs Administrator rights to capture traffic, and asks for them itself.'
+Write-Host 'Your profiles, window state and CSV exports live in %LOCALAPPDATA%\{{TOOL_ID}},'
+Write-Host 'so upgrading or removing this package does not touch them.'
+Write-Host 'Impairment with nothing to aim at hits every connection on this machine - aim it.'

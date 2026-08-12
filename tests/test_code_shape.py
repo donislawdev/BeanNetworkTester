@@ -54,7 +54,12 @@ from fakes import ROOT, check
 # there for a week and were found only because somebody printed the numbers. That is
 # the same defect the crowd counts below exist to catch, one level up.
 FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
-FILE_CEILING = 1287             # beantester/gui/app.py
+# Lowered 2026-08-12 from 1287, the same routine door: moving the user files out of
+# the install directory needed three lines in `app.py`, which was pinned to the
+# ceiling exactly, so the two CSV exports moved to `gui/csv_export.py` instead of the
+# number moving up. The crowd band below was re-measured after the drop (`engine.py`
+# is 779, still clear of it) - lowering a ceiling tightens that band too.
+FILE_CEILING = 1202             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

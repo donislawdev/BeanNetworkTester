@@ -1,0 +1,34 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.{{WINGET_SCHEMA}}.schema.json
+
+PackageIdentifier: {{WINGET_ID}}
+PackageVersion: {{VERSION}}
+PackageLocale: en-US
+Publisher: {{PUBLISHER}}
+PublisherUrl: {{REPO_URL}}
+PublisherSupportUrl: {{REPO_URL}}/issues
+PackageName: {{APP_NAME}}
+PackageUrl: {{PROJECT_URL}}
+License: {{LICENSE}}
+LicenseUrl: {{LICENSE_URL}}
+Copyright: {{COPYRIGHT}}
+ShortDescription: {{TAGLINE}}
+Description: >-
+  {{DESCRIPTION}}
+  It adds latency, jitter, packet loss, corruption, duplication and bandwidth limits
+  to the traffic of a chosen application, and reports every outcome as an exit code
+  so it can run from a pipeline. It needs Administrator rights to capture traffic and
+  asks for them itself. Profiles, window state and CSV exports are kept in
+  %LOCALAPPDATA%\{{TOOL_ID}}, so upgrading the package leaves them alone.
+Moniker: {{CHOCO_ID}}
+Tags:
+- bandwidth
+- latency
+- network
+- packet-loss
+- qa
+- testing
+- windivert
+ReleaseNotesUrl: {{RELEASE_NOTES_URL}}
+ManifestType: defaultLocale
+ManifestVersion: {{WINGET_SCHEMA}}

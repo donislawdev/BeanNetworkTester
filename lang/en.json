@@ -4,6 +4,7 @@
     "name": "English"
   },
   "about.author": "Author: {author}",
+  "about.data_dir": "Your profiles, window state and CSV exports:\n{path}",
   "about.license": "Licence: {license}",
   "about.license_terms": "Free and open source under the GNU GPL v3. Use, change and share it under the same licence.",
   "about.licenses_dir": "Full licence texts: {path}",
@@ -254,6 +255,7 @@
   "log.copied": "Copied to clipboard",
   "log.csv_error": "CSV save error",
   "log.csv_rotated": "CSV column set changed - previous statistics moved to",
+  "log.data_files_problem": "Problem with the folder your files are saved in",
   "log.dest_frozen_while_narrowed": "Destination unchanged: with the driver filter narrowed, the destination is fixed for the session (the driver's filter is set when the capture opens). Stop and start again to change it.",
   "log.dest_set": "Destination set from the connection table",
   "log.donate_opened": "Support page opened",

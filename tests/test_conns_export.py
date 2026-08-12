@@ -13,7 +13,7 @@ from gui_harness import run_gui
 def test_export_connections_csv_writes_the_current_view():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -76,7 +76,7 @@ def test_a_failed_connections_export_leaves_no_tmp_file_behind():
     """
     run_gui('''
         import os, tempfile
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -103,7 +103,7 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
     out EMPTY, not "None" and not shifted - a misaligned row here is silent."""
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -131,7 +131,7 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
 def test_export_connections_csv_honours_the_search():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -162,7 +162,7 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
     """
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         from beantester.views import avg_packet_bytes
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
@@ -186,14 +186,14 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
 def test_export_csv_stats_appends_then_rotates_on_a_column_change():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "stats.csv")
         m.CSV_FILE = path
 
         # first two exports share a column set: header once, then two data rows.
         # `capture_narrowed` comes from the SESSION, not the counters, and sits
         # between the timestamp and them - it says which world the row's numbers
-        # were measured in (see App.CSV_SESSION_COLUMNS).
+        # were measured in (see csv_export.CSV_SESSION_COLUMNS).
         app.engine.stats_snapshot = lambda: {"seen": 100, "drop_loss": 5, "queue": 2}
         app.export_csv()
         app.export_csv()
@@ -213,4 +213,36 @@ def test_export_csv_stats_appends_then_rotates_on_a_column_change():
         backups = [n for n in os.listdir(os.path.dirname(path))
                    if n != "stats.csv" and n.endswith(".csv")]
         assert len(backups) == 1, backups                # the old file was kept aside
+    ''')
+
+
+def test_both_exports_tell_the_user_the_whole_path():
+    """The name alone stopped being an answer when the files left the exe's folder.
+
+    Both exports used to log ``os.path.basename(...)``, which was enough while the
+    file landed next to the executable the user had just double-clicked. It is not
+    enough now, and nothing else on screen names the directory.
+    """
+    run_gui('''
+        import os, tempfile
+        import beantester.gui.csv_export as m
+        folder = tempfile.mkdtemp()
+        m.CSV_FILE = os.path.join(folder, "stats.csv")
+        m.CONNECTIONS_CSV_FILE = os.path.join(folder, "conns.csv")
+
+        lines = []
+        app.log = lambda text: lines.append(str(text))
+
+        app.engine.stats_snapshot = lambda: {"seen": 1}
+        app.export_csv()
+
+        app.engine.connections_snapshot = lambda limit=None: []
+        app.conn_query = ""
+        app.conn_sort = {"col": "up", "reverse": True}
+        app.export_connections_csv()
+
+        for name in ("stats.csv", "conns.csv"):
+            said = [l for l in lines if name in l]
+            assert said, (name, lines)
+            assert any(folder in l for l in said), (name, said)
     ''')

@@ -112,13 +112,13 @@ def test_both_readmes_document_every_csv_column():
     the connections export deliberately does NOT reuse the table's labels
     (``impaired`` for "impaired?", ``delivered_down_bytes`` for "down[KB]").
     """
-    from beantester.gui.app import App
-    names = set(App.CONN_CSV_HEADER)
-    names |= {App.CSV_COLUMNS.get(k, k) for k in App.CSV_COLUMNS}
+    from beantester.gui import csv_export
+    names = set(csv_export.CONN_CSV_HEADER)
+    names |= {csv_export.CSV_COLUMNS.get(k, k) for k in csv_export.CSV_COLUMNS}
     # Session columns are part of the same header and just as undocumentable by
     # inspection - `capture_narrowed` decides what `packets_seen` next to it even
     # counted.
-    names |= set(App.CSV_SESSION_COLUMNS.values())
+    names |= set(csv_export.CSV_SESSION_COLUMNS.values())
     for readme in READMES:
         text = _read(readme)
         missing = sorted(n for n in names if n not in text)

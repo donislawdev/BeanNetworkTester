@@ -336,9 +336,9 @@ def test_a_duplicate_is_charged_to_the_speed_limit():
 
 # -- the CSV column names are meant for humans ---------------------------------- #
 def test_the_csv_has_readable_column_names():
-    """Read as text: importing gui.app here would need tkinter, which the CLI does not."""
+    """Read as text: importing the gui package here would need tkinter, which the CLI does not."""
     source = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                               "beantester", "gui", "app.py"), encoding="utf-8").read()
+                               "beantester", "gui", "csv_export.py"), encoding="utf-8").read()
     check("'seen' is not a column name", '"seen": "packets_seen"' in source)
     check("link outages have a name too", '"drop_flap": "dropped_link_outage"' in source)
 

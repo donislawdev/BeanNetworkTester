@@ -170,7 +170,7 @@ check("GUI: picking a preset fills the form",
 # -- CSV export: stale header rotates the old file, never misaligns rows ------
 import csv as _csv                                # noqa: E402
 import tempfile as _tempfile                      # noqa: E402
-import beantester.gui.app as _appmod              # noqa: E402
+import beantester.gui.csv_export as _appmod       # noqa: E402
 _tmpdir = _tempfile.mkdtemp()
 _appmod.CSV_FILE = os.path.join(_tmpdir, "stats.csv")
 app._export_csv()
@@ -178,7 +178,7 @@ app._export_csv()                                 # same header -> plain append
 with open(_appmod.CSV_FILE, newline="", encoding="utf-8") as _f:
     _rows = list(_csv.reader(_f))
 # `capture_narrowed` sits between the timestamp and the counters: it records which
-# world each row's numbers were measured in (App.CSV_SESSION_COLUMNS).
+# world each row's numbers were measured in (csv_export.CSV_SESSION_COLUMNS).
 _SCOPE_HEAD = ["time", "capture_narrowed", "packets_seen"]
 check("GUI: CSV append keeps a single current header",
       len(_rows) == 3 and _rows[0][:3] == _SCOPE_HEAD, f"({_rows[:1]})")

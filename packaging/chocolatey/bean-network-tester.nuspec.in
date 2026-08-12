@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rendered by tools/build_packages.py - do not edit the generated copy. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>{{CHOCO_ID}}</id>
+    <version>{{VERSION}}</version>
+    <packageSourceUrl>{{REPO_URL}}/tree/master/packaging/chocolatey</packageSourceUrl>
+    <owners>{{PUBLISHER}}</owners>
+    <title>{{APP_NAME}}</title>
+    <authors>{{PUBLISHER}}</authors>
+    <projectUrl>{{PROJECT_URL}}</projectUrl>
+    <iconUrl>{{REPO_URL}}/raw/master/bean.png</iconUrl>
+    <copyright>{{COPYRIGHT}}</copyright>
+    <licenseUrl>{{LICENSE_URL}}</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>{{REPO_URL}}</projectSourceUrl>
+    <docsUrl>{{REPO_URL}}#readme</docsUrl>
+    <bugTrackerUrl>{{REPO_URL}}/issues</bugTrackerUrl>
+    <tags>network testing qa latency packet-loss bandwidth windivert admin</tags>
+    <summary>{{TAGLINE}}</summary>
+    <description><![CDATA[
+{{DESCRIPTION}}
+
+Bean Network Tester adds latency, jitter, packet loss, corruption, duplication and
+bandwidth limits to the traffic of a chosen application, so you can see how it behaves
+on a bad connection. It has a window and a command line, and the command line reports
+every outcome as an exit code, which is what makes it usable from a pipeline.
+
+Notes for this package:
+
+* It needs Administrator rights to capture traffic, and it asks for them itself.
+* It carries the WinDivert driver, which is what lets it intervene in real traffic.
+* Your profiles, window state and CSV exports are kept in %LOCALAPPDATA%\{{TOOL_ID}},
+  not in the package folder, so upgrading this package cannot take them with it.
+* Impairment aimed at nothing in particular affects every connection on the machine,
+  including the one you are reading this over. Aim it at an application or a port.
+
+License: {{LICENSE}}.
+]]></description>
+    <releaseNotes>{{RELEASE_NOTES_URL}}</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

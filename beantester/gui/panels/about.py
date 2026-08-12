@@ -25,6 +25,7 @@ from ... import crashlog, legal
 from ...appinfo import (APP_NAME, AUTHOR, COPYRIGHT, LICENSE_NAME, SUPPORT_URL,
                         __version__)
 from ...i18n import T
+from ...paths import user_data_dir
 from ..labels import wrapping_label
 from ..scaling import scaled
 from ..theme import FIELD, FG, MONO_FONT, MUT
@@ -109,7 +110,13 @@ class AboutWindow(PanelWindow):
         for name, version, licence, url in legal.component_rows():
             text.insert("end", "%-26s %-10s %s\n%-26s %-10s %s\n"
                         % (name, version, licence, "", "", url))
-        text.insert("end", "\n" + T("about.licenses_dir", path=legal.licenses_dir()) + "\n")
+        # Both of these are paths on the reader's own disk, so they belong in the
+        # selectable box rather than in a label: the answer to "where are my
+        # profiles" is only useful if it can be copied into an address bar. It is
+        # also the only place in the program that says where they are - the folder
+        # follows the ACCOUNT, so it moves when the program is run as another user.
+        text.insert("end", "\n" + T("about.data_dir", path=user_data_dir()) + "\n")
+        text.insert("end", T("about.licenses_dir", path=legal.licenses_dir()) + "\n")
         text.config(state="disabled")
 
     def _donate(self):

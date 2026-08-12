@@ -1,0 +1,8 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.{{WINGET_SCHEMA}}.schema.json
+
+PackageIdentifier: {{WINGET_ID}}
+PackageVersion: {{VERSION}}
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: {{WINGET_SCHEMA}}

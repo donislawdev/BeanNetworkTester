@@ -875,6 +875,27 @@ def test_print_config_dumps_the_effective_settings():
     check("--print-config: duration is part of the model", "duration" in settings)
 
 
+def test_doctor_says_where_the_users_own_files_are():
+    """The one environment fact a person cannot look up for themselves.
+
+    The folder follows the ACCOUNT the program runs as, so the same person gets a
+    different one when they start it elevated onto another account. Nothing else in
+    the program says where it is, which is what made that silent.
+
+    No admin rights needed: this line is printed whatever the driver checks decide,
+    which is also why it is a line rather than a check with a state.
+    """
+    from beantester.paths import user_data_dir
+    _, out, _ = cli(["--doctor"])
+    check("--doctor: names the user's data directory", user_data_dir() in out,
+          f"({out[-300:]})")
+
+    _, js, _ = cli(["--doctor", "--format", "json"])
+    payload = json.loads(js.strip().splitlines()[0])
+    check("--doctor --format json: carries it as a field",
+          payload.get("data_dir") == user_data_dir(), f"({payload.get('data_dir')})")
+
+
 def test_doctor_reports_the_environment():
     code, out, _ = cli(["--doctor"])
     # The two lines it prints are true on any machine, elevated or not.

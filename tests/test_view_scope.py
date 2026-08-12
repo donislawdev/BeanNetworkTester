@@ -687,7 +687,7 @@ def test_every_wording_table_is_complete_and_every_key_has_text():
 def test_the_stats_csv_carries_both_totals_and_never_narrows():
     """It is an append log: rows written under different preferences must compare."""
     run_gui("""
-        cols = app.CSV_COLUMNS
+        from beantester.gui.csv_export import CSV_COLUMNS as cols
         assert "bytes_in_scoped" in cols and "bytes_out_scoped" in cols, cols
         assert cols["seen"] == "packets_seen", cols["seen"]
         assert cols["scoped_seen"] == "packets_in_scope", cols["scoped_seen"]
@@ -708,10 +708,10 @@ def test_the_stats_csv_records_which_world_each_row_was_measured_in():
 
     out = run_gui("""
         import csv, os, tempfile
-        from beantester.gui import app as app_mod
+        from beantester.gui import csv_export as csv_mod
 
         path = os.path.join(tempfile.mkdtemp(), "stats.csv")
-        app_mod.CSV_FILE = path
+        csv_mod.CSV_FILE = path
 
         app.engine._narrowed = False
         app.export_csv()

@@ -31,5 +31,5 @@ def redirect_to_temp(directory=None):
         os.path.join(directory, "ui.json"),)
     profiles.ProfileStore.__init__.__defaults__ = (
         os.path.join(directory, "profiles.json"),)
-    crashlog.app_dir = lambda: directory
+    crashlog.user_data_dir = lambda: directory
     return directory

@@ -1,0 +1,28 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+# Submitted as manifests/d/{{PUBLISHER}}/{{TOOL_ID}}/{{VERSION}}/{{WINGET_ID}}.installer.yaml
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.{{WINGET_SCHEMA}}.schema.json
+
+PackageIdentifier: {{WINGET_ID}}
+PackageVersion: {{VERSION}}
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: {{NESTED_EXE}}
+# 🔴 Load-bearing. The default for a portable inside an archive is a SYMLINK in the
+# links folder, and this exe cannot be reached through one: it needs its sibling
+# _internal directory, which the symlink leaves behind. Setting this skips the
+# symlink and puts the directory holding the nested file on PATH instead - verified
+# in winget's own source (PortableInstaller.cpp takes the parent of the nested
+# file's path), not inferred from the field's description, which says only
+# "install location".
+ArchiveBinariesDependOnPath: true
+# The program asks for elevation itself when it needs to capture. Saying so here
+# stops winget from running the whole install elevated.
+ElevationRequirement: elevatesSelf
+ReleaseDate: {{RELEASE_DATE}}
+Installers:
+- Architecture: x64
+  InstallerUrl: {{URL}}
+  InstallerSha256: {{SHA256_UPPER}}
+ManifestType: installer
+ManifestVersion: {{WINGET_SCHEMA}}

@@ -829,8 +829,21 @@ meant delivered: a row could read 5 MB received while its application got 0.4 MB
 
 ## CSV exports
 
-Two buttons write two files, and they behave **differently on purpose**. Both land next to the
-executable (or in the project root when running from source).
+Two buttons write two files, and they behave **differently on purpose**. Both land in your own
+folder, `%LOCALAPPDATA%\BeanNetworkTester`, together with your profiles and the window state (or
+in the project root when running from source). The program writes the full path into the log
+every time it saves one. They are kept out of the program folder so that updating the program -
+by hand or through a package manager, which replaces that folder - cannot take your files with
+it. Set `BEAN_DATA_DIR` to a folder of your choosing to keep everything somewhere else, for
+example on the same stick as a portable copy.
+
+The folder belongs to the Windows account the program is running as. On an account without
+administrator rights, agreeing to the elevation prompt runs the program as the administrator
+account whose password was entered, and it then uses THAT account's folder - so the profiles you
+saved without elevation are not the ones you see with it. "About" and `--doctor` both print the
+folder in use, so you can always tell which one you are looking at. To give every account on the
+machine one shared folder, an administrator can set `BEAN_DATA_DIR` as a system-wide environment
+variable.
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
@@ -1184,6 +1197,7 @@ beantester/              the implementation package
     rates.py             throughput averaging (a pure, testable helper)
     scope.py             what the numbers on screen cover (one pure verdict)
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
+    csv_export.py        the two CSV exports and the column names they write
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl)
 tests/                   pytest tests

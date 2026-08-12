@@ -688,8 +688,20 @@ dostarczone: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,
 
 ## Eksporty CSV
 
-Dwa przyciski zapisują dwa pliki i **celowo zachowują się inaczej**. Oba lądują obok pliku
-wykonywalnego (albo w korzeniu projektu przy uruchomieniu ze źródeł).
+Dwa przyciski zapisują dwa pliki i **celowo zachowują się inaczej**. Oba lądują w Twoim własnym
+folderze, `%LOCALAPPDATA%\BeanNetworkTester`, razem z profilami i stanem okna (albo w korzeniu
+projektu przy uruchomieniu ze źródeł). Program przy każdym zapisie wpisuje do logu pełną ścieżkę.
+Leżą poza folderem programu po to, żeby aktualizacja - ręczna albo przez menedżer pakietów, który
+ten folder podmienia - nie zabrała Twoich plików razem z nim. Ustaw `BEAN_DATA_DIR` na wybrany
+folder, żeby trzymać wszystko gdzie indziej, na przykład na tym samym pendrivie co kopia programu.
+
+Folder należy do konta Windows, na którym program działa. Na koncie bez uprawnień administratora
+zgoda na pytanie o podniesienie uprawnień uruchamia program jako to konto administratora, którego
+hasło zostało podane, więc używa TAMTEGO folderu - profile zapisane bez podniesienia uprawnień to
+nie są te, które widzisz z nim. Okno „O programie" i `--doctor` pokazują folder, z którego program
+właśnie korzysta, więc zawsze wiadomo, na który patrzysz. Żeby wszystkie konta na maszynie miały
+jeden wspólny folder, administrator może ustawić `BEAN_DATA_DIR` jako systemową zmienną
+środowiskową.
 
 | | **Statystyki** („Eksportuj CSV", Statystyki → Na żywo) | **Połączenia** („Eksportuj połączenia CSV") |
 |---|---|---|
@@ -1040,6 +1052,7 @@ beantester/              pakiet z implementacją
     rates.py             uśrednianie przepustowości (czysty, testowalny helper)
     scope.py             co obejmują liczby na ekranie (jeden czysty werdykt)
     crash.py             co GUI mówi logowi awarii: kontekst raportu i okruszek
+    csv_export.py        dwa eksporty CSV i nazwy kolumn, które zapisują
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    tłumaczenia (en, pl)
 tests/                   testy pytest

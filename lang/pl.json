@@ -4,6 +4,7 @@
     "name": "Polski"
   },
   "about.author": "Autor: {author}",
+  "about.data_dir": "Twoje profile, stan okna i eksporty CSV:\n{path}",
   "about.license": "Licencja: {license}",
   "about.license_terms": "Wolne i otwarte oprogramowanie na licencji GNU GPL v3. Wolno używać, zmieniać i udostępniać dalej na tej samej licencji.",
   "about.licenses_dir": "Pełne teksty licencji: {path}",
@@ -254,6 +255,7 @@
   "log.copied": "Skopiowano do schowka",
   "log.csv_error": "Błąd zapisu CSV",
   "log.csv_rotated": "Zestaw kolumn CSV się zmienił - poprzednie statystyki przeniesiono do",
+  "log.data_files_problem": "Problem z folderem, w którym zapisują się Twoje pliki",
   "log.dest_frozen_while_narrowed": "Cel bez zmian: przy zawężonym filtrze sterownika cel jest ustalony na całą sesję (filtr sterownika powstaje przy otwarciu przechwytu). Zatrzymaj i uruchom ponownie, żeby go zmienić.",
   "log.dest_set": "Cel ustawiony z tabeli połączeń",
   "log.donate_opened": "Otwarto stronę wsparcia",

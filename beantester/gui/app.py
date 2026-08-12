@@ -14,7 +14,6 @@ Notable behaviour (all deliberate, see PROJECT_NOTES):
     purpose - no mixed languages),
   * every visible text is looked up through ``T()`` at widget-build time.
 """
-import csv
 import os
 import queue
 import sys
@@ -34,9 +33,10 @@ from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import crashlog
+from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     field_name, set_language)
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, scenarios_dir
+from ..paths import prepare_user_data, scenarios_dir
 from ..presets import (PRESETS, preset_to_settings, resolve_preset,
                        settings_to_preset)
 from ..processes import port_process_map
@@ -47,7 +47,6 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, apply_targeting,
                         settings_from_raw, warn_if_unbounded)
 from ..summary import settings_summary
 from ..utils import number_string
-from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
 from . import crash as gui_crash
 from . import dialogs
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
@@ -104,6 +103,12 @@ class App:
         self._icon_idle, self._icon_running = apply_window_icon(root)
         root.configure(bg=BG)
         apply_dark_titlebar(root)     # while still hidden, so it never flashes light
+
+        # BEFORE any store reads a file: create the data directory and adopt what an
+        # older build left next to the executable (see paths.user_data_dir). Both
+        # stores bind their path at import, so this cannot wait until the log exists -
+        # whatever went wrong is reported by _report_storage_problems instead.
+        self._data_problems = prepare_user_data()
 
         self.ui = UiStateStore()
         # Secondary windows live in a registry, exactly like the pages and the
@@ -1029,152 +1034,15 @@ class App:
             self.log(f"{T('log.profiles_not_saved')}: {err}")
 
     # -- session actions ---------------------------------------------------------- #
-    # Internal stat keys are engine-speak ("seen"); a CSV is read by people and
-    # by spreadsheets, so it gets column names that mean something.
-    CSV_COLUMNS = {"seen": "packets_seen", "scoped_seen": "packets_in_scope",
-                   "drop_loss": "dropped_loss",
-                   "drop_overflow": "dropped_overflow", "drop_syn": "dropped_syn",
-                   "drop_mtu": "dropped_mtu", "drop_nat": "dropped_nat",
-                   "drop_rst": "dropped_rst", "rst_reset": "connections_reset",
-                   "drop_lan": "dropped_lan",
-                   "drop_block": "dropped_block",
-                   "drop_flap": "dropped_link_outage", "drop_rate": "dropped_rate_limit",
-                   "drop_shutdown": "dropped_at_stop",
-                   "drop_send": "dropped_send_failed",
-                   "queue": "queue_len",
-                   "peak_queue": "queue_peak",
-                   # The stats CSV deliberately does NOT follow the "show only the
-                   # targeted traffic" preference: it is an APPEND log, and a file
-                   # whose columns mean one thing in some rows and another in the
-                   # rest is worse than useless for the spreadsheet it exists for.
-                   # It gains both totals instead, so the reader can do the
-                   # narrowing themselves and see which is which.
-                   "bytes_in_scoped": "delivered_in_scope_bytes_down",
-                   "bytes_out_scoped": "delivered_in_scope_bytes_up"}
-
-    # Columns that come from the SESSION rather than the counters: they say which
-    # world the counters were measured in. The comment above explains why this
-    # file must not follow the view preference - a column meaning one thing in
-    # some rows and another in the rest is useless to the spreadsheet it exists
-    # for. Capture narrowing is the STRONGER version of that problem and had no
-    # column at all: it does not pick between two totals, it changes `seen`
-    # itself, so a narrowed row and a wide row were indistinguishable while
-    # counting completely different traffic. The CLI has carried the same fact in
-    # its JSON summary (`capture_narrowed`) since narrowing shipped, and the repro
-    # report carries the whole `session_info` - only this file could not say.
-    # Keyed by session_info() key, like CSV_COLUMNS is keyed by counter key.
-    CSV_SESSION_COLUMNS = {"narrowed": "capture_narrowed"}
-
-    @staticmethod
-    def _csv_session_value(key, info):
-        """One session cell. Booleans as yes/no in English, like `impaired` in the
-        connections export - a CSV is read by scripts and spreadsheets, so it does
-        not follow the interface language."""
-        value = info.get(key)
-        return ("yes" if value else "no") if isinstance(value, bool) else value
-
+    # The two exports live in gui/csv_export.py - they are file work, not window
+    # work, and this file is the one at the size ceiling (convention 32b). The
+    # methods stay because every caller uses them: two pages, the smoke script,
+    # the tests and the `_export_csv` alias at the bottom of this file.
     def export_csv(self):
-        snap = self.engine.stats_snapshot()
-        info = self.engine.session_info()
-        session_cells = [self._csv_session_value(k, info)
-                         for k in self.CSV_SESSION_COLUMNS]
-        header = ["time", *self.CSV_SESSION_COLUMNS.values(),
-                  *(self.CSV_COLUMNS.get(k, k) for k in snap)]
-        try:
-            write_header = not os.path.exists(CSV_FILE)
-            if not write_header:
-                with open(CSV_FILE, newline="", encoding="utf-8") as f:
-                    existing = next(csv.reader(f), [])
-                if existing != header:
-                    # the stat columns changed between versions: appending would
-                    # silently misalign rows against the old header
-                    backup = CSV_FILE[:-4] + time.strftime(".%Y%m%d-%H%M%S.csv")
-                    os.replace(CSV_FILE, backup)
-                    self.log(f"{T('log.csv_rotated')} {os.path.basename(backup)}")
-                    write_header = True
-            with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                if write_header:
-                    writer.writerow(header)
-                writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"),
-                                 *session_cells, *snap.values()])
-            self.log(f"{T('log.stats_saved_to')} {os.path.basename(CSV_FILE)}")
-        except Exception as e:
-            self.log(f"{T('log.csv_error')}: {e}")
-
-    # Mirrors the table's columns so the export is the table, on disk. Raw bytes,
-    # not KB: a CSV is read by a spreadsheet or a script, where exact, summable
-    # integers beat the one-decimal KB the table shows for people. `impaired` is
-    # "yes"/"no" in English, like the headers - the CSV is language-independent.
-    # delivered_* is what reached the application; captured_* is what the tool
-    # saw offered. The old download_bytes/upload_bytes/total_bytes held CAPTURED
-    # under names every other surface uses for delivered, so they are renamed
-    # rather than reused - a column that quietly changes meaning is worse than one
-    # that disappears.
-    CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
-                       "local_port", "packets", "impaired", "dropped",
-                       "delivered_down_bytes", "delivered_up_bytes",
-                       "delivered_total_bytes",
-                       "captured_down_bytes", "captured_up_bytes",
-                       "captured_total_bytes",
-                       "avg_bytes", "duration_s", "idle_s"]
+        csv_export.export_stats(self)
 
     def export_connections_csv(self):
-        """Write the CURRENT connection view (search + sort) to a CSV snapshot.
-
-        The display row-limit is a rendering cap, not part of what the user asked
-        to see, so the export carries every filtered row - sorted the same way the
-        table is. The file is overwritten atomically each time (tmp + os.replace):
-        it is a snapshot of "the connections as they are now", not an append log
-        like the stats CSV.
-        """
-        now = self.engine.now_ref()
-        snapshot = self.engine.connections_snapshot(limit=None)
-        # The export follows the view: what you exported and what you were looking
-        # at have to be the same set, or the file quietly disagrees with the screen
-        # that produced it.
-        if self.scoped_view():
-            snapshot = [c for c in snapshot if c.get("scoped")]
-        rows = filter_sort_connections(
-            snapshot, self.conn_query,
-            self.conn_sort["col"], self.conn_sort["reverse"],
-            now=now, proc_map=self.proc_map, limit=0)
-        path = CONNECTIONS_CSV_FILE
-        tmp = path + ".tmp"
-        try:
-            with open(tmp, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(self.CONN_CSV_HEADER)
-                for c in rows:
-                    last = c.get("last", now)
-                    packets = c.get("packets", 0) or 0
-                    writer.writerow([
-                        connection_proc(c, self.proc_map) or "?",
-                        c.get("pid") or "",
-                        c.get("proto", "IP"), c.get("remote_ip", ""),
-                        c.get("remote_port", ""), c.get("local_port", ""),
-                        packets, "yes" if c.get("scoped") else "no",
-                        c.get("dropped", 0),
-                        c.get("sent_in", 0), c.get("sent_out", 0), c.get("sent", 0),
-                        c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
-                        avg_packet_bytes(c),
-                        f"{max(0.0, last - c.get('first', now)):.1f}",
-                        f"{max(0.0, now - last):.1f}"])
-            os.replace(tmp, path)
-            self.log(f"{T('log.conns_saved_to')} {os.path.basename(path)} ({len(rows)})")
-        except Exception as e:
-            # Clean up the half-written temp file, the way jsonfile.write_json
-            # already does. Without this a failed export left a `.csv.tmp` next to
-            # the real file for the user to find and wonder about - and the next
-            # export silently overwrote it, so the litter was never even stable.
-            # A failure here must leave the previous export untouched and nothing
-            # else behind.
-            try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except OSError as _exc:
-                crashlog.note(_exc, "gui.app")
-            self.log(f"{T('log.csv_error')}: {e}")
+        csv_export.export_connections(self)
 
     def mark_bug(self):
         if not self.running:
@@ -1744,6 +1612,10 @@ class App:
 
     def _report_storage_problems(self):
         """A profile file that vanished or broke must SAY so, not just be gone."""
+        # No reset, unlike the stores below: this list is filled once, before the
+        # window exists, and _check_environment reads it once.
+        for problem in self._data_problems:
+            self.log(f"{T('log.data_files_problem')}: {problem}")
         for store, key in ((self.profiles, "log.profiles_problem"),
                            (self.ui, "log.ui_state_problem")):
             problem = getattr(store, "problem", None)

@@ -25,11 +25,11 @@ def _crash_log_outside_the_repo(tmp_path_factory):
     the sources on every run: git-ignored, so nothing ever showed it, and
     indistinguishable at a glance from a crash the developer actually hit.
 
-    ``tests/test_crashlog.py`` points ``app_dir`` at its own per-test directory on
-    top of this; a function-scoped monkeypatch wins over a session fixture, so the
-    two do not fight.
+    ``tests/test_crashlog.py`` points ``user_data_dir`` at its own per-test
+    directory on top of this; a function-scoped monkeypatch wins over a session
+    fixture, so the two do not fight.
     """
-    crashlog.app_dir = lambda: str(tmp_path_factory.mktemp("crashlog"))
+    crashlog.user_data_dir = lambda: str(tmp_path_factory.mktemp("crashlog"))
     yield
 
 
