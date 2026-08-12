@@ -13,7 +13,7 @@ from gui_harness import run_gui
 def test_export_connections_csv_writes_the_current_view():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -76,7 +76,7 @@ def test_a_failed_connections_export_leaves_no_tmp_file_behind():
     """
     run_gui('''
         import os, tempfile
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -103,7 +103,7 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
     out EMPTY, not "None" and not shifted - a misaligned row here is silent."""
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -131,7 +131,7 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
 def test_export_connections_csv_honours_the_search():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
 
@@ -162,7 +162,7 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
     """
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         from beantester.views import avg_packet_bytes
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
@@ -186,14 +186,14 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
 def test_export_csv_stats_appends_then_rotates_on_a_column_change():
     run_gui('''
         import os, tempfile, csv
-        import beantester.gui.app as m
+        import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "stats.csv")
         m.CSV_FILE = path
 
         # first two exports share a column set: header once, then two data rows.
         # `capture_narrowed` comes from the SESSION, not the counters, and sits
         # between the timestamp and them - it says which world the row's numbers
-        # were measured in (see App.CSV_SESSION_COLUMNS).
+        # were measured in (see csv_export.CSV_SESSION_COLUMNS).
         app.engine.stats_snapshot = lambda: {"seen": 100, "drop_loss": 5, "queue": 2}
         app.export_csv()
         app.export_csv()

@@ -1040,6 +1040,7 @@ beantester/              pakiet z implementacją
     rates.py             uśrednianie przepustowości (czysty, testowalny helper)
     scope.py             co obejmują liczby na ekranie (jeden czysty werdykt)
     crash.py             co GUI mówi logowi awarii: kontekst raportu i okruszek
+    csv_export.py        dwa eksporty CSV i nazwy kolumn, które zapisują
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    tłumaczenia (en, pl)
 tests/                   testy pytest

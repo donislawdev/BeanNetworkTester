@@ -65,7 +65,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from .appinfo import __version__
-from .paths import app_dir
+from .paths import user_data_dir
 
 CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
@@ -91,8 +91,8 @@ _enabled = True
 
 # -- where ------------------------------------------------------------------- #
 def crash_dir():
-    """Directory the crash files live in. Next to the executable, like the profiles."""
-    return os.path.join(app_dir(), CRASH_DIR_NAME)
+    """Directory the crash files live in - the user's data directory, by the profiles."""
+    return os.path.join(user_data_dir(), CRASH_DIR_NAME)
 
 
 def _ensure_dir():

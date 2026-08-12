@@ -72,6 +72,16 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The whole point of moving the user files: a package manager owns the
+        # install directory and wipes it on upgrade. This is the old behaviour
+        # put back, which is also what any writability probe would degrade into.
+        "label": "paths: a frozen build writes user files next to the executable again",
+        "file": "beantester/paths.py",
+        "old": "    return os.path.join(_local_app_data(), TOOL_ID)",
+        "new": "    return executable_dir()",
+        "test": "test_a_frozen_build_keeps_no_user_file_next_to_the_executable",
+    },
+    {
         # The display's source order. Reversed, a connection row names whatever a
         # snapshot taken a few times a second last saw, while the gate is judging
         # by the live map - the exact reported shape, from the other direction.

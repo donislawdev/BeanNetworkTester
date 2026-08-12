@@ -3,14 +3,34 @@
 The tool can run in three layouts:
   * from sources        - resources live in the project root (parent of the package),
   * as a PyInstaller exe - bundled resources live in ``sys._MEIPASS``, while files
-    the user cares about (profiles, CSV) are written next to the executable,
+    the user cares about (profiles, CSV) are written into the user's data directory,
   * installed package    - resources may live inside the package directory.
+
+The user files used to sit next to the executable. They no longer do, and the
+reason is package managers - see ``user_data_dir``.
 """
 import os
+import shutil
 import sys
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(PACKAGE_DIR)
+
+# An override for a genuinely portable copy (a stick, a shared folder). Everything
+# else is derived, so this is the ONLY knob.
+DATA_DIR_ENV = "BEAN_DATA_DIR"
+
+# The files a user would miss. The NAMES are unchanged - both READMEs document
+# them and a repro command may name them - only the directory moved.
+PROFILE_NAME = "bean_network_tester_profiles.json"
+STATS_CSV_NAME = "bean_network_tester_stats.csv"
+CONNECTIONS_CSV_NAME = "bean_network_tester_connections.csv"
+UI_STATE_NAME = "bean_network_tester_ui.json"
+
+# What migration carries. Derived from the names above rather than repeated: a new
+# user file that is added below and forgotten here would simply never be adopted,
+# and nothing would say so.
+USER_FILE_NAMES = (PROFILE_NAME, STATS_CSV_NAME, CONNECTIONS_CSV_NAME, UI_STATE_NAME)
 
 
 def is_frozen():
@@ -18,16 +38,131 @@ def is_frozen():
     return bool(getattr(sys, "frozen", False))
 
 
-def app_dir():
-    """Directory for user-facing output files (profiles, CSV stats).
+def executable_dir():
+    """Directory holding the running executable (meaningful when frozen)."""
+    return os.path.dirname(os.path.abspath(sys.executable))
 
-    Next to the executable when frozen (a onefile exe unpacks itself into a
-    temporary directory, which would silently swallow saved profiles),
-    otherwise the project root.
+
+def _local_app_data():
+    """``%LOCALAPPDATA%``, with a fallback for a profile that does not set it."""
+    base = os.environ.get("LOCALAPPDATA") or ""
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
+    return base
+
+
+def user_data_dir():
+    """Directory for the files the user would miss: profiles, window state, CSV.
+
+    A frozen build writes into ``%LOCALAPPDATA%\\<TOOL_ID>``, NOT next to the
+    executable, because a package manager owns the install directory:
+
+    * WinGet records the extracted archive's top-level directory as one entry and
+      an upgrade removes every recorded entry before installing the new ones -
+      ``remove_all`` on that directory, with no diffing and no hook a manifest
+      could use. Our zip has exactly one top-level directory, so everything
+      written beside the exe is gone on the next ``winget upgrade``.
+    * Chocolatey keeps files it never installed, but its package folder grants
+      plain users read and execute only, so a non-elevated run cannot save there
+      at all.
+
+    The answer deliberately does NOT depend on whether the executable's directory
+    happens to be writable. Probing for that would make the location depend on
+    ELEVATION - the GUI elevates itself, ``--simulate`` does not - and the same
+    install would then keep two sets of profiles without saying so.
+
+    ``BEAN_DATA_DIR`` overrides everything. Running from sources is unchanged.
     """
-    if is_frozen():
-        return os.path.dirname(os.path.abspath(sys.executable))
-    return PROJECT_ROOT
+    override = os.environ.get(DATA_DIR_ENV, "").strip()
+    if override:
+        return os.path.abspath(override)
+    if not is_frozen():
+        return PROJECT_ROOT
+    # Imported here rather than at module scope: appinfo reads VERSION.txt through
+    # resource_path (below), so a top-level import would run appinfo against a
+    # half-initialised paths module.
+    from .appinfo import TOOL_ID
+    return os.path.join(_local_app_data(), TOOL_ID)
+
+
+def ensure_data_dir():
+    """Create the data directory. Returns an error message, or None.
+
+    It has to happen here because neither writer will do it: ``write_json``
+    refuses to invent a directory on purpose (a typo in ``--save-config`` must not
+    become a silent success) and the CSV export is a plain ``open``.
+    """
+    try:
+        os.makedirs(user_data_dir(), exist_ok=True)
+    except OSError as e:
+        return str(e)
+    return None
+
+
+def _same_directory(a, b):
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def migrate_user_files(source=None, target=None):
+    """Adopt user files left beside a frozen executable. Returns problems, never raises.
+
+    Two decisions worth keeping:
+
+    * it COPIES rather than moves, so rolling back to an older build still finds
+      the files where that build looks for them;
+    * it only takes a file the target does NOT have, so a stale copy beside the
+      exe can never overwrite newer data.
+
+    Nothing is parsed on the way: a corrupt file is copied as it is, and the store
+    that reads it quarantines it exactly as it would have done before the move.
+    """
+    explicit = source is not None or target is not None
+    if not explicit and not is_frozen():
+        return []                       # from sources the two are the same directory
+    source = executable_dir() if source is None else source
+    target = user_data_dir() if target is None else target
+    if _same_directory(source, target):
+        return []
+
+    problems = []
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as e:
+        return [str(e)]
+
+    for name in USER_FILE_NAMES:
+        src = os.path.join(source, name)
+        dst = os.path.join(target, name)
+        # isfile(), not exists(): a DIRECTORY carrying one of these names is what
+        # Scoop's persist leaves behind, and it must be skipped rather than copied.
+        if os.path.exists(dst) or not os.path.isfile(src):
+            continue
+        tmp = dst + ".tmp"
+        try:
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)        # atomic, so a half-copy is never readable
+        except OSError as e:
+            problems.append(f"{name}: {e}")
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError as _exc:
+                # The leftover is harmless, the silence would not be (convention 30).
+                # Imported here because crashlog imports this module.
+                from . import crashlog
+                crashlog.note(_exc, "paths")
+    return problems
+
+
+def prepare_user_data():
+    """Make the data directory usable. Returns a list of problems (empty = fine).
+
+    One call for the two things that must happen before any store reads a file.
+    """
+    error = ensure_data_dir()
+    if error:
+        return [error]
+    return migrate_user_files()
 
 
 def _resource_bases():
@@ -68,10 +203,10 @@ def scenarios_dir():
     return os.path.join(PROJECT_ROOT, "scenarios")
 
 
-PROFILE_FILE = os.path.join(app_dir(), "bean_network_tester_profiles.json")
-CSV_FILE = os.path.join(app_dir(), "bean_network_tester_stats.csv")
+PROFILE_FILE = os.path.join(user_data_dir(), PROFILE_NAME)
+CSV_FILE = os.path.join(user_data_dir(), STATS_CSV_NAME)
 # Snapshot of the connection table (overwritten each export, unlike the appended
 # stats CSV): the user asks for "the connections as they are now".
-CONNECTIONS_CSV_FILE = os.path.join(app_dir(), "bean_network_tester_connections.csv")
+CONNECTIONS_CSV_FILE = os.path.join(user_data_dir(), CONNECTIONS_CSV_NAME)
 # Window geometry, active page, collapsed sections, table sorting, language...
-UI_STATE_FILE = os.path.join(app_dir(), "bean_network_tester_ui.json")
+UI_STATE_FILE = os.path.join(user_data_dir(), UI_STATE_NAME)

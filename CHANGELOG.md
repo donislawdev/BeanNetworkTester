@@ -52,6 +52,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   ignored rather than duplicated. Like every other row action they fill the form only - press
   "Apply changes" to put them into a running session.
 
+### Changed
+- **Your profiles, window state and CSV exports now live in your own user folder**
+  (`%LOCALAPPDATA%\BeanNetworkTester`) instead of the program folder. The first time you start
+  this version, files from an earlier one are copied over and the originals are left where they
+  were, so going back to an older build still finds them. The reason is updates: a package
+  manager owns the program folder and replaces it, which would take your saved profiles with it.
+  Set `BEAN_DATA_DIR` to any folder to keep everything together instead, for example on a stick.
+
 ### Docs
 - **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**
   How to take the internet away from one app while the local network keeps working, how a scenario

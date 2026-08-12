@@ -1184,6 +1184,7 @@ beantester/              the implementation package
     rates.py             throughput averaging (a pure, testable helper)
     scope.py             what the numbers on screen cover (one pure verdict)
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
+    csv_export.py        the two CSV exports and the column names they write
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl)
 tests/                   pytest tests

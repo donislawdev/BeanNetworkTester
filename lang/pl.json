@@ -254,6 +254,7 @@
   "log.copied": "Skopiowano do schowka",
   "log.csv_error": "Błąd zapisu CSV",
   "log.csv_rotated": "Zestaw kolumn CSV się zmienił - poprzednie statystyki przeniesiono do",
+  "log.data_files_problem": "Problem z folderem, w którym zapisują się Twoje pliki",
   "log.dest_frozen_while_narrowed": "Cel bez zmian: przy zawężonym filtrze sterownika cel jest ustalony na całą sesję (filtr sterownika powstaje przy otwarciu przechwytu). Zatrzymaj i uruchom ponownie, żeby go zmienić.",
   "log.dest_set": "Cel ustawiony z tabeli połączeń",
   "log.donate_opened": "Otwarto stronę wsparcia",
