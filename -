@@ -1,0 +1,175 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "Bean Network Tester-0.5.0",
+  "documentNamespace": "https://github.com/donislawdev/BeanNetworkTester/spdx/0.5.0-e2846fc8fa4d291b",
+  "creationInfo": {
+    "created": "2026-08-12T18:54:28Z",
+    "creators": [
+      "Tool: beantester-sbom",
+      "Organization: DonislawDev"
+    ],
+    "comment": "Generated from beantester.legal.COMPONENTS, the reviewed list of what this build ships. See tools/sbom.py for why that is the source rather than a filesystem scan."
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-Bean-Network-Tester",
+      "name": "Bean Network Tester",
+      "versionInfo": "0.5.0",
+      "downloadLocation": "https://github.com/donislawdev/BeanNetworkTester",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-3.0-only",
+      "licenseDeclared": "GPL-3.0-only",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-WinDivert",
+      "name": "WinDivert",
+      "versionInfo": "2.2",
+      "downloadLocation": "https://github.com/basil00/WinDivert",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-3.0-only OR GPL-2.0-only",
+      "licenseDeclared": "LGPL-3.0-only OR GPL-2.0-only",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-PyDivert",
+      "name": "PyDivert",
+      "versionInfo": "3.1.3",
+      "downloadLocation": "https://github.com/ffalcinelli/pydivert",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-3.0-or-later OR GPL-2.0-or-later",
+      "licenseDeclared": "LGPL-3.0-or-later OR GPL-2.0-or-later",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-psutil",
+      "name": "psutil",
+      "versionInfo": "7.2.2",
+      "downloadLocation": "https://github.com/giampaolo/psutil",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-Python",
+      "name": "Python",
+      "versionInfo": "3.14.7",
+      "downloadLocation": "https://www.python.org/downloads/source/",
+      "filesAnalyzed": false,
+      "licenseConcluded": "PSF-2.0",
+      "licenseDeclared": "PSF-2.0",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-Tcl-Tk",
+      "name": "Tcl/Tk",
+      "versionInfo": "9.0",
+      "downloadLocation": "https://www.tcl-lang.org/software/tcltk/",
+      "filesAnalyzed": false,
+      "licenseConcluded": "TCL",
+      "licenseDeclared": "TCL",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-PyInstaller--bootloader",
+      "name": "PyInstaller (bootloader)",
+      "versionInfo": "6.21.0",
+      "downloadLocation": "https://github.com/pyinstaller/pyinstaller",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-or-later WITH Bootloader-exception",
+      "licenseDeclared": "GPL-2.0-or-later WITH Bootloader-exception",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-zlib",
+      "name": "zlib",
+      "versionInfo": "1.3.1.zlib-ng",
+      "downloadLocation": "https://www.zlib.net/",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Zlib",
+      "licenseDeclared": "Zlib",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-libffi",
+      "name": "libffi",
+      "versionInfo": "NOASSERTION",
+      "downloadLocation": "https://github.com/libffi/libffi",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-Microsoft-C-Runtime",
+      "name": "Microsoft C Runtime",
+      "versionInfo": "NOASSERTION",
+      "downloadLocation": "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Microsoft-Redistributable",
+      "licenseDeclared": "LicenseRef-Microsoft-Redistributable",
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-Bean-Network-Tester"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-WinDivert"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-PyDivert"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-psutil"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-Python"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-Tcl-Tk"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-PyInstaller--bootloader"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-zlib"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-libffi"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-Bean-Network-Tester",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-Microsoft-C-Runtime"
+    }
+  ],
+  "hasExtractedLicensingInfo": [
+    {
+      "licenseId": "LicenseRef-Microsoft-Redistributable",
+      "extractedText": "Microsoft Visual C++ runtime and Universal CRT files, redistributed under Microsoft's redistributable-code terms for Visual Studio. Microsoft publishes the terms rather than a licence text to bundle: https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files"
+    }
+  ]
+}

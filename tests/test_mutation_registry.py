@@ -72,6 +72,25 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The SBOM could not name the tool that froze the binary, whose bootloader
+        # ships inside it under its own licence.
+        "label": "sbom: the registry stops asking for the PyInstaller version",
+        "file": "beantester/legal.py",
+        "old": '        elif name.startswith("PyInstaller"):\n'
+               "            version = _pyinstaller_version()\n",
+        "new": "",
+        "test": "test_the_sbom_names_the_pyinstaller_that_froze_the_build",
+    },
+    {
+        # The other direction, which matters more: inside the shipped exe there is
+        # no PyInstaller to ask, and the answer there must stay "no assertion".
+        "label": "sbom: an absent build tool gets an invented version",
+        "file": "beantester/legal.py",
+        "old": '        return "bundled"\n\n\ndef component_rows():',
+        "new": '        return "0.0.0"\n\n\ndef component_rows():',
+        "test": "test_a_build_tool_that_is_not_installed_is_not_invented",
+    },
+    {
         # The one defect in this work that CI found and this machine could not:
         # relpath raises across drives, and the Windows runner keeps the repo and
         # the temp directory on different ones.

@@ -73,6 +73,11 @@ either yet.
   administrator uses that administrator's folder instead of yours. Nothing used to say so, which
   made saved profiles look lost. Both READMEs explain it, and an administrator can set
   `BEAN_DATA_DIR` system-wide to give every account one shared folder.
+- **The SBOM published with each release now names the version of the tool that built it.** That
+  component ships a piece of itself inside the executable, under its own licence, and the file
+  could not say which version you were given. The two entries that still say "no assertion" say
+  it because the files they describe carry no version at all, which is the honest answer rather
+  than a guess.
 
 ### Docs
 - **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**
