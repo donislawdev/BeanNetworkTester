@@ -138,3 +138,55 @@ def test_the_bundle_guard_notices_a_component_the_registry_lacks(tmp_path):
     found = sbom.audit_bundle(str(dirty))
     check("an unknown component is reported", "libcurl" in found and "OpenSSL" in found,
           f"({found})")
+
+
+def test_the_sbom_names_the_pyinstaller_that_froze_the_build(monkeypatch):
+    """The version of a build tool is knowable exactly where the build happens.
+
+    `tools/sbom.py` runs in the release job minutes after PyInstaller froze the
+    archive, so the installed distribution IS the one that made it. Until
+    2026-08-12 this row said NOASSERTION, which was honest - nothing asked - and
+    left the SBOM unable to name a component whose bootloader ships inside the
+    binary under its own licence.
+
+    Read through `importlib.metadata`, so asking the question never imports the
+    build tool into `--license` on a developer's machine.
+    """
+    import importlib.metadata
+
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "9.9.9")
+    rows = {name: version for name, version, _lic, _url in legal.component_rows()}
+    named = [n for n in rows if n.startswith("PyInstaller")]
+    check("the registry still has exactly one PyInstaller row", len(named) == 1, f"({named})")
+    check("it reports the installed version", rows[named[0]] == "9.9.9", f"({rows[named[0]]})")
+
+    packages = {p["name"]: p["versionInfo"] for p in sbom.build()["packages"]}
+    check("and the SBOM carries it", packages[named[0]] == "9.9.9", f"({packages[named[0]]})")
+
+
+def test_a_build_tool_that_is_not_installed_is_not_invented(monkeypatch):
+    """Inside the shipped executable there is no PyInstaller to ask.
+
+    A build tool is not bundled with what it builds, so the SBOM's honest answer
+    there is "no assertion" - the same answer this row gave before it could be
+    resolved at all.
+
+    The report the user of the binary reads keeps saying "bundled", which is the
+    other half of the truth and easy to lose: the BOOTLOADER really is inside the
+    executable, so "-" (this module's word for "not present here") would read as
+    though the component were missing.
+    """
+    import importlib.metadata
+
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    rows = {name: version for name, version, _lic, _url in legal.component_rows()}
+    named = [n for n in rows if n.startswith("PyInstaller")][0]
+    check("the report still says the component is in there",
+          rows[named] == "bundled", f"({rows[named]})")
+
+    packages = {p["name"]: p["versionInfo"] for p in sbom.build()["packages"]}
+    check("and the SBOM says NOASSERTION, not a made-up version",
+          packages[named] == "NOASSERTION", f"({packages[named]})")

@@ -112,6 +112,32 @@ def _zlib_version():
         return "-"
 
 
+def _pyinstaller_version():
+    """The PyInstaller that froze this bundle, when anything here can still say.
+
+    Read from the installed distribution's METADATA rather than by importing the
+    package: the answer is the same, and importing PyInstaller to ask its version
+    would drag a large build-time tool into `--license` on any machine that has
+    it. `importlib.metadata` does not import the package at all.
+
+    Two environments, two honest answers. Where the release is BUILT, PyInstaller
+    is installed, and `tools/sbom.py` runs in the same job minutes after the build
+    - so the version it reports is the one that actually froze the archive.
+
+    Inside the shipped executable the distribution is absent (a build tool is not
+    bundled with what it builds) and the answer falls back to "bundled", which is
+    what this row said before and is still true: the BOOTLOADER is in there, we
+    just cannot name its version from inside. Not "-", which is this module's word
+    for "not present here" and would read as though the component were absent.
+    `tools/sbom.py` maps "bundled" to NOASSERTION, so the SBOM is unchanged too.
+    """
+    try:
+        import importlib.metadata
+        return str(importlib.metadata.version("pyinstaller"))
+    except Exception:              # noqa: BLE001 - absence is an answer, not a failure
+        return "bundled"
+
+
 def component_rows():
     """``(name, version, licence, source_url)`` for every third-party component."""
     rows = []
@@ -126,6 +152,8 @@ def component_rows():
             version = _zlib_version()
         elif name == "WinDivert":
             version = WINDIVERT_VERSION
+        elif name.startswith("PyInstaller"):
+            version = _pyinstaller_version()
         else:
             version = "bundled"          # libffi and the MS runtime carry no version
         rows.append((name, version, licence, url))
