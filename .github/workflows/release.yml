@@ -14,9 +14,16 @@ permissions:
   contents: write
   # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
   # signs it, `attestations` writes the result to the repository's attestation
-  # store. Both are required by actions/attest-sbom and neither grants anything
-  # else; a release that skipped them would still publish an SBOM, just an
-  # unsigned one that anybody could swap.
+  # store. Both are required by actions/attest and neither grants anything else;
+  # a release that skipped them would still publish an SBOM, just an unsigned one
+  # that anybody could swap.
+  #
+  # NOT here on purpose: `artifact-metadata: write`, which that action's README
+  # lists as a third permission. It is needed to create the artifact STORAGE
+  # RECORD, and `create-storage-record` requires `push-to-registry`, which
+  # defaults to false and is not used here (read in the action's own action.yml,
+  # 2026-08-12). Granting a permission we do not need would contradict the line
+  # above it.
   id-token: write
   attestations: write
 
@@ -139,10 +146,17 @@ jobs:
       # anybody could replace, which is the difference between a bill of materials
       # and a note claiming to be one.
       - name: Attest the SBOM against the release archive
+        # Was actions/attest-sbom until 2026-08-12. Its own README now says it is
+        # deprecated in favour of actions/attest and runs as a wrapper over it, and
+        # that "all of the existing action inputs are compatible" - checked against
+        # actions/attest's action.yml rather than taken on trust: `sbom-path` is
+        # there, with the same meaning, and providing it is what makes this an SBOM
+        # attestation rather than build provenance. So both inputs stay as they are.
+        #
         # Pinned by SHA, not by tag. This is the first third-party-shaped action in
         # the workflow that publishes the release, and a tag can be moved; the SHA
-        # below is what `v4.1.0` pointed at on 2026-08-11, read from the API.
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e  # v4.1.0
+        # below is what `v4.2.2` pointed at on 2026-08-12, read from the API.
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
           subject-path: ${{ env.ASSET }}
           sbom-path: ${{ env.SBOM }}
