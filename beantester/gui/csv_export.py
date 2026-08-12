@@ -87,7 +87,9 @@ def export_stats(app):
                 writer.writerow(header)
             writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"),
                              *session_cells, *snap.values()])
-        app.log(f"{T('log.stats_saved_to')} {os.path.basename(CSV_FILE)}")
+        # The WHOLE path, not just the file name: these files no longer sit next to
+        # the executable, so the name alone would leave the user hunting for them.
+        app.log(f"{T('log.stats_saved_to')} {CSV_FILE}")
     except Exception as e:
         app.log(f"{T('log.csv_error')}: {e}")
 
@@ -151,7 +153,7 @@ def export_connections(app):
                     f"{max(0.0, last - c.get('first', now)):.1f}",
                     f"{max(0.0, now - last):.1f}"])
         os.replace(tmp, path)
-        app.log(f"{T('log.conns_saved_to')} {os.path.basename(path)} ({len(rows)})")
+        app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")
     except Exception as e:
         # Clean up the half-written temp file, the way jsonfile.write_json
         # already does. Without this a failed export left a `.csv.tmp` next to

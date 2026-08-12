@@ -1,4 +1,4 @@
-"""Persistence of user-defined profiles (JSON file next to the app).
+"""Persistence of user-defined profiles (a JSON file in the user's data directory).
 
 A profile stores the link-characteristic fields a preset stores (see
 ``presets.settings_to_preset``) - the field registry decides which those are.

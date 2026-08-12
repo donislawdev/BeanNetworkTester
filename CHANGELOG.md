@@ -54,11 +54,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 - **Your profiles, window state and CSV exports now live in your own user folder**
-  (`%LOCALAPPDATA%\BeanNetworkTester`) instead of the program folder. The first time you start
-  this version, files from an earlier one are copied over and the originals are left where they
-  were, so going back to an older build still finds them. The reason is updates: a package
-  manager owns the program folder and replaces it, which would take your saved profiles with it.
-  Set `BEAN_DATA_DIR` to any folder to keep everything together instead, for example on a stick.
+  (`%LOCALAPPDATA%\BeanNetworkTester`) instead of the program folder. Files from an earlier
+  version are copied over on first start, and the originals stay where they were, so going back
+  to an older build still finds them. The reason is updates: a package manager owns the program
+  folder and replaces it, which would take your profiles with it. Both CSV exports now log the
+  whole path. Set `BEAN_DATA_DIR` to keep everything somewhere else, for example on a stick.
 
 ### Docs
 - **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**

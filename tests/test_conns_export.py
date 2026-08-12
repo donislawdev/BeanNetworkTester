@@ -214,3 +214,35 @@ def test_export_csv_stats_appends_then_rotates_on_a_column_change():
                    if n != "stats.csv" and n.endswith(".csv")]
         assert len(backups) == 1, backups                # the old file was kept aside
     ''')
+
+
+def test_both_exports_tell_the_user_the_whole_path():
+    """The name alone stopped being an answer when the files left the exe's folder.
+
+    Both exports used to log ``os.path.basename(...)``, which was enough while the
+    file landed next to the executable the user had just double-clicked. It is not
+    enough now, and nothing else on screen names the directory.
+    """
+    run_gui('''
+        import os, tempfile
+        import beantester.gui.csv_export as m
+        folder = tempfile.mkdtemp()
+        m.CSV_FILE = os.path.join(folder, "stats.csv")
+        m.CONNECTIONS_CSV_FILE = os.path.join(folder, "conns.csv")
+
+        lines = []
+        app.log = lambda text: lines.append(str(text))
+
+        app.engine.stats_snapshot = lambda: {"seen": 1}
+        app.export_csv()
+
+        app.engine.connections_snapshot = lambda limit=None: []
+        app.conn_query = ""
+        app.conn_sort = {"col": "up", "reverse": True}
+        app.export_connections_csv()
+
+        for name in ("stats.csv", "conns.csv"):
+            said = [l for l in lines if name in l]
+            assert said, (name, lines)
+            assert any(folder in l for l in said), (name, said)
+    ''')

@@ -829,8 +829,13 @@ meant delivered: a row could read 5 MB received while its application got 0.4 MB
 
 ## CSV exports
 
-Two buttons write two files, and they behave **differently on purpose**. Both land next to the
-executable (or in the project root when running from source).
+Two buttons write two files, and they behave **differently on purpose**. Both land in your own
+folder, `%LOCALAPPDATA%\BeanNetworkTester`, together with your profiles and the window state (or
+in the project root when running from source). The program writes the full path into the log
+every time it saves one. They are kept out of the program folder so that updating the program -
+by hand or through a package manager, which replaces that folder - cannot take your files with
+it. Set `BEAN_DATA_DIR` to a folder of your choosing to keep everything somewhere else, for
+example on the same stick as a portable copy.
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|

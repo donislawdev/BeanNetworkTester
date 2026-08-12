@@ -1,9 +1,10 @@
 """Crash-safe JSON persistence for the tool's user files.
 
-Profiles, window state and config files are edited by hand (they live next to
-the executable on purpose), they are deleted, they are copied between machines
-and - if the process dies mid-write - they get truncated. None of that may take
-the app down, and none of it may destroy data silently:
+Profiles, window state and config files are edited by hand (they live in one
+directory of the user's own, see ``paths.user_data_dir``), they are deleted, they
+are copied between machines and - if the process dies mid-write - they get
+truncated. None of that may take the app down, and none of it may destroy data
+silently:
 
 * **atomic writes** - the new content is written to a temporary file and then
   ``os.replace``d over the target, which is atomic on Windows and POSIX alike.

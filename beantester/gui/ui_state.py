@@ -44,8 +44,8 @@ class UiStateStore:
         """Drop values whose TYPE is not the one ``DEFAULTS`` promises.
 
         ``read_json`` guarantees the file is a dict and nothing beyond that. Inside
-        it, a hand edit - and these files are meant to be hand-edited, they live
-        next to the executable - can leave any value any shape. Three of them used
+        it, a hand edit - and these files are meant to be hand-edited, they sit in
+        a directory of the user's own - can leave any value any shape. Three of them used
         to stop the app from starting at all: a list under ``page`` (unhashable as
         a dict key), a list under ``conn_sort``, a string under ``event_sort``.
         The promise at the top of this module is the exact opposite, so it is now

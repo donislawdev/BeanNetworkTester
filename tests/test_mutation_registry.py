@@ -72,6 +72,15 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The message that answers "where is my file". It was the basename while the
+        # file sat next to the exe, and nothing else on screen names the directory.
+        "label": "csv: the export log names the file but not where it went",
+        "file": "beantester/gui/csv_export.py",
+        "old": "app.log(f\"{T('log.conns_saved_to')} {path} ({len(rows)})\")",
+        "new": "app.log(f\"{T('log.conns_saved_to')} {os.path.basename(path)} ({len(rows)})\")",
+        "test": "test_both_exports_tell_the_user_the_whole_path",
+    },
+    {
         # The whole point of moving the user files: a package manager owns the
         # install directory and wipes it on upgrade. This is the old behaviour
         # put back, which is also what any writability probe would degrade into.

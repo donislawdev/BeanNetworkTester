@@ -688,8 +688,12 @@ dostarczone: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,
 
 ## Eksporty CSV
 
-Dwa przyciski zapisują dwa pliki i **celowo zachowują się inaczej**. Oba lądują obok pliku
-wykonywalnego (albo w korzeniu projektu przy uruchomieniu ze źródeł).
+Dwa przyciski zapisują dwa pliki i **celowo zachowują się inaczej**. Oba lądują w Twoim własnym
+folderze, `%LOCALAPPDATA%\BeanNetworkTester`, razem z profilami i stanem okna (albo w korzeniu
+projektu przy uruchomieniu ze źródeł). Program przy każdym zapisie wpisuje do logu pełną ścieżkę.
+Leżą poza folderem programu po to, żeby aktualizacja - ręczna albo przez menedżer pakietów, który
+ten folder podmienia - nie zabrała Twoich plików razem z nim. Ustaw `BEAN_DATA_DIR` na wybrany
+folder, żeby trzymać wszystko gdzie indziej, na przykład na tym samym pendrivie co kopia programu.
 
 | | **Statystyki** („Eksportuj CSV", Statystyki → Na żywo) | **Połączenia** („Eksportuj połączenia CSV") |
 |---|---|---|
