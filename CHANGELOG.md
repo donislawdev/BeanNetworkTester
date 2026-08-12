@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-12
+
+**The short version.** This release is about not losing your files when the program is
+updated. Profiles, window state and the CSV exports now live in your own user folder instead
+of the program folder, an older version's files are copied over the first time you start this
+one, and both the About window and `--doctor` tell you which folder is in use. Groundwork for
+installing through WinGet and Chocolatey is in place as well, though nothing is published on
+either yet.
+
 ### Added
 - **Every release now carries an SBOM, signed against the download.** A standard SPDX file listing
   each third-party component with its version, licence and source - the same list `--license`
