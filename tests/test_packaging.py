@@ -184,3 +184,20 @@ def test_the_package_sources_are_tracked_by_git():
         check(f"{path} is tracked by git", tracked.returncode == 0,
               "(ignored or untracked - a fresh clone and the Chocolatey moderators "
               "would both find nothing)")
+
+
+def test_rendering_onto_another_drive_is_not_a_crash(monkeypatch):
+    """Windows raises when two paths are on different drives, and CI is that case.
+
+    The repository sits on one drive on the Windows runner and the temporary
+    directory on another, so `os.path.relpath` - used only to print what was
+    written - raised `ValueError` and took six tests with it. It passed on this
+    machine, where both are on C:, and on Linux, where drives do not exist.
+    """
+    def different_drive(path, start):
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(os.path, "relpath", different_drive)
+    shown = bp.display_path(os.path.join("X:", "out", "installer.yaml"))
+    check("it falls back to the absolute path instead of raising",
+          shown.endswith("installer.yaml"), f"({shown})")

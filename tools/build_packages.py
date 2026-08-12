@@ -118,6 +118,21 @@ def values(version, digest, asset):
     }
 
 
+def display_path(path):
+    """``path`` relative to the repository, or absolute when that is impossible.
+
+    ``os.path.relpath`` RAISES on Windows when the two paths sit on different
+    drives, and this is only ever used to print what was written. Rendering into
+    a directory on another volume is a legitimate thing to ask for, and it is
+    what the Windows CI runner does by default - the repository is on one drive
+    and the temporary directory on another, which is how this was found.
+    """
+    try:
+        return os.path.relpath(path, ROOT)
+    except ValueError:
+        return path
+
+
 def templates():
     for base, _, names in os.walk(PACKAGING_DIR):
         for name in sorted(names):
@@ -166,7 +181,7 @@ def build(sums_path, version=None):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        written.append(os.path.relpath(target, ROOT))
+        written.append(display_path(target))
     return written
 
 
