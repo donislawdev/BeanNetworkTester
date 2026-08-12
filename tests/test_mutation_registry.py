@@ -72,6 +72,17 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The one defect in this work that CI found and this machine could not:
+        # relpath raises across drives, and the Windows runner keeps the repo and
+        # the temp directory on different ones.
+        "label": "packaging: the renderer raises when its output is on another drive",
+        "file": "tools/build_packages.py",
+        "old": "    try:\n        return os.path.relpath(path, ROOT)\n"
+               "    except ValueError:\n        return path\n",
+        "new": "    return os.path.relpath(path, ROOT)\n",
+        "test": "test_rendering_onto_another_drive_is_not_a_crash",
+    },
+    {
         # The only place the interface answers "where are my profiles". This guard
         # was VACUOUS at first: it asserted the path alone, and from sources the
         # data directory is the project root, which is a prefix of the licence-texts
