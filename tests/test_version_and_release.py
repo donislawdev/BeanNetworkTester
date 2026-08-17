@@ -405,3 +405,43 @@ def test_ci_and_release_freeze_the_same_python():
     check("release.yml freezes exactly one Python", len(release) == 1, f"({release})")
     check("ci.yml's build job and release.yml freeze the SAME Python",
           release == build, f"(release={release} ci-build={build})")
+
+
+def test_both_workflows_install_the_same_pinned_builder():
+    """PyInstaller decides whether the shipped exe starts, so its version is part
+    of the artefact - and both workflows must take it from ONE pinned file.
+
+    Paid for on 2026-08-17: `pyinstaller` was installed unpinned in both
+    workflows, CI resolved 6.22.1 and this machine had 6.21.0, and only the older
+    one mis-handles the DLL-embedded Tcl/Tk 9 library archive that Python 3.14
+    ships. Result: the same commit produced a working exe on CI and one that died
+    in PyInstaller's own tkinter run-time hook locally. The interpreter had a
+    parity guard (above); the freezer had none.
+
+    Checks the shape of the failure, not just the presence of a string: an
+    unpinned install is rejected wherever it appears, so re-adding a bare
+    `pyinstaller` to either workflow reddens this.
+    """
+    pin_file = "requirements-build.txt"
+    with open(os.path.join(ROOT, pin_file), encoding="utf-8") as f:
+        pins = [ln.strip() for ln in f
+                if ln.strip() and not ln.lstrip().startswith("#")]
+    check(f"{pin_file} pins exactly one package", len(pins) == 1, f"({pins})")
+    check(f"{pin_file} pins it with == ", bool(re.match(r"^pyinstaller==\d", pins[0])),
+          f"({pins[0]!r} - a range or a bare name is not a pin)")
+
+    for path in ("ci.yml", "release.yml"):
+        with open(os.path.join(ROOT, ".github", "workflows", path),
+                  encoding="utf-8") as f:
+            body = f.read()
+        installs = re.findall(r"^\s*pip install .*$", body, re.MULTILINE)
+        check(f"{path}: still has a pip install line", bool(installs),
+              "(none found - did the step move or change shape?)")
+        builder = [ln for ln in installs if f"-r {pin_file}" in ln]
+        check(f"{path}: installs the builder from {pin_file}", bool(builder),
+              f"(install lines: {installs})")
+        loose = [ln for ln in installs
+                 if re.search(r"(?<!-r )\bpyinstaller\b(?!==)", ln)
+                 and pin_file not in ln]
+        check(f"{path}: never installs pyinstaller unpinned", not loose,
+              f"({loose} - put the version in {pin_file}, not on the command line)")
