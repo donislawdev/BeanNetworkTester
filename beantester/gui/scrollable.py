@@ -34,6 +34,41 @@ from .. import crashlog
 _OWNER_ATTR = "_bnt_scroll_owner"
 
 
+def clamped_scrollregion(bbox, viewport_height):
+    """A scroll region never shorter than the viewport it is displayed in.
+
+    Pure on purpose: this is the arithmetic that decides whether a canvas can be
+    pushed off its own content, and the fake tkinter used by the GUI tests models
+    ``yview``/``yview_scroll`` but has no ``canvasy``, ``bbox`` or
+    ``scrollregion`` - so the symptom cannot be reproduced there and only the rule
+    can be guarded.
+
+    **Why it is needed.** Tk's ``confine`` holds the view inside the region only
+    while the region is TALLER than the window. With a region SHORTER than the
+    viewport the canvas moves its origin above the content quite happily, and
+    ``yview`` keeps reporting ``(0.0, 1.0)`` while it does - so nothing looks
+    wrong to the scrollbar, which is why the wheel path's ``can_scroll()`` guard
+    (``ScrollableFrame.scroll``) hid this for so long: the scrollbar is wired
+    straight to ``canvas.yview`` and never passed through it.
+    MEASURED 2026-08-17 on the Settings window: viewport 855 px, content 452 px,
+    ``scrollregion='0 0 807 452'``, and one scroll-up left ``canvasy(0)`` at
+    **-360** - a 360 px blank band above the first row.
+
+    ``bbox`` is whatever ``canvas.bbox("all")`` returned, **including None**. That
+    case was a second way into the same fault: ``configure(scrollregion=None)``
+    CLEARS the region, and a canvas with no region is not confined at all.
+
+    A viewport height of 0 (a window that has not been laid out yet) returns the
+    bbox unchanged, so nothing is invented before there is a size to clamp to.
+    """
+    if not bbox:
+        x0 = y0 = x1 = y1 = 0
+    else:
+        x0, y0, x1, y1 = (int(v) for v in bbox)
+    height = max(0, int(viewport_height or 0))
+    return (x0, y0, x1, max(y1, y0 + height))
+
+
 def _can_scroll(widget):
     """True when a widget has something to scroll vertically."""
     try:
@@ -161,9 +196,21 @@ class ScrollableFrame:
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
     # -- geometry ----------------------------------------------------------- #
+    def _apply_scrollregion(self, viewport_height=None):
+        """Publish the region, clamped so the view cannot leave the content.
+
+        One place, because there were two callers setting it from
+        ``bbox("all")`` directly and both let the canvas scroll above its own
+        content - see ``clamped_scrollregion``.
+        """
+        if viewport_height is None:
+            viewport_height = self.canvas.winfo_height()
+        self.canvas.configure(scrollregion=clamped_scrollregion(
+            self.canvas.bbox("all"), viewport_height))
+
     def _on_body_configure(self, _=None):
         try:
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            self._apply_scrollregion()
         except tk.TclError as _exc:
             crashlog.note(_exc, "gui.scrollable")
 
@@ -178,7 +225,12 @@ class ScrollableFrame:
             width = event.width if event is not None else self.canvas.winfo_width()
             self.canvas.itemconfigure(self._window, width=width)
             top = self.canvas.yview()[0]
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            # The event carries the NEW height; winfo_height can still report the
+            # old one while the resize is being handled, and clamping to a stale
+            # height is how the blank band would come back on a window being
+            # dragged taller.
+            height = event.height if event is not None else None
+            self._apply_scrollregion(height)
             self.canvas.yview_moveto(top)
         except (tk.TclError, TypeError, IndexError) as _exc:
             crashlog.note(_exc, "gui.scrollable")

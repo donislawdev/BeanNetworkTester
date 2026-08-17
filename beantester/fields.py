@@ -237,7 +237,11 @@ FIELD_DEFS = (
     # exception, but a DECLARED one: when the settings window arrives, it takes
     # every field marked ui_only and nothing else has to change.
     Field("row_limit", NUMBER, "fields.row_limit", "tables",
-          unit_key="fields.unit_rows_off", bounds=(0.0, 1000000.0), width=10,
+          # A BARE unit, because the hint below already says "0 = no limit" and the
+          # two together read as the same sentence twice. `unit_b_off` and
+          # `unit_s_off` keep the "(0=off)" inside the unit precisely because those
+          # fields have no hint to carry it - this one was the only field with both.
+          unit_key="fields.unit_rows", bounds=(0.0, 1000000.0), width=10,
           tip="tips.row_limit", hint="fields.row_limit_hint", span=True,
           cli="row-limit", ui_only=True),
 

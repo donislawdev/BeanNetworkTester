@@ -855,6 +855,54 @@ MUTATIONS = [
         "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
     {
+        # The cap is what makes the fit safe: without it a single narrow column
+        # would be stretched to the whole tree, far past anything a drag can reach.
+        "label": "gui: the column fit stops respecting the drag cap",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        take = min(caps[col] - out[col], int(slack * base[col] / total))",
+        "new": "        take = int(slack * base[col] / total)",
+        "test": "test_a_fit_never_takes_a_column_past_the_width_a_drag_could_reach",
+    },
+    {
+        # With every column shown the table is WIDER than the tree and the
+        # horizontal scrollbar is the right answer; fitting there would shrink
+        # columns, which is the one thing this function must never do.
+        "label": "gui: the column fit runs even when there is no slack",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "    if slack <= 0:\n        return {}",
+        "new": "    if slack < -(10 ** 9):\n        return {}",
+        "test": "test_a_full_or_overflowing_table_is_left_alone",
+    },
+    {
+        # The memo is the rule that keeps a fit from undoing a drag. Removing it
+        # makes every resize event overwrite the width the user chose.
+        "label": "gui: a column fit forgets what it was last computed for",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            if not force and token == self._fitted_for:",
+        "new": "            if False:",
+        "test": "test_a_width_the_user_dragged_survives_a_fit_but_hiding_a_column_re_fits",
+    },
+    {
+        # The reported fault: a scroll region shorter than its viewport lets Tk
+        # move the canvas origin above the content, so the Settings window showed
+        # a blank band and the scrollbar swore there was nothing to scroll.
+        "label": "gui: the scroll region stops being clamped to the viewport",
+        "file": "beantester/gui/scrollable.py",
+        "old": "    return (x0, y0, x1, max(y1, y0 + height))",
+        "new": "    return (x0, y0, x1, y1)",
+        "test": "test_a_scroller_whose_content_fits_is_still_confined_to_it",
+    },
+    {
+        # The second way into the same fault, found while fixing the first:
+        # configure(scrollregion=None) clears the region, and an unconfined canvas
+        # is exactly what the clamp exists to prevent.
+        "label": "gui: an empty canvas passes None through as its scroll region",
+        "file": "beantester/gui/scrollable.py",
+        "old": "    if not bbox:\n        x0 = y0 = x1 = y1 = 0",
+        "new": "    if bbox is None:\n        return None",
+        "test": "test_an_empty_canvas_still_gets_a_region_instead_of_none",
+    },
+    {
         # The 2026-08-17 failure in one line: an unpinned builder in a workflow.
         # CI resolved PyInstaller 6.22.1, this machine had 6.21.0, and only the
         # older one mis-handles Python 3.14's DLL-embedded Tcl/Tk 9 archive - so
@@ -907,6 +955,12 @@ PROVEN_BY_HAND = {
     "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",
     "test_a_worker_thread_exception_is_recorded": "2026-08-01, the excepthook body",
     "test_pid_for_takes_no_lock_because_the_capture_thread_calls_it": "2026-07-29, taking the lock",
+    # Not in MUTATIONS because the patch would be the two enormous `log.driver_*`
+    # lines pasted twice over, which is a registry entry nobody will ever read. The
+    # swap was done for real, both ways, on both files.
+    "test_the_language_files_stay_sorted":
+        "2026-08-17, swapped two adjacent keys back out of order in both lang "
+        "files (byte-level, so LF survived), saw it go red, restored it, saw green",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody

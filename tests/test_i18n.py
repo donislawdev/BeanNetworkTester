@@ -103,6 +103,32 @@ def test_i18n_coverage():
     check("i18n: sampled UI keys resolve to text", not unresolved, f"({unresolved})")
 
 
+def test_the_language_files_stay_sorted():
+    """Keys in file order, so a new one has exactly one place to go.
+
+    The note has said these files are sorted since they existed and NOTHING
+    enforced it, which is this project's own definition of decoration. Found by
+    running the check by hand on 2026-08-17 while removing an unused key: one pair
+    was out of order (`log.driver_wait` before `log.driver_still_unloading`) and had
+    been for however long, in both files identically.
+
+    Why it is worth a guard rather than a shrug: the two files are edited in
+    lockstep and diffed against each other constantly (`test_i18n_coverage` above
+    compares their key sets), and a key inserted "roughly where it looks right"
+    turns every later diff into a puzzle. `_meta` sorts before every dotted key on
+    its own, so it needs no exception.
+    """
+    import json as _json
+    for code in ("en", "pl"):
+        with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+            keys = list(_json.load(f))
+        out_of_order = [(a, b) for a, b in zip(keys, keys[1:]) if a > b]
+        check(f"{code}.json keys are sorted", not out_of_order,
+              f"(first offender: {out_of_order[:1]})")
+        check(f"{code}.json opens with _meta", keys and keys[0] == "_meta",
+              f"({keys[:1]})")
+
+
 def test_app_name():
     import beantester
     check("application name = Bean Network Tester", beantester.APP_NAME == "Bean Network Tester",

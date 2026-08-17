@@ -59,6 +59,68 @@ from ... import crashlog
 
 ASC, DESC = "\u25b2", "\u25bc"
 MAX_WIDTH_FACTOR = 3.0          # a column may grow to 3x its natural width
+
+
+def fitted_widths(order, visible, natural, current, tree_width,
+                  max_factor=MAX_WIDTH_FACTOR):
+    """New widths for the visible columns so they fill ``tree_width``.
+
+    Pure, and tested without Tk, because this is the arithmetic and the widget is
+    only the surface it is written onto.
+
+    **Why it exists.** This table refuses ``stretch`` on purpose (see the note in
+    ``__init__``): with a horizontal scrollbar, ttk recomputes a stretch column on
+    the next ``<Configure>`` and a width the user dragged visibly snaps back. The
+    cost of that decision only shows once columns can be HIDDEN - the remaining
+    ones keep their own widths and the rest of the table is bare background.
+    MEASURED 2026-08-17 on the Connections table: 17 columns sum to 1611 px in a
+    1076 px tree (so the scrollbar has work), but with 2 columns shown they sum to
+    205 px and leave **871 px of dead space**.
+
+    Four rules, each with a reason rather than a taste:
+
+    * **only ever WIDEN.** Shrinking would take away a width the user dragged to,
+      which is the property refusing ``stretch`` was protecting.
+    * **share the slack in proportion to NATURAL width**, so a column that was born
+      wide stays the wide one.
+    * **cap each column at ``max_factor`` x its natural width** - the same ceiling
+      ``clamp_widths`` applies after a drag, so a fit can never produce a width the
+      user could not have dragged to by hand.
+    * **if the caps cannot absorb the slack, leave the remainder as dead space.**
+      Bounded and honest beats a column stretched past what a drag may reach.
+
+    Returns only the columns whose width actually changes, so the caller touches
+    ttk as little as possible. An empty dict means "nothing to do".
+    """
+    cols = [c for c in order if c in visible]
+    width = int(tree_width or 0)
+    if not cols or width <= 1:
+        return {}                       # not laid out yet: nothing to fit against
+    now = {c: int(current.get(c, 0) or 0) for c in cols}
+    slack = width - sum(now.values())
+    if slack <= 0:
+        return {}                       # already full, or wider than the tree
+    caps = {c: int(int(natural.get(c) or now[c]) * max_factor) for c in cols}
+    growable = [c for c in cols if caps[c] > now[c]]
+    if not growable:
+        return {}
+    base = {c: max(1, int(natural.get(c) or now[c])) for c in growable}
+    total = sum(base.values())
+    out = dict(now)
+    left = slack
+    for col in growable:
+        take = min(caps[col] - out[col], int(slack * base[col] / total))
+        out[col] += take
+        left -= take
+    # Rounding, plus whatever a cap refused, handed on in table order so the
+    # result is deterministic rather than dependent on dict ordering luck.
+    for col in growable:
+        if left <= 0:
+            break
+        take = min(left, caps[col] - out[col])
+        out[col] += take
+        left -= take
+    return {c: w for c, w in out.items() if w != now[c]}
 BUFFER_ROWS = 4                 # slots kept past the viewport, hides scroll tearing
 MIN_WINDOW = 12                 # slots to keep even before the widget has a size
 
@@ -98,6 +160,12 @@ class SortableTree:
         self._tip_column = None
         self._tip_job = None
         self._natural = {}                      # column id -> width it was born with
+        # What the last width fit was computed FOR: (tree width, visible columns).
+        # The memo is not an optimisation, it is the rule that keeps a fit from
+        # fighting the user: a column the user drags narrower changes neither of
+        # those two things, so nothing re-fits and the width they chose stands.
+        # Only hiding/showing a column or resizing the widget asks again.
+        self._fitted_for = None
         self._platform = sys.platform
 
         # -- model (every row) vs viewport (what the widget actually holds) ----- #
@@ -233,6 +301,9 @@ class SortableTree:
             self._ensure_slots(needed)
             self.offset = min(self.offset, self.max_offset())
             self.repaint()
+        # A wider widget means new slack to absorb. Guarded by the memo, so this
+        # fires once per real size change and not on every event.
+        self.fit_columns()
 
     def max_offset(self):
         return max(0, len(self.items) - self.window())
@@ -595,6 +666,34 @@ class SortableTree:
             self.tree.configure(displaycolumns=tuple(wanted))
         except Exception as _exc:
             crashlog.note(_exc, "gui.widgets.sortable_tree")
+        # Hiding columns leaves the rest at their own widths and the remainder of
+        # the table as bare background - 871 px of it with 2 of 17 columns shown.
+        self.fit_columns()
+
+    def fit_columns(self, force=False):
+        """Grow the visible columns to fill the tree. See ``fitted_widths``.
+
+        Asked on two occasions only - the visible set changed, or the widget was
+        resized - and the memo below is what enforces that. Calling it after a
+        column drag would undo the drag.
+        """
+        try:
+            width = int(self.tree.winfo_width() or 0)
+            visible = self.visible_columns()
+            token = (width, tuple(visible))
+            if not force and token == self._fitted_for:
+                return
+            current = {c: int(self.tree.column(c, "width") or 0) for c in visible}
+        except Exception as _exc:      # a dying widget answers nothing
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
+            return
+        self._fitted_for = token
+        for col, value in fitted_widths(self.columns, self._visible,
+                                        self._natural, current, width).items():
+            try:
+                self.tree.column(col, width=value)
+            except Exception as _exc:
+                crashlog.note(_exc, "gui.widgets.sortable_tree")
 
     def reset_widths(self):
         """Back to the widths derived from the header text and the current DPI."""

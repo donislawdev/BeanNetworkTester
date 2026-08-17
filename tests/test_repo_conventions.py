@@ -302,11 +302,33 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
     Measured before the fix (2026-08-02): 12 of the 183 files scanned were
     git-ignored, `crashes/latest-crash.txt` among them, whose text comes from OS
     exceptions and is nobody's convention to keep.
+
+    🔴 **The HANDOFF half of this was an ASSERTION THAT COULD NOT FAIL, and only a
+    mutation run said so.** It named `HANDOFF-UI-CLI.md`, a brief deleted on
+    2026-08-10, so `repo_text_files` could never return it whatever
+    `SKIP_PREFIXES` held - emptying that tuple changed nothing and the guard still
+    read as proof (`internal_tools/mutate.py`, 2026-08-17: SURVIVED). It now PLANTS
+    a brief for the length of the scan, so the skip has something to skip. The
+    other names above are files that DO exist here, so they were never in doubt.
     """
-    scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
-               for p in repo_text_files((".py", ".md", ".json", ".txt"))}
+    # A brief that really exists, because a guard against scanning one cannot be
+    # tested by naming a file that is absent. `HANDOFF-*.md` is git-ignored, so this
+    # never dirties the tree, and it is removed before the assertions run.
+    probe = os.path.join(ROOT, "HANDOFF-scanner-probe.md")
+    check("the planted brief is not overwriting a real one",
+          not os.path.exists(probe), f"({probe})")
+    # An em-dash: what the dash scan would object to if it ever read this file.
+    # Built with chr() rather than written out, because THIS file is repository text
+    # and is scanned by the very rule it defines - a literal one fails the suite.
+    with open(probe, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write("planted by the suite " + chr(0x2014) + " removed immediately\n")
+    try:
+        scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
+                   for p in repo_text_files((".py", ".md", ".json", ".txt"))}
+    finally:
+        os.remove(probe)
     for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md",
-                  "CHANGELOG-INTERNAL.md", "HANDOFF-UI-CLI.md"):
+                  "CHANGELOG-INTERNAL.md", os.path.basename(probe)):
         check(f"{stray} is not scanned (it is not in the repository)",
               stray not in scanned, f"({stray})")
     for prefix in ("internal_tools/", ".claude/", "crashes/"):
