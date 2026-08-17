@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Docs
+- **One more component named in the licence list.** `libtommath` now appears in the About window,
+  in `--license` and in the third-party notices, with its licence and where its source lives. It
+  ships with the program because the graphical interface needs Tk, and Tk brings it along - it is
+  public-domain software and nothing here calls it directly. Nothing about how the program works
+  has changed. It was missing from the list, and a list that claims to be complete has to be.
+
 ## [0.5.0] - 2026-08-12
 
 **The short version.** This release is about not losing your files when the program is
