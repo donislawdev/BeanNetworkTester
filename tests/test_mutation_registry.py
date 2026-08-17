@@ -955,6 +955,12 @@ PROVEN_BY_HAND = {
     "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",
     "test_a_worker_thread_exception_is_recorded": "2026-08-01, the excepthook body",
     "test_pid_for_takes_no_lock_because_the_capture_thread_calls_it": "2026-07-29, taking the lock",
+    # Not in MUTATIONS because the patch would be the two enormous `log.driver_*`
+    # lines pasted twice over, which is a registry entry nobody will ever read. The
+    # swap was done for real, both ways, on both files.
+    "test_the_language_files_stay_sorted":
+        "2026-08-17, swapped two adjacent keys back out of order in both lang "
+        "files (byte-level, so LF survived), saw it go red, restored it, saw green",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody
