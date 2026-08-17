@@ -855,6 +855,26 @@ MUTATIONS = [
         "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
     {
+        # The reported fault: a scroll region shorter than its viewport lets Tk
+        # move the canvas origin above the content, so the Settings window showed
+        # a blank band and the scrollbar swore there was nothing to scroll.
+        "label": "gui: the scroll region stops being clamped to the viewport",
+        "file": "beantester/gui/scrollable.py",
+        "old": "    return (x0, y0, x1, max(y1, y0 + height))",
+        "new": "    return (x0, y0, x1, y1)",
+        "test": "test_a_scroller_whose_content_fits_is_still_confined_to_it",
+    },
+    {
+        # The second way into the same fault, found while fixing the first:
+        # configure(scrollregion=None) clears the region, and an unconfined canvas
+        # is exactly what the clamp exists to prevent.
+        "label": "gui: an empty canvas passes None through as its scroll region",
+        "file": "beantester/gui/scrollable.py",
+        "old": "    if not bbox:\n        x0 = y0 = x1 = y1 = 0",
+        "new": "    if bbox is None:\n        return None",
+        "test": "test_an_empty_canvas_still_gets_a_region_instead_of_none",
+    },
+    {
         # The 2026-08-17 failure in one line: an unpinned builder in a workflow.
         # CI resolved PyInstaller 6.22.1, this machine had 6.21.0, and only the
         # older one mis-handles Python 3.14's DLL-embedded Tcl/Tk 9 archive - so

@@ -17,7 +17,72 @@ the one that touched ``ensure_visible`` replaced it with a spy - both legitimate
 wiring tests, but between them the behaviour above never executed. See the note's
 rule about a test that stubs the very function the fault was in.
 """
+from beantester.gui.scrollable import clamped_scrollregion
+from fakes import check
 from gui_harness import run_gui
+
+
+# -- the scroll region: a canvas must not leave its own content -------------- #
+
+
+def test_a_scroller_whose_content_fits_is_still_confined_to_it():
+    """The region is never shorter than the viewport, so ``confine`` can hold.
+
+    The fault this closes (MEASURED 2026-08-17, Settings window, real Tk):
+    viewport 855 px, content 452 px, region ``0 0 807 452``. Tk confines a view
+    only while the region is TALLER than the window, so one scroll-up moved
+    ``canvasy(0)`` to **-360** - a 360 px blank band above the first row - while
+    ``yview`` still reported ``(0.0, 1.0)``, i.e. "nothing to scroll".
+
+    Guarded as ARITHMETIC rather than as the symptom, and the reason is written
+    down instead of assumed: the fake tkinter canvas has ``yview``,
+    ``yview_scroll`` and ``yview_moveto`` and no ``canvasy``, ``bbox`` or
+    ``scrollregion``, so it cannot express an origin that drifted.
+    """
+    # content shorter than the viewport: the region grows to the viewport
+    check("a short content is padded to the viewport",
+          clamped_scrollregion((0, 0, 807, 452), 855) == (0, 0, 807, 855),
+          f"({clamped_scrollregion((0, 0, 807, 452), 855)})")
+
+    # content taller: untouched, which is what keeps the Control page scrolling
+    check("a tall content is left alone",
+          clamped_scrollregion((0, 0, 807, 4000), 855) == (0, 0, 807, 4000),
+          f"({clamped_scrollregion((0, 0, 807, 4000), 855)})")
+
+    # exactly equal: no change, no off-by-one
+    check("an exact fit is left alone",
+          clamped_scrollregion((0, 0, 807, 855), 855) == (0, 0, 807, 855))
+
+
+def test_an_empty_canvas_still_gets_a_region_instead_of_none():
+    """``bbox("all")`` returns None on an empty canvas, and the old code passed
+    that straight to ``configure(scrollregion=...)``, which CLEARS the region -
+    and an unconfined canvas is the same fault by another route. This was found
+    while fixing the first one, not reported by anybody."""
+    check("None becomes a real region", clamped_scrollregion(None, 600) == (0, 0, 0, 600),
+          f"({clamped_scrollregion(None, 600)})")
+    check("an empty tuple does too", clamped_scrollregion((), 600) == (0, 0, 0, 600))
+
+
+def test_a_viewport_with_no_height_yet_invents_nothing():
+    """Before the first layout the viewport has no height. Clamping to 0 must
+    return the content's own box rather than a made-up one - a window that has
+    not been sized yet has nothing to be clamped to."""
+    check("height 0 leaves the bbox alone",
+          clamped_scrollregion((0, 0, 807, 452), 0) == (0, 0, 807, 452))
+    check("height None leaves the bbox alone",
+          clamped_scrollregion((0, 0, 807, 452), None) == (0, 0, 807, 452))
+    check("both empty is still a valid 4-tuple",
+          clamped_scrollregion(None, 0) == (0, 0, 0, 0))
+
+
+def test_a_region_that_does_not_start_at_zero_is_measured_from_its_own_top():
+    """The clamp adds height to the region's OWN top, not to zero. Nothing here
+    produces a non-zero origin today - the body is anchored at (0, 0) - so this
+    pins the arithmetic before something does, which is cheaper than finding out
+    from a blank band."""
+    check("the viewport is added to y0", clamped_scrollregion((0, 40, 807, 200), 300)
+          == (0, 40, 807, 340), f"({clamped_scrollregion((0, 40, 807, 200), 300)})")
 
 
 # -- _resolve: what is under the pointer ------------------------------------- #

@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+- **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
+  pushed everything down and left a blank band above the first setting, as if the window had lost
+  its contents. It now stops at the top, and the same fix applies to the Control page.
+
 ### Docs
 - **One more component named in the licence list.** `libtommath` now appears in the About window,
   in `--license` and in the third-party notices, with its licence and where its source lives. It
