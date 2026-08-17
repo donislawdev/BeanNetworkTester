@@ -65,6 +65,18 @@ COMPONENTS = (
     ("libffi", None, "MIT-style (text inside Python-LICENSE.txt)",
      "https://github.com/libffi/libffi",
      "MIT"),
+    # 🔴 Found the same way, six days later (bundle scan, 2026-08-17), and it
+    # arrived without a commit of ours: Python 3.14 ships Tcl/Tk 9.0, and Tcl 9
+    # links libtommath for its bignum support. `libtommath.dll` sits in the
+    # CPython DLLs directory, so it lands in the bundle with everything else Tk
+    # needs. Nothing in any requirements file names it - which is the whole reason
+    # the scan guards this list instead of the other way round.
+    # Licence read at the source (libtom/libtommath LICENSE): "This is free and
+    # unencumbered software released into the public domain", pointing at
+    # unlicense.org - so SPDX `Unlicense`, and compatible with GPLv3.
+    ("libtommath", None, "public domain (the Unlicense)",
+     "https://github.com/libtom/libtommath",
+     "Unlicense"),
     # 42 files, over half the bundle by count: ucrtbase, VCRUNTIME140(_1) and 39
     # `api-ms-win-*` ApiSet stubs. The stubs were nearly missed - they are easy to
     # read as Windows itself rather than as something we redistribute.

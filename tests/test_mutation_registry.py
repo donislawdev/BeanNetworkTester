@@ -854,6 +854,27 @@ MUTATIONS = [
                "                return f\"{name}: stopped (removal was already scheduled)\"",
         "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
+    {
+        # The 2026-08-17 failure in one line: an unpinned builder in a workflow.
+        # CI resolved PyInstaller 6.22.1, this machine had 6.21.0, and only the
+        # older one mis-handles Python 3.14's DLL-embedded Tcl/Tk 9 archive - so
+        # the same commit built a working exe there and a crashing one here.
+        "label": "release: a workflow installs the freezer unpinned again",
+        "file": ".github/workflows/ci.yml",
+        "old": "          pip install -r requirements.txt -r requirements-build.txt",
+        "new": "          pip install -r requirements.txt pyinstaller",
+        "test": "test_both_workflows_install_the_same_pinned_builder",
+    },
+    {
+        # The other half: the file is wired in, but stops actually pinning. Kept
+        # version-agnostic on purpose - `pyinstaller==` survives every bump, while
+        # spelling the number here would make this entry go stale on each one.
+        "label": "release: the builder pin loosens into a range",
+        "file": "requirements-build.txt",
+        "old": "pyinstaller==",
+        "new": "pyinstaller>=",
+        "test": "test_both_workflows_install_the_same_pinned_builder",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

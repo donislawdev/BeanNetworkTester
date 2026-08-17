@@ -1,0 +1,32 @@
+# Build-time dependency: the tool that freezes the shipped executable.
+#
+# 🔴 PINNED, and the pin is the point. This file exists because of a REAL failure
+# on 2026-08-17, not as tidiness. `pyinstaller` was installed unpinned by both
+# `ci.yml` and `release.yml` (`pip install -r requirements.txt pyinstaller`), so
+# CI and a developer machine could build with different versions of the tool that
+# produces the binary - and they did:
+#
+#   * Python 3.14 on Windows ships Tcl/Tk 9.0, which keeps its library scripts in
+#     a zip archive embedded in `tcl90.dll` instead of a directory on disk.
+#   * PyInstaller 6.21.0 reads that path as a filesystem directory, fails, and
+#     collects ZERO Tcl/Tk data files, so `_internal/_tcl_data` never exists. Its
+#     own run-time hook then requires that directory and raises FileNotFoundError
+#     before any of our code runs. The exe crashes on launch, every launch.
+#   * PyInstaller 6.22.0 added support for Tcl/Tk 9 builds with embedded data
+#     archives, and moved the "data directory missing" error from RUN time to
+#     BUILD time. A machine on 6.22.x cannot ship that crash.
+#
+# So the version of this one package decides whether the artefact starts at all,
+# and nothing recorded which version built a given release. Same reasoning as the
+# pin in requirements.txt: a requirement without a version is not a component, it
+# is a wish.
+#
+# The cost is honest: this number needs raising by hand. Do it deliberately -
+# PyInstaller decides the bundle's contents, so a bump can add or drop files that
+# `beantester/legal.py` and THIRD-PARTY-NOTICES.md have to account for (the same
+# Tcl 9 move added `libtommath` to the bundle). After bumping: build the exe and
+# LAUNCH it, CLI and GUI - see "definition of done" in PROJECT_NOTES.
+#
+# Kept out of requirements-dev.txt on purpose: that file is deliberately unpinned
+# so pytest and hypothesis track latest, and this one must not.
+pyinstaller==6.22.1

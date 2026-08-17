@@ -159,6 +159,10 @@ BUNDLE_PATTERNS = (
     (r"windivert", "WinDivert"),
     (r"^zlib", "zlib"),
     (r"libffi", "libffi"),
+    # Arrives with Tcl 9 (bignum support), not with any requirement of ours. The
+    # scan named it `\_internal\libtommath`, hence a substring match rather than
+    # an anchored one - `re.search`, so the path prefix does not matter.
+    (r"libtommath", "libtommath"),
     (r"^pydivert", "PyDivert"),
     (r"^psutil", "psutil"),
     (r"pyinstaller", "PyInstaller (bootloader)"),

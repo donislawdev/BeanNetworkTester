@@ -72,9 +72,15 @@ def test_the_declared_licences_are_real_spdx_and_match_the_registry():
     it looks authoritative to a tool that cannot check it."""
     doc = sbom.build()
     by_name = {p["name"]: p for p in doc["packages"]}
+    # Hand-curated on purpose: the point is to catch an INVENTED identifier, and a
+    # list fetched at test time would need the network. Each entry was read off the
+    # official SPDX list before being added here - "Unlicense" (full name "The
+    # Unlicense", active, OSI-approved) checked at spdx.org/licenses on 2026-08-17
+    # when Tcl 9 brought libtommath into the bundle.
     known_ids = {
         "GPL-3.0-only", "LGPL-3.0-only", "GPL-2.0-only", "LGPL-3.0-or-later",
         "GPL-2.0-or-later", "BSD-3-Clause", "PSF-2.0", "TCL", "Zlib", "MIT",
+        "Unlicense",
     }
     known_exceptions = {"Bootloader-exception"}
 

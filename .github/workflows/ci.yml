@@ -13,13 +13,18 @@ on:
   # them between pushes:
   #   * `requirements-dev.txt` is deliberately unpinned - pytest, hypothesis and
   #     pytest-cov track latest, and a new pytest can redden a green suite;
-  #   * **pyinstaller is installed unpinned** (`pip install -r requirements.txt
-  #     pyinstaller`) in the build job here AND in release.yml, so an upstream
-  #     release changes the executable we ship without a commit of ours;
   #   * the runner image and the 3.14.x patch `setup-python` resolves both move
-  #     under us.
-  # In other words the cron catches less than it used to on the runtime side and
-  # exactly as much on the side that builds the binary.
+  #     under us - and that is not theoretical: a 3.14 patch brought Tcl/Tk 9.0,
+  #     whose DLL-embedded library archive broke the frozen exe on an older
+  #     PyInstaller and added `libtommath` to the bundle (2026-08-17).
+  # `pyinstaller` USED to be unpinned here and in release.yml, which is how the
+  # same commit could build a working exe on CI and a crashing one on a developer
+  # machine. It is pinned in requirements-build.txt now, so what this cron watches
+  # on the build side is the runner and the interpreter, not the freezer.
+  #
+  # 🔴 A red cron is only worth the minutes if somebody reads it. The owner
+  # decided against opening an issue automatically (2026-08-17), so this run is
+  # checked by hand - `gh run list --workflow CI --branch master`.
   schedule:
     - cron: "0 6 * * 1"
   # Allow running the pipeline by hand from the Actions tab.
@@ -221,7 +226,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt -r requirements-build.txt
 
       # onedir + console subsystem + asInvoker - see BeanNetworkTester.spec
       - name: Build

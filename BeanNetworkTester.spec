@@ -102,11 +102,23 @@ a = Analysis(
 # Performance > size (PROJECT_NOTES): a trim may only shrink the release footprint,
 # never touch startup or runtime. onedir does NOT unpack at launch, so dropping
 # files does not speed startup - it only makes the folder next to the exe smaller.
-# Tcl bundles the full IANA timezone database (_tcl_data/tzdata, ~600 files) and its
+# A Tcl 8.6 build bundles the full IANA timezone database (_tcl_data/tzdata) and its
 # own msgcat message catalogs (_tcl_data/msgs, _tk_data/msgs). This tool uses
-# Python's time (never Tcl's [clock]) and its own i18n (lang/*.json), so those ~750
-# files are dead weight. Encodings are KEPT (Tk needs them). OpenSSL (libcrypto/libssl)
+# Python's time (never Tcl's [clock]) and its own i18n (lang/*.json), so those files
+# are dead weight. Encodings are KEPT (Tk needs them). OpenSSL (libcrypto/libssl)
 # is dropped via the Analysis `excludes` above - see the note there.
+#
+# 🔴 On Tcl 9 this filter is a NO-OP, and the sentence above used to claim it saved
+# "~750 files" unconditionally. MEASURED 2026-08-17 (Python 3.14.7, Tcl 9.0.4,
+# PyInstaller 6.22.1): Tcl 9 keeps its library scripts in a zip archive embedded in
+# tcl90.dll, so `tcltk_info.data_files` is 0, there is no _tcl_data/ or _tk_data/ in
+# the bundle at all, and this comprehension drops NOTHING. The built _internal/
+# carries exactly two Tcl files, tcl90.dll and tcl9tk90.dll.
+# The filter stays because `requires-python = ">=3.10"` (see the ADR on the tested vs
+# supported split) still permits an interpreter that ships Tcl 8.6, and there it does
+# bite - NOT re-measured here, so treat the size saving as true for 8.6 and zero for 9.
+# Nothing guards this comment. If a future Python moves the Tcl data again, the number
+# to re-read is `len(tcltk_info.data_files)`, not this paragraph.
 _TCL_CRUFT = ("_tcl_data/tzdata/", "_tcl_data/msgs/", "_tk_data/msgs/")
 a.datas = [d for d in a.datas
            if not any(part in d[0].replace("\\", "/") for part in _TCL_CRUFT)]
