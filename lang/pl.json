@@ -215,7 +215,7 @@
   "fields.target_no_match": "Żaden działający proces nie pasuje do tego celu - ruch NIE jest modyfikowany.",
   "fields.target_process": "Proces:",
   "fields.unit_b_off": "B (0=wył.)",
-  "fields.unit_rows_off": "wierszy (0 = brak)",
+  "fields.unit_rows": "wierszy",
   "fields.unit_s_off": "s (0=wył.)",
   "fields.upload": "Wysyłanie:",
   "filters.both": "Ruch w obie strony (TCP+UDP+ICMP)",

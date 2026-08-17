@@ -17,6 +17,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   three times their normal width, so with only one or two narrow columns on screen some space is
   left over rather than stretching them absurdly wide.
 
+- **The row limit no longer says the same thing twice.** The field read
+  `50000 rows (0 = off)   0 = no limit`. The unit is now just `rows`, and the note beside it still
+  explains what 0 does.
+
 ### Docs
 - **One more component named in the licence list.** `libtommath` now appears in the About window,
   in `--license` and in the third-party notices, with its licence and where its source lives. It

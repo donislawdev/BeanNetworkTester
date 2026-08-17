@@ -215,7 +215,7 @@
   "fields.target_no_match": "No running process matches this target - traffic is NOT being impaired.",
   "fields.target_process": "Process:",
   "fields.unit_b_off": "B (0=off)",
-  "fields.unit_rows_off": "rows (0 = off)",
+  "fields.unit_rows": "rows",
   "fields.unit_s_off": "s (0=off)",
   "fields.upload": "Upload:",
   "filters.both": "Both directions (TCP+UDP+ICMP)",
