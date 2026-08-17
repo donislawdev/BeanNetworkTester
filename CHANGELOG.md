@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   pushed everything down and left a blank band above the first setting, as if the window had lost
   its contents. It now stops at the top, and the same fix applies to the Control page.
 
+- **Hiding columns in Connections no longer leaves the table half empty.** The columns you keep now
+  widen to fill the space the hidden ones left, instead of huddling on the left with bare background
+  beside them. A column you have dragged to a width of your own keeps it - widening happens when you
+  change which columns are shown or resize the window, never behind your back. Columns still stop at
+  three times their normal width, so with only one or two narrow columns on screen some space is
+  left over rather than stretching them absurdly wide.
+
 ### Docs
 - **One more component named in the licence list.** `libtommath` now appears in the About window,
   in `--license` and in the third-party notices, with its licence and where its source lives. It

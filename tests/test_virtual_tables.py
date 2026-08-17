@@ -18,7 +18,128 @@ that true - and that a well-meaning "simplification" would quietly undo:
 3. selection, the context menu and Ctrl+C work off MODEL KEYS, because the
    widget's item ids are recycled slots and mean nothing.
 """
+from beantester.gui.widgets.sortable_tree import MAX_WIDTH_FACTOR, fitted_widths
+from fakes import check
 from gui_harness import run_gui
+
+
+# -- hiding columns must not leave the table half empty ---------------------- #
+
+# The Connections table's real natural widths, read off it on 2026-08-17 - so
+# these tests exercise the shape the user actually meets, not a tidy invention.
+NATURAL = {"proc": 134, "pid": 71, "down_seen": 118, "up_seen": 113,
+           "remote_ip": 148, "proto": 83}
+TREE = 1076
+
+
+def test_hiding_columns_fills_the_table_instead_of_leaving_dead_space():
+    """The reported fault, as arithmetic.
+
+    MEASURED before the fix: with 2 of 17 columns shown the visible widths summed
+    to 205 px in a 1076 px tree - **871 px of bare background**. The table refuses
+    ``stretch`` on purpose (ttk recomputes a stretch column and a dragged width
+    snaps back), so nothing was absorbing the slack.
+
+    The four-column case is the one from the report, and it fills exactly.
+    """
+    visible = {"proc", "pid", "down_seen", "up_seen"}
+    current = {c: NATURAL[c] for c in visible}
+    out = fitted_widths(NATURAL, visible, NATURAL, current, TREE)
+    total = sum(out.get(c, current[c]) for c in visible)
+    check("four columns fill the tree exactly", total == TREE, f"({total} != {TREE})")
+    check("every visible column grew", all(out[c] > current[c] for c in visible),
+          f"({out})")
+    check("a hidden column is never touched", "remote_ip" not in out, f"({out})")
+
+
+def test_a_fit_never_takes_a_column_past_the_width_a_drag_could_reach():
+    """The cap is ``MAX_WIDTH_FACTOR`` x natural - the same ceiling ``clamp_widths``
+    applies after a drag, so a fit cannot produce a width the user could not have
+    dragged to by hand.
+
+    With one narrow column against a wide tree the cap BINDS, and the leftover is
+    deliberately left as dead space rather than breaking it: measured 402 px of
+    column and 674 px of remainder for a single ``proc``. Bounded and honest beats
+    a column stretched past anything reachable.
+    """
+    out = fitted_widths(NATURAL, {"proc"}, NATURAL, {"proc": 134}, TREE)
+    cap = int(NATURAL["proc"] * MAX_WIDTH_FACTOR)
+    check("the single column stops at its cap", out == {"proc": cap}, f"({out}, cap={cap})")
+    check("and the cap really is short of the tree", cap < TREE, f"({cap})")
+
+
+def test_a_fit_only_ever_widens():
+    """Shrinking would take away a width the user dragged to, which is the whole
+    property that refusing ``stretch`` was protecting. A column already wider than
+    the tree's share keeps every pixel."""
+    visible = {"proc", "pid"}
+    current = {"proc": 900, "pid": 71}          # proc dragged out by hand
+    out = fitted_widths(NATURAL, visible, NATURAL, current, TREE)
+    check("the dragged column is not reduced", out.get("proc", 900) >= 900, f"({out})")
+    for col, width in out.items():
+        check(f"{col} did not shrink", width >= current[col], f"({width} < {current[col]})")
+
+
+def test_a_full_or_overflowing_table_is_left_alone():
+    """No slack, nothing to do - and this is the state the table is in whenever
+    every column is shown, where the horizontal scrollbar is the right answer."""
+    visible = set(NATURAL)
+    current = dict(NATURAL)
+    check("a table wider than its tree is untouched",
+          fitted_widths(NATURAL, visible, NATURAL, current, 200) == {},
+          "(a fit must never fire when the scrollbar has work)")
+    exact = {"proc": TREE}
+    check("an exact fit is untouched",
+          fitted_widths(NATURAL, {"proc"}, NATURAL, exact, TREE) == {})
+
+
+def test_a_table_that_has_not_been_laid_out_yet_is_not_fitted():
+    """Before the first layout the widget reports width 0 or 1. Fitting against
+    that would write nonsense widths that the real ``<Configure>`` then has to
+    undo."""
+    for width in (0, 1, None):
+        check(f"width {width!r} fits nothing",
+              fitted_widths(NATURAL, {"proc", "pid"}, NATURAL,
+                            {"proc": 134, "pid": 71}, width) == {})
+    check("no visible columns fits nothing",
+          fitted_widths(NATURAL, set(), NATURAL, {}, TREE) == {})
+
+
+def test_the_slack_goes_to_the_columns_that_were_born_wide():
+    """Proportional to NATURAL width, so the column that was born wide stays the
+    wide one. Sharing it equally would make a PID column as wide as a path."""
+    visible = {"proc", "pid"}
+    out = fitted_widths(NATURAL, visible, NATURAL, {"proc": 134, "pid": 71}, 500)
+    check("both grew", set(out) == visible, f"({out})")
+    check("the naturally wider column stays wider", out["proc"] > out["pid"], f"({out})")
+    check("the slack is fully used", sum(out.values()) == 500, f"({sum(out.values())})")
+
+
+def test_a_width_the_user_dragged_survives_a_fit_but_hiding_a_column_re_fits():
+    """The memo, which is the rule that keeps the fit from fighting the user.
+
+    A fit is asked for on two occasions only - the visible set changed, or the
+    widget was resized. Dragging a column narrower changes neither, so the width
+    the user chose stands. Without that, every fit would undo every drag.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        table.set_visible_columns(["proc", "pid", "down_seen", "up_seen"])
+        natural = table._natural["proc"]
+
+        # the user drags "proc" narrower than anything a fit would pick
+        table.tree.column("proc", width=90)
+        table.fit_columns()
+        assert int(table.tree.column("proc", "width")) == 90, (
+            "a fit must not undo a width the user chose",
+            table.tree.column("proc", "width"))
+
+        # ...but hiding a column is a new question, and it gets a new answer
+        table.set_visible_columns(["proc", "pid"])
+        after = int(table.tree.column("proc", "width"))
+        assert after > 90, ("hiding a column must re-fit the rest", after)
+        assert after <= natural * 3, ("and still respect the cap", after, natural)
+    """)
 
 
 def test_the_widget_never_holds_more_than_a_viewport():

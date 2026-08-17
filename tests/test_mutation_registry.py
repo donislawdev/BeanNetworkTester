@@ -855,6 +855,34 @@ MUTATIONS = [
         "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
     {
+        # The cap is what makes the fit safe: without it a single narrow column
+        # would be stretched to the whole tree, far past anything a drag can reach.
+        "label": "gui: the column fit stops respecting the drag cap",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        take = min(caps[col] - out[col], int(slack * base[col] / total))",
+        "new": "        take = int(slack * base[col] / total)",
+        "test": "test_a_fit_never_takes_a_column_past_the_width_a_drag_could_reach",
+    },
+    {
+        # With every column shown the table is WIDER than the tree and the
+        # horizontal scrollbar is the right answer; fitting there would shrink
+        # columns, which is the one thing this function must never do.
+        "label": "gui: the column fit runs even when there is no slack",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "    if slack <= 0:\n        return {}",
+        "new": "    if slack < -(10 ** 9):\n        return {}",
+        "test": "test_a_full_or_overflowing_table_is_left_alone",
+    },
+    {
+        # The memo is the rule that keeps a fit from undoing a drag. Removing it
+        # makes every resize event overwrite the width the user chose.
+        "label": "gui: a column fit forgets what it was last computed for",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            if not force and token == self._fitted_for:",
+        "new": "            if False:",
+        "test": "test_a_width_the_user_dragged_survives_a_fit_but_hiding_a_column_re_fits",
+    },
+    {
         # The reported fault: a scroll region shorter than its viewport lets Tk
         # move the canvas origin above the content, so the Settings window showed
         # a blank band and the scrollbar swore there was nothing to scroll.
