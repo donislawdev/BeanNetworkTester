@@ -85,6 +85,12 @@ LINE_C = "#2f3542"        # separators
 # nearly invisible. They get their own, lighter surface plus an outline.
 BTN_BG, BTN_HOVER, BTN_BORDER = "#394152", "#4a5468", "#525d73"
 DONATE_C = "#ff8fb1"      # the support button (not a session control - own colour)
+# The Control page's search highlight. Amber because every other meaning on this
+# page is already spoken for: blue is the accent (headers, links, "?"), green is
+# running, red is a fault, pink is the support button. A hit is none of those - it
+# is "you asked for this one" - and it has to survive being read at a glance on a
+# page whose every heading is blue.
+HIT, HIT_TEXT = "#f5c451", "#16181d"
 SCROLL_BG = "#3a4150"     # scrollbar thumb
 SCROLL_TROUGH = "#20232b"
 
@@ -108,6 +114,17 @@ def _style_surfaces(s):
     # (ttk paints a disabled ttk.Label with a filled box, which looked broken)
     s.configure("CardOff.TLabel", background=BG2, foreground=DIS_FG, font=(FONT, 9))
     s.configure("Unit.TLabel", background=BG2, foreground=MUT, font=(FONT, 9))
+    # 🔴 Search hits, in TWO strengths - and in a colour this page uses nowhere
+    # else. The first version painted them in ACC, which is the accent every
+    # section header, "?" button and link already wears: on a page this blue the
+    # highlight simply disappeared. Amber is unused here, so it can only mean
+    # "this is what you typed".
+    #   Hit    = the one you are ON: filled, like a marker pen, so it is findable
+    #            from across the window and tells you where Enter has taken you.
+    #   HitDim = the other matches: the same amber as text only. Present, clearly
+    #            related, not competing with the current one.
+    s.configure("Hit.TLabel", background=HIT, foreground=HIT_TEXT, font=(FONT, 9, "bold"))
+    s.configure("HitDim.TLabel", background=BG2, foreground=HIT, font=(FONT, 9, "bold"))
     # the "?" syntax help used to melt into the background
     s.configure("Help.TLabel", background=BG2, foreground=ACC, font=(FONT, 9, "bold"))
     # Defensive only: NOTHING in this tool switches a label with `state` today.
@@ -191,6 +208,17 @@ def _style_buttons(s):
                 font=(FONT, 9, "bold"), borderwidth=0, focuscolor=ACC,
                 padding=(scaled(2), scaled(3)), anchor="w")
     s.map("Section.TButton", background=[("active", BG2)])
+    # A section header is a search target too: when the thing that matched has no
+    # text of its own to mark (a dropdown field, or a section with no fields at
+    # all), the header is what the eye can be pointed at.
+    s.configure("Hit.Section.TButton", background=HIT, foreground=HIT_TEXT,
+                font=(FONT, 9, "bold"), borderwidth=0, focuscolor=ACC,
+                padding=(scaled(2), scaled(3)), anchor="w")
+    s.map("Hit.Section.TButton", background=[("active", HIT)])
+    s.configure("HitDim.Section.TButton", background=BG, foreground=HIT,
+                font=(FONT, 9, "bold"), borderwidth=0, focuscolor=ACC,
+                padding=(scaled(2), scaled(3)), anchor="w")
+    s.map("HitDim.Section.TButton", background=[("active", BG2)])
 
     # header gear: an icon-only button that opens the Settings window. Flat on the
     # header at rest (bevel colours pinned to BG so clam draws no raised edge), but
@@ -214,6 +242,20 @@ def _style_checkbuttons(s):
     # amount of option juggling fixes. Draw the box ourselves instead.
     s.configure("TCheckbutton", background=BG2, foreground=FG, font=(FONT, 9),
                 focuscolor=ACC, padding=(0, scaled(2)), borderwidth=0)
+    # A checkbox field IS its label (gui/form.py::_place_one draws no separate one),
+    # so the search highlight needs its own style here or those fields would be the
+    # only ones a search cannot mark. Two strengths, same as the labels.
+    s.configure("Hit.TCheckbutton", background=HIT, foreground=HIT_TEXT,
+                font=(FONT, 9, "bold"), focuscolor=ACC,
+                padding=(0, scaled(2)), borderwidth=0)
+    s.configure("HitDim.TCheckbutton", background=BG2, foreground=HIT,
+                font=(FONT, 9, "bold"), focuscolor=ACC,
+                padding=(0, scaled(2)), borderwidth=0)
+    for hit_style in ("Hit.TCheckbutton", "HitDim.TCheckbutton"):
+        # ttk would otherwise paint the hover/pressed background from the base
+        # style and the highlight would blink away under the pointer.
+        s.map(hit_style, background=[("active", HIT if hit_style == "Hit.TCheckbutton"
+                                     else BG2)])
     s.map("TCheckbutton",
           background=[("active", BG2)],
           foreground=[("disabled", DIS_FG)])

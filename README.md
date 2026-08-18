@@ -199,6 +199,14 @@ effect.
 | `Ctrl+Enter` | Apply changes |
 | `Ctrl+S` / `Ctrl+O` | Save / Load config file |
 | `Ctrl+L` | Clear the log |
+| `Ctrl+F` | Search: the field search on Control, the table search on Connections |
+
+**Finding a setting.** The box at the top of the Control page searches the settings by name -
+type part of a field or section name, or the command-line flag such as `--loss`. Every match is
+highlighted and the one you are on is filled in, so the `1 / 4` counter always points at something
+you can see. `Enter` goes to the next match, `Shift+Enter` back, `Escape` clears the box. A folded section opens while the search lasts and folds itself back afterwards. Accents are
+optional. If what you are after is one of the settings that live in the Settings window, the
+search tells you so.
 
 ### Field validation
 
@@ -1182,6 +1190,7 @@ beantester/              the implementation package
   gui/                   the tkinter interface
     app.py               window composition, state, log, start/stop, dirty-state
     form.py              form generated from fields.FIELD_DEFS
+    form_search.py       matching a typed query against the field registry (pure)
     scaling.py           DPI, scaled pixels, window/chart/tooltip geometry
     wheel.py             mouse-wheel normalisation (a pure function)
     scrollable.py        ScrollableFrame + ONE global wheel dispatcher

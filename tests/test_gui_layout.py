@@ -395,3 +395,281 @@ def test_a_tooltip_never_covers_empty_space():
         bad = stretched(root)
         assert not bad, bad
     """)
+
+
+# -- the Control-page search -------------------------------------------------- #
+
+
+def test_searching_marks_what_matched_and_counts_it():
+    """The whole promise in one run: type, see the match bolded, see how many."""
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("loss")
+        page._apply()
+
+        label = app.form.labels["loss"]
+        assert label.cget("style") == "Hit.TLabel", label.cget("style")
+        assert page._count.cget("text").startswith("1 / "), page._note.cget("text")
+
+        # ...and the field next to it, which did not match, is untouched
+        other = app.form.labels["latency"]
+        assert other.cget("style") == "Card.TLabel", other.cget("style")
+    """)
+
+
+def test_clearing_the_search_puts_every_style_back():
+    """A mark left behind after the box is empty is a page that looks broken."""
+    run_gui("""
+        page = app.pages["control"]
+        before = app.form.labels["loss"].cget("style")
+        page.query_var.set("loss")
+        page._apply()
+        assert app.form.labels["loss"].cget("style") == "Hit.TLabel"
+
+        page.clear()
+        assert app.form.labels["loss"].cget("style") == before, (
+            app.form.labels["loss"].cget("style"))
+        assert page._note.cget("text") == "" and page._count.cget("text") == ""
+    """)
+
+
+def test_a_hit_in_a_folded_section_is_opened_but_never_remembered():
+    """🔴 The regression this feature could most easily cause.
+
+    Fold state is persisted (`App.on_sections_changed` -> `ui.json`), so opening a
+    section through the accordion's own toggle would make a search permanently
+    unfold what the user had chosen to keep closed. The search must open it for
+    the length of the search and put it back.
+    """
+    run_gui("""
+        page = app.pages["control"]
+        panel = app.form.sections["advanced"]
+        panel.set_open(False)
+        app.on_sections_changed(["advanced"])
+        assert app.collapsed_sections == ["advanced"]
+        written = app.ui.get("collapsed")
+
+        page.query_var.set("--syn-drop")          # a field inside that section
+        page._apply()
+        assert panel.is_open, "the section holding the hit must be opened"
+        assert app.collapsed_sections == ["advanced"], (
+            "opening it for a search must not change the remembered state: "
+            + str(app.collapsed_sections))
+        assert app.ui.get("collapsed") == written, "nothing may be written to ui.json"
+
+        page.clear()
+        assert not panel.is_open, "clearing the search must fold it back"
+    """)
+
+
+def test_a_field_that_lives_in_the_settings_window_says_so():
+    """Decision of 2026-08-18: a hit this page cannot jump to still answers."""
+    run_gui("""
+        from beantester.i18n import T
+        page = app.pages["control"]
+        page.query_var.set("row_limit")           # renders in the Settings window
+        page._apply()
+        text = page._note.cget("text")
+        assert text and "/" not in text, "there is nothing on this page to walk: " + text
+        assert text == T("fields.search_elsewhere", name=T("fields.row_limit").rstrip(":")), text
+        assert not page._marks, "nothing on this page may be marked"
+    """)
+
+
+def test_a_query_that_matches_nothing_says_so_instead_of_going_quiet():
+    run_gui("""
+        from beantester.i18n import T
+        page = app.pages["control"]
+        page.query_var.set("zzzznothing")
+        page._apply()
+        assert page._note.cget("text") == T("fields.search_none"), page._note.cget("text")
+    """)
+
+
+def test_the_search_survives_the_form_rebuilding_itself():
+    """Crossing the two-column threshold destroys every widget in the form. The
+    marks pointed at those widgets, so without the rebuild hook the page would
+    come back with a query in the box and nothing marked."""
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("loss")
+        page._apply()
+        assert app.form.labels["loss"].cget("style") == "Hit.TLabel"
+
+        app.form.set_columns(2)                   # rebuilds the whole form
+        assert app.form.columns == 2
+        assert app.form.labels["loss"].cget("style") == "Hit.TLabel", (
+            "the mark did not come back after the rebuild")
+    """)
+
+
+def test_only_the_control_page_has_a_search_box():
+    """The Settings window renders the SAME ControlForm; the search belongs to the
+    page, not to the form, or it would appear in both."""
+    run_gui("""
+        from beantester.gui.form import ControlForm
+        assert hasattr(app.pages["control"], "query_var")
+        assert not hasattr(ControlForm, "query_var")
+
+        app.windows.open("settings")
+        panel = app.windows._open.get("settings")
+        assert panel is not None
+        assert not hasattr(panel, "query_var"), "the Settings window grew a search box"
+        # its form is a ControlForm all the same - that is the point of the check
+        assert isinstance(getattr(panel, "form", None), ControlForm)
+    """)
+
+
+def test_one_ctrl_f_reaches_whichever_search_box_is_in_front():
+    """🔴 Two boxes, one shortcut - and a root binding without `add` REPLACES the
+    one before it, so the page built second would have silently taken Ctrl+F away
+    from the other. From a page with no box the shortcut keeps its older
+    behaviour: bring the connection table forward and type there."""
+    run_gui("""
+        from beantester.gui.pages import focus_search
+        control, conns = app.pages["control"], app.pages["connections"]
+
+        app.select_page("control")
+        focus_search(app)
+        assert app.current_page() is control, "Ctrl+F left the Control page"
+        assert root.focus_get() is control._entry, "the caret missed the field search"
+
+        app.select_page("connections")
+        focus_search(app)
+        assert root.focus_get() is conns._search_entry, "the caret missed the table search"
+
+        app.select_page("statistics")
+        focus_search(app)
+        assert app.current_page() is conns, "from a page with no box it must fall back"
+        assert root.focus_get() is conns._search_entry
+    """)
+
+
+def test_the_hit_you_are_on_looks_different_from_the_rest():
+    """Reported by the owner: with several matches, Enter moved the page and
+    nothing said WHICH one you had arrived at - every match looked the same.
+
+    The current one is filled (`Hit.*`), the others are tinted (`HitDim.*`), and
+    the pair moves together with the count.
+    """
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("port")             # matches two fields, no section
+        page._apply()
+        assert len(page._targets) > 1, page._targets
+
+        first = page._marks[0][0]
+        second = page._marks[1][0]
+        assert first.cget("style") == "Hit.TLabel", first.cget("style")
+        assert second.cget("style") == "HitDim.TLabel", second.cget("style")
+        assert page._count.cget("text") == "1 / %d" % len(page._targets)
+
+        page._step(1)
+        assert first.cget("style") == "HitDim.TLabel", "the old current stayed filled"
+        assert second.cget("style") == "Hit.TLabel", "the new current was not filled"
+        assert page._count.cget("text") == "2 / %d" % len(page._targets)
+
+        # ...and it wraps rather than stopping at the end
+        for _ in range(len(page._targets) - 1):
+            page._step(1)
+        assert page._count.cget("text") == "1 / %d" % len(page._targets)
+        assert first.cget("style") == "Hit.TLabel"
+    """)
+
+
+def test_the_search_highlight_is_not_the_colour_everything_else_uses():
+    """Also reported by the owner: the first version painted hits in the page
+    accent, which is the colour of every section header, link and "?" button - so
+    the highlight vanished into the page it was meant to stand out from.
+
+    The check is that the colours DIFFER, not that any particular one was picked:
+    the palette may be retuned, the meaning may not collide again.
+    """
+    run_gui("""
+        from beantester.gui import theme
+        assert theme.HIT != theme.ACC, "the highlight is the page accent again"
+        assert theme.HIT not in (theme.BG, theme.BG2), "it is the surface colour"
+        assert theme.HIT not in (theme.OK, theme.WARN, theme.DONATE_C), (
+            "it now means the same as running / faulty / support")
+        assert theme.HIT_TEXT != theme.HIT, "the text is the same colour as its fill"
+        assert theme.HIT_TEXT in (theme.BG, theme.BG2) or theme.HIT_TEXT < "#404040", (
+            "text on the fill has to be the dark end, or it will not read")
+    """)
+
+
+def test_a_match_with_no_text_of_its_own_marks_its_section():
+    """The traffic filter is a dropdown and Profiles has no fields at all: both
+    were counted and never marked, so the count promised something the page did
+    not show."""
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("profil")           # a section with no fields of its own
+        page._apply()
+        assert page._targets, "the Profiles section must be reachable"
+        widget, kind, _old = page._marks[0]
+        assert kind == "section", kind
+        assert widget is app.form.sections["profiles"].header
+        assert widget.cget("style") == "Hit.Section.TButton", widget.cget("style")
+
+        page.clear()
+        assert widget.cget("style") == "Section.TButton", widget.cget("style")
+    """)
+
+
+def test_a_section_the_user_opens_during_a_search_is_left_open():
+    """The page closes what IT opened, not everything that happened to be closed
+    when the search started - otherwise clearing the box folds away a section the
+    user deliberately opened while looking at the results."""
+    run_gui("""
+        page = app.pages["control"]
+        advanced, block = app.form.sections["advanced"], app.form.sections["block"]
+        advanced.set_open(False)
+        block.set_open(False)
+        app.on_sections_changed(["advanced", "block"])
+
+        page.query_var.set("--syn-drop")       # lives in "advanced"
+        page._apply()
+        assert advanced.is_open, "the section holding the hit must open"
+        assert not block.is_open
+
+        block.set_open(True)                   # the user opens another one by hand
+        page.clear()
+        assert not advanced.is_open, "what the search opened must close again"
+        assert block.is_open, "what the USER opened must stay open"
+    """)
+
+
+def test_a_query_of_nothing_but_punctuation_is_not_a_search():
+    """Edge cases that must not raise or light up the page: a lone flag prefix,
+    spaces, and characters that would be a regular expression somewhere else."""
+    run_gui("""
+        page = app.pages["control"]
+        for query in ("--", "   ", "(", "*", ".*", "re:", "]["):
+            page.query_var.set(query)
+            page._apply()
+            if query.strip() in ("--", ""):
+                assert page._count.cget("text") == "", (query, page._count.cget("text"))
+                assert not page._marks, query
+            # whatever it finds, it must not raise and must not leave the page
+            # marked once it is cleared
+        page.clear()
+        assert not page._marks and page._count.cget("text") == ""
+    """)
+
+
+def test_two_hits_never_fight_over_one_widget():
+    """Measured on real Tk: "ruch" matches the traffic SECTION and the dropdown
+    inside it, and a dropdown has no text of its own so it marks the same header.
+    The header was painted current and then repainted as an ordinary match by the
+    later hit, so the count said "1 / 5" with nothing filled anywhere."""
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("ruch")
+        page._apply()
+        widgets = [m[0] for m in page._marks]
+        assert len(widgets) == len(set(id(w) for w in widgets)), "a widget marked twice"
+        assert len(page._marks) == len(page._targets), "count and marks disagree"
+        filled = [m[0] for m in page._marks if "HitDim" not in str(m[0].cget("style"))]
+        assert len(filled) == 1, "exactly one hit is the current one: %d" % len(filled)
+        assert filled[0] is page._marks[page._at][0]
+    """)

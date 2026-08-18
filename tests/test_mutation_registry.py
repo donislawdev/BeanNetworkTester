@@ -499,11 +499,19 @@ MUTATIONS = [
         "test": "test_every_error_reads_like_a_sentence",
     },
     {
-        "label": "keyboard: Ctrl+F is bound on the entry, not on the window",
-        "file": "beantester/gui/pages/conns.py",
-        "old": "            app.root.bind(\"<Control-f>\", self._focus_search)",
-        "new": "            entry.bind(\"<Control-f>\", self._focus_search)",
-        "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
+        # Replaced 2026-08-18, and the reason is worth more than the entry was.
+        # This used to break the Connections page's Ctrl+F by moving its binding
+        # from the root onto the entry. Since the Control page grew a search box
+        # of its own, BOTH pages bind the same dispatcher on the root - so losing
+        # one of the two bindings changes nothing a user can see, and the old
+        # mutation SURVIVED without anything being wrong. What is worth guarding
+        # now is the dispatcher's decision: the shortcut must reach the box on the
+        # page you are looking at, not always the table.
+        "label": "keyboard: Ctrl+F ignores which page is in front",
+        "file": "beantester/gui/pages/__init__.py",
+        "old": "    page = app.current_page()",
+        "new": "    page = None",
+        "test": "test_one_ctrl_f_reaches_whichever_search_box_is_in_front",
     },
     {
         "label": "public: the privacy scan reads an empty file list",
@@ -532,6 +540,46 @@ MUTATIONS = [
         "old": "    colours = palette(root, registry[\"palette\"])",
         "new": "    colours = {var: \"#010203\" for var in registry[\"palette\"]}",
         "test": "test_the_palette_is_read_out_of_the_theme_module",
+    },
+    {
+        # The regression this feature could most easily cause: a search that
+        # unfolds the page FOR GOOD. `toggle` runs the accordion's callback, which
+        # persists the fold state through App.on_sections_changed; `set_open` does
+        # not, which is the whole reason the reveal path uses it.
+        "label": "search: revealing a hit writes the fold state to ui.json",
+        "file": "beantester/gui/pages/control.py",
+        "old": "        if not panel.is_open:\n            panel.set_open(True)",
+        "new": "        if not panel.is_open:\n            panel.toggle()",
+        "test": "test_a_hit_in_a_folded_section_is_opened_but_never_remembered",
+    },
+    {
+        # The owner's report: with several matches, nothing said which one Enter
+        # had taken you to. If every hit is painted the same the count is a
+        # promise the page does not keep.
+        "label": "search: every match is painted as the current one",
+        "file": "beantester/gui/pages/control.py",
+        "old": "                widget.configure(style=current if index == self._at else other)",
+        "new": "                widget.configure(style=current)",
+        "test": "test_the_hit_you_are_on_looks_different_from_the_rest",
+    },
+    {
+        # Measured on real Tk: a dropdown marks its section header, and that
+        # header is often a hit itself - the second claim repainted the first and
+        # the current hit vanished.
+        "label": "search: two hits may claim the same widget again",
+        "file": "beantester/gui/pages/control.py",
+        "old": "            if mark is None or any(mark[0] is widget for widget in seen):",
+        "new": "            if mark is None:",
+        "test": "test_two_hits_never_fight_over_one_widget",
+    },
+    {
+        # Half a feature, and the half nobody can diagnose from outside: Polish
+        # labels carry diacritics and people type without them.
+        "label": "search: matching stops ignoring Polish diacritics",
+        "file": "beantester/gui/form_search.py",
+        "old": "    decomposed = unicodedata.normalize(\"NFKD\", str(text or \"\"))",
+        "new": "    decomposed = str(text or \"\")",
+        "test": "test_an_accented_label_is_reachable_without_its_accents",
     },
     {
         "label": "licence: the notices name a WinDivert file that is not shipped",

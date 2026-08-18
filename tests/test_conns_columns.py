@@ -204,7 +204,7 @@ def test_the_table_is_reachable_and_readable_without_a_mouse():
         assert "<Control-f>" in root_binds, \
             "no Ctrl+F on the main window: %r" % sorted(root_binds)
 
-        page._focus_search()
+        page.focus_search()
         assert app.current_page() is page, \
             "Ctrl+F did not bring the Connections page forward"
         assert root.focus_get() is page._search_entry, \

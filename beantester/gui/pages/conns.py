@@ -204,8 +204,9 @@ class ConnsPage:
         # Bound here rather than in App._bind_shortcuts because the search box
         # belongs to this page - and because app.py sits on the size ratchet.
         with crashlog.quiet("gui.pages.conns"):
-            app.root.bind("<Control-f>", self._focus_search)
-            app.root.bind("<Control-F>", self._focus_search)
+            from . import focus_search as _dispatch      # one shortcut, two boxes
+            app.root.bind("<Control-f>", lambda e: _dispatch(app))
+            app.root.bind("<Control-F>", lambda e: _dispatch(app))
         # The same "?" affordance the expression fields use (gui/form.py): the search
         # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
         # read is the only way anyone finds that out. A tooltip cannot be it - it
@@ -393,8 +394,12 @@ class ConnsPage:
         self.table.set_visible_columns(chosen)
         self.app.ui.set("conn_columns", list(self.table.visible_columns()))
 
-    def _focus_search(self, _event=None):
-        """Ctrl+F: show this page and put the caret in its search box."""
+    def focus_search(self, _event=None):
+        """Ctrl+F: show this page and put the caret in its search box.
+
+        Public and named the same on every page that has a box, because the
+        dispatcher in `gui/pages/__init__.py` finds it by that name.
+        """
         with crashlog.quiet("gui.pages.conns"):
             self.app.select_page(self.ID)
             self._search_entry.focus_set()

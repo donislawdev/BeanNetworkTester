@@ -152,6 +152,15 @@ Pole, które przejęło inne ustawienie, jest **wyszarzone razem z etykietą**, 
 | `Ctrl+Enter` | Zastosuj zmiany |
 | `Ctrl+S` / `Ctrl+O` | Zapisz / Wczytaj plik konfiguracji |
 | `Ctrl+L` | Wyczyść log |
+| `Ctrl+F` | Szukanie: pól na Sterowaniu, tabeli na Połączeniach |
+
+**Jak znaleźć ustawienie.** Pole u góry strony Sterowanie szuka ustawień po nazwie - wpisz część
+nazwy pola albo sekcji, albo flagę z wiersza poleceń, na przykład `--loss`. Każde trafienie jest
+podświetlone, a to, na którym stoisz, jest wypełnione kolorem - licznik `1 / 4` zawsze wskazuje
+coś, co widać. `Enter` przechodzi do następnego, `Shift+Enter` do poprzedniego, `Escape` czyści
+pole. Zwinięta sekcja rozwija się na czas szukania i sama się zwija, kiedy
+skończysz. Polskich znaków nie musisz pisać. Jeśli szukane ustawienie mieszka w oknie Ustawienia,
+wyszukiwarka o tym powie.
 
 ### Walidacja pól
 
@@ -1037,6 +1046,7 @@ beantester/              pakiet z implementacją
   gui/                   interfejs tkinter
     app.py               kompozycja okna, stan, log, start/stop, dirty-state
     form.py              formularz generowany z fields.FIELD_DEFS
+    form_search.py       dopasowanie wpisanego hasła do rejestru pól (czyste)
     scaling.py           DPI, skalowane piksele, geometria okna/wykresu/tooltipa
     wheel.py             normalizacja kółka myszy (czysta funkcja)
     scrollable.py        ScrollableFrame + JEDEN globalny dispatcher kółka

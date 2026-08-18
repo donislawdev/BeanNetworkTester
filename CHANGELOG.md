@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **You can now search for a setting on the Control page.** The box at the top right takes part of
+  a field or section name, or a `--flag`. Every match is highlighted, the one you are on is filled
+  in, and the `1 / 4` counter points at it. `Enter` goes to the next, `Shift+Enter` back, `Escape`
+  clears, `Ctrl+F` focuses the box. A folded section opens for the search and folds back after it.
+  Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
+  window is named rather than missed.
+
 ### Fixed
 - **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
   pushed everything down and left a blank band above the first setting, as if the window had lost
