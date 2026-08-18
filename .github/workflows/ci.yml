@@ -52,11 +52,11 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # the whole range being merged, not just its tip
           fetch-depth: 0
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
       - name: check the commit messages
@@ -96,7 +96,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.14"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Verify required release files are in the checkout
         # These are git-ignored by pattern and re-included by exception, so a
         # missing force-add or a broken .gitignore makes them vanish on a fresh
@@ -117,7 +117,7 @@ jobs:
             exit 1
           fi
           echo "All required release files are present."
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -150,7 +150,7 @@ jobs:
 
       - name: Coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
           path: coverage.xml
@@ -223,11 +223,11 @@ jobs:
     timeout-minutes: 30
     needs: tests
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # Must match the interpreter release.yml builds with: PyInstaller freezes
       # THIS Python into the bundle, so a CI build on a different one is not
       # smoke-testing the artefact users get.
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
@@ -286,7 +286,7 @@ jobs:
         shell: bash
         run: python tools/sbom.py --audit-bundle bundle-scan.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: BeanNetworkTester-windows
           path: dist/BeanNetworkTester

@@ -1032,6 +1032,25 @@ MUTATIONS = [
         "new": 'python tools/check_public_text.py --commits origin/${{ github.base_ref }}..$HEAD_SHA',
         "test": "test_no_workflow_puts_a_github_expression_inside_a_shell_script",
     },
+    {
+        # One action slides back onto a floating tag - the state the whole
+        # repository was in, and the one a hand-written `uses:` falls into.
+        "label": "ci: an action goes back to a movable tag",
+        "file": ".github/workflows/dependency-review.yml",
+        "old": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0",
+        "new": "actions/dependency-review-action@v5",
+        "test": "test_every_action_a_workflow_uses_is_pinned_to_a_commit",
+    },
+    {
+        # The other half of the same rule: a digest with nothing saying which
+        # version it is. Legal YAML, unreadable diff, and Dependabot has
+        # nothing to rewrite when it bumps the pin.
+        "label": "ci: a pinned action stops saying which version it is",
+        "file": ".github/workflows/dependency-review.yml",
+        "old": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0",
+        "new": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+        "test": "test_every_action_a_workflow_uses_is_pinned_to_a_commit",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

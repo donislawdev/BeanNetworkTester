@@ -511,3 +511,47 @@ def test_no_workflow_puts_a_github_expression_inside_a_shell_script():
     check("the scan actually read some script lines", scripts > 20, f"({scripts})")
     check("no workflow interpolates a GitHub expression into a script",
           not offenders, f"({offenders})")
+
+
+def test_every_action_a_workflow_uses_is_pinned_to_a_commit():
+    """A tag is a movable reference, and that movement IS the attack.
+
+    ``actions/checkout@v7`` names whichever commit that tag points at today, and
+    the owner of the tag may repoint it at any time - which is what the
+    tj-actions and trivy-action compromises did. GitHub's hardening guide is
+    blunt about the remedy: a full-length commit SHA is the only way to use an
+    action as an immutable release.
+
+    Immutable releases (generally available since October 2025) do not retire
+    this rule, and it is worth writing down why, because they sound like they
+    should. They lock the release tag - ``v7.0.1`` - while the floating major
+    ``v7`` is DESIGNED to move and GitHub's own documentation tells action
+    authors to move it. One reference in this repository was not even a tag:
+    ``actions/dependency-review-action@v5`` resolved to a BRANCH of that name.
+
+    The comment after the SHA is part of the rule rather than decoration. It is
+    what tells a reader which version the digest is, and it is exactly the format
+    Dependabot writes and rewrites when it bumps a pin - so pinning costs no
+    upkeep, it only moves the decision to update from the action's owner to us.
+    """
+    import re
+    workflows = sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml")))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+    seen, unpinned, uncommented = 0, [], []
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                match = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)(.*)$", line)
+                if not match:
+                    continue
+                seen += 1
+                action, ref, rest = match.group(1), match.group(2), match.group(3)
+                where = f"{os.path.basename(path)}:{number} {action}@{ref[:12]}"
+                if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                    unpinned.append(where)
+                elif not re.search(r"#\s*v?\d", rest):
+                    uncommented.append(where)
+    # A regex that stopped matching would report a clean sweep of nothing.
+    check("the scan found the actions the workflows use", seen >= 15, f"({seen})")
+    check("every action is pinned to a full commit SHA", not unpinned, f"({unpinned})")
+    check("every pin says which version it is", not uncommented, f"({uncommented})")
