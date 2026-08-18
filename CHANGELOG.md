@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **You can now search for a setting on the Control page.** Type part of a field or section
+  name - or the command-line flag, such as `--loss` - and the page highlights what matches and
+  scrolls to it. `Enter` goes to the next match, `Escape` clears the box, `Ctrl+F` puts the caret
+  in it. A folded section opens while the search lasts and folds itself back afterwards, so the
+  sections you keep closed stay closed. Accents are optional: typing `opoznienie` finds
+  `Opóźnienie`. If the setting lives in the Settings window, the search says so instead of coming
+  back empty.
+
 ### Fixed
 - **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
   pushed everything down and left a blank band above the first setting, as if the window had lost

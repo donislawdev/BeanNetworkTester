@@ -108,6 +108,12 @@ def _style_surfaces(s):
     # (ttk paints a disabled ttk.Label with a filled box, which looked broken)
     s.configure("CardOff.TLabel", background=BG2, foreground=DIS_FG, font=(FONT, 9))
     s.configure("Unit.TLabel", background=BG2, foreground=MUT, font=(FONT, 9))
+    # A search hit on the Control page. Deliberately the SAME accent the section
+    # headers already use, plus bold: the page is dense, and a brand-new colour
+    # for one transient state would read as a status (error? warning?) rather than
+    # as "this is the word you typed". The scroll does the locating; the colour
+    # only confirms it once the eye arrives.
+    s.configure("Hit.TLabel", background=BG2, foreground=ACC, font=(FONT, 9, "bold"))
     # the "?" syntax help used to melt into the background
     s.configure("Help.TLabel", background=BG2, foreground=ACC, font=(FONT, 9, "bold"))
     # Defensive only: NOTHING in this tool switches a label with `state` today.
@@ -214,6 +220,12 @@ def _style_checkbuttons(s):
     # amount of option juggling fixes. Draw the box ourselves instead.
     s.configure("TCheckbutton", background=BG2, foreground=FG, font=(FONT, 9),
                 focuscolor=ACC, padding=(0, scaled(2)), borderwidth=0)
+    # A checkbox field IS its label (gui/form.py::_place_one draws no separate one),
+    # so the search highlight needs its own style here or those fields would be the
+    # only ones a search cannot mark.
+    s.configure("Hit.TCheckbutton", background=BG2, foreground=ACC,
+                font=(FONT, 9, "bold"), focuscolor=ACC,
+                padding=(0, scaled(2)), borderwidth=0)
     s.map("TCheckbutton",
           background=[("active", BG2)],
           foreground=[("disabled", DIS_FG)])

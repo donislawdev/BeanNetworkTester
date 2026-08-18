@@ -58,11 +58,16 @@ class ControlForm:
     """
 
     def __init__(self, parent, app, extras=None, scroller=None, sections=None,
-                 collapsible=True):
+                 collapsible=True, on_rebuilt=None):
         self.app = app
         self.parent = parent
         self.extras = extras or {}
         self.scroller = scroller        # the ScrollableFrame the form lives in
+        # Called after a REBUILD (the column switch below), never after the first
+        # build. Crossing the width threshold destroys every panel and widget, so
+        # anything holding references into the form - the Control page's search
+        # marks - has to be told rather than left pointing at dead widgets.
+        self.on_rebuilt = on_rebuilt
         # Which registry sections this form renders. The Control page passes the
         # default (CONTROL_SECTIONS); the Settings window passes SETTINGS_SECTIONS.
         self._sections = CONTROL_SECTIONS if sections is None else tuple(sections)
@@ -351,6 +356,9 @@ class ControlForm:
             child.destroy()
         self._build()
         self.app.set_filter_cli_key(self.app._filter_key)
+        if self.on_rebuilt is not None:
+            with crashlog.quiet("gui.form"):
+                self.on_rebuilt()
 
     def _apply_toggle_state(self, section_id):
         """Grey out a section whose 'enable' box is unchecked.
