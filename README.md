@@ -1182,6 +1182,7 @@ beantester/              the implementation package
   gui/                   the tkinter interface
     app.py               window composition, state, log, start/stop, dirty-state
     form.py              form generated from fields.FIELD_DEFS
+    form_search.py       matching a typed query against the field registry (pure)
     scaling.py           DPI, scaled pixels, window/chart/tooltip geometry
     wheel.py             mouse-wheel normalisation (a pure function)
     scrollable.py        ScrollableFrame + ONE global wheel dispatcher

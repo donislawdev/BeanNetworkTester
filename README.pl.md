@@ -1037,6 +1037,7 @@ beantester/              pakiet z implementacją
   gui/                   interfejs tkinter
     app.py               kompozycja okna, stan, log, start/stop, dirty-state
     form.py              formularz generowany z fields.FIELD_DEFS
+    form_search.py       dopasowanie wpisanego hasła do rejestru pól (czyste)
     scaling.py           DPI, skalowane piksele, geometria okna/wykresu/tooltipa
     wheel.py             normalizacja kółka myszy (czysta funkcja)
     scrollable.py        ScrollableFrame + JEDEN globalny dispatcher kółka
