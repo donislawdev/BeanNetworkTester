@@ -125,7 +125,8 @@ def test_breaking_sections_come_first():
 
         def close(version, sections):
             if version and "### BREAKING" in sections and sections[0] != "### BREAKING":
-                problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"
+                # noqa: one file, one iteration - the closure cannot outlive it
+                problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"  # noqa: B023
                                 f" of {len(sections)} (first is {sections[0]!r})")
 
         for line in lines:
@@ -226,7 +227,7 @@ def test_no_user_facing_entry_grows_into_an_essay():
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
 
-    version, entry, offenders, entries = None, None, [], 0
+    entry, offenders, entries = None, [], 0
 
     def close(entry):
         if not entry:

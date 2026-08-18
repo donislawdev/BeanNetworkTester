@@ -569,7 +569,7 @@ def test_the_live_map_pushes_into_targeting_while_the_resolver_rebuilds():
     def reader():                        # the packet path
         while not stop.is_set():
             try:
-                19999 in targeting
+                _ = 19999 in targeting          # the lookup itself is the point
             except Exception as exc:     # pragma: no cover - the bug
                 problems.append(f"reader: {type(exc).__name__}: {exc}")
                 return

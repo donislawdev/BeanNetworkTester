@@ -132,7 +132,7 @@ def test_the_fragment_never_excludes_what_the_matcher_accepts():
     Run in full outside the suite over 27 648 packet views on 16 expressions with
     zero violations (2026-07-28); the sweep here is trimmed to keep the suite fast.
     """
-    pydivert = pytest.importorskip("pydivert")
+    pytest.importorskip("pydivert")
     import ctypes
     from pydivert import windivert_dll as w
     from pydivert.windivert_dll import WinDivertAddress

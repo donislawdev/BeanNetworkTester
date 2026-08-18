@@ -126,7 +126,7 @@ def test_a_preset_always_yields_every_profile_field():
 
 
 def test_every_preset_is_within_the_declared_bounds():
-    for key, preset in PRESETS.items():
+    for _key, preset in PRESETS.items():
         validate_ranges(dict(DEFAULT_SETTINGS, **preset_to_settings(preset)))
     check("presets: all inside the field bounds", True)
 

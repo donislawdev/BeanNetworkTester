@@ -135,7 +135,7 @@ def test_both_readmes_document_every_connections_column():
     import json
     import os as _os
     from beantester.gui.pages.conns import COLUMNS
-    for readme, lang in zip(READMES, ("en", "pl")):
+    for readme, lang in zip(READMES, ("en", "pl"), strict=True):
         with open(_os.path.join(ROOT, "lang", f"{lang}.json"), encoding="utf-8") as f:
             names = json.load(f)
         text = _read(readme)

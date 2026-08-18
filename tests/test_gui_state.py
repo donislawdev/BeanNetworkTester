@@ -280,8 +280,16 @@ def test_connection_menu_needs_a_row_to_act_on():
         # a real row. The table is virtualised, so identify_row() gives back a
         # VIEWPORT SLOT id (__v0, __v1, ...), which the table maps to the model key -
         # the widget ids are recycled and say nothing about which row was clicked.
-        page.table.sync([("r1", ("chrome.exe", "TCP", "1.2.3.4", "443",
-                                 "5000", "10", "1.0", "2.0", "0.1"))])
+        #
+        # Built FROM the column registry rather than by hand: this fixture used to
+        # carry nine values for a seventeen-column table and nobody noticed,
+        # because the row-to-dict zip truncated in silence.
+        def row(proc):
+            values = ["-"] * len(page.table.columns)
+            values[0] = proc
+            return values
+
+        page.table.sync([("r1", row("chrome.exe"))])
         tree.row_at = page.table._slots[0]
         page._popup(Ev())
         assert page.table.selected_keys() == ["r1"]
@@ -289,8 +297,7 @@ def test_connection_menu_needs_a_row_to_act_on():
         assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "normal"
 
         # a row whose process could not be resolved cannot be targeted
-        page.table.sync([("r2", ("?", "TCP", "1.2.3.4", "443",
-                                 "5000", "10", "1.0", "2.0", "0.1"))])
+        page.table.sync([("r2", row("?"))])
         tree.row_at = page.table._slots[0]
         page._popup(Ev())
         assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "disabled"

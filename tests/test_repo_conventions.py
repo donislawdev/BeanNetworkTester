@@ -142,7 +142,6 @@ def test_no_silent_exception_swallowing_outside_the_crash_logger():
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
-            body = [n for n in node.body if not isinstance(n, ast.Pass)]
             # `except ...: pass` with nothing else is the silent swallow
             only_pass = all(isinstance(n, ast.Pass) for n in node.body)
             if only_pass:

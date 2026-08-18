@@ -153,7 +153,7 @@ def test_the_registry_and_the_notices_describe_the_same_set():
     report = legal.cli_report()
     check("report opens with the licence itself",
           "GNU GENERAL PUBLIC LICENSE" in report)
-    for name, version, _lic, url in legal.component_rows():
+    for name, _version, _lic, url in legal.component_rows():
         check(f"report names {name}", name in report)
         check(f"report names the source of {name}", url in report)
     check("report states there is no telemetry (convention 36)",
@@ -244,7 +244,6 @@ def test_the_notices_name_the_windivert_files_that_are_really_shipped():
     PyInstaller lays a collected package out exactly as it is installed, so the
     installed tree is the authority here and no PyInstaller import is needed.
     """
-    import os
     result = _windivert_binaries()
     if result is None:
         return                      # pydivert is Windows-only; nothing shipped here

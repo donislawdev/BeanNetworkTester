@@ -43,6 +43,46 @@ include = ["beantester*"]
 testpaths = ["tests"]
 addopts = "-q"
 
+[tool.ruff]
+# Ruff: four rule families and no more, decided 2026-08-19.
+#
+#   F      pyflakes      - dead imports, dead variables, redefinitions
+#   B      bugbear       - the bug shapes a reader misses (late binding, zip truncation)
+#   S      bandit        - security patterns
+#   ASYNC  flake8-async  - blocking calls in async code (zero findings here: there is
+#                          no async code, and this keeps it that way)
+#
+# F and B BLOCK a pull request. S is a report, and the difference is not
+# softness - it is what the two measure. Measured 2026-08-19: S raises 306
+# findings here, 287 of them in tests, and they are things this project does on
+# purpose - a test asserts (180), a packet mangler randomises (89), a CI script
+# runs git (18). A gate that fires on all of them is a gate nobody reads, and it
+# would bury the ten findings in the product that are worth a look.
+target-version = "py310"        # matches requires-python; ruff reads it anyway, said out loud
+
+[tool.ruff.lint]
+select = ["F", "B", "S", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+# A test suite for a packet mangler asserts, randomises, spawns subprocesses and
+# parses XML on purpose, and none of it ships. S on tests/ is 287 lines of noise.
+"tests/**" = ["S"]
+# The one module allowed to swallow an exception, by this repository's own rule
+# (tests/test_repo_conventions.py): a crash reporter that raises while reporting
+# a crash is worse than one that stays quiet.
+"beantester/crashlog.py" = ["S110"]
+# The randomness IS the product: loss, jitter and duplication are drawn here, and
+# nothing about them is cryptographic. `seed` exists to make them repeatable.
+"beantester/engine.py" = ["S311"]
+"beantester/synthetic.py" = ["S311"]
+# Both continue past a widget or an adapter that answered nothing, in a loop whose
+# point is to survive exactly that.
+"beantester/gui/widgets/sortable_tree.py" = ["S112"]
+"beantester/winenv.py" = ["S112"]
+# Maintainer and CI scripts: they run `git` and `python` by design, and the only
+# URL opened is a literal api.github.com endpoint whose path is validated first.
+"tools/**" = ["S603", "S607", "S310"]
+
 [tool.coverage.run]
 source = ["beantester"]
 parallel = true                 # the GUI tests run in subprocesses; each writes its own data file

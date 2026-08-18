@@ -25,7 +25,6 @@ own:
 import random
 import time
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 

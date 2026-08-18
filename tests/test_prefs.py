@@ -7,7 +7,7 @@ pref is grouped and translated), the accessors validate, and each wired behaviou
 what the switch promises.
 """
 from beantester.gui import prefs
-from beantester.gui.prefs import PREFS, PREFS_BY_KEY, PREF_GROUPS, BOOL, NUMBER, coerce
+from beantester.gui.prefs import PREFS, PREFS_BY_KEY, PREF_GROUPS, coerce
 from beantester.i18n import set_language, translate
 from fakes import check
 from gui_harness import run_gui

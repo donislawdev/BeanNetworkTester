@@ -364,7 +364,10 @@ class ConnsPage:
         if not values:
             return None
         keys = list(COLUMNS)
-        return dict(zip(keys, values))
+        # strict: the row and the column registry are the same length by
+        # contract (tests/test_conns_columns.py pins it). Zipping leniently
+        # would hand the menu a row with its last columns missing instead.
+        return dict(zip(keys, values, strict=True))
 
     def _copy_row(self):
         # every selected row, tab separated - the same thing Ctrl+C puts on the

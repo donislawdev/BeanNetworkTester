@@ -40,8 +40,8 @@ def _validate_step(index, step):
         raise _err("errors.scenario_step_at", step=where)
     try:
         at = float(step["at"])
-    except (TypeError, ValueError):
-        raise _err("errors.scenario_step_at", step=where)
+    except (TypeError, ValueError) as exc:
+        raise _err("errors.scenario_step_at", step=where) from exc
     if at < 0:
         raise _err("errors.scenario_step_at", step=where)
 
@@ -81,8 +81,8 @@ def _validate_step(index, step):
             raise _err("errors.scenario_duration_without_action", step=where)
         try:
             duration = float(step["duration"])
-        except (TypeError, ValueError):
-            raise _err("errors.scenario_step_duration", step=where)
+        except (TypeError, ValueError) as exc:
+            raise _err("errors.scenario_step_duration", step=where) from exc
         if duration < 0:
             raise _err("errors.scenario_step_duration", step=where)
 
@@ -158,5 +158,5 @@ def load_scenario_file(path):
         try:
             data = json.load(f)
         except ValueError as e:
-            raise _err("errors.scenario_bad_json", error=e)
+            raise _err("errors.scenario_bad_json", error=e) from e
     return parse_scenario(data)

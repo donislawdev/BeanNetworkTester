@@ -220,8 +220,11 @@ def test_every_page_has_one_headline_and_no_image_without_a_description(tmp_path
     out, written = _build(tmp_path)
     for rel in [p for p in written if p.endswith(".html")]:
         page = _read(os.path.join(out, rel.replace("/", os.sep)))
-        check(f"{rel}: exactly one h1", len(re.findall(r"<h1[\s>]", page)) == 1,
-              f"({len(re.findall(r'<h1[\\s>]', page))})")
+        # One search, one number. The second copy of the pattern used to live
+        # inside an f-string EXPRESSION, where a backslash is legal only from
+        # Python 3.12 - and `requires-python` here says 3.10.
+        headings = re.findall(r"<h1[\s>]", page)
+        check(f"{rel}: exactly one h1", len(headings) == 1, f"({len(headings)})")
         for tag in re.findall(r"<img\b[^>]*>", page):
             check(f"{rel}: every image describes itself ({tag[:60]})",
                   re.search(r'\balt="', tag))

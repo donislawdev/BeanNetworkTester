@@ -12,8 +12,6 @@ The file dialogs are replaced per test, which is also the point - a cancelled
 dialog returning "" must do nothing at all, and that branch is how the user backs
 out of every one of these.
 """
-import json
-import os
 
 from gui_harness import run_gui
 

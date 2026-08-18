@@ -158,7 +158,6 @@ def test_an_unhandled_main_thread_exception_is_recorded(isolated):
     crashlog.install(native=False)
     chained = []
     try:
-        previous = sys.excepthook
         exc = _boom("main thread died")
         sys.excepthook(type(exc), exc, exc.__traceback__)
 

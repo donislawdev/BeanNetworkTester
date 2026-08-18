@@ -59,7 +59,6 @@ import os
 import platform
 import sys
 import threading
-import time
 import traceback
 from contextlib import contextmanager
 from datetime import datetime, timezone
