@@ -553,6 +553,26 @@ MUTATIONS = [
         "test": "test_a_hit_in_a_folded_section_is_opened_but_never_remembered",
     },
     {
+        # The owner's report: with several matches, nothing said which one Enter
+        # had taken you to. If every hit is painted the same the count is a
+        # promise the page does not keep.
+        "label": "search: every match is painted as the current one",
+        "file": "beantester/gui/pages/control.py",
+        "old": "                widget.configure(style=current if index == self._at else other)",
+        "new": "                widget.configure(style=current)",
+        "test": "test_the_hit_you_are_on_looks_different_from_the_rest",
+    },
+    {
+        # Measured on real Tk: a dropdown marks its section header, and that
+        # header is often a hit itself - the second claim repainted the first and
+        # the current hit vanished.
+        "label": "search: two hits may claim the same widget again",
+        "file": "beantester/gui/pages/control.py",
+        "old": "            if mark is None or any(mark[0] is widget for widget in seen):",
+        "new": "            if mark is None:",
+        "test": "test_two_hits_never_fight_over_one_widget",
+    },
+    {
         # Half a feature, and the half nobody can diagnose from outside: Polish
         # labels carry diacritics and people type without them.
         "label": "search: matching stops ignoring Polish diacritics",

@@ -7,13 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
-- **You can now search for a setting on the Control page.** Type part of a field or section
-  name - or the command-line flag, such as `--loss` - and the page highlights what matches and
-  scrolls to it. `Enter` goes to the next match, `Escape` clears the box, `Ctrl+F` puts the caret
-  in it. A folded section opens while the search lasts and folds itself back afterwards, so the
-  sections you keep closed stay closed. Accents are optional: typing `opoznienie` finds
-  `Opóźnienie`. If the setting lives in the Settings window, the search says so instead of coming
-  back empty.
+- **You can now search for a setting on the Control page.** The box at the top right takes part of
+  a field or section name, or a `--flag`. Every match is highlighted, the one you are on is filled
+  in, and the `1 / 4` counter points at it. `Enter` goes to the next, `Shift+Enter` back, `Escape`
+  clears, `Ctrl+F` focuses the box. A folded section opens for the search and folds back after it.
+  Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
+  window is named rather than missed.
 
 ### Fixed
 - **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards

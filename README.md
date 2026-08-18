@@ -202,9 +202,9 @@ effect.
 | `Ctrl+F` | Search: the field search on Control, the table search on Connections |
 
 **Finding a setting.** The box at the top of the Control page searches the settings by name -
-type part of a field or section name, or the command-line flag such as `--loss`. Matches are
-highlighted and the page scrolls to the first one. `Enter` goes to the next, `Escape` clears the
-box. A folded section opens while the search lasts and folds itself back afterwards. Accents are
+type part of a field or section name, or the command-line flag such as `--loss`. Every match is
+highlighted and the one you are on is filled in, so the `1 / 4` counter always points at something
+you can see. `Enter` goes to the next match, `Shift+Enter` back, `Escape` clears the box. A folded section opens while the search lasts and folds itself back afterwards. Accents are
 optional. If what you are after is one of the settings that live in the Settings window, the
 search tells you so.
 
