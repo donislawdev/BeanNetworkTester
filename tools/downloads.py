@@ -12,14 +12,27 @@ The README's downloads badge shows the same grand total live; this is for the de
 """
 import argparse
 import json
+import re
 import sys
 import urllib.request
 
 DEFAULT_REPO = "donislawdev/BeanNetworkTester"
 
 
+REPO = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+
 def fetch_releases(repo):
-    """Every published release for ``owner/name`` (newest first), via the public API."""
+    """Every published release for ``owner/name`` (newest first), via the public API.
+
+    ``repo`` is checked before it becomes part of a URL. Not because a scheme
+    could be smuggled in - the scheme here is a literal - but because the value
+    lands in the PATH, so `--repo ../../gists` would quietly ask a different
+    endpoint the question and print whatever came back as if it were releases.
+    An owner and a name, nothing else.
+    """
+    if not REPO.match(str(repo or "")):
+        raise ValueError("expected owner/name, got %r" % (repo,))
     url = "https://api.github.com/repos/%s/releases?per_page=100" % repo
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",

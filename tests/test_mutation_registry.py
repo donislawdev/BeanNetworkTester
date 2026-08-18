@@ -1051,6 +1051,26 @@ MUTATIONS = [
         "new": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
         "test": "test_every_action_a_workflow_uses_is_pinned_to_a_commit",
     },
+    {
+        # The check that keeps `--repo` inside its own meaning. Without it the
+        # value still lands in the PATH of an api.github.com URL, so
+        # `../../gists` asks a different endpoint and prints the answer as if
+        # those were releases.
+        "label": "tools: the downloads repository argument stops being checked",
+        "file": "tools/downloads.py",
+        "old": "    if not REPO.match(str(repo or \"\")):",
+        "new": "    if False and not REPO.match(str(repo or \"\")):",
+        "test": "test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name",
+    },
+    {
+        # The crash id is printed in a record a user may paste into a report,
+        # so its shape is the contract - not the hash behind it.
+        "label": "crashlog: the crash id stops being twelve characters",
+        "file": "beantester/crashlog.py",
+        "old": ".hexdigest()[:12]",
+        "new": ".hexdigest()",
+        "test": "test_different_faults_get_different_fingerprints",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

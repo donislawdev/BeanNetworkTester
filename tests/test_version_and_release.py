@@ -445,3 +445,38 @@ def test_both_workflows_install_the_same_pinned_builder():
                  and pin_file not in ln]
         check(f"{path}: never installs pyinstaller unpinned", not loose,
               f"({loose} - put the version in {pin_file}, not on the command line)")
+
+
+def test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name():
+    """``--repo`` lands in the PATH of an api.github.com URL.
+
+    Semgrep flagged the `urlopen` call (`dynamic-urllib-use-detected`) for the
+    reason it usually flags one: a dynamic value could carry a `file://` scheme.
+    It cannot here - the scheme is a literal - but the value does become part of
+    the path, so `--repo ../../gists` would quietly ask a different endpoint the
+    question and print whatever came back as if those were releases. Nobody is
+    attacked by that (it is a maintainer's own tool), and it is still three lines
+    to make the argument mean what its name says.
+    """
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import downloads
+
+    for good in ("donislawdev/BeanNetworkTester", "a/b", "Some.Owner/repo-name_1"):
+        check(f"{good} is accepted as a repository", bool(downloads.REPO.match(good)))
+
+    for bad in ("../../gists", "owner", "owner/name/extra", "owner/name?x=1",
+                "https://example.test/o/n", "owner name", ""):
+        rejected = True
+        try:
+            downloads.fetch_releases(bad)
+        except ValueError:
+            pass
+        except Exception as exc:            # noqa: BLE001 - any other error means it TRIED
+            rejected = False
+            reason = exc
+        else:
+            rejected = False
+            reason = "no error at all"
+        check(f"{bad!r} is refused before it becomes a URL", rejected,
+              "" if rejected else f"({reason})")

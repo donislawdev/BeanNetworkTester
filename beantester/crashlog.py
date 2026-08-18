@@ -166,7 +166,14 @@ def _fingerprint(exc_type, frames):
     parts = [getattr(exc_type, "__name__", str(exc_type))]
     for frame in frames[-4:]:
         parts.append(f"{os.path.basename(frame.filename)}:{frame.name}:{frame.lineno}")
-    return hashlib.sha1("|".join(parts).encode("utf-8", "replace")).hexdigest()[:12]
+    # sha256, and NOT because this is a signature - it is a dedup key, where a
+    # collision would cost one merged crash record and nothing else. The reason
+    # is cheaper than that: "sha1" in a source file is a finding in every scanner
+    # that looks (Semgrep raised it here), and answering the same false alarm
+    # every quarter costs more than the one-word change ever will. Nothing
+    # persists these ids between runs, so no stored record is invalidated - a
+    # crash text file written by an older version simply carries the old id.
+    return hashlib.sha256("|".join(parts).encode("utf-8", "replace")).hexdigest()[:12]
 
 
 def _subsystem_of(frames):
