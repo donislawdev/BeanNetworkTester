@@ -60,9 +60,17 @@ jobs:
         with:
           python-version: "3.14"
       - name: check the commit messages
+        # Through the environment, for the same reason as the step below: a
+        # `${{ }}` is pasted into the script BEFORE any shell sees it, so a
+        # branch name is not data there - it is source code. `base_ref` has to
+        # name a branch that already exists here, which makes this narrow rather
+        # than harmless, and the fix is three lines. Quote the variables: an
+        # unquoted expansion is the same fault one layer down.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          python tools/check_public_text.py \
-            --commits origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+          python tools/check_public_text.py --commits "origin/$BASE_REF..$HEAD_SHA"
       - name: check the pull-request description
         # Passed through the environment rather than interpolated into the shell:
         # a description is untrusted text and must never become part of a command.

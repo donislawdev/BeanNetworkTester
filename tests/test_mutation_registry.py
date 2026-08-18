@@ -1021,6 +1021,17 @@ MUTATIONS = [
         "new": '                                  total=str(round(t[\"total\"] / 1024.0, 1))))',
         "test": "test_connection_columns_tag_and_footer",
     },
+    {
+        # The exact line Semgrep found, put back: a `${{ }}` expanded into a
+        # script is source code, not an argument. The guard has to see it
+        # wherever in the block it sits, so this mutates only one of the two
+        # variables and leaves the other in its safe form.
+        "label": "ci: a workflow interpolates a GitHub expression into a script",
+        "file": ".github/workflows/ci.yml",
+        "old": 'python tools/check_public_text.py --commits \"origin/$BASE_REF..$HEAD_SHA\"',
+        "new": 'python tools/check_public_text.py --commits origin/${{ github.base_ref }}..$HEAD_SHA',
+        "test": "test_no_workflow_puts_a_github_expression_inside_a_shell_script",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

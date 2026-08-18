@@ -452,3 +452,62 @@ def test_every_script_the_workflows_run_is_actually_in_the_repository():
         check(f"{script} is tracked by git (a fresh clone must have it)",
               tracked.returncode == 0,
               "(it is ignored or untracked - internal_tools/ cannot hold a CI dependency)")
+
+
+def _script_lines(text):
+    """``(line number, text)`` for every line inside a ``run:`` block.
+
+    Hand-rolled rather than PyYAML, because the suite carries no YAML dependency
+    and the question is lexical anyway: is this text part of a script a runner
+    will execute. A ``run:`` opens the block, and the block ends at the first
+    non-empty line indented no further than the key itself.
+    """
+    import re
+    out, block = [], None
+    for number, line in enumerate(text.split("\n"), 1):
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if block is not None:
+            if stripped and indent <= block:
+                block = None
+            else:
+                out.append((number, line))
+                continue
+        match = re.match(r"-?\s*run:(.*)$", stripped)
+        if match:
+            out.append((number, match.group(1)))
+            block = indent
+    return out
+
+
+def test_no_workflow_puts_a_github_expression_inside_a_shell_script():
+    """``${{ }}`` in a ``run:`` block is TEXT SUBSTITUTION, not a variable.
+
+    GitHub expands the expression into the script before any shell exists, so a
+    value carrying a shell metacharacter stops being an argument and becomes a
+    command. The safe form is an intermediate ``env:`` entry, quoted where it is
+    used - which is what GitHub's own hardening guide says, and what the
+    ``check the pull-request description`` step in ``ci.yml`` has always done.
+
+    The repository had exactly one exception, four lines above that very step:
+    ``--commits origin/${{ github.base_ref }}..${{ ... .head.sha }}``. Narrow
+    rather than harmless (``base_ref`` must name a branch that already exists
+    here, and the job holds no secrets), and three lines to close - which is
+    exactly the kind of thing that survives on a memory and dies on a guard.
+    """
+    workflows = sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml")))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+    offenders = []
+    scripts = 0
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            lines = _script_lines(handle.read())
+        scripts += len(lines)
+        for number, line in lines:
+            if "${{" in line:
+                offenders.append(f"{os.path.basename(path)}:{number} {line.strip()[:60]}")
+    # A parser that stopped finding script lines would pass this silently, which
+    # is the failure mode of every hand-written scanner.
+    check("the scan actually read some script lines", scripts > 20, f"({scripts})")
+    check("no workflow interpolates a GitHub expression into a script",
+          not offenders, f"({offenders})")
