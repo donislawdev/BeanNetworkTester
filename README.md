@@ -199,6 +199,14 @@ effect.
 | `Ctrl+Enter` | Apply changes |
 | `Ctrl+S` / `Ctrl+O` | Save / Load config file |
 | `Ctrl+L` | Clear the log |
+| `Ctrl+F` | Search: the field search on Control, the table search on Connections |
+
+**Finding a setting.** The box at the top of the Control page searches the settings by name -
+type part of a field or section name, or the command-line flag such as `--loss`. Matches are
+highlighted and the page scrolls to the first one. `Enter` goes to the next, `Escape` clears the
+box. A folded section opens while the search lasts and folds itself back afterwards. Accents are
+optional. If what you are after is one of the settings that live in the Settings window, the
+search tells you so.
 
 ### Field validation
 

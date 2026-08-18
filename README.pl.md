@@ -152,6 +152,14 @@ Pole, które przejęło inne ustawienie, jest **wyszarzone razem z etykietą**, 
 | `Ctrl+Enter` | Zastosuj zmiany |
 | `Ctrl+S` / `Ctrl+O` | Zapisz / Wczytaj plik konfiguracji |
 | `Ctrl+L` | Wyczyść log |
+| `Ctrl+F` | Szukanie: pól na Sterowaniu, tabeli na Połączeniach |
+
+**Jak znaleźć ustawienie.** Pole u góry strony Sterowanie szuka ustawień po nazwie - wpisz część
+nazwy pola albo sekcji, albo flagę z wiersza poleceń, na przykład `--loss`. Trafienia są
+podświetlane, a strona przewija się do pierwszego z nich. `Enter` przechodzi do następnego,
+`Escape` czyści pole. Zwinięta sekcja rozwija się na czas szukania i sama się zwija, kiedy
+skończysz. Polskich znaków nie musisz pisać. Jeśli szukane ustawienie mieszka w oknie Ustawienia,
+wyszukiwarka o tym powie.
 
 ### Walidacja pól
 
