@@ -125,7 +125,7 @@ Rozmiar i pozycja okna, wybrana zakładka, język, zwinięte sekcje, podział lo
   - **Na żywo** - liczniki (pakiety, utracone, uszkodzone, zerwane…) i wykres przepustowości. Siatka liczników sama dobiera liczbę kolumn do szerokości okna. Przycisk „Eksportuj CSV”.
   - **Sesja** - seed, czas trwania, zużyte dane, szczyty + przyciski „Oznacz błąd”, „Zapisz raport repro”, „Kopiuj komendę CLI”.
   - **Zdarzenia** - dziennik zdarzeń (START/STOP/ZMIANA/SCENARIUSZ/BŁĄD/RESET).
-- **Połączenia** - podgląd, z jakimi adresami IP:port gada testowany system. Kolumny: **proces**, **protokół**, zdalne IP, porty, liczba pakietów, **KB**, **czas trwania** i **czas od ostatniej aktywności**. Ruch, który w ogóle nie ma portów - ping (ICMP) - też się tu pojawia: jeden wiersz na adres, z pustymi komórkami portów. **Kolumny „pobrane”/„wysłane”/„razem” to ruch DOSTARCZONY** - dokładnie ta sama wielkość, którą panel Sesja nazywa „Pobrano (MB)”. **Kolumny „pobr. widz.”/„wys. widz.” to ruch PRZECHWYCONY**, zanim cokolwiek zostało zepsute. Bez ustawionych zakłóceń obie pary są równe. Z chwilą włączenia straty albo limitu prędkości rozjeżdżają się, a **różnica między nimi to szkoda na tym połączeniu**. Najedź na dowolną, żeby dostać pełne zdanie. (Przed rozdzieleniem była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi „dostarczone”: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.) Do tego wyszukiwarka (z opóźnieniem, żeby nie mielić tabeli przy każdym znaku), sortowanie po kliknięciu w nagłówek, **„Zamroź”** (wiersze przestają uciekać spod kursora) oraz **menu pod prawym przyciskiem myszy**: kopiuj wiersz / adres IP, **„Celuj w ten proces”**, **„Ogranicz do tego IP:port”** - wypełnia pola filtrów jednym kliknięciem.
+- **Połączenia** - podgląd, z jakimi adresami IP:port gada testowany system. Kolumny: **proces**, **protokół**, zdalne IP, porty, liczba pakietów, **pobrane/wysłane/razem** (jednostka dobiera się do wartości), **czas trwania** i **czas od ostatniej aktywności**. Ruch, który w ogóle nie ma portów - ping (ICMP) - też się tu pojawia: jeden wiersz na adres, z pustymi komórkami portów. **Kolumny „pobrane”/„wysłane”/„razem” to ruch DOSTARCZONY** - dokładnie ta sama wielkość, którą panel Sesja nazywa „Pobrano (MB)”. **Kolumny „pobr. widz.”/„wys. widz.” to ruch PRZECHWYCONY**, zanim cokolwiek zostało zepsute. Bez ustawionych zakłóceń obie pary są równe. Z chwilą włączenia straty albo limitu prędkości rozjeżdżają się, a **różnica między nimi to szkoda na tym połączeniu**. Najedź na dowolną, żeby dostać pełne zdanie. (Przed rozdzieleniem była jedna para, trzymająca bajty przechwycone pod nagłówkami znaczącymi „dostarczone”: wiersz mógł pokazywać 5 MB odebranych, gdy aplikacja dostała 0,4 MB.) Do tego wyszukiwarka (z opóźnieniem, żeby nie mielić tabeli przy każdym znaku), sortowanie po kliknięciu w nagłówek, **„Zamroź”** (wiersze przestają uciekać spod kursora) oraz **menu pod prawym przyciskiem myszy**: kopiuj wiersz / adres IP, **„Celuj w ten proces”**, **„Ogranicz do tego IP:port”** - wypełnia pola filtrów jednym kliknięciem.
   Tabela jest **wirtualizowana**: rysuje tylko te wiersze, które faktycznie widać, więc przewijanie jest natychmiastowe niezależnie od tego, czy ma 400 wierszy, czy kilkaset tysięcy. Dawny sztywny limit 400 wierszy zniknął - ile pokazać, ustawiasz polem **„Limit wierszy”** (sekcja *Tabele*, 0 = bez limitu, domyślnie 50 000).
 - Na dole: **START/STOP**, **Zastosuj zmiany** i **Wczytaj/Zapisz plik**, a pod nimi log. Ten pasek jest zakotwiczony przy dolnej krawędzi - żadna zakładka nie jest w stanie go zasłonić.
 
@@ -687,14 +687,20 @@ w podpowiedzi nad tym nagłówkiem.
 | `pakiety` | Pakiety zobaczone na tym połączeniu, odkąd się pojawiło. |
 | `psute?` | Czy połączenie było **w zasięgu psucia** w tej sesji - psute, a nie tylko obserwowane. Zostaje na `tak` po zamknięciu połączenia, jako zapis. Bez ustawionego celowania wszystko jest w zasięgu. |
 | `odrzucone` | Pakiety odrzucone na tym połączeniu przez aktywne zakłócenia (strata, przerwa w łączu, tryb LAN, resety, ...). |
-| `pobrane[KB]` | Dane, które **naprawdę dotarły** do aplikacji - tyle pobrała. To ta sama wielkość, którą panel sesji nazywa „Pobrano (MB)". |
-| `wysłane[KB]` | Dane, które **naprawdę wyszły** z tej maszyny - tyle aplikacja wysłała. |
-| `razem[KB]` | Dostarczone pobieranie + dostarczone wysyłanie. |
-| `pobr. widz.[KB]` | Dane **przechwycone** na wejściu, przed psuciem - tyle połączenie zaoferowało. |
-| `wys. widz.[KB]` | Dane **przechwycone** na wyjściu - tyle aplikacja próbowała wysłać. |
+| `pobrane` | Dane, które **naprawdę dotarły** do aplikacji - tyle pobrała. To ta sama wielkość, którą panel sesji nazywa „Pobrano (MB)". |
+| `wysłane` | Dane, które **naprawdę wyszły** z tej maszyny - tyle aplikacja wysłała. |
+| `razem` | Dostarczone pobieranie + dostarczone wysyłanie. |
+| `pobr. widz.` | Dane **przechwycone** na wejściu, przed psuciem - tyle połączenie zaoferowało. |
+| `wys. widz.` | Dane **przechwycone** na wyjściu - tyle aplikacja próbowała wysłać. |
 | `śr.[B]` | Średni rozmiar pakietu na tym połączeniu (bajty / pakiety). |
 | `czas[s]` | Sekundy między pierwszym a ostatnim pakietem tego połączenia w tej sesji. |
 | `bezczynne[s]` | Sekundy od ostatniego pakietu. Przestaje rosnąć po zatrzymaniu sesji. |
+
+**Pięć kolumn z ruchem niesie własną jednostkę.** Każda komórka jest w tej z B, KB, MB albo GB,
+która do niej pasuje, więc przepływ 5 GB pokazuje `5.00 GB` zamiast `5242880.0`, a
+dziewięćdziesięciobajtowa odpowiedź DNS `90 B` zamiast `0.0`. Stopka pod tabelą robi to samo ze
+swoimi sumami. `śr.` to rozmiar pakietu i zostaje w bajtach. Sortowania ani eksportu CSV to nie
+dotyczy - oba liczą na surowych bajtach, nigdy na tekście z komórki.
 
 **Para dostarczone/widziane jest sensem tej tabeli.** Gdy nic nie psujesz, są równe. Dołóż stratę
 albo limit prędkości, a się rozjadą - i **różnica między nimi to szkoda wyrządzona temu połączeniu**.
@@ -780,8 +786,8 @@ skraca:
 | `process`, `pid`, `proto`, `remote_ip`, `remote_port`, `local_port`, `packets` | to samo, bez skrótów |
 | `impaired` | `psute?` (`yes` / `no`) |
 | `dropped` | `odrzucone` |
-| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `pobrane[KB]`, `wysłane[KB]`, `razem[KB]` - **tutaj w bajtach, nie kilobajtach** |
-| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `pobr. widz.[KB]`, `wys. widz.[KB]` (plus ich suma) |
+| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `pobrane`, `wysłane`, `razem` - **tutaj zawsze surowe bajty**, nigdy jednostka, którą wybrał ekran |
+| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `pobr. widz.`, `wys. widz.` (plus ich suma) |
 | `avg_bytes` | `śr.[B]` |
 | `duration_s`, `idle_s` | `czas[s]`, `bezczynne[s]` |
 

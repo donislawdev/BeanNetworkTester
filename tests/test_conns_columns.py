@@ -29,6 +29,13 @@ def test_connection_columns_tag_and_footer():
                  packets=4, bytes=4096, bytes_in=0, bytes_out=4096,
                  sent=4096, sent_in=0, sent_out=4096, dropped=0,
                  scoped=True, pid=None, first=95.0, last=98.0, dir="out", proc="svchost.exe"),
+            # A DNS answer: ninety bytes, in the same table as the kilobyte flows
+            # above. Under the old fixed-KB rendering this row read "0.1" and
+            # "0.0" - "nothing happened" on a row that exists because it did.
+            dict(local_port=5002, remote_ip="8.8.8.8", remote_port=53, proto="UDP",
+                 packets=2, bytes=90, bytes_in=90, bytes_out=0,
+                 sent=90, sent_in=90, sent_out=0, dropped=0,
+                 scoped=False, pid=777, first=97.0, last=99.0, dir="in", proc="dns.exe"),
         ]
         app.engine.connections_snapshot = lambda limit=None: rows
         req = {"engine": app.engine, "query": "", "sort": {"col": "dropped", "reverse": True},
@@ -41,6 +48,7 @@ def test_connection_columns_tag_and_footer():
 
         chrome_vals, chrome_tags = model["chrome.exe"]
         svc_vals, svc_tags = model["svchost.exe"]
+        dns_vals, _dns_tags = model["dns.exe"]
 
         # order: proc, pid, proto, r_ip, r_port, l_port, packets, scoped, dropped, ...
         assert str(chrome_vals[1]) == "1234", chrome_vals            # pid
@@ -56,9 +64,23 @@ def test_connection_columns_tag_and_footer():
         assert svc_vals[7] == bnt.T("conns.yes") and "impaired" in svc_tags, \
             (svc_vals, svc_tags)
 
-        # footer sums every filtered flow (down 8192 + 0 B = 8.0 KB, up 2048 + 4096 = 6.0 KB)
+        # Each traffic cell carries the unit that fits its OWN value, so the
+        # kilobyte flows and the ninety-byte one are readable in one column.
+        # (index: proc 0 ... dropped 8, down 9, up 10, total 11, down seen 12,
+        # up seen 13, avg 14)
+        assert chrome_vals[9] == "8.00 KB", chrome_vals
+        assert chrome_vals[10] == "2.00 KB", chrome_vals
+        assert svc_vals[10] == "4.00 KB", svc_vals
+        assert dns_vals[9] == "90 B" and dns_vals[10] == "0 B", dns_vals
+        assert dns_vals[11] == "90 B" and dns_vals[12] == "90 B", dns_vals
+        # avg is a PACKET size and stays in bytes: "45", not "45 B" and not "0.04 KB"
+        assert dns_vals[14] == "45", dns_vals
+
+        # footer sums every filtered flow, including the one the old rendering
+        # rounded away (down 8192 + 0 + 90 B, up 2048 + 4096 + 0 B)
         footer = page.totals.kw["text"]
-        assert "8.0" in footer and "6.0" in footer, footer
+        assert "8.09 KB" in footer and "6.00 KB" in footer, footer
+        assert "14.1 KB" in footer, footer
     ''')
 
 

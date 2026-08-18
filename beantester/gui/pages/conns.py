@@ -28,6 +28,7 @@ from tkinter import ttk
 
 from ...i18n import T
 from ...matchers import add_term
+from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                       traffic_totals)
 from .. import dialogs
@@ -55,6 +56,11 @@ SCOPE_TIPS = scope.keys_for_states({
     scope.VIEW: "tips.scope_note_scoped",
 })
 
+# The `kb` id outlived the unit it was named after (the traffic cells now carry
+# whichever of B/KB/MB/GB fits the value). It stays: a column id is written into
+# `ui.json` by every user who sorted this table or chose its columns, so renaming
+# it would silently drop their layout and their sort on the next start. Internal
+# ids are not shown to anybody - convention 2.
 COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "remote_ip": "conns.remote_ip", "remote_port": "conns.remote_port",
            "local_port": "conns.local_port", "packets": "conns.packets",
@@ -481,12 +487,21 @@ class ConnsPage:
                 port_cell(c.get("remote_port")), port_cell(c.get("local_port")), packets,
                 scoped, c.get("dropped", 0),
                 # delivered first (what the application got), captured after it -
-                # the gap between the two pairs IS the damage this row suffered
-                f"{c.get('sent_in', 0) / 1024.0:.1f}",
-                f"{c.get('sent_out', 0) / 1024.0:.1f}",
-                f"{c.get('sent', 0) / 1024.0:.1f}",
-                f"{c.get('bytes_in', 0) / 1024.0:.1f}",
-                f"{c.get('bytes_out', 0) / 1024.0:.1f}",
+                # the gap between the two pairs IS the damage this row suffered.
+                # Each cell carries its own unit (utils.human_bytes): these five
+                # columns were fixed at KB, which reads "5242880.0" for a 5 GB
+                # flow and "0.0" for a 40-byte one. Per CELL rather than per
+                # column, because the pairs that get compared ACROSS a row are
+                # the same traffic before and after impairment and are therefore
+                # close in size anyway, while down and up routinely differ by a
+                # thousandfold and never share a reading.
+                human_bytes(c.get("sent_in", 0)),
+                human_bytes(c.get("sent_out", 0)),
+                human_bytes(c.get("sent", 0)),
+                human_bytes(c.get("bytes_in", 0)),
+                human_bytes(c.get("bytes_out", 0)),
+                # NOT human_bytes: a packet size lives between 40 and 65535 B,
+                # so "1460" is the number a tester wants and "1.43 KB" is not.
                 f"{avg_packet_bytes(c)}",
                 f"{dur:.1f}", f"{idle:.1f}")
 
@@ -543,8 +558,19 @@ class ConnsPage:
     def refresh(self, force=False):
         """Repaint always (cheap); rebuild off-thread (never blocks the UI).
 
-        The table is virtualised, so a repaint costs ~0.1 ms whatever the model
-        holds. The filter and the sort are what grow - 361 ms at 500 000 rows,
+        The table is virtualised, so a repaint costs a fraction of a millisecond
+        whatever the model holds - it renders the rows ON SCREEN and nothing else.
+        Re-measured 2026-08-18 on real Tk, 240 rows in the model, paired against
+        the old formatter patched back in: giving each traffic cell its own unit
+        made a repaint **1.9-2.1x** what it was - 0.28-0.43 ms against
+        0.13-0.21 ms at a 23-slot viewport (DPI-unaware, six runs) and 0.21 ms
+        against 0.10 ms at a 12-slot one (DPI-aware at 150%, two runs). Compare
+        the PAIR, never these absolutes: they drifted by half again between runs
+        on an idle machine, while the ratio held across both scalings. Once per
+        700 ms tick that is nothing; it is written down because the sentence used
+        to say "~0.1 ms", and a number in a comment is worth what its last
+        measurement was worth.
+        The filter and the sort are what grow - 361 ms at 500 000 rows,
         1.5 s at two million - and those now run on a worker (``AsyncModel``). The
         previous rows stay on screen while it works: a table that is one second
         stale is not a problem, a window that will not scroll or STOP is.
@@ -668,7 +694,11 @@ class ConnsPage:
             text = T("conns.shown_of", shown=len(rows), total=total)
         self.count.config(text=text)
         t = result.get("totals") or {"down": 0, "up": 0, "total": 0}
+        # The footer sums the WHOLE filtered set, so it holds the largest numbers
+        # on the page - it was the worst reader of the fixed KB unit, not an
+        # afterthought to it. The unit now travels inside the value, so the
+        # sentence no longer names one.
         self.totals.config(text=T("conns.totals",
-                                  down=f"{t['down'] / 1024.0:.1f}",
-                                  up=f"{t['up'] / 1024.0:.1f}",
-                                  total=f"{t['total'] / 1024.0:.1f}"))
+                                  down=human_bytes(t["down"]),
+                                  up=human_bytes(t["up"]),
+                                  total=human_bytes(t["total"])))

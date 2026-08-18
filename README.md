@@ -827,14 +827,20 @@ tooltip on that header.
 | `packets` | Packets seen on this connection since it appeared. |
 | `impaired?` | Whether the connection was **in impairment scope** this session - impaired, not merely watched. It stays `yes` after the connection closes, as a record. With no targeting set, everything is in scope. |
 | `dropped` | Packets dropped on this connection by the active impairments (loss, link outage, LAN mode, resets, ...). |
-| `down[KB]` | Data that actually **reached** the application - what it downloaded. Same quantity the session panel calls "Downloaded (MB)". |
-| `up[KB]` | Data that actually **left** this machine - what the application uploaded. |
-| `total[KB]` | Delivered download + delivered upload. |
-| `down seen[KB]` | Data the tool **captured** coming in, before any impairment - what the connection offered. |
-| `up seen[KB]` | Data the tool **captured** going out - what the application tried to send. |
+| `down` | Data that actually **reached** the application - what it downloaded. Same quantity the session panel calls "Downloaded (MB)". |
+| `up` | Data that actually **left** this machine - what the application uploaded. |
+| `total` | Delivered download + delivered upload. |
+| `down seen` | Data the tool **captured** coming in, before any impairment - what the connection offered. |
+| `up seen` | Data the tool **captured** going out - what the application tried to send. |
 | `avg[B]` | Average packet size on this connection (total bytes / packets). |
 | `time[s]` | Seconds between the first and the last packet of this connection in this session. |
 | `idle[s]` | Seconds since the last packet. Stops counting when the session stops. |
+
+**The five traffic columns carry their own unit.** Each cell is shown in whichever of B, KB, MB or
+GB fits it, so a 5 GB flow reads `5.00 GB` instead of `5242880.0` and a ninety-byte DNS answer reads
+`90 B` instead of `0.0`. The footer under the table does the same for its totals. `avg` is a packet
+size and stays in bytes. Sorting and the CSV export are unaffected - both work on the raw byte
+counts, never on the text in the cell.
 
 **The delivered/seen pair is the point of the table.** With nothing impaired they are equal. Add
 loss or a speed limit and they part, and **the gap between them is the damage done to that
@@ -921,8 +927,8 @@ table shortens:
 | `process`, `pid`, `proto`, `remote_ip`, `remote_port`, `local_port`, `packets` | same, unabbreviated |
 | `impaired` | `impaired?` (`yes` / `no`) |
 | `dropped` | `dropped` |
-| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `down[KB]`, `up[KB]`, `total[KB]` - **in bytes here, not kilobytes** |
-| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen[KB]`, `up seen[KB]` (plus their total) |
+| `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `down`, `up`, `total` - **always raw bytes here**, never the unit the screen picked |
+| `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (plus their total) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
 

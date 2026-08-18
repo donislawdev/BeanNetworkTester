@@ -21,6 +21,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
   window is named rather than missed.
 
+### Changed
+
+- **Traffic in Connections is shown in the unit that fits the number.** A big flow used to read
+  `5242880.0` under a `[KB]` heading, and a ninety-byte DNS answer read `0.0`. Every cell now
+  carries its own unit - `5.00 GB`, `340 MB`, `90 B` - and so does the total line under the table.
+  The `[KB]` has left the headers, because the number says it. `avg` is a packet size and stays in
+  bytes. Sorting is unchanged, and the CSV export still holds raw bytes for your spreadsheet.
+
 ### Fixed
 
 - **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
