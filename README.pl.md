@@ -448,6 +448,12 @@ odrzucił pakiet), Odrzuc. przez limit (porzucone przez pełny bufor limitu prę
 liczone osobno od strat i od „Bufor przepełn.”), SYN odrzucone, MTU odrzucone, NAT wygasło,
 RST zerwane, LAN: internet odcięty, RST wysłane.
 
+**Kopiowanie liczb.** Prawy przycisk na dowolnej wartości w „Na żywo" albo „Sesja" kopiuje tę
+wartość albo całą zakładkę. Każdy panel ma też przycisk - „Kopiuj liczniki" pod siatką, „Kopiuj
+dane sesji" obok przycisków reprodukcji - który kopiuje wszystkie wiersze dokładnie tak, jak
+wyglądają na ekranie, z podpisami i jednostkami. Przydaje się do zgłoszenia błędu: panel sesji
+niesie nazwę komputera, jego adresy, seed i to, co obejmował przechwyt.
+
 Trzy z nich - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” - to sytuacje, w których
 pakiety gubi samo narzędzie, a nie łącze, które kazałeś mu udawać. Są liczone i pilnują, żeby
 arytmetyka zaobserwowane/dostarczone/porzucone się spinała, ale świadomie **nie** wchodzą do

@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **The figures on the Statistics page can be copied.** Right-click any value on "Session" or
+  "Live" for "Copy value" or "Copy the whole tab", or use the button on the panel itself - "Copy
+  session details" beside the repro buttons, "Copy counters" under the grid. The text is exactly
+  what the tab shows, one line per row, captions and units included, so it can go straight into a
+  bug report. Until now every figure was a plain label: the computer name, the addresses and the
+  counters could not even be selected, let alone copied.
+
 - **You can now search for a setting on the Control page.** The box at the top right takes part of
   a field or section name, or a `--flag`. Every match is highlighted, the one you are on is filled
   in, and the `1 / 4` counter points at it. `Enter` goes to the next, `Shift+Enter` back, `Escape`

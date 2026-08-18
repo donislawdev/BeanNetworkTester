@@ -554,6 +554,12 @@ refused), Rate-limit drop (dropped by a full speed-limit buffer - counted separa
 loss and from "Buffer overflow"), SYN dropped, MTU dropped, NAT expired, RST torn, LAN: internet cut
 off, RST sent.
 
+**Copying the figures.** Right-click any value on "Live" or "Session" to copy that value, or the
+whole tab. Each panel also has a button - "Copy counters" under the grid, "Copy session details"
+beside the repro buttons - which copies every row exactly as it reads on screen, captions and
+units included. Handy for a bug report: the session panel carries the computer name, its
+addresses, the seed and what the capture covered.
+
 The last three of those - "Buffer overflow", "Dropped at stop" and "Send failed" - are the tool
 losing your packets rather than the link you asked it to simulate. They are counted, they keep the
 seen/delivered/dropped arithmetic honest, and they are deliberately **not** part of "Effective

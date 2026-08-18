@@ -234,6 +234,18 @@ class W:
     def clipboard_append(self, text):
         CLIPBOARD.append(text)
 
+    def clipboard_get(self):
+        """Read it back, the way real Tk does - including the empty case.
+
+        Added when the statistics page started READING the clipboard to decide
+        whether to confirm a copy: without it the fake raised an AttributeError
+        that the crash logger swallowed, which is a fault registered on every
+        test that copies, and a round trip nothing could assert on.
+        """
+        if not CLIPBOARD:
+            raise TclError("CLIPBOARD selection doesn't exist")
+        return "".join(CLIPBOARD)
+
     def grab_current(self):
         return GRAB[0]
 

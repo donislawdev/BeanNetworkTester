@@ -553,6 +553,16 @@ MUTATIONS = [
         "test": "test_a_hit_in_a_folded_section_is_opened_but_never_remembered",
     },
     {
+        # A second hand-written list of rows is how the copy comes to show
+        # yesterday's panel: the text has to be built from the registry the panel
+        # itself renders.
+        "label": "stats: the session copy stops following the row registry",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "            for key, cap, _tip in SESSION_ROWS if key in self.sess_labels)",
+        "new": "            for key, cap, _tip in SESSION_ROWS[:4] if key in self.sess_labels)",
+        "test": "test_the_session_panel_copies_exactly_what_it_shows",
+    },
+    {
         # The owner's report: with several matches, nothing said which one Enter
         # had taken you to. If every hit is painted the same the count is a
         # promise the page does not keep.
