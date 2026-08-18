@@ -18,7 +18,7 @@ from .theme import ACC, BG, FONT, WARN, apply_dark_titlebar
 from .. import crashlog
 
 WRAP = 380
-_result = {}          # per-dialog result, keyed by the toplevel
+_result: dict = {}    # per-dialog result, keyed by the toplevel
 
 
 def _center(win, parent, focus=None):

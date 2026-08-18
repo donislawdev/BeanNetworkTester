@@ -602,7 +602,7 @@ def unhighlight_combobox(event=None, widget=None):
 
 
 # -- hand-drawn checkbox indicator -------------------------------------------- #
-_CHECK_IMAGES = []          # Tk only keeps a weak grip on PhotoImages
+_CHECK_IMAGES: list = []    # Tk only keeps a weak grip on PhotoImages
 _INDICATOR_READY = [False]
 
 

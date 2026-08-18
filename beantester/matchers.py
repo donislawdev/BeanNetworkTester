@@ -151,7 +151,10 @@ class _Term:
 # -- matchers ----------------------------------------------------------------- #
 class Matcher:
     """A compiled field expression. Compile once, call ``matches()`` per packet."""
-    kind = None
+    # Annotated because subclasses fill both in, and an unannotated `None`
+    # (or `()`) is read as "this attribute is always None" - which makes
+    # every subclass an error rather than the point of the base class.
+    kind: str | None = None
 
     def __init__(self, raw, terms):
         self.raw = str(raw or "").strip()
@@ -184,7 +187,7 @@ class Matcher:
     # the whole of IPv4 and none of IPv6, and that still bounds nothing worth
     # having. Covering any ONE group completely is enough. Kinds without such a
     # split declare a single group.
-    BLAST_PROBES = ()
+    BLAST_PROBES: tuple[tuple[tuple, ...], ...] = ()
 
     @property
     def covers_everything(self):

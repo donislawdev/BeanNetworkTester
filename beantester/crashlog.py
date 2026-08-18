@@ -82,7 +82,7 @@ ERROR = "error"
 DEBUG = "debug"
 
 _lock = threading.Lock()
-_seen = {}                          # fingerprint -> record (with a count)
+_seen: dict[str, dict] = {}         # fingerprint -> record (with a count)
 _context_provider = None            # set by the App/CLI: returns a dict of state
 _installed = False
 _enabled = True
@@ -325,7 +325,7 @@ def note(exc, subsystem, message=""):
     record(exc, source="swallowed", subsystem=subsystem, severity=DEBUG, note=message)
 
 
-_once_seen = set()
+_once_seen: set[tuple] = set()
 
 
 def once(subsystem, exc):

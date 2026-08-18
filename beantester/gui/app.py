@@ -1847,19 +1847,12 @@ for _name, _key in (("loss_var", "loss"), ("corr_var", "corrupt"), ("dup_var", "
     setattr(App, _name, _var_property(_key))
 
 
-# older private names kept working (docs, scripts, the GUI smoke)
-App._apply_if_running = App.apply_if_running
-App._export_csv = App.export_csv
-App._save_profile = App.save_profile
-App._delete_profile = App.delete_profile
-App._load_selected_profile = App.load_selected_profile
-App._load_scenario = App.load_scenario
-App._clear_scenario = App.clear_scenario
-App._load_config_file = App.load_config_file
-App._save_config_file = App.save_config_file
-App._mark_bug = App.mark_bug
-App._save_repro = App.save_repro
-App._copy_repro_cli = App.copy_repro_cli
-App._reset_now_click = App.reset_now_click
-App._on_close = App.on_close
-App._profile_names = App.profile_names
+# Older private names kept working (docs, scripts, the GUI smoke). Written as a
+# loop for the same reason the property block above it is: fifteen assignment
+# statements say one thing fifteen times, and every one of them was also a
+# type error - a class does not grow attributes from outside its own body.
+for _alias in ("apply_if_running", "export_csv", "save_profile", "delete_profile",
+               "load_selected_profile", "load_scenario", "clear_scenario",
+               "load_config_file", "save_config_file", "mark_bug", "save_repro",
+               "copy_repro_cli", "reset_now_click", "on_close", "profile_names"):
+    setattr(App, "_" + _alias, getattr(App, _alias))

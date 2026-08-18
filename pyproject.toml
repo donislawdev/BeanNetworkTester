@@ -83,6 +83,35 @@ select = ["F", "B", "S", "ASYNC"]
 # URL opened is a literal api.github.com endpoint whose path is validated first.
 "tools/**" = ["S603", "S607", "S310"]
 
+[tool.mypy]
+# The PACKAGE only. `tests/` and `tools/` are not a matter of taste here: both
+# hold modules with the same basename under no package (`downloads`, `fakes`),
+# and mypy refuses that layout without `--explicit-package-bases`. They can be
+# added later, deliberately; the product is what ships.
+files = ["beantester"]
+# The floor from `requires-python`, said out loud: mypy otherwise checks against
+# the interpreter it happens to run on, and the two are not the same question.
+python_version = "3.10"
+# A `# type: ignore` that has stopped being needed is a lie about the code that
+# outlives whatever it was hiding.
+warn_unused_ignores = true
+
+# Nothing strict is turned on, and that is a decision rather than an oversight.
+# This package carries no annotations, so `disallow_untyped_defs` would mean
+# annotating 66 modules before anything could be checked at all. What the default
+# level DOES catch is worth having on its own: it found fifteen attributes being
+# grown onto a class from outside its body, nine containers whose type nobody
+# could infer, and a base class that declared its own attributes as None.
+# Tighten it per module when a module is annotated, never repository-wide in one
+# go - a check that must be silenced everywhere teaches that silence is normal.
+
+[[tool.mypy.overrides]]
+# Neither ships type information: pydivert has no `py.typed` marker, and psutil's
+# stubs live in a separate `types-psutil` distribution. Ignoring the import is a
+# smaller lie than pretending we know those signatures.
+module = ["pydivert", "pydivert.*", "psutil"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["beantester"]
 parallel = true                 # the GUI tests run in subprocesses; each writes its own data file
