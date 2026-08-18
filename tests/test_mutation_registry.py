@@ -553,6 +553,16 @@ MUTATIONS = [
         "test": "test_a_hit_in_a_folded_section_is_opened_but_never_remembered",
     },
     {
+        # Reported from the running program: with a column hidden, every header
+        # to its right explained the wrong one - including columns that were not
+        # on screen at all. Forcing the fallback path puts that back.
+        "label": "tables: a header tooltip counts hidden columns again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            identifier = self.tree.column(spec, \"id\")",
+        "new": "            identifier = None",
+        "test": "test_a_header_tooltip_still_names_its_own_column_after_others_are_hidden",
+    },
+    {
         # A second hand-written list of rows is how the copy comes to show
         # yesterday's panel: the text has to be built from the registry the panel
         # itself renders.

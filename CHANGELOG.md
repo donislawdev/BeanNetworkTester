@@ -22,6 +22,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   window is named rather than missed.
 
 ### Fixed
+
+- **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
+  every header to its right explained its neighbour instead - and with only a couple of columns
+  left, the tooltip could describe a column that was not on screen at all. The tooltip now follows
+  the header the pointer is actually on, whichever columns you have chosen to show. The same fix
+  applies to the event log.
+
 - **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
   pushed everything down and left a blank band above the first setting, as if the window had lost
   its contents. It now stops at the top, and the same fix applies to the Control page.

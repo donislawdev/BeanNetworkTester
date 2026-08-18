@@ -331,7 +331,10 @@ def test_table_tooltips_belong_to_the_headers_not_the_whole_table():
         table._on_motion(Ev())
         assert table._tip_column is None
 
-        # over a header: the tooltip belongs to THAT column
+        # over a header: the tooltip belongs to THAT column. With everything
+        # shown the display position and the registry position agree - which is
+        # why this test could not see the hidden-column bug. That case has its
+        # own test below (test_a_header_tooltip_still_names_its_own_column...).
         table.tree.identify_region = lambda x, y: "heading"
         table.tree.identify_column = lambda x: "#3"
         table._on_motion(Ev())
@@ -781,4 +784,73 @@ def test_the_statistics_page_does_not_steal_ctrl_c_from_the_tables():
 
         conns = app.pages["connections"]
         assert "<Control-c>" in conns.table.tree.bindings, "the table lost its copy"
+    """)
+
+
+def test_a_header_tooltip_still_names_its_own_column_after_others_are_hidden():
+    """🔴 Reported from the running program: hide a column and every header to its
+    right explained the WRONG one - one case showed the tooltip of a column that
+    was not even on screen.
+
+    `identify_column` answers with a DISPLAY position, and the resolution counted
+    it against the full column list, so the two agreed only while everything was
+    shown. The old tooltip test asserted exactly that agreement and never hid a
+    column, which is why the suite was quiet about it.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        keys = list(table.columns)
+
+        class Ev:
+            x = 40
+            y = 8
+            x_root = 400
+            y_root = 300
+
+        table.tree.identify_region = lambda x, y: "heading"
+
+        # hide the SECOND column: everything right of it shifts one place left
+        table.set_visible_columns([k for k in keys if k != keys[1]])
+        table.tree.identify_column = lambda x: "#2"      # 2nd column ON SCREEN
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[2], (
+            "the tooltip named %r while the pointer was on %r"
+            % (table._tip_column, keys[2]))
+        assert table._tip_column in table._visible, "it named a hidden column"
+
+        # only two columns left: the last one on screen is the last one asked for
+        pair = [keys[0], keys[5]]
+        table.set_visible_columns(pair)
+        table.tree.identify_column = lambda x: "#2"
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[5], (table._tip_column, keys[5])
+
+        # and with everything back, the first column is the first column again
+        table.set_visible_columns(keys)
+        table.tree.identify_column = lambda x: "#1"
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[0], table._tip_column
+    """)
+
+
+def test_no_tooltip_past_the_last_column():
+    """Tk answers with an empty spec in the bare strip right of the headers, and
+    the old arithmetic turned that into a ValueError rather than an answer."""
+    run_gui("""
+        table = app.pages["connections"].table
+
+        class Ev:
+            x = 4000
+            y = 8
+            x_root = 400
+            y_root = 300
+
+        table.tree.identify_region = lambda x, y: "heading"
+        table.tree.identify_column = lambda x: ""
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column is None and table._tip_window is None
     """)
