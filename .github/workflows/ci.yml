@@ -131,6 +131,33 @@ jobs:
       - name: Type check the package
         run: mypy
 
+  # Semgrep, with no account and no token: `p/default` is fetched anonymously
+  # from the registry (measured - 343 rules, 184 files, 35 s). The rules are used
+  # here and never carried in the repository, because the Semgrep Rules License
+  # allows the first and forbids the second.
+  semgrep:
+    name: semgrep (ERROR, HIGH and CRITICAL block)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the scanner
+        run: pip install -r requirements-lint.txt
+      # No --error and no --severity here: the scan reports, and tools/semgrep_gate.py
+      # decides. `--severity` knows INFO/WARNING/ERROR only, while registry rules also
+      # carry HIGH and CRITICAL - measured with a probe rule, `--severity ERROR`
+      # returned zero findings for a rule marked HIGH. Metrics are off: this repository
+      # does not send telemetry about its own source anywhere.
+      - name: Scan
+        run: |
+          semgrep scan --config p/default --metrics=off --oss-only \
+            --json --output semgrep.json --quiet
+      - name: Decide
+        run: python tools/semgrep_gate.py semgrep.json
+
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}

@@ -1012,6 +1012,14 @@ a na koniec **build `.exe` i smoke zbudowanego pliku** (`--version`, `--simulate
 konfiguracja → kod 3) plus kontrola, że sterownik WinDivert naprawdę trafił obok exe, z artefaktem
 do pobrania.
 
+**Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go
+uruchamiają. **ruff** wywraca pull requesta na martwym kodzie i na kształtach błędów (`F` i `B`),
+a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje. **mypy**
+sprawdza typy w pakiecie. **semgrep** skanuje domyślnym zestawem reguł z rejestru, przy czym
+znalezisko na poziomie ERROR, HIGH albo CRITICAL wywraca przebieg, a wszystko niżej ląduje w logu.
+Wersje tych trzech narzędzi są przypięte w `requirements-lint.txt`, więc nowe wydanie lintera nie
+zaczerwieni pull requesta, w którym nic się nie zmieniło.
+
 Jeden krok wart jest osobnego zdania, bo żaden test jednostkowy go nie zastąpi: **render GUI na
 prawdziwym Tk** pod wirtualnym ekranem, w minimalnej wspieranej rozdzielczości 1366x768 i **w
 każdym języku**. Buduje prawdziwe okno, obchodzi wszystkie strony, otwiera okno „O programie” i

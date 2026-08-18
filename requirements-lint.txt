@@ -19,3 +19,17 @@ ruff==0.16.3
 # runner has - because both are ignored by name in [tool.mypy] and a missing
 # module is a different code path from an untyped one.
 mypy==2.3.1
+
+# Linux and macOS only, deliberately: the Windows wheel installs (57 MB) and then
+# `semgrep-core` fails to run a scan at all on this machine - an OCaml backtrace
+# on a three-line local rule, measured 2026-08-19. Local scans go through WSL,
+# CI runs on ubuntu. The marker keeps `pip install -r` honest on Windows instead
+# of downloading an engine that cannot start.
+#
+# 🔴 The pin fixes the ENGINE, not the rules: `--config p/default` fetches those
+# from the registry at scan time, so a new or re-graded rule can turn a pull
+# request red with no commit behind it. That is the trade for not vendoring them,
+# and vendoring is not open to us - the Semgrep Rules License permits use for our
+# own purposes and forbids redistributing the rules, which is what putting them in
+# a public repository would be.
+semgrep==1.173.0; sys_platform != "win32"

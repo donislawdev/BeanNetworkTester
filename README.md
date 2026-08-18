@@ -1157,6 +1157,14 @@ exit-code assertions, an NDJSON check, `--doctor` and `--license`, and then **an
 a smoke test of the built file** (`--version`, `--simulate`, a bad config -> code 3) plus a check
 that the WinDivert driver really shipped next to the exe, with a downloadable artifact.
 
+**Three static checks run beside the tests**, on Linux only, because they read the source rather
+than run it. **ruff** fails a pull request on a dead-code or bug-shape finding (`F` and `B`) and
+reports the security family (`S`, `ASYNC`) as annotations that never block. **mypy** type-checks
+the package. **semgrep** scans with its default registry ruleset and a finding at ERROR, HIGH or
+CRITICAL fails the run, while everything below that is printed in full. The three tool versions
+are pinned in `requirements-lint.txt`, so a new release of a linter cannot redden a pull request
+that changed nothing.
+
 One step is worth knowing about because no unit test can do its job: a **GUI render check on real
 Tk** under a virtual screen, at the minimum supported 1366x768, **in every language**. It builds
 the actual window, walks every page, opens the About window and fails the build when any button is
