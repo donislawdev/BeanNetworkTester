@@ -172,9 +172,19 @@ class StatsPage:
             self.stat_labels[key] = value
             for w in (cell, value, caption):
                 add_tooltip(w, tip)
+                self._attach_copy(w, value, "live")
             self._cells.append(cell)
         self.grid.bind("<Configure>", self._on_grid_configure)
         self._relayout_cells(4)
+
+        # Right under the figures it copies, right-aligned so it does not sit in
+        # the reading path of the grid above it.
+        row = ttk.Frame(parent)
+        row.pack(fill="x", padx=scaled(10), pady=(scaled(2), 0))
+        counters = ttk.Button(row, text=T("buttons.copy_counters"),
+                              command=lambda: self._copy_visible("live"))
+        counters.pack(side="right")
+        add_tooltip(counters, "tips.copy_counters")
 
         # anchor, not fill: the wraplength follows the PARENT's width either way
         # (gui/labels.py), while filling would hand the note - and its tooltip -
@@ -220,15 +230,19 @@ class StatsPage:
         info = ttk.Frame(frame)
         info.pack(fill="x", padx=scaled(8), pady=scaled(6))
         for i, (key, cap, tip) in enumerate(SESSION_ROWS):
-            ttk.Label(info, text=T(cap) + ":", style="Muted.TLabel").grid(
-                row=i // 2, column=(i % 2) * 2, sticky="w",
-                padx=(0, scaled(6)), pady=scaled(2))
+            caption = ttk.Label(info, text=T(cap) + ":", style="Muted.TLabel")
+            caption.grid(row=i // 2, column=(i % 2) * 2, sticky="w",
+                         padx=(0, scaled(6)), pady=scaled(2))
             value = ttk.Label(info, text="-")
             value.grid(row=i // 2, column=(i % 2) * 2 + 1, sticky="w",
                        padx=(0, scaled(24)), pady=scaled(2))
             self.sess_labels[key] = value
             if tip:
                 add_tooltip(value, tip)
+            # the caption is part of the same row, so right-clicking it copies
+            # the value it names rather than doing nothing
+            for widget in (caption, value):
+                self._attach_copy(widget, value, "session")
 
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", padx=scaled(8), pady=(0, scaled(8)))
@@ -238,9 +252,104 @@ class StatsPage:
         repro.pack(side="left", padx=scaled(6))
         copy = ttk.Button(buttons, text=T("buttons.copy_cli"), command=self.app.copy_repro_cli)
         copy.pack(side="left")
+        details = ttk.Button(buttons, text=T("buttons.copy_session"),
+                             command=lambda: self._copy_visible("session"))
+        details.pack(side="right")
         add_tooltip(mark, "tips.mark_bug")
         add_tooltip(repro, "tips.save_repro")
         add_tooltip(copy, "tips.copy_cli")
+        add_tooltip(details, "tips.copy_session")
+
+    # -- copying what is on screen -------------------------------------------- #
+    # 🔴 The figures were unreachable: every value here is a `ttk.Label`, which
+    # cannot even be SELECTED, so the machine name and the addresses beside it
+    # could only be retyped by hand into a bug report. Two ways out, matching what
+    # the connection table already does: a right-click menu for one value, and a
+    # button for the whole panel (the button is also the keyboard path - a menu
+    # that only a mouse can open is not an answer for everyone).
+    #
+    # Ctrl+C is deliberately NOT bound here. The connection table and the event
+    # log own it, and a root binding without `add=` replaces the one before it -
+    # the exact defect the Control page's Ctrl+F had to be rescued from.
+
+    def _copy_menu(self):
+        menu = getattr(self, "_menu", None)
+        if menu is None:
+            menu = tk.Menu(self.frame, tearoff=0)
+            menu.add_command(label=T("menu.copy_value"), command=self._copy_one)
+            menu.add_command(label=T("menu.copy_all"), command=self._copy_panel)
+            self._menu = menu
+        return menu
+
+    def _attach_copy(self, widget, value_widget, source):
+        """Right-click anywhere on a figure - its number, its caption, its cell."""
+        widget.bind("<Button-3>",
+                    lambda event, v=value_widget, s=source: self._popup(event, v, s))
+
+    def _popup(self, event, value_widget, source):
+        self._clicked = (value_widget, source)
+        menu = self._copy_menu()
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            with crashlog.quiet("gui.pages.stats"):
+                menu.grab_release()
+        return "break"
+
+    def session_text(self):
+        """The session panel exactly as it reads on screen, one row per line.
+
+        Built from `SESSION_ROWS` rather than a second hand-written list: a row
+        added to the registry is copied the day it appears, and cannot quietly go
+        missing from the text while sitting on the page.
+        """
+        return "\n".join(
+            "%s: %s" % (T(cap), self.sess_labels[key].cget("text"))
+            for key, cap, _tip in SESSION_ROWS if key in self.sess_labels)
+
+    def live_text(self):
+        """The counter grid, same rule - `CELLS` is the source, units included."""
+        rows = []
+        for key, cap, unit, _tip in CELLS:
+            label = self.stat_labels.get(key)
+            if label is None:
+                continue
+            caption = T(cap) + (" (%s)" % unit if unit else "")
+            rows.append("%s: %s" % (caption, label.cget("text")))
+        return "\n".join(rows)
+
+    def _copy(self, text, logged):
+        """One clipboard path (`App.copy_to_clipboard`), and no cheerful lie.
+
+        That method logs its own failure and returns nothing, so a success line
+        printed blindly next to it would contradict the error the user just read.
+        The clipboard is read back instead: the confirmation appears only when the
+        text is really there.
+        """
+        if not text:
+            return
+        self.app.copy_to_clipboard(text)
+        with crashlog.quiet("gui.pages.stats"):
+            if self.app.root.clipboard_get() == text:
+                self.app.log("%s: %s" % (T("log.copied"), logged))
+
+    def _copy_one(self):
+        clicked = getattr(self, "_clicked", None)
+        if clicked is None:
+            return
+        value = str(clicked[0].cget("text") or "")
+        self._copy(value, value)
+
+    def _copy_panel(self):
+        clicked = getattr(self, "_clicked", None)
+        source = clicked[1] if clicked else self.current()
+        self._copy_visible(source)
+
+    def _copy_visible(self, source):
+        if source == "session":
+            self._copy(self.session_text(), T("frames.session"))
+        else:
+            self._copy(self.live_text(), T("app.subtabs.live"))
 
     def _build_events(self, parent):
         holder = ttk.Frame(parent)

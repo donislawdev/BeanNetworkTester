@@ -563,9 +563,34 @@ class SortableTree:
 
     # -- header tooltips ------------------------------------------------------- #
     def _column_at(self, x):
-        """Column id under the pointer, or None."""
+        """Column id under the pointer, or None.
+
+        🔴 `identify_column` answers with a DISPLAY position - "#2" is the second
+        column CURRENTLY ON SCREEN, not the second in `self.columns`. Counting it
+        against the full list was right only while every column was shown: hide
+        one and every header to its right described somebody else's column, which
+        is a tooltip lying about the thing the pointer is on. Measured on real Tk
+        (2026-08-18): with `displaycolumns=("a", "c")`, hovering "c" reports "#2",
+        and the old arithmetic answered "b".
+
+        So Tk is asked to do the translation - `column(spec, "id")` returns the
+        identifier for a display spec and stays correct whatever is hidden. The
+        index is kept only as a fallback for a Tk that refuses the query, and it
+        is no worse there than what it replaced.
+        """
         try:
-            spec = self.tree.identify_column(x)       # "#1", "#2", ...
+            spec = self.tree.identify_column(x)       # "#1", "#2", ... (display)
+        except Exception:                             # noqa: BLE001
+            return None
+        if not spec:
+            return None                               # past the last column
+        try:
+            identifier = self.tree.column(spec, "id")
+        except Exception:                             # noqa: BLE001
+            identifier = None
+        if identifier and identifier in self.columns:
+            return identifier
+        try:
             index = int(str(spec).lstrip("#")) - 1
         except (TypeError, ValueError):
             return None

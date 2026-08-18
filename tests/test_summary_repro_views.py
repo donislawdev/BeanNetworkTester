@@ -116,6 +116,47 @@ def test_bytes_to_mb():
     check("MB: 0 for garbage input", bytes_to_mb("x") == 0.0)
 
 
+def test_human_bytes_reads_at_every_size():
+    """The connection table's traffic cells. Two failures made it exist: nine
+    ungrouped digits for a big flow, and "0.0" for a row that carried 40 bytes."""
+    from beantester.utils import human_bytes
+    cases = [
+        (0, "0 B"), (1, "1 B"), (40, "40 B"), (947, "947 B"),
+        (1023, "1023 B"),                       # the last value that is still bytes
+        (1024, "1.00 KB"), (1536, "1.50 KB"),
+        (90, "90 B"),                           # a DNS answer, which used to read 0.1
+        (10 * 1024, "10.0 KB"),                 # 10 and up drop a decimal...
+        (100 * 1024, "100 KB"),                 # ...and 100 and up drop the other
+        (1048576, "1.00 MB"), (5 * 1024 ** 3, "5.00 GB"),
+        (1024 ** 4, "1.00 TB"), (1024 ** 5, "1.00 PB"),
+    ]
+    wrong = [(n, want, human_bytes(n)) for n, want in cases if human_bytes(n) != want]
+    check("bytes: every size reads as itself", not wrong, f"({wrong})")
+
+    # Rounding must not print a value in a unit that cannot hold it: 1023.7 B
+    # rounds to "1024 B", and the byte band ends at 1023.
+    check("bytes: rounding never overflows its own unit",
+          human_bytes(1023.7) == "1.00 KB", f"({human_bytes(1023.7)})")
+    check("bytes: and not one band up either",
+          human_bytes(1048575.9) == "1.00 MB", f"({human_bytes(1048575.9)})")
+
+    # The width is what keeps the column readable down the page: three
+    # significant digits plus a two-character unit, never more.
+    widest = max(len(human_bytes(n)) for n in
+                 (0, 1023, 1024, 999999, 5 * 1024 ** 3, 1023 * 1024 ** 2))
+    check("bytes: the widest cell is 7 characters", widest == 7, f"({widest})")
+
+    # Junk in never crashes the render loop, and a counter that somehow went
+    # backwards says so instead of pretending it did not.
+    check("bytes: garbage reads as zero", human_bytes("x") == "0 B")
+    check("bytes: None reads as zero", human_bytes(None) == "0 B")
+    check("bytes: a negative keeps its sign", human_bytes(-2048) == "-2.00 KB",
+          f"({human_bytes(-2048)})")
+    # Past the last unit it stops scaling rather than inventing one.
+    check("bytes: beyond PB it stays in PB", human_bytes(4096 * 1024 ** 5) == "4096 PB",
+          f"({human_bytes(4096 * 1024 ** 5)})")
+
+
 def test_repro_report_has_data_usage():
     from beantester import DEFAULT_SETTINGS, build_repro_report
     sh = BeanEngine(); sh.set_seed(9)

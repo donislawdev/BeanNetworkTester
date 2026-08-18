@@ -234,6 +234,18 @@ class W:
     def clipboard_append(self, text):
         CLIPBOARD.append(text)
 
+    def clipboard_get(self):
+        """Read it back, the way real Tk does - including the empty case.
+
+        Added when the statistics page started READING the clipboard to decide
+        whether to confirm a copy: without it the fake raised an AttributeError
+        that the crash logger swallowed, which is a fault registered on every
+        test that copies, and a round trip nothing could assert on.
+        """
+        if not CLIPBOARD:
+            raise TclError("CLIPBOARD selection doesn't exist")
+        return "".join(CLIPBOARD)
+
     def grab_current(self):
         return GRAB[0]
 
@@ -545,11 +557,34 @@ class Treeview(W):
         self.headings.setdefault(col, {}).update(kw)
 
     def column(self, col, option=None, **kw):
+        """Configure a column, or read one option back.
+
+        🔴 A "#N" spec is a DISPLAY position and is resolved against the columns
+        currently shown, exactly as Tk does (measured 2026-08-18). Without this
+        the fake could not tell the two rules apart, and the header-tooltip bug -
+        every column after a hidden one describing its neighbour - was invisible
+        to the whole suite while being obvious on screen.
+        """
+        if option == "id" and str(col).startswith("#"):
+            try:
+                index = int(str(col).lstrip("#")) - 1
+            except ValueError:
+                return None
+            shown = self.displayed_columns()
+            return shown[index] if 0 <= index < len(shown) else None
         entry = self.cols.setdefault(col, {})
         if option is not None and not kw:
             return entry.get(option)
         entry.update(kw)
         return None
+
+    def displayed_columns(self):
+        """The columns on screen, in display order - `displaycolumns` or all."""
+        shown = self.kw.get("displaycolumns")
+        columns = list(self.kw.get("columns") or ())
+        if not shown or tuple(shown) == ("#all",):
+            return columns
+        return [c for c in shown if c in columns] or columns
 
     def get_children(self, item=""):
         return tuple(self.order)

@@ -11,6 +11,7 @@ These tests pin down the three guarantees:
   * the GUI survives a broken tick, never calls Tcl from a worker thread, and
     always releases the engine when the window closes.
 """
+import threading
 import time
 
 from beantester.engine import _LIVE_ENGINES, BeanEngine, deadline_reached
@@ -279,6 +280,7 @@ class _UnloadingDivert:
         self.fails = fails
         self.opens = 0
         self.closed = False
+        self._closing = threading.Event()
 
     def open(self):
         self.opens += 1
@@ -288,7 +290,17 @@ class _UnloadingDivert:
             raise error
 
     def recv(self):
-        time.sleep(0.01)
+        """Wait to be closed, then raise - the way a real handle behaves.
+
+        🔴 It used to raise 10 ms after the session started, which raced the
+        assertion that the session came up: `_capture_loop` catches a recv fault
+        and fail-stops, so a main thread descheduled for longer than that (a full
+        suite with GUI subprocesses on a loaded machine, seen 2026-08-18) read
+        `is_running()` as False and reddened a test about the OPEN path. Nothing
+        about the product was wrong. This fake exists to answer 433 on open, so
+        that is the only thing it should decide.
+        """
+        self._closing.wait(5.0)
         raise RuntimeError("stopped")
 
     def send(self, *_a, **_k):
@@ -296,6 +308,7 @@ class _UnloadingDivert:
 
     def close(self):
         self.closed = True
+        self._closing.set()          # lets the blocked recv() above finish
 
 
 def test_a_driver_that_is_still_unloading_is_waited_for_not_reported(monkeypatch):

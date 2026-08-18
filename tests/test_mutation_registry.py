@@ -553,6 +553,26 @@ MUTATIONS = [
         "test": "test_a_hit_in_a_folded_section_is_opened_but_never_remembered",
     },
     {
+        # Reported from the running program: with a column hidden, every header
+        # to its right explained the wrong one - including columns that were not
+        # on screen at all. Forcing the fallback path puts that back.
+        "label": "tables: a header tooltip counts hidden columns again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            identifier = self.tree.column(spec, \"id\")",
+        "new": "            identifier = None",
+        "test": "test_a_header_tooltip_still_names_its_own_column_after_others_are_hidden",
+    },
+    {
+        # A second hand-written list of rows is how the copy comes to show
+        # yesterday's panel: the text has to be built from the registry the panel
+        # itself renders.
+        "label": "stats: the session copy stops following the row registry",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "            for key, cap, _tip in SESSION_ROWS if key in self.sess_labels)",
+        "new": "            for key, cap, _tip in SESSION_ROWS[:4] if key in self.sess_labels)",
+        "test": "test_the_session_panel_copies_exactly_what_it_shows",
+    },
+    {
         # The owner's report: with several matches, nothing said which one Enter
         # had taken you to. If every hit is painted the same the count is a
         # promise the page does not keep.
@@ -970,6 +990,36 @@ MUTATIONS = [
         "old": "pyinstaller==",
         "new": "pyinstaller>=",
         "test": "test_both_workflows_install_the_same_pinned_builder",
+    },
+    {
+        # The correction that stops a rounded figure being printed in a unit
+        # that cannot hold it: 1023.7 B rounds to 1024 B, and the byte band
+        # ends at 1023. Leaving it out is the mistake every hand-rolled size
+        # formatter makes, and it shows only on two values in a thousand.
+        "label": "units: a rounded byte figure prints in a unit too small for it",
+        "file": "beantester/utils.py",
+        "old": "    if (index < len(BYTE_UNITS) - 1",
+        "new": "    if False and (index < len(BYTE_UNITS) - 1",
+        "test": "test_human_bytes_reads_at_every_size",
+    },
+    {
+        # The change itself, in one cell: back to a fixed KB, where a 5 GB flow
+        # reads "5242880.0" and a ninety-byte one reads "0.0".
+        "label": "gui: a connection traffic cell goes back to a fixed unit",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '                human_bytes(c.get(\"sent_in\", 0)),',
+        "new": '                str(round(c.get(\"sent_in\", 0) / 1024.0, 1)),',
+        "test": "test_connection_columns_tag_and_footer",
+    },
+    {
+        # The footer carries the largest numbers on the page and is summed
+        # separately from the cells, which is exactly how one of the two gets
+        # left behind on a change like this.
+        "label": "gui: the connections footer keeps a fixed unit",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '                                  total=human_bytes(t[\"total\"])))',
+        "new": '                                  total=str(round(t[\"total\"] / 1024.0, 1))))',
+        "test": "test_connection_columns_tag_and_footer",
     },
 ]
 

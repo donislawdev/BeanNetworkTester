@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **The figures on the Statistics page can be copied.** Right-click any value on "Session" or
+  "Live" for "Copy value" or "Copy the whole tab", or use the button on the panel itself - "Copy
+  session details" beside the repro buttons, "Copy counters" under the grid. The text is exactly
+  what the tab shows, one line per row, captions and units included, so it can go straight into a
+  bug report. Until now every figure was a plain label: the computer name, the addresses and the
+  counters could not even be selected, let alone copied.
+
 - **You can now search for a setting on the Control page.** The box at the top right takes part of
   a field or section name, or a `--flag`. Every match is highlighted, the one you are on is filled
   in, and the `1 / 4` counter points at it. `Enter` goes to the next, `Shift+Enter` back, `Escape`
@@ -14,7 +21,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
   window is named rather than missed.
 
+### Changed
+
+- **Traffic in Connections is shown in the unit that fits the number.** A big flow used to read
+  `5242880.0` under a `[KB]` heading, and a ninety-byte DNS answer read `0.0`. Every cell now
+  carries its own unit - `5.00 GB`, `340 MB`, `90 B` - and so does the total line under the table.
+  The `[KB]` has left the headers, because the number says it. `avg` is a packet size and stays in
+  bytes. Sorting is unchanged, and the CSV export still holds raw bytes for your spreadsheet.
+
 ### Fixed
+
+- **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
+  every header to its right explained its neighbour instead - and with only a couple of columns
+  left, the tooltip could describe a column that was not on screen at all. The tooltip now follows
+  the header the pointer is actually on, whichever columns you have chosen to show. The same fix
+  applies to the event log.
+
 - **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
   pushed everything down and left a blank band above the first setting, as if the window had lost
   its contents. It now stops at the top, and the same fix applies to the Control page.

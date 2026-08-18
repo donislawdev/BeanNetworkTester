@@ -331,7 +331,10 @@ def test_table_tooltips_belong_to_the_headers_not_the_whole_table():
         table._on_motion(Ev())
         assert table._tip_column is None
 
-        # over a header: the tooltip belongs to THAT column
+        # over a header: the tooltip belongs to THAT column. With everything
+        # shown the display position and the registry position agree - which is
+        # why this test could not see the hidden-column bug. That case has its
+        # own test below (test_a_header_tooltip_still_names_its_own_column...).
         table.tree.identify_region = lambda x, y: "heading"
         table.tree.identify_column = lambda x: "#3"
         table._on_motion(Ev())
@@ -672,4 +675,182 @@ def test_two_hits_never_fight_over_one_widget():
         filled = [m[0] for m in page._marks if "HitDim" not in str(m[0].cget("style"))]
         assert len(filled) == 1, "exactly one hit is the current one: %d" % len(filled)
         assert filled[0] is page._marks[page._at][0]
+    """)
+
+
+# -- copying the figures off the Statistics page ------------------------------ #
+
+
+def test_the_session_panel_copies_exactly_what_it_shows():
+    """Every value on that panel is a label, so nothing could be selected, let
+    alone copied - the machine name and its addresses had to be retyped by hand.
+
+    The text is built from `SESSION_ROWS`, so a row added to the registry is
+    copied the day it appears rather than the day somebody remembers.
+    """
+    run_gui("""
+        import fake_tk
+        from beantester.gui.pages.stats import SESSION_ROWS
+        from beantester.i18n import T
+
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.select("session")
+        page.refresh()
+
+        fake_tk.CLIPBOARD.clear()
+        page._copy_visible("session")
+        text = "".join(fake_tk.CLIPBOARD)
+        lines = text.splitlines()
+        assert len(lines) == len(SESSION_ROWS), (len(lines), len(SESSION_ROWS))
+        for (key, cap, _tip), line in zip(SESSION_ROWS, lines):
+            shown = page.sess_labels[key].cget("text")
+            assert line == "%s: %s" % (T(cap), shown), (line, shown)
+        assert any(T("session.host") in line for line in lines), lines
+    """)
+
+
+def test_the_counters_tab_copies_its_figures_with_their_units():
+    run_gui("""
+        import fake_tk
+        from beantester.gui.pages.stats import CELLS
+        from beantester.i18n import T
+
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.select("live")
+
+        fake_tk.CLIPBOARD.clear()
+        page._copy_visible("live")
+        lines = "".join(fake_tk.CLIPBOARD).splitlines()
+        assert len(lines) == len(CELLS), (len(lines), len(CELLS))
+        # the unit belongs to the caption on this tab, and the copy keeps it
+        down = [l for l in lines if l.startswith(T("stats.download"))]
+        assert down and "(KB/s)" in down[0], down
+    """)
+
+
+def test_copying_one_value_takes_that_value_and_nothing_else():
+    run_gui("""
+        import fake_tk
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.select("session")
+        page.refresh()
+
+        value = page.sess_labels["private_ipv4"]
+        page._clicked = (value, "session")
+        fake_tk.CLIPBOARD.clear()
+        page._copy_one()
+        assert "".join(fake_tk.CLIPBOARD) == value.cget("text"), fake_tk.CLIPBOARD
+    """)
+
+
+def test_a_copy_is_confirmed_only_when_the_clipboard_really_has_it():
+    """`App.copy_to_clipboard` logs its own failure, so a success line printed
+    blindly beside it would contradict the error the user just read."""
+    run_gui("""
+        import fake_tk
+        from beantester.i18n import T
+        app.select_page("statistics")
+        page = app.pages["statistics"]
+        page.select("session")
+
+        fake_tk.CLIPBOARD.clear()
+        page._copy_visible("session")
+        assert any(T("log.copied") in line for line in app._log_lines), app._log_lines[-3:]
+
+        # a clipboard that refuses the text says nothing cheerful
+        before = len(app._log_lines)
+        real_append = type(root).clipboard_append
+        type(root).clipboard_append = lambda self, text: None
+        try:
+            fake_tk.CLIPBOARD.clear()
+            page._copy_visible("session")
+        finally:
+            type(root).clipboard_append = real_append
+        assert len(app._log_lines) == before, app._log_lines[before:]
+    """, allow_faults=("CLIPBOARD selection doesn't exist",))
+
+
+def test_the_statistics_page_does_not_steal_ctrl_c_from_the_tables():
+    """The same class as the Ctrl+F collision: the connection table and the event
+    log own Ctrl+C, on their own widgets. A root binding here would replace
+    nothing today and everything tomorrow, so there must not be one."""
+    run_gui("""
+        app.select_page("statistics")
+        assert "<Control-c>" not in root.bindings, sorted(root.bindings)
+        assert "<Control-C>" not in root.bindings, sorted(root.bindings)
+
+        conns = app.pages["connections"]
+        assert "<Control-c>" in conns.table.tree.bindings, "the table lost its copy"
+    """)
+
+
+def test_a_header_tooltip_still_names_its_own_column_after_others_are_hidden():
+    """🔴 Reported from the running program: hide a column and every header to its
+    right explained the WRONG one - one case showed the tooltip of a column that
+    was not even on screen.
+
+    `identify_column` answers with a DISPLAY position, and the resolution counted
+    it against the full column list, so the two agreed only while everything was
+    shown. The old tooltip test asserted exactly that agreement and never hid a
+    column, which is why the suite was quiet about it.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        keys = list(table.columns)
+
+        class Ev:
+            x = 40
+            y = 8
+            x_root = 400
+            y_root = 300
+
+        table.tree.identify_region = lambda x, y: "heading"
+
+        # hide the SECOND column: everything right of it shifts one place left
+        table.set_visible_columns([k for k in keys if k != keys[1]])
+        table.tree.identify_column = lambda x: "#2"      # 2nd column ON SCREEN
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[2], (
+            "the tooltip named %r while the pointer was on %r"
+            % (table._tip_column, keys[2]))
+        assert table._tip_column in table._visible, "it named a hidden column"
+
+        # only two columns left: the last one on screen is the last one asked for
+        pair = [keys[0], keys[5]]
+        table.set_visible_columns(pair)
+        table.tree.identify_column = lambda x: "#2"
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[5], (table._tip_column, keys[5])
+
+        # and with everything back, the first column is the first column again
+        table.set_visible_columns(keys)
+        table.tree.identify_column = lambda x: "#1"
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column == keys[0], table._tip_column
+    """)
+
+
+def test_no_tooltip_past_the_last_column():
+    """Tk answers with an empty spec in the bare strip right of the headers, and
+    the old arithmetic turned that into a ValueError rather than an answer."""
+    run_gui("""
+        table = app.pages["connections"].table
+
+        class Ev:
+            x = 4000
+            y = 8
+            x_root = 400
+            y_root = 300
+
+        table.tree.identify_region = lambda x, y: "heading"
+        table.tree.identify_column = lambda x: ""
+        table._hide_tip()
+        table._on_motion(Ev())
+        assert table._tip_column is None and table._tip_window is None
     """)
