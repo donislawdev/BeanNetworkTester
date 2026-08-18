@@ -82,30 +82,40 @@ class ControlPage:
         margin, sits clear of the eye's path down the first column, and lands
         where a find box is looked for.
 
-        Packed right to left, and in this order for a reason: the COUNT is pinned
-        to the margin with a fixed width, then the box, then its label - so none
-        of them shift as the count grows from "1 / 9" to "10 / 12". The sentence
-        that names another window is a separate label further left, free to grow
-        into empty space without pushing the box around.
+        🔴 The BOX is what the eye calls "the search", so the box is what has to
+        be flush with the margin. Measured on real Tk (1200x900): with the count
+        pinned to the right the entry ended 65 px short of the section cards
+        beside it, and a control that stops short of every other right edge on the
+        page reads as something dropped on top of the page rather than part of it.
+        So the count moved to the LEFT of the label, where it still cannot push
+        anything around: everything right of it has a fixed width.
+
+        Packed right to left: entry (against the margin), its label, the count,
+        then the sentence that names another window - which is free to grow
+        leftwards into empty space without moving anything.
         """
         bar = ttk.Frame(self.frame)
+        # Low rather than high: sitting under the tab strip with a wide gap below
+        # it, the bar looked attached to the tabs. Tight to the content it belongs
+        # to, it reads as the page's own header row.
         bar.pack(side="top", fill="x", padx=(scaled(12), scaled(14)),
-                 pady=(scaled(8), scaled(2)))
-        self._count = ttk.Label(bar, text="", style="Muted.TLabel",
-                                width=9, anchor="e")
-        self._count.pack(side="right")
+                 pady=(scaled(12), scaled(3)))
         self.query_var = tk.StringVar(value=_LAST_QUERY[0])
         entry = ttk.Entry(bar, textvariable=self.query_var, width=24)
-        entry.pack(side="right", padx=(scaled(5), scaled(6)))
+        entry.pack(side="right")
+        self._count = ttk.Label(bar, text="", style="Muted.TLabel",
+                                width=8, anchor="e")
         entry.bind("<KeyRelease>", self._on_key)
         entry.bind("<Return>", lambda e: self._step(1))
         entry.bind("<Shift-Return>", lambda e: self._step(-1))
         entry.bind("<Escape>", lambda e: self.clear())
         add_tooltip(entry, "tips.control_search", shortcut="Ctrl+F")
         self._entry = entry
-        ttk.Label(bar, text=T("fields.search")).pack(side="right")
+        ttk.Label(bar, text=T("fields.search")).pack(side="right",
+                                                    padx=(scaled(6), scaled(5)))
+        self._count.pack(side="right")
         # Free to grow leftwards: "..." is in the Settings window, or "nothing
-        # matches". Never between the box and the count, which must not move.
+        # matches". Never to the right of the box, which must not move.
         self._note = ttk.Label(bar, text="", style="Muted.TLabel", anchor="e")
         self._note.pack(side="right", padx=(0, scaled(10)))
         # Bound on the ROOT through the shared dispatcher, for the same reason the
