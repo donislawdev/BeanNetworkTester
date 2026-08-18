@@ -26,6 +26,56 @@ def bytes_to_mb(n):
     return round(to_number(n) / (1024.0 * 1024.0), 2)
 
 
+# 1024-based, and spelled the way the rest of the tool already spells it ("KB",
+# not "KiB"): the presets, the chart axis, the speed fields and both READMEs
+# have meant 1024 B by "KB" since the first version, and one tool speaking two
+# spellings of one unit is worse than either spelling on its own.
+BYTE_UNITS = ("B", "KB", "MB", "GB", "TB", "PB")
+
+
+def _byte_decimals(value, index):
+    """How many decimals ``value`` gets in unit ``index``: three significant
+    digits, except that whole bytes are never fractional."""
+    if index == 0:
+        return 0                        # "947 B" - a third of a byte is not a thing
+    if value < 10:
+        return 2
+    return 1 if value < 100 else 0
+
+
+def human_bytes(n):
+    """Bytes as a string a person reads at a glance: ``5.24 GB``, ``90 B``.
+
+    The connection table used to render every traffic column as ``bytes / 1024``
+    with one decimal, so a 5 GB flow read ``5242880.0`` - nine digits with no
+    grouping - and a 40-byte ICMP row read ``0.0``, which says "nothing
+    happened" on a row that exists because something did. The unit therefore
+    follows the VALUE and not the column, which is also the only answer that
+    serves a user whose traffic is megabytes and one whose traffic is
+    kilobytes without asking either of them to set anything.
+
+    Three significant digits keep the width constant - ``1023 MB`` is the widest
+    this gets - which is what lets the column stay right-aligned and readable
+    down the page. The ``avg`` column deliberately does NOT use this: a packet
+    size lives between 40 and 65535 B, and ``1.43 KB`` is a worse answer there
+    than ``1460``.
+    """
+    value = to_number(n)
+    sign = "-" if value < 0 else ""
+    value = abs(value)
+    index = 0
+    while value >= 1024.0 and index < len(BYTE_UNITS) - 1:
+        value /= 1024.0
+        index += 1
+    # Rounding can push a value back OVER the band it was just picked for:
+    # 1023.7 B rounds to "1024 B", and that unit ends at 1023.
+    if (index < len(BYTE_UNITS) - 1
+            and round(value, _byte_decimals(value, index)) >= 1024.0):
+        value /= 1024.0
+        index += 1
+    return f"{sign}{value:.{_byte_decimals(value, index)}f} {BYTE_UNITS[index]}"
+
+
 def nice_ceiling(v):
     """Round up to a 'nice' axis value (1/2/2.5/5 x 10^k)."""
     v = to_number(v)
