@@ -1,0 +1,14 @@
+# Static analysis, CI only. Nothing here is imported by the program.
+#
+# 🔴 PINNED, and for a different reason than requirements.txt is pinned. There the
+# pin says which library a release shipped; here it says which RULES a pull request
+# was judged by. A linter's rule set moves between releases, so an unpinned tool
+# turns "green yesterday, red today" into a mystery with no commit behind it - the
+# same failure that made `pyinstaller` a pinned dependency in requirements-build.txt
+# after the same commit built a working exe on CI and a crashing one on a developer
+# machine.
+#
+# Raise these by hand, deliberately, and read the release notes when you do: a new
+# ruff minor may add rules to a family we select, and that is a decision about what
+# blocks a pull request, not a routine bump.
+ruff==0.16.3

@@ -478,8 +478,9 @@ def _parse_ip_term(body, term, field):
                 raise _err("errors.bad_filter_ip", field, term)
             version, num = operand.version, operand.num
             base = _compare_predicate(op, num)
-            # noqa: the loop returns in this iteration, so `version` and `base`
-            # cannot change under the lambda - B023 needs a second pass to bite.
+            # B023 is false here: the loop RETURNS in this iteration, so `version`
+            # and `base` cannot change under the lambda - late binding needs a
+            # second pass to bite.
             return ((lambda c: c is not None and c.version == version and base(c.num)),  # noqa: B023
                     ("ip_cmp", version, op, num))
     # CIDR

@@ -80,6 +80,34 @@ jobs:
           printf '%s' "$PR_BODY" > pr-body.txt
           python tools/check_public_text.py --text-file pr-body.txt
 
+  # Static analysis, one platform: ruff reads source, and source does not differ
+  # between the runners. Kept out of the `tests` matrix for exactly that reason -
+  # in there it would run twice and say the same thing.
+  lint:
+    name: ruff (F and B block, S and ASYNC report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the linter
+        run: pip install -r requirements-lint.txt
+      # The gate. `--select` on the command line replaces the families named in
+      # pyproject.toml and nothing else: the per-file ignores and the target
+      # version still come from there, so the two runs below cannot drift apart
+      # from what a developer sees locally.
+      - name: Bugs and dead code (blocking)
+        run: ruff check --select F,B --output-format github
+      # The report. S is 306 findings on this repository and 287 of them are
+      # things a test suite for a packet mangler does on purpose - so it
+      # annotates the diff and never fails the run. `ruff check` exits 1 on any
+      # finding, hence --exit-zero rather than a `continue-on-error` on the step:
+      # a step that "succeeded but failed" reads as a broken job to everybody.
+      - name: Security patterns and async misuse (report only)
+        run: ruff check --select S,ASYNC --exit-zero --output-format github
+
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}

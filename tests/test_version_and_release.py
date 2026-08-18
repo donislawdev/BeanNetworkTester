@@ -125,7 +125,8 @@ def test_breaking_sections_come_first():
 
         def close(version, sections):
             if version and "### BREAKING" in sections and sections[0] != "### BREAKING":
-                # noqa: one file, one iteration - the closure cannot outlive it
+                # B023 is false here: one file, one iteration - the closure
+                # cannot outlive the loop that made it.
                 problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"  # noqa: B023
                                 f" of {len(sections)} (first is {sections[0]!r})")
 
