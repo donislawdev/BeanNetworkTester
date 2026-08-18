@@ -12,3 +12,10 @@
 # ruff minor may add rules to a family we select, and that is a decision about what
 # blocks a pull request, not a routine bump.
 ruff==0.16.3
+
+# Same pin, same reason: a mypy release can start reporting a class of error the
+# previous one did not, and that is a decision about what blocks a pull request.
+# Verified 2026-08-19 on Linux WITHOUT pydivert or psutil installed - the shape a
+# runner has - because both are ignored by name in [tool.mypy] and a missing
+# module is a different code path from an untyped one.
+mypy==2.3.1

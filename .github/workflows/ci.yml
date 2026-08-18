@@ -108,6 +108,29 @@ jobs:
       - name: Security patterns and async misuse (report only)
         run: ruff check --select S,ASYNC --exit-zero --output-format github
 
+  # Its own job rather than a step in `lint`: two gates, two check names, so a
+  # branch-protection rule can require either one on its own and a red one says
+  # which of the two it was without opening the log.
+  types:
+    name: mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the type checker
+        run: pip install -r requirements-lint.txt
+      # No project dependencies installed on purpose: `pydivert` is Windows-only
+      # and `psutil` is not needed to READ this package, and both are ignored by
+      # name in [tool.mypy]. Verified in that exact shape (Linux, neither
+      # installed) before this job was written - a missing module and an untyped
+      # one are different code paths in mypy, and only one of them was measured
+      # on the developer machine.
+      - name: Type check the package
+        run: mypy
+
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
