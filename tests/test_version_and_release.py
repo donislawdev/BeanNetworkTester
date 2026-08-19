@@ -513,7 +513,9 @@ def test_the_release_attests_exactly_the_archive_it_publishes():
     check("both attestations name a subject", len(subjects) == 2, f"({subjects})")
     check("both attest the same file", len(set(subjects)) == 1, f"({subjects})")
 
-    publish = re.search(r"gh release create[^\n]*", text)
+    # The command spans lines: match it through its backslash continuations, or the
+    # asset list looks empty and every check below passes on nothing.
+    publish = re.search(r"gh release create(?:[^\n]*\\\n)*[^\n]*", text)
     check("the workflow publishes a release", publish is not None)
     uploaded = publish.group(0) if publish else ""
     # `subject-path: ${{ env.ASSET }}` against `gh release create ... "$ASSET" ...`
@@ -524,6 +526,46 @@ def test_the_release_attests_exactly_the_archive_it_publishes():
 
     for action in ("actions/attest@", "actions/attest-build-provenance@"):
         check(f"{action} is still in the release workflow", action in text)
+
+
+def test_the_provenance_bundle_ships_as_a_release_asset():
+    """An attestation nobody can find is an attestation nobody has.
+
+    Both attestations went into GitHub's attestation store and nowhere else, which
+    is enough for `gh attestation verify <zip> -R <repo>` and not enough for two
+    other readers:
+
+    * a person holding the download and no network path to that API, or a mirror
+      that copied the release page - the proof has to travel with the archive;
+    * 🔴 OpenSSF Scorecard, whose Signed-Releases check reads release assets BY
+      FILE EXTENSION and never opens the attestation store. Measured 2026-08-19:
+      the check scored 0/10 on releases that already carried two attestations.
+      `probes/releasesAreSigned` accepts `.asc`, `.minisig`, `.sig`, `.sign`,
+      `.sigstore` and `.sigstore.json`; `probes/releasesHaveProvenance` accepts
+      `.intoto.jsonl` and nothing else.
+
+    So the bundle is copied to a named asset and uploaded. The extension is part of
+    what this guards: renaming it to `.intoto.jsonl` would score two points higher
+    and would be a lie about the format, because the action writes a Sigstore
+    bundle.
+    """
+    import re
+    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
+              encoding="utf-8") as handle:
+        text = handle.read()
+
+    check("the provenance step is addressable (it needs an id for its output)",
+          re.search(r"id:\s*provenance\b", text) is not None)
+    check("the bundle path is read from that step's output",
+          "steps.provenance.outputs.bundle-path" in text)
+    check("the bundle is named as a Sigstore bundle",
+          ".sigstore.json" in text,
+          "(the action writes a Sigstore bundle - the name has to say so)")
+
+    publish = re.search(r"gh release create(?:[^\n]*\\\n)*[^\n]*", text)
+    uploaded = publish.group(0) if publish else ""
+    check("the bundle is uploaded with the other assets",
+          '"$BUNDLE"' in uploaded, f"({uploaded[:160]})")
 
 
 def _check_every_requirement_carries_hashes(filename):

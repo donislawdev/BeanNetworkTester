@@ -1347,6 +1347,16 @@ Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To 
 strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
 Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
 
+To polecenie pyta GitHuba. Dowód jedzie też **jako plik**, `BeanNetworkTester-vX.Y.Z.sigstore.json`,
+więc archiwum sprawdzisz bez pytania kogokolwiek:
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json
+```
+
+Przydaje się, gdy pliki masz z kopii lustrzanej albo na maszynie bez dostępu do API - dowód
+przyjechał razem z pobranym plikiem, zamiast leżeć w miejscu, któremu trzeba osobno ufać.
+
 ### Co jest w środku pobranego pliku i jak to sprawdzić
 
 Każde wydanie niesie **SBOM** - listę, w standardowym formacie SPDX, wszystkich

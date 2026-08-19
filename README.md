@@ -1485,6 +1485,16 @@ A checksum proves the file matches what the release page says. This proves the r
 was produced by this repository's own workflow, from a specific commit, on a GitHub-hosted runner.
 The same command also verifies the SBOM that ships beside the archive.
 
+That command asks GitHub. The proof also ships **as a file**, `BeanNetworkTester-vX.Y.Z.sigstore.json`,
+so you can check the archive without one:
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json
+```
+
+Useful if you got the files from a mirror, or from a machine that cannot reach the API - the
+evidence travelled with the download instead of living somewhere you have to trust separately.
+
 ### What is inside the download, and how to check it
 
 Every release carries an **SBOM** - a list, in the standard SPDX format, of every third-party

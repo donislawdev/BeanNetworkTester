@@ -23,11 +23,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **You can now check where a download came from, not just that it is unchanged.** Every
   release archive carries a signed build attestation, so one command answers "was this really
-  built from that source, by that workflow":
+  built from that source":
   `gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester`.
-  A checksum proves the file matches the release page. This proves the release page itself came
-  out of this repository's own workflow, from a specific commit. The same command also verifies
-  the SBOM shipped beside the archive.
+  A checksum proves the file matches the release page; this proves the page came out of this
+  repository's workflow, from a specific commit. It covers the SBOM too. The proof now ships
+  **as a file** as well, `BeanNetworkTester-vX.Y.Z.sigstore.json`, so `--bundle` checks the
+  archive from a mirror, or with no network at all.
 
 ### Changed
 
