@@ -58,6 +58,7 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
 - Presets are ordered best (top) -> worst (bottom).
 - Keep `BeanCore.decide()` pure and covered by tests; new mechanisms get a
   numbered spot in the pipeline plus unit tests.
+- A new failure mode gets an exit code, a test and a README row. A new mechanism gets a numbered spot in the pipeline plus unit tests 
 
 ## Pull requests
 
