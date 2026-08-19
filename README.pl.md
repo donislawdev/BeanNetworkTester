@@ -983,6 +983,7 @@ Silnik jest oddzielony od WinDivert, więc testy działają na każdym systemie 
 Windows, admina ani tkintera). Zestaw jest oparty o **pytest**:
 
 ```bat
+pip install --require-hashes -r requirements.txt
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```

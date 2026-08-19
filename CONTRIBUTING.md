@@ -7,6 +7,7 @@ testable on any OS.
 ## Getting started
 
 ```bash
+pip install --require-hashes -r requirements.txt   # runtime, pinned to exact artefacts
 pip install -r requirements-dev.txt
 pip install -r requirements-lint.txt   # ruff and mypy (semgrep on Linux and macOS)
 python -m pytest tests            # full suite - no Windows, no driver, no admin rights

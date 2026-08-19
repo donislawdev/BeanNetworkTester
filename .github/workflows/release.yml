@@ -46,7 +46,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-build.txt
+          # Two commands: hash-checked runtime, then the freezer. See the same
+          # split in ci.yml - pip turns hash-checking on for the whole install
+          # as soon as one requirement carries a hash.
+          pip install --require-hashes -r requirements.txt
+          pip install -r requirements-build.txt
 
       # The version is single-sourced in VERSION.txt. The tag is v<version> for a
       # final release, or v<version>-rc.N (also -beta.N / -alpha.N) for a pre-release.

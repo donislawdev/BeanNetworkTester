@@ -1130,6 +1130,7 @@ The engine is separate from WinDivert, so the tests run on any system (they need
 admin nor tkinter). The suite is based on **pytest**:
 
 ```bat
+pip install --require-hashes -r requirements.txt
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```

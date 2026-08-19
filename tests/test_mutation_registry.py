@@ -977,8 +977,8 @@ MUTATIONS = [
         # the same commit built a working exe there and a crashing one here.
         "label": "release: a workflow installs the freezer unpinned again",
         "file": ".github/workflows/ci.yml",
-        "old": "          pip install -r requirements.txt -r requirements-build.txt",
-        "new": "          pip install -r requirements.txt pyinstaller",
+        "old": "          pip install -r requirements-build.txt",
+        "new": "          pip install pyinstaller",
         "test": "test_both_workflows_install_the_same_pinned_builder",
     },
     {

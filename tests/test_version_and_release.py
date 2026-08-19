@@ -518,3 +518,72 @@ def test_the_release_attests_exactly_the_archive_it_publishes():
 
     for action in ("actions/attest@", "actions/attest-build-provenance@"):
         check(f"{action} is still in the release workflow", action in text)
+
+
+def test_every_pinned_runtime_requirement_carries_its_artefact_hashes():
+    """A version pins a NUMBER. Hashes pin the BYTES.
+
+    `pydivert==3.1.3` says which release to fetch, and says nothing about what
+    comes back: an index or a publishing account that has been taken over can
+    serve different bytes under the same version, and this particular wheel
+    carries the WinDivert kernel driver that gets installed on a user's machine.
+    With hashes present pip refuses anything that does not match.
+
+    Measured while writing this (2026-08-19), because the failure mode is not the
+    obvious one: corrupting the hash of ONE artefact does not fail the install -
+    pip falls back to another artefact of the same version, which is why every
+    artefact PyPI published for that version is listed. Corrupting them all is
+    what produces "THESE PACKAGES DO NOT MATCH THE HASHES" and exit 1.
+
+    This runs offline, so it checks the SHAPE rather than the values: the file
+    that ships cannot quietly lose its hashes. Regenerate with
+    `python tools/pin_hashes.py requirements.txt`.
+    """
+    import re
+    path = os.path.join(ROOT, "requirements.txt")
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+
+    pinned = {}
+    current = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("--hash="):
+            check("a hash line follows a requirement", current is not None, f"({stripped[:40]})")
+            digest = stripped[len("--hash="):].rstrip(" \\")
+            check(f"{current}: sha256 in the shape pip reads",
+                  re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None, f"({digest[:24]})")
+            pinned[current].append(digest)
+            continue
+        match = re.match(r"^([A-Za-z0-9._-]+)==", stripped)
+        check(f"every requirement is pinned with == ({stripped[:40]})", match is not None)
+        current = match.group(1) if match else None
+        pinned[current] = []
+
+    check("the file still names its requirements", len(pinned) >= 2, f"({sorted(pinned)})")
+    bare = [name for name, hashes in pinned.items() if not hashes]
+    check("every pinned requirement carries at least one hash", not bare, f"({bare})")
+    # More than one, or pip's fallback to another artefact of the same version
+    # would be an unhashed path back in through the front door.
+    thin = [name for name, hashes in pinned.items() if len(hashes) < 2]
+    check("each names every artefact, not just the one this machine picks",
+          not thin, f"({thin})")
+
+
+def test_the_dev_requirements_do_not_pull_in_the_hashed_file():
+    """The two cannot share one `pip install`, and the reason is pip's, not ours.
+
+    Hash-checking is turned on for the WHOLE install as soon as one requirement
+    carries a hash. `requirements-dev.txt` deliberately tracks latest - that is
+    what the weekly run watches - so including the hashed runtime file would
+    demand hashes for pytest, hypothesis and everything underneath them.
+    """
+    with open(os.path.join(ROOT, "requirements-dev.txt"), encoding="utf-8") as handle:
+        text = handle.read()
+    lines = [ln.strip() for ln in text.splitlines()
+             if ln.strip() and not ln.strip().startswith("#")]
+    check("requirements-dev.txt does not include requirements.txt",
+          not any(ln.startswith("-r requirements.txt") for ln in lines), f"({lines[:3]})")
+    check("it still lists the test tooling", any("pytest" in ln for ln in lines), f"({lines})")

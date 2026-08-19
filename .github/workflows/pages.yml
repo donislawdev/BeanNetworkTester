@@ -102,6 +102,7 @@ jobs:
       - name: Install the test dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
 
       # The generator refuses to build a broken page, but "it did not crash" is a
