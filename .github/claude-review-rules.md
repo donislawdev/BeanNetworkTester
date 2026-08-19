@@ -1,13 +1,9 @@
 # What a review of this repository has to know
 
-This file is the reviewer's briefing. It is copied to `CLAUDE.md` on the CI runner before
-the review runs, because the maintainer's own `CLAUDE.md` is not in the repository - it
-lives in a private notes repo and a runner never sees it. Without this file the review
-arrives with no idea what this project holds itself to and spends its findings on textbook
-advice that is already handled.
-
-Everything below is already visible in `CONTRIBUTING.md` and the READMEs. Nothing private
-belongs here: this file is public and permanent, like every other file in a public repo.
+The maintainer's own `CLAUDE.md` is not part of this repository, so a CI runner checks out
+a tree without it. This file is the public stand-in: it is copied to `CLAUDE.md` for the
+length of a review run. Nothing private belongs here, and nothing in it is new - every rule
+below is already stated in `CONTRIBUTING.md` or the READMEs.
 
 ## What the tool is
 
@@ -34,7 +30,8 @@ Two consequences worth carrying into every review:
    local paths, machine names, addresses or tokens, in comments either.
 3. **Anything visible from outside goes in the changelog.** `CHANGELOG.md` for users,
    `CHANGELOG-INTERNAL.md` for maintainers; a GUI change counts as visible. Entries go under
-   `[Unreleased]`, and `VERSION.txt` is never bumped in a pull request.
+   `[Unreleased]`, a user-facing entry is capped at 100 words, and `VERSION.txt` is never
+   bumped in a pull request.
 4. **Never break traffic globally.** A real interception needs a narrow target
    (`--target` / `--dst-ip` / `--dst-port`) and a short `--duration`. `--loss` or `--latency`
    with no target is a defect, not a default.
@@ -42,7 +39,6 @@ Two consequences worth carrying into every review:
    instead. Traffic is released on failure, never held.
 6. **New behaviour arrives with the test that guards it.** A new failure mode gets an exit
    code, a test and a README row. A new mechanism in the decision pipeline gets unit tests.
-   A test that cannot fail is worse than no test.
 
 ## Contracts that changes must not break silently
 
@@ -58,20 +54,70 @@ Two consequences worth carrying into every review:
 - **The project website's page addresses are a contract.** The site is published; names on
   its pages come from the language files, not typed by hand.
 
+## Where this project's bugs actually come from
+
+This is not a guess. `tests/test_mutation_registry.py` records every behaviour that has been
+broken on purpose to prove its test catches it, and the entries cluster. Look here first.
+
+1. 🔴 **A guard that cannot fail.** The single most valuable finding available in this
+   repository, and no linter can see it. An assertion that would also pass over an empty
+   set, a collector that returns nothing, a walk rooted at a directory that does not exist
+   on a runner, a search pattern that quietly stops matching - each looks like coverage and
+   is coverage of nothing. **A new test that would still pass with the behaviour removed is
+   a finding.** Ask of every added assertion: what input makes this red?
+2. **A sentence that stops agreeing with the state it describes.** A note, tooltip, chart
+   caption, log line or warning has to be derived from the state, never from a nearby proxy
+   that is usually the same. Past defects of exactly this shape: an unbounded run judged
+   bounded, a session that becomes unbounded and says nothing, a filter of pure exclusions
+   passing as a target. Numbers and the words beside them must come from one source.
+3. **Lifecycle and ordering around targeting.** The largest group by far. A socket that
+   arrives while a rebuild is in flight, a process adopted and then never re-judged, a
+   pending entry nobody drains, a failure on one item that kills the thread handling the
+   rest. Any change here deserves the question "what happens if this arrives during that".
+4. **Tables and their column registry drifting apart.** A header describing its neighbour
+   once a column is hidden, a count that includes hidden columns, a row marked by colour
+   alone, a number left touching the text beside it. If a change touches columns, check the
+   registry, the header, the tooltip and the export together.
+5. **Empty and just-changed states.** An empty table that renders as a blank rectangle, an
+   unsearched table blaming a search nobody made. The first and last iteration are where
+   this code breaks, not the middle.
+
+Two more things a diff hides:
+
+- **The fake tkinter has blind spots.** The suite drives a stand-in for Tk with one widget
+  class, no style validation and no geometry. Changes to styles, geometry or column mapping
+  are therefore **not** covered by the tests that appear to cover them, and deserve a closer
+  read than their green suite suggests.
+- **One platform is not both.** The suite runs on Linux and Windows. A symbol, a keysym or a
+  path habit named after one system can raise on the other, and "checked locally" here means
+  "checked on Windows".
+
+## What a complete pull request looks like here
+
+The change, the guard that catches its absence, an entry in the mutation registry when it
+guards a behaviour, and the changelog lines. **A pull request that adds behaviour with no
+guard is itself a finding**, and so is one that changes behaviour without touching the prose
+that describes it - the READMEs describe current state, and drift there is invisible.
+
 ## What CI already enforces, so a review need not
 
-ruff (bug shapes, dead code, a measured complexity ceiling), mypy, semgrep, CodeQL, a
-coverage gate on the whole repository plus 80 percent on the lines a pull request changes,
-a mutation registry that re-breaks each guarded behaviour to prove its test reddens, a
-licence gate on new dependencies, a weekly dependency audit, and a check that commit
-messages and the pull request body obey rule 2. Every action is pinned to a commit SHA and
-no `${{ }}` is ever interpolated into a `run:` script.
+ruff, mypy, semgrep and CodeQL; a coverage gate on the repository plus 80 percent on the
+lines a pull request changes; the mutation registry; a licence gate on new dependencies; a
+weekly dependency audit; and a check that commit messages and the pull request body obey
+rule 2. Every action is pinned to a commit SHA and no `${{ }}` reaches a `run:` script.
 
-Findings that repeat one of those are noise. The valuable finding is the one no gate can
-see: a wrong answer, a broken edge case, a contract quietly changed, a test that passes for
-the wrong reason, a comment that no longer matches the code beneath it.
+**A finding that repeats one of those is noise.** The valuable finding is the one no gate can
+see.
 
-## How to write a finding here
+## What not to propose
+
+- **A new dependency.** This project ships a kernel driver and pins its dependencies by
+  artefact hash; adding one is a deliberate decision with a licence gate in front of it, not
+  a review suggestion.
+- **A broad refactor.** Judge the change that is here.
+- **Style already settled by the linter**, or anything the section above covers.
+
+## How to write a finding
 
 Say what breaks, with the input or state that breaks it. "This could be clearer" is not a
 finding; "with `--duration 0` this loops forever, and no test covers it" is. If a rule above
