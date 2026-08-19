@@ -2,8 +2,9 @@
 
 The maintainer's own `CLAUDE.md` is not part of this repository, so a CI runner checks out
 a tree without it. This file is the public stand-in: it is copied to `CLAUDE.md` for the
-length of a review run. Nothing private belongs here, and nothing in it is new - every rule
-below is already stated in `CONTRIBUTING.md` or the READMEs.
+length of a review run. Nothing private belongs here: every line below is drawn from files
+that are already public in this repository - `CONTRIBUTING.md`, the READMEs, and the suite's
+own mutation registry.
 
 ## What the tool is
 
@@ -84,10 +85,15 @@ broken on purpose to prove its test catches it, and the entries cluster. Look he
 
 Two more things a diff hides:
 
-- **The fake tkinter has blind spots.** The suite drives a stand-in for Tk with one widget
-  class, no style validation and no geometry. Changes to styles, geometry or column mapping
-  are therefore **not** covered by the tests that appear to cover them, and deserve a closer
-  read than their green suite suggests.
+- **The fake tkinter models behaviour, not pixels.** `tests/fake_tk.py` models the widgets
+  the app leans on and records geometry and column calls, so layout and column mapping **are**
+  covered: `tests/test_gui_layout.py` asserts on `pack_info` directly, and `Treeview.column`
+  resolves a `"#N"` spec against the columns currently shown, exactly as Tk does. What it
+  cannot see needs a real renderer. `ttk.Style` is mapped to a bare widget, so style names and
+  options are never validated and `theme_use` / `map` / `layout` do nothing; and
+  `winfo_width` / `winfo_height` / `winfo_geometry` return constants, so nothing measures real
+  wrapping, clipping or overflow. Changes to `gui/theme.py`, or to anything that depends on
+  measured text, deserve a closer read than their green suite suggests.
 - **One platform is not both.** The suite runs on Linux and Windows. A symbol, a keysym or a
   path habit named after one system can raise on the other, and "checked locally" here means
   "checked on Windows".
