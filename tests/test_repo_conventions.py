@@ -583,28 +583,28 @@ def test_every_action_a_workflow_uses_is_pinned_to_a_commit():
     check("every action is pinned to a full commit SHA", not unpinned, f"({unpinned})")
     check("every pin says which version it is", not uncommented, f"({uncommented})")
 
+def test_the_optional_review_never_runs_by_itself():
+    """The one job here that spends money, and the reason it is not automatic.
 
-def test_the_paid_review_keeps_its_cost_gate():
-    """The only workflow here that spends money per run, and what stops it running.
+    It started as a review on every pull request. Measured on 2026-08-19: **$2.92 for
+    one run** - Opus 5, 13 turns, on a pull request carrying a single Markdown file -
+    because the cost tracks how far the reviewer explores, not how large the diff is.
+    At this project's rate that is a standing bill against a subscription with better
+    uses, so the trigger was inverted: it now waits to be asked.
 
-    Three things keep it cheap, and each one is a line somebody could delete while
-    tidying and never notice the bill:
+    What this guards is the shape of that decision, because each piece is one line
+    somebody could restore while tidying and only notice on the invoice:
 
-    * it triggers on `opened` and `ready_for_review` and **not** `synchronize`.
-      `synchronize` fires on every push, so adding it multiplies the cost by how
-      many times a branch gets amended - which, at this project's rate, is the
-      difference between a review per pull request and five;
-    * it runs only for the maintainer's own pull requests. The action refuses
-      non-write actors and bots by itself, and a public repository withholds
-      secrets from fork pull requests, but neither of those is visible in this file
-      - the condition is, so it is the one a reader can check;
-    * it holds no write permission. It comments through the app, and nothing here
-      can push.
+    * it must not trigger on `pull_request` AT ALL. Not `opened`, not `synchronize` -
+      any automatic trigger puts the standing bill back;
+    * it answers a comment, and only one that asks for it by name;
+    * only the maintainer can summon it;
+    * it holds no write permission. It reads and comments; it cannot push.
 
     Also guarded: the rule digest is still copied into place. Without that step the
-    review runs with no project context at all - `CLAUDE.md` is git-ignored, so a
-    runner checks out a tree without it - and the run still succeeds, just uselessly.
-    That is the failure mode worth a test: not a red job, a wasted one.
+    review runs with no project context at all - `CLAUDE.md` is not part of this
+    repository, so a runner checks out a tree without it - and the run still
+    SUCCEEDS, just uselessly. A wasted run is harder to notice than a red one.
     """
     path = os.path.join(ROOT, ".github", "workflows", "claude-review.yml")
     check("the review workflow is still here", os.path.exists(path))
@@ -614,14 +614,17 @@ def test_the_paid_review_keeps_its_cost_gate():
         lines = handle.read().splitlines()
     code = [ln.split("#", 1)[0] for ln in lines]
     body = "\n".join(code)
+    triggers = body.split("jobs:", 1)[0]
 
-    check("it does not review on every push", "synchronize" not in body,
-          "(`synchronize` fires per push - that is the expensive trigger)")
-    check("it still reviews an opened pull request", "opened" in body)
-    check("it still reviews one marked ready for review", "ready_for_review" in body)
-    check("it runs only for the maintainer's pull requests",
-          "github.event.pull_request.user.login == 'donislawdev'" in body)
-    check("it skips drafts", "draft == false" in body)
+    check("nothing makes the review run by itself",
+          "pull_request:" not in triggers and "schedule:" not in triggers,
+          "(an automatic trigger is the standing bill this was reversed to avoid)")
+    check("it is summoned by a comment",
+          "issue_comment:" in triggers, f"({triggers[-200:]})")
+    check("the comment has to ask for it by name",
+          "contains(github.event.comment.body, '@claude')" in body)
+    check("only the maintainer can summon it",
+          "github.event.comment.user.login == 'donislawdev'" in body)
     check("the rule digest is copied where Claude reads project memory",
           "cp .github/claude-review-rules.md CLAUDE.md" in body)
     check("the digest it copies exists",

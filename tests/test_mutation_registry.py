@@ -1059,13 +1059,14 @@ MUTATIONS = [
         "test": "test_the_provenance_bundle_ships_as_a_release_asset",
     },
     {
-        # The one job here that costs money per run, and the one word that decides
-        # how often it runs. `synchronize` fires on every push.
-        "label": "review: the paid review starts running on every push",
+        # The one job here that costs money per run, and the line that decides whether
+        # it runs at all. Measured at $2.92 a run before it was made optional, so an
+        # automatic trigger put back "while tidying" is a standing bill nobody chose.
+        "label": "review: the optional review goes back to running by itself",
         "file": ".github/workflows/claude-review.yml",
-        "old": "    types: [opened, ready_for_review]",
-        "new": "    types: [opened, ready_for_review, synchronize]",
-        "test": "test_the_paid_review_keeps_its_cost_gate",
+        "old": "  issue_comment:",
+        "new": "  pull_request:\n    types: [opened]\n  issue_comment:",
+        "test": "test_the_optional_review_never_runs_by_itself",
     },
     {
         "label": "supply chain: release.yml grants write at the file level again",
