@@ -582,3 +582,50 @@ def test_every_action_a_workflow_uses_is_pinned_to_a_commit():
     check("the scan found the actions the workflows use", seen >= 15, f"({seen})")
     check("every action is pinned to a full commit SHA", not unpinned, f"({unpinned})")
     check("every pin says which version it is", not uncommented, f"({uncommented})")
+
+
+def test_the_paid_review_keeps_its_cost_gate():
+    """The only workflow here that spends money per run, and what stops it running.
+
+    Three things keep it cheap, and each one is a line somebody could delete while
+    tidying and never notice the bill:
+
+    * it triggers on `opened` and `ready_for_review` and **not** `synchronize`.
+      `synchronize` fires on every push, so adding it multiplies the cost by how
+      many times a branch gets amended - which, at this project's rate, is the
+      difference between a review per pull request and five;
+    * it runs only for the maintainer's own pull requests. The action refuses
+      non-write actors and bots by itself, and a public repository withholds
+      secrets from fork pull requests, but neither of those is visible in this file
+      - the condition is, so it is the one a reader can check;
+    * it holds no write permission. It comments through the app, and nothing here
+      can push.
+
+    Also guarded: the rule digest is still copied into place. Without that step the
+    review runs with no project context at all - `CLAUDE.md` is git-ignored, so a
+    runner checks out a tree without it - and the run still succeeds, just uselessly.
+    That is the failure mode worth a test: not a red job, a wasted one.
+    """
+    path = os.path.join(ROOT, ".github", "workflows", "claude-review.yml")
+    check("the review workflow is still here", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    code = [ln.split("#", 1)[0] for ln in lines]
+    body = "\n".join(code)
+
+    check("it does not review on every push", "synchronize" not in body,
+          "(`synchronize` fires per push - that is the expensive trigger)")
+    check("it still reviews an opened pull request", "opened" in body)
+    check("it still reviews one marked ready for review", "ready_for_review" in body)
+    check("it runs only for the maintainer's pull requests",
+          "github.event.pull_request.user.login == 'donislawdev'" in body)
+    check("it skips drafts", "draft == false" in body)
+    check("the rule digest is copied where Claude reads project memory",
+          "cp .github/claude-review-rules.md CLAUDE.md" in body)
+    check("the digest it copies exists",
+          os.path.exists(os.path.join(ROOT, ".github", "claude-review-rules.md")))
+    check("the review job holds no write permission",
+          "write" not in body.split("jobs:", 1)[1].replace("id-token: write", ""),
+          "(a reviewer that can push is not a reviewer)")

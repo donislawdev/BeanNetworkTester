@@ -1029,6 +1029,26 @@ MUTATIONS = [
     {
         # The permission that outlives the job it was written for: back at the top
         # of release.yml, where every job added later inherits it.
+        # Evidence that exists and cannot be found is evidence nobody has. The
+        # attestation stayed in GitHub's store, where the archive's own readers -
+        # a person offline, a mirror, a scanner reading assets by extension - never
+        # look.
+        "label": "release: the provenance bundle stops shipping as an asset",
+        "file": ".github/workflows/release.yml",
+        "old": '"$ASSET" SHA256SUMS.txt "$SBOM" "$BUNDLE"',
+        "new": '"$ASSET" SHA256SUMS.txt "$SBOM"',
+        "test": "test_the_provenance_bundle_ships_as_a_release_asset",
+    },
+    {
+        # The one job here that costs money per run, and the one word that decides
+        # how often it runs. `synchronize` fires on every push.
+        "label": "review: the paid review starts running on every push",
+        "file": ".github/workflows/claude-review.yml",
+        "old": "    types: [opened, ready_for_review]",
+        "new": "    types: [opened, ready_for_review, synchronize]",
+        "test": "test_the_paid_review_keeps_its_cost_gate",
+    },
+    {
         "label": "supply chain: release.yml grants write at the file level again",
         "file": ".github/workflows/release.yml",
         "old": "permissions:\n  contents: read",
