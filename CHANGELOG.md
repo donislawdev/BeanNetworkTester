@@ -40,6 +40,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A filter ending in a backslash no longer swallows the one after it.** Type a Windows path with
+  its trailing separator and a second name - `C:\, chrome.exe` - and the tool showed two filters
+  while using one, because that backslash ate the comma between them. The stray backslash is now
+  dropped as the filter is read. It never meant anything on its own, so nothing you can usefully
+  write is affected, and what the filter line says is what the filter does.
+
 - **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
   every header to its right explained its neighbour instead - and with only a couple of columns
   left, the tooltip could describe a column that was not on screen at all. The tooltip now follows

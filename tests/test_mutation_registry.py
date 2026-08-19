@@ -1029,6 +1029,25 @@ MUTATIONS = [
     {
         # The permission that outlives the job it was written for: back at the top
         # of release.yml, where every job added later inherits it.
+        # The filter a user reads stops being the filter that runs: a term ending
+        # in a backslash escapes the separator `describe()` writes after it, and
+        # two terms silently become one.
+        "label": "matchers: a term keeps a trailing escape that eats the separator",
+        "file": "beantester/matchers.py",
+        "old": "        term = _without_a_dangling_escape(part.strip())",
+        "new": "        term = part.strip()",
+        "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
+    },
+    {
+        # The OVER-correction, which is the likelier future mistake: stripping the
+        # whole tail looks tidier and breaks `a\\`, which already round-tripped.
+        "label": "matchers: the escape fix widens into stripping every trailing backslash",
+        "file": "beantester/matchers.py",
+        "old": "    return term[:-1] if trailing % 2 else term",
+        "new": r'    return term.rstrip("\\")',
+        "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
+    },
+    {
         # Evidence that exists and cannot be found is evidence nobody has. The
         # attestation stayed in GitHub's store, where the archive's own readers -
         # a person offline, a mirror, a scanner reading assets by extension - never
