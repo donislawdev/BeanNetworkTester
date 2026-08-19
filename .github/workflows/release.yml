@@ -161,6 +161,29 @@ jobs:
           subject-path: ${{ env.ASSET }}
           sbom-path: ${{ env.SBOM }}
 
+      # WHO built it, and FROM WHAT. The SBOM attestation above says what is inside
+      # the zip; this one says the zip came out of this repository, from this commit,
+      # through this workflow, on a GitHub-hosted runner - signed with the same
+      # short-lived OIDC identity and stored in the same attestation store. A user
+      # checks both with one command:
+      #
+      #     gh attestation verify BeanNetworkTester-<tag>-windows-x64.zip \
+      #        -R donislawdev/BeanNetworkTester
+      #
+      # It is a different question from a code signature, which is why both are
+      # worth having: a signature says who signed the binary, provenance says which
+      # source and which build produced it. A stolen signing key cannot forge this,
+      # and a forked workflow cannot claim to be this repository.
+      #
+      # Separate action from `actions/attest` above on purpose: that one attaches a
+      # predicate you hand it (here, the SBOM), while the provenance predicate is
+      # built BY the action from the workflow's own context - there is nothing to
+      # pass in, and nothing we could pass in that would be trustworthy.
+      - name: Attest the build provenance of the release archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ env.ASSET }}
+
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
       #

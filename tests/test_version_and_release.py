@@ -482,3 +482,39 @@ def test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name():
             reason = "no error at all"
         check(f"{bad!r} is refused before it becomes a URL", rejected,
               "" if rejected else f"({reason})")
+
+
+def test_the_release_attests_exactly_the_archive_it_publishes():
+    """Two attestations, one subject, and the subject is the download.
+
+    A release carries two signed statements about the zip: an SBOM attestation
+    (what is inside it) and a build-provenance attestation (which repository,
+    commit and workflow produced it). Both are worth nothing if they name a
+    different file from the one `gh release create` uploads, and that mismatch is
+    invisible on the release page - the attestation store simply ends up holding a
+    statement about a digest nobody downloads.
+
+    So this pins the shape rather than the wording: every `subject-path` in the
+    workflow names the same variable the publish step uploads, and both actions
+    are still there.
+    """
+    import re
+    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
+              encoding="utf-8") as handle:
+        text = handle.read()
+
+    subjects = re.findall(r"subject-path:\s*(\S.*?)\s*$", text, re.MULTILINE)
+    check("both attestations name a subject", len(subjects) == 2, f"({subjects})")
+    check("both attest the same file", len(set(subjects)) == 1, f"({subjects})")
+
+    publish = re.search(r"gh release create[^\n]*", text)
+    check("the workflow publishes a release", publish is not None)
+    uploaded = publish.group(0) if publish else ""
+    # `subject-path: ${{ env.ASSET }}` against `gh release create ... "$ASSET" ...`
+    name = subjects[0].strip("${} ").replace("env.", "").strip()
+    check(f"the attested subject ({name}) is what gets uploaded",
+          ("$" + name) in uploaded or ("${" + name + "}") in uploaded,
+          f"({uploaded[:120]})")
+
+    for action in ("actions/attest@", "actions/attest-build-provenance@"):
+        check(f"{action} is still in the release workflow", action in text)

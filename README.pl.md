@@ -1316,6 +1316,18 @@ mogą zgłosić fałszywy alarm. Sam sterownik **WinDivert jest podpisany cyfrow
 przez jego autora**. Sumę kontrolną SHA-256 wydania (`SHA256SUMS.txt`) możesz
 porównać, żeby potwierdzić, że plik nie został zmodyfikowany.
 
+**Możesz też sprawdzić, skąd ten plik pochodzi, a nie tylko czy się nie zmienił.** Każde archiwum
+wydania niesie podpisaną atestację builda, więc jedno polecenie odpowiada na pytanie „czy to
+naprawdę zbudowano z tego kodu, tym workflow":
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+```
+
+Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To dowodzi, że sama
+strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
+Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
+
 ### Co jest w środku pobranego pliku i jak to sprawdzić
 
 Każde wydanie niesie **SBOM** - listę, w standardowym formacie SPDX, wszystkich

@@ -1454,6 +1454,18 @@ and some antivirus tools may raise a false alarm. The **WinDivert driver itself 
 by its author**. You can compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to confirm the
 file has not been modified.
 
+**You can also check where the download came from, not just that it is unchanged.** Every release
+archive carries a signed build attestation, so one command answers "was this really built from that
+source by that workflow":
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+```
+
+A checksum proves the file matches what the release page says. This proves the release page itself
+was produced by this repository's own workflow, from a specific commit, on a GitHub-hosted runner.
+The same command also verifies the SBOM that ships beside the archive.
+
 ### What is inside the download, and how to check it
 
 Every release carries an **SBOM** - a list, in the standard SPDX format, of every third-party
