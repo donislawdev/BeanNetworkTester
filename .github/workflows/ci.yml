@@ -98,8 +98,8 @@ jobs:
       # pyproject.toml and nothing else: the per-file ignores and the target
       # version still come from there, so the two runs below cannot drift apart
       # from what a developer sees locally.
-      - name: Bugs and dead code (blocking)
-        run: ruff check --select F,B --output-format github
+      - name: Bugs, dead code and the complexity ceiling (blocking)
+        run: ruff check --select F,B,C90 --output-format github
       # The report. S is 306 findings on this repository and 287 of them are
       # things a test suite for a packet mangler does on purpose - so it
       # annotates the diff and never fails the run. `ruff check` exits 1 on any

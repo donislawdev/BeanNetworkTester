@@ -1159,6 +1159,21 @@ exit-code assertions, an NDJSON check, `--doctor` and `--license`, and then **an
 a smoke test of the built file** (`--version`, `--simulate`, a bad config -> code 3) plus a check
 that the WinDivert driver really shipped next to the exe, with a downloadable artifact.
 
+<!-- ci-jobs:start -->
+Every job in that workflow, and what a red one means:
+
+| job | what it does |
+|---|---|
+| `public-text` | commit messages and the pull-request description: English, plain hyphens, nothing private to a machine |
+| `lint` | **ruff**. Dead code, bug shapes and the complexity ceiling fail the run. The security family is reported and never blocks |
+| `types` | **mypy** over the package |
+| `semgrep` | the default registry ruleset. ERROR, HIGH and CRITICAL fail the run, the rest is printed |
+| `mutations` | breaks each guarded behaviour and proves its test reddens. A pull request runs the entries it touched, the weekly run does all of them |
+| `audit` | weekly only: **pip-audit** against the pinned set, and it opens an issue when an advisory lands |
+| `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
+| `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
+<!-- ci-jobs:end -->
+
 **Three static checks run beside the tests**, on Linux only, because they read the source rather
 than run it. **ruff** fails a pull request on a dead-code or bug-shape finding (`F` and `B`) and
 reports the security family (`S`, `ASYNC`) as annotations that never block. **mypy** type-checks

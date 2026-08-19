@@ -1014,6 +1014,21 @@ a na koniec **build `.exe` i smoke zbudowanego pliku** (`--version`, `--simulate
 konfiguracja → kod 3) plus kontrola, że sterownik WinDivert naprawdę trafił obok exe, z artefaktem
 do pobrania.
 
+<!-- ci-jobs:start -->
+Wszystkie joby tego workflow i co znaczy czerwony:
+
+| job | co robi |
+|---|---|
+| `public-text` | treść commitów i opisu PR-a: po angielsku, płaskie łączniki, nic prywatnego z maszyny |
+| `lint` | **ruff**. Martwy kod, kształty błędów i sufit złożoności wywracają przebieg. Rodzina bezpieczeństwa tylko raportuje |
+| `types` | **mypy** na pakiecie |
+| `semgrep` | domyślny zestaw reguł z rejestru. ERROR, HIGH i CRITICAL wywracają przebieg, reszta ląduje w logu |
+| `mutations` | psuje każde pilnowane zachowanie i dowodzi, że jego test się czerwieni. PR odpala wpisy, których dotknął, cotygodniowy przebieg wszystkie |
+| `audit` | tylko co tydzień: **pip-audit** na przypiętym zestawie, a przy znalezisku zakłada issue |
+| `tests` | suite, smoke GUI, render na prawdziwym Tk i asercje CLI, na Linuksie i Windowsie |
+| `build` | plik .exe dla Windowsa, ze smoke'iem, sprawdzeniem sterownika i skanem rejestru licencji |
+<!-- ci-jobs:end -->
+
 **Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go
 uruchamiają. **ruff** wywraca pull requesta na martwym kodzie i na kształtach błędów (`F` i `B`),
 a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje. **mypy**

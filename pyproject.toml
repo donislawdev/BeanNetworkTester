@@ -61,7 +61,23 @@ addopts = "-q"
 target-version = "py310"        # matches requires-python; ruff reads it anyway, said out loud
 
 [tool.ruff.lint]
-select = ["F", "B", "S", "ASYNC"]
+select = ["F", "B", "S", "ASYNC", "C90"]
+
+[tool.ruff.lint.mccabe]
+# 🔴 THE CEILING IS THE MEASUREMENT, like FILE_CEILING in tests/test_code_shape.py.
+# 29 is `core.decide` today - the twelve-step packet pipeline, which is branchy
+# because the thing it describes is - and 27 is `cli._run_session` behind it.
+# Nothing else in the package passes 24.
+#
+# The size ratchet already watches how LONG a function is. This watches how many
+# ways through it there are, which is the number that decides whether a person
+# can hold it in their head - and the two do not move together: a hundred-line
+# function of straight-line setup is readable, a forty-line one with eight
+# nested branches is not.
+#
+# Down is routine, up is a decision. Splitting something means lowering this in
+# the same change.
+max-complexity = 29
 
 [tool.ruff.lint.per-file-ignores]
 # A test suite for a packet mangler asserts, randomises, spawns subprocesses and

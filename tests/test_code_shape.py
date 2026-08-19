@@ -37,6 +37,7 @@ past what a person can follow without somebody deciding that it should.
 """
 import ast
 import os
+import sys
 
 from fakes import ROOT, check
 
@@ -270,3 +271,52 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
           biggest_function[0] == FUNCTION_CEILING,
           f"({biggest_function[1]} is {biggest_function[0]}, ceiling is "
           f"{FUNCTION_CEILING} - move the ceiling to {biggest_function[0]})")
+
+
+# Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a
+# contributor may not have installed. The two checks below skip themselves rather
+# than fail in that case - the same choice the admin-only tests make, and for the
+# same reason: a red that means "you did not install a tool" teaches people to
+# ignore red.
+def _ruff_complexity_findings(limit):
+    """How many functions ruff reports above ``limit``, or None if ruff is absent."""
+    import subprocess
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", "--select", "C901",
+             "--config", f"lint.mccabe.max-complexity = {limit}",
+             "--output-format", "concise", "--no-cache", "."],
+            cwd=ROOT, capture_output=True, text=True)
+    except OSError:
+        return None
+    if "No module named" in proc.stderr or proc.returncode not in (0, 1):
+        return None
+    return len([ln for ln in proc.stdout.splitlines() if "C901" in ln])
+
+
+def test_the_complexity_ceiling_is_the_measurement_not_a_number_above_it():
+    """The same rule the file and function ceilings live by, on the third axis.
+
+    A ceiling parked above the truth grants headroom nobody decided to grant, and
+    the next arrival slips in under it in silence. So `max-complexity` has to BE
+    the most branching function in the tree: nothing may exceed it, and lowering
+    it by one must produce a finding.
+
+    Complexity is not length. The size ratchet already watches how long a function
+    is, and the two do not move together - a hundred lines of straight-line setup
+    is readable, forty lines with eight nested branches is not.
+    """
+    import tomllib
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as handle:
+        ceiling = tomllib.load(handle)["tool"]["ruff"]["lint"]["mccabe"]["max-complexity"]
+
+    at_ceiling = _ruff_complexity_findings(ceiling)
+    if at_ceiling is None:
+        return                      # ruff not installed here: nothing to measure
+    check(f"nothing in the tree is more complex than {ceiling}",
+          at_ceiling == 0, f"({at_ceiling} function(s) over the ceiling)")
+
+    below = _ruff_complexity_findings(ceiling - 1)
+    check(f"the ceiling {ceiling} IS a real measurement, not headroom",
+          below and below > 0,
+          f"(nothing reaches {ceiling} - lower max-complexity to the real maximum)")
