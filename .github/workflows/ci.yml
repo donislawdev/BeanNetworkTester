@@ -415,13 +415,29 @@ jobs:
           done
           if [ -n "$missing" ]; then
             echo "installing:$missing"
-            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' \
-              /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
-              /etc/apt/sources.list.d/*.list 2>/dev/null || true
-            sudo timeout 240 apt-get update \
-              -o Acquire::Retries=2 \
-              -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
-            sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            # 🔴 The mirror is NOT in sources.list on these images - it is in a
+            # MIRRORLIST that sources.list points at, and the first rewrite here
+            # missed it. The log said so plainly and it took a second failure to
+            # read it: `Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]`,
+            # then `Ign: http://azure.archive.ubuntu.com/...` for every index.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            # The image ships package lists, so the cheap path is to install
+            # without refreshing them at all. `apt-get update` is the expensive,
+            # network-bound half, and it is only worth paying for when the lists
+            # really are too old for the package we need.
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              echo "install from the shipped lists failed - refreshing them"
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
           else
             echo "python3-tk and xvfb are already on the image"
           fi
