@@ -1034,8 +1034,10 @@ uruchamiają. **ruff** wywraca pull requesta na martwym kodzie i na kształtach 
 a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje. **mypy**
 sprawdza typy w pakiecie. **semgrep** skanuje domyślnym zestawem reguł z rejestru, przy czym
 znalezisko na poziomie ERROR, HIGH albo CRITICAL wywraca przebieg, a wszystko niżej ląduje w logu.
-Wersje tych trzech narzędzi są przypięte w `requirements-lint.txt`, więc nowe wydanie lintera nie
-zaczerwieni pull requesta, w którym nic się nie zmieniło.
+Wersje wszystkich trzech narzędzi są przypięte, więc nowe wydanie lintera nie zaczerwieni pull
+requesta, w którym nic się nie zmieniło: ruff i mypy w `requirements-lint.txt`, który CI instaluje
+po dokładnych skrótach plików, a semgrep w `requirements-scan.txt`, przypięty tylko wersją. Akurat
+przy semgrepie przypięcie i tak nie obiecuje stałej odpowiedzi, bo reguły pobiera przy starcie.
 
 Jeden krok wart jest osobnego zdania, bo żaden test jednostkowy go nie zastąpi: **render GUI na
 prawdziwym Tk** pod wirtualnym ekranem, w minimalnej wspieranej rozdzielczości 1366x768 i **w

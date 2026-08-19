@@ -1178,9 +1178,11 @@ Every job in that workflow, and what a red one means:
 than run it. **ruff** fails a pull request on a dead-code or bug-shape finding (`F` and `B`) and
 reports the security family (`S`, `ASYNC`) as annotations that never block. **mypy** type-checks
 the package. **semgrep** scans with its default registry ruleset and a finding at ERROR, HIGH or
-CRITICAL fails the run, while everything below that is printed in full. The three tool versions
-are pinned in `requirements-lint.txt`, so a new release of a linter cannot redden a pull request
-that changed nothing.
+CRITICAL fails the run, while everything below that is printed in full. All three tool versions are
+pinned, so a new release of a linter cannot redden a pull request that changed nothing: ruff and
+mypy in `requirements-lint.txt`, which CI installs by exact file hashes, and semgrep in
+`requirements-scan.txt`, pinned to a version only. Semgrep is the one place where a pin cannot
+promise a stable answer anyway, because it downloads its rules when it runs.
 
 One step is worth knowing about because no unit test can do its job: a **GUI render check on real
 Tk** under a virtual screen, at the minimum supported 1366x768, **in every language**. It builds
