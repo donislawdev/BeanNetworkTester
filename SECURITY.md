@@ -27,7 +27,7 @@ Please include:
 - a clear description and the smallest steps to reproduce,
 - the impact you believe it has.
 
-You can expect an initial response within a few days. Once a fix is ready it ships in
+You can expect an initial response within 14 days or fewer. Once a fix is ready it ships in
 the next release, and the advisory is published crediting the reporter (unless you
 prefer to remain anonymous).
 
