@@ -1071,6 +1071,24 @@ MUTATIONS = [
         "new": ".hexdigest()",
         "test": "test_different_faults_get_different_fingerprints",
     },
+    {
+        # One byte of the recorded driver hash. The version resource still reads
+        # 2.2 - which is exactly what a swapped kernel driver looks like.
+        "label": "legal: the recorded WinDivert driver hash stops matching",
+        "file": "beantester/legal.py",
+        "old": "8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
+        "new": "0da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
+        "test": "test_the_shipped_driver_is_byte_for_byte_the_one_we_recorded",
+    },
+    {
+        # The line that makes an undetectable licence block. Without it this gate
+        # agrees with the official action: informs, and passes.
+        "label": "deps: an undetectable licence stops blocking",
+        "file": "tools/dependency_gate.py",
+        "old": "    if licence is None or not str(licence).strip():",
+        "new": "    if False and (licence is None or not str(licence).strip()):",
+        "test": "test_an_unknown_licence_blocks",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

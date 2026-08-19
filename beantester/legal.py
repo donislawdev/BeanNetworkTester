@@ -21,6 +21,25 @@ LICENSES_DIR = "licenses"
 # that source and rebuild it.
 WINDIVERT_VERSION = "2.2"
 
+# The exact bytes of the two files that version resolves to, as shipped by the
+# pinned `pydivert` wheel (sha256, recorded 2026-08-19 from pydivert 3.1.3).
+#
+# The version above answers "which WinDivert is this" for the licence notices.
+# These answer a different question, and it is the one an attacker cares about:
+# are these the same bytes the pinned wheel contained. `requirements.txt` pins
+# the wheel by hash, so this is defence in depth rather than the first line -
+# it catches a driver swapped in `site-packages` AFTER the install, on the
+# machine that builds the release. A kernel driver is exactly the file worth
+# spending a second guard on.
+#
+# When the pydivert pin moves: rebuild these from the new wheel, and read the
+# version resource again - a driver whose bytes changed without its version
+# changing is the case this exists to make loud.
+WINDIVERT_SHA256 = {
+    "WinDivert64.dll": "c1e060ee19444a259b2162f8af0f3fe8c4428a1c6f694dce20de194ac8d7d9a2",
+    "WinDivert64.sys": "8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
+}
+
 # The components we ship, in the order a reader cares about. ``module`` is the
 # import name used to report the real version at run time (None = not a Python
 # package, so the version is fixed or reported by other means).

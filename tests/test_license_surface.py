@@ -282,3 +282,42 @@ def test_the_written_offer_lasts_as_long_as_the_licence_demands():
     check("notices: the written offer names the three-year floor",
           "three years" in notices,
           "(an offer weaker than GPLv3 section 6(b) allows)")
+
+
+def test_the_shipped_driver_is_byte_for_byte_the_one_we_recorded():
+    """A version resource is a claim. A hash is not.
+
+    `WINDIVERT_VERSION` says which WinDivert the notices describe, and the test
+    above proves the driver agrees. Neither notices anything if the FILE changes
+    while the version stays "2.2" - which is what a swapped driver looks like,
+    and this one loads into the kernel.
+
+    `requirements.txt` pins the pydivert wheel by hash, so this is the second
+    line rather than the first: it catches a file replaced in `site-packages`
+    after the install, on the machine that builds the release.
+
+    Skips where pydivert is absent - it is a Windows-only dependency, so the
+    Linux runner has nothing to hash.
+    """
+    import hashlib
+    import os
+    from beantester import legal as _legal
+    directory, names = _windivert_binaries() or (None, None)
+    if not directory:
+        return                              # no pydivert here: nothing to check
+    import pydivert
+    root = os.path.dirname(os.path.dirname(os.path.abspath(pydivert.__file__)))
+    recorded = _legal.WINDIVERT_SHA256
+
+    check("the registry records a hash for every file it ships",
+          set(recorded) == set(names),
+          f"(recorded {sorted(recorded)}, shipped {sorted(names)})")
+
+    for name in sorted(names):
+        path = os.path.join(root, directory.replace("/", os.sep), name)
+        with open(path, "rb") as handle:
+            digest = hashlib.sha256(handle.read()).hexdigest()
+        check(f"{name} is the file we recorded",
+              digest == recorded.get(name),
+              f"(got {digest[:16]}..., recorded {str(recorded.get(name))[:16]}... - "
+              f"if the pydivert pin moved, re-record it deliberately)")

@@ -26,3 +26,23 @@ jobs:
           # fails the pull request rather than warning in a log nobody reads.
           fail-on-severity: moderate
           comment-summary-in-pr: always
+
+      # The half the action above cannot do. Its own documentation: "If we can't
+      # detect the license for a dependency we will inform you, but the action
+      # won't fail." For a GPL-3.0 project that ships a binary, an unidentified
+      # licence is the one answer nobody can act on - so the same data is read
+      # again here, from the API the action itself uses, and an unknown licence
+      # blocks exactly like a denied one.
+      #
+      # `gh` is preinstalled and uses the job token. The gate exits 2 when it
+      # cannot read the answer (the endpoint refuses some repository shapes), so
+      # a 403 fails the run instead of looking like an empty list of problems.
+      - name: Licences of what this pull request adds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/dependency-graph/compare/$BASE...$HEAD" > deps.json
+          python tools/dependency_gate.py deps.json
