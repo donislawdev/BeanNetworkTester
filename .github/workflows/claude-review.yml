@@ -7,6 +7,16 @@
 # it. None of those redden a linter.
 #
 # 🔴 It cannot fail a pull request. It comments.
+#
+# 🔴 **A pull request that CHANGES THIS FILE gets no review, and the job still goes
+# green.** Measured on the pull request that introduced it (2026-08-19): the app
+# refuses to hand out a token unless the workflow file is byte-identical to the copy
+# on the default branch, and the action then exits with
+# *"Exiting due to workflow validation skip"* - a success, in 18 seconds, with no
+# model call and nothing spent. That is the app's anti-abuse rule, and it is the
+# right one: without it a pull request could edit this file to walk off with the
+# token. The consequence to remember rather than re-derive: this workflow cannot be
+# tested before it is merged, and every later change to it skips its own review.
 name: Claude review
 
 on:
