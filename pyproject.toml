@@ -122,6 +122,23 @@ warn_unused_ignores = true
 # go - a check that must be silenced everywhere teaches that silence is normal.
 
 [[tool.mypy.overrides]]
+# 🔴 THE STRICT LIST, and it is a RATCHET: it may grow, and
+# `tests/test_code_shape.py::test_the_strictly_typed_modules_only_ever_grow`
+# refuses to let it shrink. Deleting a name here is deleting a guarantee, which
+# is a decision somebody has to make on purpose rather than to get unblocked.
+#
+# Why these three first: `utils` is pure, small and read by every layer, so a
+# wrong type there travels furthest; `rates` and `scope` are the other two
+# modules that already import headlessly and have no tkinter in them. Growing the
+# list means annotating a module, not flipping a switch - which is the point,
+# because a flag turned on over 66 unannotated modules would have to be silenced
+# everywhere, and a check that is silenced everywhere teaches that silence is
+# normal.
+module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
 # Neither ships type information: pydivert has no `py.typed` marker, and psutil's
 # stubs live in a separate `types-psutil` distribution. Ignoring the import is a
 # smaller lie than pretending we know those signatures.

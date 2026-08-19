@@ -24,13 +24,15 @@ The rule below evicts a sample only when the one BEHIND it is still old enough t
 anchor the window, so the span is always >= WINDOW once the session is warm.
 """
 from collections import deque
+from typing import Optional
 
 WINDOW_S = 1.0          # average over this much time
 WARMUP_S = 0.8          # below this the window is too young to trust
 AVG_MIN_S = 0.5         # session average needs at least this much elapsed time
 
 
-def average_kbps(total_bytes, elapsed_s, min_elapsed_s=AVG_MIN_S):
+def average_kbps(total_bytes: float, elapsed_s: float,
+                 min_elapsed_s: float = AVG_MIN_S) -> float:
     """Session-average throughput in KB/s (1024-based), or 0 while too young.
 
     ``total_bytes / elapsed`` is the honest lifetime average, but dividing by an
@@ -45,18 +47,19 @@ def average_kbps(total_bytes, elapsed_s, min_elapsed_s=AVG_MIN_S):
 class PeakWindow:
     """Sliding window over cumulative byte counters -> KB/s, averaged over ~1 s."""
 
-    def __init__(self, window_s=WINDOW_S, warmup_s=WARMUP_S):
+    def __init__(self, window_s: float = WINDOW_S, warmup_s: float = WARMUP_S) -> None:
         self.window_s = float(window_s)
         self.warmup_s = float(warmup_s)
-        self._samples = deque()      # (t, bytes_in, bytes_out)
+        self._samples: deque[tuple[float, int, int]] = deque()
 
-    def reset(self):
+    def reset(self) -> None:
         self._samples.clear()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._samples)
 
-    def add(self, now, bytes_in, bytes_out):
+    def add(self, now: float, bytes_in: int,
+            bytes_out: int) -> Optional[tuple[float, float]]:
         """Record a snapshot; return ``(down_kbs, up_kbs)`` or ``None`` if too young.
 
         ``None`` means "no honest answer yet", not "zero" - the caller must not

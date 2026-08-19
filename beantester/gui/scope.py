@@ -35,7 +35,7 @@ destination's traffic from every process and impairs one process's share.
 Pure (no tkinter, no engine): ``gui/__init__`` is lazy, so this imports and
 unit-tests headlessly, like ``scaling`` and ``rates``.
 """
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 # The four answers - and the whole set. A surface maps these to its own wording
 # through a table keyed by all of STATES, so a fifth state goes red at its
@@ -48,7 +48,7 @@ VIEW = "view"                       # the view preference is doing the narrowing
 STATES = (ALL, CAPTURE, CAPTURE_PROCESS, VIEW)
 
 
-def keys_for_states(mapping):
+def keys_for_states(mapping: dict[str, str]) -> dict[str, str]:
     """Freeze a ``state -> i18n key`` table, refusing an incomplete one.
 
     Each surface keeps its own table, because each says this in its own words -
@@ -79,7 +79,8 @@ class Coverage(NamedTuple):
     process_target: bool
 
 
-def coverage(capture_narrowed, view_scoped, process_target):
+def coverage(capture_narrowed: bool, view_scoped: bool,
+             process_target: bool) -> "Coverage":
     """Derive what the on-screen numbers cover. Pure; the single decider.
 
     ``view_scoped`` wins over ``capture_narrowed`` because it is the stronger
@@ -104,7 +105,7 @@ def coverage(capture_narrowed, view_scoped, process_target):
     return Coverage(state, capture_narrowed, view_scoped, process_target)
 
 
-def capture_scope_note(settings, capture_narrowed):
+def capture_scope_note(settings: dict, capture_narrowed: bool) -> Optional[str]:
     """i18n key of the line to log about the capture's scope, or ``None``.
 
     Asked for and got it, or asked for and did NOT: both have to be said, and

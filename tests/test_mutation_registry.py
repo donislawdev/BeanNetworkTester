@@ -1089,6 +1089,15 @@ MUTATIONS = [
         "new": "    if False and (licence is None or not str(licence).strip()):",
         "test": "test_an_unknown_licence_blocks",
     },
+    {
+        # A module quietly dropping out of the strict list. The check that
+        # vanishes cannot fail, which is why the list is recorded twice.
+        "label": "types: a module loses its strict typing quietly",
+        "file": "pyproject.toml",
+        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]',
+        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope"]',
+        "test": "test_the_strictly_typed_modules_only_ever_grow",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

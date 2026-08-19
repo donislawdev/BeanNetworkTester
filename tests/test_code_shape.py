@@ -320,3 +320,41 @@ def test_the_complexity_ceiling_is_the_measurement_not_a_number_above_it():
     check(f"the ceiling {ceiling} IS a real measurement, not headroom",
           below and below > 0,
           f"(nothing reaches {ceiling} - lower max-complexity to the real maximum)")
+
+
+# The modules mypy is strict about, recorded here so the list in pyproject.toml
+# cannot quietly shrink. Add to BOTH when a module gains annotations; this one is
+# the ratchet, and like every ratchet here it may rise and may not fall.
+STRICTLY_TYPED = {
+    "beantester.utils",
+    "beantester.gui.rates",
+    "beantester.gui.scope",
+}
+
+
+def test_the_strictly_typed_modules_only_ever_grow():
+    """Gradual typing without a ratchet is a plan, not a property.
+
+    `disallow_untyped_defs` is on for three modules. Nothing stops the next
+    change from dropping one out of `pyproject.toml` to make a red build green -
+    and nothing would ever say so, because the check that vanished cannot fail.
+
+    So the list is recorded twice: in the configuration, and here. Growing it is
+    free (add to both), shrinking it reddens. That is the same shape as
+    FILE_CEILING, one axis over.
+    """
+    import tomllib
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as handle:
+        config = tomllib.load(handle)
+    strict = set()
+    for override in config["tool"]["mypy"].get("overrides", []):
+        if override.get("disallow_untyped_defs"):
+            module = override.get("module")
+            strict |= set(module if isinstance(module, list) else [module])
+
+    lost = sorted(STRICTLY_TYPED - strict)
+    check("no module has quietly lost its strict typing", not lost,
+          f"({lost} - dropping one is a decision, so change STRICTLY_TYPED too)")
+    gained = sorted(strict - STRICTLY_TYPED)
+    check("a newly strict module is recorded here as well", not gained,
+          f"({gained} - add it to STRICTLY_TYPED, that is what makes it stick)")
