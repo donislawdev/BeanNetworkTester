@@ -48,9 +48,9 @@ def _url(name, version):
     🔴 The escaping is not about the scheme. A scanner flags `urlopen` on a value it
     cannot see the shape of, and the risk it names - a `file://` URL reading a local
     file - is not reachable here: `API` is a literal `https://` and both parts land in
-    the PATH, after the authority. Measured across `../../etc/passwd`, `x@evil.com`
-    and a literal `file:///c:/windows` as the version: the scheme stays `https` and
-    the host stays `pypi.org` in every case.
+    the PATH, after the authority. Measured across `../../etc/passwd`, an at-sign
+    followed by an address, and a literal `file:///c:/windows` as the version: the
+    scheme stays `https` and the host stays `pypi.org` in every case.
 
     What IS reachable is quieter and worth closing anyway. `version` is only barred
     from whitespace and semicolons, so `1.0?x=y` or `1.0#frag` used to truncate the

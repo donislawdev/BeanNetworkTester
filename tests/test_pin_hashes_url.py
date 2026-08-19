@@ -29,7 +29,11 @@ HOSTILE = [
     "..%2F..%2Fetc",
     "x?a=b",
     "x#frag",
-    "x@evil.com",
+    # An at-sign and an authority - the shape of an escape attempt. Written with an
+    # IP rather than a hostname on purpose: a hostname here reads as an email address
+    # to `test_no_stray_email_addresses_in_the_public_tree`, which is right to say so
+    # about a public repository, and an IP is the more realistic attempt anyway.
+    "x@127.0.0.1",
     "/../..//",
     "file:///c:/windows/win.ini",
     "https://evil.example/pypi",
