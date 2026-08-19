@@ -20,7 +20,15 @@ import re
 
 from fakes import ROOT, check
 
-IGNORE = {"--help", "--noconfirm", "--noconsole", "--onefile", "--uac-admin"}
+# Flags the READMEs mention that belong to OTHER programs, so the parser will never
+# have them. PyInstaller's are here because the build section explains what the spec
+# does and does not pass; `gh`'s are here because the verification section spells out
+# the exact command a user runs against a release, and that command needs three flags
+# (measured on v0.5.0-rc.2 - without them `gh` refuses, or looks for the wrong kind of
+# attestation). Keep this list short and keep knowing whose each flag is: its job is to
+# stop a real typo in OUR flags hiding behind somebody else's.
+IGNORE = {"--help", "--noconfirm", "--noconsole", "--onefile", "--uac-admin",
+          "--bundle", "--repo", "--predicate-type"}
 READMES = ("README.md", "README.pl.md")
 
 
