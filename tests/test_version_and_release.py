@@ -526,6 +526,47 @@ def test_the_release_attests_exactly_the_archive_it_publishes():
         check(f"{action} is still in the release workflow", action in text)
 
 
+def _check_every_requirement_carries_hashes(filename):
+    """Shared by the two hash-checked files: every line pinned, every pin hashed.
+
+    Offline on purpose - it reads the SHAPE, not the values, so it says the same
+    thing on a runner with no network as it does here.
+    """
+    import re
+    with open(os.path.join(ROOT, filename), encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+
+    pinned = {}
+    current = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("--hash="):
+            check(f"{filename}: a hash line follows a requirement",
+                  current is not None, f"({stripped[:40]})")
+            digest = stripped[len("--hash="):].rstrip(" \\")
+            check(f"{filename}: {current}: sha256 in the shape pip reads",
+                  re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None, f"({digest[:24]})")
+            pinned[current].append(digest)
+            continue
+        match = re.match(r"^([A-Za-z0-9._-]+)==", stripped)
+        check(f"{filename}: every requirement is pinned with == ({stripped[:40]})",
+              match is not None)
+        current = match.group(1) if match else None
+        pinned[current] = []
+
+    check(f"{filename} still names its requirements", len(pinned) >= 2, f"({sorted(pinned)})")
+    bare = [name for name, hashes in pinned.items() if not hashes]
+    check(f"{filename}: every pinned requirement carries at least one hash",
+          not bare, f"({bare})")
+    # More than one, or pip's fallback to another artefact of the same version
+    # would be an unhashed path back in through the front door.
+    thin = [name for name, hashes in pinned.items() if len(hashes) < 2]
+    check(f"{filename}: each names every artefact, not just the one this machine picks",
+          not thin, f"({thin})")
+
+
 def test_every_pinned_runtime_requirement_carries_its_artefact_hashes():
     """A version pins a NUMBER. Hashes pin the BYTES.
 
@@ -545,37 +586,51 @@ def test_every_pinned_runtime_requirement_carries_its_artefact_hashes():
     that ships cannot quietly lose its hashes. Regenerate with
     `python tools/pin_hashes.py requirements.txt`.
     """
+    _check_every_requirement_carries_hashes("requirements.txt")
+
+
+def test_the_analysis_tools_carry_their_artefact_hashes_too():
+    """Same shape, second file - and here the closure is the point.
+
+    `requirements-lint.txt` used to pin three tools by version alone. Since
+    2026-08-19 it is hash-checked, which is all-or-nothing in pip: the moment one
+    requirement carries a hash, EVERY package the install resolves needs one. So
+    the file holds the whole closure (13 packages, resolved for Python 3.14 and
+    measured identical on manylinux2014_x86_64 and win_amd64), not just the three
+    names a person chose.
+
+    That is what this guards. Losing a transitive line does not loosen a pin -
+    it breaks the install outright, on every job at once, which is a confusing
+    failure to meet for the first time on a runner. Regenerate with
+    `python tools/pin_hashes.py requirements-lint.txt`.
+
+    semgrep and pip-audit are deliberately NOT here: they live in
+    requirements-scan.txt, pinned by version and not by hash, for the reasons
+    written in that file. See test_the_scanners_are_pinned_by_version_at_least.
+    """
+    _check_every_requirement_carries_hashes("requirements-lint.txt")
+
+
+def test_the_scanners_are_pinned_by_version_at_least():
+    """The file we chose NOT to hash still has to pin.
+
+    requirements-scan.txt is the one place here that answers "pinned by version,
+    not by bytes", and the reason is written there: the two scanners' closures are
+    tens of packages, and neither can put a byte into a release. That is a decision
+    about hashes - it is not permission to let the versions float, which would put
+    the semgrep engine and the pip-audit database back on "green yesterday, red
+    today with no commit behind it".
+    """
     import re
-    path = os.path.join(ROOT, "requirements.txt")
-    with open(path, encoding="utf-8") as handle:
-        lines = handle.read().splitlines()
-
-    pinned = {}
-    current = None
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if stripped.startswith("--hash="):
-            check("a hash line follows a requirement", current is not None, f"({stripped[:40]})")
-            digest = stripped[len("--hash="):].rstrip(" \\")
-            check(f"{current}: sha256 in the shape pip reads",
-                  re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None, f"({digest[:24]})")
-            pinned[current].append(digest)
-            continue
-        match = re.match(r"^([A-Za-z0-9._-]+)==", stripped)
-        check(f"every requirement is pinned with == ({stripped[:40]})", match is not None)
-        current = match.group(1) if match else None
-        pinned[current] = []
-
-    check("the file still names its requirements", len(pinned) >= 2, f"({sorted(pinned)})")
-    bare = [name for name, hashes in pinned.items() if not hashes]
-    check("every pinned requirement carries at least one hash", not bare, f"({bare})")
-    # More than one, or pip's fallback to another artefact of the same version
-    # would be an unhashed path back in through the front door.
-    thin = [name for name, hashes in pinned.items() if len(hashes) < 2]
-    check("each names every artefact, not just the one this machine picks",
-          not thin, f"({thin})")
+    with open(os.path.join(ROOT, "requirements-scan.txt"), encoding="utf-8") as handle:
+        lines = [ln.strip() for ln in handle.read().splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+    check("requirements-scan.txt still names its scanners", len(lines) >= 2, f"({lines})")
+    loose = [ln for ln in lines if not re.match(r"^[A-Za-z0-9._-]+==\d", ln)]
+    check("every scanner is pinned with ==", not loose, f"({loose})")
+    for tool in ("semgrep", "pip-audit"):
+        check(f"{tool} is still pinned in requirements-scan.txt",
+              any(ln.startswith(tool + "==") for ln in lines), f"({lines})")
 
 
 def test_the_dev_requirements_do_not_pull_in_the_hashed_file():
@@ -593,3 +648,104 @@ def test_the_dev_requirements_do_not_pull_in_the_hashed_file():
     check("requirements-dev.txt does not include requirements.txt",
           not any(ln.startswith("-r requirements.txt") for ln in lines), f"({lines[:3]})")
     check("it still lists the test tooling", any("pytest" in ln for ln in lines), f"({lines})")
+
+
+def _workflow_paths():
+    import glob
+    return sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml")))
+
+
+def test_no_workflow_bootstraps_pip_from_the_index():
+    """`pip install --upgrade pip` was the one unverified link in a hash-checked chain.
+
+    Every install in these workflows that matters is `--require-hashes`, and the
+    program doing the checking was itself fetched from the index, unpinned, one line
+    earlier. A poisoned pip is then the thing verifying our hashes, and it is the
+    last place anybody would look. Removed in five places on 2026-08-19; the pip that
+    checks them is the one `setup-python` shipped with the interpreter, and that
+    action is pinned by SHA.
+
+    🔴 This guard exists because the SCANNER cannot see most of them. OpenSSF
+    Scorecard skips steps that run in a Windows shell (`checks/raw/
+    shell_download_validate.go`: "Skip unsupported shells. We don't support Windows
+    shells"), and three of the five were in `windows-latest` jobs - so it reported
+    two and stayed quiet about the rest. Fixing only what a scanner names is how a
+    repository ends up green and unchanged.
+    """
+    offenders = []
+    for path in _workflow_paths():
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle.read().splitlines(), 1):
+                code = line.split("#", 1)[0]
+                if "pip install" in code and "--upgrade" in code and "pip" in code.split("--upgrade")[1]:
+                    offenders.append(f"{os.path.basename(path)}:{number}")
+    check("no workflow upgrades pip from the index before checking hashes",
+          not offenders, f"({offenders})")
+
+
+def test_every_install_of_a_hashed_file_asks_pip_to_check_the_hashes():
+    """The flag is not decoration: without it the hashes are advisory.
+
+    pip does turn hash-checking on by itself when a requirement carries a hash, so
+    dropping `--require-hashes` would still verify what is written down - and would
+    silently stop being an error the day a line loses its hash block. The flag makes
+    that an install failure instead of a quiet downgrade, which is the same reason
+    it is what OpenSSF Scorecard looks for (`isUnpinnedPipInstall`, read 2026-08-19:
+    the flag is the ONLY thing that makes a pip command count as pinned).
+    """
+    import re
+    hashed = ("requirements.txt", "requirements-build.txt", "requirements-lint.txt")
+    seen, bare = 0, []
+    for path in _workflow_paths():
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle.read().splitlines(), 1):
+                code = line.split("#", 1)[0]
+                if not re.search(r"\bpip install\b", code):
+                    continue
+                names = [f for f in hashed if f"-r {f}" in code]
+                if not names:
+                    continue
+                seen += 1
+                if "--require-hashes" not in code:
+                    bare.append(f"{os.path.basename(path)}:{number} {names}")
+    check("the hashed files are still installed by these workflows", seen >= 5, f"({seen})")
+    check("every install of a hashed file passes --require-hashes", not bare, f"({bare})")
+
+
+def test_the_release_workflow_grants_write_on_the_job_not_the_whole_file():
+    """A permission belongs to the job that uses it, never to the file.
+
+    release.yml is the only workflow that can publish an asset under this project's
+    name, and it held `contents: write` at the top - inherited by every job added to
+    that file later, by an author with no reason to scroll up. Named by OpenSSF
+    Scorecard (Token-Permissions, 0/10) and moved onto the single `release` job on
+    2026-08-19. ci.yml, pages.yml and scorecard.yml already worked this way.
+
+    Read as text: PyYAML is deliberately not a test dependency (same choice as
+    test_site.py and the CI-jobs guard in test_readme_guards.py).
+    """
+    path = os.path.join(ROOT, ".github", "workflows", "release.yml")
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+
+    top, inside = [], False
+    for line in lines:
+        if line.startswith("permissions:"):
+            inside = True
+            continue
+        if inside:
+            if line.startswith(" "):
+                top.append(line.strip())
+                continue
+            if not line.strip():
+                continue
+            break
+    check("release.yml still declares top-level permissions", bool(top), f"({top})")
+    granted = [entry for entry in top
+               if not entry.startswith("#") and entry.endswith(": write")]
+    check("release.yml grants nothing writable at the top level", not granted, f"({granted})")
+
+    body = "\n".join(lines)
+    for scope in ("contents: write", "id-token: write", "attestations: write"):
+        check(f"the release job still asks for {scope}",
+              f"      {scope}" in body, "(a six-space indent is the job's own block)")
