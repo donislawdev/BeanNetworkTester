@@ -21,6 +21,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
   window is named rather than missed.
 
+- **You can now check where a download came from, not just that it is unchanged.** Every
+  release archive carries a signed build attestation, so one command answers "was this really
+  built from that source, by that workflow":
+  `gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester`.
+  A checksum proves the file matches the release page. This proves the release page itself came
+  out of this repository's own workflow, from a specific commit. The same command also verifies
+  the SBOM shipped beside the archive.
+
 ### Changed
 
 - **Traffic in Connections is shown in the unit that fits the number.** A big flow used to read

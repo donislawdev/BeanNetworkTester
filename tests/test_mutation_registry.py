@@ -992,6 +992,50 @@ MUTATIONS = [
         "test": "test_both_workflows_install_the_same_pinned_builder",
     },
     {
+        # The one unverified link in a hash-checked chain: an unpinned pip, fetched
+        # from the index a line before it is asked to verify our hashes. Additive on
+        # purpose - it puts the line back without taking anything away, so exactly
+        # one test answers.
+        "label": "supply chain: a workflow upgrades pip from the index again",
+        "file": ".github/workflows/ci.yml",
+        "old": "          pip install --require-hashes -r requirements-lint.txt",
+        "new": "          python -m pip install --upgrade pip\n"
+               "          pip install --require-hashes -r requirements-lint.txt",
+        "test": "test_no_workflow_bootstraps_pip_from_the_index",
+    },
+    {
+        # The flag, not the file. Without --require-hashes the hashes still get
+        # checked today and stop being checked the day a line loses its block -
+        # a downgrade with no error anywhere.
+        "label": "supply chain: an analysis job stops asking pip to check hashes",
+        "file": ".github/workflows/ci.yml",
+        "old": "      - name: Install the linter\n"
+               "        run: pip install --require-hashes -r requirements-lint.txt",
+        "new": "      - name: Install the linter\n"
+               "        run: pip install -r requirements-lint.txt",
+        "test": "test_every_install_of_a_hashed_file_asks_pip_to_check_the_hashes",
+    },
+    {
+        # Version-agnostic like the pyinstaller entry above, and for the same
+        # reason: spelling the number here would make the entry go stale on the
+        # next bump. A closure line that stops being a pin breaks hash-checking
+        # for the whole install, not just for itself.
+        "label": "supply chain: a line in the lint closure loosens into a range",
+        "file": "requirements-lint.txt",
+        "old": "pluggy==",
+        "new": "pluggy>=",
+        "test": "test_the_analysis_tools_carry_their_artefact_hashes_too",
+    },
+    {
+        # The permission that outlives the job it was written for: back at the top
+        # of release.yml, where every job added later inherits it.
+        "label": "supply chain: release.yml grants write at the file level again",
+        "file": ".github/workflows/release.yml",
+        "old": "permissions:\n  contents: read",
+        "new": "permissions:\n  contents: write",
+        "test": "test_the_release_workflow_grants_write_on_the_job_not_the_whole_file",
+    },
+    {
         # The correction that stops a rounded figure being printed in a unit
         # that cannot hold it: 1023.7 B rounds to 1024 B, and the byte band
         # ends at 1023. Leaving it out is the mistake every hand-rolled size

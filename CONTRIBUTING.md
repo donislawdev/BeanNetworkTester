@@ -9,7 +9,8 @@ testable on any OS.
 ```bash
 pip install --require-hashes -r requirements.txt   # runtime, pinned to exact artefacts
 pip install -r requirements-dev.txt
-pip install -r requirements-lint.txt   # ruff and mypy (semgrep on Linux and macOS)
+pip install --require-hashes -r requirements-lint.txt   # ruff, mypy and diff-cover
+pip install -r requirements-scan.txt   # semgrep (Linux and macOS) and pip-audit
 python -m pytest tests            # full suite - no Windows, no driver, no admin rights
 python smoke_gui.py               # GUI smoke with a fake tkinter
 ruff check                        # F and B fail a pull request, S and ASYNC are a report

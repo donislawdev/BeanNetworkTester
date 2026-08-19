@@ -93,7 +93,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install the linter
-        run: pip install -r requirements-lint.txt
+        run: pip install --require-hashes -r requirements-lint.txt
       # The gate. `--select` on the command line replaces the families named in
       # pyproject.toml and nothing else: the per-file ignores and the target
       # version still come from there, so the two runs below cannot drift apart
@@ -121,7 +121,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install the type checker
-        run: pip install -r requirements-lint.txt
+        run: pip install --require-hashes -r requirements-lint.txt
       # No project dependencies installed on purpose: `pydivert` is Windows-only
       # and `psutil` is not needed to READ this package, and both are ignored by
       # name in [tool.mypy]. Verified in that exact shape (Linux, neither
@@ -145,7 +145,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install the scanner
-        run: pip install -r requirements-lint.txt
+        run: pip install -r requirements-scan.txt
       # No --error and no --severity here: the scan reports, and tools/semgrep_gate.py
       # decides. `--severity` knows INFO/WARNING/ERROR only, while registry rules also
       # carry HIGH and CRITICAL - measured with a probe rule, `--severity ERROR`
@@ -181,7 +181,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install the auditor
-        run: pip install -r requirements-lint.txt
+        run: pip install -r requirements-scan.txt
       # The pinned set, installed exactly as the build installs it, into its own
       # environment - then audited BY PATH. Auditing the requirement files instead
       # silently skips `packaging` and `setuptools` (measured), and a scanner that
@@ -249,7 +249,6 @@ jobs:
           python-version: "3.14"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
       # A pull request pays for what it touched; the weekly run pays for
@@ -320,13 +319,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install dependencies
+        # 🔴 No `pip install --upgrade pip`, here or anywhere else in this repository.
+        # That line fetched an UNPINNED pip from the index and then used it to check
+        # the hashes on the next line - the one unverified link in a hash-checked
+        # chain, and the last place anybody would look. The pip that checks them is
+        # the one `setup-python` shipped with the interpreter, and that action is
+        # pinned by SHA. Guarded by tests/test_version_and_release.py.
         run: |
-          python -m pip install --upgrade pip
           pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
-          # diff-cover only: the rest of that file is for the analysis jobs, and
-          # installing it whole here would drag semgrep onto both matrix legs.
-          pip install "$(grep -E '^diff-cover==' requirements-lint.txt)"
+          # The whole lint file rather than diff-cover picked out of it by grep. A
+          # hash cannot travel through `$(grep ...)`: it hands pip a bare pin, and
+          # pip stays out of hash-checking mode. semgrep and pip-audit moved to
+          # requirements-scan.txt, so this no longer drags an engine onto both legs.
+          pip install --require-hashes -r requirements-lint.txt
 
       # ONE run of the whole suite, under coverage. testpaths=["tests"] (pyproject)
       # means this already includes the suites that used to own separate steps:
@@ -504,7 +510,6 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           # One hash-checked resolution over both files: the runtime pins and
           # the freezer's whole closure. Nothing here may resolve to bytes
           # that are not written down.
