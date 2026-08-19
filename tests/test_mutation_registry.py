@@ -1221,6 +1221,26 @@ MUTATIONS = [
         "new": 'module = ["beantester.gui.rates", "beantester.gui.scope"]',
         "test": "test_the_strictly_typed_modules_only_ever_grow",
     },
+    {
+        # How the white menu got in: one of the two menus in the program was
+        # built bare. The rule guard reads the source, so this is the patch it
+        # has to see.
+        "label": "gui: a context menu is built without the dark theme",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "menu = style_menu(tk.Menu(self.frame, tearoff=0))",
+        "new": "menu = tk.Menu(self.frame, tearoff=0)",
+        "test": "test_every_context_menu_is_handed_to_the_dark_theme",
+    },
+    {
+        # The other half, and the reason both exist: "style_menu was called" and
+        # "the menu is dark" are two claims. This one breaks the wrapper while
+        # leaving every call site intact, so only the behavioural test can see it.
+        "label": "gui: the menu theme stops setting a background",
+        "file": "beantester/gui/theme.py",
+        "old": "        menu.configure(background=BG2, foreground=FG,",
+        "new": "        menu.configure(foreground=FG,",
+        "test": "test_the_statistics_copy_menu_is_dark_like_every_other_context_menu",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

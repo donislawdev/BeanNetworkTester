@@ -632,3 +632,46 @@ def test_the_optional_review_never_runs_by_itself():
     check("the review job holds no write permission",
           "write" not in body.split("jobs:", 1)[1].replace("id-token: write", ""),
           "(a reviewer that can push is not a reviewer)")
+
+
+def test_every_context_menu_is_handed_to_the_dark_theme():
+    """A ``tk.Menu`` has to be built INSIDE ``theme.style_menu(...)``.
+
+    ttk styles do not reach a classic menu - on Windows it is a native Win32
+    popup, so a menu nobody configures comes up in the system's colours: a white
+    box in the middle of a dark program. That shipped: the Statistics page's
+    copy menu was bare while the connection table's was wrapped, and the two sat
+    two files apart (reported from a running build, 2026-08-19).
+
+    The rule, not the example. A test naming the two menus that exist today
+    would pass on the day a third one is added bare - which is exactly how this
+    one arrived. Colours cannot be checked by rendering here anyway: the fake
+    tkinter records them without drawing, so the wrapper being CALLED is the
+    strongest mechanical statement available.
+    """
+    import ast
+    import pathlib
+
+    offenders = []
+    for path in sorted(_gui_files()):
+        source = pathlib.Path(path).read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=path)
+        # Every Menu(...) call, and every call sitting directly inside a
+        # style_menu(...) - the difference is what is missing a wrapper.
+        menus, styled = [], set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = node.func.attr if isinstance(node.func, ast.Attribute) else (
+                node.func.id if isinstance(node.func, ast.Name) else "")
+            if name == "Menu":
+                menus.append(node)
+            elif name == "style_menu":
+                styled.update(id(arg) for arg in node.args)
+        for menu in menus:
+            if id(menu) not in styled:
+                offenders.append("%s:%d" % (os.path.basename(path), menu.lineno))
+
+    check("every tk.Menu is built inside theme.style_menu(...) "
+          "(ttk styles do not reach it - a bare menu renders WHITE)",
+          not offenders, f"({offenders})")

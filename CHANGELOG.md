@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- The right-click copy menu on the Statistics page opened with a white background instead of the
+  dark one used everywhere else. It now looks like the menu in the Connections table, on both
+  Live and Session.
+
 ## [0.5.0] - 2026-08-19
 
 **The short version.** Two things, and the first is about not losing your files when the

@@ -22,7 +22,7 @@ from ..rates import average_kbps
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from .. import scope
-from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C
+from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C, style_menu
 from ..tooltip import add_tooltip, retip
 from ..widgets import SortableTree
 from ... import crashlog
@@ -275,7 +275,14 @@ class StatsPage:
     def _copy_menu(self):
         menu = getattr(self, "_menu", None)
         if menu is None:
-            menu = tk.Menu(self.frame, tearoff=0)
+            # style_menu, exactly like the connection table's menu: ttk styles do
+            # not reach a classic tk.Menu (on Windows it is a native Win32 popup),
+            # so a menu built without it comes up in the SYSTEM colours - a white
+            # box in the middle of a dark program. Nothing in the suite could see
+            # that: the fake tkinter records colours without rendering them, which
+            # is why this line now has a rule guarding it rather than a comment
+            # asking the next person to remember.
+            menu = style_menu(tk.Menu(self.frame, tearoff=0))
             menu.add_command(label=T("menu.copy_value"), command=self._copy_one)
             menu.add_command(label=T("menu.copy_all"), command=self._copy_panel)
             self._menu = menu
