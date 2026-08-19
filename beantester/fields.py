@@ -88,6 +88,17 @@ FIELD_DEFS = (
     # with the whole rest of the form at zero, cuts the machine's internet.
     Field("lan_mode", BOOL, "fields.lan_mode", "traffic",
           tip="tips.lan_mode", span=True, cli="lan-mode", impairs=IMPAIRS_ALL),
+    # The mirror of the line above, and IMPAIRS_ALL for the same reason: on its
+    # own, with the whole rest of the form at zero, it cuts every local address
+    # this machine talks to. Loopback survives (utils.is_lan_ip).
+    #
+    # 🔴 The CLI flag may not begin with "lan-". MEASURED: a second --lan-*
+    # option makes the abbreviation --lan ambiguous, and argparse then REFUSES it
+    # with exit 2 - so naming it --lan-cut would silently break a documented
+    # shortcut of --lan-mode (allow_abbrev stays on: ADR 2026-08-02).
+    Field("internet_only", BOOL, "fields.internet_only", "traffic",
+          tip="tips.internet_only", span=True, cli="internet-only",
+          impairs=IMPAIRS_ALL),
 
     # -- target process ---------------------------------------------------- #
     Field("target", EXPR, TARGET_FIELD, "target_process", expr_kind=KIND_PROCESS,
@@ -290,7 +301,8 @@ SECTIONS = (
     # preset picker must be the first thing they see - not the last section after
     # a dozen panels of NAT/MTU/RST jargon.
     Section("profiles", "frames.profiles", (), columns=1, extra="profiles"),
-    Section("traffic", "frames.traffic", ("filter", "lan_mode"), columns=1),
+    Section("traffic", "frames.traffic", ("filter", "lan_mode", "internet_only"),
+            columns=1),
     # No "enable" checkbox: an empty target already means "all traffic", so the
     # checkbox was a switch that did nothing but take a click (same for the two
     # sections below).

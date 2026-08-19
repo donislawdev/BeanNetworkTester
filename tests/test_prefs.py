@@ -58,6 +58,27 @@ def test_a_pref_can_only_name_a_section_that_will_actually_render_it():
               p in prefs.prefs_in_section(p.section))
 
 
+def test_only_prefs_that_can_show_a_hint_declare_one():
+    """A hint on a checkbox is text nobody will ever read.
+
+    ``SettingsWindow._build_pref_row`` handles BOOL and ACTION first and
+    **returns**, so only a NUMBER row ever reaches the line that draws
+    ``pref.hint``. Nothing raises: the text is simply written, translated into
+    every language, and then shown to no one.
+
+    Measured, not hypothetical. ``scope_view_to_target`` carried a 250-character
+    hint that never appeared on screen - and its TOOLTIP had grown into the
+    longest string in the language files trying to carry the same explanation.
+    That is word for word what
+    ``test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one``
+    already records about ``narrow_filter``: the same hole, one registry over,
+    which is why this guard is its mirror rather than a new idea.
+    """
+    stray = [(p.key, p.kind) for p in PREFS if p.hint and p.kind != prefs.NUMBER]
+    check("prefs: no pref declares a hint its row cannot show",
+          not stray, f"({stray})")
+
+
 def test_pref_texts_resolve_in_every_language():
     keys = []
     for p in PREFS:
@@ -322,4 +343,112 @@ def test_reset_ui_layout_forgets_window_state():
         assert app.ui.get("geometry") == "", app.ui.get("geometry")
         assert app.ui.get("collapsed") == []
         assert app.collapsed_sections == []
+    """)
+
+
+def test_the_control_search_bar_can_be_switched_off_and_back_on():
+    """The box goes away, and comes back ABOVE the page body.
+
+    The order is the part that can go wrong silently: pack hands out space in
+    CALL order, so a bar re-packed after the scroller exists lands UNDER the whole
+    page unless it names what to sit before. This asserts the call carries
+    ``before=``; whether Tk then draws it in the right place is a live-render
+    question the fake cannot answer (it keeps children in creation order).
+    """
+    run_gui("""
+        page = app.pages["control"]
+        assert app.pref("show_control_search") is True, "default is: the box is there"
+        assert page._bar.winfo_ismapped(), "the bar should start on the page"
+
+        app.set_pref("show_control_search", False)
+        page.on_pref_changed("show_control_search")
+        assert not page._bar.winfo_ismapped(), "the bar is still on the page"
+
+        app.set_pref("show_control_search", True)
+        page.on_pref_changed("show_control_search")
+        assert page._bar.winfo_ismapped(), "the bar did not come back"
+        assert page._bar.pack_info.get("before") is page.scroll.vsb, (
+            "re-packed without before= - it would sit under the page body")
+
+        # an unrelated preference must not move it
+        page.on_pref_changed("chart_seconds")
+        assert page._bar.winfo_ismapped()
+    """)
+
+
+def test_hiding_the_search_takes_its_marks_and_its_folds_with_it():
+    """The marks are painted on the FORM, not on the bar.
+
+    So a query left standing when the box goes away leaves fields highlighted
+    with nothing left to clear them from, and the sections the search unfolded
+    stay unfolded. A debounce still in flight would repaint both a moment after
+    the bar was gone, which is why the pending job is cancelled rather than left
+    to run against a hidden box.
+    """
+    run_gui("""
+        page = app.pages["control"]
+        page.query_var.set("port")
+        page._apply()
+        assert page._targets, "the fixture needs a query that actually matches"
+        marked = [w for w, _kind, _old in page._marks]
+        assert marked
+
+        # A debounce in flight. The fake's `after` returns nothing, so the job is
+        # planted by hand and the cancel is recorded - what matters is that the
+        # timer is taken back, not how the fake numbers it.
+        cancelled = []
+        page._job = "pending-search"
+        page.frame.after_cancel = lambda job: cancelled.append(job)
+
+        app.set_pref("show_control_search", False)
+        page.on_pref_changed("show_control_search")
+
+        assert cancelled == ["pending-search"], cancelled
+        assert page._job is None, "a pending search would repaint a hidden box"
+        assert page.query_var.get() == ""
+        assert page._marks == [], "fields left highlighted with no box to clear them"
+        assert not page._opened, "sections the search opened stayed open"
+        for widget in marked:
+            assert not str(widget.cget("style")).startswith("Hit"), widget.kw
+    """)
+
+
+def test_a_hidden_search_bar_survives_a_language_switch():
+    """The page is REBUILT from scratch by a language switch, and the rebuild
+    packs the bar before anything reads the preference - so the state has to be
+    re-applied, not assumed."""
+    run_gui("""
+        app.set_pref("show_control_search", False)
+        app.pages["control"].on_pref_changed("show_control_search")
+
+        app.lang_var.set(app._lang_name2code and "English" or "English")
+        app._switch_language()
+
+        page = app.pages["control"]
+        assert not page._bar.winfo_ismapped(), "the rebuilt page brought the bar back"
+        assert page.focus_search() is False
+    """)
+
+
+def test_the_settings_checkbox_hides_the_search_immediately():
+    """End to end, through the window the user actually clicks.
+
+    Storing alone is not enough here: every other preference is re-read by the
+    next tick anyway, but a widget appearing or disappearing up to 0.7 s after
+    the click reads as a broken checkbox. This is the path that closes that gap
+    (``SettingsWindow._store`` -> ``gui/pages/pref_changed``).
+    """
+    run_gui("""
+        page = app.pages["control"]
+        panel = app.open_window("settings")
+        var = panel._pref_vars["show_control_search"]
+
+        var.set(False)
+        panel._store("show_control_search", False)
+        assert app.pref("show_control_search") is False, "not persisted"
+        assert not page._bar.winfo_ismapped(), "still on the page after the click"
+
+        var.set(True)
+        panel._store("show_control_search", True)
+        assert page._bar.winfo_ismapped(), "the box did not come back"
     """)

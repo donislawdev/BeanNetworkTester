@@ -196,7 +196,8 @@ def test_default_core_is_pass_through_across_a_deterministic_sweep():
 # --------------------------------------------------------------------------- #
 # Layer B: a real engine session forwards everything while still collecting
 # --------------------------------------------------------------------------- #
-DAMAGE_COUNTERS = ["drop_loss", "drop_flap", "drop_lan", "drop_block", "drop_mtu",
+DAMAGE_COUNTERS = ["drop_loss", "drop_flap", "drop_lan", "drop_internet_only",
+                   "drop_block", "drop_mtu",
                    "drop_nat", "drop_rst", "drop_syn", "drop_overflow", "drop_rate",
                    "corrupted", "duplicated", "rst_sent"]
 

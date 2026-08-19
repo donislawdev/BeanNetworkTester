@@ -24,6 +24,7 @@ DEFAULT_SETTINGS = dict(
     loss=0, corrupt=0, dup=0, latency=0, jitter=0, down=0, up=0,
     buffer=1000,         # link buffer (ms) for the speed limit; 0 = unbounded. See fields.py
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
+    internet_only=False,            # the mirror of lan_mode; loopback survives both
     block_ip="", block_port="",     # firewall: drop traffic to matching IP/port
 
     syn_drop=0, max_size=0, spike_prob=0, spike_ms=0,
@@ -505,6 +506,14 @@ def apply_settings(engine, s, log=lambda *_: None):
             log(f"{T('log.filter_skipped')}: {e}")
             engine.set_dest(False)
     engine.set_lan(bool(g("lan_mode")))
+    engine.set_internet_only(bool(g("internet_only")))
+    # Both at once is a legal request - it is the union of two impairments, the
+    # same as --loss 100 - but it is far more likely to be a mistake, and the
+    # symptom (nothing but loopback moves) looks like the tool is broken rather
+    # than like the tool doing what it was told. Said out loud, once per apply,
+    # instead of being refused: refusing would break a run somebody meant.
+    if g("lan_mode") and g("internet_only"):
+        log(T("log.lan_and_internet_only"))
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     try:

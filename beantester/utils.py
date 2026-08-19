@@ -114,6 +114,10 @@ def is_local_ip(ip: Any) -> bool:
     """True for local addresses (RFC1918, loopback, link-local, CGNAT...).
 
     Public (internet) addresses return False. Missing/error = treated as local.
+
+    🔴 This one COUNTS LOOPBACK as local; ``is_lan_ip`` below does not, and the
+    difference is deliberate - see its docstring before assuming one of them is
+    a typo for the other.
     """
     if not ip:
         return True
@@ -122,6 +126,37 @@ def is_local_ip(ip: Any) -> bool:
         return not ipaddress.ip_address(str(ip)).is_global
     except Exception:
         return True
+
+
+def is_lan_ip(ip: Any) -> bool:
+    """True for the local network, with LOOPBACK carved out.
+
+    What "Internet only" cuts (``core.decide`` step 2b). It is deliberately NOT
+    the mirror of ``is_local_ip``: a machine talking to itself on 127.x is not
+    "the local network" in any sense a tester means, and cutting it would take
+    down local development servers and any tool using loopback for IPC - on the
+    same machine the person is running this from. Owner's decision, 2026-08-19.
+
+    Everything the other predicate calls local IS local here (RFC1918,
+    link-local, CGNAT, and the TEST-NET documentation ranges, which are local
+    because they are not globally routable). MEASURED, because it is the
+    surprising half: IPv4 MULTICAST is NOT - ``ipaddress`` reports 224.0.0.251
+    as globally routable, so mDNS and SSDP sit on the internet side of both
+    switches, and LAN mode is the one that cuts them.
+
+    Errors and missing values return False: an address this cannot classify is
+    an address this must not damage, which is the same safe direction
+    ``is_local_ip`` takes by answering "local" (there, "local" means "do not
+    cut"; here it is "not LAN" that means it).
+    """
+    if not ip:
+        return False
+    try:
+        import ipaddress
+        address = ipaddress.ip_address(str(ip))
+        return not address.is_global and not address.is_loopback
+    except Exception:
+        return False
 
 
 def _route_source_ip(family: int, probe: str) -> str:

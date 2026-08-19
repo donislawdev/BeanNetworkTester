@@ -442,3 +442,42 @@ def test_a_config_value_says_what_the_setting_takes(tmp_path):
           "0" in message and "100" in message, f"({message})")
     check("config: it quotes back what was actually given",
           "abc" in message, f"({message})")
+
+
+def test_both_lan_switches_at_once_are_allowed_and_said_out_loud():
+    """LAN mode plus "Internet only" is the union of two impairments, so it is a
+    legal request - and it cuts everything except loopback, which looks far more
+    like a broken tool than like a tool doing as it was told.
+
+    Refusing it was rejected: a run somebody meant would die on validation. Saying
+    it once per apply is the same answer the shared-port warning gives, and the
+    same one the engine gives for a destination frozen by a narrowed filter.
+    """
+    from beantester import DEFAULT_SETTINGS, apply_settings
+    from beantester.i18n import T
+
+    warning = T("log.lan_and_internet_only")
+
+    def lines_for(**overrides):
+        said = []
+        apply_settings(BeanEngine(), dict(DEFAULT_SETTINGS, **overrides), said.append)
+        return said
+
+    check("both on: the run says so",
+          warning in lines_for(lan_mode=True, internet_only=True))
+    check("LAN mode alone: nothing to warn about",
+          warning not in lines_for(lan_mode=True))
+    check("Internet only alone: nothing to warn about",
+          warning not in lines_for(internet_only=True))
+    check("neither: nothing to warn about", warning not in lines_for())
+
+
+def test_internet_only_reaches_the_engine_through_apply_settings():
+    """The setting has to arrive at the core, not merely be stored."""
+    from beantester import DEFAULT_SETTINGS, apply_settings
+    engine = BeanEngine()
+    apply_settings(engine, dict(DEFAULT_SETTINGS, internet_only=True),
+                   lambda *_: None)
+    check("internet only: armed on the core", engine.core.internet_only is True)
+    apply_settings(engine, dict(DEFAULT_SETTINGS), lambda *_: None)
+    check("internet only: disarmed again", engine.core.internet_only is False)

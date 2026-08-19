@@ -111,14 +111,16 @@ WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
 # rebuilt for every dropped packet, and a session set to 100% loss drops as often
 # as it sees. It is also the SINGLE SOURCE for what counts as damage below.
 DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
-                  "rst": "drop_rst", "lan": "drop_lan", "block": "drop_block",
+                  "rst": "drop_rst", "lan": "drop_lan",
+                  "internet_only": "drop_internet_only", "block": "drop_block",
                   "flap": "drop_flap", "rate": "drop_rate"}
 
 # Damage the simulated link inflicted: every reason decide() can name, plus the
 # unnamed default (the configured Loss). Derived from the map above so that a new
 # impairment cannot quietly fall outside the figure - which is exactly how
 # "Effective loss" came to read 0.0% through a session losing 90% to a speed
-# limit. Guarded by test_engine.py::test_every_drop_counter_is_classified.
+# limit. Guarded by
+# test_engine.py::test_every_drop_counter_and_drop_reason_is_classified.
 IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
 
 # Losses the TOOL caused, not the link: its delay queue filled up, the session
@@ -491,6 +493,9 @@ class BeanEngine:
     def set_lan(self, *a):
         self.core.set_lan(*a)
 
+    def set_internet_only(self, *a):
+        self.core.set_internet_only(*a)
+
     def set_block(self, *a):
         self.core.set_block(*a)
 
@@ -559,7 +564,8 @@ class BeanEngine:
             self.st = dict(seen=0, scoped_seen=0,
                            drop_loss=0, drop_overflow=0, corrupted=0,
                            duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
-                           drop_rst=0, drop_lan=0, drop_block=0, drop_flap=0,
+                           drop_rst=0, drop_lan=0, drop_internet_only=0,
+                           drop_block=0, drop_flap=0,
                            drop_rate=0, drop_shutdown=0, drop_send=0,
                            # rst_reset counts CONNECTIONS torn down; drop_rst counts
                            # the packets each one then swallows for its cooldown, and

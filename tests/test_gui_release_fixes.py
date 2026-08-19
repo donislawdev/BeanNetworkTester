@@ -466,3 +466,29 @@ def test_the_banner_also_fires_when_the_tool_cannot_re_inject():
         app._drain_engine_warning()
         assert app.engine_warning.kw.get("text") == ""
     """)
+
+
+def test_the_statistics_copy_menu_is_dark_like_every_other_context_menu():
+    """It came up WHITE in the middle of a dark program - reported from a running
+    build, 2026-08-19.
+
+    ttk styles do not reach a classic ``tk.Menu``: on Windows it is a native Win32
+    popup, so it keeps the system colours unless something configures it. The
+    connection table wraps its menu in ``theme.style_menu``; this one was built
+    bare. Nothing could go red over it, because the fake tkinter records colours
+    and never renders them - which is why the rule guard in
+    ``test_repo_conventions.py`` was added beside this test rather than instead
+    of it: this one proves THIS menu is dark, that one proves the next menu
+    somebody adds cannot repeat the mistake.
+    """
+    run_gui("""
+        from beantester.gui.theme import ACC, BG2, FG
+        page = app.pages["statistics"]
+        menu = page._copy_menu()
+        assert menu.cget("background") == BG2, menu.kw
+        assert menu.cget("foreground") == FG, menu.kw
+        assert menu.cget("activebackground") == ACC, menu.kw
+        # the cached menu is the SAME object on the second call, so a second
+        # right-click cannot get an unstyled one
+        assert page._copy_menu() is menu
+    """)

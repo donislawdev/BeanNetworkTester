@@ -5,6 +5,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **"Internet only (no local network)" - a new checkbox under "Traffic to modify", the mirror of
+  LAN mode.** It drops traffic to and from local addresses and leaves the internet up, so you can
+  test an app whose intranet server, NAS or printer has gone away. On the command line:
+  `--internet-only`. Its counter is "Local network cut".
+- **Two things to know before ticking it.** Loopback keeps working, so anything talking to itself
+  on your own machine is untouched. But your router is on the local network, so if your PC asks it
+  for DNS, name lookups stop with everything else. Both checkboxes can be on at once - that cuts
+  everything except loopback, and the log says so when you apply it.
+
+- **The search box on the Control page can be switched off.** Settings (the cog) has a new
+  "Show the search box on the Control page" switch under Display. It is on by default, and
+  turning it off takes the box away at once - Ctrl+F then goes to the search box in the
+  Connections tab, the way it does from any other page.
+
+### Fixed
+
+- The right-click copy menu on the Statistics page opened with a white background instead of the
+  dark one used everywhere else. It now looks like the menu in the Connections table, on both
+  Live and Session.
+- **A reproduction command left out `--narrow-filter`.** A session started with "Capture only the
+  targeted traffic" produced a command that re-ran a WIDER capture, so the packet counts of the
+  re-run could not match the report they came from.
+
 ## [0.5.0] - 2026-08-19
 
 **The short version.** Two things, and the first is about not losing your files when the

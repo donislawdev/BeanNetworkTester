@@ -67,10 +67,16 @@ class ControlPage:
             "profiles": self._build_profiles,
         })
         app.form = self.form
+        # Applied only now, with the scroller and the form already built: putting
+        # the bar BACK needs `before=` to name the scroller, and hiding it runs a
+        # clear, which talks to the form. `_build_search_bar` packed it, so that
+        # is the state this starts from.
+        self._search_shown = True
+        self._sync_search_visibility()
         # A query typed before a language switch (or before the window was
         # widened into two columns) is still in the box after the rebuild, so the
         # marks have to come back with it.
-        if _LAST_QUERY[0]:
+        if self._search_shown and _LAST_QUERY[0]:
             self.frame.after_idle(self._apply)
 
     # -- search -------------------------------------------------------------- #
@@ -95,11 +101,8 @@ class ControlPage:
         leftwards into empty space without moving anything.
         """
         bar = ttk.Frame(self.frame)
-        # Low rather than high: sitting under the tab strip with a wide gap below
-        # it, the bar looked attached to the tabs. Tight to the content it belongs
-        # to, it reads as the page's own header row.
-        bar.pack(side="top", fill="x", padx=(scaled(12), scaled(14)),
-                 pady=(scaled(12), scaled(3)))
+        self._bar = bar
+        self._pack_bar()
         self.query_var = tk.StringVar(value=_LAST_QUERY[0])
         entry = ttk.Entry(bar, textvariable=self.query_var, width=24)
         entry.pack(side="right")
@@ -127,10 +130,79 @@ class ControlPage:
             self.app.root.bind("<Control-f>", lambda e: _dispatch(self.app))
             self.app.root.bind("<Control-F>", lambda e: _dispatch(self.app))
 
+    def _pack_bar(self, **extra):
+        """Where the bar sits, in ONE place - it is packed twice.
+
+        Once at build time and once when the preference brings it back, and two
+        copies of these numbers would drift the day somebody tunes one of them.
+
+        The padding is low rather than high on purpose: sitting under the tab
+        strip with a wide gap below it, the bar looked attached to the tabs. Tight
+        to the content it belongs to, it reads as the page's own header row.
+
+        🔴 Bringing it back passes ``before=``. pack hands out space in CALL
+        order, so a bar re-packed after the scroller exists would land UNDER the
+        page body - and the fake tkinter cannot see that (it checks that
+        ``before=`` names a sibling and keeps children in creation order), so this
+        one is answered by a live render, not by the suite.
+        """
+        self._bar.pack(side="top", fill="x", padx=(scaled(12), scaled(14)),
+                       pady=(scaled(12), scaled(3)), **extra)
+
+    def search_is_visible(self):
+        """Is the search bar on the page? (the preference, read live)"""
+        return bool(self.app.pref("show_control_search"))
+
+    def on_pref_changed(self, key):
+        """A preference was written in the Settings window (see gui/pages)."""
+        if key == "show_control_search":
+            self._sync_search_visibility()
+
+    def _sync_search_visibility(self):
+        """Bring the bar in or out, once per actual change."""
+        want = self.search_is_visible()
+        if want == self._search_shown:
+            return
+        self._search_shown = want
+        if want:
+            self._pack_bar(before=self.scroll.vsb)
+        else:
+            self._hide_search()
+
+    def _hide_search(self):
+        """Take the bar away, and leave nothing of the search behind.
+
+        Clearing first is not tidiness. The marks are painted on the FORM, not on
+        the bar, so a query left standing would leave fields highlighted with no
+        box left to clear them from - and the sections the search had unfolded
+        would stay unfolded. A debounce still in flight would repaint both a
+        moment after the bar was gone.
+        """
+        if self._job is not None:
+            with crashlog.quiet("gui.pages.control"):
+                self.frame.after_cancel(self._job)
+            self._job = None
+        self.query_var.set("")
+        self._apply()               # unmarks, refolds, forgets the query
+        with crashlog.quiet("gui.pages.control"):
+            # Only if the caret is actually in there: typing into a widget that
+            # is no longer on screen is the one way this could swallow keystrokes.
+            if self.frame.focus_get() is self._entry:
+                self.frame.focus_set()
+        self._bar.pack_forget()
+
     def focus_search(self):
-        """Put the caret in the box (the Ctrl+F path, see gui/app.py)."""
+        """Put the caret in the box (the Ctrl+F path, see gui/app.py).
+
+        ``False`` means "not available here": with the box switched off the
+        dispatcher passes Ctrl+F on to the connection table, which is what the
+        shortcut did from this page before it had a box at all.
+        """
+        if not self._search_shown:
+            return False
         self._entry.focus_set()
         self._entry.select_range(0, "end")
+        return True
 
     def _on_key(self, event):
         # Enter and Escape have their own bindings; letting them through here

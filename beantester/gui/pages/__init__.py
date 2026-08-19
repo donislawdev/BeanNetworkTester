@@ -41,8 +41,12 @@ def focus_search(app):
     """
     page = app.current_page()
     if page is not None and hasattr(page, "focus_search"):
-        page.focus_search()
-        return "break"
+        # A page can REFUSE: the Control page's box can be switched off in the
+        # Settings window, and a shortcut that focuses a widget nobody can see is
+        # worse than one that does nothing. Refusing sends the user to the table,
+        # which is what Ctrl+F did before that page had a box at all.
+        if page.focus_search() is not False:
+            return "break"
     app.select_page(SEARCH_FALLBACK)
     fallback = app.pages.get(SEARCH_FALLBACK)
     if fallback is not None:
@@ -50,4 +54,35 @@ def focus_search(app):
     return "break"
 
 
-__all__ = ["PAGES", "Page", "ControlPage", "StatsPage", "ConnsPage", "focus_search"]
+def pref_changed(app, key):
+    """A GUI preference was written: let the pages that react to one react NOW.
+
+    Preferences are stored and then simply READ - the chart asks for its history
+    length on the next tick, ``scoped_stat`` asks for the view scope on every
+    figure it prints. That is enough for anything the tick redraws anyway, and it
+    is NOT enough for a switch whose whole visible effect is a widget appearing or
+    disappearing: up to one tick (0.7 s) of a ticked box doing nothing reads as a
+    broken checkbox, not as a slow one.
+
+    A broadcast rather than a name in the registry, and the reason is the shape of
+    the alternative: ``Pref`` would have to carry the name of an ``App`` method,
+    and ``gui/app.py`` sits ON the size ratchet with zero headroom
+    (``tests/test_code_shape.py``), so that method would have to live somewhere
+    else and be reached through App anyway. This is the same dispatcher shape as
+    ``focus_search`` above, in the same place, for the same reason: how a page is
+    ADDRESSED belongs to the page registry.
+
+    A page that raises must not take the Settings window down with it - the user
+    would be left with a checkbox they cannot untick.
+    """
+    from ... import crashlog
+    for page in app.pages.values():
+        handler = getattr(page, "on_pref_changed", None)
+        if handler is None:
+            continue
+        with crashlog.quiet("gui.pages"):
+            handler(key)
+
+
+__all__ = ["PAGES", "Page", "ControlPage", "StatsPage", "ConnsPage",
+           "focus_search", "pref_changed"]

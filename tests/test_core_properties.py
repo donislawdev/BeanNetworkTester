@@ -203,7 +203,7 @@ def test_every_decision_is_structurally_coherent(s, pkts):
 # gate on an otherwise maximally noisy core, so whatever comes out names the
 # step that fired. If a step is ever moved, inserted or made conditional, the
 # reason changes and this goes red.
-GATES = ["lan", "block", "nat", "rst", "flap", "mtu", "syn"]
+GATES = ["lan", "internet_only", "block", "nat", "rst", "flap", "mtu", "syn"]
 
 # Impairments that must NOT be able to preempt a gate. All of them sit at step 7
 # or later, so at 100% they are the strongest possible competition.
@@ -222,6 +222,8 @@ def _armed(gate, rst_cooldown, flap_period):
     core.reset_buckets(0.0)
     if gate == "lan":
         core.set_lan(True)
+    elif gate == "internet_only":
+        core.set_internet_only(True)
     elif gate == "block":
         core.set_block(True, port="443")
     elif gate == "nat":
@@ -261,8 +263,12 @@ def test_an_armed_gate_wins_over_every_later_step(gate, seed, size,
     # Measured 2026-07-28: such a reset left the client hanging until its own
     # timeout instead of resetting it. So the rst gate is armed with an ordinary
     # packet here; the syn gate needs a SYN by definition, and the rest do not care.
-    kw = dict(remote_ip="8.8.8.8", remote_port=443, is_tcp=True,
-              is_syn=(gate != "rst"))
+    # 🔴 Two gates here judge the remote end by ADDRESS CLASS and want OPPOSITE
+    # answers: LAN mode fires on a public peer, "Internet only" on a local one.
+    # One address for every gate would leave the second one unarmed and this test
+    # green for the wrong reason.
+    kw = dict(remote_ip="192.168.1.5" if gate == "internet_only" else "8.8.8.8",
+              remote_port=443, is_tcp=True, is_syn=(gate != "rst"))
     now = 0.0
     if gate == "nat":
         core.decide(100, True, 5000, 0.0, rng, **kw)     # create the mapping...
@@ -283,6 +289,14 @@ def test_an_earlier_gate_beats_a_later_one(seed):
                     remote_ip="8.8.8.8", remote_port=443, is_tcp=True)
     check("LAN mode (2b) wins over the MTU black hole (6)",
           d.drop and d.reason == "lan", f"(reason={d.reason})")
+
+    mirror = BeanCore()
+    mirror.set_internet_only(True)      # step 2b, the other half
+    mirror.set_advanced(0, 10)          # step 6 - would also drop this packet
+    m = mirror.decide(9000, False, 5000, 0.0, random.Random(seed),
+                      remote_ip="192.168.1.5", remote_port=443, is_tcp=True)
+    check("Internet only (2b) wins over the MTU black hole (6)",
+          m.drop and m.reason == "internet_only", f"(reason={m.reason})")
 
 
 # --------------------------------------------------------------------------- #

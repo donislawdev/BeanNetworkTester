@@ -43,6 +43,16 @@ def settings_to_cli(settings, seed=None, simulate=False):
         args += ["--block-port", block_port]
     if g("lan_mode"):
         args += ["--lan-mode"]
+    if g("internet_only"):
+        args += ["--internet-only"]
+    # START-only, and it changes what the session even SAW - a command without it
+    # re-runs a wider capture, so `packets` and every percentage derived from it
+    # describe a different run. It was missing until the guard below went looking
+    # (test_summary_repro_views.py::test_every_setting_with_a_flag_reaches_the_
+    # reproduction_command); the repro REPORT has carried `narrowed` all along,
+    # which is why nobody noticed the command did not.
+    if g("narrow_filter"):
+        args += ["--narrow-filter"]
     filt = g("filter")
     if filt and filt != "both":
         args += ["--filter", str(filt)]
@@ -92,6 +102,7 @@ def build_repro_report(engine, settings):
         syn_dropped=stats["drop_syn"],
         nat_expired=stats["drop_nat"],
         blocked=stats["drop_block"],
+        local_network_dropped=stats.get("drop_internet_only", 0),
         rate_dropped=stats["drop_rate"],
         peak_queue=stats.get("peak_queue", stats["queue"]),
     )

@@ -237,6 +237,21 @@ public (internet) addresses and passes the local network: 10.0.0.0/8, 172.16-31.
 loopback, link-local and CGNAT. It simulates "LAN works, internet is down" - a test of how the app
 behaves without internet access (e.g. no gateway/WAN, a captive portal).
 
+**Internet only** - the mirror of it, an "Internet only (no local network)" checkbox in the same
+section. It drops traffic to/from those same local addresses and leaves the internet working, so
+you can test an app that talks to an intranet server, a NAS or a printer while the WAN is fine.
+Two things it does not do, and both matter:
+
+- **Loopback keeps working.** 127.x and `::1` pass either way, so a local development server, a
+  database on your own machine and anything using loopback to talk to itself are untouched. That
+  is deliberate: your own machine talking to itself is not "the local network".
+- **The router is on the local network.** If your PC asks the router for DNS, name lookups stop
+  working with it, and the internet then looks broken even though internet traffic is being let
+  through. Use a public resolver while testing this if that gets in the way.
+
+Both checkboxes can be on at once. That is allowed and it cuts everything except loopback - the
+program says so in the log when you apply it, and each of the two counters reports its own half.
+
 **Target process** - narrow the effect to chosen apps: process name (e.g. `chrome.exe`), PID, a
 comma-separated list, PID range, wildcard or regular expression - see
 [Filter syntax](#filter-syntax-process--ip--port). The rest of the machine's traffic stays
@@ -554,7 +569,7 @@ tool is overloaded), Dropped at stop (were still queued when STOP was pressed), 
 tool captured them but could not put them back on the wire - the connection went down, or the driver
 refused), Rate-limit drop (dropped by a full speed-limit buffer - counted separately from
 loss and from "Buffer overflow"), SYN dropped, MTU dropped, NAT expired, RST torn, LAN: internet cut
-off, RST sent.
+off, Local network cut, RST sent.
 
 **Copying the figures.** Right-click any value on "Live" or "Session" to copy that value, or the
 whole tab. Each panel also has a button - "Copy counters" under the grid, "Copy session details"
@@ -583,7 +598,7 @@ Designed so that after a bug you can recreate exactly the same conditions:
 - **Start / Duration / Effective loss / Queue peak / Down-up peak** - a quick picture of the run.
 - **What "Effective loss" counts** - the share of the traffic you aimed at that **this tool**
   broke, across **every** impairment: the configured Loss plus rate-limit drops, blocking, LAN cut,
-  link outages, connection resets, SYN drops, MTU drops and NAT expiry. With a target set, only
+  local-network cut, link outages, connection resets, SYN drops, MTU drops and NAT expiry. With a target set, only
   the target's traffic counts, so other applications cannot dilute it. Packets the **tool** threw
   away are deliberately excluded - "Buffer overflow", "Dropped at stop" and "Send failed" are its
   own failures, not the link's, and they have their own counters. The report's `effective_loss_pct` is the same
@@ -691,6 +706,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
+| `--internet-only` | - | the mirror: cut off the local network (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), keep the internet. Loopback keeps working. Careful: DNS asked of your router is local traffic, so the internet can stop working with it |
 | `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only. While it is on, statistics and connections cover the narrowed traffic only |
 
 **Targeting** (all three accept the full [filter syntax](#filter-syntax-process--ip--port): lists,
@@ -828,7 +844,7 @@ tooltip on that header.
 | `l.port` | Port on this machine - what links the connection to a process. Empty for ping/ICMP, which is also why those rows usually have no process name. |
 | `packets` | Packets seen on this connection since it appeared. |
 | `impaired?` | Whether the connection was **in impairment scope** this session - impaired, not merely watched. It stays `yes` after the connection closes, as a record. With no targeting set, everything is in scope. |
-| `dropped` | Packets dropped on this connection by the active impairments (loss, link outage, LAN mode, resets, ...). |
+| `dropped` | Packets dropped on this connection by the active impairments (loss, link outage, LAN mode, "Internet only", resets, ...). |
 | `down` | Data that actually **reached** the application - what it downloaded. Same quantity the session panel calls "Downloaded (MB)". |
 | `up` | Data that actually **left** this machine - what the application uploaded. |
 | `total` | Delivered download + delivered upload. |
@@ -903,6 +919,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_nat` | dropped because the NAT mapping had expired |
 | `dropped_rst` | traffic swallowed while a connection was held down after a reset |
 | `dropped_lan` | dropped by LAN mode (internet cut, local network alive) |
+| `dropped_local_network` | dropped by "Internet only" (local network cut, internet and loopback alive) |
 | `dropped_block` | dropped by the blocking (firewall) fields |
 | `dropped_link_outage` | dropped during a flapping outage |
 | `dropped_rate_limit` | dropped by a full speed-limit buffer |
@@ -971,7 +988,8 @@ pause.
 **Which names go in `settings`** - any setting the tool has, under the **same name as the config
 file** (that is, its command-line flag with the dashes turned into underscores): `loss`, `latency`, `jitter`,
 `down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`, `target`,
-`rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `seed` and the rest. Run
+`rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `internet_only`, `seed` and the
+rest. Run
 `--print-config` to dump the full set of names with their current values.
 
 **Everything is validated when the file loads, and a mistake names itself.** An unknown setting, an

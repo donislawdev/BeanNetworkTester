@@ -57,6 +57,8 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         parts.append(tr("summary.flap", v=num("flap_period")))
     if g("lan_mode"):
         parts.append(tr("summary.lan"))
+    if g("internet_only"):
+        parts.append(tr("summary.internet_only"))
     if scheduled:
         parts.append(tr("summary.schedule"))
     if str(g("target")).strip():

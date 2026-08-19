@@ -145,6 +145,13 @@ def build_arg_parser():
                         "(e.g. '80,443,8000-8100' or '!53')")
     p.add_argument("--lan-mode", action="store_true",
                    help="LAN mode: cut the internet (public addresses), keep the local network")
+    # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
+    # the --lan abbreviation ambiguous and argparse then refuses it outright.
+    p.add_argument("--internet-only", action="store_true",
+                   help="cut the local network (10.x, 192.168.x, 172.16-31.x, "
+                        "link-local, CGNAT), keep the internet. Loopback keeps "
+                        "working. Careful: DNS asked of your router is local "
+                        "traffic, so the internet can stop working with it")
     p.add_argument("--narrow-filter", action="store_true",
                    help="push --dst-ip/--dst-port into the WinDivert filter, so the "
                         "driver never hands over traffic that could not be impaired "
@@ -361,7 +368,9 @@ def _sample_record(elapsed, down, up, s):
                 down_kbps=round(down, 1), up_kbps=round(up, 1),
                 packets=s["seen"], drop_loss=s["drop_loss"], drop_syn=s["drop_syn"],
                 drop_nat=s["drop_nat"], drop_rst=s["drop_rst"], rst_sent=s["rst_sent"],
-                drop_lan=s["drop_lan"], drop_block=s["drop_block"],
+                drop_lan=s["drop_lan"],
+                drop_internet_only=s["drop_internet_only"],
+                drop_block=s["drop_block"],
                 corrupted=s["corrupted"],
                 duplicated=s["duplicated"], drop_overflow=s["drop_overflow"],
                 drop_rate=s["drop_rate"],
@@ -372,7 +381,8 @@ def _sample_text(elapsed, down, up, s):
     return (f"[{elapsed:6.1f}s] down={down:7.1f} up={up:7.1f} KB/s | "
             f"pkts={s['seen']} loss={s['drop_loss']} syn={s['drop_syn']} "
             f"nat={s['drop_nat']} rst={s['drop_rst']}/{s['rst_sent']} "
-            f"lan={s['drop_lan']} block={s['drop_block']} corrupt={s['corrupted']} "
+            f"lan={s['drop_lan']} localnet={s['drop_internet_only']} "
+            f"block={s['drop_block']} corrupt={s['corrupted']} "
             f"rate={s['drop_rate']} queue={s['queue']}")
 
 

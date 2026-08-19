@@ -215,6 +215,7 @@ class _TargetedEngine:
     def set_buffer(self, *_a, **_k): pass
     def set_dest(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
+    def set_internet_only(self, *_a, **_k): pass
     def set_block(self, *_a, **_k): pass
     def set_advanced(self, *_a, **_k): pass
     def set_spike(self, *_a, **_k): pass
@@ -374,6 +375,7 @@ def test_exit_code_runtime_without_pydivert():
         def set_buffer(self, *_a, **_k): pass
         def set_dest(self, *_a, **_k): pass
         def set_lan(self, *_a, **_k): pass
+        def set_internet_only(self, *_a, **_k): pass
         def set_block(self, *_a, **_k): pass
         def set_advanced(self, *_a, **_k): pass
         def set_spike(self, *_a, **_k): pass
@@ -1044,6 +1046,34 @@ def test_the_warning_names_lan_mode_which_reads_like_a_scope(monkeypatch):
     """
     _, _, err, _ = _real_run(monkeypatch, ["--lan-mode"])
     check("warning: LAN mode alone is a machine-wide impairment", _warned(err))
+
+
+def test_the_warning_names_internet_only_too(monkeypatch):
+    """Its mirror cuts the machine's local network the same way, and the name
+    reads just as much like a scope ("only the internet") as LAN mode's does.
+
+    The registry is what makes this true - the field declares ``IMPAIRS_ALL`` -
+    but a declaration nobody exercises is how the first one got missed, so the
+    second gate is asked the question rather than assumed to inherit the answer.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--internet-only"])
+    check("warning: Internet only alone is a machine-wide impairment", _warned(err))
+
+
+def test_the_lan_abbreviation_still_reaches_lan_mode(monkeypatch):
+    """🔴 MEASURED, and the reason the new flag is not called ``--lan-cut``.
+
+    argparse keeps ``allow_abbrev`` on here by decision (ADR 2026-08-02: people
+    may already be typing ``--lat``), so a SECOND option starting with ``lan-``
+    would make ``--lan`` ambiguous and argparse would refuse it outright with
+    exit 2 - silently breaking a shortcut of a documented flag. This asserts the
+    abbreviation still resolves, which is the property the naming protects.
+    """
+    parser = cli_module.build_arg_parser()
+    args = parser.parse_args(["--lan"])
+    check("--lan still means --lan-mode", args.lan_mode is True)
+    check("--internet-only did not attach itself to it",
+          args.internet_only is False)
 
 
 def test_a_bounded_run_is_not_warned_about(monkeypatch):

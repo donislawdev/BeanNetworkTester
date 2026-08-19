@@ -276,6 +276,75 @@ def test_lan_mode_gate():
     check("LAN: disabled = internet passes", not off.drop, f"(drop={off.drop})")
 
 
+def test_is_lan_ip_carves_out_loopback():
+    """The predicate behind "Internet only", and the two answers that surprise.
+
+    LOOPBACK is not the local network here (owner's decision, 2026-08-19): a
+    machine talking to itself is not what a tester means by "the LAN", and
+    cutting it would take down local development servers on the very machine the
+    tool runs on. MULTICAST is not either, and that one is measured rather than
+    chosen - ``ipaddress`` reports 224.0.0.251 as globally routable, so mDNS and
+    SSDP sit on the internet side of both switches.
+    """
+    from beantester.utils import is_lan_ip
+    for ip in ("192.168.1.10", "10.0.0.5", "172.20.1.1", "169.254.3.4",
+               "100.64.0.1", "203.0.113.9", "fe80::1", "::ffff:192.168.1.1"):
+        check(f"lan: {ip} is the local network", is_lan_ip(ip))
+    for ip in ("127.0.0.1", "127.9.9.9", "::1", "::ffff:127.0.0.1"):
+        check(f"lan: {ip} is loopback, not the local network", not is_lan_ip(ip))
+    for ip in ("8.8.8.8", "1.1.1.1", "224.0.0.251"):
+        check(f"lan: {ip} is not the local network", not is_lan_ip(ip))
+    # Anything unclassifiable must not be damaged - the same safe direction
+    # is_local_ip takes by answering "local".
+    for bad in (None, "", "not-an-ip", "999.1.1.1"):
+        check(f"lan: {bad!r} is not treated as the local network", not is_lan_ip(bad))
+
+
+def test_internet_only_gate():
+    """The mirror of LAN mode: cut the local network, keep the internet."""
+    core = BeanCore()
+    core.set_internet_only(True)
+    rng = random.Random(1)
+    loc = core.decide(200, True, 5000, 0.0, rng, remote_ip="192.168.1.5", remote_port=443)
+    pub = core.decide(200, True, 5000, 0.0, rng, remote_ip="8.8.8.8", remote_port=443)
+    back = core.decide(200, True, 5000, 0.0, rng, remote_ip="127.0.0.1", remote_port=443)
+    none = core.decide(200, True, 5000, 0.0, rng, remote_ip=None, remote_port=443)
+    six = core.decide(200, True, 5000, 0.0, rng, remote_ip="fe80::5", remote_port=443)
+    check("internet only: local traffic dropped",
+          loc.drop and loc.reason == "internet_only",
+          f"(drop={loc.drop}, reason={loc.reason})")
+    check("internet only: internet passes", not pub.drop, f"(drop={pub.drop})")
+    check("internet only: LOOPBACK passes", not back.drop, f"(drop={back.drop})")
+    check("internet only: a packet with no remote address passes", not none.drop)
+    check("internet only: IPv6 link-local is the local network too",
+          six.drop and six.reason == "internet_only", f"(reason={six.reason})")
+    core.set_internet_only(False)
+    off = core.decide(200, True, 5000, 0.0, rng, remote_ip="192.168.1.5", remote_port=443)
+    check("internet only: disabled = local passes", not off.drop, f"(drop={off.drop})")
+
+
+def test_both_lan_switches_split_the_traffic_instead_of_one_swallowing_it():
+    """Both on is legal - the union of two impairments - and each names its half.
+
+    They judge the same packet from opposite sides, so they can never both fire
+    on one packet. That is why nothing but loopback survives and why the two
+    counters stay meaningful: one says how much internet was cut, the other how
+    much local network was.
+    """
+    core = BeanCore()
+    core.set_lan(True)
+    core.set_internet_only(True)
+    rng = random.Random(1)
+    pub = core.decide(200, True, 5000, 0.0, rng, remote_ip="8.8.8.8", remote_port=443)
+    loc = core.decide(200, True, 5000, 0.0, rng, remote_ip="192.168.1.5", remote_port=443)
+    back = core.decide(200, True, 5000, 0.0, rng, remote_ip="127.0.0.1", remote_port=443)
+    check("both: the internet half is named by LAN mode",
+          pub.drop and pub.reason == "lan", f"(reason={pub.reason})")
+    check("both: the local half is named by Internet only",
+          loc.drop and loc.reason == "internet_only", f"(reason={loc.reason})")
+    check("both: loopback still gets through", not back.drop, f"(drop={back.drop})")
+
+
 class _FakePorts:
     """A live port container the way ``ProcessTargeting`` presents itself.
 
