@@ -8,30 +8,38 @@ on:
     tags:
       - "v*"
 
-# The default token only reads the repo; creating a Release and uploading assets
-# needs write. Scoped to this workflow, not the whole repository.
+# Read-only at the top, and the job below raises exactly what it needs. Same rule as
+# ci.yml, pages.yml and scorecard.yml already follow; this file was the last one
+# breaking it, and OpenSSF Scorecard named it (Token-Permissions, 0/10, 2026-08-19).
+#
+# 🔴 Not cosmetic while there is only one job. A permission written here is granted
+# to every job ADDED to this file later - a job whose author has no reason to scroll
+# back up, in the one workflow that can publish an asset under this project's name.
 permissions:
-  contents: write
-  # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
-  # signs it, `attestations` writes the result to the repository's attestation
-  # store. Both are required by actions/attest and neither grants anything else;
-  # a release that skipped them would still publish an SBOM, just an unsigned one
-  # that anybody could swap.
-  #
-  # NOT here on purpose: `artifact-metadata: write`, which that action's README
-  # lists as a third permission. It is needed to create the artifact STORAGE
-  # RECORD, and `create-storage-record` requires `push-to-registry`, which
-  # defaults to false and is not used here (read in the action's own action.yml,
-  # 2026-08-12). Granting a permission we do not need would contradict the line
-  # above it.
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   release:
     name: Build and publish the Windows executable
     runs-on: windows-latest
     timeout-minutes: 30
+    permissions:
+      # Creating a Release and uploading its assets. The default token only reads.
+      contents: write
+      # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
+      # signs it, `attestations` writes the result to the repository's attestation
+      # store. Both are required by actions/attest and neither grants anything else;
+      # a release that skipped them would still publish an SBOM, just an unsigned one
+      # that anybody could swap.
+      #
+      # NOT here on purpose: `artifact-metadata: write`, which that action's README
+      # lists as a third permission. It is needed to create the artifact STORAGE
+      # RECORD, and `create-storage-record` requires `push-to-registry`, which
+      # defaults to false and is not used here (read in the action's own action.yml,
+      # 2026-08-12). Granting a permission we do not need would contradict the line
+      # above it.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -45,7 +53,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           # One hash-checked resolution over both files - the same command the
           # build job in ci.yml runs, so a release cannot be built from a
           # different set of bytes than the one CI proved.
