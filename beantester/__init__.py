@@ -46,8 +46,8 @@ from .settings import (DEFAULT_SETTINGS, MATCH_FIELDS, apply_settings,
                        validate_settings)
 from .summary import settings_summary
 from .synthetic import SyntheticDivert
-from .utils import (_num, bytes_to_mb, canonical_ip, clamp01, is_local_ip,
-                    nice_ceiling, to_number)
+from .utils import (_num, bytes_to_mb, canonical_ip, clamp01, is_lan_ip,
+                    is_local_ip, nice_ceiling, to_number)
 from .validators import parse_number, parse_seed
 from .views import filter_sort_connections, sort_events
 
@@ -74,7 +74,9 @@ __all__ = [
     "find_process_ports", "parse_target", "port_process_map",
     "compile_target", "make_targeting", "ProcessTargeting", "portmap",
     "clamp01", "to_number", "_num", "bytes_to_mb", "nice_ceiling", "is_local_ip",
-    "canonical_ip",
+    # Exported beside its sibling on purpose: one of the pair being public and
+    # the other not is a trap ("which one does the local network mean?").
+    "is_lan_ip", "canonical_ip",
     "sort_events", "filter_sort_connections",
     "build_arg_parser", "config_from_args", "apply_config", "run_cli", "main",
     "CliError", "exitcodes", "clilog", "driver", "winenv",
