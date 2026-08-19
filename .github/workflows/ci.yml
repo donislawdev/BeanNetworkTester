@@ -288,6 +288,10 @@ jobs:
         python-version: ["3.14"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The diff-coverage step below compares against the base branch, and a
+          # shallow clone has no base branch to compare against.
+          fetch-depth: 0
       - name: Verify required release files are in the checkout
         # These are git-ignored by pattern and re-included by exception, so a
         # missing force-add or a broken .gitignore makes them vanish on a fresh
@@ -317,6 +321,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
+          # diff-cover only: the rest of that file is for the analysis jobs, and
+          # installing it whole here would drag semgrep onto both matrix legs.
+          pip install "$(grep -E '^diff-cover==' requirements-lint.txt)"
 
       # ONE run of the whole suite, under coverage. testpaths=["tests"] (pyproject)
       # means this already includes the suites that used to own separate steps:
@@ -339,6 +346,26 @@ jobs:
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: python -m pytest tests --cov=beantester --cov-report=term --cov-report=xml
+
+      # The whole-repository gate (pyproject: fail_under) answers "is this project
+      # tested". It cannot answer "is this CHANGE tested": at ~1200 tests the
+      # average barely moves, so a pull request can add a hundred untested lines
+      # and still pass it - and those are the lines nobody has run twice yet.
+      #
+      # 80 rather than 100, deliberately. Parts of the GUI are only reachable
+      # through a real Tk event loop that the fake tkinter cannot drive, so
+      # demanding every changed line would push people towards writing the test
+      # that is easy instead of the one that matters. Ubuntu only, because the two
+      # matrix legs produce the same answer, and pull requests only, because there
+      # is nothing to diff against on a push to master.
+      - name: Coverage of the lines this pull request changed
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          diff-cover coverage.xml --compare-branch "origin/$BASE_REF" --fail-under 80
 
       - name: Coverage report
         if: always()

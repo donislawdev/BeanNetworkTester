@@ -46,3 +46,9 @@ semgrep==1.173.0; sys_platform != "win32"
 # with 10 (those two, plus pip itself). A scanner that quietly covers less than it
 # was asked to is worse than none, because its clean report gets quoted.
 pip-audit==2.10.1
+
+# Coverage of the CHANGE, on top of the whole-repository gate in pyproject. The
+# average moves so slowly at this size that a pull request can add a hundred
+# untested lines without pushing it below the threshold - which is precisely the
+# code most worth a test, because it is the code nobody has run twice yet.
+diff-cover==10.5.1
