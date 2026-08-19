@@ -1270,6 +1270,16 @@ MUTATIONS = [
         "new": "        pass",
         "test": "test_one_ctrl_f_reaches_whichever_search_box_is_in_front",
     },
+    {
+        # Text written, translated and reviewed, then drawn by nobody: the BOOL
+        # row returns before the hint. The field registry has had this guard for
+        # a while; the pref registry did not, and lost a paragraph to it.
+        "label": "prefs: a checkbox declares a hint its row cannot draw",
+        "file": "beantester/gui/prefs.py",
+        "old": '         default=False, section="scope"),',
+        "new": '         default=False, hint="prefs.scope_view", section="scope"),',
+        "test": "test_only_prefs_that_can_show_a_hint_declare_one",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

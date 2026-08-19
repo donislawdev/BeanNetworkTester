@@ -58,6 +58,27 @@ def test_a_pref_can_only_name_a_section_that_will_actually_render_it():
               p in prefs.prefs_in_section(p.section))
 
 
+def test_only_prefs_that_can_show_a_hint_declare_one():
+    """A hint on a checkbox is text nobody will ever read.
+
+    ``SettingsWindow._build_pref_row`` handles BOOL and ACTION first and
+    **returns**, so only a NUMBER row ever reaches the line that draws
+    ``pref.hint``. Nothing raises: the text is simply written, translated into
+    every language, and then shown to no one.
+
+    Measured, not hypothetical. ``scope_view_to_target`` carried a 250-character
+    hint that never appeared on screen - and its TOOLTIP had grown into the
+    longest string in the language files trying to carry the same explanation.
+    That is word for word what
+    ``test_field_registry.py::test_only_fields_that_can_show_a_hint_declare_one``
+    already records about ``narrow_filter``: the same hole, one registry over,
+    which is why this guard is its mirror rather than a new idea.
+    """
+    stray = [(p.key, p.kind) for p in PREFS if p.hint and p.kind != prefs.NUMBER]
+    check("prefs: no pref declares a hint its row cannot show",
+          not stray, f"({stray})")
+
+
 def test_pref_texts_resolve_in_every_language():
     keys = []
     for p in PREFS:

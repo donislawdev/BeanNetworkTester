@@ -65,7 +65,7 @@ PREFS = (
     # `seen` AND `scoped_seen` regardless, so a pipeline never has to guess which
     # world a file came from.
     Pref("scope_view_to_target", BOOL, "prefs.scope_view", "tips.scope_view",
-         default=False, hint="prefs.scope_view_hint", section="scope"),
+         default=False, section="scope"),
     # Default True: the box has always been there, and a preference is allowed to
     # take something away only when the user asks.
     #

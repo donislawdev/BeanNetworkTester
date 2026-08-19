@@ -345,7 +345,6 @@
   "prefs.reset_layout": "Zresetuj układ okna",
   "prefs.restore_profile": "Przywróć ostatni profil przy starcie",
   "prefs.scope_view": "Pokazuj tylko ruch celu",
-  "prefs.scope_view_hint": "Statystyki, wykres przepustowości, tabela Połączeń i oba eksporty CSV obejmują wtedy tylko to, co wybrało Twoje celowanie. Zmienia to, co WIDZISZ - nigdy tego, co jest przechwytywane, ani tego, co jest psute.",
   "prefs.show_control_search": "Pokazuj wyszukiwarkę na stronie Sterowanie",
   "prefs.unit_lines": "linii",
   "prefs.unit_seconds": "s",

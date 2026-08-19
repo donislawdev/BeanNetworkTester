@@ -345,7 +345,6 @@
   "prefs.reset_layout": "Reset window layout",
   "prefs.restore_profile": "Restore the last profile on startup",
   "prefs.scope_view": "Show only the targeted traffic",
-  "prefs.scope_view_hint": "Statistics, the throughput chart, the Connections table and both CSV exports then cover only what your targeting selected. It changes what you SEE - never what is captured and never what is impaired.",
   "prefs.show_control_search": "Show the search box on the Control page",
   "prefs.unit_lines": "lines",
   "prefs.unit_seconds": "s",
