@@ -316,16 +316,44 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
     probe = os.path.join(ROOT, "HANDOFF-scanner-probe.md")
     check("the planted brief is not overwriting a real one",
           not os.path.exists(probe), f"({probe})")
-    # An em-dash: what the dash scan would object to if it ever read this file.
+    # 🔴 And the same trick for the DIRECTORIES, for the same reason one level up.
+    # `internal_tools/`, `.claude/` and `crashes/` exist on the maintainer's machine
+    # and in no checkout, so on a runner there is nothing under them to leak - the
+    # assertion below passes whatever SKIP_DIRS holds. Measured on CI (2026-08-19):
+    # the mutation that drops `internal_tools` from SKIP_DIRS came back SURVIVED,
+    # with no defect behind it. Planting one file in each makes the guard mean the
+    # same thing in both places.
+    planted = []
+    for directory in ("internal_tools", ".claude", "crashes"):
+        target = os.path.join(ROOT, directory, "scanner-probe.md")
+        if os.path.exists(target):
+            continue                        # never overwrite something real
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        planted.append((target, os.path.dirname(target)))
+    # An em-dash: what the dash scan would object to if it ever read these files.
     # Built with chr() rather than written out, because THIS file is repository text
     # and is scanned by the very rule it defines - a literal one fails the suite.
+    text = "planted by the suite " + chr(0x2014) + " removed immediately\n"
     with open(probe, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write("planted by the suite " + chr(0x2014) + " removed immediately\n")
+        handle.write(text)
+    for target, _parent in planted:
+        with open(target, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
     try:
         scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
                    for p in repo_text_files((".py", ".md", ".json", ".txt"))}
     finally:
         os.remove(probe)
+        for target, parent in planted:
+            os.remove(target)
+            # Only a directory this test created: a maintainer's own is left alone.
+            try:
+                os.rmdir(parent)
+            except OSError:
+                pass
+    check("the scan had something to find under each skipped directory",
+          len(planted) == 3 or os.path.isdir(os.path.join(ROOT, "internal_tools")),
+          f"(planted {len(planted)})")
     for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md",
                   "CHANGELOG-INTERNAL.md", os.path.basename(probe)):
         check(f"{stray} is not scanned (it is not in the repository)",
