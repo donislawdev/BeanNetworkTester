@@ -158,6 +158,73 @@ jobs:
       - name: Decide
         run: python tools/semgrep_gate.py semgrep.json
 
+  # Weekly, on Windows, and only weekly: this asks whether the world changed
+  # under versions that did not. A pull request cannot make it red, so running it
+  # per pull request would burn minutes to re-answer the same question.
+  #
+  # windows-latest because that is where the shipped set actually exists:
+  # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
+  # skip the one dependency that puts a kernel driver on a user's machine.
+  audit:
+    name: pip-audit (advisories against the pinned set)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Raised on THIS job only, and only because it opens an issue when it finds
+      # something. Nothing else in this workflow may write anything.
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the auditor
+        run: pip install -r requirements-lint.txt
+      # The pinned set, installed exactly as the build installs it, into its own
+      # environment - then audited BY PATH. Auditing the requirement files instead
+      # silently skips `packaging` and `setuptools` (measured), and a scanner that
+      # covers less than it was asked to is worse than no scanner at all.
+      - name: Install the pinned set into a clean environment
+        shell: bash
+        run: |
+          python -m venv audit-env
+          audit-env/Scripts/python -m pip install --quiet \
+            --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Audit it
+        shell: bash
+        # pip-audit exits non-zero when it finds something, and finding something
+        # is what the next step is for - so the exit code is captured, not obeyed.
+        run: |
+          set +e
+          pip-audit --path audit-env/Lib/site-packages -f json -o audit.json
+          echo "pip-audit exit: $?"
+          set -e
+          test -s audit.json || { echo "no report was written"; exit 1; }
+      - name: Open an issue if anything was found
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue list --label security-scan --state open --json number,title > open.json
+          action=$(python tools/audit_issue.py --audit audit.json --existing open.json \
+                     --title-out issue-title.txt --body-out issue-body.md \
+                     --run-url "$RUN_URL")
+          echo "verdict: $action"
+          case "$action" in
+            create)
+              gh label create security-scan --color B60205 \
+                  --description "opened by the weekly dependency audit" --force
+              gh issue create --label security-scan \
+                  --title "$(cat issue-title.txt)" --body-file issue-body.md
+              ;;
+            skip) echo "an open issue already names exactly these advisories" ;;
+            none) echo "nothing published against the pinned set" ;;
+            *)    echo "unexpected verdict from tools/audit_issue.py"; exit 1 ;;
+          esac
+
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}

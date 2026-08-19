@@ -33,3 +33,16 @@ mypy==2.3.1
 # own purposes and forbids redistributing the rules, which is what putting them in
 # a public repository would be.
 semgrep==1.173.0; sys_platform != "win32"
+
+# The weekly audit of what we PIN. Not the same question as dependency-review,
+# which looks at what a pull request ADDS: this one asks whether an advisory has
+# been published since, against versions that have not moved.
+#
+# 🔴 Run against an INSTALLED environment (`--path`), never against the
+# requirement files. Measured 2026-08-19: `pip-audit -r requirements.txt -r
+# requirements-build.txt --require-hashes` audits 7 of the 9 pinned packages and
+# says "No known vulnerabilities found" - it silently skips `packaging` and
+# `setuptools`. The same set installed into a venv and audited by path comes back
+# with 10 (those two, plus pip itself). A scanner that quietly covers less than it
+# was asked to is worse than none, because its clean report gets quoted.
+pip-audit==2.10.1
