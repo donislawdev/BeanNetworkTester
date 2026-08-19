@@ -1048,6 +1048,16 @@ MUTATIONS = [
         "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
     },
     {
+        # The command in the README stops matching what we attest, and every user who
+        # follows it gets an error. Nothing here runs `gh`, so only this pairing can
+        # notice.
+        "label": "release: the documented verify command loses its predicate type",
+        "file": "README.md",
+        "old": " --predicate-type https://spdx.dev/Document/v2.3",
+        "new": "",
+        "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
+    },
+    {
         # The escaping removed as "noise" - and the tool that writes our supply-chain
         # hashes can again be pointed at a different PyPI endpoint by a `?` in a
         # version string, silently answering about something else.

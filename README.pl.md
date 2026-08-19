@@ -1352,15 +1352,19 @@ Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To 
 strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
 Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
 
-To polecenie pyta GitHuba. Dowód jedzie też **jako plik**, `BeanNetworkTester-vX.Y.Z.sigstore.json`,
-więc archiwum sprawdzisz bez pytania kogokolwiek:
+To polecenie pyta GitHuba, jakie atestacje istnieją. Dowód jedzie też **jako plik**,
+`BeanNetworkTester-vX.Y.Z.sigstore.json`, więc archiwum sprawdzisz wobec dowodu, który
+przyjechał razem z nim:
 
 ```bash
-gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Przydaje się, gdy pliki masz z kopii lustrzanej albo na maszynie bez dostępu do API - dowód
-przyjechał razem z pobranym plikiem, zamiast leżeć w miejscu, któremu trzeba osobno ufać.
+Obie dodatkowe flagi są potrzebne i żadna nie jest ozdobą. `--repo` mówi, z jakim repozytorium
+ma się zgadzać tożsamość podpisująca. `--predicate-type` jest dlatego, że ten bundle to atestacja
+**SBOM-u**, a `gh` domyślnie szuka atestacji prowenancji - bez tej flagi dostaniesz „no attestations
+found with predicate type", czyli narzędzie jest precyzyjne, a nie zepsute. Przy dobrym pliku nic
+nie wypisuje i kończy się zerem. Zmień jeden bajt, a skończy się jedynką.
 
 Trzy oświadczenia, i warto wiedzieć, że odpowiadają na różne pytania. **Podpis** mówi, kto za tym
 plikiem stoi. **Powyższy bundle** wiąże dokładnie to archiwum z jego listą składników i powstaje

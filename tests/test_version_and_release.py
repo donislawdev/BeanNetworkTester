@@ -859,3 +859,41 @@ def test_the_release_workflow_grants_write_on_the_job_not_the_whole_file():
     for scope in ("contents: write", "id-token: write", "attestations: write"):
         check(f"the release job still asks for {scope}",
               f"      {scope}" in body, "(a six-space indent is the job's own block)")
+
+
+def test_the_documented_verify_command_matches_what_we_actually_attest():
+    """The README hands users a command. It has to be the command that works.
+
+    🔴 Paid for on 2026-08-19, on a real release: the first version of that line was
+    `gh attestation verify <zip> --bundle <bundle>` and it fails twice over. `gh`
+    refuses without `--repo` or `--owner`, and then looks for a build-provenance
+    attestation and reports "no attestations found with predicate type" - because the
+    bundle we publish is the SBOM attestation, made after signing over the bytes a
+    user downloads. Both are the tool being precise; the documentation was wrong.
+
+    So this pins the two halves together: the predicate type the README tells people
+    to ask for must be the one `attest-release.yml` actually produces. Change the
+    workflow to attest something else and the README's command starts failing for
+    every user, silently, because nothing here runs `gh`.
+    """
+    workflow = os.path.join(ROOT, ".github", "workflows", "attest-release.yml")
+    with open(workflow, encoding="utf-8") as handle:
+        yaml_body = handle.read()
+    # An SBOM attestation is what `sbom-path` makes, and its predicate type is SPDX.
+    makes_sbom = "sbom-path:" in yaml_body
+    check("the attestation workflow still makes an SBOM attestation", makes_sbom,
+          "(if this changed, the predicate type in both READMEs has to change with it)")
+
+    for readme in ("README.md", "README.pl.md"):
+        with open(os.path.join(ROOT, readme), encoding="utf-8") as handle:
+            text = handle.read()
+        line = [ln for ln in text.splitlines() if "gh attestation verify" in ln
+                and "--bundle" in ln]
+        check(f"{readme} documents the offline verify command", bool(line))
+        command = line[0] if line else ""
+        check(f"{readme}: it names the repository", "--repo " in command, f"({command[:120]})")
+        check(f"{readme}: it names the predicate type",
+              "--predicate-type " in command, f"({command[:120]})")
+        if makes_sbom:
+            check(f"{readme}: the predicate type is the SPDX one the workflow makes",
+                  "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
