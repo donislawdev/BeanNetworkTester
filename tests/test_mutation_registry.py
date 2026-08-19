@@ -1029,6 +1029,45 @@ MUTATIONS = [
     {
         # The permission that outlives the job it was written for: back at the top
         # of release.yml, where every job added later inherits it.
+        # The filter a user reads stops being the filter that runs: a term ending
+        # in a backslash escapes the separator `describe()` writes after it, and
+        # two terms silently become one.
+        "label": "matchers: a term keeps a trailing escape that eats the separator",
+        "file": "beantester/matchers.py",
+        "old": "        term = _without_a_dangling_escape(part.strip())",
+        "new": "        term = part.strip()",
+        "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
+    },
+    {
+        # The OVER-correction, which is the likelier future mistake: stripping the
+        # whole tail looks tidier and breaks `a\\`, which already round-tripped.
+        "label": "matchers: the escape fix widens into stripping every trailing backslash",
+        "file": "beantester/matchers.py",
+        "old": "    return term[:-1] if trailing % 2 else term",
+        "new": r'    return term.rstrip("\\")',
+        "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
+    },
+    {
+        # Evidence that exists and cannot be found is evidence nobody has. The
+        # attestation stayed in GitHub's store, where the archive's own readers -
+        # a person offline, a mirror, a scanner reading assets by extension - never
+        # look.
+        "label": "release: the provenance bundle stops shipping as an asset",
+        "file": ".github/workflows/release.yml",
+        "old": '"$ASSET" SHA256SUMS.txt "$SBOM" "$BUNDLE"',
+        "new": '"$ASSET" SHA256SUMS.txt "$SBOM"',
+        "test": "test_the_provenance_bundle_ships_as_a_release_asset",
+    },
+    {
+        # The one job here that costs money per run, and the one word that decides
+        # how often it runs. `synchronize` fires on every push.
+        "label": "review: the paid review starts running on every push",
+        "file": ".github/workflows/claude-review.yml",
+        "old": "    types: [opened, ready_for_review]",
+        "new": "    types: [opened, ready_for_review, synchronize]",
+        "test": "test_the_paid_review_keeps_its_cost_gate",
+    },
+    {
         "label": "supply chain: release.yml grants write at the file level again",
         "file": ".github/workflows/release.yml",
         "old": "permissions:\n  contents: read",

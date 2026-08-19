@@ -190,9 +190,41 @@ jobs:
       # built BY the action from the workflow's own context - there is nothing to
       # pass in, and nothing we could pass in that would be trustworthy.
       - name: Attest the build provenance of the release archive
+        id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
         with:
           subject-path: ${{ env.ASSET }}
+
+      # The same bundle, published as an ASSET rather than left only in the
+      # attestation store. Two reasons, one for a person and one for a scanner.
+      #
+      # For a person: the file travels with the archive it describes, so
+      # `gh attestation verify <zip> --bundle <this file>` answers without asking an
+      # API - which is the difference between "GitHub says this is fine" and "these
+      # bytes say so". A mirror that copies the release page copies the proof too.
+      #
+      # 🔴 For a scanner: OpenSSF Scorecard's Signed-Releases check reads release
+      # assets BY FILE EXTENSION (`.sigstore.json`, `.asc`, `.sig`, `.intoto.jsonl`)
+      # and never looks in the attestation store. Read in probes/releasesAreSigned
+      # on 2026-08-19, after the check scored 0/10 on releases that already carried
+      # two attestations. Producing evidence nobody can find is the same as not
+      # producing it.
+      #
+      # The name says what the file IS: a Sigstore bundle, which is what the action
+      # writes. `.intoto.jsonl` would score two points higher there and would be a
+      # different format - not a rename.
+      - name: Publish the provenance bundle beside the archive
+        shell: bash
+        env:
+          # Through the environment, never interpolated into the script: `${{ }}` is
+          # expanded before a shell exists, so it is source code rather than an
+          # argument. Guarded by tests/test_repo_conventions.py.
+          BUNDLE_PATH: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          bundle="BeanNetworkTester-${GITHUB_REF_NAME}.sigstore.json"
+          cp "$BUNDLE_PATH" "$bundle"
+          python -c "import json,sys; json.load(open(sys.argv[1])); print('bundle parses as JSON')" "$bundle"
+          echo "BUNDLE=$bundle" >> "$GITHUB_ENV"
 
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".
@@ -212,4 +244,5 @@ jobs:
           head -5 RELEASE_NOTES.md
           flags=(--title "$TITLE" --notes-file RELEASE_NOTES.md)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
-          gh release create "$GITHUB_REF_NAME" "$ASSET" SHA256SUMS.txt "$SBOM" "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" \
+            "$ASSET" SHA256SUMS.txt "$SBOM" "$BUNDLE" "${flags[@]}"

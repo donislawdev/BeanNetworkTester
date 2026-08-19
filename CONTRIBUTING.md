@@ -58,7 +58,10 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
 - Presets are ordered best (top) -> worst (bottom).
 - Keep `BeanCore.decide()` pure and covered by tests; new mechanisms get a
   numbered spot in the pipeline plus unit tests.
-- A new failure mode gets an exit code, a test and a README row. A new mechanism gets a numbered spot in the pipeline plus unit tests 
+- **New functionality is merged with the test that guards it.** That is the policy, and the
+  two bullets above are what it looks like in practice. It is not left to good intentions:
+  `tests/test_mutation_registry.py` records which broken behaviour each test is supposed to
+  catch, and CI re-breaks them to prove the test actually reddens.
 
 ## Pull requests
 

@@ -5,6 +5,7 @@
 [![Downloads](https://img.shields.io/github/downloads/donislawdev/BeanNetworkTester/total)](https://github.com/donislawdev/BeanNetworkTester/releases)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
 **Bean Network Tester** to narzędzie dla testerów i deweloperów: sprawdź, jak aplikacja zachowuje
@@ -1346,6 +1347,16 @@ gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/Be
 Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To dowodzi, że sama
 strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
 Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
+
+To polecenie pyta GitHuba. Dowód jedzie też **jako plik**, `BeanNetworkTester-vX.Y.Z.sigstore.json`,
+więc archiwum sprawdzisz bez pytania kogokolwiek:
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json
+```
+
+Przydaje się, gdy pliki masz z kopii lustrzanej albo na maszynie bez dostępu do API - dowód
+przyjechał razem z pobranym plikiem, zamiast leżeć w miejscu, któremu trzeba osobno ufać.
 
 ### Co jest w środku pobranego pliku i jak to sprawdzić
 

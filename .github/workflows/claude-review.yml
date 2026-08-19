@@ -1,0 +1,111 @@
+# A second reader on every pull request, with a different context from the session
+# that wrote the code.
+#
+# Why it is worth a workflow when four analysers already run: they read the code for
+# shapes. This reads the CHANGE for meaning - a wrong answer, an edge case nobody
+# tried, a contract quietly altered, a comment that stopped matching the code under
+# it. None of those redden a linter.
+#
+# 🔴 It cannot fail a pull request. It comments.
+#
+# 🔴 **A pull request that CHANGES THIS FILE gets no review, and the job still goes
+# green.** Measured on the pull request that introduced it (2026-08-19): the app
+# refuses to hand out a token unless the workflow file is byte-identical to the copy
+# on the default branch, and the action then exits with
+# *"Exiting due to workflow validation skip"* - a success, in 18 seconds, with no
+# model call and nothing spent. That is the app's anti-abuse rule, and it is the
+# right one: without it a pull request could edit this file to walk off with the
+# token. The consequence to remember rather than re-derive: this workflow cannot be
+# tested before it is merged, and every later change to it skips its own review.
+name: Claude review
+
+on:
+  # `opened` and `ready_for_review` only, deliberately - NOT `synchronize`.
+  # `synchronize` fires on every push, and at this project's rate (several pull
+  # requests a day, several pushes each) that multiplies the bill by the number of
+  # times somebody amends a branch. The cost of the choice is named rather than
+  # hidden: a review reads the pull request as opened, so a finding introduced by a
+  # later push is not seen. Ask for a fresh pass with an `@claude` comment when a
+  # branch changes substantially.
+  pull_request:
+    types: [opened, ready_for_review]
+
+# Read-all at the top; the job raises what it needs. Same rule as every other
+# workflow here.
+permissions:
+  contents: read
+
+# One review per pull request. Reopening or marking ready while a review is still
+# running replaces it rather than paying for both.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude review
+    # 🔴 THE COST GATE, and it is three locks rather than one, because this is the
+    # only job here that spends money per run.
+    #
+    #   1. this condition - the pull request must be the maintainer's;
+    #   2. the action's own check - it refuses an actor without write access, and
+    #      refuses bot actors outright, so Dependabot never triggers it;
+    #   3. GitHub itself - a public repository withholds secrets from workflows
+    #      triggered by a fork's pull request, so a stranger's branch cannot spend
+    #      the token even if the two above were removed.
+    #
+    # Drafts are skipped: `ready_for_review` is in the trigger precisely so the
+    # review happens once, when the change is finished.
+    if: >-
+      github.event.pull_request.user.login == 'donislawdev'
+      && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      # Required by the action's default GitHub App authentication.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 1
+
+      # 🔴 The reviewer's briefing, and the reason it needs a step at all.
+      #
+      # Claude Code reads `CLAUDE.md` from the checkout as project memory - that is
+      # the documented way to give it a project's rules. This repository's real
+      # `CLAUDE.md` is git-ignored: it lives in a private notes repo, so a runner
+      # checks out a tree without it and the review would arrive knowing nothing
+      # about flat hyphens, English-only history, the changelog rule or the fail-open
+      # contract, and would spend its findings on advice CI already enforces.
+      #
+      # So the public digest in `.github/` is copied into place for the length of the
+      # run. Nothing private crosses over: that file is in the repository, and every
+      # rule in it is already stated in CONTRIBUTING.md and the READMEs.
+      - name: Put the public rule digest where Claude reads project memory
+        shell: bash
+        run: cp .github/claude-review-rules.md CLAUDE.md
+
+      - name: Review the pull request
+        uses: anthropics/claude-code-action@d40ddef4c030e508327d6e35a9c45f3368482c50  # v1.0.195
+        with:
+          # The subscription token, not an API key: runs bill against the
+          # maintainer's Claude subscription instead of opening a second meter.
+          # Generated with `claude setup-token`.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          # `--comment` is what puts the review on the pull request - an inline
+          # comment per finding, or one summary comment when there are none. Without
+          # it the findings stay in the run log, where nobody reads them.
+          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          # `--model` because the default is whatever Claude Code ships; this project
+          # would rather pay for the better reader on a change that ships a kernel
+          # driver. `--allowedTools` has to name the inline-comment tool even though
+          # the skill's own frontmatter does: the action starts that MCP server only
+          # when this argument asks for it.
+          claude_args: |
+            --model claude-opus-5
+            --allowedTools "mcp__github_inline_comment__create_inline_comment"

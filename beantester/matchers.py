@@ -342,7 +342,42 @@ def split_terms(text):
     if escaped:
         buf.append("\\")
     parts.append("".join(buf))
-    return [p.strip() for p in parts if p.strip()]
+    terms = []
+    for part in parts:
+        term = _without_a_dangling_escape(part.strip())
+        if term:
+            terms.append(term)
+    return terms
+
+
+def _without_a_dangling_escape(term):
+    """``term`` with a trailing backslash that cannot survive being described.
+
+    🔴 The round trip this protects: ``Matcher.describe`` joins terms with ``", "``,
+    so a term ENDING in a backslash escapes that separator on the way back in, and
+    two terms silently become one. Measured 2026-08-19 with the exact filter this
+    tool meets most often::
+
+        C:\\ ,chrome.exe   ->  ['C:\\', 'chrome.exe']      two terms
+        describe           ->  'C:\\, chrome.exe'
+        parsed again       ->  ['C:, chrome.exe']          ONE term
+
+    A filter that reads as two names and behaves as one is the class of lie
+    convention 5 exists to stop, and it reaches the user through the display of the
+    filter, the log line and the repro report.
+
+    **Only an ODD count is dangerous**, which is why this drops one rather than
+    stripping the tail: an even run escapes itself and already round-trips, so
+    ``a\\\\`` is left exactly as it is. The dropped character carries no meaning in
+    any kind this language has - a ``re:`` pattern ending in a backslash is not a
+    valid regex at all (*bad escape (end of pattern)*), and no address, port or
+    process name ends in one - so this repairs a term rather than truncating it.
+
+    Found by ``test_describe_reparses_to_the_same_matcher``, the same property test
+    that found the comma-escape half of this in ``describe``.
+    """
+    trailing = len(term) - len(term.rstrip("\\"))
+    return term[:-1] if trailing % 2 else term
 
 
 def add_term(text, term):

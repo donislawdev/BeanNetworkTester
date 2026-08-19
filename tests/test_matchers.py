@@ -318,6 +318,45 @@ def test_matcher_never_raises_from_matches():
     check("Matcher is the exported base class", isinstance(m, Matcher))
 
 
+def test_a_term_may_not_end_in_an_escape_that_swallows_the_separator():
+    """The other half of the same fault, and the half that reaches a real filter.
+
+    ``describe()`` joins terms with ``", "``. A term ENDING in a backslash escapes
+    that comma on the way back in, so two terms silently become one - and the filter
+    a user reads is not the filter that runs.
+
+    Measured before the fix, with the shape this tool meets most often - a Windows
+    path typed with its trailing separator, then a second name::
+
+        C:\\ ,chrome.exe   ->  ['C:\\', 'chrome.exe']      two terms
+        describe             ->  'C:\\, chrome.exe'
+        parsed again         ->  ['C:, chrome.exe']          ONE term
+
+    Deliberately NOT left to the property test that found it. That test explores at
+    random and passed on CI the same afternoon it failed here, so on its own it
+    reports this fault as weather. These three assertions report it as a bug.
+
+    Only an ODD run of trailing backslashes is dangerous - an even run escapes
+    itself and already round-tripped - so the even case is pinned too. Widening the
+    fix to strip the whole tail would redden that one.
+    """
+    B = chr(92)
+
+    check("a trailing escape is dropped, and the two terms stay two",
+          split_terms("C:" + B + " ,chrome.exe") == ["C:", "chrome.exe"],
+          f"({split_terms('C:' + B + ' ,chrome.exe')})")
+    check("an odd run loses exactly one backslash, not the run",
+          split_terms("a" + B * 3 + " ,b") == ["a" + B * 2, "b"],
+          f"({split_terms('a' + B * 3 + ' ,b')})")
+    check("an even run is untouched - it already round-tripped",
+          split_terms("a" + B * 2 + " ,b") == ["a" + B * 2, "b"],
+          f"({split_terms('a' + B * 2 + ' ,b')})")
+
+    described = ", ".join(split_terms("C:" + B + " ,chrome.exe"))
+    check("and the described text parses back to the same two terms",
+          split_terms(described) == ["C:", "chrome.exe"], f"({described!r})")
+
+
 def test_describe_round_trips_an_escaped_comma():
     """``describe()`` is the CANONICAL text - it must parse back to the same matcher.
 
