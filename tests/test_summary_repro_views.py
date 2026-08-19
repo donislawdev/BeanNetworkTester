@@ -339,3 +339,57 @@ def test_settings_to_cli_covers_every_numeric_field():
         argv = settings_to_cli({**DEFAULT_SETTINGS, f.key: val})
         check(f"repro command includes --{f.cli}", f"--{f.cli}" in argv,
               f"(field {f.key!r} value {val} produced {argv})")
+
+
+def test_every_setting_with_a_flag_reaches_the_reproduction_command():
+    """🔴 ``settings_to_cli`` is a HAND-WRITTEN list, and the registry is not.
+
+    The reproduction command is a public contract: people paste it to re-run
+    somebody else's session. A field that never made it into this list produces a
+    command that silently reproduces a DIFFERENT run - no error, no red test, and
+    the difference only shows up as counters that do not match the report.
+
+    Measured the day this guard was written: THREE flags were missing. Two were
+    real (``--internet-only``, brand new, and ``--narrow-filter``, which had been
+    absent for weeks while the repro REPORT carried `narrowed` faithfully) and one
+    was correct - ``row_limit`` is ``ui_only``, so the engine never sees it and it
+    cannot change what a re-run does.
+
+    Deriving the list from the registry instead would be the real fix, but the
+    order of the flags and the "only when it differs from the default" rule are
+    hand-tuned per field, so the honest guard is this one: enumerate the registry
+    and demand each flag appear.
+    """
+    from beantester import fields as F
+    from beantester.matchers import KIND_INT, KIND_IP
+    from beantester.repro import settings_to_cli
+    from beantester.settings import DEFAULT_SETTINGS
+
+    def probe_for(field):
+        if field.kind == F.BOOL:
+            return True
+        if field.kind == F.NUMBER:
+            return 7
+        if field.kind == F.SEED:
+            return 42
+        if field.kind == F.SCHEDULE:
+            return "1:100:0"
+        if field.kind == F.CHOICE:
+            return "out"
+        if field.expr_kind == KIND_INT:
+            return "4433"
+        if field.expr_kind == KIND_IP:
+            return "192.0.2.9"
+        return "beanprobe.exe"
+
+    missing = []
+    for field in F.FIELD_DEFS:
+        if not field.cli or field.ui_only:
+            continue
+        args = settings_to_cli(dict(DEFAULT_SETTINGS,
+                                    **{field.key: probe_for(field)}))
+        if ("--" + field.cli) not in args:
+            missing.append(field.key)
+
+    check("repro: every engine field with a CLI flag reaches the command",
+          not missing, f"(missing: {missing})")

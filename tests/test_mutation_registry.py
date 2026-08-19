@@ -1280,6 +1280,52 @@ MUTATIONS = [
         "new": '         default=False, hint="prefs.scope_view", section="scope"),',
         "test": "test_only_prefs_that_can_show_a_hint_declare_one",
     },
+    {
+        "label": "core: the Internet-only gate stops cutting the local network",
+        "file": "beantester/core.py",
+        "old": "        if self.internet_only and is_lan_ip(remote_ip):\n"
+               '            return "internet_only"',
+        "new": "        pass",
+        "test": "test_internet_only_gate",
+    },
+    {
+        # The carve-out the owner asked for. Without it the switch takes down the
+        # local development server on the machine running the tool.
+        "label": "utils: loopback stops being carved out of the local network",
+        "file": "beantester/utils.py",
+        "old": "        return not address.is_global and not address.is_loopback",
+        "new": "        return not address.is_global",
+        "test": "test_is_lan_ip_carves_out_loopback",
+    },
+    {
+        # Without its own row the drop falls through to the unnamed default and
+        # is reported as packet LOSS - the exact confusion drop_flap was split
+        # out to end.
+        "label": "engine: the Internet-only drop loses its own counter",
+        "file": "beantester/engine.py",
+        "old": '                  "internet_only": "drop_internet_only", "block": "drop_block",',
+        "new": '                  "block": "drop_block",',
+        "test": "test_every_drop_counter_and_drop_reason_is_classified",
+    },
+    {
+        # Both switches on cuts everything but loopback. Silence there looks like
+        # a broken tool rather than a tool doing as it was told.
+        "label": "settings: both LAN switches on stops saying so",
+        "file": "beantester/settings.py",
+        "old": '        log(T("log.lan_and_internet_only"))',
+        "new": "        pass",
+        "test": "test_both_lan_switches_at_once_are_allowed_and_said_out_loud",
+    },
+    {
+        # The hand-written list falling behind the registry: the command then
+        # reproduces a DIFFERENT run, with nothing red to say so. That is how
+        # --narrow-filter went missing for weeks.
+        "label": "repro: a flag drops out of the reproduction command",
+        "file": "beantester/repro.py",
+        "old": '    if g("internet_only"):\n        args += ["--internet-only"]',
+        "new": "    pass",
+        "test": "test_every_setting_with_a_flag_reaches_the_reproduction_command",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

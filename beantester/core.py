@@ -2,7 +2,7 @@
 
 ``BeanCore.decide()`` inspects a single packet's metadata and returns a
 ``Decision``. The pipeline order (numbered below) is part of the contract:
-1) process targeting -> 2) destination targeting -> 2b) LAN mode
+1) process targeting -> 2) destination targeting -> 2b) LAN mode / Internet only
 -> 2c) blocking (firewall) -> 3) NAT -> 4) RST -> 5) flapping -> 6) MTU
 -> 7) SYN -> 8) loss -> 9) corruption -> 10) latency/jitter/spike
 -> 11) bandwidth (per-direction token bucket) -> 12) duplication.
@@ -13,7 +13,7 @@ import time
 from typing import List, NamedTuple, Optional
 
 from .matchers import KIND_INT, KIND_IP, PORT_BOUNDS, parse_matcher, port_expression
-from .utils import clamp01, is_local_ip
+from .utils import clamp01, is_lan_ip, is_local_ip
 
 
 class Decision(NamedTuple):
@@ -237,6 +237,12 @@ class BeanCore:
         self.dst_ip_matcher = parse_matcher("", KIND_IP)
         self.dst_port_matcher = parse_matcher("", KIND_INT)
         self.lan_only = False       # LAN mode: cuts internet traffic (public addresses)
+        # The mirror switch: cuts the local network and leaves the internet up.
+        # NOT the exact opposite of the line above - loopback survives both (see
+        # utils.is_lan_ip). Both may be on at once: they judge the same packet
+        # from opposite sides, so nothing but loopback gets through, and each
+        # counter says how much of its own half it cut.
+        self.internet_only = False
         # blocking (firewall): drop traffic to matching destinations. The two
         # expressions combine with OR, and an EMPTY expression does not take part -
         # so block_port='443' with no block_ip blocks 443 to ANY address rather than
@@ -344,6 +350,37 @@ class BeanCore:
     def set_lan(self, enabled):
         with self._lock:
             self.lan_only = bool(enabled)
+
+    def set_internet_only(self, enabled):
+        with self._lock:
+            self.internet_only = bool(enabled)
+
+    def _address_class_cut(self, remote_ip):
+        """Which address-class switch cuts this packet, or ``None``.
+
+        Step 2b of the pipeline, in one place because the two switches are one
+        decision: they judge the same remote end from opposite sides and can
+        never both fire on one packet, so with BOTH armed nothing crosses except
+        loopback and each counter still reports its own half.
+
+        🔴 LOOPBACK survives either switch. ``is_local_ip`` counts it as local
+        (so LAN mode passes it) and ``is_lan_ip`` carves it out (so "Internet
+        only" passes it too) - a machine talking to itself is not "the local
+        network", and cutting it would take down a local development server on
+        the very machine the tool is running on. Owner's decision, 2026-08-19.
+
+        Called only when a switch is armed (see the caller), so an ordinary
+        session never pays for the call.
+        """
+        if not remote_ip:
+            # No remote end to judge: ICMP without addresses, a malformed packet.
+            # Neither switch may guess - both leave it alone.
+            return None
+        if self.lan_only and not is_local_ip(remote_ip):
+            return "lan"
+        if self.internet_only and is_lan_ip(remote_ip):
+            return "internet_only"
+        return None
 
     def set_block(self, active, ip=None, port=None):
         """Blocking (firewall). ``ip``/``port`` are filter expressions (see
@@ -567,9 +604,25 @@ class BeanCore:
                 if self.dst_port_matcher and not self.dst_port_matcher.matches(remote_port):
                     return Decision(False, False, [now], scoped=False)
 
-            # 2b) LAN mode: cut the internet (public addresses), keep the local network
-            if self.lan_only and remote_ip and not is_local_ip(remote_ip):
-                return Decision(True, False, [], "lan")
+            # 2b) the two address-class switches: LAN mode (cut the internet) and
+            # "Internet only" (cut the local network). Both are asked through one
+            # gate so this function does not grow a branch per switch - it sits on
+            # the complexity ceiling, and the answer to that is to move code out,
+            # not to raise the number.
+            #
+            # The left half keeps the common case cheap: with neither switch
+            # armed this costs two attribute reads and nothing else, and the call
+            # only happens in a session that asked for one of them.
+            #
+            # One statement rather than the obvious nested pair, MEASURED: ruff's
+            # complexity metric counts BRANCH STATEMENTS and not the boolean
+            # operators inside them, so a second `if` here reads as 30 while this
+            # form reads as 29 - the ceiling, which is pinned to the measurement
+            # and may not be raised to make room. The "is there a remote end at
+            # all" test lives inside the helper for the same reason.
+            if (self.lan_only or self.internet_only) and (
+                    cut := self._address_class_cut(remote_ip)):
+                return Decision(True, False, [], cut)
 
             # 2c) blocking (firewall): drop matching destinations. OR of the two
             # expressions, each taking part only when non-empty (an empty matcher

@@ -75,6 +75,7 @@ CELLS = (
     ("drop_nat", "stats.nat_expired", "", "tips.stat_nat"),
     ("drop_rst", "stats.rst_reset", "", "tips.stat_rst"),
     ("drop_lan", "stats.lan_cut", "", "tips.stat_lan"),
+    ("drop_internet_only", "stats.local_cut", "", "tips.stat_local"),
     ("drop_block", "stats.block_cut", "", "tips.stat_block"),
     ("drop_flap", "stats.flap_cut", "", "tips.stat_flap"),
     ("rst_sent", "stats.rst_sent", "", "tips.stat_rst_sent"),
@@ -492,7 +493,8 @@ class StatsPage:
         for key in ("seen", "queue", "drop_loss", "corrupted", "duplicated",
                     "drop_overflow", "drop_shutdown", "drop_send",
                     "drop_rate", "drop_syn", "drop_mtu",
-                    "drop_nat", "drop_rst", "drop_lan", "drop_block", "drop_flap", "rst_sent"):
+                    "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",
+                    "drop_block", "drop_flap", "rst_sent"):
             self.stat_labels[key].config(text=str(self.app.scoped_stat(snap, key)))
 
     def refresh_session(self):

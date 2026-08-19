@@ -1,10 +1,10 @@
 """Every gate that judges the REMOTE end must judge it in BOTH directions.
 
 The invariant: ``engine._capture_loop`` reads the remote endpoint as the packet's
-DESTINATION when it is outbound and as its SOURCE when it is inbound. Five
-features consume that value - destination IP, destination port, LAN mode, block
-by IP, block by port - and each of them is meant to act on "who the other end
-is", not on "which header field happens to hold it".
+DESTINATION when it is outbound and as its SOURCE when it is inbound. Six
+features consume that value - destination IP, destination port, LAN mode,
+"Internet only", block by IP, block by port - and each of them is meant to act on
+"who the other end is", not on "which header field happens to hold it".
 
 Why this file exists rather than one more case in an existing test. MUTATION,
 2026-07-29: changing the inbound branch to read ``dst_addr`` - the exact
@@ -68,35 +68,48 @@ def _inbound_from(peer, port=PEER_PORT):
                       dst_port=LOCAL_PORT, src_addr=peer, dst_addr="10.0.0.2")
 
 
-# (name, how to configure the engine, which counter should move)
+# A peer on the local network, for the gate that cuts exactly that. It must not
+# be loopback: "Internet only" carves 127.x out on purpose (utils.is_lan_ip), so
+# reaching for 127.0.0.1 here would make the gate do nothing and read as a bug in
+# it - the same trap the note above records for the TEST-NET ranges.
+LAN_PEER = "192.168.77.7"
+
+# (name, how to configure the engine, which counter should move, the peer to send
+#  to, and whether the gate judges an ADDRESS CLASS rather than a specific peer)
+#
+# That last flag used to be `if name == "LAN mode"` further down - a check on the
+# NAME, which is the shape this file's own docstring argues against. With a
+# second address-class gate it would simply have been wrong.
 CONSUMERS = (
     ("destination IP",
-     lambda e: e.set_dest(True, PEER, ""), "drop_loss"),
+     lambda e: e.set_dest(True, PEER, ""), "drop_loss", PEER, False),
     ("destination port",
-     lambda e: e.set_dest(True, "", str(PEER_PORT)), "drop_loss"),
+     lambda e: e.set_dest(True, "", str(PEER_PORT)), "drop_loss", PEER, False),
     ("LAN mode",
-     lambda e: e.set_lan(True), "drop_lan"),
+     lambda e: e.set_lan(True), "drop_lan", PEER, True),
+    ("Internet only",
+     lambda e: e.set_internet_only(True), "drop_internet_only", LAN_PEER, True),
     ("block by IP",
-     lambda e: e.set_block(True, PEER, ""), "drop_block"),
+     lambda e: e.set_block(True, PEER, ""), "drop_block", PEER, False),
     ("block by port",
-     lambda e: e.set_block(True, "", str(PEER_PORT)), "drop_block"),
+     lambda e: e.set_block(True, "", str(PEER_PORT)), "drop_block", PEER, False),
 )
 
 
 def test_every_remote_endpoint_gate_fires_in_both_directions():
     """Outbound TO the peer and inbound FROM the peer must be treated alike."""
-    for name, configure, counter in CONSUMERS:
+    for name, configure, counter, peer, _class_gate in CONSUMERS:
         def setup(engine, configure=configure, counter=counter):
             configure(engine)
             if counter == "drop_loss":
                 # destination targeting only SELECTS; something has to do damage
                 engine.set_params(100, 0, 0, 0, 0, 0, 0)
 
-        out = _run(setup, [_outbound_to(PEER)], counter)
+        out = _run(setup, [_outbound_to(peer)], counter)
         check("%s: an OUTBOUND packet to the peer is caught" % name, out == 1,
               "(%s=%s)" % (counter, out))
 
-        inn = _run(setup, [_inbound_from(PEER)], counter)
+        inn = _run(setup, [_inbound_from(peer)], counter)
         check("%s: an INBOUND packet from the peer is caught too" % name, inn == 1,
               "(%s=%s)" % (counter, inn))
 
@@ -106,9 +119,9 @@ def test_the_gates_still_let_a_different_peer_through_in_both_directions():
 
     Without this, a gate that simply said "yes" would satisfy the test above.
     """
-    for name, configure, counter in CONSUMERS:
-        if name == "LAN mode":
-            continue          # LAN mode gates on "is it public", not on which peer
+    for name, configure, counter, _peer, class_gate in CONSUMERS:
+        if class_gate:
+            continue          # these gate on the address CLASS, not on which peer
 
         def setup(engine, configure=configure, counter=counter):
             configure(engine)
@@ -122,4 +135,37 @@ def test_the_gates_still_let_a_different_peer_through_in_both_directions():
 
         inn = _run(setup, [_inbound_from(OTHER, other_port)], counter)
         check("%s: an unrelated INBOUND packet is left alone" % name, inn == 0,
+              "(%s=%s)" % (counter, inn))
+
+
+def test_the_address_class_gates_let_the_other_class_through_in_both_directions():
+    """The half the "different peer" test above cannot ask of these two.
+
+    LAN mode and "Internet only" do not judge WHICH peer - they judge which side
+    of the address split it is on - so the mirror that proves they are not simply
+    saying yes is the OPPOSITE class, not another address of the same kind. Both
+    directions, because that is what this whole file exists for: the inbound
+    branch reads the remote end from a different header field, and a gate that
+    got it wrong there would cut traffic nobody asked it to cut.
+
+    Loopback is in here on purpose. It is the one address BOTH switches leave
+    alone (owner's decision, 2026-08-19), and nothing else in this file would
+    notice if that carve-out disappeared.
+    """
+    cases = (
+        # (name, configure, counter, an address it must NOT touch)
+        ("LAN mode", lambda e: e.set_lan(True), "drop_lan", LAN_PEER),
+        ("LAN mode", lambda e: e.set_lan(True), "drop_lan", "127.0.0.1"),
+        ("Internet only", lambda e: e.set_internet_only(True),
+         "drop_internet_only", OTHER),
+        ("Internet only", lambda e: e.set_internet_only(True),
+         "drop_internet_only", "127.0.0.1"),
+    )
+    for name, configure, counter, bystander in cases:
+        out = _run(configure, [_outbound_to(bystander)], counter)
+        check("%s: OUTBOUND to %s is left alone" % (name, bystander), out == 0,
+              "(%s=%s)" % (counter, out))
+
+        inn = _run(configure, [_inbound_from(bystander)], counter)
+        check("%s: INBOUND from %s is left alone" % (name, bystander), inn == 0,
               "(%s=%s)" % (counter, inn))

@@ -178,6 +178,13 @@ Pola liczbowe są sprawdzane **na żywo, razem z zakresem** (np. utrata 0-100%, 
 
 **Tryb LAN** - pole wyboru „Tryb LAN (tylko sieć lokalna, bez internetu)”. Odrzuca ruch do/od adresów publicznych (internet), a przepuszcza sieć lokalną: 10.0.0.0/8, 172.16-31.x, 192.168.x, loopback, link-local i CGNAT. Symuluje sytuację „LAN działa, internetu brak” - test zachowania aplikacji bez dostępu do internetu (np. brak bramy/WAN, portal przechwytujący).
 
+**Tylko internet** - lustro tamtego, pole wyboru „Tylko internet (bez sieci lokalnej)” w tej samej sekcji. Odrzuca ruch do/od tych samych adresów lokalnych, a zostawia działający internet - można więc przetestować aplikację gadającą z serwerem w intranecie, z NAS-em albo z drukarką, przy sprawnym WAN-ie. Dwie rzeczy, których ta opcja NIE robi, i obie są ważne:
+
+- **Loopback działa dalej.** 127.x i `::1` przechodzą w obu trybach, więc lokalny serwer deweloperski, baza na tej samej maszynie i wszystko, co rozmawia samo ze sobą przez loopback, zostaje nietknięte. To jest celowe: własna maszyna gadająca sama ze sobą nie jest „siecią lokalną”.
+- **Router jest w sieci lokalnej.** Jeśli komputer pyta o DNS router, razem z siecią lokalną przestaje działać rozwiązywanie nazw, a wtedy internet wygląda na zepsuty, choć ruch do internetu jest przepuszczany. Gdy to przeszkadza, ustaw na czas testu publiczny resolver.
+
+Oba pola wyboru można włączyć naraz. To jest dozwolone i odcina wszystko poza loopbackiem - program mówi o tym w logu przy zastosowaniu, a każdy z dwóch liczników raportuje swoją połowę.
+
 **Celuj w proces** - zawęź działanie do wybranych aplikacji: nazwa procesu (np. `chrome.exe`),
 PID, lista po przecinku, zakres PID, wildcard lub wyrażenie regularne - patrz
 [Składnia filtrów](#składnia-filtrów-proces--ip--port). Reszta ruchu na komputerze pozostaje
@@ -448,7 +455,7 @@ przeciążeniu narzędzia), Porzuc. przy stopie (czekały w kolejce, gdy nacisni
 (narzędzie je przechwyciło, ale nie zdołało odesłać do sieci - padło połączenie albo sterownik
 odrzucił pakiet), Odrzuc. przez limit (porzucone przez pełny bufor limitu prędkości -
 liczone osobno od strat i od „Bufor przepełn.”), SYN odrzucone, MTU odrzucone, NAT wygasło,
-RST zerwane, LAN: internet odcięty, RST wysłane.
+RST zerwane, LAN: internet odcięty, Sieć lokalna odcięta, RST wysłane.
 
 **Kopiowanie liczb.** Prawy przycisk na dowolnej wartości w „Na żywo" albo „Sesja" kopiuje tę
 wartość albo całą zakładkę. Każdy panel ma też przycisk - „Kopiuj liczniki" pod siatką, „Kopiuj
@@ -469,7 +476,7 @@ Zaprojektowane tak, by po wystąpieniu błędu odtworzyć dokładnie te same war
 - **Powtarzalny flapping** - wzorzec przerw łącza liczony jest względem startu sesji, więc przy tych samych ustawieniach powtarza się identycznie między uruchomieniami (a nie zależy od zegara systemowego).
 - **Co dokładnie odtwarza seed** - seed odtwarza **decyzje** silnika (które pakiety zostaną porzucone, uszkodzone, zduplikowane, o ile opóźnione), a nie **liczbę pakietów**. Ruch, który przechodzi przez łącze, zależy od tego, co w danej chwili robią aplikacje i system, więc dwa przebiegi z tym samym seedem dadzą te same *proporcje* (np. 15,8% strat w obu), ale nie identyczne liczniki co do sztuki. Do porównań w CI używaj wskaźników (%), nie surowych liczb pakietów.
 - **Start / Czas trwania / Efektywna utrata / Szczyt kolejki / Szczyt down-up** - szybki obraz przebiegu.
-- **Co liczą „Efektywne straty”** - jaką część ruchu, w który celujesz, zepsuło **to narzędzie**, licząc **każde** zakłócenie: ustawioną Utratę plus porzucenia z limitu prędkości, blokadę, odcięcie internetu w trybie LAN, przerwy w łączu, zrywanie połączeń, odrzucone SYN-y, odrzucenia z MTU i wygasanie NAT. Gdy ustawisz cel, liczy się wyłącznie jego ruch, więc inne aplikacje nie rozwadniają tej liczby. Pakiety porzucone przez samo **narzędzie** są świadomie pominięte - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” to jego własne awarie, nie zachowanie łącza, i mają osobne liczniki. `effective_loss_pct` w raporcie to ta sama liczba, obok `packets_in_scope`.
+- **Co liczą „Efektywne straty”** - jaką część ruchu, w który celujesz, zepsuło **to narzędzie**, licząc **każde** zakłócenie: ustawioną Utratę plus porzucenia z limitu prędkości, blokadę, odcięcie internetu w trybie LAN, odcięcie sieci lokalnej, przerwy w łączu, zrywanie połączeń, odrzucone SYN-y, odrzucenia z MTU i wygasanie NAT. Gdy ustawisz cel, liczy się wyłącznie jego ruch, więc inne aplikacje nie rozwadniają tej liczby. Pakiety porzucone przez samo **narzędzie** są świadomie pominięte - „Bufor przepełn.”, „Porzuc. przy stopie” i „Nie odesłane” to jego własne awarie, nie zachowanie łącza, i mają osobne liczniki. `effective_loss_pct` w raporcie to ta sama liczba, obok `packets_in_scope`.
 - **Czekanie w kolejce sterownika (szczyt)** - najdłuższy czas, jaki pakiet **już** przeczekał wewnątrz WinDiverta, zanim narzędzie go dostało. To pomiar, nie oszacowanie: sterownik stempluje każdy pakiet czasem przechwycenia, a narzędzie próbkuje to 20 razy na sekundę. Na spokojnej maszynie to ułamek milisekundy (zmierzone tutaj: 0,05-0,16 ms). Gdy rośnie, narzędzie dokłada opóźnienie, którego nie widać w żadnym innym liczniku, bo powstaje w kolejce sterownika przed jego własną - a powyżej 50 ms mówi o tym w logu i na liście zdarzeń. Puste przy `--simulate`, bo tam nie ma sterownika.
 - **To miara tej maszyny, nie internetu.** Narzędzie widzi pakiety przechodzące przez stos sieciowy tego komputera, więc pakiet zgubiony w sieci - odpowiedź, która nie wróciła - nigdy tu nie dociera i nic go tu nie policzy. Czysty ping 30 pakietów, w którym zginie jedna odpowiedź, pokaże w wierszu połączenia **59** pakietów i **zero** porzuceń, i obie liczby są prawdziwe: wyszło 30 żądań, wróciło 29 odpowiedzi, a narzędzie nie zepsuło żadnego. Od straty end-to-end są liczniki samej aplikacji (albo „Lost” w wyniku `ping`).
 - **Zużycie danych** - Pobrano / Wysłano / Razem (MB) narastająco od startu oraz średnia przepustowość sesji. Od razu wiesz, ile danych aplikacja zużyła. (W raporcie jest też „próbowano MB” - ile aplikacja chciała przesłać przed odjęciem strat/limitów.)
@@ -552,6 +559,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--flap-period` `--flap-down` | s / % | cykliczne zrywanie łącza: co ile i na jaki ułamek okresu |
 | `--rate-schedule` | - | zmienna przepustowość: `"czas:pobieranie:wysyłanie,..."` w KB/s, w pętli |
 | `--lan-mode` | - | tryb LAN: odetnij internet (adresy publiczne), zostaw sieć lokalną |
+| `--internet-only` | - | lustro tamtego: odetnij sieć lokalną (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), zostaw internet. Loopback działa dalej. Uwaga: DNS pytany u routera to ruch lokalny, więc internet może przestać działać razem z siecią lokalną |
 | `--narrow-filter` | - | wepchnij `--dst-ip`/`--dst-port` do filtra WinDiverta, żeby sterownik w ogóle nie podawał ruchu, którego nie dałoby się popsuć (dużo szybciej przy dużej liczbie pakietów). Tylko przy STARCIE. Gdy działa, statystyki i połączenia obejmują wyłącznie zawężony ruch |
 
 **Celowanie** (wszystkie trzy przyjmują pełną [składnię filtrów](#składnia-filtrów-proces--ip--port): listy, zakresy, `!`, `>`, `<`, `>=`, `<=`, wildcardy, `re:`, a `--dst-ip` dodatkowo CIDR)
@@ -688,7 +696,7 @@ w podpowiedzi nad tym nagłówkiem.
 | `lok.port` | Port na tej maszynie - to on wiąże połączenie z procesem. Pusty dla ping/ICMP, dlatego te wiersze zwykle nie mają nazwy procesu. |
 | `pakiety` | Pakiety zobaczone na tym połączeniu, odkąd się pojawiło. |
 | `psute?` | Czy połączenie było **w zasięgu psucia** w tej sesji - psute, a nie tylko obserwowane. Zostaje na `tak` po zamknięciu połączenia, jako zapis. Bez ustawionego celowania wszystko jest w zasięgu. |
-| `odrzucone` | Pakiety odrzucone na tym połączeniu przez aktywne zakłócenia (strata, przerwa w łączu, tryb LAN, resety, ...). |
+| `odrzucone` | Pakiety odrzucone na tym połączeniu przez aktywne zakłócenia (strata, przerwa w łączu, tryb LAN, „Tylko internet”, resety, ...). |
 | `pobrane` | Dane, które **naprawdę dotarły** do aplikacji - tyle pobrała. To ta sama wielkość, którą panel sesji nazywa „Pobrano (MB)". |
 | `wysłane` | Dane, które **naprawdę wyszły** z tej maszyny - tyle aplikacja wysłała. |
 | `razem` | Dostarczone pobieranie + dostarczone wysyłanie. |
@@ -762,6 +770,7 @@ w ogóle policzył - więc każdy wiersz zapisuje to w kolumnie `capture_narrowe
 | `dropped_nat` | odrzucone, bo mapowanie NAT wygasło |
 | `dropped_rst` | ruch pochłonięty, gdy połączenie było trzymane po resecie |
 | `dropped_lan` | odrzucone przez tryb LAN (internet odcięty, sieć lokalna żyje) |
+| `dropped_local_network` | odrzucone przez „Tylko internet” (sieć lokalna odcięta, internet i loopback żyją) |
 | `dropped_block` | odrzucone przez blokadę (firewall) |
 | `dropped_link_outage` | odrzucone w trakcie przerwy w łączu (flapping) |
 | `dropped_rate_limit` | odrzucone przez pełny bufor limitu prędkości |
@@ -830,7 +839,8 @@ błąd, a nie pauza.
 **Jakie nazwy wchodzą do `settings`** - dowolne ustawienie, jakie ma narzędzie, pod **tą samą nazwą
 co w pliku konfiguracji** (czyli jej flaga wiersza poleceń z myślnikami zamienionymi na podkreślenia): `loss`,
 `latency`, `jitter`, `down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`,
-`target`, `rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `seed` i reszta.
+`target`, `rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `internet_only`,
+`seed` i reszta.
 `--print-config` wypisuje pełny zestaw nazw wraz z bieżącymi wartościami.
 
 **Wszystko jest sprawdzane przy wczytaniu, a pomyłka sama się nazywa.** Nieznane ustawienie,
@@ -1113,7 +1123,7 @@ BeanNetworkTester.spec   przepis builda (onedir, konsola, asInvoker)
 ## Jak to działa (skrót)
 
 Rdzeń `BeanCore.decide()` to czysta funkcja decydująca o losie pakietu w kolejności:
-celowanie → tryb LAN → blokada (firewall) → NAT → RST → flapping → MTU → SYN → utrata → uszkodzenie →
+celowanie → tryb LAN / tylko internet → blokada (firewall) → NAT → RST → flapping → MTU → SYN → utrata → uszkodzenie →
 opóźnienie/jitter/skok → limit przepustowości (token bucket z ograniczonym buforem, ew. z harmonogramu) → duplikacja.
 Wątek przechwytujący czyta pakiety i wykonuje decyzję. Wątek re-injektujący wysyła je w
 wyznaczonym momencie. Wszystkie losowania idą przez jeden generator (opcjonalnie seedowany).
