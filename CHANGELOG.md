@@ -5,8 +5,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-### Added
+## [0.5.0] - 2026-08-19
 
+**The short version.** Two things, and the first is about not losing your files when the
+program is updated: profiles, window state and the CSV exports now live in your own user
+folder instead of the program folder, an older version's files are copied over the first time
+you start this one, and both the About window and `--doctor` tell you which folder is in use.
+
+The second is about trusting what you downloaded. **The executable is signed now**, so Windows
+names the publisher instead of saying "Unknown publisher", and the release carries proof you
+can check yourself - a checksum, a bill of materials, and an attestation bound to the exact
+file, verifiable without asking anyone. Groundwork for installing through WinGet and
+Chocolatey is in place as well, though nothing is published on either yet.
+
+The rest is the usual: the Statistics figures can be copied, settings can be searched by name,
+and a batch of table and layout fixes.
+
+### Added
 - **The figures on the Statistics page can be copied.** Right-click any value on "Session" or
   "Live" for "Copy value" or "Copy the whole tab", or use the button on the panel itself - "Copy
   session details" beside the repro buttons, "Copy counters" under the grid. The text is exactly
@@ -37,60 +52,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   **as a file** as well, `BeanNetworkTester-vX.Y.Z.sigstore.json`, so `--bundle` checks the
   archive from a mirror, or with no network at all.
 
-### Changed
-
-- **Traffic in Connections is shown in the unit that fits the number.** A big flow used to read
-  `5242880.0` under a `[KB]` heading, and a ninety-byte DNS answer read `0.0`. Every cell now
-  carries its own unit - `5.00 GB`, `340 MB`, `90 B` - and so does the total line under the table.
-  The `[KB]` has left the headers, because the number says it. `avg` is a packet size and stays in
-  bytes. Sorting is unchanged, and the CSV export still holds raw bytes for your spreadsheet.
-
-### Fixed
-
-- **A filter ending in a backslash no longer swallows the one after it.** Type a Windows path with
-  its trailing separator and a second name - `C:\, chrome.exe` - and the tool showed two filters
-  while using one, because that backslash ate the comma between them. The stray backslash is now
-  dropped as the filter is read. It never meant anything on its own, so nothing you can usefully
-  write is affected, and what the filter line says is what the filter does.
-
-- **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
-  every header to its right explained its neighbour instead - and with only a couple of columns
-  left, the tooltip could describe a column that was not on screen at all. The tooltip now follows
-  the header the pointer is actually on, whichever columns you have chosen to show. The same fix
-  applies to the event log.
-
-- **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
-  pushed everything down and left a blank band above the first setting, as if the window had lost
-  its contents. It now stops at the top, and the same fix applies to the Control page.
-
-- **Hiding columns in Connections no longer leaves the table half empty.** The columns you keep now
-  widen to fill the space the hidden ones left, instead of huddling on the left with bare background
-  beside them. A column you have dragged to a width of your own keeps it - widening happens when you
-  change which columns are shown or resize the window, never behind your back. Columns still stop at
-  three times their normal width, so with only one or two narrow columns on screen some space is
-  left over rather than stretching them absurdly wide.
-
-- **The row limit no longer says the same thing twice.** The field read
-  `50000 rows (0 = off)   0 = no limit`. The unit is now just `rows`, and the note beside it still
-  explains what 0 does.
-
-### Docs
-- **One more component named in the licence list.** `libtommath` now appears in the About window,
-  in `--license` and in the third-party notices, with its licence and where its source lives. It
-  ships with the program because the graphical interface needs Tk, and Tk brings it along - it is
-  public-domain software and nothing here calls it directly. Nothing about how the program works
-  has changed. It was missing from the list, and a list that claims to be complete has to be.
-
-## [0.5.0] - 2026-08-12
-
-**The short version.** This release is about not losing your files when the program is
-updated. Profiles, window state and the CSV exports now live in your own user folder instead
-of the program folder, an older version's files are copied over the first time you start this
-one, and both the About window and `--doctor` tell you which folder is in use. Groundwork for
-installing through WinGet and Chocolatey is in place as well, though nothing is published on
-either yet.
-
-### Added
 - **Every release now carries an SBOM, signed against the download.** A standard SPDX file listing
   each third-party component with its version, licence and source - the same list `--license`
   prints, in a form tools can read. It is signed together with the archive, so
@@ -138,6 +99,12 @@ either yet.
   "Apply changes" to put them into a running session.
 
 ### Changed
+- **Traffic in Connections is shown in the unit that fits the number.** A big flow used to read
+  `5242880.0` under a `[KB]` heading, and a ninety-byte DNS answer read `0.0`. Every cell now
+  carries its own unit - `5.00 GB`, `340 MB`, `90 B` - and so does the total line under the table.
+  The `[KB]` has left the headers, because the number says it. `avg` is a packet size and stays in
+  bytes. Sorting is unchanged, and the CSV export still holds raw bytes for your spreadsheet.
+
 - **Your profiles, window state and CSV exports now live in your own user folder**
   (`%LOCALAPPDATA%\BeanNetworkTester`) instead of the program folder. Files from an earlier
   version are copied over on first start, and the originals stay where they were, so going back
@@ -156,6 +123,12 @@ either yet.
   than a guess.
 
 ### Docs
+- **One more component named in the licence list.** `libtommath` now appears in the About window,
+  in `--license` and in the third-party notices, with its licence and where its source lives. It
+  ships with the program because the graphical interface needs Tk, and Tk brings it along - it is
+  public-domain software and nothing here calls it directly. Nothing about how the program works
+  has changed. It was missing from the list, and a list that claims to be complete has to be.
+
 - **Four more guides on the website: no internet, timed scenarios, game lag and chaos testing.**
   How to take the internet away from one app while the local network keeps working, how a scenario
   file changes conditions on a timeline (with the seven that ship listed straight from the folder),
@@ -207,6 +180,33 @@ either yet.
   are part of the project and stay GPLv3.
 
 ### Fixed
+- **A filter ending in a backslash no longer swallows the one after it.** Type a Windows path with
+  its trailing separator and a second name - `C:\, chrome.exe` - and the tool showed two filters
+  while using one, because that backslash ate the comma between them. The stray backslash is now
+  dropped as the filter is read. It never meant anything on its own, so nothing you can usefully
+  write is affected, and what the filter line says is what the filter does.
+
+- **Column tooltips in Connections no longer describe the wrong column.** With any column hidden,
+  every header to its right explained its neighbour instead - and with only a couple of columns
+  left, the tooltip could describe a column that was not on screen at all. The tooltip now follows
+  the header the pointer is actually on, whichever columns you have chosen to show. The same fix
+  applies to the event log.
+
+- **The Settings window no longer scrolls off the top of itself.** Dragging its scrollbar upwards
+  pushed everything down and left a blank band above the first setting, as if the window had lost
+  its contents. It now stops at the top, and the same fix applies to the Control page.
+
+- **Hiding columns in Connections no longer leaves the table half empty.** The columns you keep now
+  widen to fill the space the hidden ones left, instead of huddling on the left with bare background
+  beside them. A column you have dragged to a width of your own keeps it - widening happens when you
+  change which columns are shown or resize the window, never behind your back. Columns still stop at
+  three times their normal width, so with only one or two narrow columns on screen some space is
+  left over rather than stretching them absurdly wide.
+
+- **The row limit no longer says the same thing twice.** The field read
+  `50000 rows (0 = off)   0 = no limit`. The unit is now just `rows`, and the note beside it still
+  explains what 0 does.
+
 
 - **Blocking everything now warns you, like every other way of affecting everything.** A block
   normally limits its own damage, because it names an address or a port - so it never raised the
