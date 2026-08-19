@@ -1048,15 +1048,44 @@ MUTATIONS = [
         "test": "test_a_term_may_not_end_in_an_escape_that_swallows_the_separator",
     },
     {
-        # Evidence that exists and cannot be found is evidence nobody has. The
-        # attestation stayed in GitHub's store, where the archive's own readers -
-        # a person offline, a mirror, a scanner reading assets by extension - never
-        # look.
-        "label": "release: the provenance bundle stops shipping as an asset",
+        # The escaping removed as "noise" - and the tool that writes our supply-chain
+        # hashes can again be pointed at a different PyPI endpoint by a `?` in a
+        # version string, silently answering about something else.
+        "label": "supply chain: the hash generator stops escaping what it asks about",
+        "file": "tools/pin_hashes.py",
+        "old": 'return API % (quote(name, safe=""), quote(version, safe=""))',
+        "new": "return API % (name, version)",
+        "test": "test_no_version_can_truncate_the_path_into_a_query",
+    },
+    {
+        # The simplification that puts an UNSIGNED executable on a public release
+        # page for as long as the signing ritual takes. It looks like tidying: the
+        # archive is right there, why not attach it.
+        "label": "release: the draft ships the unsigned archive after all",
         "file": ".github/workflows/release.yml",
-        "old": '"$ASSET" SHA256SUMS.txt "$SBOM" "$BUNDLE"',
-        "new": '"$ASSET" SHA256SUMS.txt "$SBOM"',
-        "test": "test_the_provenance_bundle_ships_as_a_release_asset",
+        "old": 'gh release create "$GITHUB_REF_NAME" "$SBOM" "${flags[@]}"',
+        "new": 'gh release create "$GITHUB_REF_NAME" "$ASSET" "$SBOM" "${flags[@]}"',
+        "test": "test_the_release_never_publishes_an_unsigned_archive",
+    },
+    {
+        # "Signed" going back to being a claim instead of a measurement. A second
+        # code-signing certificate on the same machine would then sign a release
+        # under this project's name and nothing would say so.
+        "label": "release: the signing script stops checking WHICH certificate signed",
+        "file": "tools/sign_release.py",
+        "old": "        if actual != CODESIGN_SHA256:",
+        "new": "        if actual == CODESIGN_SHA256:",
+        "test": "test_the_signing_certificate_is_pinned_by_its_bytes",
+    },
+    {
+        # The tempting shortcut in the attestation half: it was HANDED a digest, so
+        # why download the file. Because then it attests something nobody checked -
+        # a rumour with a signature on it.
+        "label": "attestation: the signed release is attested from a digest, not the file",
+        "file": ".github/workflows/attest-release.yml",
+        "old": "          subject-path: ${{ env.ARCHIVE }}",
+        "new": "          subject-digest: sha256:${{ inputs.digest }}",
+        "test": "test_the_signed_archive_is_attested_over_bytes_the_job_holds",
     },
     {
         # The one job here that costs money per run, and the line that decides whether

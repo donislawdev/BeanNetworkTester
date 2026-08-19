@@ -1329,12 +1329,16 @@ odpowiedni przycisk.
 
 ## Uwaga: SmartScreen i antywirusy
 
-Plik .exe nie jest (jeszcze) podpisany certyfikatem, a jednocześnie prosi o
-uprawnienia administratora i ładuje sterownik sieciowy - dlatego Windows
-SmartScreen może pokazać ostrzeżenie „Nieznany wydawca”, a niektóre antywirusy
-mogą zgłosić fałszywy alarm. Sam sterownik **WinDivert jest podpisany cyfrowo
-przez jego autora**. Sumę kontrolną SHA-256 wydania (`SHA256SUMS.txt`) możesz
-porównać, żeby potwierdzić, że plik nie został zmodyfikowany.
+**Od 0.5.0 plik .exe jest podpisany** certyfikatem, którego klucz prywatny siedzi
+na karcie kryptograficznej i nigdy z niej nie wychodzi - więc Windows pokazuje
+nazwę wydawcy zamiast „Nieznany wydawca”. Warto wiedzieć, czego to nie załatwia:
+świeży certyfikat nie ma jeszcze reputacji w SmartScreenie, więc ostrzeżenie może
+przez jakiś czas nadal się pojawiać, a niektóre antywirusy nadal mogą zgłosić
+fałszywy alarm przy programie, który prosi o uprawnienia administratora i ładuje
+sterownik sieciowy. Zmienia się to, że ostrzeżenie mówi teraz, kto go podpisał.
+Sam sterownik **WinDivert jest podpisany cyfrowo przez jego autora**. Sumę
+kontrolną SHA-256 wydania (`SHA256SUMS.txt`) nadal możesz porównać, żeby
+potwierdzić, że plik dotarł bez zmian.
 
 **Możesz też sprawdzić, skąd ten plik pochodzi, a nie tylko czy się nie zmienił.** Każde archiwum
 wydania niesie podpisaną atestację builda, więc jedno polecenie odpowiada na pytanie „czy to
@@ -1357,6 +1361,12 @@ gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetw
 
 Przydaje się, gdy pliki masz z kopii lustrzanej albo na maszynie bez dostępu do API - dowód
 przyjechał razem z pobranym plikiem, zamiast leżeć w miejscu, któremu trzeba osobno ufać.
+
+Trzy oświadczenia, i warto wiedzieć, że odpowiadają na różne pytania. **Podpis** mówi, kto za tym
+plikiem stoi. **Powyższy bundle** wiąże dokładnie to archiwum z jego listą składników i powstaje
+już po podpisaniu, nad bajtami, które pobrałeś. **Prowenancja builda** mówi, z którego commita i
+którym workflow powstał build, który potem podpisano - z konieczności opisuje wersję niepodpisaną,
+bo podpis zmienia bajty, i leży w magazynie atestacji tego repozytorium, a nie w pobranym pliku.
 
 ### Co jest w środku pobranego pliku i jak to sprawdzić
 

@@ -490,82 +490,150 @@ def test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name():
               "" if rejected else f"({reason})")
 
 
-def test_the_release_attests_exactly_the_archive_it_publishes():
-    """Two attestations, one subject, and the subject is the download.
+def test_the_release_never_publishes_an_unsigned_archive():
+    """The build workflow opens a DRAFT and hands the archive over. It does not ship it.
 
-    A release carries two signed statements about the zip: an SBOM attestation
-    (what is inside it) and a build-provenance attestation (which repository,
-    commit and workflow produced it). Both are worth nothing if they name a
-    different file from the one `gh release create` uploads, and that mismatch is
-    invisible on the release page - the attestation store simply ends up holding a
-    statement about a digest nobody downloads.
+    🔴 The reason is that the build is not finished when the build workflow ends. The
+    executable inside is unsigned, and this runner cannot sign it: the key lives on a
+    cryptographic card in a USB reader and cannot be exported, which is the whole
+    value of it. So the archive leaves as a workflow ARTEFACT, `tools/sign_release.py`
+    signs it where the card is, and the release stays a draft until a person looks at
+    it.
 
-    So this pins the shape rather than the wording: every `subject-path` in the
-    workflow names the same variable the publish step uploads, and both actions
-    are still there.
+    What this guards is the shape of that split, because every piece of it is one line
+    somebody could "simplify" back into a single publish step:
+
+    * `gh release create` must pass `--draft`, and must NOT carry the archive. An
+      unsigned executable on a public release page, for as long as the ritual takes,
+      is a file somebody downloads;
+    * the archive must leave as an artefact instead, under the name the signing script
+      fetches - a rename here strands the ritual with a clear-looking error much later;
+    * no `SHA256SUMS.txt` is written here. These are not the bytes a user gets, and a
+      checksum describing a file nobody has is worse than none.
+
+    The provenance attestation stays, over the unsigned build, because that is the one
+    thing this workflow can honestly say: it built these bytes from this commit.
     """
+    path = os.path.join(ROOT, ".github", "workflows", "release.yml")
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    code = [ln.split("#", 1)[0] for ln in lines]
+    body = "\n".join(code)
+
+    # The WHOLE step, not just the `gh release create` line: the flags are assembled
+    # in an array above it, so a guard reading one line reads the wrong thing - and
+    # would have passed while `--draft` was missing.
     import re
-    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
-              encoding="utf-8") as handle:
-        text = handle.read()
+    step = re.search(r"- name: Open the release as a DRAFT.*?(?=\n      - |\Z)",
+                     body, re.S)
+    check("the workflow still opens a release", step is not None)
+    opening = step.group(0) if step else ""
+    check("it opens it as a draft", "--draft" in opening, f"({opening[-200:]})")
+    created = re.search(r"gh release create(?:[^\n]*\\\n)*[^\n]*", opening)
+    created = created.group(0) if created else ""
+    check("it does not publish the archive", "$ASSET" not in created,
+          f"(an unsigned executable would sit on a public page: {created[:160]})")
+    check("it writes no checksum over bytes nobody downloads",
+          "SHA256SUMS.txt" not in body,
+          "(the checksum belongs next to the signature, over the same bytes)")
 
-    subjects = re.findall(r"subject-path:\s*(\S.*?)\s*$", text, re.MULTILINE)
-    check("both attestations name a subject", len(subjects) == 2, f"({subjects})")
-    check("both attest the same file", len(set(subjects)) == 1, f"({subjects})")
+    check("the build leaves as an artefact",
+          "actions/upload-artifact@" in body, "(the signing script fetches it)")
+    check("under the name the signing script fetches",
+          "unsigned-build-" in body and "unsigned-build-%s" in
+          _read_text(os.path.join(ROOT, "tools", "sign_release.py")),
+          "(rename this on one side only and the ritual strands)")
 
-    # The command spans lines: match it through its backslash continuations, or the
-    # asset list looks empty and every check below passes on nothing.
-    publish = re.search(r"gh release create(?:[^\n]*\\\n)*[^\n]*", text)
-    check("the workflow publishes a release", publish is not None)
-    uploaded = publish.group(0) if publish else ""
-    # `subject-path: ${{ env.ASSET }}` against `gh release create ... "$ASSET" ...`
-    name = subjects[0].strip("${} ").replace("env.", "").strip()
-    check(f"the attested subject ({name}) is what gets uploaded",
-          ("$" + name) in uploaded or ("${" + name + "}") in uploaded,
-          f"({uploaded[:120]})")
-
-    for action in ("actions/attest@", "actions/attest-build-provenance@"):
-        check(f"{action} is still in the release workflow", action in text)
+    check("build provenance is still attested here",
+          "actions/attest-build-provenance@" in body,
+          "(this workflow DID build these bytes - that claim is true and worth making)")
 
 
-def test_the_provenance_bundle_ships_as_a_release_asset():
-    """An attestation nobody can find is an attestation nobody has.
+def test_the_signed_archive_is_attested_over_bytes_the_job_holds():
+    """The second half of a release: a statement about the file a user downloads.
 
-    Both attestations went into GitHub's attestation store and nowhere else, which
-    is enough for `gh attestation verify <zip> -R <repo>` and not enough for two
-    other readers:
+    The signature changes the bytes, so a statement made at build time verifies
+    against nothing afterwards. `attest-release.yml` makes it after the signing,
+    which raises the question this guards: how does a workflow attest something a
+    person made on their own machine without lying?
 
-    * a person holding the download and no network path to that API, or a mirror
-      that copied the release page - the proof has to travel with the archive;
-    * 🔴 OpenSSF Scorecard, whose Signed-Releases check reads release assets BY
-      FILE EXTENSION and never opens the attestation store. Measured 2026-08-19:
-      the check scored 0/10 on releases that already carried two attestations.
-      `probes/releasesAreSigned` accepts `.asc`, `.minisig`, `.sig`, `.sign`,
-      `.sigstore` and `.sigstore.json`; `probes/releasesHaveProvenance` accepts
-      `.intoto.jsonl` and nothing else.
+    🔴 By downloading it. The job fetches the archive from the draft, so everything it
+    attests is about bytes it is holding - the difference between an attestation and a
+    rumour. The digest it was dispatched with is kept as a cross-check and the run
+    stops when the two disagree, which is what "something moved between signing and
+    publishing" looks like.
 
-    So the bundle is copied to a named asset and uploaded. The extension is part of
-    what this guards: renaming it to `.intoto.jsonl` would score two points higher
-    and would be a lie about the format, because the action writes a Sigstore
-    bundle.
+    Deliberately NOT here: build provenance. That belongs to the workflow that built
+    something, and claiming it in the one document nobody should have to doubt would
+    be false.
+
+    The bundle is published as an ASSET, not left only in the attestation store, and
+    the extension is part of what this guards: OpenSSF Scorecard's Signed-Releases
+    check reads release assets by file extension and never opens that store (measured
+    2026-08-19, `probes/releasesAreSigned`), and a user with no route to the API
+    cannot use the store either.
     """
+    path = os.path.join(ROOT, ".github", "workflows", "attest-release.yml")
+    check("the attestation workflow exists", os.path.exists(path))
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    code = [ln.split("#", 1)[0] for ln in lines]
+    body = "\n".join(code)
+
+    check("it is asked for, not automatic", "workflow_dispatch:" in body)
+    check("it fetches what was signed", "gh release download" in body)
+    check("it attests bytes it holds, not a digest it was told",
+          "subject-path:" in body and "subject-digest:" not in body,
+          "(attesting a digest nobody checked is a rumour with a signature on it)")
+    check("it cross-checks the digest it was dispatched with",
+          "CLAIMED" in body and "exit 1" in body)
+    check("it binds the SBOM to that same file", "sbom-path:" in body)
+    check("it does not claim to have built it",
+          "attest-build-provenance" not in body,
+          "(a person signed it on their own machine - saying otherwise is false)")
+    check("the bundle is published as an asset",
+          ".sigstore.json" in body and "gh release upload" in body)
+
+
+def test_the_signing_certificate_is_pinned_by_its_bytes():
+    """"Signed" is a claim. "Signed by THIS certificate" is a measurement.
+
+    A second code-signing certificate on the same machine - a renewal, a test one, one
+    from another project - would sign a release just as happily, and the release page
+    would look identical. So the certificate is pinned by the sha256 of its DER bytes,
+    the signing script reads the certificate back OUT of the file it just signed, and
+    it refuses to upload anything when the two disagree.
+
+    Same shape as `WINDIVERT_SHA256`, and for the same reason: a version, a subject
+    line or a file name is a label, and a digest is not.
+
+    The certificate expires; a renewal issues a new one and this digest moves with it.
+    The guard failing on that day is the point.
+    """
+    from beantester.legal import CODESIGN_SHA256
     import re
-    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
-              encoding="utf-8") as handle:
-        text = handle.read()
+    check("the certificate is pinned as a sha256",
+          re.fullmatch(r"[0-9a-f]{64}", CODESIGN_SHA256) is not None,
+          f"({CODESIGN_SHA256[:24]}...)")
 
-    check("the provenance step is addressable (it needs an id for its output)",
-          re.search(r"id:\s*provenance\b", text) is not None)
-    check("the bundle path is read from that step's output",
-          "steps.provenance.outputs.bundle-path" in text)
-    check("the bundle is named as a Sigstore bundle",
-          ".sigstore.json" in text,
-          "(the action writes a Sigstore bundle - the name has to say so)")
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    check("the signing script reads the pin rather than carrying its own copy",
+          "from beantester.legal import CODESIGN_SHA256" in script)
+    check("it compares what actually signed the file against the pin",
+          "actual != CODESIGN_SHA256" in script)
+    check("and refuses without uploading anything",
+          "Nothing has been uploaded." in script,
+          "(a mismatch caught after the upload is not caught)")
+    check("it timestamps the signature",
+          "/tr" in script and "time.certum.pl" in script,
+          "(without a timestamp the signature dies when the certificate expires)")
 
-    publish = re.search(r"gh release create(?:[^\n]*\\\n)*[^\n]*", text)
-    uploaded = publish.group(0) if publish else ""
-    check("the bundle is uploaded with the other assets",
-          '"$BUNDLE"' in uploaded, f"({uploaded[:160]})")
+
+def _read_text(path):
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
 
 
 def _check_every_requirement_carries_hashes(filename):

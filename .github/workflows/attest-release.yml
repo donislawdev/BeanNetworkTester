@@ -1,0 +1,96 @@
+# The second half of a release, after a person has signed it.
+#
+# The build workflow cannot sign: the key lives on a cryptographic card in a USB
+# reader and cannot be exported, so `tools/sign_release.py` signs on the maintainer's
+# machine and then dispatches this. Here the signed archive gets the statement that
+# travels with it, and the release is still a draft when this finishes.
+#
+# 🔴 It DOWNLOADS the archive rather than trusting the digest it was handed. Everything
+# attested here is then a statement about bytes this job is holding, which is the whole
+# difference between an attestation and a rumour. The digest input is kept as a
+# cross-check: if it disagrees with the file on the release, something moved between
+# signing and publishing and the run stops.
+#
+# What it does NOT do: build provenance. That belongs to the workflow that actually
+# built something, and it is made there, over the unsigned build. Claiming here that
+# this workflow produced a file a person signed on their own machine would be false in
+# the one document nobody should have to doubt.
+name: Attest a signed release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag, e.g. v0.5.0-rc.2"
+        required: true
+      digest:
+        description: "sha256 of the signed archive, as sign_release.py printed it"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  attest:
+    name: Attest the signed archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Reading the draft's assets and uploading the bundle back to it.
+      contents: write
+      # `id-token` mints the short-lived OIDC token that signs the attestation,
+      # `attestations` writes the result to the repository's attestation store.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Fetch what the maintainer signed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          CLAIMED: ${{ inputs.digest }}
+        run: |
+          mkdir -p signed && cd signed
+          gh release download "$TAG" --pattern '*.zip' --pattern '*.spdx.json'
+          archive="$(ls *.zip)"
+          actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+          echo "release carries: $actual"
+          if [ "$actual" != "$CLAIMED" ]; then
+            echo "::error::the archive on the release hashes to $actual, but the run was"
+            echo "::error::dispatched for $CLAIMED - something changed in between"
+            exit 1
+          fi
+          {
+            echo "ARCHIVE=signed/$archive"
+            echo "SBOM=signed/$(ls *.spdx.json)"
+            echo "BUNDLE=BeanNetworkTester-${TAG}.sigstore.json"
+          } >> "$GITHUB_ENV"
+
+      # The SBOM, bound to the file a user actually downloads. Before the signature
+      # moved to a card this binding was made at build time; now it is made here,
+      # because the signature changes the bytes and a statement about the wrong bytes
+      # verifies against nothing.
+      - name: Attest the SBOM against the signed archive
+        id: attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-path: ${{ env.ARCHIVE }}
+          sbom-path: ${{ env.SBOM }}
+
+      # 🔴 As an ASSET, not only in the attestation store. Scorecard's Signed-Releases
+      # check reads release assets by file extension and never opens that store, and a
+      # user with no route to the API cannot use it either. `gh attestation verify
+      # <zip> --bundle <this file>` answers offline, from a mirror, from anywhere.
+      - name: Publish the bundle beside the archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          BUNDLE_PATH: ${{ steps.attestation.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE_PATH" "$BUNDLE"
+          python -c "import json,sys; json.load(open(sys.argv[1])); print('bundle parses as JSON')" "$BUNDLE"
+          gh release upload "$TAG" "$BUNDLE" --clobber
+          echo "attached $BUNDLE to $TAG (still a draft)"
