@@ -1,0 +1,75 @@
+# OpenSSF Scorecard: an OUTSIDE opinion on this repository's supply chain.
+#
+# Why it is worth a workflow when CI already runs three static analysers: those
+# read the code, and this reads the PROJECT - whether actions are pinned, whether
+# tokens are least-privilege, whether releases are signed, whether a branch is
+# protected, whether dangerous workflow patterns are present. It is the only check
+# here that can tell us something we did not already think to test, and it says it
+# in a form a stranger can read before installing a tool that loads a kernel
+# driver.
+#
+# Nothing here can fail a pull request. It reports.
+name: Scorecard
+
+on:
+  # The default branch only. Scorecard grades a repository, not a change, and its
+  # own documentation marks the pull_request trigger experimental.
+  push:
+    branches: [master]
+  schedule:
+    # Monday 07:00 UTC - an hour after the CI cron, so the two do not queue behind
+    # each other on the same runner pool.
+    - cron: "0 7 * * 1"
+  # Branch protection is one of the things it grades, so a change to it should be
+  # re-graded rather than waiting a week.
+  branch_protection_rule:
+  workflow_dispatch:
+
+# Read-all at the top, and the job below raises exactly what it needs. Same rule
+# as ci.yml: a permission is granted on the job that uses it, never globally.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Publishes the SARIF into the Security tab, next to CodeQL's own findings.
+      security-events: write
+      # Mints the OIDC token that lets the OpenSSF API verify the results really
+      # came from this repository. This is what makes the badge mean anything -
+      # without it anyone could publish a score for any repository.
+      id-token: write
+      # Scorecard reads workflow run data to grade CI practices.
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The analyser must never be handed a token it could use: it walks
+          # repository data, and it has no business being able to push.
+          persist-credentials: false
+
+      - name: Run the analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc  # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publishing is what turns the score into a badge, and it is public
+          # information about a public repository either way.
+          publish_results: true
+
+      # Kept as an artefact as well as uploaded: the Security tab shows the
+      # findings, the file shows the whole grading, including the checks that
+      # passed.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload to the Security tab
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+        with:
+          sarif_file: results.sarif

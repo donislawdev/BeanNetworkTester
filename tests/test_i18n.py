@@ -122,7 +122,7 @@ def test_the_language_files_stay_sorted():
     for code in ("en", "pl"):
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             keys = list(_json.load(f))
-        out_of_order = [(a, b) for a, b in zip(keys, keys[1:]) if a > b]
+        out_of_order = [(a, b) for a, b in zip(keys, keys[1:], strict=False) if a > b]
         check(f"{code}.json keys are sorted", not out_of_order,
               f"(first offender: {out_of_order[:1]})")
         check(f"{code}.json opens with _meta", keys and keys[0] == "_meta",

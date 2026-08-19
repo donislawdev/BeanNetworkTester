@@ -702,9 +702,6 @@ def test_the_stats_csv_records_which_world_each_row_was_measured_in():
     what `packets_seen` counted - so without this column two rows under one
     header could describe completely different traffic with no way to tell.
     """
-    import csv as _csv
-    import os
-    import tempfile
 
     out = run_gui("""
         import csv, os, tempfile

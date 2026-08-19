@@ -43,6 +43,108 @@ include = ["beantester*"]
 testpaths = ["tests"]
 addopts = "-q"
 
+[tool.ruff]
+# Ruff: four rule families and no more, decided 2026-08-19.
+#
+#   F      pyflakes      - dead imports, dead variables, redefinitions
+#   B      bugbear       - the bug shapes a reader misses (late binding, zip truncation)
+#   S      bandit        - security patterns
+#   ASYNC  flake8-async  - blocking calls in async code (zero findings here: there is
+#                          no async code, and this keeps it that way)
+#
+# F and B BLOCK a pull request. S is a report, and the difference is not
+# softness - it is what the two measure. Measured 2026-08-19: S raises 306
+# findings here, 287 of them in tests, and they are things this project does on
+# purpose - a test asserts (180), a packet mangler randomises (89), a CI script
+# runs git (18). A gate that fires on all of them is a gate nobody reads, and it
+# would bury the ten findings in the product that are worth a look.
+target-version = "py310"        # matches requires-python; ruff reads it anyway, said out loud
+
+[tool.ruff.lint]
+select = ["F", "B", "S", "ASYNC", "C90"]
+
+[tool.ruff.lint.mccabe]
+# 🔴 THE CEILING IS THE MEASUREMENT, like FILE_CEILING in tests/test_code_shape.py.
+# 29 is `core.decide` today - the twelve-step packet pipeline, which is branchy
+# because the thing it describes is - and 27 is `cli._run_session` behind it.
+# Nothing else in the package passes 24.
+#
+# The size ratchet already watches how LONG a function is. This watches how many
+# ways through it there are, which is the number that decides whether a person
+# can hold it in their head - and the two do not move together: a hundred-line
+# function of straight-line setup is readable, a forty-line one with eight
+# nested branches is not.
+#
+# Down is routine, up is a decision. Splitting something means lowering this in
+# the same change.
+max-complexity = 29
+
+[tool.ruff.lint.per-file-ignores]
+# A test suite for a packet mangler asserts, randomises, spawns subprocesses and
+# parses XML on purpose, and none of it ships. S on tests/ is 287 lines of noise.
+"tests/**" = ["S"]
+# The one module allowed to swallow an exception, by this repository's own rule
+# (tests/test_repo_conventions.py): a crash reporter that raises while reporting
+# a crash is worse than one that stays quiet.
+"beantester/crashlog.py" = ["S110"]
+# The randomness IS the product: loss, jitter and duplication are drawn here, and
+# nothing about them is cryptographic. `seed` exists to make them repeatable.
+"beantester/engine.py" = ["S311"]
+"beantester/synthetic.py" = ["S311"]
+# Both continue past a widget or an adapter that answered nothing, in a loop whose
+# point is to survive exactly that.
+"beantester/gui/widgets/sortable_tree.py" = ["S112"]
+"beantester/winenv.py" = ["S112"]
+# Maintainer and CI scripts: they run `git` and `python` by design, and the only
+# URL opened is a literal api.github.com endpoint whose path is validated first.
+"tools/**" = ["S603", "S607", "S310"]
+
+[tool.mypy]
+# The PACKAGE only. `tests/` and `tools/` are not a matter of taste here: both
+# hold modules with the same basename under no package (`downloads`, `fakes`),
+# and mypy refuses that layout without `--explicit-package-bases`. They can be
+# added later, deliberately; the product is what ships.
+files = ["beantester"]
+# The floor from `requires-python`, said out loud: mypy otherwise checks against
+# the interpreter it happens to run on, and the two are not the same question.
+python_version = "3.10"
+# A `# type: ignore` that has stopped being needed is a lie about the code that
+# outlives whatever it was hiding.
+warn_unused_ignores = true
+
+# Nothing strict is turned on, and that is a decision rather than an oversight.
+# This package carries no annotations, so `disallow_untyped_defs` would mean
+# annotating 66 modules before anything could be checked at all. What the default
+# level DOES catch is worth having on its own: it found fifteen attributes being
+# grown onto a class from outside its body, nine containers whose type nobody
+# could infer, and a base class that declared its own attributes as None.
+# Tighten it per module when a module is annotated, never repository-wide in one
+# go - a check that must be silenced everywhere teaches that silence is normal.
+
+[[tool.mypy.overrides]]
+# 🔴 THE STRICT LIST, and it is a RATCHET: it may grow, and
+# `tests/test_code_shape.py::test_the_strictly_typed_modules_only_ever_grow`
+# refuses to let it shrink. Deleting a name here is deleting a guarantee, which
+# is a decision somebody has to make on purpose rather than to get unblocked.
+#
+# Why these three first: `utils` is pure, small and read by every layer, so a
+# wrong type there travels furthest; `rates` and `scope` are the other two
+# modules that already import headlessly and have no tkinter in them. Growing the
+# list means annotating a module, not flipping a switch - which is the point,
+# because a flag turned on over 66 unannotated modules would have to be silenced
+# everywhere, and a check that is silenced everywhere teaches that silence is
+# normal.
+module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+# Neither ships type information: pydivert has no `py.typed` marker, and psutil's
+# stubs live in a separate `types-psutil` distribution. Ignoring the import is a
+# smaller lie than pretending we know those signatures.
+module = ["pydivert", "pydivert.*", "psutil"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["beantester"]
 parallel = true                 # the GUI tests run in subprocesses; each writes its own data file

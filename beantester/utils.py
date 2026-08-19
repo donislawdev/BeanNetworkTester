@@ -1,13 +1,21 @@
-"""Small dependency-free helpers shared across the engine, GUI and CLI."""
+"""Small dependency-free helpers shared across the engine, GUI and CLI.
+
+Annotated on purpose, and one of only three modules mypy is strict about
+(`[[tool.mypy.overrides]]` in pyproject.toml). The list is a ratchet: it may
+grow, and `tests/test_code_shape.py` refuses to let it shrink. This module is
+in it because it is pure, small and read by every layer - the cheapest place to
+start, and the place where a wrong type travels furthest.
+"""
 import math
+from typing import Any, Optional
 
 
-def clamp01(x):
+def clamp01(x: float) -> float:
     """Clamp a number into the ``[0.0, 1.0]`` range."""
     return max(0.0, min(1.0, x))
 
 
-def to_number(value):
+def to_number(value: Any) -> float:
     """Lenient float conversion: ``None`` / garbage -> ``0.0``."""
     try:
         return float(value)
@@ -15,13 +23,13 @@ def to_number(value):
         return 0.0
 
 
-def number_string(value):
+def number_string(value: Any) -> str:
     """Compact string for a number: ``5.0`` -> ``'5'``, ``2.5`` -> ``'2.5'``."""
     f = to_number(value)
     return str(int(f)) if f == int(f) else str(f)
 
 
-def bytes_to_mb(n):
+def bytes_to_mb(n: Any) -> float:
     """Bytes -> megabytes (MB = 1024*1024 B), rounded to 2 decimals."""
     return round(to_number(n) / (1024.0 * 1024.0), 2)
 
@@ -33,7 +41,7 @@ def bytes_to_mb(n):
 BYTE_UNITS = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
-def _byte_decimals(value, index):
+def _byte_decimals(value: float, index: int) -> int:
     """How many decimals ``value`` gets in unit ``index``: three significant
     digits, except that whole bytes are never fractional."""
     if index == 0:
@@ -43,7 +51,7 @@ def _byte_decimals(value, index):
     return 1 if value < 100 else 0
 
 
-def human_bytes(n):
+def human_bytes(n: Any) -> str:
     """Bytes as a string a person reads at a glance: ``5.24 GB``, ``90 B``.
 
     The connection table used to render every traffic column as ``bytes / 1024``
@@ -76,7 +84,7 @@ def human_bytes(n):
     return f"{sign}{value:.{_byte_decimals(value, index)}f} {BYTE_UNITS[index]}"
 
 
-def nice_ceiling(v):
+def nice_ceiling(v: Any) -> float:
     """Round up to a 'nice' axis value (1/2/2.5/5 x 10^k)."""
     v = to_number(v)
     if v <= 0:
@@ -89,7 +97,7 @@ def nice_ceiling(v):
     return 10 * base
 
 
-def canonical_ip(ip):
+def canonical_ip(ip: Any) -> Optional[str]:
     """Canonical text form of an IPv4/IPv6 address, or ``None`` if invalid.
 
     Used to validate user-entered destination IPs and to compare them against
@@ -102,7 +110,7 @@ def canonical_ip(ip):
         return None
 
 
-def is_local_ip(ip):
+def is_local_ip(ip: Any) -> bool:
     """True for local addresses (RFC1918, loopback, link-local, CGNAT...).
 
     Public (internet) addresses return False. Missing/error = treated as local.
@@ -116,7 +124,7 @@ def is_local_ip(ip):
         return True
 
 
-def _route_source_ip(family, probe):
+def _route_source_ip(family: int, probe: str) -> str:
     """The local address the OS would use to reach ``probe`` - no packet is sent.
 
     A connected UDP socket only records a default peer, so this asks the routing
@@ -133,7 +141,7 @@ def _route_source_ip(family, probe):
         return "-"
 
 
-def host_identity():
+def host_identity() -> tuple[str, str, str]:
     """Hostname and this machine's private IPv4 / IPv6 addresses.
 
     The addresses belong to the adapter that would route to the internet, found
@@ -161,7 +169,7 @@ def host_identity():
 _num = to_number
 
 
-def human_duration(seconds):
+def human_duration(seconds: Any) -> str:
     """A session length a human can read, at any length.
 
     It used to be ``f"{minutes}m {seconds}s"``, which is fine for the ten-minute

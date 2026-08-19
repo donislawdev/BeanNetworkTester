@@ -977,7 +977,7 @@ MUTATIONS = [
         # the same commit built a working exe there and a crashing one here.
         "label": "release: a workflow installs the freezer unpinned again",
         "file": ".github/workflows/ci.yml",
-        "old": "          pip install -r requirements.txt -r requirements-build.txt",
+        "old": "          pip install --require-hashes -r requirements.txt -r requirements-build.txt",
         "new": "          pip install -r requirements.txt pyinstaller",
         "test": "test_both_workflows_install_the_same_pinned_builder",
     },
@@ -1020,6 +1020,83 @@ MUTATIONS = [
         "old": '                                  total=human_bytes(t[\"total\"])))',
         "new": '                                  total=str(round(t[\"total\"] / 1024.0, 1))))',
         "test": "test_connection_columns_tag_and_footer",
+    },
+    {
+        # The exact line Semgrep found, put back: a `${{ }}` expanded into a
+        # script is source code, not an argument. The guard has to see it
+        # wherever in the block it sits, so this mutates only one of the two
+        # variables and leaves the other in its safe form.
+        "label": "ci: a workflow interpolates a GitHub expression into a script",
+        "file": ".github/workflows/ci.yml",
+        "old": 'python tools/check_public_text.py --commits \"origin/$BASE_REF..$HEAD_SHA\"',
+        "new": 'python tools/check_public_text.py --commits origin/${{ github.base_ref }}..$HEAD_SHA',
+        "test": "test_no_workflow_puts_a_github_expression_inside_a_shell_script",
+    },
+    {
+        # One action slides back onto a floating tag - the state the whole
+        # repository was in, and the one a hand-written `uses:` falls into.
+        "label": "ci: an action goes back to a movable tag",
+        "file": ".github/workflows/dependency-review.yml",
+        "old": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0",
+        "new": "actions/dependency-review-action@v5",
+        "test": "test_every_action_a_workflow_uses_is_pinned_to_a_commit",
+    },
+    {
+        # The other half of the same rule: a digest with nothing saying which
+        # version it is. Legal YAML, unreadable diff, and Dependabot has
+        # nothing to rewrite when it bumps the pin.
+        "label": "ci: a pinned action stops saying which version it is",
+        "file": ".github/workflows/dependency-review.yml",
+        "old": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0",
+        "new": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+        "test": "test_every_action_a_workflow_uses_is_pinned_to_a_commit",
+    },
+    {
+        # The check that keeps `--repo` inside its own meaning. Without it the
+        # value still lands in the PATH of an api.github.com URL, so
+        # `../../gists` asks a different endpoint and prints the answer as if
+        # those were releases.
+        "label": "tools: the downloads repository argument stops being checked",
+        "file": "tools/downloads.py",
+        "old": "    if not REPO.match(str(repo or \"\")):",
+        "new": "    if False and not REPO.match(str(repo or \"\")):",
+        "test": "test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name",
+    },
+    {
+        # The crash id is printed in a record a user may paste into a report,
+        # so its shape is the contract - not the hash behind it.
+        "label": "crashlog: the crash id stops being twelve characters",
+        "file": "beantester/crashlog.py",
+        "old": ".hexdigest()[:12]",
+        "new": ".hexdigest()",
+        "test": "test_different_faults_get_different_fingerprints",
+    },
+    {
+        # One byte of the recorded driver hash. The version resource still reads
+        # 2.2 - which is exactly what a swapped kernel driver looks like.
+        "label": "legal: the recorded WinDivert driver hash stops matching",
+        "file": "beantester/legal.py",
+        "old": "8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
+        "new": "0da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
+        "test": "test_the_shipped_driver_is_byte_for_byte_the_one_we_recorded",
+    },
+    {
+        # The line that makes an undetectable licence block. Without it this gate
+        # agrees with the official action: informs, and passes.
+        "label": "deps: an undetectable licence stops blocking",
+        "file": "tools/dependency_gate.py",
+        "old": "    if licence is None or not str(licence).strip():",
+        "new": "    if False and (licence is None or not str(licence).strip()):",
+        "test": "test_an_unknown_licence_blocks",
+    },
+    {
+        # A module quietly dropping out of the strict list. The check that
+        # vanishes cannot fail, which is why the list is recorded twice.
+        "label": "types: a module loses its strict typing quietly",
+        "file": "pyproject.toml",
+        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]',
+        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope"]',
+        "test": "test_the_strictly_typed_modules_only_ever_grow",
     },
 ]
 

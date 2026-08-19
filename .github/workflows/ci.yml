@@ -52,17 +52,25 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # the whole range being merged, not just its tip
           fetch-depth: 0
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
       - name: check the commit messages
+        # Through the environment, for the same reason as the step below: a
+        # `${{ }}` is pasted into the script BEFORE any shell sees it, so a
+        # branch name is not data there - it is source code. `base_ref` has to
+        # name a branch that already exists here, which makes this narrow rather
+        # than harmless, and the fix is three lines. Quote the variables: an
+        # unquoted expansion is the same fault one layer down.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          python tools/check_public_text.py \
-            --commits origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+          python tools/check_public_text.py --commits "origin/$BASE_REF..$HEAD_SHA"
       - name: check the pull-request description
         # Passed through the environment rather than interpolated into the shell:
         # a description is untrusted text and must never become part of a command.
@@ -71,6 +79,200 @@ jobs:
         run: |
           printf '%s' "$PR_BODY" > pr-body.txt
           python tools/check_public_text.py --text-file pr-body.txt
+
+  # Static analysis, one platform: ruff reads source, and source does not differ
+  # between the runners. Kept out of the `tests` matrix for exactly that reason -
+  # in there it would run twice and say the same thing.
+  lint:
+    name: ruff (F and B block, S and ASYNC report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the linter
+        run: pip install -r requirements-lint.txt
+      # The gate. `--select` on the command line replaces the families named in
+      # pyproject.toml and nothing else: the per-file ignores and the target
+      # version still come from there, so the two runs below cannot drift apart
+      # from what a developer sees locally.
+      - name: Bugs, dead code and the complexity ceiling (blocking)
+        run: ruff check --select F,B,C90 --output-format github
+      # The report. S is 306 findings on this repository and 287 of them are
+      # things a test suite for a packet mangler does on purpose - so it
+      # annotates the diff and never fails the run. `ruff check` exits 1 on any
+      # finding, hence --exit-zero rather than a `continue-on-error` on the step:
+      # a step that "succeeded but failed" reads as a broken job to everybody.
+      - name: Security patterns and async misuse (report only)
+        run: ruff check --select S,ASYNC --exit-zero --output-format github
+
+  # Its own job rather than a step in `lint`: two gates, two check names, so a
+  # branch-protection rule can require either one on its own and a red one says
+  # which of the two it was without opening the log.
+  types:
+    name: mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the type checker
+        run: pip install -r requirements-lint.txt
+      # No project dependencies installed on purpose: `pydivert` is Windows-only
+      # and `psutil` is not needed to READ this package, and both are ignored by
+      # name in [tool.mypy]. Verified in that exact shape (Linux, neither
+      # installed) before this job was written - a missing module and an untyped
+      # one are different code paths in mypy, and only one of them was measured
+      # on the developer machine.
+      - name: Type check the package
+        run: mypy
+
+  # Semgrep, with no account and no token: `p/default` is fetched anonymously
+  # from the registry (measured - 343 rules, 184 files, 35 s). The rules are used
+  # here and never carried in the repository, because the Semgrep Rules License
+  # allows the first and forbids the second.
+  semgrep:
+    name: semgrep (ERROR, HIGH and CRITICAL block)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the scanner
+        run: pip install -r requirements-lint.txt
+      # No --error and no --severity here: the scan reports, and tools/semgrep_gate.py
+      # decides. `--severity` knows INFO/WARNING/ERROR only, while registry rules also
+      # carry HIGH and CRITICAL - measured with a probe rule, `--severity ERROR`
+      # returned zero findings for a rule marked HIGH. Metrics are off: this repository
+      # does not send telemetry about its own source anywhere.
+      - name: Scan
+        run: |
+          semgrep scan --config p/default --metrics=off --oss-only \
+            --json --output semgrep.json --quiet
+      - name: Decide
+        run: python tools/semgrep_gate.py semgrep.json
+
+  # Weekly, on Windows, and only weekly: this asks whether the world changed
+  # under versions that did not. A pull request cannot make it red, so running it
+  # per pull request would burn minutes to re-answer the same question.
+  #
+  # windows-latest because that is where the shipped set actually exists:
+  # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
+  # skip the one dependency that puts a kernel driver on a user's machine.
+  audit:
+    name: pip-audit (advisories against the pinned set)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Raised on THIS job only, and only because it opens an issue when it finds
+      # something. Nothing else in this workflow may write anything.
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install the auditor
+        run: pip install -r requirements-lint.txt
+      # The pinned set, installed exactly as the build installs it, into its own
+      # environment - then audited BY PATH. Auditing the requirement files instead
+      # silently skips `packaging` and `setuptools` (measured), and a scanner that
+      # covers less than it was asked to is worse than no scanner at all.
+      - name: Install the pinned set into a clean environment
+        shell: bash
+        run: |
+          python -m venv audit-env
+          audit-env/Scripts/python -m pip install --quiet \
+            --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Audit it
+        shell: bash
+        # pip-audit exits non-zero when it finds something, and finding something
+        # is what the next step is for - so the exit code is captured, not obeyed.
+        run: |
+          set +e
+          pip-audit --path audit-env/Lib/site-packages -f json -o audit.json
+          echo "pip-audit exit: $?"
+          set -e
+          test -s audit.json || { echo "no report was written"; exit 1; }
+      - name: Open an issue if anything was found
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue list --label security-scan --state open --json number,title > open.json
+          action=$(python tools/audit_issue.py --audit audit.json --existing open.json \
+                     --title-out issue-title.txt --body-out issue-body.md \
+                     --run-url "$RUN_URL")
+          echo "verdict: $action"
+          case "$action" in
+            create)
+              gh label create security-scan --color B60205 \
+                  --description "opened by the weekly dependency audit" --force
+              gh issue create --label security-scan \
+                  --title "$(cat issue-title.txt)" --body-file issue-body.md
+              ;;
+            skip) echo "an open issue already names exactly these advisories" ;;
+            none) echo "nothing published against the pinned set" ;;
+            *)    echo "unexpected verdict from tools/audit_issue.py"; exit 1 ;;
+          esac
+
+  # The registry that ships is checked by the suite for POINTING at code that
+  # exists. Nothing in the repository ever RAN one, so "116 caught, 0 survived"
+  # was true on the day somebody typed it and unverifiable afterwards. This is
+  # that sentence, executed.
+  #
+  # windows-latest, and not to be tidy: `pydivert` carries a win32 marker, and an
+  # entry whose test needs the driver would report SURVIVED on a Linux runner -
+  # the test passes there by returning early, which is indistinguishable from a
+  # guard that does not guard.
+  mutations:
+    name: mutation registry
+    if: github.event_name != 'push'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # `--changed` diffs against the base branch, which has to be here.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt
+          pip install -r requirements-dev.txt
+      # A pull request pays for what it touched; the weekly run pays for
+      # everything. The full pass is minutes (~13 for 117 entries on a developer
+      # machine), which is fine once a week and absurd on every push.
+      - name: Break each guarded behaviour and prove its test reddens
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          # Through the environment like every other context value here - the
+          # repository's own guard refuses a `${{ }}` inside a run block, and it
+          # refused this one while it was being written.
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # No --depth here: `git fetch --depth=0` is an error ("depth 0 is
+            # not a positive number"), and the checkout above already took the
+            # full history with fetch-depth: 0.
+            git fetch --no-tags origin "$BASE_REF"
+            python tools/mutate.py --changed "origin/$BASE_REF"
+          else
+            python tools/mutate.py
+          fi
 
   tests:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -88,7 +290,11 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.14"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The diff-coverage step below compares against the base branch, and a
+          # shallow clone has no base branch to compare against.
+          fetch-depth: 0
       - name: Verify required release files are in the checkout
         # These are git-ignored by pattern and re-included by exception, so a
         # missing force-add or a broken .gitignore makes them vanish on a fresh
@@ -109,14 +315,18 @@ jobs:
             exit 1
           fi
           echo "All required release files are present."
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
+          # diff-cover only: the rest of that file is for the analysis jobs, and
+          # installing it whole here would drag semgrep onto both matrix legs.
+          pip install "$(grep -E '^diff-cover==' requirements-lint.txt)"
 
       # ONE run of the whole suite, under coverage. testpaths=["tests"] (pyproject)
       # means this already includes the suites that used to own separate steps:
@@ -140,9 +350,29 @@ jobs:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: python -m pytest tests --cov=beantester --cov-report=term --cov-report=xml
 
+      # The whole-repository gate (pyproject: fail_under) answers "is this project
+      # tested". It cannot answer "is this CHANGE tested": at ~1200 tests the
+      # average barely moves, so a pull request can add a hundred untested lines
+      # and still pass it - and those are the lines nobody has run twice yet.
+      #
+      # 80 rather than 100, deliberately. Parts of the GUI are only reachable
+      # through a real Tk event loop that the fake tkinter cannot drive, so
+      # demanding every changed line would push people towards writing the test
+      # that is easy instead of the one that matters. Ubuntu only, because the two
+      # matrix legs produce the same answer, and pull requests only, because there
+      # is nothing to diff against on a push to master.
+      - name: Coverage of the lines this pull request changed
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          diff-cover coverage.xml --compare-branch "origin/$BASE_REF" --fail-under 80
+
       - name: Coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}
           path: coverage.xml
@@ -155,15 +385,64 @@ jobs:
       # smoke cannot see truncation or DPI/layout breakage; this builds the real App
       # at the minimum supported resolution in BOTH languages (Polish strings are the
       # longest - that is where layouts crack) and fails on any clipped key widget.
+      # 🔴 Everything here except the last line is armour against the runner's
+      # package mirror, and it was paid for: on 2026-08-19 this step burned the
+      # job's whole 20-minute budget three times in a row without ever starting
+      # the render. The log said `Ign: http://azure.archive.ubuntu.com/...` four
+      # times per index list, then went silent for 15 minutes 39 seconds. The
+      # same step took 17 seconds on master the day before. Nothing in this
+      # repository changed - GitHub's image points apt at a mirror that stopped
+      # answering, and `apt-get update` has no timeout of its own.
+      #
+      #   * touch apt at all only when a package is actually missing;
+      #   * rewrite that mirror to the one that answered (the fallback apt was
+      #     already limping towards);
+      #   * bound every apt call, so a dead mirror costs a minute and a clear
+      #     error rather than the job's whole budget;
+      #   * bound the render too, because a GUI that hangs must look different
+      #     from a mirror that hangs;
+      #   * and run Python UNBUFFERED, because when this hung its output was
+      #     still in a pipe buffer and the archived log showed nothing at all -
+      #     which is why the first diagnosis blamed the wrong command.
       - name: GUI render check (real Tk, Xvfb, 1366x768, PL+EN)
         if: runner.os == 'Linux'
         env:
           BEAN_NO_ELEVATE: "1"
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-tk xvfb
-          xvfb-run -a --server-args="-screen 0 1366x768x24" \
-            python tools/ci_gui_render.py
+          missing=""
+          for package in python3-tk xvfb; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          if [ -n "$missing" ]; then
+            echo "installing:$missing"
+            # 🔴 The mirror is NOT in sources.list on these images - it is in a
+            # MIRRORLIST that sources.list points at, and the first rewrite here
+            # missed it. The log said so plainly and it took a second failure to
+            # read it: `Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]`,
+            # then `Ign: http://azure.archive.ubuntu.com/...` for every index.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            # The image ships package lists, so the cheap path is to install
+            # without refreshing them at all. `apt-get update` is the expensive,
+            # network-bound half, and it is only worth paying for when the lists
+            # really are too old for the package we need.
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              echo "install from the shipped lists failed - refreshing them"
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
+          else
+            echo "python3-tk and xvfb are already on the image"
+          fi
+          timeout 300 xvfb-run -a --server-args="-screen 0 1366x768x24" \
+            python -u tools/ci_gui_render.py
 
       # The CLI contract itself: --simulate needs neither Windows, WinDivert nor
       # admin, so every runner can prove it end to end.
@@ -215,18 +494,21 @@ jobs:
     timeout-minutes: 30
     needs: tests
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # Must match the interpreter release.yml builds with: PyInstaller freezes
       # THIS Python into the bundle, so a CI build on a different one is not
       # smoke-testing the artefact users get.
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-build.txt
+          # One hash-checked resolution over both files: the runtime pins and
+          # the freezer's whole closure. Nothing here may resolve to bytes
+          # that are not written down.
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
 
       # onedir + console subsystem + asInvoker - see BeanNetworkTester.spec
       - name: Build
@@ -278,7 +560,7 @@ jobs:
         shell: bash
         run: python tools/sbom.py --audit-bundle bundle-scan.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: BeanNetworkTester-windows
           path: dist/BeanNetworkTester

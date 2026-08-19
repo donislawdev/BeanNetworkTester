@@ -33,12 +33,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
       # step with the build job in ci.yml, or CI smoke-tests one artefact and
       # users download another.
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
@@ -46,7 +46,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-build.txt
+          # One hash-checked resolution over both files - the same command the
+          # build job in ci.yml runs, so a release cannot be built from a
+          # different set of bytes than the one CI proved.
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
 
       # The version is single-sourced in VERSION.txt. The tag is v<version> for a
       # final release, or v<version>-rc.N (also -beta.N / -alpha.N) for a pre-release.
@@ -160,6 +163,29 @@ jobs:
         with:
           subject-path: ${{ env.ASSET }}
           sbom-path: ${{ env.SBOM }}
+
+      # WHO built it, and FROM WHAT. The SBOM attestation above says what is inside
+      # the zip; this one says the zip came out of this repository, from this commit,
+      # through this workflow, on a GitHub-hosted runner - signed with the same
+      # short-lived OIDC identity and stored in the same attestation store. A user
+      # checks both with one command:
+      #
+      #     gh attestation verify BeanNetworkTester-<tag>-windows-x64.zip \
+      #        -R donislawdev/BeanNetworkTester
+      #
+      # It is a different question from a code signature, which is why both are
+      # worth having: a signature says who signed the binary, provenance says which
+      # source and which build produced it. A stolen signing key cannot forge this,
+      # and a forked workflow cannot claim to be this repository.
+      #
+      # Separate action from `actions/attest` above on purpose: that one attaches a
+      # predicate you hand it (here, the SBOM), while the provenance predicate is
+      # built BY the action from the workflow's own context - there is nothing to
+      # pass in, and nothing we could pass in that would be trustworthy.
+      - name: Attest the build provenance of the release archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ env.ASSET }}
 
       # gh is preinstalled on the runner - no third-party action, uses the job token.
       # A -rc/-beta/-alpha tag publishes as a "Pre-release"; a plain tag as "Latest".

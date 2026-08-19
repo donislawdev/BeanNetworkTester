@@ -4,6 +4,7 @@
 [![Latest release](https://img.shields.io/github/v/release/donislawdev/BeanNetworkTester?sort=semver)](https://github.com/donislawdev/BeanNetworkTester/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/donislawdev/BeanNetworkTester/total)](https://github.com/donislawdev/BeanNetworkTester/releases)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
 **Bean Network Tester** to narzędzie dla testerów i deweloperów: sprawdź, jak aplikacja zachowuje
@@ -983,6 +984,7 @@ Silnik jest oddzielony od WinDivert, więc testy działają na każdym systemie 
 Windows, admina ani tkintera). Zestaw jest oparty o **pytest**:
 
 ```bat
+pip install --require-hashes -r requirements.txt
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```
@@ -1011,6 +1013,29 @@ smoke GUI na atrapie tkintera, asercje kodów wyjścia, sprawdzenie NDJSON, `--d
 a na koniec **build `.exe` i smoke zbudowanego pliku** (`--version`, `--simulate`, błędna
 konfiguracja → kod 3) plus kontrola, że sterownik WinDivert naprawdę trafił obok exe, z artefaktem
 do pobrania.
+
+<!-- ci-jobs:start -->
+Wszystkie joby tego workflow i co znaczy czerwony:
+
+| job | co robi |
+|---|---|
+| `public-text` | treść commitów i opisu PR-a: po angielsku, płaskie łączniki, nic prywatnego z maszyny |
+| `lint` | **ruff**. Martwy kod, kształty błędów i sufit złożoności wywracają przebieg. Rodzina bezpieczeństwa tylko raportuje |
+| `types` | **mypy** na pakiecie |
+| `semgrep` | domyślny zestaw reguł z rejestru. ERROR, HIGH i CRITICAL wywracają przebieg, reszta ląduje w logu |
+| `mutations` | psuje każde pilnowane zachowanie i dowodzi, że jego test się czerwieni. PR odpala wpisy, których dotknął, cotygodniowy przebieg wszystkie |
+| `audit` | tylko co tydzień: **pip-audit** na przypiętym zestawie, a przy znalezisku zakłada issue |
+| `tests` | suite, smoke GUI, render na prawdziwym Tk i asercje CLI, na Linuksie i Windowsie |
+| `build` | plik .exe dla Windowsa, ze smoke'iem, sprawdzeniem sterownika i skanem rejestru licencji |
+<!-- ci-jobs:end -->
+
+**Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go
+uruchamiają. **ruff** wywraca pull requesta na martwym kodzie i na kształtach błędów (`F` i `B`),
+a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje. **mypy**
+sprawdza typy w pakiecie. **semgrep** skanuje domyślnym zestawem reguł z rejestru, przy czym
+znalezisko na poziomie ERROR, HIGH albo CRITICAL wywraca przebieg, a wszystko niżej ląduje w logu.
+Wersje tych trzech narzędzi są przypięte w `requirements-lint.txt`, więc nowe wydanie lintera nie
+zaczerwieni pull requesta, w którym nic się nie zmieniło.
 
 Jeden krok wart jest osobnego zdania, bo żaden test jednostkowy go nie zastąpi: **render GUI na
 prawdziwym Tk** pod wirtualnym ekranem, w minimalnej wspieranej rozdzielczości 1366x768 i **w
@@ -1307,6 +1332,18 @@ SmartScreen może pokazać ostrzeżenie „Nieznany wydawca”, a niektóre anty
 mogą zgłosić fałszywy alarm. Sam sterownik **WinDivert jest podpisany cyfrowo
 przez jego autora**. Sumę kontrolną SHA-256 wydania (`SHA256SUMS.txt`) możesz
 porównać, żeby potwierdzić, że plik nie został zmodyfikowany.
+
+**Możesz też sprawdzić, skąd ten plik pochodzi, a nie tylko czy się nie zmienił.** Każde archiwum
+wydania niesie podpisaną atestację builda, więc jedno polecenie odpowiada na pytanie „czy to
+naprawdę zbudowano z tego kodu, tym workflow":
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+```
+
+Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To dowodzi, że sama
+strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
+Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
 
 ### Co jest w środku pobranego pliku i jak to sprawdzić
 

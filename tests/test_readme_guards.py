@@ -135,7 +135,7 @@ def test_both_readmes_document_every_connections_column():
     import json
     import os as _os
     from beantester.gui.pages.conns import COLUMNS
-    for readme, lang in zip(READMES, ("en", "pl")):
+    for readme, lang in zip(READMES, ("en", "pl"), strict=True):
         with open(_os.path.join(ROOT, "lang", f"{lang}.json"), encoding="utf-8") as f:
             names = json.load(f)
         text = _read(readme)
@@ -206,3 +206,46 @@ def test_polish_readme_pipeline_keeps_lan_and_blocking():
              ("celowanie", "tryb LAN", "blokada", "NAT") if sec.find(w) >= 0)]
     check("README.pl.md 'Jak to działa' keeps celowanie -> tryb LAN -> blokada -> NAT",
           order == ["celowanie", "tryb LAN", "blokada", "NAT"], f"(got {order})")
+
+
+def test_both_readmes_list_every_job_the_ci_workflow_runs():
+    """Prose about CI is the first thing to go stale, and nothing was watching it.
+
+    The workflow gained four jobs in two days. A reader deciding whether to trust
+    this project reads the README, not the YAML - so the table there has to be the
+    set of jobs, exactly: a new job that nobody documented reddens this, and so
+    does a documented job that no longer exists.
+
+    Parsed by hand rather than with PyYAML, which is deliberately not a test
+    dependency (see the same choice in test_site.py).
+    """
+    import re
+    with open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    inside, jobs = False, []
+    for line in lines:
+        if re.match(r"^jobs:\s*$", line):
+            inside = True
+            continue
+        if inside:
+            if line and not line.startswith((" ", "\t", "#")):
+                break                                   # a new top-level key
+            match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+            if match:
+                jobs.append(match.group(1))
+    check("the workflow scan found its jobs", len(jobs) >= 5, f"({jobs})")
+
+    for readme in READMES:
+        text = _read(readme)
+        # Only the marked table: both READMEs are full of tables whose first
+        # column is a backticked lowercase name (CLI flags, CSV columns), and a
+        # guard that reads all of them measures the wrong thing.
+        block = re.search(r"<!-- ci-jobs:start -->(.*?)<!-- ci-jobs:end -->", text, re.S)
+        check(f"{readme} carries the marked CI table", block is not None)
+        documented = set(re.findall(r"^\| `([a-z0-9_-]+)` \|", block.group(1) if block else "",
+                                    re.MULTILINE))
+        missing = sorted(set(jobs) - documented)
+        extra = sorted(documented - set(jobs))
+        check(f"{readme} documents every CI job", not missing, f"(missing: {missing})")
+        check(f"{readme} documents no job that no longer exists", not extra,
+              f"(stale: {extra})")

@@ -4,6 +4,7 @@
 [![Latest release](https://img.shields.io/github/v/release/donislawdev/BeanNetworkTester?sort=semver)](https://github.com/donislawdev/BeanNetworkTester/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/donislawdev/BeanNetworkTester/total)](https://github.com/donislawdev/BeanNetworkTester/releases)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
 **Bean Network Tester** is a tool for testers and developers: check how your application behaves
@@ -1130,6 +1131,7 @@ The engine is separate from WinDivert, so the tests run on any system (they need
 admin nor tkinter). The suite is based on **pytest**:
 
 ```bat
+pip install --require-hashes -r requirements.txt
 pip install -r requirements-dev.txt
 python -m pytest tests
 ```
@@ -1156,6 +1158,29 @@ The **CI/CD CLI contract** is guarded separately:
 exit-code assertions, an NDJSON check, `--doctor` and `--license`, and then **an `.exe` build with
 a smoke test of the built file** (`--version`, `--simulate`, a bad config -> code 3) plus a check
 that the WinDivert driver really shipped next to the exe, with a downloadable artifact.
+
+<!-- ci-jobs:start -->
+Every job in that workflow, and what a red one means:
+
+| job | what it does |
+|---|---|
+| `public-text` | commit messages and the pull-request description: English, plain hyphens, nothing private to a machine |
+| `lint` | **ruff**. Dead code, bug shapes and the complexity ceiling fail the run. The security family is reported and never blocks |
+| `types` | **mypy** over the package |
+| `semgrep` | the default registry ruleset. ERROR, HIGH and CRITICAL fail the run, the rest is printed |
+| `mutations` | breaks each guarded behaviour and proves its test reddens. A pull request runs the entries it touched, the weekly run does all of them |
+| `audit` | weekly only: **pip-audit** against the pinned set, and it opens an issue when an advisory lands |
+| `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
+| `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
+<!-- ci-jobs:end -->
+
+**Three static checks run beside the tests**, on Linux only, because they read the source rather
+than run it. **ruff** fails a pull request on a dead-code or bug-shape finding (`F` and `B`) and
+reports the security family (`S`, `ASYNC`) as annotations that never block. **mypy** type-checks
+the package. **semgrep** scans with its default registry ruleset and a finding at ERROR, HIGH or
+CRITICAL fails the run, while everything below that is printed in full. The three tool versions
+are pinned in `requirements-lint.txt`, so a new release of a linter cannot redden a pull request
+that changed nothing.
 
 One step is worth knowing about because no unit test can do its job: a **GUI render check on real
 Tk** under a virtual screen, at the minimum supported 1366x768, **in every language**. It builds
@@ -1445,6 +1470,18 @@ rights and loads a network driver - so Windows SmartScreen may show an "Unknown 
 and some antivirus tools may raise a false alarm. The **WinDivert driver itself is digitally signed
 by its author**. You can compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to confirm the
 file has not been modified.
+
+**You can also check where the download came from, not just that it is unchanged.** Every release
+archive carries a signed build attestation, so one command answers "was this really built from that
+source by that workflow":
+
+```bash
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+```
+
+A checksum proves the file matches what the release page says. This proves the release page itself
+was produced by this repository's own workflow, from a specific commit, on a GitHub-hosted runner.
+The same command also verifies the SBOM that ships beside the archive.
 
 ### What is inside the download, and how to check it
 

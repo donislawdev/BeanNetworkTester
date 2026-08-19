@@ -53,8 +53,9 @@ def parse_schedule(text):
             raise ValueError(translate("errors.bad_schedule_step", None, part=part))
         try:
             dur, dn, up = (float(bits[0]), float(bits[1]), float(bits[2]))
-        except ValueError:
-            raise ValueError(translate("errors.bad_schedule_step", None, part=part))
+        except ValueError as exc:
+            raise ValueError(translate("errors.bad_schedule_step", None,
+                                       part=part)) from exc
         steps.append((dur, dn, up))
     return steps
 
@@ -565,14 +566,14 @@ def _coerce_setting(key, value):
             if isinstance(value, bool):
                 raise ValueError
             return float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             # Say what the setting DOES take, not just that this is not it. The
             # registry already knows - the form has been telling people "must be
             # between 0 and 100" for as long as it has existed, while the config
             # loader said only "invalid" for the very same value.
             raise ValueError(translate("errors.bad_config_value", None,
                                        field=key, value=repr(value),
-                                       expected=_expected_shape(key)))
+                                       expected=_expected_shape(key))) from exc
     return str(value)
 
 

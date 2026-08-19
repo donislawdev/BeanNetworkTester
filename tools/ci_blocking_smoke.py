@@ -169,7 +169,7 @@ def main():
                             "took more than it named" % (label, other, ROUNDS))
 
     print("phase                                     named  bystander")
-    for label, ip, port, named, other, bystander_counts in results:
+    for label, _ip, _port, named, other, bystander_counts in results:
         note = "" if bystander_counts else "   (bystander N/A: a one-octet " \
                                            "loopback prefix covers every 127.x)"
         print("  %-38s %2d/%-2d  %2d/%-2d%s"

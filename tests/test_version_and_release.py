@@ -125,7 +125,9 @@ def test_breaking_sections_come_first():
 
         def close(version, sections):
             if version and "### BREAKING" in sections and sections[0] != "### BREAKING":
-                problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"
+                # B023 is false here: one file, one iteration - the closure
+                # cannot outlive the loop that made it.
+                problems.append(f"{name} {version}: BREAKING is #{sections.index('### BREAKING') + 1}"  # noqa: B023
                                 f" of {len(sections)} (first is {sections[0]!r})")
 
         for line in lines:
@@ -226,7 +228,7 @@ def test_no_user_facing_entry_grows_into_an_essay():
     with open(path, encoding="utf-8") as f:
         lines = f.read().splitlines()
 
-    version, entry, offenders, entries = None, None, [], 0
+    entry, offenders, entries = None, [], 0
 
     def close(entry):
         if not entry:
@@ -425,10 +427,16 @@ def test_both_workflows_install_the_same_pinned_builder():
     pin_file = "requirements-build.txt"
     with open(os.path.join(ROOT, pin_file), encoding="utf-8") as f:
         pins = [ln.strip() for ln in f
-                if ln.strip() and not ln.lstrip().startswith("#")]
-    check(f"{pin_file} pins exactly one package", len(pins) == 1, f"({pins})")
-    check(f"{pin_file} pins it with == ", bool(re.match(r"^pyinstaller==\d", pins[0])),
-          f"({pins[0]!r} - a range or a bare name is not a pin)")
+                if ln.strip() and not ln.lstrip().startswith("#")
+                and not ln.strip().startswith("--hash=")]
+    # Since 2026-08-19 this file pins the whole CLOSURE, not just the freezer:
+    # pinning the top of the tree left seven packages free to move underneath
+    # it, one of which decides what goes inside the bundle and ships monthly.
+    unpinned = [p for p in pins if not re.match(r"^[A-Za-z0-9._-]+==\d", p.rstrip(" \\"))]
+    check(f"{pin_file}: every package in the closure is pinned with ==",
+          not unpinned, f"({unpinned} - a range or a bare name is not a pin)")
+    check(f"{pin_file}: the freezer itself is still pinned there",
+          any(re.match(r"^pyinstaller==\d", p) for p in pins), f"({pins[:3]})")
 
     for path in ("ci.yml", "release.yml"):
         with open(os.path.join(ROOT, ".github", "workflows", path),
@@ -445,3 +453,143 @@ def test_both_workflows_install_the_same_pinned_builder():
                  and pin_file not in ln]
         check(f"{path}: never installs pyinstaller unpinned", not loose,
               f"({loose} - put the version in {pin_file}, not on the command line)")
+
+
+def test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name():
+    """``--repo`` lands in the PATH of an api.github.com URL.
+
+    Semgrep flagged the `urlopen` call (`dynamic-urllib-use-detected`) for the
+    reason it usually flags one: a dynamic value could carry a `file://` scheme.
+    It cannot here - the scheme is a literal - but the value does become part of
+    the path, so `--repo ../../gists` would quietly ask a different endpoint the
+    question and print whatever came back as if those were releases. Nobody is
+    attacked by that (it is a maintainer's own tool), and it is still three lines
+    to make the argument mean what its name says.
+    """
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import downloads
+
+    for good in ("donislawdev/BeanNetworkTester", "a/b", "Some.Owner/repo-name_1"):
+        check(f"{good} is accepted as a repository", bool(downloads.REPO.match(good)))
+
+    for bad in ("../../gists", "owner", "owner/name/extra", "owner/name?x=1",
+                "https://example.test/o/n", "owner name", ""):
+        rejected = True
+        try:
+            downloads.fetch_releases(bad)
+        except ValueError:
+            pass
+        except Exception as exc:            # noqa: BLE001 - any other error means it TRIED
+            rejected = False
+            reason = exc
+        else:
+            rejected = False
+            reason = "no error at all"
+        check(f"{bad!r} is refused before it becomes a URL", rejected,
+              "" if rejected else f"({reason})")
+
+
+def test_the_release_attests_exactly_the_archive_it_publishes():
+    """Two attestations, one subject, and the subject is the download.
+
+    A release carries two signed statements about the zip: an SBOM attestation
+    (what is inside it) and a build-provenance attestation (which repository,
+    commit and workflow produced it). Both are worth nothing if they name a
+    different file from the one `gh release create` uploads, and that mismatch is
+    invisible on the release page - the attestation store simply ends up holding a
+    statement about a digest nobody downloads.
+
+    So this pins the shape rather than the wording: every `subject-path` in the
+    workflow names the same variable the publish step uploads, and both actions
+    are still there.
+    """
+    import re
+    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
+              encoding="utf-8") as handle:
+        text = handle.read()
+
+    subjects = re.findall(r"subject-path:\s*(\S.*?)\s*$", text, re.MULTILINE)
+    check("both attestations name a subject", len(subjects) == 2, f"({subjects})")
+    check("both attest the same file", len(set(subjects)) == 1, f"({subjects})")
+
+    publish = re.search(r"gh release create[^\n]*", text)
+    check("the workflow publishes a release", publish is not None)
+    uploaded = publish.group(0) if publish else ""
+    # `subject-path: ${{ env.ASSET }}` against `gh release create ... "$ASSET" ...`
+    name = subjects[0].strip("${} ").replace("env.", "").strip()
+    check(f"the attested subject ({name}) is what gets uploaded",
+          ("$" + name) in uploaded or ("${" + name + "}") in uploaded,
+          f"({uploaded[:120]})")
+
+    for action in ("actions/attest@", "actions/attest-build-provenance@"):
+        check(f"{action} is still in the release workflow", action in text)
+
+
+def test_every_pinned_runtime_requirement_carries_its_artefact_hashes():
+    """A version pins a NUMBER. Hashes pin the BYTES.
+
+    `pydivert==3.1.3` says which release to fetch, and says nothing about what
+    comes back: an index or a publishing account that has been taken over can
+    serve different bytes under the same version, and this particular wheel
+    carries the WinDivert kernel driver that gets installed on a user's machine.
+    With hashes present pip refuses anything that does not match.
+
+    Measured while writing this (2026-08-19), because the failure mode is not the
+    obvious one: corrupting the hash of ONE artefact does not fail the install -
+    pip falls back to another artefact of the same version, which is why every
+    artefact PyPI published for that version is listed. Corrupting them all is
+    what produces "THESE PACKAGES DO NOT MATCH THE HASHES" and exit 1.
+
+    This runs offline, so it checks the SHAPE rather than the values: the file
+    that ships cannot quietly lose its hashes. Regenerate with
+    `python tools/pin_hashes.py requirements.txt`.
+    """
+    import re
+    path = os.path.join(ROOT, "requirements.txt")
+    with open(path, encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+
+    pinned = {}
+    current = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("--hash="):
+            check("a hash line follows a requirement", current is not None, f"({stripped[:40]})")
+            digest = stripped[len("--hash="):].rstrip(" \\")
+            check(f"{current}: sha256 in the shape pip reads",
+                  re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None, f"({digest[:24]})")
+            pinned[current].append(digest)
+            continue
+        match = re.match(r"^([A-Za-z0-9._-]+)==", stripped)
+        check(f"every requirement is pinned with == ({stripped[:40]})", match is not None)
+        current = match.group(1) if match else None
+        pinned[current] = []
+
+    check("the file still names its requirements", len(pinned) >= 2, f"({sorted(pinned)})")
+    bare = [name for name, hashes in pinned.items() if not hashes]
+    check("every pinned requirement carries at least one hash", not bare, f"({bare})")
+    # More than one, or pip's fallback to another artefact of the same version
+    # would be an unhashed path back in through the front door.
+    thin = [name for name, hashes in pinned.items() if len(hashes) < 2]
+    check("each names every artefact, not just the one this machine picks",
+          not thin, f"({thin})")
+
+
+def test_the_dev_requirements_do_not_pull_in_the_hashed_file():
+    """The two cannot share one `pip install`, and the reason is pip's, not ours.
+
+    Hash-checking is turned on for the WHOLE install as soon as one requirement
+    carries a hash. `requirements-dev.txt` deliberately tracks latest - that is
+    what the weekly run watches - so including the hashed runtime file would
+    demand hashes for pytest, hypothesis and everything underneath them.
+    """
+    with open(os.path.join(ROOT, "requirements-dev.txt"), encoding="utf-8") as handle:
+        text = handle.read()
+    lines = [ln.strip() for ln in text.splitlines()
+             if ln.strip() and not ln.strip().startswith("#")]
+    check("requirements-dev.txt does not include requirements.txt",
+          not any(ln.startswith("-r requirements.txt") for ln in lines), f"({lines[:3]})")
+    check("it still lists the test tooling", any("pytest" in ln for ln in lines), f"({lines})")

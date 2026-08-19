@@ -172,7 +172,7 @@ def corruption_pct(stats):
 
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
-_LIVE_ENGINES = weakref.WeakSet()
+_LIVE_ENGINES: weakref.WeakSet = weakref.WeakSet()
 
 
 def deadline_reached(deadline, now):

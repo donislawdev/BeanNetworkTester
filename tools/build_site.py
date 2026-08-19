@@ -90,18 +90,18 @@ def _read_json(path):
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
-    except FileNotFoundError:
-        raise SiteError("missing file: %s" % path)
+    except FileNotFoundError as exc:
+        raise SiteError("missing file: %s" % path) from exc
     except json.JSONDecodeError as exc:
-        raise SiteError("%s is not valid JSON: %s" % (path, exc))
+        raise SiteError("%s is not valid JSON: %s" % (path, exc)) from exc
 
 
 def _read_text(path):
     try:
         with open(path, encoding="utf-8") as handle:
             return handle.read()
-    except FileNotFoundError:
-        raise SiteError("missing file: %s" % path)
+    except FileNotFoundError as exc:
+        raise SiteError("missing file: %s" % path) from exc
 
 
 def load_registry(root):
@@ -134,7 +134,7 @@ def load_registry(root):
     if reg["default_language"] not in codes:
         raise SiteError("site.json: default_language %r is not one of %s"
                         % (reg["default_language"], codes))
-    if dict(zip(codes, dirs))[reg["default_language"]] != "":
+    if dict(zip(codes, dirs, strict=True))[reg["default_language"]] != "":
         raise SiteError("site.json: the default language must live at the root (dir \"\")")
     return reg
 
@@ -166,7 +166,9 @@ def palette(root, mapping):
         if isinstance(target, ast.Name) and isinstance(value, ast.Constant):
             found[target.id] = value.value
         elif isinstance(target, ast.Tuple) and isinstance(value, ast.Tuple):
-            for name, item in zip(target.elts, value.elts):
+            # `a, b = 1, 2, 3` parses, so the two sides may differ in length:
+            # read the pairs that exist rather than raising on the rest.
+            for name, item in zip(target.elts, value.elts, strict=False):
                 if isinstance(name, ast.Name) and isinstance(item, ast.Constant):
                     found[name.id] = item.value
 
@@ -896,7 +898,7 @@ SOURCE_GLYPH = (
 def page_context(page, code, registry, texts, home, colours, root, pages):
     """Everything a page's template and body may refer to, for one language."""
     entry = page["languages"][code]
-    lang = _language(registry, code)
+    _language(registry, code)          # raises on a code site.json does not know
     repo = registry["repo_url"].rstrip("/")
     context = dict(texts[code])
     _merge(context, load_app_strings(root, code), "program strings [%s]" % code)

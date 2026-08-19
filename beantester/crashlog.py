@@ -59,7 +59,6 @@ import os
 import platform
 import sys
 import threading
-import time
 import traceback
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -83,7 +82,7 @@ ERROR = "error"
 DEBUG = "debug"
 
 _lock = threading.Lock()
-_seen = {}                          # fingerprint -> record (with a count)
+_seen: dict[str, dict] = {}         # fingerprint -> record (with a count)
 _context_provider = None            # set by the App/CLI: returns a dict of state
 _installed = False
 _enabled = True
@@ -166,7 +165,14 @@ def _fingerprint(exc_type, frames):
     parts = [getattr(exc_type, "__name__", str(exc_type))]
     for frame in frames[-4:]:
         parts.append(f"{os.path.basename(frame.filename)}:{frame.name}:{frame.lineno}")
-    return hashlib.sha1("|".join(parts).encode("utf-8", "replace")).hexdigest()[:12]
+    # sha256, and NOT because this is a signature - it is a dedup key, where a
+    # collision would cost one merged crash record and nothing else. The reason
+    # is cheaper than that: "sha1" in a source file is a finding in every scanner
+    # that looks (Semgrep raised it here), and answering the same false alarm
+    # every quarter costs more than the one-word change ever will. Nothing
+    # persists these ids between runs, so no stored record is invalidated - a
+    # crash text file written by an older version simply carries the old id.
+    return hashlib.sha256("|".join(parts).encode("utf-8", "replace")).hexdigest()[:12]
 
 
 def _subsystem_of(frames):
@@ -319,7 +325,7 @@ def note(exc, subsystem, message=""):
     record(exc, source="swallowed", subsystem=subsystem, severity=DEBUG, note=message)
 
 
-_once_seen = set()
+_once_seen: set[tuple] = set()
 
 
 def once(subsystem, exc):

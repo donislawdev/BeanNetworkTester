@@ -22,8 +22,8 @@ def parse_number(value, field_key=None, bounds=None, lang=None):
     text = str("" if value is None else value).strip().replace(",", ".")
     try:
         number = float(text)
-    except (TypeError, ValueError):
-        raise ValueError(translate("errors.field_number", lang, name=name))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(translate("errors.field_number", lang, name=name)) from exc
     if number != number or number in (float("inf"), float("-inf")):   # NaN / inf
         raise ValueError(translate("errors.field_number", lang, name=name))
     if bounds:
@@ -43,5 +43,5 @@ def parse_seed(value, lang=None):
         return -1
     try:
         return int(text)
-    except (TypeError, ValueError):
-        raise ValueError(translate("errors.seed_integer", lang))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(translate("errors.seed_integer", lang)) from exc

@@ -154,7 +154,6 @@ class W:
         self.bindings.setdefault(sequence, []).append(func)
 
     bind_all = bind
-    bind_class = bind
 
     def unbind(self, sequence, funcid=None):
         self.bindings.pop(sequence, None)

@@ -5,11 +5,24 @@ version: 2
 #   security fixes). Grouped so one PR carries the whole bump, not four.
 # - pip: requirements*.txt (pydivert, psutil, pytest, hypothesis, ...). Review these
 #   before merging - pydivert/psutil touch the packet path and the build.
+# `cooldown` holds a newly published version back for a week before it is
+# proposed here. It closes the window the tj-actions and trivy-action
+# compromises used - a poisoned release pulled in within hours of publication -
+# and it costs a week of latency on updates nobody is waiting for.
+# 🔴 It does NOT delay security fixes: cooldown applies to version updates only,
+# and Dependabot security updates are a separate mechanism (GitHub docs,
+# "Dependabot options reference"). Checked there rather than assumed, because
+# a week of silence on a CVE would be the opposite of the point.
+# github-actions supports `default-days` alone; the `semver-*-days` variants
+# exist for pip, and are left off until there is a reason to treat a major
+# differently from a patch here.
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
@@ -19,4 +32,6 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5

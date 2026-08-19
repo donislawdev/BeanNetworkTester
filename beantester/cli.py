@@ -19,7 +19,7 @@ import time
 
 from . import appinfo, clilog, driver, exitcodes, winenv
 from .appinfo import APP_NAME, command_name, program_name, __version__
-from .clilog import LOG_PREFIX, CliLog
+from .clilog import CliLog
 from . import crashlog
 from .engine import BeanEngine
 from .fields import BOOL, FIELD_DEFS
@@ -32,7 +32,7 @@ from .repro import save_repro_report, settings_to_cli_string
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
-                       range_errors, validate_ranges, warn_if_unbounded)
+                       range_errors, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
 

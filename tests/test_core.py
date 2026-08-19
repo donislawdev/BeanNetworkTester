@@ -517,7 +517,8 @@ def test_corrupt_packet_edge_cases():
     # exactly one bit flipped (payload length preserved, hamming distance == 1)
     p = FakePacket(payload=b"\x00" * 16)
     BeanCore.corrupt_packet(p, random.Random(5))
-    diff_bits = sum(bin(a ^ b).count("1") for a, b in zip(b"\x00" * 16, p.payload))
+    diff_bits = sum(bin(a ^ b).count("1")
+                    for a, b in zip(b"\x00" * 16, p.payload, strict=True))
     check("corrupt: exactly 1 bit flipped", diff_bits == 1 and len(p.payload) == 16,
           f"(bits={diff_bits}, len={len(p.payload)})")
 
@@ -628,7 +629,7 @@ def test_a_long_rst_cooldown_is_honoured_not_truncated_by_the_flow_table():
         if d.emit_rst:
             resets.append(now)
         now += 0.05
-    gaps = [round(b - a, 1) for a, b in zip(resets, resets[1:])]
+    gaps = [round(b - a, 1) for a, b in zip(resets, resets[1:], strict=False)]
     check("RST: the cooldown between resets is the one that was configured",
           gaps and all(abs(g - cooldown) < 0.5 for g in gaps),
           f"(cooldown={cooldown}, gaps={gaps})")

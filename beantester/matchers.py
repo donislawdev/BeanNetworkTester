@@ -151,7 +151,10 @@ class _Term:
 # -- matchers ----------------------------------------------------------------- #
 class Matcher:
     """A compiled field expression. Compile once, call ``matches()`` per packet."""
-    kind = None
+    # Annotated because subclasses fill both in, and an unannotated `None`
+    # (or `()`) is read as "this attribute is always None" - which makes
+    # every subclass an error rather than the point of the base class.
+    kind: str | None = None
 
     def __init__(self, raw, terms):
         self.raw = str(raw or "").strip()
@@ -184,7 +187,7 @@ class Matcher:
     # the whole of IPv4 and none of IPv6, and that still bounds nothing worth
     # having. Covering any ONE group completely is enough. Kinds without such a
     # split declare a single group.
-    BLAST_PROBES = ()
+    BLAST_PROBES: tuple[tuple[tuple, ...], ...] = ()
 
     @property
     def covers_everything(self):
@@ -441,8 +444,8 @@ def _compile_regex(pattern, field, term):
             warnings.simplefilter("ignore", FutureWarning)
             warnings.simplefilter("ignore", DeprecationWarning)
             return re.compile(pattern, re.IGNORECASE)
-    except re.error:
-        raise _err("errors.bad_filter_regex", field, term)
+    except re.error as exc:
+        raise _err("errors.bad_filter_regex", field, term) from exc
 
 
 def _is_glob(body):
@@ -478,14 +481,17 @@ def _parse_ip_term(body, term, field):
                 raise _err("errors.bad_filter_ip", field, term)
             version, num = operand.version, operand.num
             base = _compare_predicate(op, num)
-            return ((lambda c: c is not None and c.version == version and base(c.num)),
+            # B023 is false here: the loop RETURNS in this iteration, so `version`
+            # and `base` cannot change under the lambda - late binding needs a
+            # second pass to bite.
+            return ((lambda c: c is not None and c.version == version and base(c.num)),  # noqa: B023
                     ("ip_cmp", version, op, num))
     # CIDR
     if "/" in body:
         try:
             net = ipaddress.ip_network(body, strict=False)
-        except (ValueError, TypeError):
-            raise _err("errors.bad_filter_ip", field, term)
+        except (ValueError, TypeError) as exc:
+            raise _err("errors.bad_filter_ip", field, term) from exc
         lo = int(net.network_address)
         hi = int(net.broadcast_address)
         version = net.version
@@ -537,7 +543,7 @@ def _parse_process_term(body, term, field):
             if not operand.isdigit():
                 raise _err("errors.bad_filter_compare_name", field, term)
             base = _compare_predicate(op, int(operand))
-            return (lambda c: c.pid is not None and base(c.pid)), None
+            return (lambda c: c.pid is not None and base(c.pid)), None  # noqa: B023
     # numeric atoms (literal PID / PID range) reuse the int parser
     numeric = _parse_int_atom(body, term, field, None)
     if numeric is not None:
@@ -567,8 +573,8 @@ def parse_matcher(text, kind, field="fields.filter", bounds=None):
         return text
     try:
         cls = _MATCHER_CLASSES[kind]
-    except KeyError:
-        raise ValueError(f"unknown matcher kind: {kind!r}")
+    except KeyError as exc:
+        raise ValueError(f"unknown matcher kind: {kind!r}") from exc
 
     terms = []
     for raw_term in split_terms(text):

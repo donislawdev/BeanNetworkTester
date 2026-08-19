@@ -27,7 +27,7 @@ def __getattr__(name):
     if name == "_HAS_TK":
         try:
             from beantester import gui
-            gui.App                    # force the tkinter-backed import to run
+            _ = gui.App                # force the tkinter-backed import to run
             return True
         except Exception:
             return False

@@ -39,7 +39,7 @@ seeds = st.integers(min_value=0, max_value=2**32 - 1)
 
 def _bit_difference(a, b):
     """Total number of differing bits between two equal-length byte strings."""
-    return sum(bin(x ^ y).count("1") for x, y in zip(a, b))
+    return sum(bin(x ^ y).count("1") for x, y in zip(a, b, strict=True))
 
 
 # --------------------------------------------------------------------------- #

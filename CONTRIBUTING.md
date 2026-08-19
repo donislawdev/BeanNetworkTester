@@ -7,9 +7,13 @@ testable on any OS.
 ## Getting started
 
 ```bash
+pip install --require-hashes -r requirements.txt   # runtime, pinned to exact artefacts
 pip install -r requirements-dev.txt
+pip install -r requirements-lint.txt   # ruff and mypy (semgrep on Linux and macOS)
 python -m pytest tests            # full suite - no Windows, no driver, no admin rights
 python smoke_gui.py               # GUI smoke with a fake tkinter
+ruff check                        # F and B fail a pull request, S and ASYNC are a report
+mypy                              # types, over the package
 python bean_network_tester.py --simulate --loss 10 --duration 3   # CLI demo
 python bean_network_tester.py --doctor                            # environment report
 ```
@@ -57,5 +61,8 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
 ## Pull requests
 
 1. Run `python -m pytest tests` - everything must pass.
-2. Add tests for new behavior (see `tests/` for the style).
-3. Update both `lang/en.json` and `lang/pl.json` when adding UI texts.
+2. Run `ruff check` and `mypy` - both are gates on the pull request.
+   Semgrep runs in CI and needs no local setup. On Windows it installs but does not
+   scan, so run it from WSL if you want it locally.
+3. Add tests for new behavior (see `tests/` for the style).
+4. Update both `lang/en.json` and `lang/pl.json` when adding UI texts.

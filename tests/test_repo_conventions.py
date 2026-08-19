@@ -142,7 +142,6 @@ def test_no_silent_exception_swallowing_outside_the_crash_logger():
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
-            body = [n for n in node.body if not isinstance(n, ast.Pass)]
             # `except ...: pass` with nothing else is the silent swallow
             only_pass = all(isinstance(n, ast.Pass) for n in node.body)
             if only_pass:
@@ -317,16 +316,44 @@ def test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository():
     probe = os.path.join(ROOT, "HANDOFF-scanner-probe.md")
     check("the planted brief is not overwriting a real one",
           not os.path.exists(probe), f"({probe})")
-    # An em-dash: what the dash scan would object to if it ever read this file.
+    # 🔴 And the same trick for the DIRECTORIES, for the same reason one level up.
+    # `internal_tools/`, `.claude/` and `crashes/` exist on the maintainer's machine
+    # and in no checkout, so on a runner there is nothing under them to leak - the
+    # assertion below passes whatever SKIP_DIRS holds. Measured on CI (2026-08-19):
+    # the mutation that drops `internal_tools` from SKIP_DIRS came back SURVIVED,
+    # with no defect behind it. Planting one file in each makes the guard mean the
+    # same thing in both places.
+    planted = []
+    for directory in ("internal_tools", ".claude", "crashes"):
+        target = os.path.join(ROOT, directory, "scanner-probe.md")
+        if os.path.exists(target):
+            continue                        # never overwrite something real
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        planted.append((target, os.path.dirname(target)))
+    # An em-dash: what the dash scan would object to if it ever read these files.
     # Built with chr() rather than written out, because THIS file is repository text
     # and is scanned by the very rule it defines - a literal one fails the suite.
+    text = "planted by the suite " + chr(0x2014) + " removed immediately\n"
     with open(probe, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write("planted by the suite " + chr(0x2014) + " removed immediately\n")
+        handle.write(text)
+    for target, _parent in planted:
+        with open(target, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
     try:
         scanned = {os.path.relpath(p, ROOT).replace(os.sep, "/")
                    for p in repo_text_files((".py", ".md", ".json", ".txt"))}
     finally:
         os.remove(probe)
+        for target, parent in planted:
+            os.remove(target)
+            # Only a directory this test created: a maintainer's own is left alone.
+            try:
+                os.rmdir(parent)
+            except OSError:
+                pass
+    check("the scan had something to find under each skipped directory",
+          len(planted) == 3 or os.path.isdir(os.path.join(ROOT, "internal_tools")),
+          f"(planted {len(planted)})")
     for stray in ("PROJECT_NOTES.md", "CLAUDE.md", "HISTORY_NOTES.md",
                   "CHANGELOG-INTERNAL.md", os.path.basename(probe)):
         check(f"{stray} is not scanned (it is not in the repository)",
@@ -452,3 +479,106 @@ def test_every_script_the_workflows_run_is_actually_in_the_repository():
         check(f"{script} is tracked by git (a fresh clone must have it)",
               tracked.returncode == 0,
               "(it is ignored or untracked - internal_tools/ cannot hold a CI dependency)")
+
+
+def _script_lines(text):
+    """``(line number, text)`` for every line inside a ``run:`` block.
+
+    Hand-rolled rather than PyYAML, because the suite carries no YAML dependency
+    and the question is lexical anyway: is this text part of a script a runner
+    will execute. A ``run:`` opens the block, and the block ends at the first
+    non-empty line indented no further than the key itself.
+    """
+    import re
+    out, block = [], None
+    for number, line in enumerate(text.split("\n"), 1):
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if block is not None:
+            if stripped and indent <= block:
+                block = None
+            else:
+                out.append((number, line))
+                continue
+        match = re.match(r"-?\s*run:(.*)$", stripped)
+        if match:
+            out.append((number, match.group(1)))
+            block = indent
+    return out
+
+
+def test_no_workflow_puts_a_github_expression_inside_a_shell_script():
+    """``${{ }}`` in a ``run:`` block is TEXT SUBSTITUTION, not a variable.
+
+    GitHub expands the expression into the script before any shell exists, so a
+    value carrying a shell metacharacter stops being an argument and becomes a
+    command. The safe form is an intermediate ``env:`` entry, quoted where it is
+    used - which is what GitHub's own hardening guide says, and what the
+    ``check the pull-request description`` step in ``ci.yml`` has always done.
+
+    The repository had exactly one exception, four lines above that very step:
+    ``--commits origin/${{ github.base_ref }}..${{ ... .head.sha }}``. Narrow
+    rather than harmless (``base_ref`` must name a branch that already exists
+    here, and the job holds no secrets), and three lines to close - which is
+    exactly the kind of thing that survives on a memory and dies on a guard.
+    """
+    workflows = sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml")))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+    offenders = []
+    scripts = 0
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            lines = _script_lines(handle.read())
+        scripts += len(lines)
+        for number, line in lines:
+            if "${{" in line:
+                offenders.append(f"{os.path.basename(path)}:{number} {line.strip()[:60]}")
+    # A parser that stopped finding script lines would pass this silently, which
+    # is the failure mode of every hand-written scanner.
+    check("the scan actually read some script lines", scripts > 20, f"({scripts})")
+    check("no workflow interpolates a GitHub expression into a script",
+          not offenders, f"({offenders})")
+
+
+def test_every_action_a_workflow_uses_is_pinned_to_a_commit():
+    """A tag is a movable reference, and that movement IS the attack.
+
+    ``actions/checkout@v7`` names whichever commit that tag points at today, and
+    the owner of the tag may repoint it at any time - which is what the
+    tj-actions and trivy-action compromises did. GitHub's hardening guide is
+    blunt about the remedy: a full-length commit SHA is the only way to use an
+    action as an immutable release.
+
+    Immutable releases (generally available since October 2025) do not retire
+    this rule, and it is worth writing down why, because they sound like they
+    should. They lock the release tag - ``v7.0.1`` - while the floating major
+    ``v7`` is DESIGNED to move and GitHub's own documentation tells action
+    authors to move it. One reference in this repository was not even a tag:
+    ``actions/dependency-review-action@v5`` resolved to a BRANCH of that name.
+
+    The comment after the SHA is part of the rule rather than decoration. It is
+    what tells a reader which version the digest is, and it is exactly the format
+    Dependabot writes and rewrites when it bumps a pin - so pinning costs no
+    upkeep, it only moves the decision to update from the action's owner to us.
+    """
+    import re
+    workflows = sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*.yml")))
+    check("there are workflows to read", bool(workflows), f"({workflows})")
+    seen, unpinned, uncommented = 0, [], []
+    for path in workflows:
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                match = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)(.*)$", line)
+                if not match:
+                    continue
+                seen += 1
+                action, ref, rest = match.group(1), match.group(2), match.group(3)
+                where = f"{os.path.basename(path)}:{number} {action}@{ref[:12]}"
+                if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                    unpinned.append(where)
+                elif not re.search(r"#\s*v?\d", rest):
+                    uncommented.append(where)
+    # A regex that stopped matching would report a clean sweep of nothing.
+    check("the scan found the actions the workflows use", seen >= 15, f"({seen})")
+    check("every action is pinned to a full commit SHA", not unpinned, f"({unpinned})")
+    check("every pin says which version it is", not uncommented, f"({uncommented})")

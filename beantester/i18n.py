@@ -12,8 +12,8 @@ from .paths import lang_dir
 
 FALLBACK_LANGUAGE = "en"
 
-_translations = {}        # language code -> {key: translated text}
-_language_names = {}      # language code -> display name (from "_meta")
+_translations: dict[str, dict[str, str]] = {}   # language code -> {key: text}
+_language_names: dict[str, str] = {}            # code -> name (from "_meta")
 _LANG = None    # resolved lazily on first use (see _resolve_language)
 
 

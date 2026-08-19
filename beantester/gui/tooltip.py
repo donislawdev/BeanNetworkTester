@@ -17,7 +17,7 @@ from .scaling import scaled, tooltip_position
 from .theme import FONT, TIP_BG, TIP_FG
 from .. import crashlog
 
-_BUBBLES = {}          # toplevel name -> (window, label)
+_BUBBLES: dict[str, tuple] = {}     # toplevel name -> (window, label)
 
 
 def _alive(entry):

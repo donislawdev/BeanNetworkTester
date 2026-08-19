@@ -98,6 +98,13 @@ def test_different_faults_get_different_fingerprints(isolated):
     other()
     prints = {e["fingerprint"] for e in _entries(isolated)}
     assert len(prints) == 2, "two different bugs must not be merged into one"
+    # The id is printed in the record a user may paste into a report, so its
+    # SHAPE is the part worth pinning: twelve hex characters, whatever hash is
+    # behind it. (It moved from sha1 to sha256 in August 2026 - not for strength,
+    # this is a dedup key and not a signature, but because "sha1" in a source
+    # file is a finding in every scanner that looks.)
+    for one in prints:
+        assert len(one) == 12 and all(c in "0123456789abcdef" for c in one), one
 
 
 # -- 3) it never raises, whatever it is handed ------------------------------- #
@@ -151,7 +158,6 @@ def test_an_unhandled_main_thread_exception_is_recorded(isolated):
     crashlog.install(native=False)
     chained = []
     try:
-        previous = sys.excepthook
         exc = _boom("main thread died")
         sys.excepthook(type(exc), exc, exc.__traceback__)
 

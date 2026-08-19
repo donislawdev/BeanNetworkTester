@@ -1,4 +1,13 @@
--r requirements.txt
+# 🔴 This file no longer includes `-r requirements.txt`, and that is forced
+# rather than chosen. The runtime file carries artefact hashes now, and pip
+# turns hash-checking on for the WHOLE install as soon as one requirement has
+# a hash - so including it here would demand hashes for pytest, hypothesis and
+# every transitive dependency of theirs. Those are deliberately unpinned (the
+# weekly run exists to watch them drift), and the two cannot share one command.
+#
+# Install both, in either order:
+#     pip install --require-hashes -r requirements.txt
+#     pip install -r requirements-dev.txt
 pytest
 hypothesis        # property-based tests (matchers) and CLI fuzzing
 pytest-cov        # coverage gate (see [tool.coverage] in pyproject.toml)

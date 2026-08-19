@@ -102,7 +102,7 @@ def verify_package():
     # The WinDivert driver must travel with the app, never in %TEMP% - and its
     # presence is also what makes the LGPL library replaceable in place.
     hits = []
-    for dirpath, _dirs, files in os.walk(DIST):
+    for _dirpath, _dirs, files in os.walk(DIST):
         hits += [f for f in files if f.lower().startswith("windivert")]
     if not hits:
         print("build.py: WARNING: no WinDivert* files found in the bundle "

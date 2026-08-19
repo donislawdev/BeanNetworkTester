@@ -288,7 +288,7 @@ def test_constant_misses_cannot_turn_into_a_continuous_scan():
 
         def storm():                      # unrelated traffic: a miss every time
             while not stop.is_set():
-                9999 in targeting
+                _ = 9999 in targeting           # the lookup itself is the point
 
         noise = threading.Thread(target=storm, daemon=True)
         noise.start()
@@ -363,7 +363,7 @@ def test_a_child_spawned_mid_session_starts_being_impaired():
         # ...and a grandchild, two levels down
         table.info[300] = ("renderer.exe", 200)
         table.ports[7002] = 300
-        9999 in targeting                            # any packet re-arms the miss
+        _ = 9999 in targeting                        # any packet re-arms the miss
         check("a grandchild is targeted too", _wait(lambda: 7002 in targeting))
 
         check("the whole tree is in scope", targeting.ports() == {5001, 7001, 7002},
@@ -383,7 +383,7 @@ def test_an_excluded_child_is_not_pulled_back_in_by_its_parent():
         check("the resolver settled", _wait(lambda: resolver.rebuilds >= 1))
         table.info[200] = ("myapp-helper.exe", 100)
         table.ports[7001] = 200
-        9999 in targeting
+        _ = 9999 in targeting                        # re-arms the miss
         check("a rebuild happened", _wait(lambda: resolver.rebuilds >= 2))
         time.sleep(0.05)
         check("the excluded child stays out despite its matching parent",

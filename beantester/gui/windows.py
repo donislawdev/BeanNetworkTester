@@ -50,7 +50,7 @@ from .scaling import geometry_fits, max_window_size, scaled
 from .theme import BG, apply_dark_titlebar, disable_maximize
 from .. import crashlog
 
-WINDOWS = {}                    # id -> PanelWindow subclass (the registry)
+WINDOWS: dict[str, type] = {}   # id -> PanelWindow subclass (the registry)
 
 MIN_W, MIN_H = 480, 320         # unscaled; a window smaller than this is unusable
 

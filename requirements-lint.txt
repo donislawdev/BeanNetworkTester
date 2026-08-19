@@ -1,0 +1,54 @@
+# Static analysis, CI only. Nothing here is imported by the program.
+#
+# 🔴 PINNED, and for a different reason than requirements.txt is pinned. There the
+# pin says which library a release shipped; here it says which RULES a pull request
+# was judged by. A linter's rule set moves between releases, so an unpinned tool
+# turns "green yesterday, red today" into a mystery with no commit behind it - the
+# same failure that made `pyinstaller` a pinned dependency in requirements-build.txt
+# after the same commit built a working exe on CI and a crashing one on a developer
+# machine.
+#
+# Raise these by hand, deliberately, and read the release notes when you do: a new
+# ruff minor may add rules to a family we select, and that is a decision about what
+# blocks a pull request, not a routine bump.
+ruff==0.16.3
+
+# Same pin, same reason: a mypy release can start reporting a class of error the
+# previous one did not, and that is a decision about what blocks a pull request.
+# Verified 2026-08-19 on Linux WITHOUT pydivert or psutil installed - the shape a
+# runner has - because both are ignored by name in [tool.mypy] and a missing
+# module is a different code path from an untyped one.
+mypy==2.3.1
+
+# Linux and macOS only, deliberately: the Windows wheel installs (57 MB) and then
+# `semgrep-core` fails to run a scan at all on this machine - an OCaml backtrace
+# on a three-line local rule, measured 2026-08-19. Local scans go through WSL,
+# CI runs on ubuntu. The marker keeps `pip install -r` honest on Windows instead
+# of downloading an engine that cannot start.
+#
+# 🔴 The pin fixes the ENGINE, not the rules: `--config p/default` fetches those
+# from the registry at scan time, so a new or re-graded rule can turn a pull
+# request red with no commit behind it. That is the trade for not vendoring them,
+# and vendoring is not open to us - the Semgrep Rules License permits use for our
+# own purposes and forbids redistributing the rules, which is what putting them in
+# a public repository would be.
+semgrep==1.173.0; sys_platform != "win32"
+
+# The weekly audit of what we PIN. Not the same question as dependency-review,
+# which looks at what a pull request ADDS: this one asks whether an advisory has
+# been published since, against versions that have not moved.
+#
+# 🔴 Run against an INSTALLED environment (`--path`), never against the
+# requirement files. Measured 2026-08-19: `pip-audit -r requirements.txt -r
+# requirements-build.txt --require-hashes` audits 7 of the 9 pinned packages and
+# says "No known vulnerabilities found" - it silently skips `packaging` and
+# `setuptools`. The same set installed into a venv and audited by path comes back
+# with 10 (those two, plus pip itself). A scanner that quietly covers less than it
+# was asked to is worse than none, because its clean report gets quoted.
+pip-audit==2.10.1
+
+# Coverage of the CHANGE, on top of the whole-repository gate in pyproject. The
+# average moves so slowly at this size that a pull request can add a hundred
+# untested lines without pushing it below the threshold - which is precisely the
+# code most worth a test, because it is the code nobody has run twice yet.
+diff-cover==10.5.1
