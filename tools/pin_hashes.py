@@ -36,14 +36,34 @@ import json
 import re
 import sys
 import urllib.request
+from urllib.parse import quote
 
 API = "https://pypi.org/pypi/%s/%s/json"
 PINNED = re.compile(r"^(?P<name>[A-Za-z0-9._-]+)==(?P<version>[^\s;\\]+)(?P<rest>.*)$")
 
 
+def _url(name, version):
+    """The PyPI JSON endpoint for one exact version, with both parts escaped.
+
+    🔴 The escaping is not about the scheme. A scanner flags `urlopen` on a value it
+    cannot see the shape of, and the risk it names - a `file://` URL reading a local
+    file - is not reachable here: `API` is a literal `https://` and both parts land in
+    the PATH, after the authority. Measured across `../../etc/passwd`, an at-sign
+    followed by an address, and a literal `file:///c:/windows` as the version: the
+    scheme stays `https` and the host stays `pypi.org` in every case.
+
+    What IS reachable is quieter and worth closing anyway. `version` is only barred
+    from whitespace and semicolons, so `1.0?x=y` or `1.0#frag` used to truncate the
+    path into a query or a fragment - a DIFFERENT endpoint, answering about something
+    else, and this file writes the hashes that gate the supply chain. Escaped, such a
+    version asks about a release that does not exist and fails loudly instead.
+    """
+    return API % (quote(name, safe=""), quote(version, safe=""))
+
+
 def artefact_hashes(name, version, timeout=30):
     """Every sha256 on PyPI for that exact version, newest artefact last."""
-    with urllib.request.urlopen(API % (name, version), timeout=timeout) as response:
+    with urllib.request.urlopen(_url(name, version), timeout=timeout) as response:
         payload = json.load(response)
     digests = [f["digests"]["sha256"] for f in payload.get("urls", [])]
     if not digests:

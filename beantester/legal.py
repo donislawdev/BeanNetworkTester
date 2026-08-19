@@ -40,6 +40,26 @@ WINDIVERT_SHA256 = {
     "WinDivert64.sys": "8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2",
 }
 
+# The certificate the shipped executable is signed with, as the sha256 of its DER
+# bytes (recorded 2026-08-19). Public information by construction: a certificate is
+# the half of the pair that travels inside every signed file. The private key lives
+# on a hardware card, cannot be exported, and is why the signing step is a person at
+# a keyboard rather than a runner.
+#
+# 🔴 Why a pin and not a subject name: "signed" is a claim, "signed by THIS
+# certificate" is a measurement. `tools/sign_release.py` refuses to publish when the
+# certificate that actually signed the file hashes to something else, so a second
+# code-signing certificate on the same machine - a renewal, a test one, one from
+# another project - cannot quietly sign a release under this project's name.
+#
+# The signing tool selects a certificate by its SHA-1 thumbprint, which is what
+# `signtool /sha1` takes; the script resolves this digest to that thumbprint in the
+# Windows store rather than carrying two constants that can disagree.
+#
+# It expires 2027-08-19. A renewal issues a NEW certificate, so this digest moves
+# with it - and the guard failing on that day is the point, not an inconvenience.
+CODESIGN_SHA256 = "47b79ad3cfa53ef846cad03a59148f8c981d0b1196891e48b8c8d7982b10c148"
+
 # The components we ship, in the order a reader cares about. ``module`` is the
 # import name used to report the real version at run time (None = not a Python
 # package, so the version is fixed or reported by other means).

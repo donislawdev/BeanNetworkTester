@@ -21,6 +21,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Accents are optional: `opoznienie` finds `Opóźnienie`. A setting that lives in the Settings
   window is named rather than missed.
 
+- **The download is signed.** From this version the executable carries a code-signing signature, so
+  Windows names the publisher instead of saying "Unknown publisher". The key lives on a hardware
+  card, so the signing is done by hand and the release page fills in two steps. Know what it does
+  not buy: a new certificate has no SmartScreen reputation yet, so a warning can still appear for a
+  while - it now says who signed the file. The attestation you check with `--bundle` is made after
+  signing, over the exact bytes you download.
+
 - **You can now check where a download came from, not just that it is unchanged.** Every
   release archive carries a signed build attestation, so one command answers "was this really
   built from that source":

@@ -1468,11 +1468,14 @@ and only when you click the corresponding button yourself.
 
 ## A note on SmartScreen and antivirus
 
-The .exe is not (yet) signed with a certificate, and at the same time it asks for administrator
-rights and loads a network driver - so Windows SmartScreen may show an "Unknown publisher" warning,
-and some antivirus tools may raise a false alarm. The **WinDivert driver itself is digitally signed
-by its author**. You can compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to confirm the
-file has not been modified.
+**From 0.5.0 the .exe is signed**, with a certificate whose private key lives on a hardware card
+that never leaves the maintainer's desk - so Windows names the publisher instead of saying "Unknown
+publisher". Be aware of what that does and does not buy you: a new certificate has no SmartScreen
+reputation yet, so a warning can still appear for a while, and some antivirus tools may still raise
+a false alarm about a program that asks for administrator rights and loads a network driver. What
+changes is that the warning now says who signed it. The **WinDivert driver itself is digitally
+signed by its author**. You can still compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to
+confirm the file arrived unchanged.
 
 **You can also check where the download came from, not just that it is unchanged.** Every release
 archive carries a signed build attestation, so one command answers "was this really built from that
@@ -1495,6 +1498,13 @@ gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetw
 
 Useful if you got the files from a mirror, or from a machine that cannot reach the API - the
 evidence travelled with the download instead of living somewhere you have to trust separately.
+
+Three statements, and it is worth knowing they answer different questions. The **signature** says
+who stands behind the file. The **bundle above** binds this exact archive to its bill of materials,
+and it is made after signing, over the bytes you downloaded. The **build provenance** says which
+commit and which workflow produced the build that was then signed - it necessarily describes the
+unsigned build, because signing changes the bytes, and it lives in this repository's attestation
+store rather than in the download.
 
 ### What is inside the download, and how to check it
 
