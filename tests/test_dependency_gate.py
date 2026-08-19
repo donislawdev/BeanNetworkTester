@@ -94,3 +94,26 @@ def test_the_report_names_what_it_blocked_and_why(tmp_path, capsys):
     out = capsys.readouterr().out
     for expected in ("mystery", "unknown", "fine", "MIT", "1 blocked, 1 allowed"):
         check(f"the report says {expected!r}", expected in out, f"({out[:200]})")
+
+
+def test_github_actions_are_not_judged_by_this_gate():
+    """Measured on the first real run: GitHub reports `license: null` for EVERY
+    action, while every pip package came back with a real licence.
+
+    An action is CI machinery that never reaches a user, so it creates none of
+    the distribution obligation an unknown licence is dangerous for. Keeping them
+    would block every pull request that touches a workflow, for ever - and a gate
+    that always fires is one people learn to bypass. Actions are held to a
+    stricter rule elsewhere: pinned to a commit SHA, and graded weekly.
+    """
+    review = [_dep(name="actions/checkout", licence=None),
+              _dep(name="mypy", licence="MIT")]
+    review[0]["ecosystem"] = "actions"
+    blocked, passed = dependency_gate.split(review)
+    check("an action with no licence does not block", not blocked, f"({blocked})")
+    check("and it is not counted as allowed either", len(passed) == 1, f"({passed})")
+
+    # ...while a pip package with no licence still blocks, which is the point.
+    unknown = [_dep(name="mystery", licence=None)]
+    check("a package with no licence still blocks",
+          len(dependency_gate.split(unknown)[0]) == 1)

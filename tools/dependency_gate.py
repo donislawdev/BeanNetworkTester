@@ -48,8 +48,26 @@ EXCEPTIONS = {
 }
 
 
+# 🔴 GitHub Actions are dependencies in this data too, and GitHub reports
+# `license: null` for every one of them - measured on the first real run, where
+# this gate blocked `actions/checkout`, `actions/upload-artifact`,
+# `github/codeql-action` and `ossf/scorecard-action` while every pip package came
+# back with a real licence.
+#
+# They are skipped, and the reason is not convenience. An action is CI machinery
+# that never reaches a user, so it creates no distribution obligation - the thing
+# an unknown licence is dangerous for. Keeping them would mean blocking every
+# pull request that touches a workflow, for ever, and a gate that always fires is
+# a gate people learn to bypass. What actions ARE checked for lives elsewhere and
+# is stricter: every one must be pinned to a commit SHA
+# (tests/test_repo_conventions.py), and OpenSSF Scorecard grades them weekly.
+SKIPPED_ECOSYSTEMS = frozenset({"actions"})
+
+
 def added(review):
-    return [d for d in review if str(d.get("change_type", "")) == "added"]
+    return [d for d in review
+            if str(d.get("change_type", "")) == "added"
+            and str(d.get("ecosystem", "")).lower() not in SKIPPED_ECOSYSTEMS]
 
 
 def verdict(dependency):

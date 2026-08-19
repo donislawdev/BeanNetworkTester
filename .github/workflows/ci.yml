@@ -265,7 +265,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch --no-tags --depth=0 origin "$BASE_REF"
+            # No --depth here: `git fetch --depth=0` is an error ("depth 0 is
+            # not a positive number"), and the checkout above already took the
+            # full history with fetch-depth: 0.
+            git fetch --no-tags origin "$BASE_REF"
             python tools/mutate.py --changed "origin/$BASE_REF"
           else
             python tools/mutate.py
