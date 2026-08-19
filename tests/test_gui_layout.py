@@ -545,6 +545,16 @@ def test_one_ctrl_f_reaches_whichever_search_box_is_in_front():
         focus_search(app)
         assert app.current_page() is conns, "from a page with no box it must fall back"
         assert root.focus_get() is conns._search_entry
+
+        # The Control page's box can be switched OFF in the Settings window, and
+        # then it is a page without a box: focusing a widget that is not on
+        # screen would swallow the keystrokes that followed the shortcut.
+        app.select_page("control")
+        app.set_pref("show_control_search", False)
+        control.on_pref_changed("show_control_search")
+        focus_search(app)
+        assert app.current_page() is conns, "a hidden box kept Ctrl+F to itself"
+        assert root.focus_get() is conns._search_entry
     """)
 
 

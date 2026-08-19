@@ -1241,6 +1241,35 @@ MUTATIONS = [
         "new": "        menu.configure(foreground=FG,",
         "test": "test_the_statistics_copy_menu_is_dark_like_every_other_context_menu",
     },
+    {
+        # pack hands out space in CALL order, so the bar comes back UNDER the
+        # whole page body. The fake cannot render it - it can only see that the
+        # call no longer says where to sit.
+        "label": "gui: the search bar comes back without saying where to sit",
+        "file": "beantester/gui/pages/control.py",
+        "old": "            self._pack_bar(before=self.scroll.vsb)",
+        "new": "            self._pack_bar()",
+        "test": "test_the_control_search_bar_can_be_switched_off_and_back_on",
+    },
+    {
+        # The marks live on the FORM, so hiding the bar without clearing leaves
+        # fields highlighted with nothing left to clear them from.
+        "label": "gui: hiding the search leaves its marks on the form",
+        "file": "beantester/gui/pages/control.py",
+        "old": '        self.query_var.set("")\n'
+               "        self._apply()               # unmarks, refolds, forgets the query",
+        "new": "        pass",
+        "test": "test_hiding_the_search_takes_its_marks_and_its_folds_with_it",
+    },
+    {
+        # Focusing a widget that is not on screen swallows whatever the user
+        # types next - the shortcut has to decline instead.
+        "label": "gui: Ctrl+F still claims a hidden search box",
+        "file": "beantester/gui/pages/control.py",
+        "old": "        if not self._search_shown:\n            return False",
+        "new": "        pass",
+        "test": "test_one_ctrl_f_reaches_whichever_search_box_is_in_front",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

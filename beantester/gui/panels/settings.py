@@ -235,7 +235,7 @@ class SettingsWindow(PanelWindow):
             var = tk.BooleanVar(value=bool(app.pref(pref.key)))
             chk = ttk.Checkbutton(
                 row, text=T(pref.label), variable=var,
-                command=lambda k=pref.key, v=var: app.set_pref(k, bool(v.get())))
+                command=lambda k=pref.key, v=var: self._store(k, bool(v.get())))
             chk.pack(side="left", anchor="w")
             add_tooltip(chk, pref.tip)
             self._pref_vars[pref.key] = var
@@ -283,9 +283,24 @@ class SettingsWindow(PanelWindow):
         else:
             entry.config(style="TEntry")
             self._pref_messages.pop(pref.key, None)
-            self.app.set_pref(
-                pref.key, int(value) if float(value).is_integer() else value)
+            self._store(pref.key,
+                        int(value) if float(value).is_integer() else value)
         self._show_pref_errors()
+
+    def _store(self, key, value):
+        """Persist a preference and tell the pages, in ONE place.
+
+        Both kinds of row write through here so that "a preference was changed"
+        has a single meaning: the value is on disk (``App.set_pref`` persists
+        immediately - a preference must survive a hard crash) and anything that
+        has to look different NOW already does. Without the second half a switch
+        waits for the next tick, and the one that shows or hides a widget looks
+        broken while it waits. See ``gui/pages/__init__.py::pref_changed``.
+        """
+        self.app.set_pref(key, value)
+        with crashlog.quiet("gui.panels.settings"):
+            from ..pages import pref_changed
+            pref_changed(self.app, key)
 
     def _show_pref_errors(self):
         """List every live reason under its group, the way ControlForm does."""

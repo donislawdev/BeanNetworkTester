@@ -66,6 +66,14 @@ PREFS = (
     # world a file came from.
     Pref("scope_view_to_target", BOOL, "prefs.scope_view", "tips.scope_view",
          default=False, hint="prefs.scope_view_hint", section="scope"),
+    # Default True: the box has always been there, and a preference is allowed to
+    # take something away only when the user asks.
+    #
+    # Worded POSITIVELY on purpose. "Hide the search box" plus an unticked box is
+    # a double negative to read, and it would make this the one switch in the
+    # window where a tick means less rather than more.
+    Pref("show_control_search", BOOL, "prefs.show_control_search",
+         "tips.show_control_search", default=True),
     # -- behaviour --------------------------------------------------------- #
     Pref("confirm_close", BOOL, "prefs.confirm_close", "tips.confirm_close",
          default=True),
@@ -81,7 +89,7 @@ PREFS_BY_KEY = {p.key: p for p in PREFS}
 # Prefs that name a ``section`` are rendered there instead and must NOT appear
 # here - see ``SECTION_PREFS`` below.
 PREF_GROUPS = (
-    ("prefs.group_view", ("chart_seconds", "log_lines")),
+    ("prefs.group_view", ("chart_seconds", "log_lines", "show_control_search")),
     ("prefs.group_behaviour", ("confirm_close", "restore_profile", "reset_layout")),
 )
 

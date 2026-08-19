@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **The search box on the Control page can be switched off.** Settings (the cog) has a new
+  "Show the search box on the Control page" switch under Display. It is on by default, and
+  turning it off takes the box away at once - Ctrl+F then goes to the search box in the
+  Connections tab, the way it does from any other page.
+
 ### Fixed
 
 - The right-click copy menu on the Statistics page opened with a white background instead of the
