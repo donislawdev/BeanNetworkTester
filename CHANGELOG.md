@@ -48,9 +48,10 @@ and a batch of table and layout fixes.
   built from that source":
   `gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester`.
   A checksum proves the file matches the release page; this proves the page came out of this
-  repository's workflow, from a specific commit. It covers the SBOM too. The proof now ships
-  **as a file** as well, `BeanNetworkTester-vX.Y.Z.sigstore.json`, so `--bundle` checks the
-  archive from a mirror, or with no network at all.
+  repository's workflow, from a specific commit. The proof also ships **as a file**,
+  `BeanNetworkTester-vX.Y.Z.sigstore.json`, so the archive can be checked against evidence that
+  travelled with it. The README gives the exact command - it needs `--repo` and
+  `--predicate-type` as well as `--bundle`.
 
 - **Every release now carries an SBOM, signed against the download.** A standard SPDX file listing
   each third-party component with its version, licence and source - the same list `--license`

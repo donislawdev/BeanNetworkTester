@@ -1489,15 +1489,19 @@ A checksum proves the file matches what the release page says. This proves the r
 was produced by this repository's own workflow, from a specific commit, on a GitHub-hosted runner.
 The same command also verifies the SBOM that ships beside the archive.
 
-That command asks GitHub. The proof also ships **as a file**, `BeanNetworkTester-vX.Y.Z.sigstore.json`,
-so you can check the archive without one:
+That command asks GitHub which attestations exist. The proof also ships **as a file**,
+`BeanNetworkTester-vX.Y.Z.sigstore.json`, so you can check the archive against evidence that
+travelled with it:
 
 ```bash
-gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip --bundle BeanNetworkTester-v0.5.0.sigstore.json --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Useful if you got the files from a mirror, or from a machine that cannot reach the API - the
-evidence travelled with the download instead of living somewhere you have to trust separately.
+Both extra flags are needed and neither is decoration. `--repo` names the repository the
+signing identity has to match. `--predicate-type` is there because this bundle is the **SBOM**
+attestation, and `gh` looks for a build-provenance one unless you say otherwise - without it you
+get "no attestations found with predicate type", which is the tool being precise rather than
+broken. When the file is good it prints nothing and exits 0. Change one byte and it exits 1.
 
 Three statements, and it is worth knowing they answer different questions. The **signature** says
 who stands behind the file. The **bundle above** binds this exact archive to its bill of materials,
