@@ -427,10 +427,16 @@ def test_both_workflows_install_the_same_pinned_builder():
     pin_file = "requirements-build.txt"
     with open(os.path.join(ROOT, pin_file), encoding="utf-8") as f:
         pins = [ln.strip() for ln in f
-                if ln.strip() and not ln.lstrip().startswith("#")]
-    check(f"{pin_file} pins exactly one package", len(pins) == 1, f"({pins})")
-    check(f"{pin_file} pins it with == ", bool(re.match(r"^pyinstaller==\d", pins[0])),
-          f"({pins[0]!r} - a range or a bare name is not a pin)")
+                if ln.strip() and not ln.lstrip().startswith("#")
+                and not ln.strip().startswith("--hash=")]
+    # Since 2026-08-19 this file pins the whole CLOSURE, not just the freezer:
+    # pinning the top of the tree left seven packages free to move underneath
+    # it, one of which decides what goes inside the bundle and ships monthly.
+    unpinned = [p for p in pins if not re.match(r"^[A-Za-z0-9._-]+==\d", p.rstrip(" \\"))]
+    check(f"{pin_file}: every package in the closure is pinned with ==",
+          not unpinned, f"({unpinned} - a range or a bare name is not a pin)")
+    check(f"{pin_file}: the freezer itself is still pinned there",
+          any(re.match(r"^pyinstaller==\d", p) for p in pins), f"({pins[:3]})")
 
     for path in ("ci.yml", "release.yml"):
         with open(os.path.join(ROOT, ".github", "workflows", path),
