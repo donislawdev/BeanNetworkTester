@@ -1346,6 +1346,16 @@ MUTATIONS = [
         "test": "test_the_two_lan_switches_share_one_row",
     },
     {
+        # How they shipped touching: the checkbox branch packed with no padding
+        # while every other kind went through a cell that had some, so the pair
+        # only looked wrong once two of them ended up in one row.
+        "label": "gui: paired checkboxes lose the gap between them",
+        "file": "beantester/gui/form.py",
+        "old": '            widget.pack(side="left", anchor="w", padx=(0, _gap_after(field)))',
+        "new": '            widget.pack(side="left", anchor="w")',
+        "test": "test_the_two_lan_switches_share_one_row",
+    },
+    {
         # Without the idle hint the row is one cluster in a band of nothing -
         # the shape that has now been reported twice.
         "label": "gui: the search bar loses its idle right-hand anchor",

@@ -48,6 +48,20 @@ def _takes_a_row(field):
     neighbour. Only the registry may say so - the caller reads the answer.
     """
     return field.kind in SPAN_KINDS if field.span is None else field.span
+
+
+def _gap_after(field):
+    """How much room to leave to the RIGHT of a field inside its row.
+
+    A field that owns its row only has to clear the card's edge. Two that SHARE
+    one need a real gap between them, or they read as a single control: the pair
+    of LAN switches shipped touching, the second one's box hard against the end
+    of the first one's label, because the checkbox branch packed with no padding
+    at all while every other kind went through a cell that had some.
+
+    One place, so the two paths cannot drift apart again.
+    """
+    return scaled(6) if _takes_a_row(field) else scaled(22)
 VALIDATED_KINDS = (F.NUMBER, F.EXPR, F.SCHEDULE, F.SEED)
 
 # Below this width a second column of sections would squeeze the wider rows
@@ -216,7 +230,7 @@ class ControlForm:
             widget = ttk.Checkbutton(row, text=T(field.label),
                                      variable=app.vars[field.key],
                                      command=app.on_form_changed)
-            widget.pack(side="left", anchor="w")
+            widget.pack(side="left", anchor="w", padx=(0, _gap_after(field)))
             add_tooltip(widget, field.tip)
             self.entries[field.key] = widget
             return
@@ -240,8 +254,7 @@ class ControlForm:
 
         span = _takes_a_row(field)
         cell = ttk.Frame(row, style="Card.TFrame")
-        cell.pack(side="left", fill="x", expand=span,
-                  padx=(0, scaled(6) if span else scaled(22)))
+        cell.pack(side="left", fill="x", expand=span, padx=(0, _gap_after(field)))
 
         label = ttk.Label(cell, text=T(field.label), style="Card.TLabel")
         label.pack(side="left", padx=(0, scaled(6)))
