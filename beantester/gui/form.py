@@ -37,6 +37,17 @@ from .. import crashlog
 
 SECTION_BY_ID = {s.id: s for s in SECTIONS}
 SPAN_KINDS = (F.CHOICE, F.BOOL, F.EXPR, F.SCHEDULE)
+
+
+def _takes_a_row(field):
+    """Does this field get a row to itself, or does it share one?
+
+    The kind decides by default, because these four carry a label long enough to
+    be clipped in half a card. A field may override it: ``span=True`` claims a
+    row a short kind would not get, ``span=False`` PAIRS a long kind with its
+    neighbour. Only the registry may say so - the caller reads the answer.
+    """
+    return field.kind in SPAN_KINDS if field.span is None else field.span
 VALIDATED_KINDS = (F.NUMBER, F.EXPR, F.SCHEDULE, F.SEED)
 
 # Below this width a second column of sections would squeeze the wider rows
@@ -176,7 +187,7 @@ class ControlForm:
         rows, current = [], []
         for key in sec.fields:
             field = FIELDS[key]
-            if field.span or field.kind in SPAN_KINDS:
+            if _takes_a_row(field):
                 if current:
                     rows.append(current)
                     current = []
@@ -227,7 +238,7 @@ class ControlForm:
             app.filter_cb = widget
             return
 
-        span = field.span or field.kind in SPAN_KINDS
+        span = _takes_a_row(field)
         cell = ttk.Frame(row, style="Card.TFrame")
         cell.pack(side="left", fill="x", expand=span,
                   padx=(0, scaled(6) if span else scaled(22)))

@@ -351,9 +351,12 @@ def test_the_control_search_bar_can_be_switched_off_and_back_on():
 
     The order is the part that can go wrong silently: pack hands out space in
     CALL order, so a bar re-packed after the scroller exists lands UNDER the whole
-    page unless it names what to sit before. This asserts the call carries
-    ``before=``; whether Tk then draws it in the right place is a live-render
-    question the fake cannot answer (it keeps children in creation order).
+    page unless it names what to sit before.
+
+    Upgraded 2026-08-20: the fake now models pack order, so this asserts the bar
+    is BACK ABOVE the page body rather than merely that the call carried
+    ``before=``. Until then the real question had to go to a live render, because
+    ``pack_slaves`` answered in creation order and could not tell the two apart.
     """
     run_gui("""
         page = app.pages["control"]
@@ -369,6 +372,9 @@ def test_the_control_search_bar_can_be_switched_off_and_back_on():
         assert page._bar.winfo_ismapped(), "the bar did not come back"
         assert page._bar.pack_info.get("before") is page.scroll.vsb, (
             "re-packed without before= - it would sit under the page body")
+        packed = page.frame.pack_slaves()
+        assert packed.index(page._bar) < packed.index(page.scroll.canvas), (
+            "the bar came back UNDER the page body: %r" % (packed,))
 
         # an unrelated preference must not move it
         page.on_pref_changed("chart_seconds")

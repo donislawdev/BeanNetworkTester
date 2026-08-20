@@ -393,8 +393,8 @@ MUTATIONS = [
     {
         "label": "warning: LAN mode is demoted from impairment to scenery",
         "file": "beantester/fields.py",
-        "old": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\", impairs=IMPAIRS_ALL),",
-        "new": "          tip=\"tips.lan_mode\", span=True, cli=\"lan-mode\"),",
+        "old": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\", impairs=IMPAIRS_ALL),",
+        "new": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\"),",
         "test": "test_the_warning_names_lan_mode_which_reads_like_a_scope",
     },
     {
@@ -1325,6 +1325,34 @@ MUTATIONS = [
         "old": '    if g("internet_only"):\n        args += ["--internet-only"]',
         "new": "    pass",
         "test": "test_every_setting_with_a_flag_reaches_the_reproduction_command",
+    },
+    {
+        # The harness itself. It claimed pack order for months while answering in
+        # creation order, so every ordering question had to go to a live render.
+        "label": "harness: the fake stops honouring before= when packing",
+        "file": "tests/fake_tk.py",
+        "old": "        if before is not None and before in order:\n"
+               "            index = order.index(before)",
+        "new": "        if False:\n            index = 0",
+        "test": "test_the_harness_models_pack_order_so_layout_tests_can_ask_about_it",
+    },
+    {
+        # A checkbox takes a whole row BY KIND, so the pair goes back to a column
+        # the moment the registry's override stops being read.
+        "label": "gui: the form ignores a field's span override",
+        "file": "beantester/gui/form.py",
+        "old": "    return field.kind in SPAN_KINDS if field.span is None else field.span",
+        "new": "    return field.kind in SPAN_KINDS",
+        "test": "test_the_two_lan_switches_share_one_row",
+    },
+    {
+        # Without the idle hint the row is one cluster in a band of nothing -
+        # the shape that has now been reported twice.
+        "label": "gui: the search bar loses its idle right-hand anchor",
+        "file": "beantester/gui/pages/control.py",
+        "old": '        return "" if self.query_var.get().strip() else "Ctrl+F"',
+        "new": '        return ""',
+        "test": "test_clearing_the_search_puts_every_style_back",
     },
 ]
 

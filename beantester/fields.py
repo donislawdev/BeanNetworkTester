@@ -66,7 +66,12 @@ class Field(NamedTuple):
     hint: str = ""                 # i18n key of the greyed hint next to the entry
     in_profile: bool = False       # stored by a user profile / built-in preset
     preset_key: str = ""           # short key a preset/profile stores it under ("" = key)
-    span: bool = False             # takes a whole row in the section grid
+    # Whole row, or share one? ``None`` = decide from the kind, which is what
+    # nearly every field wants: a checkbox, a dropdown or an expression carries a
+    # long label and would be clipped in half a card (``gui/form.py::SPAN_KINDS``).
+    # Say ``False`` to override that and PAIR the field with its neighbour - the
+    # two LAN switches read as a pair and are short enough to sit side by side.
+    span: bool | None = None       # True = own row, False = share, None = by kind
     cli: str = ""                  # argparse flag (without "--")
     overridden_by: str = ""        # key of a field that makes this one inert
     override_note: str = ""        # i18n key explaining the override, shown in the form
@@ -86,8 +91,11 @@ FIELD_DEFS = (
     # like a scope ("only the local network") and is the exact opposite. decide()
     # step 2b DROPS every packet whose remote end is public, so this flag alone,
     # with the whole rest of the form at zero, cuts the machine's internet.
+    # span=False on both: they are one decision seen from two sides, so they sit
+    # side by side rather than stacked with a card's width of nothing beside each.
+    # A BOOL would take a whole row by kind - see fields.Field.span.
     Field("lan_mode", BOOL, "fields.lan_mode", "traffic",
-          tip="tips.lan_mode", span=True, cli="lan-mode", impairs=IMPAIRS_ALL),
+          tip="tips.lan_mode", span=False, cli="lan-mode", impairs=IMPAIRS_ALL),
     # The mirror of the line above, and IMPAIRS_ALL for the same reason: on its
     # own, with the whole rest of the form at zero, it cuts every local address
     # this machine talks to. Loopback survives (utils.is_lan_ip).
@@ -97,7 +105,7 @@ FIELD_DEFS = (
     # with exit 2 - so naming it --lan-cut would silently break a documented
     # shortcut of --lan-mode (allow_abbrev stays on: ADR 2026-08-02).
     Field("internet_only", BOOL, "fields.internet_only", "traffic",
-          tip="tips.internet_only", span=True, cli="internet-only",
+          tip="tips.internet_only", span=False, cli="internet-only",
           impairs=IMPAIRS_ALL),
 
     # -- target process ---------------------------------------------------- #
@@ -301,8 +309,10 @@ SECTIONS = (
     # preset picker must be the first thing they see - not the last section after
     # a dozen panels of NAT/MTU/RST jargon.
     Section("profiles", "frames.profiles", (), columns=1, extra="profiles"),
+    # Two columns so the pair of LAN switches shares a row; the filter dropdown
+    # above them still spans both, because a CHOICE takes a row by kind.
     Section("traffic", "frames.traffic", ("filter", "lan_mode", "internet_only"),
-            columns=1),
+            columns=2),
     # No "enable" checkbox: an empty target already means "all traffic", so the
     # checkbox was a switch that did nothing but take a click (same for the two
     # sections below).

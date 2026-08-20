@@ -52,7 +52,12 @@ import bean_network_tester as n                      # noqa: E402
 from beantester.gui.windows import WINDOWS           # noqa: E402
 
 GEOMETRY = "1366x768"
-BUTTON_CLASSES = ("TButton", "Button")
+# 🔴 Checkbuttons are in here as of 2026-08-20, and they were the obvious gap:
+# a checkbox is a label that cannot wrap, so it clips exactly like a button, and
+# the two longest ones in the program sit side by side in one card. The class was
+# simply never listed - the guard was written for the "Wesprzyj projekt" -> "Wesp"
+# report, and that was a TButton.
+BUTTON_CLASSES = ("TButton", "Button", "TCheckbutton", "Checkbutton")
 LABEL_CLASSES = ("TLabel", "Label")
 TOL = 1                                               # px slack against rounding
 
