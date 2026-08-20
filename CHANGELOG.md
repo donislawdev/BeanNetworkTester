@@ -33,6 +33,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The two LAN checkboxes were touching.** "Internet only" started right where the "LAN mode"
+  label ended, with nothing between them, so the pair read as one control. They now have the same
+  gap as any other two settings sharing a row.
 - The right-click copy menu on the Statistics page opened with a white background instead of the
   dark one used everywhere else. It now looks like the menu in the Connections table, on both
   Live and Session.

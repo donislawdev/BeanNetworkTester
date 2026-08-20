@@ -932,4 +932,12 @@ def test_the_two_lan_switches_share_one_row():
         assert lan.master is net.master, "the LAN switches are not in one row"
         assert app.form.entries["filter"].master is not lan.master, (
             "the traffic dropdown was pulled into the checkbox row")
+
+        # ...and they must not TOUCH. They shipped with the second one's box hard
+        # against the end of the first one's label, because the checkbox branch
+        # packed with no padding while every other kind went through a cell that
+        # had some. Two controls with nothing between them read as one.
+        gap = (lan.pack_info or {}).get("padx")
+        gap = gap[1] if isinstance(gap, (tuple, list)) else gap
+        assert gap, "no room to the right of the first switch: %r" % (lan.pack_info,)
     """)
