@@ -5,18 +5,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-### Changed
+## [0.5.0] - 2026-08-20
 
-- **The two LAN switches sit side by side.** "LAN mode" and "Internet only" are one decision seen
-  from two sides, so they now share a row under "Traffic to modify" instead of being stacked with
-  half a card of empty space beside each.
-- **The search box on the Control page moved to the left of its row**, where the Connections tab
-  keeps its own, and the right end of that row now shows `Ctrl+F` when you are not searching. The
-  box used to sit alone against the right margin with the rest of the row empty, which read as
-  something dropped onto the page rather than part of it.
+**The short version.** Three things, and the first is about not losing your files when the
+program is updated: profiles, window state and the CSV exports now live in your own user
+folder instead of the program folder, an older version's files are copied over the first time
+you start this one, and both the About window and `--doctor` tell you which folder is in use.
+
+The second is about trusting what you downloaded. **The executable is signed now**, so Windows
+names the publisher instead of saying "Unknown publisher", and the release carries proof you
+can check yourself - a checksum, a bill of materials, and an attestation bound to the exact
+file, verifiable without asking anyone. Groundwork for installing through WinGet and
+Chocolatey is in place as well, though nothing is published on either yet.
+
+The third is a new switch. **"Internet only" cuts your local network and leaves the internet
+up** - the mirror of "LAN mode", for testing an app whose intranet server, NAS or printer has
+gone away. Anything talking to itself on your own machine keeps working, but your router is on
+the local network, so if your PC asks it for DNS, name lookups stop with it.
+
+The rest is the usual: the Statistics figures can be copied, settings can be searched by name,
+and a batch of table and layout fixes.
 
 ### Added
-
 - **"Internet only (no local network)" - a new checkbox under "Traffic to modify", the mirror of
   LAN mode.** It drops traffic to and from local addresses and leaves the internet up, so you can
   test an app whose intranet server, NAS or printer has gone away. On the command line:
@@ -30,36 +40,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Show the search box on the Control page" switch under Display. It is on by default, and
   turning it off takes the box away at once - Ctrl+F then goes to the search box in the
   Connections tab, the way it does from any other page.
-
-### Fixed
-
-- **The two LAN checkboxes were touching.** "Internet only" started right where the "LAN mode"
-  label ended, with nothing between them, so the pair read as one control. They now have the same
-  gap as any other two settings sharing a row.
-- The right-click copy menu on the Statistics page opened with a white background instead of the
-  dark one used everywhere else. It now looks like the menu in the Connections table, on both
-  Live and Session.
-- **A reproduction command left out `--narrow-filter`.** A session started with "Capture only the
-  targeted traffic" produced a command that re-ran a WIDER capture, so the packet counts of the
-  re-run could not match the report they came from.
-
-## [0.5.0] - 2026-08-19
-
-**The short version.** Two things, and the first is about not losing your files when the
-program is updated: profiles, window state and the CSV exports now live in your own user
-folder instead of the program folder, an older version's files are copied over the first time
-you start this one, and both the About window and `--doctor` tell you which folder is in use.
-
-The second is about trusting what you downloaded. **The executable is signed now**, so Windows
-names the publisher instead of saying "Unknown publisher", and the release carries proof you
-can check yourself - a checksum, a bill of materials, and an attestation bound to the exact
-file, verifiable without asking anyone. Groundwork for installing through WinGet and
-Chocolatey is in place as well, though nothing is published on either yet.
-
-The rest is the usual: the Statistics figures can be copied, settings can be searched by name,
-and a batch of table and layout fixes.
-
-### Added
 - **The figures on the Statistics page can be copied.** Right-click any value on "Session" or
   "Live" for "Copy value" or "Copy the whole tab", or use the button on the panel itself - "Copy
   session details" beside the repro buttons, "Copy counters" under the grid. The text is exactly
@@ -160,6 +140,13 @@ and a batch of table and layout fixes.
   could not say which version you were given. The two entries that still say "no assertion" say
   it because the files they describe carry no version at all, which is the honest answer rather
   than a guess.
+- **The two LAN switches sit side by side.** "LAN mode" and "Internet only" are one decision seen
+  from two sides, so they now share a row under "Traffic to modify" instead of being stacked with
+  half a card of empty space beside each.
+- **The search box on the Control page moved to the left of its row**, where the Connections tab
+  keeps its own, and the right end of that row now shows `Ctrl+F` when you are not searching. The
+  box used to sit alone against the right margin with the rest of the row empty, which read as
+  something dropped onto the page rather than part of it.
 
 ### Docs
 - **One more component named in the licence list.** `libtommath` now appears in the About window,
@@ -351,6 +338,15 @@ and a batch of table and layout fixes.
   START, if the window was already open at the time. Ticking it did nothing until the next
   session. It now greys out for as long as the session runs, with the same "locked while running"
   note as every other option that is only read at start.
+- **The two LAN checkboxes were touching.** "Internet only" started right where the "LAN mode"
+  label ended, with nothing between them, so the pair read as one control. They now have the same
+  gap as any other two settings sharing a row.
+- The right-click copy menu on the Statistics page opened with a white background instead of the
+  dark one used everywhere else. It now looks like the menu in the Connections table, on both
+  Live and Session.
+- **A reproduction command left out `--narrow-filter`.** A session started with "Capture only the
+  targeted traffic" produced a command that re-ran a WIDER capture, so the packet counts of the
+  re-run could not match the report they came from.
 
 ## [0.4.0] - 2026-08-01
 
