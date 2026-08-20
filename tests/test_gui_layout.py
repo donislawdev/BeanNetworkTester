@@ -5,6 +5,7 @@ gave the session panel and the event log no space at all: "Mark bug", "Save repr
 report", "Copy CLI" and the whole event table were simply unreachable. Nothing
 could catch that, because the fake tkinter ignored geometry calls entirely.
 """
+from fakes import check
 from gui_harness import run_gui
 
 
@@ -432,7 +433,10 @@ def test_clearing_the_search_puts_every_style_back():
         page.clear()
         assert app.form.labels["loss"].cget("style") == before, (
             app.form.labels["loss"].cget("style"))
-        assert page._note.cget("text") == "" and page._count.cget("text") == ""
+        # An empty box says the shortcut, never a position: the right end of the
+        # bar is what keeps the row anchored while nothing is being searched.
+        assert page._note.cget("text") == ""
+        assert page._count.cget("text") == "Ctrl+F", page._count.cget("text")
     """)
 
 
@@ -661,12 +665,16 @@ def test_a_query_of_nothing_but_punctuation_is_not_a_search():
             page.query_var.set(query)
             page._apply()
             if query.strip() in ("--", ""):
-                assert page._count.cget("text") == "", (query, page._count.cget("text"))
+                # No POSITION - which is the claim. A box that strips to nothing
+                # is idle and says the shortcut instead; one with characters in
+                # it that match nothing says nothing at all.
+                idle = "Ctrl+F" if not query.strip() else ""
+                assert page._count.cget("text") == idle, (query, page._count.cget("text"))
                 assert not page._marks, query
             # whatever it finds, it must not raise and must not leave the page
             # marked once it is cleared
         page.clear()
-        assert not page._marks and page._count.cget("text") == ""
+        assert not page._marks and page._count.cget("text") == "Ctrl+F"
     """)
 
 
@@ -863,4 +871,65 @@ def test_no_tooltip_past_the_last_column():
         table._hide_tip()
         table._on_motion(Ev())
         assert table._tip_column is None and table._tip_window is None
+    """)
+
+
+def test_the_harness_models_pack_order_so_layout_tests_can_ask_about_it():
+    """The instrument that checks layout has to model the thing being checked.
+
+    ``pack_slaves`` returned CREATION order while its docstring claimed pack
+    order (measured 2026-08-20). Nothing was red: a widget re-packed above an
+    existing sibling looked correct here and landed under the whole page on real
+    Tk, so every ordering question had to be answered by rendering. The Control
+    page re-packs its search bar whenever the preference brings it back, which is
+    exactly that shape.
+
+    Four cases, because Tk answers all four: append, ``before=``, ``after=``, and
+    re-packing an already-packed widget (which MOVES it).
+    """
+    import fake_tk
+    root = fake_tk.Root()
+    a, b, c = (fake_tk.W(root) for _ in range(3))
+    order = lambda: root.pack_slaves()
+
+    a.pack(side="top")
+    c.pack(side="top")
+    check("harness: pack appends in call order", order() == [a, c], f"{order()}")
+
+    b.pack(side="top", before=c)
+    check("harness: before= puts it in front of the named sibling",
+          order() == [a, b, c], f"{order()}")
+
+    b.pack_forget()
+    check("harness: forgetting takes it out of the order", order() == [a, c],
+          f"{order()}")
+
+    b.pack(side="top", after=a)
+    check("harness: after= puts it behind the named sibling",
+          order() == [a, b, c], f"{order()}")
+
+    a.pack(side="top")
+    check("harness: re-packing MOVES rather than duplicates",
+          order() == [b, c, a], f"{order()}")
+
+
+def test_the_two_lan_switches_share_one_row():
+    """One decision seen from two sides, so they sit side by side.
+
+    Stacked, each of them had a card's width of nothing beside it, and the
+    second one read as an afterthought under the first rather than as its
+    mirror. A checkbox takes a whole row BY KIND (``gui/form.py::SPAN_KINDS`` -
+    a long label clips in half a card), so this only holds while the registry
+    overrides that with ``span=False``: one edit in ``fields.py`` puts them back
+    in a column with nothing red.
+
+    The dropdown above them must NOT join in: it is a CHOICE, it is the widest
+    thing in the card, and it keeps its own row.
+    """
+    run_gui("""
+        lan = app.form.entries["lan_mode"]
+        net = app.form.entries["internet_only"]
+        assert lan.master is net.master, "the LAN switches are not in one row"
+        assert app.form.entries["filter"].master is not lan.master, (
+            "the traffic dropdown was pulled into the checkbox row")
     """)

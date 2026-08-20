@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Changed
+
+- **The two LAN switches sit side by side.** "LAN mode" and "Internet only" are one decision seen
+  from two sides, so they now share a row under "Traffic to modify" instead of being stacked with
+  half a card of empty space beside each.
+- **The search box on the Control page moved to the left of its row**, where the Connections tab
+  keeps its own, and the right end of that row now shows `Ctrl+F` when you are not searching. The
+  box used to sit alone against the right margin with the rest of the row empty, which read as
+  something dropped onto the page rather than part of it.
+
 ### Added
 
 - **"Internet only (no local network)" - a new checkbox under "Traffic to modify", the mirror of

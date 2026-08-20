@@ -101,13 +101,57 @@ class W:
                     f"(its parent is {getattr(sibling, 'master', None)!r}, "
                     f"ours is {self.master!r})")
         self.pack_info = dict(kw)
+        self._enter_pack_order(kw.get("before"), kw.get("after"))
+
+    def _enter_pack_order(self, before=None, after=None):
+        """Take this widget's place in its parent's pack order.
+
+        🔴 Modelled, because until 2026-08-20 it was not and the docstring below
+        SAID it was. `pack_slaves` returned `self.children`, which is CREATION
+        order, so a widget packed above an existing sibling looked right here and
+        landed under the whole page on real Tk. A GUI that re-packs anything -
+        the Control page puts its search bar back when a preference returns it -
+        could therefore only be checked by rendering.
+
+        Order is what pack cares about: appended in call order, or placed
+        relative to a named sibling. Re-packing an already-packed widget MOVES
+        it, exactly as Tk does.
+        """
+        parent = self.master
+        if parent is None:
+            return
+        # 🔴 `__dict__`, never `getattr(..., None)`: `W.__getattr__` answers ANY
+        # unknown attribute with a no-op CALLABLE, so the default never arrives
+        # and the "not set yet" branch is unreachable. Same trap `winfo_toplevel`
+        # is explicit about.
+        order = parent.__dict__.get("_pack_order")
+        if order is None:
+            order = parent._pack_order = []
+        if self in order:
+            order.remove(self)
+        index = len(order)
+        if before is not None and before in order:
+            index = order.index(before)
+        elif after is not None and after in order:
+            index = order.index(after) + 1
+        order.insert(index, self)
 
     def pack_forget(self):
         self.pack_info = None
+        parent = self.master
+        order = parent.__dict__.get("_pack_order") if parent is not None else None
+        if order is not None and self in order:
+            order.remove(self)
 
     def pack_slaves(self):
-        """The children this widget currently manages with pack - in pack order."""
-        return [c for c in self.children if getattr(c, "pack_info", None) is not None]
+        """The children this widget manages with pack, in PACK order.
+
+        Creation order until 2026-08-20, when the claim was measured and found
+        false - see ``_enter_pack_order``. Anything not packed through ``pack``
+        (grid, or never packed) is not here, which is also what Tk answers.
+        """
+        return [c for c in self.__dict__.get("_pack_order", [])
+                if c.__dict__.get("pack_info") is not None]
 
     def winfo_ismapped(self):
         return 1 if self.pack_info is not None else 0

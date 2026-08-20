@@ -81,31 +81,37 @@ class ControlPage:
 
     # -- search -------------------------------------------------------------- #
     def _build_search_bar(self):
-        """The bar sits on the RIGHT, against the page's own margin.
+        """A toolbar with BOTH ends anchored: box on the left, count on the right.
 
-        On the left it read as a stray label floating above the first section with
-        the whole width empty beside it. On the right it lines up with the page
-        margin, sits clear of the eye's path down the first column, and lands
-        where a find box is looked for.
+        🔴 Third shape, and the first two were rejected for the SAME complaint -
+        "it looks like it was dropped on the page". Worth knowing before moving
+        it again, because the obvious fix is to move it back:
 
-        🔴 The BOX is what the eye calls "the search", so the box is what has to
-        be flush with the margin. Measured on real Tk (1200x900): with the count
-        pinned to the right the entry ended 65 px short of the section cards
-        beside it, and a control that stops short of every other right edge on the
-        page reads as something dropped on top of the page rather than part of it.
-        So the count moved to the LEFT of the label, where it still cannot push
-        anything around: everything right of it has a fixed width.
+        * everything packed LEFT (until 2026-08-11) - "a stray label floating
+          above the first section with the whole width empty beside it";
+        * everything packed RIGHT (until 2026-08-20) - the same, mirrored, and an
+          alignment fix in between did not settle it either.
 
-        Packed right to left: entry (against the margin), its label, the count,
-        then the sentence that names another window - which is free to grow
-        leftwards into empty space without moving anything.
+        So the side was never the problem. A row with one cluster in it has a
+        band of nothing next to that cluster wherever the cluster goes. This one
+        has a group at each end, which is the shape the Connections toolbar
+        already uses and nobody has reported: the gap in the middle then reads as
+        the space BETWEEN two groups rather than as emptiness beside one. It also
+        puts "Szukaj" in the same place on both pages that have it.
+
+        Nothing may move while typing, which is what the packing order protects:
+        the label and the box are pinned to the left margin, the count is pinned
+        to the right at a fixed width, and the sentence naming another window
+        grows leftwards into the middle, where there is nothing to push.
         """
         bar = ttk.Frame(self.frame)
         self._bar = bar
         self._pack_bar()
         self.query_var = tk.StringVar(value=_LAST_QUERY[0])
+        ttk.Label(bar, text=T("fields.search")).pack(side="left",
+                                                     padx=(0, scaled(6)))
         entry = ttk.Entry(bar, textvariable=self.query_var, width=24)
-        entry.pack(side="right")
+        entry.pack(side="left")
         self._count = ttk.Label(bar, text="", style="Muted.TLabel",
                                 width=8, anchor="e")
         entry.bind("<KeyRelease>", self._on_key)
@@ -114,11 +120,15 @@ class ControlPage:
         entry.bind("<Escape>", lambda e: self.clear())
         add_tooltip(entry, "tips.control_search", shortcut="Ctrl+F")
         self._entry = entry
-        ttk.Label(bar, text=T("fields.search")).pack(side="right",
-                                                    padx=(scaled(6), scaled(5)))
+        # Pinned to the right margin at a fixed width, so the number changing
+        # from "1 / 9" to "10 / 90" cannot push anything.
+        # Filled at build, not left blank: a page that opens with an empty box
+        # must already show the shortcut, or the row starts life lopsided.
+        # `_targets` and `query_var` both exist by now (see __init__).
+        self._count.config(text=self._count_text())
         self._count.pack(side="right")
-        # Free to grow leftwards: "..." is in the Settings window, or "nothing
-        # matches". Never to the right of the box, which must not move.
+        # Free to grow leftwards into the middle: "..." is in the Settings
+        # window, or "nothing matches". There is nothing to its left to shove.
         self._note = ttk.Label(bar, text="", style="Muted.TLabel", anchor="e")
         self._note.pack(side="right", padx=(0, scaled(10)))
         # Bound on the ROOT through the shared dispatcher, for the same reason the
@@ -146,7 +156,7 @@ class ControlPage:
         ``before=`` names a sibling and keeps children in creation order), so this
         one is answered by a live render, not by the suite.
         """
-        self._bar.pack(side="top", fill="x", padx=(scaled(12), scaled(14)),
+        self._bar.pack(side="top", fill="x", padx=(0, scaled(14)),
                        pady=(scaled(12), scaled(3)), **extra)
 
     def search_is_visible(self):
@@ -230,7 +240,9 @@ class ControlPage:
         self._at = 0
         if not query.strip():
             self._restore_folds()
-            self._say("", "")
+            # Not blank: the idle right end carries the shortcut, which is what
+            # stops the row reading as one cluster in a band of nothing.
+            self._say(self._count_text(), "")
             return
         if self._targets:
             self._paint()
@@ -267,7 +279,22 @@ class ControlPage:
         self._note.config(text=note)
 
     def _count_text(self):
-        return "%d / %d" % (self._at + 1, len(self._targets)) if self._targets else ""
+        """What the right end of the bar says: the position, or the shortcut.
+
+        🔴 The shortcut is not decoration - it is what keeps the row anchored at
+        BOTH ends. With an empty box the count and the note are both blank, and a
+        toolbar with one cluster on the left and nothing else is exactly the
+        shape that has now been reported twice (see ``_build_search_bar``). The
+        idle state is the state the page is looked at in, so it is the one that
+        has to hold.
+
+        Same label, same fixed width, so nothing moves when it turns into a
+        count. A key name is not translated - the tooltips pass these as literals
+        too.
+        """
+        if self._targets:
+            return "%d / %d" % (self._at + 1, len(self._targets))
+        return "" if self.query_var.get().strip() else "Ctrl+F"
 
     def _note_text(self, elsewhere):
         if elsewhere:
