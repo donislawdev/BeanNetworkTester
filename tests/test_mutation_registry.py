@@ -248,6 +248,16 @@ MUTATIONS = [
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
     {
+        # The same knob on the complexity axis, which had no crowd count at all
+        # until 2026-08-21: `max-complexity` watches the single most branching
+        # function and cannot see the runners-up climbing together underneath it.
+        "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary",
+        "new": "COMPLEX_NEAR_CEILING = 5        # decide, _run_session, settings_summary",
+        "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.

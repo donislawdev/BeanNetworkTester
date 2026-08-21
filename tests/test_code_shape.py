@@ -273,6 +273,27 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
           f"{FUNCTION_CEILING} - move the ceiling to {biggest_function[0]})")
 
 
+# 🔴 THE SECOND KNOB, on the complexity axis - the counterpart of
+# FILES_NEAR_CEILING and FUNCTIONS_NEAR_CEILING, and it was missing until
+# 2026-08-21. `max-complexity` watches ONE function: the most branching one in the
+# tree. It is blind to the shape the size ratchet already grew a knob for - the
+# runners-up climbing together, none of them a record. With the ceiling at 29,
+# `cli._run_session` could go from 27 to 29 across three sessions and every gate in
+# this repository would stay green the whole way.
+#
+# Today's measurement, same 70% band as the size counts (CROWD_BAND): three
+# functions reach 21 or more - `core.decide` (29), `cli._run_session` (27) and
+# `summary.settings_summary` (25). `engine._capture_loop` is next at 20, roughly
+# one branch of headroom, which is what makes this band a real one rather than a
+# number that can never fire.
+#
+# Measured over the WHOLE tree, like the ceiling above it and unlike the size
+# counts, which walk the package only. That is deliberate: the ceiling this band
+# hangs from is repo-wide, so a band scoped to the package would be measuring a
+# different thing from the number it is a percentage of.
+COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary
+
+
 # Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a
 # contributor may not have installed. The two checks below skip themselves rather
 # than fail in that case - the same choice the admin-only tests make, and for the
@@ -320,6 +341,34 @@ def test_the_complexity_ceiling_is_the_measurement_not_a_number_above_it():
     check(f"the ceiling {ceiling} IS a real measurement, not headroom",
           below and below > 0,
           f"(nothing reaches {ceiling} - lower max-complexity to the real maximum)")
+
+
+def test_nothing_else_is_creeping_up_on_the_complexity_ceiling():
+    """The crowd count, one axis over - see COMPLEX_NEAR_CEILING for why.
+
+    Both halves live in ONE test on purpose, which is a deviation from the size
+    ratchet above and it is about cost, not tidiness: every reading here is a ruff
+    subprocess over the whole tree (measured 0.6 s warm, 2.4 s cold), and splitting
+    the two questions would pay for the same measurement twice to print two
+    sentences. `check` gives each half its own wording, which is what the split was
+    ever for.
+    """
+    import tomllib
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as handle:
+        ceiling = tomllib.load(handle)["tool"]["ruff"]["lint"]["mccabe"]["max-complexity"]
+
+    band = int(ceiling * CROWD_BAND)
+    crowded = _ruff_complexity_findings(band)
+    if crowded is None:
+        return                      # ruff not installed here: nothing to measure
+
+    check(f"at most {COMPLEX_NEAR_CEILING} function(s) within {CROWD_BAND:.0%} of "
+          f"max-complexity ({band + 1} or more) - simplify one before adding another",
+          crowded <= COMPLEX_NEAR_CEILING,
+          f"({crowded} in the band, COMPLEX_NEAR_CEILING is {COMPLEX_NEAR_CEILING})")
+    check("the complexity crowd count is today's measurement, not a looser number",
+          crowded == COMPLEX_NEAR_CEILING,
+          f"(measured {crowded}, frozen at {COMPLEX_NEAR_CEILING} - lower it)")
 
 
 # The modules mypy is strict about, recorded here so the list in pyproject.toml
