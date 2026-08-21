@@ -1031,7 +1031,7 @@ Wszystkie joby tego workflow i co znaczy czerwony:
 | job | co robi |
 |---|---|
 | `public-text` | treść commitów i opisu PR-a: po angielsku, płaskie łączniki, nic prywatnego z maszyny |
-| `lint` | **ruff**. Martwy kod, kształty błędów i sufit złożoności wywracają przebieg. Rodzina bezpieczeństwa tylko raportuje |
+| `lint` | **ruff**. Martwy kod, kształty błędów, sufit złożoności i sufit liczby argumentów wywracają przebieg. Rodzina bezpieczeństwa tylko raportuje |
 | `types` | **mypy** na pakiecie |
 | `semgrep` | domyślny zestaw reguł z rejestru. ERROR, HIGH i CRITICAL wywracają przebieg, reszta ląduje w logu |
 | `mutations` | psuje każde pilnowane zachowanie i dowodzi, że jego test się czerwieni. PR odpala wpisy, których dotknął, cotygodniowy przebieg wszystkie |
@@ -1042,7 +1042,10 @@ Wszystkie joby tego workflow i co znaczy czerwony:
 
 **Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go
 uruchamiają. **ruff** wywraca pull requesta na martwym kodzie i na kształtach błędów (`F` i `B`),
-a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje. **mypy**
+a rodzinę bezpieczeństwa (`S`, `ASYNC`) tylko wypisuje w diffie i nigdy nie blokuje.
+Dwie z jego reguł to sufity, a nie opinie: `C90` mierzy, iloma drogami można przejść
+przez funkcję, a `PLR0913` ile bierze argumentów. Obie stoją na najszerszej rzeczy,
+jaka dziś istnieje, więc milczą, dopóki coś jej nie przerośnie. **mypy**
 sprawdza typy w pakiecie. **semgrep** skanuje domyślnym zestawem reguł z rejestru, przy czym
 znalezisko na poziomie ERROR, HIGH albo CRITICAL wywraca przebieg, a wszystko niżej ląduje w logu.
 Wersje wszystkich trzech narzędzi są przypięte, więc nowe wydanie lintera nie zaczerwieni pull

@@ -1184,7 +1184,7 @@ Every job in that workflow, and what a red one means:
 | job | what it does |
 |---|---|
 | `public-text` | commit messages and the pull-request description: English, plain hyphens, nothing private to a machine |
-| `lint` | **ruff**. Dead code, bug shapes and the complexity ceiling fail the run. The security family is reported and never blocks |
+| `lint` | **ruff**. Dead code, bug shapes, the complexity ceiling and the argument ceiling fail the run. The security family is reported and never blocks |
 | `types` | **mypy** over the package |
 | `semgrep` | the default registry ruleset. ERROR, HIGH and CRITICAL fail the run, the rest is printed |
 | `mutations` | breaks each guarded behaviour and proves its test reddens. A pull request runs the entries it touched, the weekly run does all of them |
@@ -1195,7 +1195,10 @@ Every job in that workflow, and what a red one means:
 
 **Three static checks run beside the tests**, on Linux only, because they read the source rather
 than run it. **ruff** fails a pull request on a dead-code or bug-shape finding (`F` and `B`) and
-reports the security family (`S`, `ASYNC`) as annotations that never block. **mypy** type-checks
+reports the security family (`S`, `ASYNC`) as annotations that never block. Two of its
+rules are ceilings rather than opinions: `C90` for how many ways there are through a
+function and `PLR0913` for how many arguments it takes, both set to the widest thing
+that exists today, so they are silent until something grows past it. **mypy** type-checks
 the package. **semgrep** scans with its default registry ruleset and a finding at ERROR, HIGH or
 CRITICAL fails the run, while everything below that is printed in full. All three tool versions are
 pinned, so a new release of a linter cannot redden a pull request that changed nothing: ruff and

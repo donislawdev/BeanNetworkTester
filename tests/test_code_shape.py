@@ -299,20 +299,28 @@ COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary
 # than fail in that case - the same choice the admin-only tests make, and for the
 # same reason: a red that means "you did not install a tool" teaches people to
 # ignore red.
-def _ruff_complexity_findings(limit):
-    """How many functions ruff reports above ``limit``, or None if ruff is absent."""
+def _ruff_findings(rule, setting, limit):
+    """How many findings ``rule`` raises with ``setting`` at ``limit``.
+
+    None when ruff is not installed here, so every caller skips rather than fails.
+    """
     import subprocess
     try:
         proc = subprocess.run(
-            [sys.executable, "-m", "ruff", "check", "--select", "C901",
-             "--config", f"lint.mccabe.max-complexity = {limit}",
+            [sys.executable, "-m", "ruff", "check", "--select", rule,
+             "--config", f"{setting} = {limit}",
              "--output-format", "concise", "--no-cache", "."],
             cwd=ROOT, capture_output=True, text=True)
     except OSError:
         return None
     if "No module named" in proc.stderr or proc.returncode not in (0, 1):
         return None
-    return len([ln for ln in proc.stdout.splitlines() if "C901" in ln])
+    return len([ln for ln in proc.stdout.splitlines() if rule in ln])
+
+
+def _ruff_complexity_findings(limit):
+    """How many functions ruff reports above ``limit``, or None if ruff is absent."""
+    return _ruff_findings("C901", "lint.mccabe.max-complexity", limit)
 
 
 def test_the_complexity_ceiling_is_the_measurement_not_a_number_above_it():
@@ -369,6 +377,87 @@ def test_nothing_else_is_creeping_up_on_the_complexity_ceiling():
     check("the complexity crowd count is today's measurement, not a looser number",
           crowded == COMPLEX_NEAR_CEILING,
           f"(measured {crowded}, frozen at {COMPLEX_NEAR_CEILING} - lower it)")
+
+
+def test_the_argument_ceiling_is_the_measurement_not_a_number_above_it():
+    """`max-args` on the third axis: how many things a caller must line up.
+
+    Complexity and length are both blind to it - a fifteen-argument constructor
+    can be four lines of straight-line assignment and pass them both. The rule at
+    ruff's own default of 5 would be red on 25 signatures on day one, so it is
+    pinned to the widest one instead and ratchets down from there.
+    """
+    import tomllib
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as handle:
+        ceiling = tomllib.load(handle)["tool"]["ruff"]["lint"]["pylint"]["max-args"]
+
+    over = _ruff_findings("PLR0913", "lint.pylint.max-args", ceiling)
+    if over is None:
+        return                      # ruff not installed here: nothing to measure
+    check(f"no signature takes more than {ceiling} arguments "
+          f"(split the call - do not raise the ceiling)",
+          over == 0, f"({over} signature(s) over the ceiling)")
+
+    below = _ruff_findings("PLR0913", "lint.pylint.max-args", ceiling - 1)
+    check(f"the ceiling {ceiling} IS a real measurement, not headroom",
+          below and below > 0,
+          f"(nothing reaches {ceiling} - lower max-args to the real maximum)")
+
+
+# 🔴 The rule list is a RATCHET, and it is recorded in two places for the reason
+# every other double record here exists: nothing stopped a future change from
+# deleting a family out of `select` to make a red build green, and a check that
+# has vanished cannot fail to announce itself.
+#
+# `BLOCKING` is the subset the pull request actually stands on. It is written down
+# separately because `--select` on the ci.yml command line REPLACES the list in
+# pyproject.toml - so a rule can be configured, visible to anyone running plain
+# `ruff check`, and yet absent from the only run that can block a merge. That is
+# not hypothetical: it is the exact mistake this test was written to make
+# impossible, on the day PLR0913 was added.
+SELECTED_RULES = {"F", "B", "S", "ASYNC", "C90", "PLR0913"}
+BLOCKING_RULES = {"F", "B", "C90", "PLR0913"}
+
+
+def test_the_selected_rules_only_ever_grow():
+    """Growing the list is free (add it in both places); shrinking it reddens."""
+    import tomllib
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as handle:
+        selected = set(tomllib.load(handle)["tool"]["ruff"]["lint"]["select"])
+
+    lost = sorted(SELECTED_RULES - selected)
+    check("no rule family has quietly left the ruff configuration", not lost,
+          f"({lost} - dropping one is a decision, so change SELECTED_RULES too)")
+    gained = sorted(selected - SELECTED_RULES)
+    check("a newly selected rule is recorded here as well", not gained,
+          f"({gained} - add it to SELECTED_RULES, that is what makes it stick)")
+
+
+def test_every_blocking_rule_is_named_in_the_workflow_that_blocks():
+    """The configured list and the list CI runs are two different things.
+
+    ci.yml runs ruff twice: once blocking, once reporting with --exit-zero. Between
+    them they must account for every selected rule - a rule in neither is a gate
+    nobody runs, and a blocking rule missing from the first command is a gate that
+    exists only on a developer machine.
+    """
+    import re
+    path = os.path.join(ROOT, ".github", "workflows", "ci.yml")
+    with open(path, encoding="utf-8") as handle:
+        workflow = handle.read()
+    runs = re.findall(r"ruff check --select ([A-Z0-9,]+)", workflow)
+    check("ci.yml still runs ruff twice (one blocking, one report)",
+          len(runs) == 2, f"(found {len(runs)} ruff invocations)")
+    if len(runs) != 2:
+        return
+    blocking, reporting = (set(r.split(",")) for r in runs)
+    check("the blocking run names exactly the rules that must block",
+          blocking == BLOCKING_RULES,
+          f"(workflow blocks on {sorted(blocking)}, expected {sorted(BLOCKING_RULES)})")
+    check("every selected rule is either blocking or reported, none is unrun",
+          blocking | reporting == SELECTED_RULES,
+          f"(workflow runs {sorted(blocking | reporting)}, "
+          f"configured {sorted(SELECTED_RULES)})")
 
 
 # The modules mypy is strict about, recorded here so the list in pyproject.toml

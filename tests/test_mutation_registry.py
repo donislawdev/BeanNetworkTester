@@ -258,6 +258,34 @@ MUTATIONS = [
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {
+        # A rule deleted from `select` to turn a red build green is a check that
+        # vanished - and a check that has vanished cannot fail to announce itself.
+        "label": "ruff: a selected rule quietly leaves the configuration",
+        "file": "pyproject.toml",
+        "old": 'select = ["F", "B", "S", "ASYNC", "C90", "PLR0913"]',
+        "new": 'select = ["F", "B", "S", "ASYNC", "C90"]',
+        "test": "test_the_selected_rules_only_ever_grow",
+    },
+    {
+        # The gap the pairing exists for: `--select` on the command line REPLACES
+        # the list in pyproject.toml, so a rule can stay configured, stay visible
+        # to `ruff check` on a developer machine, and stop blocking anything.
+        "label": "ci: a blocking ruff rule drops out of the workflow command",
+        "file": ".github/workflows/ci.yml",
+        "old": "        run: ruff check --select F,B,C90,PLR0913 --output-format github",
+        "new": "        run: ruff check --select F,B,C90 --output-format github",
+        "test": "test_every_blocking_rule_is_named_in_the_workflow_that_blocks",
+    },
+    {
+        # A ceiling standing above the truth grants headroom nobody decided to
+        # grant - the same defect the file and function ceilings are guarded for.
+        "label": "ratchet: the argument ceiling is raised above the widest signature",
+        "file": "pyproject.toml",
+        "old": "max-args = 14",
+        "new": "max-args = 20",
+        "test": "test_the_argument_ceiling_is_the_measurement_not_a_number_above_it",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.

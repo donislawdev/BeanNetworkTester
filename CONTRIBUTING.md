@@ -13,7 +13,7 @@ pip install --require-hashes -r requirements-lint.txt   # ruff, mypy and diff-co
 pip install -r requirements-scan.txt   # semgrep (Linux and macOS) and pip-audit
 python -m pytest tests            # full suite - no Windows, no driver, no admin rights
 python smoke_gui.py               # GUI smoke with a fake tkinter
-ruff check                        # F and B fail a pull request, S and ASYNC are a report
+ruff check                        # F, B, C90 and PLR0913 fail a PR; S and ASYNC are a report
 mypy                              # types, over the package
 python bean_network_tester.py --simulate --loss 10 --duration 3   # CLI demo
 python bean_network_tester.py --doctor                            # environment report
@@ -69,5 +69,10 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
 2. Run `ruff check` and `mypy` - both are gates on the pull request.
    Semgrep runs in CI and needs no local setup. On Windows it installs but does not
    scan, so run it from WSL if you want it locally.
+   Two of the ruff rules are ceilings pinned to the widest thing in the tree today
+   (`C90` complexity, `PLR0913` argument count), so they are green until something
+   grows past what already exists. If one fires, split the function - raising the
+   number in `pyproject.toml` is a decision for the maintainer, not a way to get a
+   build green.
 3. Add tests for new behavior (see `tests/` for the style).
 4. Update both `lang/en.json` and `lang/pl.json` when adding UI texts.
