@@ -1035,9 +1035,10 @@ Wszystkie joby tego workflow i co znaczy czerwony:
 | `types` | **mypy** na pakiecie |
 | `semgrep` | domyślny zestaw reguł z rejestru. ERROR, HIGH i CRITICAL wywracają przebieg, reszta ląduje w logu |
 | `mutations` | psuje każde pilnowane zachowanie i dowodzi, że jego test się czerwieni. PR odpala wpisy, których dotknął, cotygodniowy przebieg wszystkie |
-| `audit` | tylko co tydzień: **pip-audit** na przypiętym zestawie, a przy znalezisku zakłada issue |
+| `audit` | **pip-audit** na przypiętym zestawie. Co tydzień - czy świat ruszył się pod wersjami, które stoją - oraz na PR-ze zmieniającym plik wymagań - czy ruszył się zestaw. Cotygodniowy przebieg zakłada issue, a PR przypinający coś podatnego po prostu się wywraca |
 | `tests` | suite, smoke GUI, render na prawdziwym Tk i asercje CLI, na Linuksie i Windowsie |
 | `build` | plik .exe dla Windowsa, ze smoke'iem, sprawdzeniem sterownika i skanem rejestru licencji |
+| `cron-issue` | zakłada issue, gdy cotygodniowy przebieg zrobi się czerwony, z deduplikacją po tym, które joby padły. Crona bardzo łatwo przegapić, a nic innego go nie zgłasza. Nie chodzi na PR-ach i nigdy sam nie zamyka issue |
 <!-- ci-jobs:end -->
 
 **Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go

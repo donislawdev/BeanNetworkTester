@@ -1,0 +1,28 @@
+# Who owns this repository, and who GitHub asks to review a change to it.
+#
+# One owner, one line. Finer-grained rules would be fiction here: every path
+# below has the same owner, and a list that pretends otherwise ages into a claim
+# nobody checks.
+#
+# What this file DOES do
+# ----------------------
+# A pull request opened by anyone else automatically requests a review from the
+# owner. That is the whole reason it exists: an outside contribution should not
+# sit unnoticed because nobody was asked.
+#
+# What it does NOT do
+# -------------------
+# GitHub never requests a review from the person who opened the pull request, and
+# nobody can approve their own. So on a change written by the owner this file is
+# silent by design - and a branch rule that demands a code-owner approval would,
+# on such a change, demand one from somebody who does not exist. That combination
+# freezes the repository: no pull request can ever be merged.
+#
+# This project therefore protects the default branch with STATUS CHECKS rather
+# than with reviews (see CONTRIBUTING.md and the CI workflow). A gate that runs is
+# worth more here than an approval nobody can give.
+#
+# Syntax note: gitignore-style patterns, with three exceptions - a pattern may not
+# start with `#`, `!` does not negate, and `[ ]` character ranges do not work.
+
+*       @donislawdev

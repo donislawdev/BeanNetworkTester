@@ -1188,9 +1188,10 @@ Every job in that workflow, and what a red one means:
 | `types` | **mypy** over the package |
 | `semgrep` | the default registry ruleset. ERROR, HIGH and CRITICAL fail the run, the rest is printed |
 | `mutations` | breaks each guarded behaviour and proves its test reddens. A pull request runs the entries it touched, the weekly run does all of them |
-| `audit` | weekly only: **pip-audit** against the pinned set, and it opens an issue when an advisory lands |
+| `audit` | **pip-audit** against the pinned set. Weekly, to ask whether the world moved under versions that did not, and on a pull request that edits a requirements file, to ask whether the set moved. The weekly run opens an issue, and a pull request that pins something vulnerable simply fails |
 | `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
 | `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
+| `cron-issue` | opens an issue when the weekly run goes red, deduplicated by which jobs failed. A cron is easy to miss and nothing else announces one. Never runs on a pull request, and never closes an issue by itself |
 <!-- ci-jobs:end -->
 
 **Three static checks run beside the tests**, on Linux only, because they read the source rather
