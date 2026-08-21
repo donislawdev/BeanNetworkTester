@@ -175,9 +175,11 @@ jobs:
       - name: Decide
         run: python tools/semgrep_gate.py semgrep.json
 
-  # Weekly, on Windows, and only weekly: this asks whether the world changed
-  # under versions that did not. A pull request cannot make it red, so running it
-  # per pull request would burn minutes to re-answer the same question.
+  # On Windows, and on two schedules of its own - see the triggers below. The
+  # weekly half asks whether the world changed under versions that did not; the
+  # pull-request half asks whether the versions changed. It USED to be weekly and
+  # nothing else, which left a tag that moved a pin unchecked until the following
+  # Monday, with a merge and possibly a release in between (2026-08-21).
   #
   # windows-latest because that is where the shipped set actually exists:
   # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
