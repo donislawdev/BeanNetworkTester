@@ -297,6 +297,28 @@ MUTATIONS = [
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
     {
+        # Half the package is only ever named from the suite, so a scan that stops
+        # reading tests/ calls a live helper dead. This is the noisy direction and
+        # the one that gets a guard switched off.
+        "label": "dead code: the usage scan stops reading the test suite",
+        "file": "tests/test_code_hygiene.py",
+        "old": 'USAGE_TREES = ("beantester", "tests", "tools", "lang", "scenarios")',
+        "new": 'USAGE_TREES = ("beantester", "tools", "lang", "scenarios")',
+        "test": "test_no_definition_in_the_package_is_unreferenced",
+    },
+    {
+        # The quiet direction, and the reason the exception list is a ratchet
+        # rather than a note: a scan blinded here finds NOTHING and reads exactly
+        # like a clean package. What catches it is the list of names that are
+        # supposed to still be unreferenced - they stop being reported, and the
+        # second test says so.
+        "label": "dead code: the scan stops recognising an unreferenced definition",
+        "file": "tests/test_code_hygiene.py",
+        "old": "            if not living:\n                dead.add(key)",
+        "new": "            if False:\n                dead.add(key)",
+        "test": "test_the_known_unused_list_only_ever_shrinks",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.
