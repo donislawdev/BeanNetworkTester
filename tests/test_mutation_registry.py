@@ -248,6 +248,77 @@ MUTATIONS = [
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
     {
+        # The same knob on the complexity axis, which had no crowd count at all
+        # until 2026-08-21: `max-complexity` watches the single most branching
+        # function and cannot see the runners-up climbing together underneath it.
+        "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary",
+        "new": "COMPLEX_NEAR_CEILING = 5        # decide, _run_session, settings_summary",
+        "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
+    },
+    {
+        # A rule deleted from `select` to turn a red build green is a check that
+        # vanished - and a check that has vanished cannot fail to announce itself.
+        "label": "ruff: a selected rule quietly leaves the configuration",
+        "file": "pyproject.toml",
+        "old": 'select = ["F", "B", "S", "ASYNC", "C90", "PLR0913"]',
+        "new": 'select = ["F", "B", "S", "ASYNC", "C90"]',
+        "test": "test_the_selected_rules_only_ever_grow",
+    },
+    {
+        # The gap the pairing exists for: `--select` on the command line REPLACES
+        # the list in pyproject.toml, so a rule can stay configured, stay visible
+        # to `ruff check` on a developer machine, and stop blocking anything.
+        "label": "ci: a blocking ruff rule drops out of the workflow command",
+        "file": ".github/workflows/ci.yml",
+        "old": "        run: ruff check --select F,B,C90,PLR0913 --output-format github",
+        "new": "        run: ruff check --select F,B,C90 --output-format github",
+        "test": "test_every_blocking_rule_is_named_in_the_workflow_that_blocks",
+    },
+    {
+        # A ceiling standing above the truth grants headroom nobody decided to
+        # grant - the same defect the file and function ceilings are guarded for.
+        "label": "ratchet: the argument ceiling is raised above the widest signature",
+        "file": "pyproject.toml",
+        "old": "max-args = 14",
+        "new": "max-args = 20",
+        "test": "test_the_argument_ceiling_is_the_measurement_not_a_number_above_it",
+    },
+    {
+        # The third axis, added the same day. Aimed at the COUNT rather than at
+        # `_nesting_depth` itself for the reason written next to the depth metric
+        # tests in PROVEN_BY_HAND: any patch to the metric reddens three tests at
+        # once, and an entry that fells a crowd proves nothing about any one of them.
+        "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "DEPTHS_NEAR_CEILING = 12        # make_gear_icon at 5, eleven more at 4",
+        "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
+        "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
+    },
+    {
+        # Half the package is only ever named from the suite, so a scan that stops
+        # reading tests/ calls a live helper dead. This is the noisy direction and
+        # the one that gets a guard switched off.
+        "label": "dead code: the usage scan stops reading the test suite",
+        "file": "tests/test_code_hygiene.py",
+        "old": 'USAGE_TREES = ("beantester", "tests", "tools", "lang", "scenarios")',
+        "new": 'USAGE_TREES = ("beantester", "tools", "lang", "scenarios")',
+        "test": "test_no_definition_in_the_package_is_unreferenced",
+    },
+    {
+        # The quiet direction, and the reason the exception list is a ratchet
+        # rather than a note: a scan blinded here finds NOTHING and reads exactly
+        # like a clean package. What catches it is the list of names that are
+        # supposed to still be unreferenced - they stop being reported, and the
+        # second test says so.
+        "label": "dead code: the scan stops recognising an unreferenced definition",
+        "file": "tests/test_code_hygiene.py",
+        "old": "            if not living:\n                dead.add(key)",
+        "new": "            if False:\n                dead.add(key)",
+        "test": "test_the_known_unused_list_only_ever_shrinks",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.
@@ -996,11 +1067,19 @@ MUTATIONS = [
         # from the index a line before it is asked to verify our hashes. Additive on
         # purpose - it puts the line back without taking anything away, so exactly
         # one test answers.
+        # 🔴 RE-ANCHORED 2026-08-21, and the reason is the trap itself: this used to
+        # aim at the bare `pip install --require-hashes -r requirements-lint.txt`
+        # line, which was unique only while ONE job installed the linter. The
+        # moment the mutation job needed ruff too, the pattern matched twice and
+        # the entry stopped proving anything - the suite said so the same day.
+        # The anchor now names two requirement files in one command, which is
+        # unique for a reason that has nothing to do with the property guarded
+        # here, so extending the linter install again cannot break it.
         "label": "supply chain: a workflow upgrades pip from the index again",
         "file": ".github/workflows/ci.yml",
-        "old": "          pip install --require-hashes -r requirements-lint.txt",
+        "old": "          pip install --require-hashes -r requirements.txt -r requirements-build.txt",
         "new": "          python -m pip install --upgrade pip\n"
-               "          pip install --require-hashes -r requirements-lint.txt",
+               "          pip install --require-hashes -r requirements.txt -r requirements-build.txt",
         "test": "test_no_workflow_bootstraps_pip_from_the_index",
     },
     {
@@ -1421,6 +1500,26 @@ PROVEN_BY_HAND = {
     "test_the_language_files_stay_sorted":
         "2026-08-17, swapped two adjacent keys back out of order in both lang "
         "files (byte-level, so LF survived), saw it go red, restored it, saw green",
+    # 🔴 These three cannot become MUTATIONS entries, and the reason is a property
+    # of what they guard rather than laziness. Every patch to `_nesting_depth`
+    # moves the measurement of the whole package, so it reddens the two ratchet
+    # tests pinned to that measurement as well as the metric test being aimed at -
+    # measured on 2026-08-21: making an `elif` count as a level again turned three
+    # tests red at once, and rule 3 of this registry is that an entry names ONE.
+    # An entry that fells a crowd proves nothing about any single guard in it.
+    #
+    # All three were red for real during the session that wrote them, which is
+    # better evidence than usual for this list: the metric was WRONG when the tests
+    # went in - it walked an `if` body without adding the level that body sits at -
+    # and `test_the_depth_metric_still_counts_real_nesting` is what found it, before
+    # any constant had been filled in.
+    "test_an_elif_chain_is_one_level_not_one_per_branch":
+        "2026-08-21, made elif count per branch again, saw red, restored, saw green",
+    "test_an_except_handler_is_not_a_level_of_its_own":
+        "2026-08-21, same patch run: the handler counted as its own level",
+    "test_the_depth_metric_still_counts_real_nesting":
+        "2026-08-21, it failed on the first draft of the metric (four nested blocks "
+        "measured three) and passed once the missing level was added",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody

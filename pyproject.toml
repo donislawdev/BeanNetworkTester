@@ -44,13 +44,28 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.ruff]
-# Ruff: four rule families and no more, decided 2026-08-19.
+# Ruff: a NAMED list, and nothing joins it without a reason written down. Four
+# families were chosen on 2026-08-19; C90 arrived with the gates in #133 and
+# PLR0913 on 2026-08-21, each for a measurement nothing else here takes.
 #
-#   F      pyflakes      - dead imports, dead variables, redefinitions
-#   B      bugbear       - the bug shapes a reader misses (late binding, zip truncation)
-#   S      bandit        - security patterns
-#   ASYNC  flake8-async  - blocking calls in async code (zero findings here: there is
-#                          no async code, and this keeps it that way)
+#   F        pyflakes      - dead imports, dead variables, redefinitions
+#   B        bugbear       - the bug shapes a reader misses (late binding, zip truncation)
+#   S        bandit        - security patterns
+#   ASYNC    flake8-async  - blocking calls in async code (zero findings here: there is
+#                            no async code, and this keeps it that way)
+#   C90      mccabe        - the complexity ceiling (see max-complexity below)
+#   PLR0913  pylint        - how many arguments a function takes
+#
+# 🔴 Why PLR0913 ALONE out of the pylint refactor rules, and why not the obvious
+# three next to it. PLR0912 (branches) scores `core.decide` at 30 where C90 scores
+# it 29 - the same function, the same axis, a second number that moves at a
+# different rate. PLR0915 (statements) is FUNCTION_CEILING measured worse, because
+# the ratchet in tests/test_code_shape.py counts LOGIC lines and therefore leaves
+# comments free, which this repository is built on. PLR0911 (returns) needs a
+# branch per return, so C90 has already counted them. Argument count is the one
+# thing on that list nothing else here measures, so it is the one that joined.
+# The same test applied to `lizard` on 2026-08-21 is why that tool was not adopted:
+# five of the six things it measures are measured here already.
 #
 # F and B BLOCK a pull request. S is a report, and the difference is not
 # softness - it is what the two measure. Measured 2026-08-19: S raises 306
@@ -61,7 +76,24 @@ addopts = "-q"
 target-version = "py310"        # matches requires-python; ruff reads it anyway, said out loud
 
 [tool.ruff.lint]
-select = ["F", "B", "S", "ASYNC", "C90"]
+select = ["F", "B", "S", "ASYNC", "C90", "PLR0913"]
+
+[tool.ruff.lint.pylint]
+# 🔴 THE CEILING IS THE MEASUREMENT, like max-complexity above it and FILE_CEILING
+# in tests/test_code_shape.py. 14 is `gui/widgets/sortable_tree.py::__init__`
+# today, which is the widest signature in the tree; `engine._log_conn` is next at
+# 10. Ruff does not count `self`.
+#
+# Ruff's own default is 5, and setting it there would raise 25 findings across the
+# repository on day one - a gate that is red before it has caught anything teaches
+# people to switch it off. This one is a ratchet instead: nothing may get wider
+# than the widest thing today, down is routine, up is a decision.
+#
+# What this measures that nothing else here does: how many things a caller must
+# line up correctly to use a function. Complexity and length do not see it - a
+# fifteen-argument constructor can be four lines of straight-line assignment and
+# sail past both.
+max-args = 14
 
 [tool.ruff.lint.mccabe]
 # 🔴 THE CEILING IS THE MEASUREMENT, like FILE_CEILING in tests/test_code_shape.py.

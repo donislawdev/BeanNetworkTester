@@ -751,9 +751,6 @@ class PortTable:
             return None
         return self._ports.get(int(port))
 
-    def age(self, now=None):
-        return (self.clock() if now is None else now) - self._last
-
     # -- process info ----------------------------------------------------------- #
     def _expire_info(self, now):
         """Drop entries older than ``INFO_TTL_S``, counted from when they were WRITTEN.

@@ -84,7 +84,7 @@ jobs:
   # between the runners. Kept out of the `tests` matrix for exactly that reason -
   # in there it would run twice and say the same thing.
   lint:
-    name: ruff (F and B block, S and ASYNC report)
+    name: ruff (F, B, C90 and PLR0913 block, S and ASYNC report)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -98,8 +98,14 @@ jobs:
       # pyproject.toml and nothing else: the per-file ignores and the target
       # version still come from there, so the two runs below cannot drift apart
       # from what a developer sees locally.
-      - name: Bugs, dead code and the complexity ceiling (blocking)
-        run: ruff check --select F,B,C90 --output-format github
+      # 🔴 Every blocking rule has to be named HERE as well. `--select` on the
+      # command line REPLACES the list in pyproject.toml, so a rule added there
+      # and forgotten here is configured, visible to a developer running plain
+      # `ruff check`, and absent from the only place that can block a merge.
+      # tests/test_code_shape.py::test_the_selected_rules_only_ever_grow holds the
+      # two lists to each other so this cannot drift in silence.
+      - name: Bugs, dead code, complexity and argument count (blocking)
+        run: ruff check --select F,B,C90,PLR0913 --output-format github
       # The report. S is 306 findings on this repository and 287 of them are
       # things a test suite for a packet mangler does on purpose - so it
       # annotates the diff and never fails the run. `ruff check` exits 1 on any
@@ -251,6 +257,16 @@ jobs:
         run: |
           pip install --require-hashes -r requirements.txt
           pip install -r requirements-dev.txt
+          # 🔴 The linter too, and it is not decoration here. Three guards in
+          # tests/test_code_shape.py read a threshold out of pyproject.toml and
+          # ask ruff whether anything crosses it. Without ruff on PATH they skip,
+          # a skip is not a failure, and the runner reports SURVIVED for a
+          # mutation the guard would have caught anywhere else. Measured on this
+          # very branch (2026-08-21): two entries came back SURVIVED with no
+          # defect behind either - the job simply could not run the checks it was
+          # asked to break. The whole file, never a single package picked out of
+          # it by grep: a hash cannot travel through `$(grep ...)`.
+          pip install --require-hashes -r requirements-lint.txt
       # A pull request pays for what it touched; the weekly run pays for
       # everything. The full pass is minutes (~13 for 117 entries on a developer
       # machine), which is fine once a week and absurd on every push.
