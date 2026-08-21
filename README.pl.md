@@ -1350,17 +1350,23 @@ Sam sterownik **WinDivert jest podpisany cyfrowo przez jego autora**. Sumę
 kontrolną SHA-256 wydania (`SHA256SUMS.txt`) nadal możesz porównać, żeby
 potwierdzić, że plik dotarł bez zmian.
 
-**Możesz też sprawdzić, skąd ten plik pochodzi, a nie tylko czy się nie zmienił.** Każde archiwum
-wydania niesie podpisaną atestację builda, więc jedno polecenie odpowiada na pytanie „czy to
-naprawdę zbudowano z tego kodu, tym workflow":
+**Możesz też sprawdzić, co ten plik zawiera, a nie tylko czy się nie zmienił.** Każde archiwum
+wydania niesie podpisany spis wszystkiego, co jest w środku, zrobiony przez workflow tego
+repozytorium nad dokładnie tymi bajtami, które pobrałeś:
 
 ```bash
-gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To dowodzi, że sama
-strona wydania powstała z workflow tego repozytorium, z konkretnego commita, na maszynie GitHuba.
-Tym samym poleceniem sprawdzisz też SBOM, który jedzie obok archiwum.
+Suma kontrolna dowodzi, że plik zgadza się z tym, co mówi strona wydania. To dowodzi, że spis
+składników obok niego opisuje te same bajty i że wystawił go workflow w tym repozytorium, a nie
+ten, kto podał Ci plik.
+
+`--predicate-type` nie jest opcjonalne. Bez niego `gh` szuka atestacji prowenancji builda i
+odpowiada `HTTP 404`, bo archiwum, które pobierasz, jest **podpisywane na maszynie autora**, a nie
+budowane na maszynie GitHuba - klucz siedzi na karcie, do której żaden runner nie sięga.
+Prowenancja jest atestowana dla niepodpisanego builda wewnątrz workflow. Z wydaniem jedzie spis
+składników nad podpisanym plikiem.
 
 To polecenie pyta GitHuba, jakie atestacje istnieją. Dowód jedzie też **jako plik**,
 `BeanNetworkTester-vX.Y.Z.sigstore.json`, więc archiwum sprawdzisz wobec dowodu, który
@@ -1393,10 +1399,12 @@ SBOM jest **podpisany razem z archiwum, które opisuje**, więc nie da się ich
 rozdzielić:
 
 ```bash
-gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester
+gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Suma kontrolna mówi, że plik dotarł niezmieniony. Atestacja mówi, że **ta** wersja,
-z **tym** wykazem składników, wyszła z workflow wydania tego repozytorium.
+Suma kontrolna mówi, że plik dotarł niezmieniony. Atestacja mówi, że **ten** wykaz
+składników należy do **tego** archiwum i że wystawił go workflow wydania tego
+repozytorium. Bez `--predicate-type` polecenie szuka atestacji prowenancji builda
+i odpowiada `HTTP 404`.
 
 Dokumentacja po angielsku: [README.md](README.md).

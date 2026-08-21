@@ -1495,17 +1495,23 @@ changes is that the warning now says who signed it. The **WinDivert driver itsel
 signed by its author**. You can still compare the release's SHA-256 checksum (`SHA256SUMS.txt`) to
 confirm the file arrived unchanged.
 
-**You can also check where the download came from, not just that it is unchanged.** Every release
-archive carries a signed build attestation, so one command answers "was this really built from that
-source by that workflow":
+**You can also check what the download contains, not just that it is unchanged.** Every release
+archive carries a signed statement listing everything inside it, made by this repository's own
+workflow over the exact bytes you downloaded:
 
 ```bash
-gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester
+gh attestation verify BeanNetworkTester-v0.5.0-windows-x64.zip -R donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-A checksum proves the file matches what the release page says. This proves the release page itself
-was produced by this repository's own workflow, from a specific commit, on a GitHub-hosted runner.
-The same command also verifies the SBOM that ships beside the archive.
+A checksum proves the file matches what the release page says. This proves the bill of materials
+beside it describes those same bytes, and that the statement was made by a workflow in this
+repository rather than by whoever handed you the file.
+
+`--predicate-type` is not optional. Without it `gh` looks for a build-provenance statement and
+answers `HTTP 404`, because the archive you download was **signed on the maintainer's machine**,
+not built on a runner - the signing key is on a card that no runner can reach. Provenance is
+attested for the unsigned build inside the workflow. What travels with the release is the bill
+of materials over the signed file.
 
 That command asks GitHub which attestations exist. The proof also ships **as a file**,
 `BeanNetworkTester-vX.Y.Z.sigstore.json`, so you can check the archive against evidence that
@@ -1537,8 +1543,10 @@ component in the build with its version, licence and where its source lives. It 
 The SBOM is **signed against the archive it describes**, so the two cannot be separated:
 
 ```bash
-gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester
+gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-A checksum tells you the file arrived unchanged. The attestation tells you that *this* build,
-with *this* bill of materials, came out of this repository's release workflow.
+A checksum tells you the file arrived unchanged. The attestation tells you that *this* bill of
+materials belongs to *this* archive, and that the statement was made by this repository's release
+workflow. Leave `--predicate-type` out and `gh` looks for a build-provenance statement instead and
+answers `HTTP 404`.

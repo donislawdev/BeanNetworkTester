@@ -1051,10 +1051,29 @@ MUTATIONS = [
         # The command in the README stops matching what we attest, and every user who
         # follows it gets an error. Nothing here runs `gh`, so only this pairing can
         # notice.
-        "label": "release: the documented verify command loses its predicate type",
+        #
+        # 🔴 Anchored on `.sigstore.json` rather than on the flag alone. The flag now
+        # appears three times in README.md - it was added to the two ONLINE forms on
+        # 2026-08-21, after the one without it shipped in 0.5.0 answering HTTP 404 -
+        # and a pattern that matches three places proves nothing about any of them.
+        # This anchor is version-independent: the file name carries the version, the
+        # extension does not.
+        "label": "release: the documented OFFLINE verify command loses its predicate type",
         "file": "README.md",
-        "old": " --predicate-type https://spdx.dev/Document/v2.3",
-        "new": "",
+        "old": ".sigstore.json --repo donislawdev/BeanNetworkTester"
+               " --predicate-type https://spdx.dev/Document/v2.3",
+        "new": ".sigstore.json --repo donislawdev/BeanNetworkTester",
+        "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
+    },
+    {
+        # The other half, and the one that actually broke. `-R` is the online form's
+        # short flag and appears nowhere else in the file, so this anchor stays unique
+        # for the same reason the one above does.
+        "label": "release: the documented ONLINE verify command loses its predicate type",
+        "file": "README.md",
+        "old": "-R donislawdev/BeanNetworkTester"
+               " --predicate-type https://spdx.dev/Document/v2.3",
+        "new": "-R donislawdev/BeanNetworkTester",
         "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
     },
     {

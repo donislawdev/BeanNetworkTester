@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **The command for checking your download did not work.** Both READMEs told you to run
+  `gh attestation verify <file> -R donislawdev/BeanNetworkTester`, and it answers `HTTP 404`.
+  It looks for proof the file was built on a runner, and the file you download is signed on
+  the maintainer's own machine, so what travels with it is proof of the bill of materials
+  instead. The command now says which proof to ask for, and every published release is
+  checked with the exact commands the README gives you, so a broken one cannot ship again.
+
 ## [0.5.0] - 2026-08-20
 
 **The short version.** Three things, and the first is about not losing your files when the
