@@ -40,8 +40,43 @@ jobs:
       # above it.
       id-token: write
       attestations: write
+      # Reading the CI runs for the tagged commit, for the gate that is the first
+      # step below. Read-only, and it is the whole reason this scope is here.
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # 🔴 FIRST, before anything is installed or built: was CI green on EXACTLY
+      # this commit? This workflow deliberately does not re-run the tests - it
+      # builds and publishes - so until 2026-08-21 the only thing standing between a
+      # red commit and a published release was somebody remembering. That was step 1
+      # of the recipe, it was written down as manual, and a rule kept by memory is a
+      # rule that eventually is not.
+      #
+      # Keyed on the CI workflow BY NAME rather than "are all checks green": this
+      # repository has a check that fails for a reason of its own (a code-scanning
+      # feature the account is not licensed for), and a gate that demands a clean
+      # sweep of everything would block every release over something unrelated.
+      - name: Refuse to build unless CI was green on this commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&status=completed" \
+            --jq '[.workflow_runs[] | select(.name == "CI")] | map(.conclusion)')"
+          echo "completed CI runs on $GITHUB_SHA: $runs"
+          if [ "$runs" = "[]" ]; then
+            echo "::error::No completed CI run for $GITHUB_SHA. Tag a commit that CI has"
+            echo "::error::finished on - this workflow does not run the tests itself."
+            exit 1
+          fi
+          if ! echo "$runs" | grep -q '"success"'; then
+            echo "::error::CI did not succeed on $GITHUB_SHA ($runs). Releasing this tag"
+            echo "::error::would publish code that was never proven to build or pass."
+            exit 1
+          fi
+          echo "CI is green on the commit being released."
 
       # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
       # step with the build job in ci.yml, or CI smoke-tests one artefact and

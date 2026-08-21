@@ -1,0 +1,164 @@
+# The last step of a release: check the thing people can actually download.
+#
+# Everything before this verifies an artefact, a draft, or a digest passed between
+# workflows. None of it touches the published release page, and the published page is
+# the only thing a user ever sees. Until 2026-08-21 the commands in the README were
+# run by a human, occasionally, after the fact - and that is exactly how the first
+# documented verify command shipped broken for every user of 0.5.0-rc.2 and again
+# for 0.5.0, where `gh attestation verify <zip> -R <repo>` answers HTTP 404 because
+# it looks for build provenance that a hand-signed archive deliberately does not have.
+#
+# 🔴 So this runs THE COMMANDS FROM THE README, verbatim, against the published
+# assets. Not equivalents, not a re-implementation: if the README's command stops
+# working, this has to be what goes red. `tests/test_version_and_release.py` pins the
+# two together so neither can drift alone.
+#
+# Runs on Windows because one of the checks is Authenticode, which does not exist
+# anywhere else - and the signature is the half of the release a checksum cannot
+# speak for.
+name: Verify the published release
+
+on:
+  release:
+    types: [published]
+  # Re-runnable by hand against any published tag, because "did that old release
+  # still verify" is a question worth being able to ask without cutting a new one.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published tag to check, e.g. v0.5.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Download what users download, then check it
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      # Reading the release assets. Nothing here writes anything, anywhere.
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Work out which release we are checking
+        id: which
+        shell: bash
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          test -n "$tag" || { echo "no tag to check"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # A dispatch has no event payload, so assume "not a pre-release" only when
+          # the payload said so; otherwise ask the API below rather than guessing.
+          echo "prerelease=${PRERELEASE:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "checking $tag (prerelease=${PRERELEASE:-unknown})"
+
+      - name: Download every published asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.which.outputs.tag }}
+        run: |
+          mkdir -p published && cd published
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY"
+          ls -l
+          # Four assets ship: the archive, the checksums, the SBOM and the bundle.
+          # A missing one means a phase did not finish, which is precisely the
+          # half-failure nobody would notice by looking at the page.
+          for pattern in '*.zip' 'SHA256SUMS.txt' '*.spdx.json' '*.sigstore.json'; do
+            # shellcheck disable=SC2086
+            ls $pattern >/dev/null 2>&1 || { echo "MISSING asset: $pattern"; exit 1; }
+          done
+
+      - name: The checksum users are told to compare
+        shell: bash
+        working-directory: published
+        run: |
+          # The file is written in `sha256sum -c` format; the `*` before the name is
+          # the binary-mode marker, not a typo, and `sha256sum` expects it.
+          sha256sum -c SHA256SUMS.txt
+
+      - name: The offline command from the README, verbatim
+        shell: bash
+        working-directory: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip="$(ls ./*.zip)"
+          bundle="$(ls ./*.sigstore.json)"
+          gh attestation verify "$zip" \
+            --bundle "$bundle" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document/v2.3
+
+      - name: The online command from the README, verbatim
+        shell: bash
+        working-directory: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip="$(ls ./*.zip)"
+          gh attestation verify "$zip" \
+            -R "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document/v2.3
+
+      - name: The signature, and that it is OUR certificate
+        shell: pwsh
+        working-directory: published
+        run: |
+          # Convention 46: pwsh first. This step is the reason the job runs on
+          # Windows - a checksum says the bytes are unchanged, and says nothing at
+          # all about who signed them.
+          $zip = (Get-ChildItem -Filter *.zip)[0].FullName
+          Expand-Archive -LiteralPath $zip -DestinationPath unpacked -Force
+          $exe = Get-ChildItem -Path unpacked -Filter BeanNetworkTester.exe -Recurse |
+                 Select-Object -First 1
+          if (-not $exe) { throw "no BeanNetworkTester.exe inside the archive" }
+
+          $sig = Get-AuthenticodeSignature -LiteralPath $exe.FullName
+          "status  : $($sig.Status)"
+          "subject : $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { throw "signature status is $($sig.Status)" }
+
+          # Without a timestamp the signature dies when the certificate expires, so
+          # its absence is a real defect and not a detail.
+          if (-not $sig.TimeStamperCertificate) { throw "the signature carries no timestamp" }
+          "stamped : $($sig.TimeStamperCertificate.Subject)"
+
+          $bytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                     $sig.SignerCertificate.RawData)
+          $actual = ($bytes | ForEach-Object { $_.ToString('x2') }) -join ''
+          # Read the pin out of the source rather than repeating it here: two copies
+          # of a constant are two things that can disagree, and this one moves when
+          # the certificate is renewed.
+          $line = Select-String -Path ../beantester/legal.py -Pattern '^CODESIGN_SHA256 = "([0-9a-f]{64})"'
+          if (-not $line) { throw "could not read CODESIGN_SHA256 out of beantester/legal.py" }
+          $pinned = $line.Matches[0].Groups[1].Value
+          "pinned  : $pinned"
+          "actual  : $actual"
+          if ($actual -ne $pinned) { throw "the shipped file was signed by a DIFFERENT certificate" }
+
+      - name: A full release must be the one the website offers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.which.outputs.tag }}
+        run: |
+          # The download button on the project site points at /releases/latest, so
+          # "published" and "what people get" are only the same thing if this holds.
+          # Asked of the API rather than the event payload, because a dispatch has no
+          # payload and a pre-release is SUPPOSED to fail this.
+          prerelease="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)"
+          if [ "$prerelease" = "true" ]; then
+            echo "$TAG is a pre-release: it must NOT be latest, and is not checked here"
+            exit 0
+          fi
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          echo "latest is $latest, this release is $TAG"
+          test "$latest" = "$TAG"

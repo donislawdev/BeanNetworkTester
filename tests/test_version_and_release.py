@@ -897,3 +897,130 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
         if makes_sbom:
             check(f"{readme}: the predicate type is the SPDX one the workflow makes",
                   "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
+
+        # 🔴 EVERY documented command, not just the one with `--bundle`. Until
+        # 2026-08-21 this test read the offline line only, and the ONLINE line above
+        # it - `gh attestation verify <zip> -R <repo>` - shipped in 0.5.0 answering
+        # HTTP 404 for every user, because `gh` defaults to looking for build
+        # provenance and a hand-signed archive deliberately has none. A guard that
+        # checks one of two commands is a guard that reports the wrong half is fine.
+        online = [ln for ln in text.splitlines() if "gh attestation verify" in ln
+                  and "--bundle" not in ln]
+        check(f"{readme} documents the online verify command", bool(online))
+        for command in online:
+            check(f"{readme}: the online command names a predicate type",
+                  "--predicate-type " in command,
+                  f"(without it gh asks for SLSA provenance and gets 404: {command[:120]})")
+            if makes_sbom:
+                check(f"{readme}: the online command asks for the SPDX predicate",
+                      "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
+
+
+def test_the_published_release_is_checked_by_a_workflow_not_by_a_person():
+    """Something has to run the README's commands against what people download.
+
+    🔴 Every other check in the release path looks at an artefact, a draft or a
+    digest handed between workflows. None of them touches the published release
+    page, which is the only thing a user ever sees - and that gap is exactly how a
+    verify command shipped broken twice: once for `v0.5.0-rc.2` (missing `--repo`
+    and `--predicate-type`) and once for `v0.5.0`, whose online command answered
+    HTTP 404 because `gh` looks for build provenance a hand-signed archive does not
+    have. Both were found by a person running the command by hand, afterwards.
+
+    So this pins the workflow to the documentation: the job must run the SAME two
+    commands the README hands users. If someone rewrites the README's command, this
+    keeps passing only while the workflow moves with it.
+    """
+    path = os.path.join(ROOT, ".github", "workflows", "verify-release.yml")
+    check("a workflow verifies the published release", os.path.exists(path),
+          "(expected .github/workflows/verify-release.yml)")
+    with open(path, encoding="utf-8") as handle:
+        body = handle.read()
+
+    check("it runs when a release is published", "types: [published]" in body,
+          "(a draft is not what users download)")
+    check("it downloads the published assets", "gh release download" in body)
+    check("it compares the checksums users are told to compare",
+          "sha256sum -c SHA256SUMS.txt" in body)
+
+    for flag in ("--bundle", "--repo", "-R ", "--predicate-type",
+                 "https://spdx.dev/Document/v2.3"):
+        check(f"the workflow runs the documented command with {flag.strip()}",
+              flag in body, "(it must run the README's command, not an equivalent)")
+
+    # The half a checksum cannot speak for.
+    check("it checks the Authenticode signature",
+          "Get-AuthenticodeSignature" in body)
+    check("it refuses a signature with no timestamp",
+          "TimeStamperCertificate" in body,
+          "(without one the signature dies when the certificate expires)")
+    check("it compares the signing certificate against the pin",
+          "CODESIGN_SHA256" in body,
+          "(read out of beantester/legal.py, so the constant has one home)")
+    check("it writes nothing", "contents: write" not in body,
+          "(a verifier that can publish is not only a verifier)")
+
+
+def test_release_refuses_a_tag_whose_commit_ci_never_passed():
+    """`release.yml` builds and publishes; it does not test. So it has to ASK.
+
+    Step 1 of the release recipe - "tag only a commit CI was green on" - was prose
+    and nothing enforced it, which the notes said out loud. A red commit plus a tag
+    published unproven code and the workflow would not have noticed.
+
+    Keyed on the CI workflow by name on purpose: this repository carries a check that
+    fails for a licensing reason of its own, so "every check is green" would block
+    every release over something unrelated to the code.
+    """
+    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
+              encoding="utf-8") as handle:
+        body = handle.read()
+    check("the release workflow asks whether CI passed",
+          "actions/runs?head_sha=" in body,
+          "(it cannot re-run the tests, so it must read their result)")
+    check("it looks at the CI workflow by name", 'select(.name == "CI")' in body)
+    check("it has the permission that needs", "actions: read" in body)
+    check("the gate runs before anything is built",
+          body.index("actions/runs?head_sha=") < body.index("pyinstaller")
+          if "pyinstaller" in body.lower() else True,
+          "(failing after a build wastes the build and reads as a build failure)")
+
+
+def test_the_signing_certificate_expiry_is_a_condition_not_a_note():
+    """A date the script prints and draws no conclusion from is decoration.
+
+    The card's certificate expires on a known day. Before 2026-08-21 the first
+    release after it would have failed inside the signing step, with the card in the
+    reader - the worst moment to learn about a certificate. The warning also has to
+    mention the pin, because renewal issues a DIFFERENT certificate and
+    `legal.CODESIGN_SHA256` has to move with it.
+    """
+    import datetime
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "sign_release", os.path.join(ROOT, "tools", "sign_release.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    now = datetime.datetime(2026, 8, 21, tzinfo=datetime.timezone.utc)
+
+    far = " ".join(module.expiry_notice("2027-08-19T15:26:42+02:00", now))
+    check("a certificate with a year left does not shout", "WARNING" not in far, f"({far})")
+
+    soon = " ".join(module.expiry_notice("2026-10-01T10:00:00+02:00", now))
+    check("a certificate inside the warning window shouts", "WARNING" in soon, f"({soon})")
+    check("...and says the pin moves with a renewal", "CODESIGN_SHA256" in soon, f"({soon})")
+
+    for junk in (None, "not-a-date"):
+        note = " ".join(module.expiry_notice(junk, now))
+        check(f"an unreadable expiry ({junk!r}) is reported, not ignored",
+              "check the card" in note, f"({note})")
+
+    try:
+        module.expiry_notice("2026-01-01T10:00:00+02:00", now)
+        check("an EXPIRED certificate refuses to sign", False,
+              "(it returned a note instead of refusing)")
+    except SystemExit as exc:
+        check("the refusal explains the renewal", "CODESIGN_SHA256" in str(exc),
+              f"({str(exc)[:160]})")
