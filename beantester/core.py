@@ -519,25 +519,6 @@ class BeanCore:
         self._flow_last.maybe_rotate(now)
         self._reset_until.maybe_rotate(now)
 
-    def in_scope(self, local_port, remote_ip=None, remote_port=None):
-        """Whether a flow is in targeting scope RIGHT NOW (read-only, no effects).
-
-        Mirrors the targeting gates of ``decide`` (steps 1-2) without touching any
-        flow table or bucket. The connections view uses it to colour a row by the
-        target as it stands now, not by the last packet the flow happened to send:
-        an idle flow otherwise kept a stale flag, so a firefox row stayed marked
-        "in scope" after the target had been narrowed to chrome.
-        """
-        with self._lock:
-            if self.target_active and local_port not in self.target_ports:
-                return False
-            if self.dst_active:
-                if self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip):
-                    return False
-                if self.dst_port_matcher and not self.dst_port_matcher.matches(remote_port):
-                    return False
-            return True
-
     def targeting_active(self):
         """True when any targeting (process or destination) is narrowing traffic."""
         with self._lock:

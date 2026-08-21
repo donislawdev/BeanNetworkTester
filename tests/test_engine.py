@@ -315,8 +315,8 @@ def test_scoped_is_a_sticky_session_record():
     socket closed. A browser closes hundreds of connections a minute; if the flag
     tracked only the latest packet (or a live port lookup) every finished flow would
     read "not impaired" the instant it closed, so a run that impaired all of chrome
-    looked like it had caught nothing. The LIVE "in scope now" signal is a separate
-    thing (the connections page highlights the row via BeanCore.in_scope).
+    looked like it had caught nothing. The row highlight reads this same stored
+    record (gui/pages/conns.py::_tag_of), so colour and column cannot disagree.
 
     Driven straight through ``_log_conn`` so the stickiness is asserted without any
     thread timing: three packets on one flow (in scope, then twice out), plus a flow

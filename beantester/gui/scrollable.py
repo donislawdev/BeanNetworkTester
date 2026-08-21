@@ -285,18 +285,6 @@ class ScrollableFrame:
         except Exception as _exc:
             crashlog.note(_exc, "gui.scrollable")
 
-    def yview_fraction(self):
-        try:
-            return float(self.canvas.yview()[0])
-        except Exception:
-            return 0.0
-
-    def set_yview_fraction(self, fraction):
-        try:
-            self.canvas.yview_moveto(max(0.0, min(1.0, float(fraction or 0.0))))
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.scrollable")
-
 
 def make_scrollable(parent):
     """Backwards-compatible helper: returns the inner frame."""

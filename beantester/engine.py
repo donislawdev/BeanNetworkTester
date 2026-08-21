@@ -470,10 +470,6 @@ class BeanEngine:
     def set_dest(self, *a):
         self.core.set_dest(*a)
 
-    def in_scope_now(self, local_port, remote_ip=None, remote_port=None):
-        """Whether a flow is in targeting scope right now (see BeanCore.in_scope)."""
-        return self.core.in_scope(local_port, remote_ip, remote_port)
-
     def targeting_active(self):
         """True when process or destination targeting is narrowing traffic."""
         return self.core.targeting_active()
@@ -728,10 +724,9 @@ class BeanEngine:
             # a browser closes hundreds a minute. A live check flipped every
             # finished flow to "not impaired" the moment it closed (its ephemeral
             # port left the socket table), so a run that impaired all of chrome read
-            # as a table full of "no". The LIVE "in scope now" signal still exists -
-            # it is the row highlight (gui/pages/conns.py::_tag_of, via in_scope) -
-            # so narrowing chrome->firefox drops the highlight without erasing the
-            # record that the chrome flow WAS impaired.
+            # as a table full of "no". The row highlight
+            # (gui/pages/conns.py::_tag_of) reads this same stored record, so the
+            # colour and the "impaired?" column can never disagree.
             c["scoped"] = c["scoped"] or bool(scoped)
             c["last"] = now
             c["dir"] = "out" if is_out else "in"
