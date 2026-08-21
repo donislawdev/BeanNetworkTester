@@ -286,6 +286,17 @@ MUTATIONS = [
         "test": "test_the_argument_ceiling_is_the_measurement_not_a_number_above_it",
     },
     {
+        # The third axis, added the same day. Aimed at the COUNT rather than at
+        # `_nesting_depth` itself for the reason written next to the depth metric
+        # tests in PROVEN_BY_HAND: any patch to the metric reddens three tests at
+        # once, and an entry that fells a crowd proves nothing about any one of them.
+        "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
+        "file": "tests/test_code_shape.py",
+        "old": "DEPTHS_NEAR_CEILING = 12        # make_gear_icon at 5, eleven more at 4",
+        "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
+        "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
+    },
+    {
         # The leak guard's newest half. It runs in CI and had never been shown
         # able to fail - the canary that finally did found it blind to exactly
         # the class the convention names first.
@@ -1459,6 +1470,26 @@ PROVEN_BY_HAND = {
     "test_the_language_files_stay_sorted":
         "2026-08-17, swapped two adjacent keys back out of order in both lang "
         "files (byte-level, so LF survived), saw it go red, restored it, saw green",
+    # 🔴 These three cannot become MUTATIONS entries, and the reason is a property
+    # of what they guard rather than laziness. Every patch to `_nesting_depth`
+    # moves the measurement of the whole package, so it reddens the two ratchet
+    # tests pinned to that measurement as well as the metric test being aimed at -
+    # measured on 2026-08-21: making an `elif` count as a level again turned three
+    # tests red at once, and rule 3 of this registry is that an entry names ONE.
+    # An entry that fells a crowd proves nothing about any single guard in it.
+    #
+    # All three were red for real during the session that wrote them, which is
+    # better evidence than usual for this list: the metric was WRONG when the tests
+    # went in - it walked an `if` body without adding the level that body sits at -
+    # and `test_the_depth_metric_still_counts_real_nesting` is what found it, before
+    # any constant had been filled in.
+    "test_an_elif_chain_is_one_level_not_one_per_branch":
+        "2026-08-21, made elif count per branch again, saw red, restored, saw green",
+    "test_an_except_handler_is_not_a_level_of_its_own":
+        "2026-08-21, same patch run: the handler counted as its own level",
+    "test_the_depth_metric_still_counts_real_nesting":
+        "2026-08-21, it failed on the first draft of the metric (four nested blocks "
+        "measured three) and passed once the missing level was added",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody

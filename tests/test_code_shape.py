@@ -32,8 +32,12 @@ What this does NOT check
 Whether a function does one thing (a tidy twenty-line function doing three things
 passes exactly like a good one), whether its name is honest, or whether splitting it
 scattered the logic across ten places - that last one has its own cost and no metric.
-Nesting depth is not measured either. This guard buys one thing only: nothing grows
-past what a person can follow without somebody deciding that it should.
+This guard buys one thing only: nothing grows past what a person can follow without
+somebody deciding that it should.
+
+Nesting depth USED to be on that list and was taken off it on 2026-08-21 - see
+DEPTH_CEILING. Length, branch count and indent depth are three different questions,
+and a function can be quiet in two of them while failing the third.
 """
 import ast
 import os
@@ -82,6 +86,36 @@ CROWD_BAND = 0.70
 FILES_NEAR_CEILING = 1          # beantester/gui/app.py
 FUNCTIONS_NEAR_CEILING = 3      # _run_session, _build_ui, build_arg_parser
 
+# 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph
+# above, that nesting depth was not measured. It is now, because nothing else can
+# see it: ruff has no rule for it (SIM102 and SIM117 collapse joinable statements,
+# they do not measure depth), the size ceiling is blind to it by construction, and
+# `max-complexity` scores a flat chain of eight `elif` exactly like eight nested
+# `if` while a reader does not.
+#
+# Today, over 942 functions: one reaches 5 and it earns it - `gui/icon.py::
+# make_gear_icon` is a supersampling rasteriser, four loops over pixel and sub-pixel
+# with the coverage test inside. Eleven sit at 4, 70 at 3, and 860 at 2 or less. So
+# this ceiling buys nothing today and is bought for the same reason as the ones
+# above it: it costs nothing while nothing grows.
+#
+# 🔴 These numbers are the SECOND measurement. The first put the band at 3
+# functions, and it was wrong: `_nesting_depth` walked an `if` body without adding
+# the level the body sits at, so anything nested inside an `if` measured one short.
+# `test_the_depth_metric_still_counts_real_nesting` caught it - four nested blocks
+# came back as three - which is the entire reason the three metric tests below were
+# written before the constants were filled in rather than after.
+#
+# The band here is ABSOLUTE, not the 70% the size counts use, and that is measured
+# rather than lazy: 70% of 5 is 3.5, so the band would be "4 or more" today - the
+# same as below - but the moment the ceiling dropped to 4 it would become "3 or
+# more" and the count would jump from 3 to 38. A band that reshapes itself under
+# the thing it is watching says nothing. Percentages need a range to be a
+# percentage OF, and depth here runs 0 to 5.
+DEPTH_CEILING = 5               # beantester/gui/icon.py::make_gear_icon
+DEPTH_BAND = 4                  # absolute: see above
+DEPTHS_NEAR_CEILING = 12        # make_gear_icon at 5, eleven more at 4
+
 
 def _logic_lines(source):
     """Line numbers that carry executable code: no blanks, comments or docstrings.
@@ -103,6 +137,51 @@ def _logic_lines(source):
         if text and not text.startswith("#") and number not in doc:
             live.add(number)
     return tree, live
+
+
+def _nesting_depth(node):
+    """How deep the deepest block inside one function is INDENTED ON SCREEN.
+
+    Two corrections, and both were paid for: the first draft of this metric put
+    ``legal.py::component_rows`` at depth 7 when the function is two levels deep to
+    a reader. A ceiling standing on a wrong metric is worse than no ceiling, because
+    it looks guarded.
+
+    * **An ``elif`` chain is ONE level.** In the AST each ``elif`` is an ``If``
+      nested in the ``orelse`` of the one before it, so a flat six-branch chain
+      measures six deep unless the whole chain is walked at a single depth.
+    * **An ``except`` handler is not a level of its own.** The AST makes it a child
+      of the ``Try``; on screen the two bodies sit at the same indent.
+
+    A nested function is skipped and measured on its own, like everywhere else here.
+    """
+    blocks = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith,
+              ast.Try, ast.Match, ast.match_case)
+
+    def step(child, depth):
+        """A child that opens a block sits one level in; anything else does not."""
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return depth                             # measured on its own, not here
+        return walk(child, depth + (1 if isinstance(child, blocks) else 0))
+
+    def walk(current, depth):
+        deepest = depth
+        if isinstance(current, ast.If):
+            chain = current
+            while True:
+                for child in chain.body:
+                    deepest = max(deepest, step(child, depth))
+                if len(chain.orelse) == 1 and isinstance(chain.orelse[0], ast.If):
+                    chain = chain.orelse[0]          # elif: same indent, keep going
+                    continue
+                for child in chain.orelse:           # a real else, same indent again
+                    deepest = max(deepest, step(child, depth))
+                return deepest
+        for child in ast.iter_child_nodes(current):
+            deepest = max(deepest, step(child, depth))
+        return deepest
+
+    return walk(node, 0)
 
 
 def _package_files():
@@ -129,6 +208,19 @@ def _sizes():
     files.sort(reverse=True)
     functions.sort(reverse=True)
     return files, functions, len(paths)
+
+
+def _depths():
+    """Every function in the package with its indent depth, deepest first."""
+    out = []
+    for path in _package_files():
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.append((_nesting_depth(node), f"{rel}::{node.name}"))
+    out.sort(reverse=True)
+    return out
 
 
 def _measure():
@@ -162,6 +254,114 @@ def test_no_function_or_file_has_grown_past_the_ratchet():
           worst_file[1] <= FILE_CEILING,
           f"(worst: {worst_file[0]} at {worst_file[1]}, "
           f"{FILE_CEILING - worst_file[1]} lines of headroom left)")
+
+
+def test_no_function_nests_deeper_than_the_ratchet():
+    """The third axis - see DEPTH_CEILING for what it buys and what it costs.
+
+    A function can be short, have few branches and still be unreadable because
+    every one of them is inside the last. Neither ceiling above sees that.
+    """
+    depths = _depths()
+    check("the depth scan actually read the package "
+          "(an empty scan satisfies every ceiling ever set)",
+          len(depths) >= 300, f"({len(depths)} functions)")
+
+    deepest = depths[0]
+    check(f"no function nests deeper than {DEPTH_CEILING} "
+          f"(pull a block out into its own function - do not raise the ceiling)",
+          deepest[0] <= DEPTH_CEILING, f"(deepest: {deepest[1]} at {deepest[0]})")
+
+    crowded = [f"{name} ({d})" for d, name in depths if d >= DEPTH_BAND]
+    check(f"at most {DEPTHS_NEAR_CEILING} function(s) nested {DEPTH_BAND} deep or "
+          f"more - flatten one before adding another",
+          len(crowded) <= DEPTHS_NEAR_CEILING, f"({crowded})")
+
+
+def test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire():
+    """Both numbers are today's measurement, exactly - the rule the file lives by.
+
+    Frozen one above the truth, either would grant headroom nobody decided to grant
+    and the next arrival would slip in silently.
+    """
+    depths = _depths()
+    check("the depth ceiling IS the deepest function, not a number above it",
+          depths[0][0] == DEPTH_CEILING,
+          f"({depths[0][1]} is {depths[0][0]}, ceiling is {DEPTH_CEILING} - "
+          f"move the ceiling to {depths[0][0]})")
+    actual = sum(1 for d, _ in depths if d >= DEPTH_BAND)
+    check("the depth crowd count is today's measurement, not a looser number",
+          actual == DEPTHS_NEAR_CEILING,
+          f"(measured {actual}, frozen at {DEPTHS_NEAR_CEILING} - lower it)")
+
+
+# The three tests below measure the METRIC, not the code, and they are not
+# decoration: the first draft of `_nesting_depth` reported a flat six-branch `elif`
+# chain as six levels deep and put `legal.py::component_rows` at 7 when a reader
+# sees 2. A ceiling standing on a metric that lies is worse than no ceiling,
+# because the suite is green and somebody believes it.
+def test_an_elif_chain_is_one_level_not_one_per_branch():
+    source = ("def f(x):\n"
+              "    if x == 1:\n"
+              "        return 'a'\n"
+              "    elif x == 2:\n"
+              "        return 'b'\n"
+              "    elif x == 3:\n"
+              "        return 'c'\n"
+              "    else:\n"
+              "        return 'd'\n")
+    node = ast.parse(source).body[0]
+    check("a four-branch if/elif/else measures one level deep",
+          _nesting_depth(node) == 1, f"(measured {_nesting_depth(node)})")
+
+
+def test_an_except_handler_is_not_a_level_of_its_own():
+    """``try`` and ``except`` bodies share an indent, whatever the AST shape says."""
+    plain = ast.parse("def f():\n"
+                      "    try:\n"
+                      "        g()\n"
+                      "    except OSError:\n"
+                      "        h()\n").body[0]
+    check("try/except is one level, not two",
+          _nesting_depth(plain) == 1, f"(measured {_nesting_depth(plain)})")
+
+    nested = ast.parse("def f():\n"
+                       "    try:\n"
+                       "        g()\n"
+                       "    except OSError:\n"
+                       "        for item in items:\n"
+                       "            h(item)\n").body[0]
+    check("a loop inside the handler is the second level, not the third",
+          _nesting_depth(nested) == 2, f"(measured {_nesting_depth(nested)})")
+
+
+def test_the_depth_metric_still_counts_real_nesting():
+    """The other half, and the one that keeps the two above honest.
+
+    "An elif chain is flat" is satisfied perfectly by a metric that returns zero for
+    everything - and a ceiling standing on a metric stuck at zero passes for ever
+    while the code nests deeper underneath it.
+    """
+    flat = ast.parse("def f():\n    a = 1\n    b = 2\n").body[0]
+    check("a function with no blocks is zero deep",
+          _nesting_depth(flat) == 0, f"(measured {_nesting_depth(flat)})")
+
+    deep = ast.parse("def f():\n"
+                     "    for a in x:\n"
+                     "        for b in a:\n"
+                     "            if b:\n"
+                     "                with open(b) as fh:\n"
+                     "                    fh.read()\n").body[0]
+    check("four genuinely nested blocks measure four",
+          _nesting_depth(deep) == 4, f"(measured {_nesting_depth(deep)})")
+
+    sibling = ast.parse("def f():\n"
+                        "    for a in x:\n"
+                        "        pass\n"
+                        "    for b in y:\n"
+                        "        pass\n").body[0]
+    check("two loops side by side are one level, not two",
+          _nesting_depth(sibling) == 1, f"(measured {_nesting_depth(sibling)})")
 
 
 def test_the_ratchet_measures_logic_and_not_explanation():
