@@ -1067,11 +1067,19 @@ MUTATIONS = [
         # from the index a line before it is asked to verify our hashes. Additive on
         # purpose - it puts the line back without taking anything away, so exactly
         # one test answers.
+        # 🔴 RE-ANCHORED 2026-08-21, and the reason is the trap itself: this used to
+        # aim at the bare `pip install --require-hashes -r requirements-lint.txt`
+        # line, which was unique only while ONE job installed the linter. The
+        # moment the mutation job needed ruff too, the pattern matched twice and
+        # the entry stopped proving anything - the suite said so the same day.
+        # The anchor now names two requirement files in one command, which is
+        # unique for a reason that has nothing to do with the property guarded
+        # here, so extending the linter install again cannot break it.
         "label": "supply chain: a workflow upgrades pip from the index again",
         "file": ".github/workflows/ci.yml",
-        "old": "          pip install --require-hashes -r requirements-lint.txt",
+        "old": "          pip install --require-hashes -r requirements.txt -r requirements-build.txt",
         "new": "          python -m pip install --upgrade pip\n"
-               "          pip install --require-hashes -r requirements-lint.txt",
+               "          pip install --require-hashes -r requirements.txt -r requirements-build.txt",
         "test": "test_no_workflow_bootstraps_pip_from_the_index",
     },
     {

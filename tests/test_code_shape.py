@@ -43,6 +43,8 @@ import ast
 import os
 import sys
 
+import pytest
+
 from fakes import ROOT, check
 
 # Today's maxima, measured 2026-08-02. Ratchet: down is routine, up is a decision.
@@ -109,7 +111,7 @@ FUNCTIONS_NEAR_CEILING = 3      # _run_session, _build_ui, build_arg_parser
 # The band here is ABSOLUTE, not the 70% the size counts use, and that is measured
 # rather than lazy: 70% of 5 is 3.5, so the band would be "4 or more" today - the
 # same as below - but the moment the ceiling dropped to 4 it would become "3 or
-# more" and the count would jump from 3 to 38. A band that reshapes itself under
+# more" and the count would jump from 12 to 82. A band that reshapes itself under
 # the thing it is watching says nothing. Percentages need a range to be a
 # percentage OF, and depth here runs 0 to 5.
 DEPTH_CEILING = 5               # beantester/gui/icon.py::make_gear_icon
@@ -541,7 +543,7 @@ def test_the_complexity_ceiling_is_the_measurement_not_a_number_above_it():
 
     at_ceiling = _ruff_complexity_findings(ceiling)
     if at_ceiling is None:
-        return                      # ruff not installed here: nothing to measure
+        pytest.skip("ruff is not installed here, so this guard measured nothing")
     check(f"nothing in the tree is more complex than {ceiling}",
           at_ceiling == 0, f"({at_ceiling} function(s) over the ceiling)")
 
@@ -568,7 +570,7 @@ def test_nothing_else_is_creeping_up_on_the_complexity_ceiling():
     band = int(ceiling * CROWD_BAND)
     crowded = _ruff_complexity_findings(band)
     if crowded is None:
-        return                      # ruff not installed here: nothing to measure
+        pytest.skip("ruff is not installed here, so this guard measured nothing")
 
     check(f"at most {COMPLEX_NEAR_CEILING} function(s) within {CROWD_BAND:.0%} of "
           f"max-complexity ({band + 1} or more) - simplify one before adding another",
@@ -593,7 +595,7 @@ def test_the_argument_ceiling_is_the_measurement_not_a_number_above_it():
 
     over = _ruff_findings("PLR0913", "lint.pylint.max-args", ceiling)
     if over is None:
-        return                      # ruff not installed here: nothing to measure
+        pytest.skip("ruff is not installed here, so this guard measured nothing")
     check(f"no signature takes more than {ceiling} arguments "
           f"(split the call - do not raise the ceiling)",
           over == 0, f"({over} signature(s) over the ceiling)")
