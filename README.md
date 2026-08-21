@@ -1510,8 +1510,8 @@ repository rather than by whoever handed you the file.
 `--predicate-type` is not optional. Without it `gh` looks for a build-provenance statement and
 answers `HTTP 404`, because the archive you download was **signed on the maintainer's machine**,
 not built on a runner - the signing key is on a card that no runner can reach. Provenance is
-attested for the unsigned build inside the workflow; what travels with the release is the bill of
-materials over the signed file.
+attested for the unsigned build inside the workflow. What travels with the release is the bill
+of materials over the signed file.
 
 That command asks GitHub which attestations exist. The proof also ships **as a file**,
 `BeanNetworkTester-vX.Y.Z.sigstore.json`, so you can check the archive against evidence that

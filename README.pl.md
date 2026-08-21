@@ -1365,7 +1365,7 @@ ten, kto podał Ci plik.
 `--predicate-type` nie jest opcjonalne. Bez niego `gh` szuka atestacji prowenancji builda i
 odpowiada `HTTP 404`, bo archiwum, które pobierasz, jest **podpisywane na maszynie autora**, a nie
 budowane na maszynie GitHuba - klucz siedzi na karcie, do której żaden runner nie sięga.
-Prowenancja jest atestowana dla niepodpisanego builda wewnątrz workflow; z wydaniem jedzie spis
+Prowenancja jest atestowana dla niepodpisanego builda wewnątrz workflow. Z wydaniem jedzie spis
 składników nad podpisanym plikiem.
 
 To polecenie pyta GitHuba, jakie atestacje istnieją. Dowód jedzie też **jako plik**,
