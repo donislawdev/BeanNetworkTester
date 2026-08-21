@@ -267,6 +267,34 @@ MUTATIONS = [
         "test": "test_the_selected_rules_only_ever_grow",
     },
     {
+        # A job outside `needs` fails every Monday in silence - the same defect
+        # the notice itself exists to cure, one level up.
+        "label": "cron notice: a job drops out of what the weekly notice watches",
+        "file": ".github/workflows/ci.yml",
+        "old": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]",
+        "new": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests]",
+        "test": "test_the_cron_notice_watches_every_job_in_the_workflow",
+    },
+    {
+        # A tag can be cut days before the next cron, so the pinned set has to be
+        # asked about when it CHANGES, not only when the calendar turns.
+        "label": "audit: the pinned set stops being checked when a pull request moves it",
+        "file": ".github/workflows/ci.yml",
+        "old": "      || github.event_name == 'pull_request'",
+        "new": "      || false",
+        "test": "test_the_audit_job_answers_to_a_pull_request_that_moves_the_pins",
+    },
+    {
+        # File mode covers 7 of the 9 packages and silently skips `packaging` and
+        # `setuptools` - measured 2026-08-11. A release audited that way reads
+        # clean for a reason that has nothing to do with being clean.
+        "label": "release: the pre-release audit reads the requirement files instead of the install",
+        "file": ".github/workflows/release.yml",
+        "old": "          audit-tool/Scripts/pip-audit --path audit-env/Lib/site-packages \\",
+        "new": "          audit-tool/Scripts/pip-audit -r requirements.txt \\",
+        "test": "test_the_release_audits_its_pins_before_it_builds",
+    },
+    {
         # The gap the pairing exists for: `--select` on the command line REPLACES
         # the list in pyproject.toml, so a rule can stay configured, stay visible
         # to `ruff check` on a developer machine, and stop blocking anything.

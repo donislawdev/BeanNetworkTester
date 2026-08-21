@@ -14,12 +14,17 @@ Prints one word for the workflow to act on:
 
 Why an issue at all
 -------------------
-The weekly run deliberately does NOT open an issue when it goes red - that was
-decided on 2026-08-17, and the reasoning holds: a red cron usually means
-something drifted, and drift is read when somebody looks. A published advisory
-against a version we ship is a different animal. It has a clock on it, it does
-not resolve itself, and the person who needs to see it is not necessarily
-looking at Actions that week.
+A published advisory against a version we ship has a clock on it, it does not
+resolve itself, and the person who needs to see it is not necessarily looking at
+Actions that week.
+
+This used to be the NARROW exception to a rule - on 2026-08-17 the owner decided
+a red weekly run would be read by hand rather than announced, and advisories were
+carved out of that on 2026-08-19. The rule itself was reversed on 2026-08-21
+(`tools/cron_issue.py`), for the reason this file had already argued: a cron is
+easy to miss. The two stay separate tools with separate labels, because an
+advisory against a shipped version and a runner that could not install a package
+are different problems and must not deduplicate against each other.
 
 Why the title carries the advisory ids
 --------------------------------------

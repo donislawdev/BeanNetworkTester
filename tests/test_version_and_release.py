@@ -1024,3 +1024,105 @@ def test_the_signing_certificate_expiry_is_a_condition_not_a_note():
     except SystemExit as exc:
         check("the refusal explains the renewal", "CODESIGN_SHA256" in str(exc),
               f"({str(exc)[:160]})")
+
+
+def _ci_text():
+    with open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8") as f:
+        return f.read()
+
+
+def _ci_job_ids(text):
+    """Top-level job ids, which are the 2-space keys AFTER the `jobs:` line.
+
+    Parsed rather than hard-coded, and started at `jobs:` on purpose: `on:` has
+    2-space keys of its own (`push`, `schedule`), and counting those would make
+    the guard below demand that the notice watch a trigger.
+    """
+    lines = text.splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.rstrip() == "jobs:")
+    return [re.match(r"^  ([a-z][a-z0-9-]*):\s*$", ln).group(1)
+            for ln in lines[start + 1:] if re.match(r"^  [a-z][a-z0-9-]*:\s*$", ln)]
+
+
+def test_the_cron_notice_watches_every_job_in_the_workflow():
+    """A job left out of `needs` can fail every Monday for a year in silence.
+
+    The weekly run announces itself through `cron-issue`, and that job can only
+    see what it depends on. Adding a job to this workflow and forgetting this
+    list would leave the new job unwatched by exactly the mechanism that exists
+    because a cron is easy to miss - the same failure one level up.
+    """
+    text = _ci_text()
+    jobs = _ci_job_ids(text)
+    check("ci.yml still defines the weekly notice", "cron-issue" in jobs, f"({jobs})")
+
+    needs = re.search(r"^  cron-issue:.*?^    needs: \[(.*?)\]", text, re.S | re.M)
+    check("the notice declares what it watches", needs is not None)
+    if not needs:
+        return
+    watched = {name.strip() for name in needs.group(1).split(",")}
+    unwatched = sorted(set(jobs) - watched - {"cron-issue"})
+    check("the notice depends on every other job in the workflow", not unwatched,
+          f"({unwatched} - add them to `needs`, or they fail unannounced)")
+    ghosts = sorted(watched - set(jobs))
+    check("and on no job that no longer exists", not ghosts, f"({ghosts})")
+
+
+def test_the_audit_job_answers_to_a_pull_request_that_moves_the_pins():
+    """A tag can be cut days before the next cron, so the set must be checked when
+    it CHANGES, not only when the calendar turns.
+
+    Both halves are asserted: that the job runs on a pull request at all, and that
+    the pull-request path FAILS rather than opening an issue. An issue is the right
+    answer to "the world moved under a set nobody is touching"; it is the wrong
+    answer to a change with an author and an open review.
+    """
+    text = _ci_text()
+    audit = re.search(r"^  audit:.*?(?=^  [a-z][a-z0-9-]*:\s*$)", text, re.S | re.M)
+    check("ci.yml still has an audit job", audit is not None)
+    if not audit:
+        return
+    body = audit.group(0)
+    # 🔴 The JOB-LEVEL trigger, not the job text. The first version of this check
+    # looked for "pull_request" anywhere in the body and passed for a reason that
+    # had nothing to do with the claim - the STEPS mention it too, in their own
+    # conditions. Deleting the trigger left the guard green, and the mutation
+    # registry is what said so (2026-08-21, SURVIVED).
+    trigger = re.search(r"^    if: >-\n((?:      .*\n)+)", body, re.M)
+    check("the audit job declares its triggers", trigger is not None)
+    check("and one of them is a pull request",
+          trigger is not None and "pull_request" in trigger.group(1),
+          f"({trigger.group(1).strip() if trigger else None})")
+    check("a pull request that pins something vulnerable fails the run",
+          "Refuse a pull request that pins something vulnerable" in body)
+    check("and the pull-request path never opens an issue",
+          re.search(r"Open an issue if anything was found\n\s+if: github\.event_name != 'pull_request'",
+                    body) is not None)
+
+
+def test_the_release_audits_its_pins_before_it_builds():
+    """"CI was green on this commit" never included this question.
+
+    The audit job runs on the schedule and on a pull request that moves a
+    requirements file. A tag push is neither, so a release could ship a set that
+    an issue had already flagged, for as long as nobody read the issue.
+
+    Order matters and is asserted: auditing after the build would still publish
+    the artefact and only then complain.
+    """
+    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
+              encoding="utf-8") as f:
+        text = f.read()
+    audit_at = text.find("Refuse to build a release whose pins carry a published advisory")
+    build_at = text.find("pyinstaller --noconfirm")
+    check("release.yml audits the pinned set", audit_at != -1)
+    check("release.yml still builds", build_at != -1)
+    if audit_at == -1 or build_at == -1:
+        return
+    check("and it audits BEFORE it builds", audit_at < build_at,
+          f"(audit at {audit_at}, build at {build_at})")
+    check("audited by path, not from the requirement files (7 of 9 packages)",
+          "--path audit-env" in text)
+    check("the auditor lives in its own environment, so the release set stays "
+          "exactly the hash-pinned bytes",
+          "audit-tool/Scripts/pip-audit" in text)

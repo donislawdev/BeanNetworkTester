@@ -86,6 +86,48 @@ jobs:
           python-version: "3.14"
           cache: pip
 
+      # 🔴 "CI was green on this commit" does NOT include this question, and that
+      # was the gap. The `audit` job in ci.yml runs on the schedule and on a pull
+      # request that moves a requirements file - neither of which is a tag push.
+      # So a release could ship a set that Monday's issue had already flagged,
+      # for as long as nobody read the issue.
+      #
+      # BOTH venvs are deliberate. `pip-audit` is pinned by version only, and the
+      # environment this job builds the executable from must contain exactly the
+      # hash-pinned bytes and nothing else - that is what `--require-hashes` is
+      # FOR. So the auditor lives in one throwaway environment, the audited set
+      # in another, and the job's own Python is not touched until the step below.
+      #
+      # Audited BY PATH for the reason measured on 2026-08-11: auditing the
+      # requirement files instead covers 7 of the 9 packages and silently skips
+      # `packaging` and `setuptools`.
+      - name: Refuse to build a release whose pins carry a published advisory
+        shell: bash
+        run: |
+          python -m venv audit-env
+          audit-env/Scripts/python -m pip install --quiet \
+            --require-hashes -r requirements.txt -r requirements-build.txt
+          python -m venv audit-tool
+          audit-tool/Scripts/python -m pip install --quiet -r requirements-scan.txt
+          set +e
+          audit-tool/Scripts/pip-audit --path audit-env/Lib/site-packages \
+            -f json -o release-audit.json
+          echo "pip-audit exit: $?"
+          set -e
+          test -s release-audit.json || { echo "no report was written"; exit 1; }
+          # The same reader the weekly job and the pull-request path use, so the
+          # three cannot disagree about what counts as a finding.
+          verdict="$(python tools/audit_issue.py --audit release-audit.json)"
+          echo "verdict: $verdict"
+          if [ "$verdict" != "none" ]; then
+            echo "::error::A published advisory names a version this tag would ship."
+            echo "::error::Raise the pin and tag again. Releasing over this would put"
+            echo "::error::a known-vulnerable dependency inside a signed binary."
+            exit 1
+          fi
+          echo "nothing published against the set this tag ships."
+          rm -rf audit-env audit-tool
+
       - name: Install dependencies
         run: |
           # One hash-checked resolution over both files - the same command the

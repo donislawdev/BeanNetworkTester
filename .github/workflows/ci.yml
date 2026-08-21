@@ -22,9 +22,20 @@ on:
   # machine. It is pinned in requirements-build.txt now, so what this cron watches
   # on the build side is the runner and the interpreter, not the freezer.
   #
-  # 🔴 A red cron is only worth the minutes if somebody reads it. The owner
-  # decided against opening an issue automatically (2026-08-17), so this run is
-  # checked by hand - `gh run list --workflow CI --branch master`.
+  # 🔴 A red cron is only worth the minutes if somebody reads it - and the way
+  # this repository made sure of that CHANGED on 2026-08-21.
+  #
+  # The owner decided on 2026-08-17 that a red weekly run would be read by hand
+  # (`gh run list --workflow CI --branch master`) rather than announced, and
+  # reversed that on 2026-08-21 for one reason: **a cron is very easy to miss.**
+  # Nothing arrives when it goes red, the run hangs off no pull request anybody
+  # is looking at, and a week later it is off the first page. The narrow
+  # exception carved out for advisories (the `audit` job below) had already made
+  # the same argument for a smaller case.
+  #
+  # So the `cron-issue` job at the end of this file opens one, deduplicated by
+  # the set of jobs that failed. It never closes anything: a later green run
+  # means those jobs passed once, not that the cause is gone.
   schedule:
     - cron: "0 6 * * 1"
   # Allow running the pipeline by hand from the Actions tab.
@@ -172,33 +183,85 @@ jobs:
   # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
   # skip the one dependency that puts a kernel driver on a user's machine.
   audit:
+    # 🔴 A CONTRACT with the branch ruleset, like every other job name here: the
+    # rule requires a status check by this exact string. Do not edit it without
+    # editing the ruleset first.
     name: pip-audit (advisories against the pinned set)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Three triggers, two different questions.
+    #
+    #   schedule / workflow_dispatch - "did the WORLD move under versions that
+    #     did not?" The set is hash-pinned, so only a newly published advisory
+    #     can change the answer, and that is a clock event.
+    #   pull_request - "did the SET move?" A pull request that edits a
+    #     requirements file changes what is installed, and waiting until Monday
+    #     to find out means a merge and possibly a release in between.
+    #
+    # A pull request that touches no requirements file cannot change the answer,
+    # so the job starts, asks that question cheaply, and stops. It runs rather
+    # than being skipped by a job-level `if:` on purpose: a job that reports
+    # "skipped" is an awkward thing for a required check to be, while one that
+    # reports success after finding nothing to do is not.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 15
     permissions:
       contents: read
       # Raised on THIS job only, and only because it opens an issue when it finds
-      # something. Nothing else in this workflow may write anything.
+      # something on the SCHEDULED path. Nothing else in this workflow may write
+      # anything, and the pull-request path never uses it - it fails the run
+      # instead, which is what a pull request can act on.
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The pull-request path diffs against the base branch, and a shallow
+          # clone has no base branch to diff against.
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+      # 🔴 The cheap question, and the one place this job can go quietly wrong.
+      # If the base cannot be fetched, `git diff` fails and so does this step -
+      # deliberately. The alternative shape ("could not tell, so assume nothing
+      # changed") is the worst failure mode a gate has: green because it could
+      # not look.
+      - name: Is there anything to audit
+        id: scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD" -- 'requirements*.txt')"
+          if [ -n "$changed" ]; then
+            echo "the pinned set moved:"; echo "$changed"
+            echo "audit=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "no requirements file changed - the answer cannot have moved"
+            echo "audit=no" >> "$GITHUB_OUTPUT"
+          fi
+      # Every step below is skipped on a pull request that moved no requirements
+      # file. The condition is repeated rather than shared because GitHub Actions
+      # has no way to name one - there are no YAML anchors here.
       - name: Install the auditor
+        if: github.event_name != 'pull_request' || steps.scope.outputs.audit == 'yes'
         run: pip install -r requirements-scan.txt
       # The pinned set, installed exactly as the build installs it, into its own
       # environment - then audited BY PATH. Auditing the requirement files instead
       # silently skips `packaging` and `setuptools` (measured), and a scanner that
       # covers less than it was asked to is worse than no scanner at all.
       - name: Install the pinned set into a clean environment
+        if: github.event_name != 'pull_request' || steps.scope.outputs.audit == 'yes'
         shell: bash
         run: |
           python -m venv audit-env
           audit-env/Scripts/python -m pip install --quiet \
             --require-hashes -r requirements.txt -r requirements-build.txt
       - name: Audit it
+        if: github.event_name != 'pull_request' || steps.scope.outputs.audit == 'yes'
         shell: bash
         # pip-audit exits non-zero when it finds something, and finding something
         # is what the next step is for - so the exit code is captured, not obeyed.
@@ -208,7 +271,27 @@ jobs:
           echo "pip-audit exit: $?"
           set -e
           test -s audit.json || { echo "no report was written"; exit 1; }
+      # 🔴 The pull-request path ENDS HERE, and it ends by failing. An issue is
+      # the right answer to "the world moved under a set nobody is touching this
+      # week"; it is the wrong answer to "this change adds a vulnerable pin",
+      # which has an author, a diff and a review open right now. The same JSON is
+      # read by the same tool, so the two paths cannot disagree about what counts
+      # as a finding.
+      - name: Refuse a pull request that pins something vulnerable
+        if: github.event_name == 'pull_request' && steps.scope.outputs.audit == 'yes'
+        shell: bash
+        run: |
+          verdict="$(python tools/audit_issue.py --audit audit.json)"
+          echo "verdict: $verdict"
+          if [ "$verdict" != "none" ]; then
+            echo "::error::This pull request changes a requirements file, and the set"
+            echo "::error::it pins carries a published advisory. Raise the pin, or drop"
+            echo "::error::the dependency - see the report above."
+            exit 1
+          fi
+          echo "nothing published against the set this pull request pins."
       - name: Open an issue if anything was found
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -585,3 +668,65 @@ jobs:
         with:
           name: BeanNetworkTester-windows
           path: dist/BeanNetworkTester
+
+  # 🔴 The weekly run tells nobody it went red. This job is the telling, and it
+  # reverses the 2026-08-17 decision - see the note beside `schedule` at the top.
+  #
+  # `needs` NAMES EVERY OTHER JOB, and that is load-bearing rather than tidy: a
+  # job left out of this list can fail every Monday for a year in perfect silence.
+  # tests/test_version_and_release.py holds the two lists to each other so adding
+  # a job to this workflow cannot quietly leave it unwatched.
+  #
+  # `always()` because `needs` on a job that was SKIPPED (public-text is
+  # pull-request-only, so it is skipped here) would otherwise skip this one too.
+  # `contains(needs.*.result, 'failure')` and not `failure()`: a cancelled run -
+  # superseded, or out of time - says nothing about the code, and an issue for it
+  # is the noise that teaches people to close these unread. The tool refuses that
+  # case a second time, in tests/test_cron_issue.py.
+  cron-issue:
+    name: open an issue when the weekly run is red
+    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]
+    if: >-
+      always() && github.event_name == 'schedule'
+      && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Raised on THIS job only, for the same reason as on `audit`: it opens an
+      # issue and does nothing else.
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Say which jobs went red, once
+        shell: bash
+        # Every context value travels through the environment, never into the
+        # script text: the repository's own guard refuses a `${{ }}` inside a
+        # `run:` block, and `toJSON(needs)` is exactly the kind of value that
+        # must not become source code.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          printf '%s' "$NEEDS" > needs.json
+          gh issue list --label ci-cron --state open --json number,title > open.json
+          action=$(python tools/cron_issue.py --needs needs.json --existing open.json \
+                     --title-out issue-title.txt --body-out issue-body.md \
+                     --run-url "$RUN_URL" --commit "$HEAD_SHA")
+          echo "verdict: $action"
+          case "$action" in
+            create)
+              gh label create ci-cron --color D93F0B \
+                  --description "opened by the weekly scheduled run" --force
+              gh issue create --label ci-cron \
+                  --title "$(cat issue-title.txt)" --body-file issue-body.md
+              ;;
+            skip) echo "an open issue already names exactly these jobs" ;;
+            none) echo "nothing in this run failed" ;;
+            *)    echo "unexpected verdict from tools/cron_issue.py"; exit 1 ;;
+          esac
