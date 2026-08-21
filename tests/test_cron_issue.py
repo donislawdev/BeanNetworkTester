@@ -116,3 +116,54 @@ def test_an_unreadable_report_is_not_a_green_one(tmp_path, capsys):
     check("it exits 2, not 0", code == 2, f"(exit {code})")
     check("and says nothing that could be mistaken for a verdict",
           capsys.readouterr().out.strip() == "")
+
+
+def test_a_hand_fired_run_on_another_branch_says_so_in_the_title(tmp_path, capsys):
+    """🔴 The reason the ref is in the title at all, and it is not cosmetic.
+
+    The notice can be fired by hand, which is the only way to exercise this path
+    without waiting for a red Monday. A hand-fired run can sit on any branch - so
+    without the ref, an issue from a test run where `build` was deliberately red
+    would carry exactly the title a genuine Monday failure of `build` produces.
+    """
+    path = _write(tmp_path, "n.json", _needs(build="failure"))
+    cron_issue.main(["--needs", path, "--ref", "refs/heads/some-experiment",
+                     "--title-out", str(tmp_path / "t.txt"),
+                     "--body-out", str(tmp_path / "b.md")])
+    capsys.readouterr()
+    title = (tmp_path / "t.txt").read_text(encoding="utf-8")
+    check("the title carries the branch", "some-experiment" in title, f"({title})")
+    body = (tmp_path / "b.md").read_text(encoding="utf-8")
+    check("and the body says it was not the schedule", "fired by hand" in body)
+
+
+def test_the_weekly_title_is_unchanged_on_the_default_branch(tmp_path, capsys):
+    """The other half: the ref must NOT leak into the title of a genuine run.
+
+    Otherwise every weekly issue would carry a suffix, the dedup key would still
+    work, and the titles would just be noisier for no reason.
+    """
+    path = _write(tmp_path, "n.json", _needs(build="failure"))
+    cron_issue.main(["--needs", path, "--ref", "refs/heads/master",
+                     "--title-out", str(tmp_path / "t.txt")])
+    capsys.readouterr()
+    title = (tmp_path / "t.txt").read_text(encoding="utf-8")
+    check("a run on the default branch keeps the plain title",
+          title == "Weekly CI run is red: build", f"({title})")
+
+
+def test_a_test_issue_cannot_swallow_a_genuine_weekly_one(tmp_path, capsys):
+    """The failure the two tests above exist to prevent, asserted end to end.
+
+    An open issue from a hand-fired run must NOT make a real Monday failure of the
+    same job report `skip` - that would lose the real one in silence, which is
+    worse than the gap this notice closes.
+    """
+    open_issues = _write(tmp_path, "open.json",
+                         [{"number": 9,
+                           "title": "Weekly CI run is red: build (refs/heads/some-experiment)"}])
+    path = _write(tmp_path, "n.json", _needs(build="failure"))
+    cron_issue.main(["--needs", path, "--existing", open_issues,
+                     "--ref", "refs/heads/master"])
+    check("the genuine failure still asks for its own issue",
+          capsys.readouterr().out.strip() == "create")

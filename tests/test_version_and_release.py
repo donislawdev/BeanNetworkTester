@@ -1067,6 +1067,20 @@ def test_the_cron_notice_watches_every_job_in_the_workflow():
     ghosts = sorted(watched - set(jobs))
     check("and on no job that no longer exists", not ghosts, f"({ghosts})")
 
+    # 🔴 The invariant that keeps this from becoming an issue factory. The notice
+    # answers to the schedule and to a hand-fired run - the second so the path can
+    # be exercised at all - and to nothing else. On a pull request it would open
+    # an issue per pull request.
+    trigger = re.search(r"^  cron-issue:.*?^    if: >-\n((?:      .*\n)+)", text, re.S | re.M)
+    check("the notice declares its triggers", trigger is not None)
+    if not trigger:
+        return
+    events = trigger.group(1)
+    check("the notice never fires on a pull request",
+          "pull_request" not in events, f"({events.strip()})")
+    check("and it can be fired by hand, or nothing could ever prove it works",
+          "workflow_dispatch" in events, f"({events.strip()})")
+
 
 def test_the_audit_job_answers_to_a_pull_request_that_moves_the_pins():
     """A tag can be cut days before the next cron, so the set must be checked when
