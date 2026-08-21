@@ -59,11 +59,30 @@ def failed_jobs(needs):
     return sorted(out)
 
 
-def title_for(jobs):
-    return "Weekly CI run is red: %s" % ", ".join(jobs)
+# The branch the weekly run is about. Anything else is somebody firing the
+# workflow by hand, and its issue must not be mistaken for the real thing.
+DEFAULT_REF = "refs/heads/master"
 
 
-def body_for(jobs, run_url="", commit=""):
+def title_for(jobs, ref=""):
+    """The title, and it is the deduplication key - see the note below.
+
+    🔴 The ref is in the title for a reason that is not cosmetic. The notice can
+    also be fired by hand (`workflow_dispatch`), which is the only way to prove
+    this path works without waiting for a red Monday - and a hand-fired run can
+    sit on ANY branch. Without the ref, an issue opened from a test run on a
+    branch where `build` was deliberately red would carry exactly the title a
+    genuine Monday failure of `build` produces. The real one would then come back
+    as `skip` and be swallowed by the test issue, silently, which is worse than
+    the gap the notice exists to close.
+    """
+    base = "Weekly CI run is red: %s" % ", ".join(jobs)
+    if ref and ref != DEFAULT_REF:
+        return "%s (%s)" % (base, ref)
+    return base
+
+
+def body_for(jobs, run_url="", commit="", ref=""):
     lines = ["The scheduled run of the CI workflow failed. Nothing in a pull request",
              "caused this - the schedule asks whether the world moved under versions",
              "that did not.", ""]
@@ -72,6 +91,10 @@ def body_for(jobs, run_url="", commit=""):
         lines.append("**Commit:** `%s`" % commit)
     if run_url:
         lines.append("**Run:** %s" % run_url)
+    if ref and ref != DEFAULT_REF:
+        lines += ["", "> This run was fired by hand on `%s`, not by the schedule. "
+                      "It is here so the notice itself can be exercised without waiting "
+                      "for a red Monday." % ref]
     lines += [
         "",
         "### The first question is whether this is us",
@@ -103,6 +126,9 @@ def main(argv=None):
     parser.add_argument("--body-out", help="write the issue body here")
     parser.add_argument("--run-url", default="", help="link back to the workflow run")
     parser.add_argument("--commit", default="", help="the commit the run was on")
+    parser.add_argument("--ref", default="",
+                        help="the ref the run was on: kept out of the title on the "
+                             "default branch, and put IN it otherwise (see title_for)")
     args = parser.parse_args(argv)
 
     try:
@@ -119,7 +145,7 @@ def main(argv=None):
         print("none")
         return 0
 
-    title = title_for(jobs)
+    title = title_for(jobs, args.ref)
     existing = []
     if args.existing:
         try:
@@ -137,7 +163,7 @@ def main(argv=None):
             handle.write(title)
     if args.body_out:
         with open(args.body_out, "w", encoding="utf-8") as handle:
-            handle.write(body_for(jobs, args.run_url, args.commit))
+            handle.write(body_for(jobs, args.run_url, args.commit, args.ref))
     print("create")
     return 0
 

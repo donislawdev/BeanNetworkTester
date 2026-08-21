@@ -1191,7 +1191,7 @@ Every job in that workflow, and what a red one means:
 | `audit` | **pip-audit** against the pinned set. Weekly, to ask whether the world moved under versions that did not, and on a pull request that edits a requirements file, to ask whether the set moved. The weekly run opens an issue, and a pull request that pins something vulnerable simply fails |
 | `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
 | `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
-| `cron-issue` | opens an issue when the weekly run goes red, deduplicated by which jobs failed. A cron is easy to miss and nothing else announces one. Never runs on a pull request, and never closes an issue by itself |
+| `cron-issue` | opens an issue when the weekly run goes red, deduplicated by which jobs failed. A cron is easy to miss and nothing else announces one. It also answers to a hand-fired run, which is the only way to exercise it without waiting for a red Monday. Never runs on a pull request, and never closes an issue by itself |
 <!-- ci-jobs:end -->
 
 **Three static checks run beside the tests**, on Linux only, because they read the source rather

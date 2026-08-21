@@ -267,6 +267,16 @@ MUTATIONS = [
         "test": "test_the_selected_rules_only_ever_grow",
     },
     {
+        # The notice exists because a cron is easy to miss. Pointed at pull
+        # requests it becomes an issue factory instead - one per pull request -
+        # and the fastest way to teach everyone that these issues are noise.
+        "label": "cron notice: the weekly notice starts firing on pull requests",
+        "file": ".github/workflows/ci.yml",
+        "old": "      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')",
+        "new": "      && (github.event_name == 'schedule' || github.event_name == 'pull_request')",
+        "test": "test_the_cron_notice_watches_every_job_in_the_workflow",
+    },
+    {
         # A job outside `needs` fails every Monday in silence - the same defect
         # the notice itself exists to cure, one level up.
         "label": "cron notice: a job drops out of what the weekly notice watches",

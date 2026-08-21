@@ -688,8 +688,23 @@ jobs:
   cron-issue:
     name: open an issue when the weekly run is red
     needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]
+    # 🔴 `workflow_dispatch` is here so this path can be PROVEN. Until it was
+    # added, the only way to find out whether `gh issue create` works with these
+    # permissions was a red Monday - which is to say, the notice that exists
+    # because a cron is easy to miss was itself unexercised, and would have been
+    # discovered broken at exactly the moment it was needed.
+    #
+    # A hand-fired run can sit on any branch, so `tools/cron_issue.py` puts the
+    # ref in the title whenever it is not the default one. Without that, an issue
+    # from a test run would carry the same title a genuine Monday failure of the
+    # same job produces, and the real one would come back as `skip` - swallowed,
+    # silently, by the test issue.
+    #
+    # `pull_request` is deliberately absent and must stay absent: a notice that
+    # fired there would open an issue per pull request.
     if: >-
-      always() && github.event_name == 'schedule'
+      always()
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -714,12 +729,13 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           HEAD_SHA: ${{ github.sha }}
+          HEAD_REF: ${{ github.ref }}
         run: |
           printf '%s' "$NEEDS" > needs.json
           gh issue list --label ci-cron --state open --json number,title > open.json
           action=$(python tools/cron_issue.py --needs needs.json --existing open.json \
                      --title-out issue-title.txt --body-out issue-body.md \
-                     --run-url "$RUN_URL" --commit "$HEAD_SHA")
+                     --run-url "$RUN_URL" --commit "$HEAD_SHA" --ref "$HEAD_REF")
           echo "verdict: $action"
           case "$action" in
             create)

@@ -1038,7 +1038,7 @@ Wszystkie joby tego workflow i co znaczy czerwony:
 | `audit` | **pip-audit** na przypiętym zestawie. Co tydzień - czy świat ruszył się pod wersjami, które stoją - oraz na PR-ze zmieniającym plik wymagań - czy ruszył się zestaw. Cotygodniowy przebieg zakłada issue, a PR przypinający coś podatnego po prostu się wywraca |
 | `tests` | suite, smoke GUI, render na prawdziwym Tk i asercje CLI, na Linuksie i Windowsie |
 | `build` | plik .exe dla Windowsa, ze smoke'iem, sprawdzeniem sterownika i skanem rejestru licencji |
-| `cron-issue` | zakłada issue, gdy cotygodniowy przebieg zrobi się czerwony, z deduplikacją po tym, które joby padły. Crona bardzo łatwo przegapić, a nic innego go nie zgłasza. Nie chodzi na PR-ach i nigdy sam nie zamyka issue |
+| `cron-issue` | zakłada issue, gdy cotygodniowy przebieg zrobi się czerwony, z deduplikacją po tym, które joby padły. Crona bardzo łatwo przegapić, a nic innego go nie zgłasza. Odpowiada też na przebieg odpalony ręcznie, bo tylko tak da się go sprawdzić bez czekania na czerwony poniedziałek. Nie chodzi na PR-ach i nigdy sam nie zamyka issue |
 <!-- ci-jobs:end -->
 
 **Obok testów chodzą trzy analizy statyczne**, wyłącznie na Linuksie, bo czytają kod, a nie go
