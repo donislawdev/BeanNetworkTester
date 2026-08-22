@@ -8,9 +8,17 @@
 #     with its own release cadence, and Dependabot has open bugs on rewriting
 #     `--hash` blocks. That is a standing maintenance cost on every bump;
 #   * what it would buy is smaller than it looks. Both run in a job whose token is
-#     `contents: read`, both produce a report, and neither can put a byte into a
-#     release: requirements.txt and requirements-build.txt are hash-checked, and
-#     those are the only two files the build and release workflows install from;
+#     `contents: read`, both produce a verdict rather than an artefact, and neither
+#     can put a byte into a release: the job that builds and publishes installs
+#     ONLY from requirements.txt and requirements-build.txt, which are hash-checked.
+#     🔴 That sentence stopped being true for two days and it matters that it did.
+#     On 2026-08-21 the pre-release audit was added as a STEP of the release job,
+#     which put an unpinned install inside the job holding `contents: write` and
+#     the attestation permissions. Scorecard raised it (alert 18,
+#     PinnedDependenciesID, 2026-08-22) and was right to. The audit is its own
+#     `contents: read` job now, and `release` waits on it - so the premise above is
+#     a property of the workflow again rather than a claim about it. A guard in
+#     tests/test_version_and_release.py asserts the auditor's token can only read;
 #   * semgrep in particular cannot be frozen in the sense that matters anyway. The
 #     pin fixes the ENGINE, and `--config p/default` fetches the RULES from the
 #     registry at scan time.

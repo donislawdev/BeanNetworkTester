@@ -300,8 +300,8 @@ MUTATIONS = [
         # clean for a reason that has nothing to do with being clean.
         "label": "release: the pre-release audit reads the requirement files instead of the install",
         "file": ".github/workflows/release.yml",
-        "old": "          audit-tool/Scripts/pip-audit --path audit-env/Lib/site-packages \\",
-        "new": "          audit-tool/Scripts/pip-audit -r requirements.txt \\",
+        "old": "          pip-audit --path audit-env/Lib/site-packages -f json -o release-audit.json",
+        "new": "          pip-audit -r requirements.txt -f json -o release-audit.json",
         "test": "test_the_release_audits_its_pins_before_it_builds",
     },
     {

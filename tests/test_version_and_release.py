@@ -1121,22 +1121,41 @@ def test_the_release_audits_its_pins_before_it_builds():
     requirements file. A tag push is neither, so a release could ship a set that
     an issue had already flagged, for as long as nobody read the issue.
 
-    Order matters and is asserted: auditing after the build would still publish
-    the artefact and only then complain.
+    Order is expressed as a dependency rather than as text order, which is
+    stronger: `needs` skips the build when the audit fails, while a step further
+    down the same job merely happens later.
+
+    🔴 The auditor's job must be READ-ONLY, and that is the half worth guarding.
+    `requirements-scan.txt` is pinned by version and not by hash on purpose, and
+    one leg of that decision is that the scanners "cannot put a byte into a
+    release". Auditing inside the release job made that sentence false - it put
+    an unpinned install into the job holding `contents: write` and the attestation
+    permissions - and Scorecard said so (alert 18, 2026-08-22). Splitting the job
+    restored the premise; this check keeps it restored.
     """
-    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
-              encoding="utf-8") as f:
+    import yaml
+    path = os.path.join(ROOT, ".github", "workflows", "release.yml")
+    with open(path, encoding="utf-8") as f:
         text = f.read()
-    audit_at = text.find("Refuse to build a release whose pins carry a published advisory")
-    build_at = text.find("pyinstaller --noconfirm")
-    check("release.yml audits the pinned set", audit_at != -1)
-    check("release.yml still builds", build_at != -1)
-    if audit_at == -1 or build_at == -1:
+    workflow = yaml.safe_load(text)
+    jobs = workflow.get("jobs") or {}
+
+    check("release.yml has an audit job", "audit" in jobs, f"({sorted(jobs)})")
+    check("release.yml still has a release job", "release" in jobs, f"({sorted(jobs)})")
+    if "audit" not in jobs or "release" not in jobs:
         return
-    check("and it audits BEFORE it builds", audit_at < build_at,
-          f"(audit at {audit_at}, build at {build_at})")
+
+    needs = jobs["release"].get("needs")
+    needs = [needs] if isinstance(needs, str) else (needs or [])
+    check("nothing is built until the audit has passed", "audit" in needs,
+          f"(release needs {needs})")
+
+    permissions = jobs["audit"].get("permissions") or {}
+    writes = sorted(k for k, v in permissions.items() if v == "write")
+    check("the auditor's token can only read, so an unpinned tool cannot reach "
+          "a release artefact", not writes, f"({writes})")
+
     check("audited by path, not from the requirement files (7 of 9 packages)",
           "--path audit-env" in text)
-    check("the auditor lives in its own environment, so the release set stays "
-          "exactly the hash-pinned bytes",
-          "audit-tool/Scripts/pip-audit" in text)
+    check("the audited set is installed with its hashes checked",
+          "--require-hashes -r requirements.txt -r requirements-build.txt" in text)
