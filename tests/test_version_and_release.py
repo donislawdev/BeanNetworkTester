@@ -1133,27 +1133,33 @@ def test_the_release_audits_its_pins_before_it_builds():
     permissions - and Scorecard said so (alert 18, 2026-08-22). Splitting the job
     restored the premise; this check keeps it restored.
     """
-    import yaml
+    # Read as TEXT, not through a YAML parser. `yaml` is not in the pinned test
+    # environment, and the first version of this guard imported it - green here,
+    # `ModuleNotFoundError` on both runners (2026-08-22). Every other workflow
+    # guard in this file reads the text for the same reason.
     path = os.path.join(ROOT, ".github", "workflows", "release.yml")
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    workflow = yaml.safe_load(text)
-    jobs = workflow.get("jobs") or {}
 
-    check("release.yml has an audit job", "audit" in jobs, f"({sorted(jobs)})")
-    check("release.yml still has a release job", "release" in jobs, f"({sorted(jobs)})")
-    if "audit" not in jobs or "release" not in jobs:
+    def job_block(name):
+        """The lines of one top-level job, up to the next 2-space key."""
+        match = re.search(r"^  %s:\n(.*?)(?=^  [a-z][a-z0-9-]*:\s*$|\Z)" % re.escape(name),
+                          text, re.S | re.M)
+        return match.group(1) if match else None
+
+    audit, release = job_block("audit"), job_block("release")
+    check("release.yml has an audit job", audit is not None)
+    check("release.yml still has a release job", release is not None)
+    if audit is None or release is None:
         return
 
-    needs = jobs["release"].get("needs")
-    needs = [needs] if isinstance(needs, str) else (needs or [])
-    check("nothing is built until the audit has passed", "audit" in needs,
-          f"(release needs {needs})")
+    check("nothing is built until the audit has passed",
+          re.search(r"^    needs: audit\s*$", release, re.M) is not None,
+          "(the release job does not declare `needs: audit`)")
 
-    permissions = jobs["audit"].get("permissions") or {}
-    writes = sorted(k for k, v in permissions.items() if v == "write")
+    writes = re.findall(r"^\s+([a-z-]+): write\s*$", audit, re.M)
     check("the auditor's token can only read, so an unpinned tool cannot reach "
-          "a release artefact", not writes, f"({writes})")
+          "a release artefact", not writes, f"({sorted(set(writes))})")
 
     check("audited by path, not from the requirement files (7 of 9 packages)",
           "--path audit-env" in text)
