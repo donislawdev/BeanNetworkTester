@@ -19,8 +19,68 @@ permissions:
   contents: read
 
 jobs:
+  # 🔴 ITS OWN JOB, and the reason is a premise this repository wrote down and then
+  # broke. `requirements-scan.txt` is pinned by version and NOT by hash on purpose
+  # (the reasoning is in that file), and one leg of that reasoning is: the scanners
+  # "cannot put a byte into a release", because the build and release workflows
+  # install only from the two hash-checked files. Auditing inside the release job
+  # made that sentence false - it put an unpinned install into the job that holds
+  # `contents: write` and the attestation permissions - and OpenSSF Scorecard said
+  # so (alert 18, PinnedDependenciesID, 2026-08-22).
+  #
+  # Restoring the premise is cheaper than pinning the auditor's 28-package closure
+  # and re-pinning it on every bump, which is exactly the maintenance cost the
+  # original decision refused. So the auditor runs here, in a job whose token can
+  # only read, and the release job below waits on it.
+  audit:
+    name: Refuse to release pins that carry a published advisory
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      # 🔴 "CI was green on this commit" does NOT include this question, and that
+      # was the gap. The `audit` job in ci.yml runs on the schedule and on a pull
+      # request that moves a requirements file - neither of which is a tag push.
+      # So a release could ship a set that Monday's issue had already flagged, for
+      # as long as nobody read the issue.
+      #
+      # The audited set goes into a throwaway environment and is read BY PATH, for
+      # the reason measured on 2026-08-11: auditing the requirement files instead
+      # covers 7 of the 9 packages and silently skips `packaging` and `setuptools`.
+      - name: Audit the pinned set
+        shell: bash
+        run: |
+          python -m venv audit-env
+          audit-env/Scripts/python -m pip install --quiet \
+            --require-hashes -r requirements.txt -r requirements-build.txt
+          pip install --quiet -r requirements-scan.txt
+          set +e
+          pip-audit --path audit-env/Lib/site-packages -f json -o release-audit.json
+          echo "pip-audit exit: $?"
+          set -e
+          test -s release-audit.json || { echo "no report was written"; exit 1; }
+          # The same reader the weekly job and the pull-request path use, so the
+          # three cannot disagree about what counts as a finding.
+          verdict="$(python tools/audit_issue.py --audit release-audit.json)"
+          echo "verdict: $verdict"
+          if [ "$verdict" != "none" ]; then
+            echo "::error::A published advisory names a version this tag would ship."
+            echo "::error::Raise the pin and tag again. Releasing over this would put"
+            echo "::error::a known-vulnerable dependency inside a signed binary."
+            exit 1
+          fi
+          echo "nothing published against the set this tag ships."
+
   release:
     name: Build and publish the Windows executable
+    # Nothing is built until the audit above has passed. `needs` is what makes the
+    # gate a gate: a failed dependency skips this job rather than letting it start.
+    needs: audit
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
@@ -85,48 +145,6 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-
-      # 🔴 "CI was green on this commit" does NOT include this question, and that
-      # was the gap. The `audit` job in ci.yml runs on the schedule and on a pull
-      # request that moves a requirements file - neither of which is a tag push.
-      # So a release could ship a set that Monday's issue had already flagged,
-      # for as long as nobody read the issue.
-      #
-      # BOTH venvs are deliberate. `pip-audit` is pinned by version only, and the
-      # environment this job builds the executable from must contain exactly the
-      # hash-pinned bytes and nothing else - that is what `--require-hashes` is
-      # FOR. So the auditor lives in one throwaway environment, the audited set
-      # in another, and the job's own Python is not touched until the step below.
-      #
-      # Audited BY PATH for the reason measured on 2026-08-11: auditing the
-      # requirement files instead covers 7 of the 9 packages and silently skips
-      # `packaging` and `setuptools`.
-      - name: Refuse to build a release whose pins carry a published advisory
-        shell: bash
-        run: |
-          python -m venv audit-env
-          audit-env/Scripts/python -m pip install --quiet \
-            --require-hashes -r requirements.txt -r requirements-build.txt
-          python -m venv audit-tool
-          audit-tool/Scripts/python -m pip install --quiet -r requirements-scan.txt
-          set +e
-          audit-tool/Scripts/pip-audit --path audit-env/Lib/site-packages \
-            -f json -o release-audit.json
-          echo "pip-audit exit: $?"
-          set -e
-          test -s release-audit.json || { echo "no report was written"; exit 1; }
-          # The same reader the weekly job and the pull-request path use, so the
-          # three cannot disagree about what counts as a finding.
-          verdict="$(python tools/audit_issue.py --audit release-audit.json)"
-          echo "verdict: $verdict"
-          if [ "$verdict" != "none" ]; then
-            echo "::error::A published advisory names a version this tag would ship."
-            echo "::error::Raise the pin and tag again. Releasing over this would put"
-            echo "::error::a known-vulnerable dependency inside a signed binary."
-            exit 1
-          fi
-          echo "nothing published against the set this tag ships."
-          rm -rf audit-env audit-tool
 
       - name: Install dependencies
         run: |

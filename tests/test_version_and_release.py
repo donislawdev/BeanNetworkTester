@@ -1121,22 +1121,47 @@ def test_the_release_audits_its_pins_before_it_builds():
     requirements file. A tag push is neither, so a release could ship a set that
     an issue had already flagged, for as long as nobody read the issue.
 
-    Order matters and is asserted: auditing after the build would still publish
-    the artefact and only then complain.
+    Order is expressed as a dependency rather than as text order, which is
+    stronger: `needs` skips the build when the audit fails, while a step further
+    down the same job merely happens later.
+
+    🔴 The auditor's job must be READ-ONLY, and that is the half worth guarding.
+    `requirements-scan.txt` is pinned by version and not by hash on purpose, and
+    one leg of that decision is that the scanners "cannot put a byte into a
+    release". Auditing inside the release job made that sentence false - it put
+    an unpinned install into the job holding `contents: write` and the attestation
+    permissions - and Scorecard said so (alert 18, 2026-08-22). Splitting the job
+    restored the premise; this check keeps it restored.
     """
-    with open(os.path.join(ROOT, ".github", "workflows", "release.yml"),
-              encoding="utf-8") as f:
+    # Read as TEXT, not through a YAML parser. `yaml` is not in the pinned test
+    # environment, and the first version of this guard imported it - green here,
+    # `ModuleNotFoundError` on both runners (2026-08-22). Every other workflow
+    # guard in this file reads the text for the same reason.
+    path = os.path.join(ROOT, ".github", "workflows", "release.yml")
+    with open(path, encoding="utf-8") as f:
         text = f.read()
-    audit_at = text.find("Refuse to build a release whose pins carry a published advisory")
-    build_at = text.find("pyinstaller --noconfirm")
-    check("release.yml audits the pinned set", audit_at != -1)
-    check("release.yml still builds", build_at != -1)
-    if audit_at == -1 or build_at == -1:
+
+    def job_block(name):
+        """The lines of one top-level job, up to the next 2-space key."""
+        match = re.search(r"^  %s:\n(.*?)(?=^  [a-z][a-z0-9-]*:\s*$|\Z)" % re.escape(name),
+                          text, re.S | re.M)
+        return match.group(1) if match else None
+
+    audit, release = job_block("audit"), job_block("release")
+    check("release.yml has an audit job", audit is not None)
+    check("release.yml still has a release job", release is not None)
+    if audit is None or release is None:
         return
-    check("and it audits BEFORE it builds", audit_at < build_at,
-          f"(audit at {audit_at}, build at {build_at})")
+
+    check("nothing is built until the audit has passed",
+          re.search(r"^    needs: audit\s*$", release, re.M) is not None,
+          "(the release job does not declare `needs: audit`)")
+
+    writes = re.findall(r"^\s+([a-z-]+): write\s*$", audit, re.M)
+    check("the auditor's token can only read, so an unpinned tool cannot reach "
+          "a release artefact", not writes, f"({sorted(set(writes))})")
+
     check("audited by path, not from the requirement files (7 of 9 packages)",
           "--path audit-env" in text)
-    check("the auditor lives in its own environment, so the release set stays "
-          "exactly the hash-pinned bytes",
-          "audit-tool/Scripts/pip-audit" in text)
+    check("the audited set is installed with its hashes checked",
+          "--require-hashes -r requirements.txt -r requirements-build.txt" in text)
