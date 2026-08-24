@@ -38,9 +38,23 @@ PLACEHOLDER = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 CHOCO_ID = "bean-network-tester"
 WINGET_ID = f"{appinfo.AUTHOR}.{appinfo.TOOL_ID}"
 # Pinned rather than "latest": a schema version is a contract, and a manifest that
-# silently follows a moving target fails in the reviewer's CI, not ours. Checked
-# against microsoft/winget-pkgs/doc/manifest/schema on 2026-08-12 (convention 47).
-WINGET_SCHEMA = "1.28.0"
+# silently follows a moving target fails in the reviewer's CI, not ours.
+#
+# 🔴 1.12.0, and the way this number was got wrong once is the useful part. It was
+# 1.28.0 from 2026-08-12 to 2026-08-25, read from the folder listing under
+# `microsoft/winget-pkgs/doc/manifest/schema` - the newest directory there. Both
+# `winget validate` and the local install accepted it. The SUBMISSION did not: the
+# first pull request came back with `Manifest-Version-Error` from "02. Manifest
+# Validation", within minutes.
+#
+# What the pipeline actually accepts is what MERGED manifests carry, and on
+# 2026-08-25 the ones landing on master carried 1.12.0. So the authoritative source
+# for this field is other people's accepted submissions, not the documentation tree -
+# a schema can be documented before the validation service takes it.
+# Checked that 1.12.0 still defines every field this manifest needs:
+# `NestedInstallerType`, `NestedInstallerFiles`, `ArchiveBinariesDependOnPath` and
+# `ElevationRequirement`.
+WINGET_SCHEMA = "1.12.0"
 
 
 def _read_json(*parts):
