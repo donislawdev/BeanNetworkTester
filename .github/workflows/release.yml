@@ -59,15 +59,22 @@ jobs:
           audit-env/Scripts/python -m pip install --quiet \
             --require-hashes -r requirements.txt -r requirements-build.txt
           # 🔴 The next line is OpenSSF Scorecard alert 19, dismissed as "won't fix"
-          # on 2026-08-24, and MOVING IT is what mints alert 20. For that check
-          # "pinned" means exactly one thing - the `--require-hashes` flag
-          # (`isUnpinnedPipInstall` finds it and stops looking) - so a job's
-          # permissions are invisible to it and no new address quiets it. Alerts 5, 7,
-          # 10 and 17 are the same install elsewhere and were dismissed the same way.
+          # on 2026-08-24. For that check "pinned" means exactly one thing - the
+          # `--require-hashes` flag (`isUnpinnedPipInstall` finds it and stops looking)
+          # - so a job's permissions are invisible to it and no new address quiets it.
+          # Alerts 5, 7, 10 and 17 are the same install elsewhere, dismissed the same
+          # way.
           #
-          # Alert 18 WAS real and IS fixed: this install used to sit inside the job
-          # that holds `contents: write`. Why the file is pinned by version and not by
-          # bytes: requirements-scan.txt, which names this exact cost in writing.
+          # 🔴 What survives what, measured on this alert rather than assumed: EDITING
+          # around this line is safe. The comment you are reading pushed the install ten
+          # lines down, Scorecard re-graded the branch, and alert 19 came back as the
+          # same dismissed alert with a new location - so the fingerprint is not the
+          # line number. MOVING the command into another job is what mints a new alert,
+          # and that is exactly how 18 became 19. Alert 18 WAS real and IS fixed: this
+          # install used to sit inside the job that holds `contents: write`.
+          #
+          # Why the file is pinned by version and not by bytes: requirements-scan.txt,
+          # which names this exact cost in writing.
           pip install --quiet -r requirements-scan.txt
           set +e
           pip-audit --path audit-env/Lib/site-packages -f json -o release-audit.json
