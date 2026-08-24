@@ -63,6 +63,13 @@ def _url(name, version):
 
 def artefact_hashes(name, version, timeout=30):
     """Every sha256 on PyPI for that exact version, newest artefact last."""
+    # The audit that rule asks for is DONE, and proved rather than asserted: `_url`
+    # above fixes the scheme and the host and escapes both parts, and
+    # tests/test_pin_hashes_url.py walks the hostile shapes - `file:///c:/windows`
+    # among them - and checks that none of them moves the request. Suppressed here
+    # so the finding stops costing an analysis on every scan; the suppression itself
+    # is inventoried by test_repo_conventions.py, so a second one is a decision.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(_url(name, version), timeout=timeout) as response:
         payload = json.load(response)
     digests = [f["digests"]["sha256"] for f in payload.get("urls", [])]

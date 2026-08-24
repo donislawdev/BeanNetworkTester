@@ -583,6 +583,62 @@ def test_every_action_a_workflow_uses_is_pinned_to_a_commit():
     check("every action is pinned to a full commit SHA", not unpinned, f"({unpinned})")
     check("every pin says which version it is", not uncommented, f"({uncommented})")
 
+
+# Every semgrep suppression in this repository, by path and by the rule it silences.
+# The list IS the guard below - see its docstring for why adding a line here has to
+# be an edit somebody makes on purpose.
+SEMGREP_SUPPRESSIONS = {
+    ("tools/downloads.py", "python.lang.security.audit.dynamic-urllib-use-detected"
+                           ".dynamic-urllib-use-detected"),
+    ("tools/pin_hashes.py", "python.lang.security.audit.dynamic-urllib-use-detected"
+                            ".dynamic-urllib-use-detected"),
+}
+
+
+def test_every_semgrep_suppression_is_named_and_inventoried():
+    """A suppression says the scanner is wrong, and saying that must cost something.
+
+    Semgrep takes the comment in two forms: bare, which silences EVERY rule on that
+    line for ever, and with a rule id, which silences exactly the one that was
+    audited. This repository had none until 2026-08-24 and now has two, both over a
+    URL whose scheme and host are literals and whose one dynamic part is escaped or
+    regex-checked before it gets there.
+
+    Two things are guarded here, and neither of them is the rule itself:
+
+    * the bare form never appears. A line that silences everything goes on silencing
+      everything after the code under it has been rewritten, and nothing says so;
+    * the set of suppressions is written down in this file. Adding one means editing
+      a test, which lands in a diff as a decision - instead of a comment that slid in
+      while somebody was quieting a report.
+
+    Removing one is the same edit and equally visible. What this cannot check is
+    whether the audit behind a suppression is still true: that is the job of the two
+    guards named in the comments above them.
+    """
+    import re
+    pattern = re.compile(r"#\s*nosemgrep(?::\s*(\S+))?")
+    files = repo_text_files((".py", ".yml", ".yaml"))
+    # A walk that yields nothing passes every check below and looks like it worked.
+    check("the scan found files to read", len(files) >= 40, f"({len(files)})")
+    found, unnamed = set(), []
+    for path in files:
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                match = pattern.search(line)
+                if not match:
+                    continue
+                if not match.group(1):
+                    unnamed.append(f"{rel}:{number}")
+                else:
+                    found.add((rel, match.group(1)))
+    check("no suppression silences every rule at once", not unnamed, f"({unnamed})")
+    check("the suppressions in the tree are the ones written down here",
+          found == SEMGREP_SUPPRESSIONS,
+          f"(unlisted or missing: {sorted(found ^ SEMGREP_SUPPRESSIONS)})")
+
+
 def test_the_optional_review_never_runs_by_itself():
     """The one job here that spends money, and the reason it is not automatic.
 

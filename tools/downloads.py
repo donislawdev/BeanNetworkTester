@@ -38,6 +38,13 @@ def fetch_releases(repo):
         "Accept": "application/vnd.github+json",
         "User-Agent": "bnt-downloads",
     })
+    # The audit that rule asks for is DONE, and it is the `REPO.match` above: the
+    # scheme and the host are literals, and the one value that reaches the URL is an
+    # owner and a name or nothing. Guarded by
+    # test_the_downloads_tool_refuses_anything_that_is_not_owner_slash_name.
+    # Suppressed so the finding stops costing an analysis on every scan; the
+    # suppression itself is inventoried by test_repo_conventions.py.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.load(resp)
 
