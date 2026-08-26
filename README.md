@@ -765,7 +765,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--print-config` | print the effective settings (after `defaults < file < preset < flags`) as JSON and exit |
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |
-| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers) and exit |
+| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights) and exit |
 | `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit |
 
 Precedence order: **defaults < `--config` < `--preset` < flags**. Full list:
@@ -823,8 +823,10 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 
 The seed guarantees identical **per-packet decisions** for the same packet sequence. Scenario steps
 are cumulative (each patches the state), and `action: reset_tcp` tears down TCP connections at that
-moment. The scenario file is **validated** - random JSON ends
-with a readable error, not a "scenario with 0 steps".
+moment. The scenario file is **validated when you open it** - random JSON ends with a readable
+error, not a "scenario with 0 steps", and a step's settings are checked by the same rules the
+form uses, so a value the program cannot use is named with its step number instead of stopping
+the run halfway through.
 
 Every CLI run ends by printing the **effective seed** and a ready command to reproduce it, and
 `--repro-out file.json` saves the full reproduction report.

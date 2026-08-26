@@ -617,7 +617,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--print-config` | wypisz efektywne ustawienia (po `domyślne < plik < preset < flagi`) jako JSON i wyjdź |
 | `--min-packets N` | zakończ kodem `6`, jeśli złapano mniej niż N pakietów |
 | `--fail-on-no-traffic` | skrót na `--min-packets 1` - **łapie filtr, który nie złapał niczego** |
-| `--doctor` | sprawdź środowisko (admin, `pydivert`, stan sterownika WinDivert, resztki w `%TEMP%`) i wyjdź |
+| `--doctor` | sprawdź środowisko (admin, `pydivert`, stan sterownika WinDivert, resztki w `%TEMP%`, czy do folderu programu da się pisać bez praw administratora) i wyjdź |
 | `--cleanup-driver` | wyładuj zawieszony sterownik WinDivert (uwalnia zablokowany plik `.sys` **bez restartu systemu**) i wyjdź |
 
 Kolejność pierwszeństwa: **domyślne < `--config` < `--preset` < flagi**.
@@ -676,7 +676,10 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 Seed gwarantuje identyczne **decyzje na pakiet** dla tej samej sekwencji pakietów.
 Kroki scenariusza są kumulatywne (każdy nakłada łatkę na stan), a `action: reset_tcp`
 zrywa w danym momencie połączenia TCP. Plik scenariusza
-jest **walidowany** - losowy JSON kończy się czytelnym błędem, a nie „scenariuszem z 0 kroków”.
+jest **walidowany przy otwarciu** - losowy JSON kończy się czytelnym błędem, a nie „scenariuszem
+z 0 kroków”, a wartości ustawień w kroku sprawdzane są tymi samymi regułami co formularz, więc
+wartość, której program nie umie użyć, jest nazwana razem z numerem kroku, zamiast przerywać
+przebieg w połowie.
 
 Każdy przebieg CLI kończy się wypisaniem **efektywnego seeda** i gotowej komendy do odtworzenia,
 a `--repro-out plik.json` zapisuje pełny raport reprodukcji.
