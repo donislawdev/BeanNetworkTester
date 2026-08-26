@@ -99,6 +99,34 @@ def ensure_data_dir():
     return None
 
 
+def directory_is_writable(path):
+    """True when THIS process can create a file in ``path``. ``None`` if it cannot tell.
+
+    A probe, not an ACL walk. Reading the access list would mean deciding which
+    principals count as "an ordinary user", and that judgement is the question, not
+    the answer - while a write that SUCCEEDS is the answer, for exactly the token
+    doing the asking. Which is why the caller has to care whether it is elevated:
+    the same probe answers a different question then.
+    """
+    if not os.path.isdir(path):
+        return None
+    probe = os.path.join(path, f".bnt-write-probe-{os.getpid()}")
+    try:
+        with open(probe, "w"):
+            pass
+    except OSError:
+        return False                  # the answer, not a fault: nothing to record
+    try:
+        os.remove(probe)
+    except OSError as _exc:
+        # We just created it, so failing to remove it IS a surprise - and a probe
+        # that leaves litter behind should not do it quietly (convention 30).
+        # Imported here, not at the top: crashlog imports this module.
+        from . import crashlog
+        crashlog.note(_exc, "paths")
+    return True
+
+
 def _same_directory(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 

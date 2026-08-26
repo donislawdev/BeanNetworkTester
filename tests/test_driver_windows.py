@@ -469,3 +469,54 @@ def test_every_open_failure_hint_is_a_key_both_languages_define():
         missing = sorted(k for k in driver.OPEN_ERROR_HINTS.values() if k not in texts)
         check(f"lang/{code}.json defines every open-failure hint", not missing,
               f"({missing})")
+
+
+def test_doctor_says_when_anything_running_as_you_could_replace_the_driver(monkeypatch):
+    """The program elevates itself and THEN loads WinDivert.dll from its own folder.
+
+    A folder that can be written without administrator rights therefore turns "code
+    as the user" into "code as Administrator", while the UAC prompt shows a signed,
+    trusted executable. Measured 2026-08-26: that is the DEFAULT WinGet install for
+    this package (portable, user scope, under %LOCALAPPDATA%) and any archive
+    unpacked in the profile - not a corner case somebody has to arrange.
+
+    Three answers, and the third is the one worth having a test for: "I could not
+    check" must not print as a clean bill of health.
+    """
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_frozen", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {})
+    monkeypatch.setattr(driver, "executable_dir", lambda: "C:" + chr(92) + "somewhere")
+
+    def row_when(admin, writable):
+        monkeypatch.setattr(driver, "is_admin", lambda: admin)
+        monkeypatch.setattr(driver, "directory_is_writable", lambda _p: writable)
+        _, checks = driver.doctor()
+        return next(c for c in checks if c[0] == "program folder")
+
+    warn = row_when(admin=False, writable=True)
+    check("doctor: a writable program folder is a warning", warn[1] == "warn", f"({warn})")
+    check("doctor: and it says what to do about it",
+          "--scope machine" in warn[2], f"({warn})")
+
+    fine = row_when(admin=False, writable=False)
+    check("doctor: a protected folder passes", fine[1] == "ok", f"({fine})")
+
+    elevated = row_when(admin=True, writable=True)
+    check("doctor: 'checked while elevated' is not a pass", elevated[1] == "warn",
+          f"({elevated})")
+    check("doctor: and it says how to get the real answer",
+          "WITHOUT administrator" in elevated[2], f"({elevated})")
+
+
+def test_doctor_does_not_ask_the_question_from_a_source_checkout(monkeypatch):
+    """From sources the folder is a checkout its owner writes by definition, and the
+    driver comes out of site-packages rather than from next to an exe. A row that is
+    trivially true teaches people to skim the report."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_frozen", lambda: False)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {})
+    _, checks = driver.doctor()
+    check("doctor: no program-folder row when running from sources",
+          not [c for c in checks if c[0] == "program folder"],
+          f"({[c[0] for c in checks]})")

@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--doctor` now tells you whether your copy can be tampered with.** The program asks for
+  administrator rights and then loads its network driver from its own folder, so a folder
+  anyone can write to without those rights is worth knowing about. Run `--doctor` without
+  administrator rights and it says which case yours is, and what to install differently if you
+  want the other one. `SECURITY.md` has the same in a table. Run it elevated and it says it
+  could not tell, rather than pretending everything is fine.
+
 - **Asking for administrator rights could change your command line.** When the program needs
   administrator rights it restarts itself with the same arguments. An argument ending in a
   backslash broke the quoting, so the restarted copy could receive different flags than the

@@ -87,3 +87,25 @@ The program has **no telemetry and no network client** - it sends no data anywhe
 Reports that are in scope include, for example: a way to make the tool affect traffic
 it was not told to target, a crash that corrupts a user's files (profiles, config,
 CSV), or unsafe handling of the files it reads and writes.
+
+## Where you install it matters
+
+The program asks for administrator rights and then loads `WinDivert.dll` from its own
+folder. So anything that can write to that folder **without** administrator rights can
+leave a DLL there for the elevated copy to load. That is a property of every user-scope
+install, not of this program in particular - but this program is the one that elevates,
+so it is worth saying plainly.
+
+Measured on 2026-08-26:
+
+| How you installed it | Folder | Writable without admin rights |
+|---|---|---|
+| `winget install` (default) | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\` | **yes** |
+| `winget install --scope machine` | `%PROGRAMFILES%\WinGet\Packages\` | no |
+| Chocolatey | `C:\ProgramData\chocolatey\lib\` | no |
+| Zip unpacked in your profile | wherever you put it | **yes** |
+
+If that matters on your machine, install with `winget install --scope machine`, use
+Chocolatey, or unpack the zip somewhere only administrators can write.
+`BeanNetworkTester.exe --doctor` tells you which of the two your copy is in - run it
+**without** administrator rights, or it can only report that it could not tell.

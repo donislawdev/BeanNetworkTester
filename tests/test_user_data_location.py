@@ -192,3 +192,26 @@ def test_an_unusable_data_directory_does_not_stop_the_program(tmp_path, monkeypa
 
     check("startup gets a problem to log instead of an exception",
           len(problems) == 1 and problems[0], f"({problems})")
+
+
+def test_the_write_probe_answers_for_the_token_that_asks(tmp_path):
+    """`directory_is_writable` is a probe, not a reading of the access list.
+
+    Reading the ACL would mean deciding which principals count as "an ordinary
+    user" - which is the question, not the answer. A write that succeeds is the
+    answer, for exactly the token doing the asking, and that is what `--doctor`
+    needs: it runs unelevated, so what it can write is what the user can write.
+
+    The two portable cases are here. "Not writable" is not: `chmod` genuinely
+    blocks a write on POSIX while on Windows it only toggles the read-only bit and
+    the directory stays writable, so a test for it would assert one thing on one
+    runner and nothing on the other. `test_driver_windows.py` covers that half
+    where it matters, by giving `doctor()` the answer instead of the filesystem.
+    """
+    check("a directory this process owns is writable",
+          paths.directory_is_writable(str(tmp_path)) is True)
+    check("a path that is not a directory cannot be answered, not guessed",
+          paths.directory_is_writable(str(tmp_path / "nope")) is None)
+
+    leftovers = [p.name for p in tmp_path.iterdir()]
+    check("the probe leaves nothing behind", not leftovers, f"({leftovers})")
