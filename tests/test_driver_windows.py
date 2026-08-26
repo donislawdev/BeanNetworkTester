@@ -502,6 +502,10 @@ def test_doctor_says_when_anything_running_as_you_could_replace_the_driver(monke
     fine = row_when(admin=False, writable=False)
     check("doctor: a protected folder passes", fine[1] == "ok", f"({fine})")
 
+    unknown = row_when(admin=False, writable=None)
+    check("doctor: a folder that could not be probed is not a pass either",
+          unknown[1] == "warn", f"({unknown})")
+
     elevated = row_when(admin=True, writable=True)
     check("doctor: 'checked while elevated' is not a pass", elevated[1] == "warn",
           f"({elevated})")

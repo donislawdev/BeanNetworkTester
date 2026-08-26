@@ -215,3 +215,21 @@ def test_the_write_probe_answers_for_the_token_that_asks(tmp_path):
 
     leftovers = [p.name for p in tmp_path.iterdir()]
     check("the probe leaves nothing behind", not leftovers, f"({leftovers})")
+
+
+def test_a_directory_that_refuses_the_write_is_answered_false(monkeypatch):
+    """The refusal is the interesting answer, and the filesystem cannot be asked
+    for it portably: ``chmod`` genuinely blocks a write on POSIX, while on Windows
+    it only toggles the read-only bit and the directory stays writable. So the
+    refusal is injected at the one call that can produce it, and the assertion is
+    that it becomes ``False`` - not an exception, and not the ``None`` that means
+    "there is nothing here to check"."""
+    def refuse(*_a, **_kw):
+        raise PermissionError("Access is denied")
+
+    monkeypatch.setattr("builtins.open", refuse)
+    answer = paths.directory_is_writable(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.undo()
+
+    check("a directory that refuses the write is not writable", answer is False,
+          f"({answer!r})")
