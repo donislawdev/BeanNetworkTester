@@ -169,6 +169,9 @@ KNOWN_UNUSED = {
                 "PROJECT_NOTES lists it as part of the scaling surface",
     "make_scrollable": "the compatibility alias the notes say stays. Deleting it is "
                        "a decision about that promise, not about this scan",
+    "get_field": "an OVERRIDE of string.Formatter.get_field - the base class calls "
+                 "it, so no line in this package ever names it. Deleting it would "
+                 "restore attribute access inside translation templates",
 }
 
 

@@ -72,6 +72,25 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The hand-rolled quoting, restored exactly as it shipped: an argument
+        # ending in a backslash escapes its own closing quote.
+        "label": "winenv: relaunch quoting goes back to wrapping each argument",
+        "file": "beantester/winenv.py",
+        "old": "    import subprocess\n"
+               "    return subprocess.list2cmdline([str(a) for a in args])",
+        "new": "    return ' '.join('\"%s\"' % str(a).replace('\"', chr(92) + '\"')\n"
+               "                    for a in args)",
+        "test": "test_the_relaunch_quoting_survives_the_arguments_windows_reparses",
+    },
+    {
+        # Back to str.format, which walks attributes into whatever it was given.
+        "label": "i18n: a translation file gets str.format back",
+        "file": "beantester/i18n.py",
+        "old": "            return _FORMATTER.vformat(text, (), fmt)",
+        "new": "            return text.format(**fmt)",
+        "test": "test_a_translation_file_cannot_reach_inside_the_values_it_formats",
+    },
+    {
         # The half that was missing for years: the step's setting NAMES were
         # checked, its VALUES went to the engine untouched.
         "label": "scenario: a step's settings values stop being validated",

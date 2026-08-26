@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Asking for administrator rights could change your command line.** When the program needs
+  administrator rights it restarts itself with the same arguments. An argument ending in a
+  backslash broke the quoting, so the restarted copy could receive different flags than the
+  ones you typed - including a flag you never passed. Arguments are now quoted the way Windows
+  reads them back.
+
+- **A translation file could reach into the program.** Adding a language means dropping a JSON
+  file into `lang/`, so a translation is something you get from somebody else. Its text was
+  being run through a formatter powerful enough to print the program's own internals into a
+  label, and one wrong character in it could stop the program. Translations now fill in names
+  and nothing else.
+
+- **An exported CSV could carry a formula.** The connections export writes the names of the
+  programs it saw, and a spreadsheet runs any cell that starts with `=`, `+`, `-` or `@` - all
+  of them legal first characters for a file name on Windows. These exports are made to be
+  shared, so such a name became a payload for whoever opened the file. Those cells are now
+  marked as text; numbers stay numbers.
+
 - **A scenario file checked the names of your settings but not their values.** A misspelled
   setting was refused with a suggestion; a nonsense VALUE went straight to the engine. Too
   large a number was simply used, and a value of the wrong kind stopped the timeline mid-run -
