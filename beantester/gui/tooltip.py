@@ -15,8 +15,7 @@ import tkinter as tk
 from ..i18n import T
 from .scaling import scaled, tooltip_position
 from .theme import FONT, TIP_BG, TIP_FG
-from .. import crashlog
-from .. import winenv
+from .. import crashlog, winenv
 
 _BUBBLES: dict[str, tuple] = {}     # toplevel name -> (window, label)
 

@@ -148,6 +148,16 @@ def geometry_fits(geometry, screen_w, screen_h, bounds_at=None):
     straddling two monitors keeps being judged by the monitor its corner is on,
     which is the verdict it got before this argument existed - a fix here must not
     invent a new way to lose a window.
+
+    One consequence said out loud: the SIZE is measured against the work area too,
+    which is slightly stricter than the whole monitor. With the taskbar at the
+    bottom - where it is by default, and where it costs height only - nothing our
+    own UI can produce reaches that edge, because ``max_window_size`` already caps
+    a window below it. A taskbar down the SIDE of the screen makes the work area
+    narrower than the cap, and a window within about thirty pixels of it would be
+    re-centred at the next start instead of being restored. That is a remembered
+    size lost, not a window lost, and it buys the case that matters: a window on a
+    monitor LARGER than the primary one, which the old check rejected outright.
     """
     try:
         size, _, rest = str(geometry).partition("+")

@@ -47,9 +47,8 @@ from tkinter import ttk
 
 from ..i18n import T
 from .scaling import centred_in, geometry_fits, max_window_size, scaled
-from .. import winenv
 from .theme import BG, apply_dark_titlebar, disable_maximize
-from .. import crashlog
+from .. import crashlog, winenv
 
 WINDOWS: dict[str, type] = {}   # id -> PanelWindow subclass (the registry)
 
