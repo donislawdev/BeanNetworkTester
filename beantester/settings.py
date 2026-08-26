@@ -276,6 +276,33 @@ def settings_from_raw(raw, lang=None):
     return s
 
 
+def validated_patch(raw, lang=None):
+    """Validate a PARTIAL settings dict and hand back only the keys it carried.
+
+    A scenario step is a PATCH, not a settings dict: ``Scenario.settings_at``
+    layers each step over the state built by the ones before it. Returning a full
+    dict here would therefore be a bug with a very quiet symptom - a step that
+    says ``{"loss": 10}`` would also reset every OTHER setting to its default, and
+    the run would look like it was obeying the file.
+
+    So the validation is done on a full dict (that is the only way to check what
+    is cross-field - an expression compiles, a schedule parses) and then the patch
+    is cut back out of it. What comes back is the same keys, converted the way the
+    form converts them: numbers as numbers, expressions normalised.
+
+    Raises the same translated ``ValueError`` the form raises. That is the point:
+    a scenario file and a typed-in value are two doors into the same engine, and
+    before this only one of them was locked.
+    """
+    if not raw:
+        return {}
+    full = settings_from_raw(raw, lang)
+    # `full` starts life as dict(DEFAULT_SETTINGS), so every key the caller was
+    # allowed to pass is in it - the scenario validator has already refused
+    # anything outside that set, with a spelling hint.
+    return {key: full[key] for key in raw}
+
+
 def validate_settings(s, lang=None):
     """Raise a translated ``ValueError`` if any setting is malformed."""
     build_matchers(s)

@@ -538,6 +538,21 @@ class BeanEngine:
         if self._scenario_runner is not None:
             self._scenario_runner.stop()
 
+    def worker_failed(self, error):
+        """A worker thread this engine does not OWN has died. Same answer as ours.
+
+        The scenario runner lives above the engine (it is a separate module for a
+        dependency reason), so the watchdog's dead-thread check cannot see it: that
+        one walks ``_t_cap`` and ``_t_inj``. This is the same door for the thread
+        the engine cannot watch, and it exists so there is only one answer to "a
+        worker died" rather than a second, quieter one for the scenario.
+
+        ``blocking=False`` for the reason the watchdog uses it (F2): the caller is
+        a worker thread of its own, and an external ``stop()`` must never be left
+        waiting on a lock this call is blocked on.
+        """
+        self._fail_stop(error, blocking=False)
+
     def scenario_finished(self):
         """True once a non-looping scenario has played its whole timeline.
 

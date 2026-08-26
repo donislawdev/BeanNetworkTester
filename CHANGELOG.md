@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A scenario file checked the names of your settings but not their values.** A misspelled
+  setting was refused with a suggestion; a nonsense VALUE went straight to the engine. Too
+  large a number was simply used, and a value of the wrong kind stopped the timeline mid-run -
+  the session kept damaging traffic to a plan that no longer existed, and nothing said so.
+  Values are now checked when you open the file, by the same rules the form uses, and the
+  message names the step. A timeline that breaks stops the session instead of disappearing.
+
 - **A damaged file could stop the program from opening, and keep stopping it.** Some broken
   JSON - a profile, the window state, a config or a scenario somebody sent you - took the
   program down instead of being refused, and the step that rescues your data by moving the

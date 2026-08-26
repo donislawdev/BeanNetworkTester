@@ -8,6 +8,7 @@ normally, keeping dependencies one-directional.
 import threading
 import time
 
+from . import crashlog
 from .i18n import T
 from .scenario import ACTIONS
 from .settings import apply_settings
@@ -40,6 +41,34 @@ class ScenarioRunner:
         self._stop = True
 
     def _loop(self, scenario, base, log):
+        """The thread body: run the timeline, and never die in silence.
+
+        Before this wrapper, an exception in the loop killed the daemon thread and
+        nothing else happened. The session kept running with whatever the last step
+        had applied, no further step was ever applied, ``finished`` stayed False -
+        and without ``--duration`` that flag is the ONLY ending a run has, so the
+        session went on until somebody stopped it. Measured 2026-08-26 with a
+        scenario carrying a value of the wrong type: thread dead, uncaught
+        TypeError, ``engine.is_running()`` still True.
+
+        A worker that dies takes the session down with it - that is not a new rule,
+        it is ``BeanEngine._fail_stop``: "a worker died: stop the session so the
+        network is never left impaired". The thread that CHANGES the impairment
+        over time is exactly the one that must not be allowed to disappear while
+        the impairment stays.
+        """
+        try:
+            self._timeline(scenario, base, log)
+        except Exception as exc:                      # noqa: BLE001 - the net itself
+            try:
+                crashlog.record(exc, "scenario_runner")
+                log(T("log.scenario_failed", e=f"{type(exc).__name__}: {exc}"))
+                self.engine.worker_failed(exc)
+            except Exception as _exc:
+                # A safety net that can itself fall through is not one.
+                crashlog.note(_exc, "scenario_runner")
+
+    def _timeline(self, scenario, base, log):
         eng = self.engine
         start = time.monotonic()
         prev_t, last = -1.0, None
