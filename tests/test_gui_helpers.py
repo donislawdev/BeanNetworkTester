@@ -74,6 +74,79 @@ def test_geometry_fits_rejects_stale_saved_geometry():
     check("geometry: garbage is rejected", not scaling.geometry_fits("nonsense", 1366, 768))
 
 
+def _primary_only(x, y):
+    """One monitor, 3840x2088 of work area. The nearest one is always this one."""
+    return (0, 0, 3840, 2088)
+
+
+def _second_monitor_right(x, y):
+    """A portrait monitor attached to the right of a 3840-wide primary."""
+    return (3840, 0, 4920, 1920) if x >= 3820 else (0, 0, 3840, 2088)
+
+
+def test_geometry_fits_tells_a_second_monitor_from_an_unplugged_one():
+    """A window left on a second monitor used to come back on the first one.
+
+    Both checks below use the SAME saved geometry, at x=4000 - past the primary
+    monitor's width, so the old code called it "off screen" and threw it away. The
+    only thing that separates a window on a second monitor from a window on a
+    monitor that has been unplugged is whether that spot is still on a display,
+    and nothing but the system can answer that. Hence ``bounds_at``.
+    """
+    saved = "800x600+4000+100"
+    check("geometry: a window on the second monitor is kept",
+          scaling.geometry_fits(saved, 3840, 2088, _second_monitor_right))
+    check("geometry: the same spot with that monitor gone is rejected",
+          not scaling.geometry_fits(saved, 3840, 2088, _primary_only))
+    check("geometry: with nothing to ask, the old primary-screen answer stands",
+          not scaling.geometry_fits(saved, 3840, 2088))
+
+
+def test_geometry_fits_accepts_the_monitors_that_have_negative_coordinates():
+    """The primary monitor owns the origin, so a monitor left of or above it is at
+    negative coordinates - and Tk writes those into ``ui.json`` as "+-1800"."""
+    def left(x, y):
+        return (-1920, 0, 0, 1080)
+
+    def above(x, y):
+        return (0, -1080, 1920, 0)
+
+    check("geometry: a monitor to the left is a valid place for a window",
+          scaling.geometry_fits("800x600+-1800+100", 1920, 1080, left))
+    check("geometry: so is a monitor above the primary one",
+          scaling.geometry_fits("800x600+100+-900", 1920, 1080, above))
+    check("geometry: and the numbers are still checked there",
+          not scaling.geometry_fits("800x600+-5000+100", 1920, 1080, left))
+
+
+def test_a_window_bigger_than_the_primary_monitor_still_fits_its_own():
+    """The size half of the same assumption: a 4K second monitor next to a laptop
+    screen. The saved window fits where it was left, and only the primary screen
+    said otherwise."""
+    def four_k_on_the_right(x, y):
+        return (1366, 0, 5206, 2160)
+
+    check("geometry: judged against the monitor it is on",
+          scaling.geometry_fits("2400x1300+1400+100", 1366, 768, four_k_on_the_right))
+    check("geometry: and a window that fits NOTHING is still rejected",
+          not scaling.geometry_fits("9000x5000+1400+100", 1366, 768,
+                                    four_k_on_the_right))
+
+
+def test_a_window_centres_on_the_monitor_it_is_given():
+    x, y = scaling.centred_in((0, 0, 1920, 1080), 800, 600)
+    check("centred: on the primary monitor", x == 560 and 0 < y < 200, f"({x}, {y})")
+    x, _ = scaling.centred_in((1920, 0, 3000, 1920), 800, 600)
+    check("centred: on the second monitor, not back on the first",
+          1920 <= x and x + 800 <= 3000, f"(x={x})")
+    x, y = scaling.centred_in((-1920, -200, 0, 880), 800, 600)
+    check("centred: a monitor at negative coordinates is a monitor",
+          -1920 <= x and x + 800 <= 0 and y >= -200, f"({x}, {y})")
+    x, y = scaling.centred_in((1920, 0, 2200, 200), 800, 600)
+    check("centred: a window bigger than its monitor still STARTS on it",
+          (x, y) == (1920, 0), f"({x}, {y})")
+
+
 def test_min_window_size_never_exceeds_the_smallest_screen():
     for scale in (1.0, 1.5, 2.0):
         w, h = scaling.min_window_size(scale)

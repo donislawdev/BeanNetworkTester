@@ -138,8 +138,8 @@ with different scaling does not blur the interface.
 
 Window size and position, the selected tab, language, collapsed sections, the log/tabs split and
 table sort order are remembered in `bean_network_tester_ui.json` (next to the profiles). The saved
-geometry is validated before use - if the monitor is gone, the window returns to the centre of the
-current screen.
+geometry is validated before use - a window left on a second monitor opens there again, and if that
+monitor is gone it returns to the centre of the current screen.
 
 - **Control** - all impairment settings, grouped into **collapsible sections** (the collapsed
   state is remembered). On a wide window the sections lay out **in two columns** (instead of one

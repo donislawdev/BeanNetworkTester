@@ -83,6 +83,32 @@ MUTATIONS = [
         "test": "test_the_bubble_opens_on_the_monitor_the_widget_is_on",
     },
     {
+        # The caller half of the same fix: `geometry_fits` grew an argument, and
+        # the quiet way to lose the fix is to stop passing it - the default is the
+        # old primary-screen answer, so nothing looks broken.
+        "label": "gui: the main window validates its geometry against the primary screen",
+        "file": "beantester/gui/app.py",
+        "old": "        if saved and geometry_fits(saved, screen_w, screen_h,"
+               " winenv.monitor_work_area):",
+        "new": "        if saved and geometry_fits(saved, screen_w, screen_h):",
+        "test": "test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on",
+    },
+    {
+        "label": "gui: a panel centres on the primary monitor, not on the app's",
+        "file": "beantester/gui/windows.py",
+        "old": "            x, y = centred_in(self._app_monitor(screen_w, screen_h), width, height)",
+        "new": "            x, y = centred_in((0, 0, screen_w, screen_h), width, height)",
+        "test": "test_a_window_opens_on_the_monitor_the_application_is_on",
+    },
+    {
+        "label": "gui: a panel forgets a position that is not on the primary screen",
+        "file": "beantester/gui/windows.py",
+        "old": "        if saved and screen_w and geometry_fits(saved, screen_w, screen_h,\n"
+               "                                                winenv.monitor_work_area):",
+        "new": "        if saved and screen_w and geometry_fits(saved, screen_w, screen_h):",
+        "test": "test_a_window_opens_on_the_monitor_the_application_is_on",
+    },
+    {
         # The SBOM could not name the tool that froze the binary, whose bootloader
         # ships inside it under its own licence.
         "label": "sbom: the registry stops asking for the PyInstaller version",

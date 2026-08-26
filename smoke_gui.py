@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tes
 import fake_tk                                    # noqa: E402
 
 tk = fake_tk.install()
+fake_tk.single_monitor()      # one monitor, exactly the fake screen (see its docstring)
 
 # The user's own files (UI state, profiles, crash log) must not be written into
 # the repository by a smoke run. Same helper the pytest GUI harness uses; without

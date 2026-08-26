@@ -46,7 +46,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ..i18n import T
-from .scaling import geometry_fits, max_window_size, scaled
+from .scaling import centred_in, geometry_fits, max_window_size, scaled
+from .. import winenv
 from .theme import BG, apply_dark_titlebar, disable_maximize
 from .. import crashlog
 
@@ -164,12 +165,37 @@ class PanelWindow:
     def _state_key(self):
         return f"window.{self.ID}"
 
+    def _app_monitor(self, screen_w, screen_h):
+        """The work area of the monitor the MAIN window is on.
+
+        A window centred on the primary monitor while the application sits on the
+        second one opens where the user is not looking. That is the same
+        single-monitor assumption the tooltip bubble had, one window bigger:
+        ``winfo_screenwidth()`` is the primary monitor whatever the app is on.
+
+        The probe point is the MIDDLE of the main window, not its corner - this
+        asks "where is the application", and a window overhanging a monitor edge
+        should not send its panels to the neighbouring screen. (``geometry_fits``
+        asks about a corner, and says in its own docstring why the answer there is
+        the other one.)
+        """
+        root = self.app.root
+        with crashlog.quiet("gui.windows"):
+            area = winenv.monitor_work_area(
+                root.winfo_rootx() + root.winfo_width() // 2,
+                root.winfo_rooty() + root.winfo_height() // 2)
+            if area is not None:
+                return area
+        return (0, 0, int(screen_w), int(screen_h))
+
     def _restore_geometry(self):
-        """Reuse the saved size/position - but only if it still fits the screen.
+        """Reuse the saved size/position - but only if it is still reachable.
 
         A geometry saved on a second monitor that is no longer attached puts the
         window somewhere the user cannot reach it. The main window learned this the
-        hard way; this is the same guard (``scaling.geometry_fits``).
+        hard way; this is the same guard (``scaling.geometry_fits``), and since
+        2026-08-26 the guard knows the difference between a monitor that was
+        unplugged and one that is simply not the primary.
         """
         win = self.win
         saved = self.app.ui.get(self._state_key())
@@ -178,7 +204,8 @@ class PanelWindow:
             screen_h = win.winfo_screenheight()
         except Exception:
             screen_w = screen_h = 0
-        if saved and screen_w and geometry_fits(saved, screen_w, screen_h):
+        if saved and screen_w and geometry_fits(saved, screen_w, screen_h,
+                                                winenv.monitor_work_area):
             try:
                 win.geometry(saved)
                 return
@@ -186,8 +213,7 @@ class PanelWindow:
                 crashlog.note(_exc, "gui.windows")
         width, height = scaled(self.SIZE[0]), scaled(self.SIZE[1])
         try:
-            x = max(0, (screen_w - width) // 2)
-            y = max(0, (screen_h - height) // 3)
+            x, y = centred_in(self._app_monitor(screen_w, screen_h), width, height)
             win.geometry(f"{width}x{height}+{x}+{y}")
         except Exception as _exc:
             crashlog.note(_exc, "gui.windows")

@@ -127,11 +127,27 @@ def max_window_size(screen_w, screen_h, want=(1280, 1000), scale=None):
     return (w, h)
 
 
-def geometry_fits(geometry, screen_w, screen_h):
-    """True when a saved ``WxH+X+Y`` string still fits on the current screen.
+def geometry_fits(geometry, screen_w, screen_h, bounds_at=None):
+    """True when a saved ``WxH+X+Y`` string still describes a reachable window.
 
     A geometry restored from ``ui.json`` must be re-validated: the user may have
-    unplugged the 4K monitor it was saved on.
+    unplugged the 4K monitor it was saved on, and a window put back where nobody
+    can reach it is worse than a window in the middle of the screen.
+
+    ``bounds_at(x, y)`` says which monitor that spot is on and hands back its work
+    area (``winenv.monitor_work_area``). Without it the check falls back to the
+    primary screen, which is the only display Tk itself can describe - and that
+    fallback is why a window MOVED TO A SECOND MONITOR came back on the first one
+    at the next start: ``x`` was simply larger than the primary monitor's width,
+    so a perfectly good geometry was thrown away as "off screen". The unplugged
+    case still works, and for the same reason it always did: the nearest monitor
+    is then the primary one, and the numbers below say no.
+
+    Asking about the window's own top-left CORNER is deliberate. The nearest
+    monitor rule makes the off-screen slack below work by itself, and a window
+    straddling two monitors keeps being judged by the monitor its corner is on,
+    which is the verdict it got before this argument existed - a fix here must not
+    invent a new way to lose a window.
     """
     try:
         size, _, rest = str(geometry).partition("+")
@@ -139,15 +155,36 @@ def geometry_fits(geometry, screen_w, screen_h):
         w, h = int(w_s), int(h_s)
     except (TypeError, ValueError):
         return False
-    if w < 320 or h < 320 or w > int(screen_w) or h > int(screen_h):
-        return False
     parts = rest.split("+")
     try:
+        # Tk writes a negative coordinate as "+-1882", so splitting on "+" leaves
+        # the sign on the number - a monitor left of the primary one survives the
+        # round trip through ui.json.
         x, y = (int(parts[0]), int(parts[1])) if len(parts) >= 2 else (0, 0)
     except ValueError:
         return False
+    left, top, right, bottom = 0, 0, int(screen_w), int(screen_h)
+    if bounds_at is not None:
+        area = bounds_at(x, y)
+        if area is not None:
+            left, top, right, bottom = (int(edge) for edge in area)
+    if w < 320 or h < 320 or w > right - left or h > bottom - top:
+        return False
     # allow a little off-screen slack, but the title bar must stay reachable
-    return -20 <= x <= int(screen_w) - 100 and 0 <= y <= int(screen_h) - 60
+    return left - 20 <= x <= right - 100 and top <= y <= bottom - 60
+
+
+def centred_in(bounds, width, height):
+    """Top-left corner for a ``width`` x ``height`` window centred in ``bounds``.
+
+    Slightly above centre, like ``initial_geometry`` - the same reason, it reads
+    better - and expressed as a rectangle so a window can be centred on the
+    monitor the application is actually on rather than on the primary one.
+    """
+    left, top, right, bottom = (int(edge) for edge in bounds)
+    x = left + max(0, ((right - left) - int(width)) // 2)
+    y = top + max(0, ((bottom - top) - int(height)) // 3)
+    return x, y
 
 
 # -- pure geometry helpers used by the tooltip and the chart ------------------ #

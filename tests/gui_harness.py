@@ -20,6 +20,7 @@ import fake_tk
 fake_tk.SCREEN[:] = [{screen_w}, {screen_h}]
 fake_tk.DPI[0] = {dpi}
 tk = fake_tk.install()
+fake_tk.single_monitor()      # one monitor, exactly the fake screen (see its docstring)
 
 # user files (profiles / ui state / crash log) must never be written into the
 # repo by a test - shared with smoke_gui.py so both stay isolated the same way
