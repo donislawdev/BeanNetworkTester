@@ -93,8 +93,13 @@ _MONITORINFO = [None]
 MONITOR_DEFAULTTONEAREST = 2
 
 
-def monitorinfo_type():
+def monitorinfo_type():                       # pragma: no cover - Windows only
     """The ``MONITORINFO`` layout, built on first use and cached.
+
+    The pragma is not a hidden line, it is a platform: this is reached only from
+    ``user32()``, which returns None before it off Windows, and the coverage gate
+    is computed on the Linux runner. The Windows runner really does execute it -
+    ``test_native_prototypes.py`` calls through these prototypes there.
 
     Not at module scope, and not a plain ``c_void_p`` at the call site either:
     ``ctypes.wintypes`` cannot even be IMPORTED off Windows (which is why every
@@ -222,7 +227,9 @@ def monitor_work_area(x, y):
     lib = user32()
     if lib is None:
         return None
-    with crashlog.quiet("winenv.monitor"):
+    # Everything below runs on Windows only - the line above is where the Linux
+    # runner leaves, and the Windows runner covers the rest for real.
+    with crashlog.quiet("winenv.monitor"):    # pragma: no cover - Windows only
         import ctypes
         from ctypes import wintypes
 
@@ -240,7 +247,7 @@ def monitor_work_area(x, y):
             # fall back. Nothing observed producing one; it costs one comparison.
             return None
         return (int(area.left), int(area.top), int(area.right), int(area.bottom))
-    return None
+    return None                               # pragma: no cover - Windows only
 
 
 # QueryPerformanceCounter, because that is the clock WinDivert stamps its packets

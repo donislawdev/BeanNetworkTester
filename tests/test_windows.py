@@ -79,6 +79,15 @@ def test_a_window_opens_on_the_monitor_the_application_is_on():
         panel.close()
         panel = app.open_window("probe_monitor")
         assert panel.win.kw["geometry"] == "640x480+2500+300", panel.win.kw["geometry"]
+
+        # With no answer from the system - every non-Windows machine, and the Linux
+        # runner - the window centres on the screen Tk describes, as it always did.
+        panel.close()
+        app.ui.set("window.probe_monitor", "")
+        winenv.monitor_work_area = lambda x, y: None
+        panel = app.open_window("probe_monitor")
+        spec = panel.win.kw["geometry"]
+        assert 0 <= int(spec.split("+")[1]) < 1920, spec
     """)
 
 

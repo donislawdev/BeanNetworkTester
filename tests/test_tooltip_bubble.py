@@ -233,7 +233,18 @@ def test_the_bubble_opens_on_the_monitor_the_widget_is_on():
         assert window is not None
         x, y = where(window)
         assert 0 <= x <= 1920 and 0 <= y <= 1080, (x, y)
-    """)
+
+        # ...and no answer from Tk either. Nothing can tell us how big anything is,
+        # and the bubble still has to be SOMEWHERE rather than take the window down.
+        def no_idea(*a, **kw):
+            raise RuntimeError("Tk cannot measure the screen")
+
+        label.winfo_screenwidth = no_idea
+        window = tooltip._show_bubble(label, "filter expression syntax", 10, 10, 20)
+        assert window is not None, "a bubble must survive a screen it cannot measure"
+        x, y = where(window)
+        assert 0 <= x <= 1920 and 0 <= y <= 1080, (x, y)
+    """, allow_faults=("gui.tooltip",))
 
 
 def test_dead_bubbles_do_not_pile_up_across_windows():

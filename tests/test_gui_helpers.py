@@ -183,6 +183,11 @@ def test_a_tooltip_stays_on_the_monitor_that_shows_the_widget():
     x, _ = scaling.tooltip_position(2960, 300, 20, 300, 80, right)
     check("tooltip: clamped to THAT monitor's right edge, not the primary's",
           1920 <= x and x + 300 <= 3000, f"(x={x})")
+    # The LEFT edge of a monitor that does not start at zero: a widget whose corner
+    # sits just past the boundary would otherwise put the bubble on the neighbour.
+    x, _ = scaling.tooltip_position(1890, 300, 20, 300, 80, right)
+    check("tooltip: clamped to that monitor's LEFT edge too",
+          x >= 1920, f"(x={x})")
 
     left = (-1920, -200, 0, 880)              # monitor left of and above primary
     x, y = scaling.tooltip_position(-1900, 800, 20, 300, 80, left)
