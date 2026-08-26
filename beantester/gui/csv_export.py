@@ -63,6 +63,30 @@ def session_value(key, info):
     return ("yes" if value else "no") if isinstance(value, bool) else value
 
 
+# A cell a spreadsheet would run instead of showing. Excel and LibreOffice treat a
+# cell starting with one of these as a FORMULA, and this program writes strings it
+# did not choose: a process name comes from the filesystem, and `=cmd.exe` or
+# `=HYPERLINK("http://...")` are legal Windows file names. The CSV is written to be
+# shared - it goes into bug reports and measurements - so the person who opens it is
+# usually not the person whose machine produced it. CWE-1236.
+_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+
+
+def formula_safe(value):
+    """One data cell, with a leading apostrophe when a spreadsheet would run it.
+
+    Only strings are touched, which is what keeps the numeric columns numeric: the
+    writers below pass ints and floats as ints and floats, so a negative NUMBER
+    never reaches this and never turns into text. Header rows are deliberately not
+    passed through here either - the stats file compares the header it finds on
+    disk against the one it would write, and quoting one side of that comparison
+    would rotate the file on every append.
+    """
+    if isinstance(value, str) and value.startswith(_FORMULA_LEAD):
+        return "'" + value
+    return value
+
+
 def export_stats(app):
     snap = app.engine.stats_snapshot()
     info = app.engine.session_info()
@@ -86,8 +110,9 @@ def export_stats(app):
             writer = csv.writer(f)
             if write_header:
                 writer.writerow(header)
-            writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"),
-                             *session_cells, *snap.values()])
+            writer.writerow([formula_safe(v) for v in
+                             (time.strftime("%Y-%m-%d %H:%M:%S"),
+                              *session_cells, *snap.values())])
         # The WHOLE path, not just the file name: these files no longer sit next to
         # the executable, so the name alone would leave the user hunting for them.
         app.log(f"{T('log.stats_saved_to')} {CSV_FILE}")
@@ -141,7 +166,7 @@ def export_connections(app):
             for c in rows:
                 last = c.get("last", now)
                 packets = c.get("packets", 0) or 0
-                writer.writerow([
+                writer.writerow([formula_safe(v) for v in (
                     connection_proc(c, app.proc_map) or "?",
                     c.get("pid") or "",
                     c.get("proto", "IP"), c.get("remote_ip", ""),
@@ -152,7 +177,7 @@ def export_connections(app):
                     c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
                     avg_packet_bytes(c),
                     f"{max(0.0, last - c.get('first', now)):.1f}",
-                    f"{max(0.0, now - last):.1f}"])
+                    f"{max(0.0, now - last):.1f}")])
         os.replace(tmp, path)
         app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")
     except Exception as e:

@@ -1047,30 +1047,74 @@ def test_closing_the_window_always_releases_the_engine():
 # -- pure winenv helpers: no UAC, no ctypes, no excuse for being untested ----- #
 
 
-def test_the_relaunch_quoting_survives_a_path_with_spaces_and_quotes():
-    """``_quote`` builds the parameter string handed to ``ShellExecuteW`` when the
-    app re-launches itself elevated. It is a pure function and it was untested,
-    while a mis-quoted argument means the elevated copy starts with the WRONG
-    settings - or, with a crafted path, with extra ones.
+def test_the_relaunch_quoting_survives_the_arguments_windows_reparses():
+    """What crosses the UAC boundary must be what the user typed.
+
+    The version this replaces wrapped each argument in quotes and escaped inner
+    quotes - correct until an argument ENDS in a backslash, which then escapes the
+    closing quote and lets the rest of the command line be re-read as part of that
+    argument. Measured with ``CommandLineToArgvW``, the same parser the elevated
+    process starts with:
+
+        asked for : --target 'evil\\" --loss 100 "' --loss 0
+        arrived as: --target 'evil\'  --loss  100  '" --loss 0'
+
+    ``--loss 100`` in the ELEVATED process, from a command line that never said it,
+    in a program that damages network traffic for a living.
+
+    🔴 The test that used to be here is the reason this shipped. Its docstring named
+    this exact attack ("with a crafted path, with extra ones") and then asserted the
+    SHAPE of the answer - that the result starts and ends with a quote, that an
+    inner quote becomes a backslash-quote - which is a description of the
+    implementation, not a property of it. It passed for as long as the bug existed
+    and would have kept passing. This one asks the only question that matters: parse
+    it back, do you get what you asked for?
     """
+    import ctypes
+
     from beantester import winenv
 
-    check("a plain argument is wrapped", winenv._quote("--simulate") == '"--simulate"')
-
-    # Built from parts so the test's own escaping cannot be what it measures.
     sep = chr(92)
-    spaced = "C:" + sep + "Program Files" + sep + "bean.py"
-    check("a path with spaces stays ONE argument",
-          winenv._quote(spaced) == '"' + spaced + '"', f"({winenv._quote(spaced)})")
-    check("...and its backslashes are passed through untouched",
-          winenv._quote(spaced).count(sep) == 2, f"({winenv._quote(spaced)})")
+    cases = [
+        ["--simulate"],
+        ["--target", "C:" + sep + "Program Files" + sep + "bean.py"],
+        ["--config", 'a"b.json'],
+        ["--target", "x" + sep, "--loss", "100"],
+        ["--target", "evil" + sep + '" --loss 100 "', "--loss", "0"],
+        ["--target", "a" + sep * 3, "--simulate"],
+        [7],                                    # a non-string argument, as before
+    ]
 
-    quoted = winenv._quote('a"b')
-    check("an embedded quote is escaped, not left to close the string early",
-          quoted == '"a\\"b"', f"({quoted})")
-    check("the result always opens and closes with a quote",
-          quoted.startswith('"') and quoted.endswith('"'), f"({quoted})")
-    check("a non-string argument does not explode", winenv._quote(7) == '"7"')
+    if not hasattr(ctypes, "windll"):
+        # Not Windows: there is no CommandLineToArgvW to ask, and the elevation
+        # path this builds for does not exist here either. Assert the part that is
+        # still true - it produces a string and does not raise on any of them -
+        # rather than a weaker version of the real check.
+        for args in cases:
+            check(f"a parameter string is built off Windows too: {args}",
+                  isinstance(winenv._relaunch_params(args), str))
+        return
+
+    from ctypes import wintypes                        # pragma: no cover - Windows
+
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    shell32.CommandLineToArgvW.argtypes = [wintypes.LPCWSTR,
+                                           ctypes.POINTER(ctypes.c_int)]
+    shell32.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+
+    def reparse(line):
+        count = ctypes.c_int(0)
+        argv = shell32.CommandLineToArgvW(line, ctypes.byref(count))
+        try:
+            return [argv[i] for i in range(count.value)][1:]   # drop argv[0]
+        finally:
+            ctypes.windll.kernel32.LocalFree(argv)
+
+    for args in cases:
+        wanted = [str(a) for a in args]
+        line = "bean.exe " + winenv._relaunch_params(args)
+        check(f"the elevated copy receives exactly these arguments: {wanted}",
+              reparse(line) == wanted, f"(it would receive {reparse(line)})")
 
 
 def test_the_no_elevate_switch_is_read_the_way_the_screenshot_workflow_uses_it():

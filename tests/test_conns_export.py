@@ -246,3 +246,44 @@ def test_both_exports_tell_the_user_the_whole_path():
             assert said, (name, lines)
             assert any(folder in l for l in said), (name, said)
     ''')
+
+
+def test_a_process_name_cannot_arrive_as_a_spreadsheet_formula():
+    """The export is written to be SHARED, and it carries names we did not choose.
+
+    Excel and LibreOffice run a cell that starts with `=`, `+`, `-` or `@`, and
+    those are all legal first characters for a Windows file name. So a process
+    called `=HYPERLINK("http://...")` turns this file into a payload for whoever
+    opens it - which, for a CSV that goes into bug reports and measurements, is
+    usually not the person whose machine produced it (CWE-1236).
+
+    The other half matters just as much: the numeric columns must stay numeric.
+    They are written as ints and floats, so nothing quotes them - a spreadsheet
+    that reads `packets` as text would make the export useless for the one job it
+    has.
+    """
+    run_gui('''
+        import os, tempfile, csv
+        import beantester.gui.csv_export as m
+        path = os.path.join(tempfile.mkdtemp(), "conns.csv")
+        m.CONNECTIONS_CSV_FILE = path
+
+        app.engine.now_ref = lambda: 10.0
+        app.engine.connections_snapshot = lambda limit=None: [
+            dict(local_port=51000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
+                 packets=4, bytes=3072, bytes_in=2048, bytes_out=1024,
+                 sent=2048, sent_in=1024, sent_out=1024, dropped=3,
+                 scoped=True, pid=1234, first=2.0, last=9.0, dir="in",
+                 proc='=HYPERLINK("http://evil.example","click")'),
+        ]
+        app.conn_query = ""
+        app.conn_sort = {"col": "up", "reverse": True}
+        app.export_connections_csv()
+
+        rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
+        name = rows[1][0]
+        assert name.startswith("'="), "a formula reached the file unquoted: %r" % name
+        assert "HYPERLINK" in name, "the name itself must survive: %r" % name
+        assert rows[1][6] == "4", "packets stopped being a number: %r" % rows[1][6]
+        assert rows[1][8] == "3", "dropped stopped being a number: %r" % rows[1][8]
+    ''')

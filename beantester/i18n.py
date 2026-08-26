@@ -6,6 +6,7 @@ English fallback -> the key itself. Adding a language = adding a JSON file;
 no code changes are needed.
 """
 import os
+import string
 
 from .jsonfile import load_json
 from .paths import lang_dir
@@ -137,11 +138,42 @@ def current_language():
     return _resolve_language()
 
 
+class _PlainFieldsOnly(string.Formatter):
+    """Substitutes ``{name}`` and nothing else - no attributes, no indexing.
+
+    ``str.format`` walks attributes: ``"{x.__class__.__mro__}".format(x=1)`` is a
+    perfectly valid template. The text being walked comes out of
+    ``lang/<code>.json``, and this module's own docstring calls adding one of those
+    the way to add a language - "no code changes are needed". So the first
+    translation somebody contributes is untrusted input by any honest reading, and
+    it was being handed a language feature nobody needs.
+
+    MEASURED 2026-08-26, both halves: a poisoned string rendered the internals of
+    its argument into a GUI label, and a template naming an attribute that does not
+    exist raised ``AttributeError`` - which ``translate`` did not catch, so one
+    stray character in a translation file could take the program down in whatever
+    window happened to render it.
+
+    The rule is as strict as it is because the files say it can be: every one of
+    the 222 placeholders across both shipped language files is a plain name. No
+    positional field, no attribute, no index, no format spec. Nothing legitimate
+    is refused here - that was checked before the rule was chosen, not after.
+    """
+
+    def get_field(self, field_name, args, kwargs):
+        if not field_name.isidentifier():
+            raise ValueError(f"unsupported placeholder: {field_name!r}")
+        return kwargs[field_name], field_name
+
+
+_FORMATTER = _PlainFieldsOnly()
+
+
 def translate(key, lang=None, **fmt):
     """Translate a key: requested language -> English fallback -> the key itself.
 
     Non-string input passes through unchanged. Optional keyword arguments are
-    applied with ``str.format()``; a malformed template never raises.
+    substituted into ``{name}`` placeholders; a malformed template never raises.
     """
     if not isinstance(key, str):
         return key
@@ -151,9 +183,12 @@ def translate(key, lang=None, **fmt):
     if text is None:
         text = _translations.get(FALLBACK_LANGUAGE, {}).get(key, key)
     if fmt:
+        # The untranslated text is a better answer than a crash OR than a leak:
+        # anything this formatter refuses comes back with its braces showing,
+        # which is visibly wrong to the translator and harmless to the user.
         try:
-            return text.format(**fmt)
-        except (KeyError, IndexError, ValueError):
+            return _FORMATTER.vformat(text, (), fmt)
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
             return text
     return text
 

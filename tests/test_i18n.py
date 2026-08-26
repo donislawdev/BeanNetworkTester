@@ -204,6 +204,49 @@ def test_translate_placeholders():
           "ping" in n.translate("summary.latency", "en", v=100, extra=1))
 
 
+def test_a_translation_file_cannot_reach_inside_the_values_it_formats():
+    """A language file is contributed input, and it was being handed `str.format`.
+
+    "Adding a language = adding a JSON file; no code changes are needed" is this
+    module's own docstring, so the first translation somebody sends is untrusted
+    text - and `str.format` walks attributes. Measured before the fix:
+    `{name.__class__.__mro__}` rendered the internals of the argument into the
+    label, and `{name.nope}` raised AttributeError, which `translate` did not catch.
+    One stray character in a translation could take the program down.
+
+    The three cases are the three outcomes that matter: nothing leaks, nothing
+    raises, and the thing translations actually do still works.
+    """
+    from beantester import i18n
+
+    i18n.load_languages()
+    poisoned = {
+        "probe.leak": "leak: {name.__class__.__mro__}",
+        "probe.missing_attr": "{name.no_such_attribute}",
+        "probe.index": "{name[0]}",
+        "probe.plain": "hello {name}",
+    }
+    i18n._translations.setdefault("en", {}).update(poisoned)
+    try:
+        leak = i18n.translate("probe.leak", "en", name="x")
+        # Compared against the raw template, not searched for words: the template
+        # ITSELF contains "__class__", so "no internals leaked" has to mean
+        # "nothing was substituted at all" to be worth anything.
+        check("i18n: a template cannot walk into the value it was given",
+              leak == poisoned["probe.leak"] and "<class" not in leak, f"({leak})")
+
+        for key in ("probe.missing_attr", "probe.index"):
+            out = i18n.translate(key, "en", name="x")
+            check(f"i18n: {key} does not raise, it comes back unrendered",
+                  isinstance(out, str) and "{" in out, f"({out!r})")
+
+        check("i18n: a plain placeholder still works",
+              i18n.translate("probe.plain", "en", name="world") == "hello world")
+    finally:
+        for key in poisoned:
+            i18n._translations["en"].pop(key, None)
+
+
 def test_settings_summary_uses_current_language():
     import beantester as n
     orig = n.current_language()

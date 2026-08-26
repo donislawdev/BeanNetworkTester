@@ -292,8 +292,33 @@ def qpc_now():
     return None
 
 
-def _quote(arg):
-    return '"%s"' % str(arg).replace('"', r"\"")
+def _relaunch_params(args):
+    """The parameter string for ``ShellExecuteW``, quoted the way Windows parses it.
+
+    This crosses a PRIVILEGE boundary: whatever it builds is what the elevated copy
+    receives. The hand-rolled version it replaces wrapped each argument in quotes
+    and escaped inner quotes, which is right until an argument ends in a backslash -
+    then the backslash escapes the closing quote and the rest of the command line is
+    re-read as part of that argument.
+
+    MEASURED 2026-08-26 by parsing the result back with ``CommandLineToArgvW``, the
+    same function the elevated process's own startup uses. It was not only a
+    mangled value:
+
+        asked for : --target 'evil\\" --loss 100 "' --loss 0
+        arrived as: --target 'evil\\'   --loss   100   '" --loss 0'
+
+    ``--loss 100`` appears in the elevated process as a flag the user never passed
+    - in a program whose whole purpose is damaging network traffic, and whose own
+    README hands people ``Reproduce:`` command lines to paste.
+
+    ``subprocess.list2cmdline`` is the stdlib's implementation of exactly these
+    rules (it is what Python itself uses to build a Windows command line). Imported
+    inside the function, like every other binding here, and for a pure string
+    helper: nothing in this module spawns a process.
+    """
+    import subprocess
+    return subprocess.list2cmdline([str(a) for a in args])
 
 
 def elevate_self(argv=None):
@@ -313,7 +338,7 @@ def elevate_self(argv=None):
             program, args = sys.executable, argv
         else:                       # running from sources: elevate the interpreter
             program, args = sys.executable, [os.path.abspath(sys.argv[0])] + argv
-        params = " ".join(_quote(a) for a in args)
+        params = _relaunch_params(args)
         # ShellExecuteW with the "runas" verb is the only supported way to ask
         # for elevation; a return value <= 32 means it did not start (e.g. 1223
         # = the user clicked "No").
