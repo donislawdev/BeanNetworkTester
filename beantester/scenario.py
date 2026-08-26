@@ -7,9 +7,9 @@ scenario with **zero steps**, which then ran a session that did nothing while
 the UI happily reported "scenario loaded".
 """
 import difflib
-import json
 
 from .i18n import translate
+from .jsonfile import load_json
 from .settings import DEFAULT_SETTINGS
 
 # The actions a step may carry. ``scenario_runner`` reads THIS tuple rather than
@@ -154,9 +154,12 @@ def parse_scenario(data):
 
 
 def load_scenario_file(path):
-    with open(path, encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-        except ValueError as e:
-            raise _err("errors.scenario_bad_json", error=e) from e
+    # load_json, not a bare json.load: it answers deep nesting, an oversized file
+    # and the non-JSON constants (NaN / Infinity) with the same ValueError this
+    # already turns into a translated message. OSError still travels untouched -
+    # "cannot read the file" is a different sentence from "this is not a scenario".
+    try:
+        data = load_json(path)
+    except ValueError as e:
+        raise _err("errors.scenario_bad_json", error=e) from e
     return parse_scenario(data)

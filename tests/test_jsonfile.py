@@ -13,8 +13,8 @@ mocks - the behaviour under test IS the filesystem behaviour.
 import json
 import os
 
-from beantester.jsonfile import quarantine, read_json, write_json
-from fakes import check
+from beantester.jsonfile import MAX_BYTES, quarantine, read_json, write_json
+from fakes import ROOT, check
 
 
 def test_write_then_read_round_trips(tmp_path):
@@ -109,6 +109,53 @@ def test_write_to_missing_directory_fails_cleanly(tmp_path):
     check("the missing directory was not invented", not target.parent.exists())
     leftovers = list(tmp_path.rglob("*.tmp"))
     check("no .tmp file is left behind on failure", not leftovers, f"(found {leftovers})")
+
+
+def test_the_writer_refuses_a_value_the_reader_would_reject(tmp_path):
+    """The two halves have to agree, or the program writes its own corrupt file.
+
+    ``json.dump`` emits ``Infinity`` and ``NaN`` happily - they are a Python
+    extension, not JSON - while ``load_json`` refuses them. Left as it was, one
+    stray non-finite float would produce a file this program then reported as
+    broken and quarantined, which is the least explainable bug report there is.
+    """
+    path = str(tmp_path / "state.json")
+    error = write_json(path, {"latency": float("inf")})
+
+    check("a non-finite value is refused", bool(error), f"(error={error!r})")
+    check("and nothing is left behind", not os.path.exists(path)
+          and not [p for p in os.listdir(tmp_path) if p.endswith(".tmp")],
+          f"(files: {sorted(os.listdir(tmp_path))})")
+
+
+def test_a_directory_carrying_the_name_of_a_data_file_is_not_renamed_aside(tmp_path):
+    """Quarantine moves a broken FILE aside. A directory with that name is not a
+    broken file - it is what a Scoop persist leaves behind (``paths.migrate_user_files``
+    skips it for the same reason). Renaming it would break the user's install to
+    punish it for not being what we expected."""
+    path = tmp_path / "bean_network_tester_profiles.json"
+    path.mkdir()
+
+    backup = quarantine(str(path))
+    check("a directory is not quarantined", backup is None, f"({backup!r})")
+    check("and it is still where the user put it", path.is_dir(),
+          f"(files: {sorted(p.name for p in tmp_path.iterdir())})")
+
+
+def test_the_size_limit_is_far_above_the_files_this_program_writes():
+    """The limit must be something only a hostile file ever meets.
+
+    Measured rather than guessed: the largest JSON this repository ships is a
+    translation file. If one ever grows past a tenth of the limit, the number here
+    is no longer a safety net but a wall the next language will hit - and this test
+    is where that gets noticed, not a user's bug report.
+    """
+    lang = os.path.join(ROOT, "lang")
+    biggest = max(os.path.getsize(os.path.join(lang, name))
+                  for name in os.listdir(lang) if name.endswith(".json"))
+
+    check("the biggest shipped file is nowhere near the limit",
+          biggest * 10 < MAX_BYTES, f"(biggest {biggest} B, limit {MAX_BYTES} B)")
 
 
 def test_quarantine_of_a_missing_file_returns_none(tmp_path):

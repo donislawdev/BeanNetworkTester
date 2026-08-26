@@ -72,6 +72,32 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The exact shape that walked past all four JSON loaders: RecursionError is
+        # neither OSError nor ValueError, so re-raising it is the bug restored.
+        "label": "jsonfile: deep nesting escapes the reader again",
+        "file": "beantester/jsonfile.py",
+        "old": '            raise ValueError("nesting is too deep to read") from exc',
+        "new": "            raise",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
+        # `parse_constant` back to the permissive default: float("NaN") and
+        # float("Infinity") are exactly what json would have produced on its own.
+        "label": "jsonfile: the NaN and Infinity literals are accepted again",
+        "file": "beantester/jsonfile.py",
+        "old": '    raise ValueError(f"{name} is not a value a JSON file may carry")',
+        "new": "    return float(name)",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
+        "label": "jsonfile: the size limit stops being checked",
+        "file": "beantester/jsonfile.py",
+        "old": "    size = os.path.getsize(path)                     "
+               "# OSError if it is not there",
+        "new": "    size = 0",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
         # The 2026-08-26 report in one line. "The screen" is SM_CXSCREEN on
         # Windows, which is the PRIMARY monitor whatever the window is on, so this
         # patch is not an invented break: it is the code that shipped.

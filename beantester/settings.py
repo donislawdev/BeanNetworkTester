@@ -5,13 +5,12 @@ The shape of a setting (type, label, bounds, section, profile scope) lives in
 settings dict and applies it to an engine.
 """
 import difflib
-import json
 import socket
 
 from . import crashlog
 from . import fields as F
 from . import portmap
-from .jsonfile import write_json
+from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
 from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
@@ -587,8 +586,12 @@ def _coerce_setting(key, value):
 
 
 def load_config_file(path):
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    # Through jsonfile.load_json, which turns every way a parser can fail into
+    # ValueError - the exception this function's caller in cli.py already maps to
+    # exit code CONFIG. Deliberately NOT read_json: that one QUARANTINES a broken
+    # file, and this path is handed an arbitrary file the user named on the command
+    # line. Renaming somebody's file because we could not parse it is not our call.
+    data = load_json(path)
     if not isinstance(data, dict):
         # Valid JSON of the wrong shape. Without this check the next statement
         # reaches ``data.items()`` and raises AttributeError - and the CLI catches

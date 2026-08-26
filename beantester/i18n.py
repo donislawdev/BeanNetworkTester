@@ -5,9 +5,9 @@ texts live in the JSON files. The lookup chain is: selected language ->
 English fallback -> the key itself. Adding a language = adding a JSON file;
 no code changes are needed.
 """
-import json
 import os
 
+from .jsonfile import load_json
 from .paths import lang_dir
 
 FALLBACK_LANGUAGE = "en"
@@ -35,8 +35,14 @@ def load_languages(directory=None):
         if not fname.lower().endswith(".json"):
             continue
         try:
-            with open(os.path.join(directory, fname), encoding="utf-8") as f:
-                data = json.load(f)
+            # Same reader as every other JSON file the program opens, so a
+            # translation file that is too big, too deeply nested or carries a
+            # non-JSON constant is SKIPPED like any other broken one. It used to
+            # be a bare json.load, and deep nesting there raised RecursionError
+            # past this handler and out of startup - a stray file in lang/ could
+            # stop the program, which is exactly what this except clause exists to
+            # prevent (see the _meta note below, the same lesson one line down).
+            data = load_json(os.path.join(directory, fname))
         except (OSError, ValueError):
             continue
         if not isinstance(data, dict):
