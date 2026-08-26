@@ -69,4 +69,9 @@ body:
     id: extra
     attributes:
       label: Anything else?
-      description: Logs (`--log-file`), screenshots, or a crash file from the `crashes/` folder.
+      description: >-
+        Logs (`--log-file`), screenshots, or a crash file from the `crashes/` folder.
+        Before attaching one: a crash file records the command line you ran, your
+        settings (including any process you targeted and any address you aimed at) and
+        file paths that contain your user name. This issue is public, so have a look at
+        it first and remove anything you would rather not publish.

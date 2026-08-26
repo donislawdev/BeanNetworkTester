@@ -38,6 +38,7 @@ import os
 import tempfile
 
 from . import crashlog
+from .paths import directory_is_writable, executable_dir, is_frozen
 from .winenv import is_admin, is_windows
 
 # Set once a session actually opened a REAL WinDivert handle (not --simulate and
@@ -504,6 +505,48 @@ def open_failure_hint(exc, elevated=None):
     return "" if elevated else "dialogs.run_as_admin"
 
 
+def _program_folder_check():
+    """Could something running as this user replace the files we load when elevated?
+
+    This program asks for administrator rights and THEN loads ``WinDivert.dll`` from
+    its own folder. If that folder can be written without administrator rights, then
+    anything running as the user - no elevation needed - can leave its own DLL there
+    and have the elevated copy load it. That turns "code as you" into "code as
+    Administrator", and the UAC prompt shows a signed, trusted executable while it
+    happens.
+
+    It is not a defect of this program: it is what a user-scope install IS. But this
+    program is the one that does the elevating, so it is the one that should say so.
+    MEASURED 2026-08-26 on a real machine, because the first version of the audit
+    assumed the opposite: WinGet's default for this package (``InstallerType: zip``
+    with ``NestedInstallerType: portable``) is a USER-scope install under
+    ``%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages``, where the user has full control -
+    and so does an archive unpacked anywhere in the profile. ``--scope machine`` and
+    Chocolatey's package folder do not.
+
+    Reported as a WARN rather than a FAIL: it does not stop a session from starting,
+    and on most machines the user cannot change it without reinstalling. "Not
+    checked" is a warn too - an unanswered question must not print as a clean bill of
+    health, which is the rule the WinDivert row above already lives by.
+    """
+    folder = executable_dir()
+    if is_admin():
+        return ("program folder", "warn",
+                f"{folder} - not checked: this run is already elevated, so a "
+                f"successful write says nothing about an ordinary user. Run "
+                f"--doctor WITHOUT administrator rights to check it")
+    writable = directory_is_writable(folder)
+    if writable is None:
+        return ("program folder", "warn", f"{folder} - could not be checked")
+    if writable:
+        return ("program folder", "warn",
+                f"{folder} - writable without administrator rights: anything running "
+                f"as you can replace the files this program loads when it elevates. "
+                f"Installing with 'winget install --scope machine' avoids this")
+    return ("program folder", "ok",
+            f"{folder} - not writable without administrator rights")
+
+
 def doctor():
     """Environment report used by ``--doctor``: ``(ok, [(check, state, detail)])``."""
     import platform
@@ -522,6 +565,12 @@ def doctor():
         checks.append(("pydivert", "ok" if pydivert_available() else "fail",
                        "importable" if pydivert_available()
                        else "missing - pip install pydivert"))
+        # Only for a frozen build: from sources the "program folder" is a source
+        # checkout the developer owns by definition, and the driver comes out of
+        # site-packages rather than from next to the exe. A row that is trivially
+        # true tells nobody anything and trains people to skip the report.
+        if is_frozen():
+            checks.append(_program_folder_check())
         drivers = installed_drivers()
         if drivers:
             running = [n for n, s in drivers.items() if s == "running"]

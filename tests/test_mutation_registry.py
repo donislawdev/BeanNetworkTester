@@ -72,6 +72,15 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # "I could not check" printing as a clean bill of health - the same lie the
+        # WinDivert row was fixed for, one check further down.
+        "label": "doctor: an unchecked program folder reports as a pass",
+        "file": "beantester/driver.py",
+        "old": '    if is_admin():\n        return ("program folder", "warn",',
+        "new": '    if is_admin():\n        return ("program folder", "ok",',
+        "test": "test_doctor_says_when_anything_running_as_you_could_replace_the_driver",
+    },
+    {
         # The hand-rolled quoting, restored exactly as it shipped: an argument
         # ending in a backslash escapes its own closing quote.
         "label": "winenv: relaunch quoting goes back to wrapping each argument",
