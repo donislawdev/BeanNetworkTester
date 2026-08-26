@@ -32,7 +32,7 @@ from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
-from .. import crashlog
+from .. import crashlog, winenv
 from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     field_name, set_language)
@@ -271,7 +271,7 @@ class App:
             screen_w, screen_h = 1366, 768
         maximum = max_window_size(screen_w, screen_h)
         saved = str(self.ui.get("geometry", "") or "")
-        if saved and geometry_fits(saved, screen_w, screen_h):
+        if saved and geometry_fits(saved, screen_w, screen_h, winenv.monitor_work_area):
             geometry = saved
         else:
             w, h, x, y = initial_geometry(screen_w, screen_h)

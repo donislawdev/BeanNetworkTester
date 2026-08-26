@@ -14,6 +14,7 @@ import sys
 import types
 
 SCREEN = [1920, 1080]     # mutable: tests can pretend to be on a 1366x768 laptop
+# ...and the monitor LAYOUT has to be part of the same fiction, see single_monitor()
 DPI = [96.0]
 CLIPBOARD = []            # what the app copied (Ctrl+C, "copy row", repro CLI)
 GRAB = [None]             # what currently holds the Tk grab (an open popdown)
@@ -485,6 +486,13 @@ class Root(W):
         self.kw["geometry"] = spec
         return None
 
+    # Real tkinter defines `wm_geometry` and aliases `geometry` to it, so the two
+    # names are ONE call. Without this line the alias fell through to
+    # `W.__getattr__`, which answers any unknown name with a no-op: the tooltip
+    # bubble positions itself with `wm_geometry`, so every assertion about where
+    # a bubble landed would have passed while recording nothing at all.
+    wm_geometry = geometry
+
     def minsize(self, w=None, h=None):
         self.kw["minsize"] = (w, h)
 
@@ -685,6 +693,24 @@ class Font:
 
     def metrics(self, *a):
         return 16
+
+
+def single_monitor():
+    """Make the machine's MONITOR layout agree with the fake screen.
+
+    ``beantester.winenv.monitor_work_area`` asks Windows, not Tk. On the Windows
+    runner it therefore answers with the runner's REAL monitor while every widget
+    in this double believes the screen is ``SCREEN`` - and since 2026-08-26 the
+    GUI positions windows from both. Without this, the same test lands the same
+    window somewhere else on the Windows runner than on the Linux one (where the
+    call returns None), which is a difference that has nothing to do with the code
+    under test.
+
+    Call it after settling ``SCREEN``. A test that wants a second monitor
+    overrides the same attribute afterwards.
+    """
+    from beantester import winenv
+    winenv.monitor_work_area = lambda x, y: (0, 0, SCREEN[0], SCREEN[1])
 
 
 def install():

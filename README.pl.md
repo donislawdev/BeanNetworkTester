@@ -120,7 +120,7 @@ sterownika.
 
 Okno **dopasowuje się do ekranu i do skalowania systemu (DPI)**. Rozmiar startowy jest liczony z rozdzielczości (mieści się na 1366×768 i rośnie na Full HD / 2K / 4K), a wszystkie wymiary - szerokości kolumn, wysokość wierszy tabel, marginesy wykresu, zawijanie tekstu - skalują się razem z czcionką. Program deklaruje się jako **Per-Monitor-V2 DPI aware**, więc przeniesienie okna na drugi monitor o innym skalowaniu nie rozmywa interfejsu.
 
-Rozmiar i pozycja okna, wybrana zakładka, język, zwinięte sekcje, podział log/zakładki oraz sortowanie tabel są zapamiętywane w pliku `bean_network_tester_ui.json` (obok profili). Zapisana geometria jest przed użyciem sprawdzana - jeśli monitor zniknął, okno wraca na środek bieżącego ekranu.
+Rozmiar i pozycja okna, wybrana zakładka, język, zwinięte sekcje, podział log/zakładki oraz sortowanie tabel są zapamiętywane w pliku `bean_network_tester_ui.json` (obok profili). Zapisana geometria jest przed użyciem sprawdzana - okno zostawione na drugim monitorze otworzy się tam ponownie, a jeśli tego monitora już nie ma, wraca na środek bieżącego ekranu.
 
 - **Sterowanie** - wszystkie ustawienia zakłóceń, pogrupowane w **zwijane sekcje** (stan zwinięcia jest zapamiętywany). Na szerokim oknie sekcje układają się **w dwie kolumny** (zamiast jednej wąskiej i pustej prawej połowy), więc przewijania jest znacznie mniej. Cała zakładka jest przewijana - również **kółkiem myszy**.
 - **Statystyki** - trzy podzakładki, żeby nic nie było ucinane na małych ekranach:

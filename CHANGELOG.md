@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Tooltips opened on the wrong monitor.** With the window moved to a second monitor,
+  hovering a "?" put the explanation on the main monitor instead of next to what you were
+  pointing at. The program asked Windows how big "the screen" is, and that answer is always
+  the main monitor, whichever one you happen to be using. Tooltips now open on the monitor
+  the window is on, including a monitor placed to the left of or above the main one. While
+  fixing it: a tooltip near the bottom of the screen no longer slides under the taskbar.
+
+- **A window left on a second monitor came back on the main one.** The program remembers where
+  you left each window, then threw that away at the next start if the position was outside the
+  main monitor - which every position on a second monitor is. Windows now open where you left
+  them, and the check that saves you from a window restored onto a monitor you have unplugged
+  still does its job. Settings, Event log and About open on the monitor the program is on too.
+
 - **The command for checking your download did not work.** Both READMEs told you to run
   `gh attestation verify <file> -R donislawdev/BeanNetworkTester`, and it answers `HTTP 404`.
   It looks for proof the file was built on a runner, and the file you download is signed on

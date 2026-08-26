@@ -20,6 +20,32 @@ def test_window_fits_the_smallest_supported_screen():
     """, screen=(1366, 768))
 
 
+def test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on():
+    """Wiring, not arithmetic: `app._restore_geometry` has to ASK about monitors.
+
+    `scaling.geometry_fits` learned to take a monitor lookup, and the way to lose
+    that fix quietly is to leave the caller passing nothing - the function keeps
+    its old default and the window keeps coming back to the primary monitor. Both
+    halves are here: the geometry is restored while that monitor exists, and it is
+    dropped once it does not, which is the guard this used to be.
+    """
+    run_gui("""
+        from beantester import winenv
+
+        winenv.monitor_work_area = lambda x, y: (1920, 0, 3000, 1920)
+        app.ui.set("geometry", "800x600+2400+100")
+        app._restore_geometry()
+        assert root.kw["geometry"] == "800x600+2400+100", root.kw["geometry"]
+
+        # ...and with that monitor unplugged the window must NOT be put back there.
+        winenv.monitor_work_area = lambda x, y: (0, 0, 1920, 1080)
+        app._restore_geometry()
+        spec = root.kw["geometry"]
+        assert spec != "800x600+2400+100", spec
+        assert int(spec.split("+")[1]) < 1920, spec
+    """)
+
+
 def test_window_scales_up_on_a_4k_screen():
     run_gui("""
         spec = root.kw["geometry"]

@@ -46,6 +46,51 @@ def test_a_registered_window_opens_raises_and_closes():
     """)
 
 
+def test_a_window_opens_on_the_monitor_the_application_is_on():
+    """A panel centred on the primary monitor while the app sits on the second one
+    opens where the user is not looking.
+
+    Same single-monitor assumption as the tooltip bubble, one window bigger:
+    ``winfo_screenwidth()`` describes the primary monitor whatever the application
+    is on. The stub is what a monitor to the right would answer for the fake main
+    window; the panel has no saved geometry, so this is the centring path.
+    """
+    run_gui("""
+        from beantester import winenv
+        from beantester.gui.windows import PanelWindow, register_window
+
+        class Probe(PanelWindow):
+            ID = "probe_monitor"
+            TITLE = "app.tabs.statistics"        # any real i18n key
+            def build(self, body):
+                pass
+
+        register_window(Probe)
+        winenv.monitor_work_area = lambda x, y: (1920, 0, 3000, 1920)
+
+        panel = app.open_window("probe_monitor")
+        spec = panel.win.kw["geometry"]
+        x = int(spec.split("+")[1])
+        assert 1920 <= x < 3000, "the panel opened on the primary monitor: %s" % spec
+
+        # ...and once the user has moved it, the remembered position must survive
+        # being on a monitor Tk cannot describe.
+        panel.win.geometry("640x480+2500+300")
+        panel.close()
+        panel = app.open_window("probe_monitor")
+        assert panel.win.kw["geometry"] == "640x480+2500+300", panel.win.kw["geometry"]
+
+        # With no answer from the system - every non-Windows machine, and the Linux
+        # runner - the window centres on the screen Tk describes, as it always did.
+        panel.close()
+        app.ui.set("window.probe_monitor", "")
+        winenv.monitor_work_area = lambda x, y: None
+        panel = app.open_window("probe_monitor")
+        spec = panel.win.kw["geometry"]
+        assert 0 <= int(spec.split("+")[1]) < 1920, spec
+    """)
+
+
 def test_a_window_is_dark_and_hidden_before_it_is_shown():
     """Windows draws the title bar in DWM: a window that does not ask for the dark
     variant BEFORE it is mapped shows a bright white bar until the user clicks it."""

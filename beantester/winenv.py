@@ -86,6 +86,39 @@ def elevation_disabled():
 # Declaring the prototypes costs nothing and removes the whole question.
 _USER32 = [None]
 _DWMAPI = [None]
+_MONITORINFO = [None]
+
+# MonitorFromPoint: the point is on no monitor at all (a window dragged past the
+# edge of the desktop), so answer with the nearest one rather than nothing.
+MONITOR_DEFAULTTONEAREST = 2
+
+
+def monitorinfo_type():                       # pragma: no cover - Windows only
+    """The ``MONITORINFO`` layout, built on first use and cached.
+
+    The pragma is not a hidden line, it is a platform: this is reached only from
+    ``user32()``, which returns None before it off Windows, and the coverage gate
+    is computed on the Linux runner. The Windows runner really does execute it -
+    ``test_native_prototypes.py`` calls through these prototypes there.
+
+    Not at module scope, and not a plain ``c_void_p`` at the call site either:
+    ``ctypes.wintypes`` cannot even be IMPORTED off Windows (which is why every
+    binding in this file is lazy), and this is the one struct here the system
+    WRITES THROUGH a pointer we hand it - the shape that took the interpreter
+    down in ``driver._advapi``. Declaring it is what makes the prototype real.
+    """
+    if _MONITORINFO[0] is None:
+        import ctypes
+        from ctypes import wintypes
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD),
+                        ("rcMonitor", wintypes.RECT),
+                        ("rcWork", wintypes.RECT),
+                        ("dwFlags", wintypes.DWORD)]
+
+        _MONITORINFO[0] = MONITORINFO
+    return _MONITORINFO[0]
 
 
 def user32():
@@ -106,6 +139,13 @@ def user32():
         lib.SetWindowPos.argtypes = [H, H, ctypes.c_int, ctypes.c_int,
                                      ctypes.c_int, ctypes.c_int, wintypes.UINT]
         lib.SetWindowPos.restype = wintypes.BOOL
+        # HMONITOR is a HANDLE, so its result is pointer-sized: exactly the shape
+        # ctypes' default 32-bit restype truncates.
+        lib.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+        lib.MonitorFromPoint.restype = wintypes.HMONITOR
+        lib.GetMonitorInfoW.argtypes = [wintypes.HMONITOR,
+                                        ctypes.POINTER(monitorinfo_type())]
+        lib.GetMonitorInfoW.restype = wintypes.BOOL
         # 64-bit Windows has the ...Ptr forms; 32-bit has only the plain ones, and
         # there LONG_PTR is a LONG. Declared for whichever this build actually has,
         # so the guard walks what exists instead of a list somebody wrote down.
@@ -148,6 +188,66 @@ def dwmapi():
 # factory nothing checks, so the list is the registry and the test reads it -
 # rather than the test naming six function names that drift the day one moves.
 NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi}
+
+
+def monitor_work_area(x, y):
+    """The usable rectangle of the monitor showing ``(x, y)``: ``(l, t, r, b)``.
+
+    ``None`` off Windows, or when the system will not answer - callers must have
+    a fallback, and today's fallback is the primary screen, which is what the
+    whole program used before this existed.
+
+    WHY THIS IS NOT ``winfo_screenwidth()``. Tk has no concept of a second
+    monitor: on Windows it reports the screen as ``GetSystemMetrics(SM_CXSCREEN)``,
+    which Microsoft documents as ALWAYS the primary monitor, "not necessarily the
+    monitor that displays your application" ("Positioning Objects on Multiple
+    Display Monitors"). Anything that clamps a window into ``(0, 0, screen_w,
+    screen_h)`` therefore drags it back onto the primary monitor - reported
+    2026-08-26 for the tooltip bubble, which appeared on the first monitor while
+    the window it explained was on the second.
+
+    Three properties this returns that the screen metrics cannot:
+
+    * the rectangle of the monitor the point is really on, whichever that is;
+    * NEGATIVE coordinates, because the primary monitor owns the origin and a
+      monitor placed left of - or above - it lives at negative x/y. Measured on
+      this machine 2026-08-26: Tk honours ``wm_geometry("+-500+100")`` as a real
+      position, so a bubble can be put there;
+    * the WORK area, not the whole monitor, so a bubble at the bottom of the
+      screen no longer slides under the taskbar (measured here: 2160 px of
+      monitor, 2088 px of work area).
+
+    Deliberately NOT cached: monitors are plugged in, unplugged and rearranged
+    while the program runs, and a cached rectangle would be a stale answer that
+    nothing invalidates. The price of asking every time was MEASURED rather than
+    assumed - 4 us per call on this machine, 2026-08-26 - against one call per
+    hover, after a 400 ms delay. A cache here would buy nothing and owe an
+    invalidation nobody would write.
+    """
+    lib = user32()
+    if lib is None:
+        return None
+    # Everything below runs on Windows only - the line above is where the Linux
+    # runner leaves, and the Windows runner covers the rest for real.
+    with crashlog.quiet("winenv.monitor"):    # pragma: no cover - Windows only
+        import ctypes
+        from ctypes import wintypes
+
+        handle = lib.MonitorFromPoint(wintypes.POINT(int(x), int(y)),
+                                      MONITOR_DEFAULTTONEAREST)
+        if not handle:
+            return None
+        info = monitorinfo_type()()
+        info.cbSize = ctypes.sizeof(info)
+        if not lib.GetMonitorInfoW(handle, ctypes.byref(info)):
+            return None
+        area = info.rcWork
+        if area.right <= area.left or area.bottom <= area.top:
+            # A monitor with no usable area is not an answer, it is a reason to
+            # fall back. Nothing observed producing one; it costs one comparison.
+            return None
+        return (int(area.left), int(area.top), int(area.right), int(area.bottom))
+    return None                               # pragma: no cover - Windows only
 
 
 # QueryPerformanceCounter, because that is the clock WinDivert stamps its packets

@@ -74,6 +74,79 @@ def test_geometry_fits_rejects_stale_saved_geometry():
     check("geometry: garbage is rejected", not scaling.geometry_fits("nonsense", 1366, 768))
 
 
+def _primary_only(x, y):
+    """One monitor, 3840x2088 of work area. The nearest one is always this one."""
+    return (0, 0, 3840, 2088)
+
+
+def _second_monitor_right(x, y):
+    """A portrait monitor attached to the right of a 3840-wide primary."""
+    return (3840, 0, 4920, 1920) if x >= 3820 else (0, 0, 3840, 2088)
+
+
+def test_geometry_fits_tells_a_second_monitor_from_an_unplugged_one():
+    """A window left on a second monitor used to come back on the first one.
+
+    Both checks below use the SAME saved geometry, at x=4000 - past the primary
+    monitor's width, so the old code called it "off screen" and threw it away. The
+    only thing that separates a window on a second monitor from a window on a
+    monitor that has been unplugged is whether that spot is still on a display,
+    and nothing but the system can answer that. Hence ``bounds_at``.
+    """
+    saved = "800x600+4000+100"
+    check("geometry: a window on the second monitor is kept",
+          scaling.geometry_fits(saved, 3840, 2088, _second_monitor_right))
+    check("geometry: the same spot with that monitor gone is rejected",
+          not scaling.geometry_fits(saved, 3840, 2088, _primary_only))
+    check("geometry: with nothing to ask, the old primary-screen answer stands",
+          not scaling.geometry_fits(saved, 3840, 2088))
+
+
+def test_geometry_fits_accepts_the_monitors_that_have_negative_coordinates():
+    """The primary monitor owns the origin, so a monitor left of or above it is at
+    negative coordinates - and Tk writes those into ``ui.json`` as "+-1800"."""
+    def left(x, y):
+        return (-1920, 0, 0, 1080)
+
+    def above(x, y):
+        return (0, -1080, 1920, 0)
+
+    check("geometry: a monitor to the left is a valid place for a window",
+          scaling.geometry_fits("800x600+-1800+100", 1920, 1080, left))
+    check("geometry: so is a monitor above the primary one",
+          scaling.geometry_fits("800x600+100+-900", 1920, 1080, above))
+    check("geometry: and the numbers are still checked there",
+          not scaling.geometry_fits("800x600+-5000+100", 1920, 1080, left))
+
+
+def test_a_window_bigger_than_the_primary_monitor_still_fits_its_own():
+    """The size half of the same assumption: a 4K second monitor next to a laptop
+    screen. The saved window fits where it was left, and only the primary screen
+    said otherwise."""
+    def four_k_on_the_right(x, y):
+        return (1366, 0, 5206, 2160)
+
+    check("geometry: judged against the monitor it is on",
+          scaling.geometry_fits("2400x1300+1400+100", 1366, 768, four_k_on_the_right))
+    check("geometry: and a window that fits NOTHING is still rejected",
+          not scaling.geometry_fits("9000x5000+1400+100", 1366, 768,
+                                    four_k_on_the_right))
+
+
+def test_a_window_centres_on_the_monitor_it_is_given():
+    x, y = scaling.centred_in((0, 0, 1920, 1080), 800, 600)
+    check("centred: on the primary monitor", x == 560 and 0 < y < 200, f"({x}, {y})")
+    x, _ = scaling.centred_in((1920, 0, 3000, 1920), 800, 600)
+    check("centred: on the second monitor, not back on the first",
+          1920 <= x and x + 800 <= 3000, f"(x={x})")
+    x, y = scaling.centred_in((-1920, -200, 0, 880), 800, 600)
+    check("centred: a monitor at negative coordinates is a monitor",
+          -1920 <= x and x + 800 <= 0 and y >= -200, f"({x}, {y})")
+    x, y = scaling.centred_in((1920, 0, 2200, 200), 800, 600)
+    check("centred: a window bigger than its monitor still STARTS on it",
+          (x, y) == (1920, 0), f"({x}, {y})")
+
+
 def test_min_window_size_never_exceeds_the_smallest_screen():
     for scale in (1.0, 1.5, 2.0):
         w, h = scaling.min_window_size(scale)
@@ -83,12 +156,57 @@ def test_min_window_size_never_exceeds_the_smallest_screen():
 
 # -- tooltip / chart --------------------------------------------------------- #
 def test_tooltip_flips_above_at_the_bottom_of_the_screen():
-    _, y = scaling.tooltip_position(100, 1040, 20, 300, 80, 1920, 1080)
+    screen = (0, 0, 1920, 1080)
+    _, y = scaling.tooltip_position(100, 1040, 20, 300, 80, screen)
     check("tooltip: flips above instead of falling off the screen", y < 1040, f"(y={y})")
-    x, _ = scaling.tooltip_position(1900, 100, 20, 300, 80, 1920, 1080)
+    x, _ = scaling.tooltip_position(1900, 100, 20, 300, 80, screen)
     check("tooltip: clamped to the right edge", x + 300 <= 1920, f"(x={x})")
-    x, y = scaling.tooltip_position(100, 100, 20, 300, 80, 1920, 1080)
+    x, y = scaling.tooltip_position(100, 100, 20, 300, 80, screen)
     check("tooltip: normal case sits below the widget", y > 100 and x >= 100)
+
+
+def test_a_tooltip_stays_on_the_monitor_that_shows_the_widget():
+    """Reported 2026-08-26: on a second monitor the bubble opened on the first one.
+
+    The bubble was clamped into ``(0, 0, screen_w, screen_h)``, and on Windows
+    that pair is the PRIMARY monitor whatever the window is on - so hovering a "?"
+    on a monitor to the right pinned the bubble to the right edge of the primary
+    one. Both rectangles below are ones a single-monitor clamp gets wrong, and the
+    second is the one easiest to write off as impossible: the primary monitor owns
+    the origin, so a monitor left of or above it has NEGATIVE coordinates.
+    """
+    right = (1920, 0, 3000, 1920)             # portrait monitor, right of primary
+    x, y = scaling.tooltip_position(2400, 300, 20, 300, 80, right)
+    check("tooltip: opens on the monitor the widget is on",
+          1920 <= x and x + 300 <= 3000, f"(x={x})")
+    check("tooltip: and still sits below the widget there", y > 300, f"(y={y})")
+    x, _ = scaling.tooltip_position(2960, 300, 20, 300, 80, right)
+    check("tooltip: clamped to THAT monitor's right edge, not the primary's",
+          1920 <= x and x + 300 <= 3000, f"(x={x})")
+    # The LEFT edge of a monitor that does not start at zero: a widget whose corner
+    # sits just past the boundary would otherwise put the bubble on the neighbour.
+    x, _ = scaling.tooltip_position(1890, 300, 20, 300, 80, right)
+    check("tooltip: clamped to that monitor's LEFT edge too",
+          x >= 1920, f"(x={x})")
+
+    left = (-1920, -200, 0, 880)              # monitor left of and above primary
+    x, y = scaling.tooltip_position(-1900, 800, 20, 300, 80, left)
+    check("tooltip: a negative origin is a position, not an error",
+          -1920 <= x and x + 300 <= 0, f"(x={x})")
+    check("tooltip: flips above WITHIN the left monitor", -200 <= y < 800, f"(y={y})")
+
+
+def test_a_tooltip_bigger_than_the_monitor_still_starts_on_it():
+    """The degenerate case, kept honest: a bubble wider or taller than the screen.
+
+    It cannot fit, so it will overflow - but it must overflow off the FAR edge
+    with its top-left corner still on the monitor, or the text starts off-screen
+    and the bubble is unreadable rather than merely clipped.
+    """
+    monitor = (1920, 0, 2600, 400)
+    x, y = scaling.tooltip_position(2000, 100, 20, 900, 700, monitor)
+    check("tooltip: oversized bubble starts inside the monitor",
+          1920 <= x <= 2600 and 0 <= y <= 400, f"({x}, {y})")
 
 
 def test_chart_geometry_leaves_room_for_the_axes():

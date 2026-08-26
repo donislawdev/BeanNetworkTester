@@ -92,7 +92,8 @@ _DIRECT = re.compile(r"\bwindll\.(\w+)\.(\w+)")
 # OpenSCManagerW's restype.) ``argtypes`` DOES default to None, so that half is
 # checked generically below; the width of a result is checked here, by name.
 POINTER_SIZED_RESULTS = {
-    "user32": ("GetParent", "GetWindowLongPtrW", "SetWindowLongPtrW"),
+    "user32": ("GetParent", "GetWindowLongPtrW", "SetWindowLongPtrW",
+               "MonitorFromPoint"),
     "advapi32": ("OpenSCManagerW", "OpenServiceW"),
 }
 
@@ -144,6 +145,39 @@ def test_every_declared_native_function_has_a_full_prototype():
     # The canary this project puts on every scan: a walk that finds nothing
     # satisfies every assertion above perfectly.
     check("the walk actually found native functions", checked >= 10, f"({checked})")
+
+
+def test_the_monitor_lookup_answers_a_usable_rectangle():
+    """The prototypes above are only half of it - this CALLS through them.
+
+    ``monitor_work_area`` is what stops the GUI from clamping windows and tooltip
+    bubbles onto the primary monitor (see its docstring). A prototype guard cannot
+    tell whether the struct is laid out correctly, because a wrong layout returns
+    numbers rather than raising: it just returns the WRONG numbers, and the only
+    cheap way to notice is to insist the answer is a usable rectangle of plain
+    Python ints.
+
+    On a single-monitor machine this cannot prove the multi-monitor case. What it
+    does prove is the part that would break for everyone: the call works, the
+    fields land where we said they do, and a point that is on NO monitor still
+    gets an answer instead of None - the case a window dragged past the edge of
+    the desktop produces.
+    """
+    area = winenv.monitor_work_area(10, 10)
+    if not winenv.is_windows():
+        check("monitor_work_area degrades to None off Windows", area is None, f"({area})")
+        return
+    check("the monitor lookup answers at all", area is not None)     # pragma: no cover
+    check("it is four plain ints",                                   # pragma: no cover
+          isinstance(area, tuple) and len(area) == 4
+          and all(isinstance(edge, int) for edge in area), f"({area})")
+    left, top, right, bottom = area                                  # pragma: no cover
+    check("the work area is a real rectangle, not an empty one",     # pragma: no cover
+          right - left >= 640 and bottom - top >= 480,
+          f"({area}) - a mislaid struct field reads as garbage, not as an error")
+    far = winenv.monitor_work_area(1 << 20, 1 << 20)                 # pragma: no cover
+    check("a point on no monitor still gets the nearest one",        # pragma: no cover
+          far is not None and far[2] > far[0], f"({far})")
 
 
 def test_the_pointer_sized_table_still_matches_the_factories():

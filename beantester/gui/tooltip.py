@@ -15,7 +15,7 @@ import tkinter as tk
 from ..i18n import T
 from .scaling import scaled, tooltip_position
 from .theme import FONT, TIP_BG, TIP_FG
-from .. import crashlog
+from .. import crashlog, winenv
 
 _BUBBLES: dict[str, tuple] = {}     # toplevel name -> (window, label)
 
@@ -91,6 +91,27 @@ def _grab_active(widget):
     return False
 
 
+def _bounds_for(widget, x_root, y_root):
+    """The rectangle the bubble must stay inside, for THIS widget's monitor.
+
+    The anchor is the widget's own corner rather than its window, and that is the
+    interesting half: a window straddling two monitors has no single monitor, but
+    the "?" the pointer is resting on does, and that is the one the bubble belongs
+    to. ``MonitorFromPoint`` answers exactly that question.
+
+    The fallback - the primary screen, as Tk reports it - is what this module did
+    for every window before, so off Windows and on any machine where the system
+    will not answer, the behaviour is unchanged rather than worse.
+    """
+    area = winenv.monitor_work_area(x_root, y_root)
+    if area is not None:
+        return area
+    with crashlog.quiet("gui.tooltip"):
+        return (0, 0, widget.winfo_screenwidth() or 1920,
+                widget.winfo_screenheight() or 1080)
+    return (0, 0, 1920, 1080)
+
+
 def _show_bubble(widget, text, x_root, y_root, height=0):
     if not text:
         return None
@@ -105,10 +126,8 @@ def _show_bubble(widget, text, x_root, y_root, height=0):
         window.update_idletasks()
         tip_w = window.winfo_reqwidth() or scaled(340)
         tip_h = window.winfo_reqheight() or scaled(60)
-        screen_w = widget.winfo_screenwidth() or 1920
-        screen_h = widget.winfo_screenheight() or 1080
         px, py = tooltip_position(x_root, y_root, height, tip_w, tip_h,
-                                  screen_w, screen_h)
+                                  _bounds_for(widget, x_root, y_root))
         window.wm_geometry(f"+{px}+{py}")
         window.deiconify()
         window.lift()
