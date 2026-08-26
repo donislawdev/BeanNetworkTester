@@ -72,6 +72,17 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The 2026-08-26 report in one line. "The screen" is SM_CXSCREEN on
+        # Windows, which is the PRIMARY monitor whatever the window is on, so this
+        # patch is not an invented break: it is the code that shipped.
+        "label": "gui: the tooltip bubble is clamped to the primary monitor again",
+        "file": "beantester/gui/tooltip.py",
+        "old": "                                  _bounds_for(widget, x_root, y_root))",
+        "new": "                                  (0, 0, widget.winfo_screenwidth() or 1920,\n"
+               "                                   widget.winfo_screenheight() or 1080))",
+        "test": "test_the_bubble_opens_on_the_monitor_the_widget_is_on",
+    },
+    {
         # The SBOM could not name the tool that froze the binary, whose bootloader
         # ships inside it under its own licence.
         "label": "sbom: the registry stops asking for the PyInstaller version",

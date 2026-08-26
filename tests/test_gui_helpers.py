@@ -83,12 +83,52 @@ def test_min_window_size_never_exceeds_the_smallest_screen():
 
 # -- tooltip / chart --------------------------------------------------------- #
 def test_tooltip_flips_above_at_the_bottom_of_the_screen():
-    _, y = scaling.tooltip_position(100, 1040, 20, 300, 80, 1920, 1080)
+    screen = (0, 0, 1920, 1080)
+    _, y = scaling.tooltip_position(100, 1040, 20, 300, 80, screen)
     check("tooltip: flips above instead of falling off the screen", y < 1040, f"(y={y})")
-    x, _ = scaling.tooltip_position(1900, 100, 20, 300, 80, 1920, 1080)
+    x, _ = scaling.tooltip_position(1900, 100, 20, 300, 80, screen)
     check("tooltip: clamped to the right edge", x + 300 <= 1920, f"(x={x})")
-    x, y = scaling.tooltip_position(100, 100, 20, 300, 80, 1920, 1080)
+    x, y = scaling.tooltip_position(100, 100, 20, 300, 80, screen)
     check("tooltip: normal case sits below the widget", y > 100 and x >= 100)
+
+
+def test_a_tooltip_stays_on_the_monitor_that_shows_the_widget():
+    """Reported 2026-08-26: on a second monitor the bubble opened on the first one.
+
+    The bubble was clamped into ``(0, 0, screen_w, screen_h)``, and on Windows
+    that pair is the PRIMARY monitor whatever the window is on - so hovering a "?"
+    on a monitor to the right pinned the bubble to the right edge of the primary
+    one. Both rectangles below are ones a single-monitor clamp gets wrong, and the
+    second is the one easiest to write off as impossible: the primary monitor owns
+    the origin, so a monitor left of or above it has NEGATIVE coordinates.
+    """
+    right = (1920, 0, 3000, 1920)             # portrait monitor, right of primary
+    x, y = scaling.tooltip_position(2400, 300, 20, 300, 80, right)
+    check("tooltip: opens on the monitor the widget is on",
+          1920 <= x and x + 300 <= 3000, f"(x={x})")
+    check("tooltip: and still sits below the widget there", y > 300, f"(y={y})")
+    x, _ = scaling.tooltip_position(2960, 300, 20, 300, 80, right)
+    check("tooltip: clamped to THAT monitor's right edge, not the primary's",
+          1920 <= x and x + 300 <= 3000, f"(x={x})")
+
+    left = (-1920, -200, 0, 880)              # monitor left of and above primary
+    x, y = scaling.tooltip_position(-1900, 800, 20, 300, 80, left)
+    check("tooltip: a negative origin is a position, not an error",
+          -1920 <= x and x + 300 <= 0, f"(x={x})")
+    check("tooltip: flips above WITHIN the left monitor", -200 <= y < 800, f"(y={y})")
+
+
+def test_a_tooltip_bigger_than_the_monitor_still_starts_on_it():
+    """The degenerate case, kept honest: a bubble wider or taller than the screen.
+
+    It cannot fit, so it will overflow - but it must overflow off the FAR edge
+    with its top-left corner still on the monitor, or the text starts off-screen
+    and the bubble is unreadable rather than merely clipped.
+    """
+    monitor = (1920, 0, 2600, 400)
+    x, y = scaling.tooltip_position(2000, 100, 20, 900, 700, monitor)
+    check("tooltip: oversized bubble starts inside the monitor",
+          1920 <= x <= 2600 and 0 <= y <= 400, f"({x}, {y})")
 
 
 def test_chart_geometry_leaves_room_for_the_axes():

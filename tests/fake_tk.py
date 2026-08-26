@@ -485,6 +485,13 @@ class Root(W):
         self.kw["geometry"] = spec
         return None
 
+    # Real tkinter defines `wm_geometry` and aliases `geometry` to it, so the two
+    # names are ONE call. Without this line the alias fell through to
+    # `W.__getattr__`, which answers any unknown name with a no-op: the tooltip
+    # bubble positions itself with `wm_geometry`, so every assertion about where
+    # a bubble landed would have passed while recording nothing at all.
+    wm_geometry = geometry
+
     def minsize(self, w=None, h=None):
         self.kw["minsize"] = (w, h)
 

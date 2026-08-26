@@ -189,6 +189,53 @@ def test_hiding_still_withdraws_a_live_bubble():
     """)
 
 
+def test_the_bubble_opens_on_the_monitor_the_widget_is_on():
+    """The 2026-08-26 report, end to end: window on the second monitor, bubble on
+    the first one.
+
+    ``_show_bubble`` asked Tk how big "the screen" is, and on Windows that is the
+    PRIMARY monitor however many are attached - so the bubble was clamped onto a
+    monitor the user was not looking at. This drives the whole show path (the
+    monitor lookup is the only thing stubbed) and reads back the geometry the
+    bubble was actually given.
+
+    The second half is the half that would have shipped broken: on Linux CI, and
+    on any machine where the system will not answer, ``monitor_work_area``
+    returns None and the bubble must fall back to the old screen box rather than
+    to nothing.
+    """
+    run_gui("""
+        from beantester import winenv
+        from beantester.gui import tooltip
+        from tkinter import ttk
+
+        def where(window):
+            spec = window.kw.get("geometry")
+            assert spec, "the bubble never positioned itself"
+            x, _, y = spec.lstrip("+").partition("+")
+            return int(x), int(y)
+
+        # A portrait monitor to the right of the primary one - the reporter's setup.
+        # The fake Tk still answers 1920x1080 for "the screen", which is exactly
+        # the lie the old code believed.
+        tooltip._BUBBLES.clear()
+        winenv.monitor_work_area = lambda x, y: (1920, 0, 3000, 1920)
+        label = ttk.Label(root, text="?")
+        window = tooltip._show_bubble(label, "filter expression syntax", 2400, 300, 20)
+        assert window is not None
+        x, y = where(window)
+        assert 1920 <= x < 3000, "the bubble jumped back to the primary monitor: %d" % x
+        assert 0 <= y < 1920, y
+
+        # No answer from the system: the old behaviour, not no behaviour.
+        winenv.monitor_work_area = lambda x, y: None
+        window = tooltip._show_bubble(label, "filter expression syntax", 100, 100, 20)
+        assert window is not None
+        x, y = where(window)
+        assert 0 <= x <= 1920 and 0 <= y <= 1080, (x, y)
+    """)
+
+
 def test_dead_bubbles_do_not_pile_up_across_windows():
     """The cache is keyed by toplevel NAME and Tk does not reuse names, so without
     pruning every window ever opened leaves an entry holding a dead Toplevel and

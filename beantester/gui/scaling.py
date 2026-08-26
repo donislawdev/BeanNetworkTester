@@ -151,22 +151,35 @@ def geometry_fits(geometry, screen_w, screen_h):
 
 
 # -- pure geometry helpers used by the tooltip and the chart ------------------ #
-def tooltip_position(x, y, widget_h, tip_w, tip_h, screen_w, screen_h, margin=6):
-    """Where to put a tooltip bubble so it stays on screen.
+def tooltip_position(x, y, widget_h, tip_w, tip_h, bounds, margin=6):
+    """Where to put a tooltip bubble so it stays on the monitor it belongs to.
 
-    The old code always placed it below the widget, so hovering anything near the
-    bottom of the display pushed the bubble off the monitor.
+    ``bounds`` is the rectangle the bubble has to stay inside, ``(left, top,
+    right, bottom)`` in screen coordinates - normally the work area of the
+    monitor showing the widget (``winenv.monitor_work_area``).
+
+    It takes a RECTANGLE and not a width/height pair because a rectangle is the
+    only shape that can express a second monitor. ``(0, 0, screen_w, screen_h)``
+    is the primary monitor and nothing else, so clamping to it moved the bubble
+    back onto the primary monitor whenever the window was on another one - the
+    2026-08-26 report. ``left`` and ``top`` are NEGATIVE for a monitor placed
+    left of, or above, the primary one; nothing here may assume they are zero.
+
+    The other reason this function exists is older: the first version always put
+    the bubble below the widget, so hovering anything near the bottom edge pushed
+    it off the display.
     """
+    left, top, right, bottom = (int(edge) for edge in bounds)
     px = x + scaled(18)
     py = y + widget_h + margin
-    if py + tip_h > screen_h - margin:          # no room below -> flip above
+    if py + tip_h > bottom - margin:            # no room below -> flip above
         py = y - tip_h - margin
-    if py < margin:                             # nor above -> clamp
-        py = margin
-    if px + tip_w > screen_w - margin:
-        px = max(margin, screen_w - tip_w - margin)
-    if px < margin:
-        px = margin
+    if py < top + margin:                       # nor above -> clamp
+        py = top + margin
+    if px + tip_w > right - margin:
+        px = max(left + margin, right - tip_w - margin)
+    if px < left + margin:
+        px = left + margin
     return int(px), int(py)
 
 
