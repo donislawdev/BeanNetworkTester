@@ -1113,3 +1113,26 @@ def test_elevation_is_refused_when_the_switch_is_set():
         os.environ.pop("BEAN_NO_ELEVATE", None)
         if previous is not None:
             os.environ["BEAN_NO_ELEVATE"] = previous
+
+
+def test_a_worker_the_engine_does_not_own_reports_through_the_same_door():
+    """The scenario runner is a worker thread the watchdog cannot see.
+
+    That watchdog walks ``_t_cap`` and ``_t_inj``; the timeline thread lives in
+    ``scenario_runner``, above the engine, so a death there was nobody's business -
+    the thread vanished and the session kept impairing traffic to a plan that had
+    stopped existing. ``worker_failed`` is the door for that thread, and the point
+    of it is that it leads to the SAME place as every other worker death rather
+    than to a quieter answer of its own.
+    """
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    try:
+        eng.worker_failed(RuntimeError("the timeline broke"))
+
+        check("fault: a foreign worker's death is recorded like any other",
+              "the timeline broke" in str(eng.fault), f"({eng.fault!r})")
+        check("fault: and it stops the session, so nothing is left impaired",
+              not eng.is_running())
+    finally:
+        eng.stop()

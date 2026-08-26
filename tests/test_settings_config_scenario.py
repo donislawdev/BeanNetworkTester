@@ -456,6 +456,13 @@ def test_a_scenario_value_is_checked_when_the_file_is_opened():
     check("scenario: and the step stays a PATCH, not a full settings dict",
           list(sc.steps[0]["settings"]) == ["loss"], f"({sc.steps[0]['settings']!r})")
 
+    # The empty patch is the same rule at its limit, and the one that would do the
+    # most damage if it were got wrong: `{}` becoming a full dict of defaults means
+    # a step that says nothing would reset every setting the run had built up.
+    empty = parse_scenario([{"at": 0, "settings": {}}, {"at": 1, "action": "reset_tcp"}])
+    check("scenario: a step with no settings patches nothing",
+          empty.steps[0]["settings"] == {}, f"({empty.steps[0]['settings']!r})")
+
 
 def test_a_scenario_step_cannot_be_scheduled_at_infinity():
     """``at`` was the last number in the program that skipped ``parse_number``.
