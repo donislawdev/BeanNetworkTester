@@ -72,6 +72,56 @@ MUTATIONS = [
         "test": "test_start_only_fields_are_locked_while_a_session_runs",
     },
     {
+        # The half that was missing for years: the step's setting NAMES were
+        # checked, its VALUES went to the engine untouched.
+        "label": "scenario: a step's settings values stop being validated",
+        "file": "beantester/scenario.py",
+        "old": "            settings = validated_patch(settings)",
+        "new": "            settings = dict(settings)",
+        "test": "test_a_scenario_value_is_checked_when_the_file_is_opened",
+    },
+    {
+        "label": "scenario: at goes back to float(), which accepts Infinity",
+        "file": "beantester/scenario.py",
+        "old": '        at = parse_number(step["at"], bounds=(0, None))',
+        "new": '        at = float(step["at"])',
+        "test": "test_a_scenario_step_cannot_be_scheduled_at_infinity",
+    },
+    {
+        # The timeline dies, the session keeps impairing traffic, nobody is told.
+        "label": "scenario: a broken timeline stops telling the engine",
+        "file": "beantester/scenario_runner.py",
+        "old": "                self.engine.worker_failed(exc)",
+        "new": "                pass",
+        "test": "test_a_timeline_that_breaks_takes_the_session_down_with_it",
+    },
+    {
+        # The exact shape that walked past all four JSON loaders: RecursionError is
+        # neither OSError nor ValueError, so re-raising it is the bug restored.
+        "label": "jsonfile: deep nesting escapes the reader again",
+        "file": "beantester/jsonfile.py",
+        "old": '            raise ValueError("nesting is too deep to read") from exc',
+        "new": "            raise",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
+        # `parse_constant` back to the permissive default: float("NaN") and
+        # float("Infinity") are exactly what json would have produced on its own.
+        "label": "jsonfile: the NaN and Infinity literals are accepted again",
+        "file": "beantester/jsonfile.py",
+        "old": '    raise ValueError(f"{name} is not a value a JSON file may carry")',
+        "new": "    return float(name)",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
+        "label": "jsonfile: the size limit stops being checked",
+        "file": "beantester/jsonfile.py",
+        "old": "    size = os.path.getsize(path)                     "
+               "# OSError if it is not there",
+        "new": "    size = 0",
+        "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
         # The 2026-08-26 report in one line. "The screen" is SM_CXSCREEN on
         # Windows, which is the PRIMARY monitor whatever the window is on, so this
         # patch is not an invented break: it is the code that shipped.

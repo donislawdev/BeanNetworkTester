@@ -24,6 +24,7 @@ class FakeEngine:
         self.running = True
         self.events = []
         self.resets = []
+        self.failures = []          # what the runner reported as a worker death
 
     def is_running(self):
         return self.running
@@ -33,6 +34,12 @@ class FakeEngine:
 
     def reset_now(self, duration):
         self.resets.append(duration)
+
+    def worker_failed(self, error):
+        """The real engine stops the session here (``BeanEngine._fail_stop``); the
+        fake only records that it was told, which is the part being asserted."""
+        self.failures.append(error)
+        self.running = False
 
 
 class FakeScenario:
@@ -198,3 +205,42 @@ def test_the_runner_stops_when_the_engine_stops(spy_apply):
     _join(runner)
     check("the runner exits once the engine is no longer running",
           not runner._thread.is_alive())
+
+
+def test_a_timeline_that_breaks_takes_the_session_down_with_it(monkeypatch):
+    """The failure this net exists for, measured before it existed.
+
+    A scenario carrying a value of the wrong type raised inside ``apply_settings``
+    on this daemon thread. Nothing caught it, so: the thread died, no further step
+    was ever applied, ``finished`` stayed False - and without ``--duration`` that
+    flag is the only ending a run has (see ``cli.py``, "a scenario's timeline is an
+    ending too"). The session went on impairing traffic to a plan that had stopped
+    existing, and the only trace was an entry in the crash log.
+
+    The engine already has one answer for a worker that dies (``_fail_stop``:
+    "stop the session so the network is never left impaired"). The thread that
+    CHANGES the impairment over time now gets that same answer instead of a
+    quieter one of its own.
+    """
+    logged = []
+    boom = TypeError("a value the engine cannot use")
+
+    def explode(*_a, **_kw):
+        raise boom
+
+    monkeypatch.setattr(scenario_runner, "apply_settings", explode)
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=False, duration=5.0), base_settings={},
+                 log=logged.append)
+    _join(runner)
+
+    check("the thread does not survive as a zombie", not runner._thread.is_alive())
+    check("the engine is told a worker died", engine.failures == [boom],
+          f"({engine.failures!r})")
+    check("and the user is told, in the log they are watching",
+          any("TypeError" in str(line) for line in logged), f"({logged!r})")
+    check("a broken timeline is still not a FINISHED one", not runner.finished,
+          "'finished' means the timeline ran out - see its own docstring")

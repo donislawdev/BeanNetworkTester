@@ -421,6 +421,73 @@ def test_a_misspelled_scenario_setting_gets_the_same_help_as_a_config_one():
           "reset_tcp" in str(action.value), f"({action.value})")
 
 
+def test_a_scenario_value_is_checked_when_the_file_is_opened():
+    """The names were checked; the VALUES were not, and that is the half that hurt.
+
+    A step's ``settings`` went from the file into ``apply_settings`` untouched, on
+    the runner's background thread. Measured 2026-08-26: an out-of-range number
+    was applied to the engine as it stood, a nested object was applied as an
+    object, and a string where a number belongs raised on that thread - killing
+    the timeline while the session kept impairing traffic.
+
+    A scenario file and a typed-in value are two doors into the same engine. This
+    asserts they now answer the same way, and that the answer arrives when the
+    file is OPENED - naming the step - rather than in the fifth minute of a run.
+    """
+    import pytest
+    from beantester.scenario import parse_scenario
+
+    hostile = (
+        ("a string where a number belongs", {"loss": "abc"}),
+        ("a number outside the field's range", {"loss": 1e9}),
+        ("a nested object", {"dst_port": {"nope": 1}}),
+        ("a value the form would refuse", {"latency": -5}),
+    )
+    for label, patch in hostile:
+        with pytest.raises(ValueError) as bad:
+            parse_scenario([{"at": 0, "settings": patch}])
+        check(f"scenario: {label} is refused at load", "1" in str(bad.value),
+              f"(message does not name the step: {bad.value})")
+
+    # ...and the values that are FINE keep working, in the shape the engine wants.
+    sc = parse_scenario([{"at": 0, "settings": {"loss": "10"}}])
+    check("scenario: a legitimate value survives, converted",
+          sc.steps[0]["settings"] == {"loss": 10.0}, f"({sc.steps[0]!r})")
+    check("scenario: and the step stays a PATCH, not a full settings dict",
+          list(sc.steps[0]["settings"]) == ["loss"], f"({sc.steps[0]['settings']!r})")
+
+    # The empty patch is the same rule at its limit, and the one that would do the
+    # most damage if it were got wrong: `{}` becoming a full dict of defaults means
+    # a step that says nothing would reset every setting the run had built up.
+    empty = parse_scenario([{"at": 0, "settings": {}}, {"at": 1, "action": "reset_tcp"}])
+    check("scenario: a step with no settings patches nothing",
+          empty.steps[0]["settings"] == {}, f"({empty.steps[0]['settings']!r})")
+
+
+def test_a_scenario_step_cannot_be_scheduled_at_infinity():
+    """``at`` was the last number in the program that skipped ``parse_number``.
+
+    ``float("Infinity")`` passed the ``>= 0`` check, so the step validated cleanly
+    and then never fired: ``t0 < at <= t1`` is false for every t. A scenario that
+    looked right and quietly did not do what it said. ``duration`` had the same
+    hole - an ``Infinity`` there is a reset that never ends.
+    """
+    import pytest
+    from beantester.scenario import parse_scenario
+
+    for label, step in (("at=Infinity", {"at": float("inf"), "settings": {"loss": 1}}),
+                        ("at=NaN", {"at": float("nan"), "settings": {"loss": 1}}),
+                        ("duration=Infinity",
+                         {"at": 0, "action": "reset_tcp", "duration": float("inf")})):
+        with pytest.raises(ValueError):
+            parse_scenario([step])
+        check(f"scenario: {label} is refused", True)
+
+    sc = parse_scenario([{"at": "2,5", "settings": {"loss": 1}}])
+    check("scenario: a plain number still works, comma included",
+          sc.steps[0]["at"] == 2.5, f"({sc.steps[0]['at']!r})")
+
+
 def test_a_config_value_says_what_the_setting_takes(tmp_path):
     """"Invalid value for 'loss'" said the value was wrong and stopped there.
 

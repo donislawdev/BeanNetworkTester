@@ -30,10 +30,11 @@ import io
 import json
 import os
 
-from beantester import exitcodes, i18n
+from beantester import exitcodes, i18n, scenario, settings
 from beantester.cli import run_cli
+from beantester.gui.profiles import ProfileStore
 from beantester.gui.ui_state import DEFAULTS, UiStateStore
-from beantester.jsonfile import read_json
+from beantester.jsonfile import MAX_BYTES, read_json
 from fakes import check
 from gui_harness import run_gui
 
@@ -342,6 +343,125 @@ def test_a_missing_language_directory_is_not_fatal(tmp_path):
 # --------------------------------------------------------------------------- #
 # the filesystem itself: not every failure is a parse failure
 # --------------------------------------------------------------------------- #
+# -- files that were SENT to the user, not files that went wrong -------------- #
+# The three shapes above are accidents: a truncated write, a hand-edited typo. The
+# ones below are what a file looks like when somebody wanted it to do damage, and
+# every one of them used to get PAST a loader rather than be refused by it.
+#
+# `nested too deep` is the one that mattered. It is 240 KB of nothing but brackets,
+# and `json` answers it with RecursionError - which is neither OSError nor
+# ValueError, so it walked past all four loaders at once and out of App.__init__.
+# The quarantine never ran either, so the next start failed the same way: a file
+# somebody was sent turned into a program that would not open again.
+HOSTILE = ("nested too deep", "the NaN literal", "the Infinity literal",
+           "far over the size limit")
+
+
+def _hostile_text(label):
+    if label == "nested too deep":
+        return "[" * 60000 + "]" * 60000
+    if label == "the NaN literal":
+        return '{"loss": NaN}'
+    if label == "the Infinity literal":
+        return '{"loss": Infinity}'
+    return '{"x": "' + "A" * (MAX_BYTES + 1024) + '"}'
+
+
+def test_no_loader_can_be_taken_down_by_a_hostile_file(tmp_path):
+    """Four doors, one answer: refused, never raised past the caller.
+
+    This is the property `jsonfile.load_json` exists to hold. Before it, the four
+    readers caught four different sets of exceptions - not by decision, but because
+    they were written months apart - so "is this file safe to open" had four
+    different answers depending on which one you asked.
+
+    Each door gets its OWN copy of the file on purpose: `read_json` quarantines
+    what it rejects, so a shared file would be gone by the second loader and this
+    would be measuring the rename instead of the loader.
+    """
+    good = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "lang", "en.json")
+
+    for label in HOSTILE:
+        text = _hostile_text(label)
+        slug = label.replace(" ", "-")
+
+        def fresh(door, body=text, name=slug):
+            path = tmp_path / f"{name}-{door}.json"
+            path.write_text(body, encoding="utf-8")
+            return str(path)
+
+        data, error = read_json(fresh("profiles"), expect=dict)
+        check(f"profiles/ui: answered, not raised ({label})",
+              data is None and bool(error), f"(data={data!r}, error={error!r})")
+
+        for door, load in (("config", settings.load_config_file),
+                           ("scenario", scenario.load_scenario_file)):
+            try:
+                load(fresh(door))
+                verdict = "ACCEPTED IT"
+            except ValueError as exc:
+                verdict = f"refused: {str(exc)[:40]}"
+            except Exception as exc:                     # noqa: BLE001 - the point
+                verdict = f"RAISED {type(exc).__name__}"
+            check(f"{door}: refused with a plain ValueError ({label})",
+                  verdict.startswith("refused"), f"({verdict})")
+
+        folder = tmp_path / f"lang-{slug}"
+        folder.mkdir()
+        (folder / "en.json").write_text(open(good, encoding="utf-8").read(),
+                                        encoding="utf-8")
+        (folder / "zz.json").write_text(text, encoding="utf-8")
+        try:
+            codes = i18n.load_languages(str(folder))
+            verdict = "en" in codes and "zz" not in codes
+        except Exception as exc:                         # noqa: BLE001 - the point
+            verdict = f"RAISED {type(exc).__name__}"
+        check(f"lang: the bad file is skipped, the good one still loads ({label})",
+              verdict is True, f"({verdict})")
+
+    i18n.load_languages()      # this module's state is global; put the real one back
+
+
+def test_a_hostile_file_is_quarantined_so_the_next_start_is_clean(tmp_path):
+    """The half that made this worse than a crash.
+
+    A file the program cannot read is renamed aside precisely so the NEXT start
+    finds nothing and works. RecursionError escaped before the quarantine could
+    run, so the file stayed exactly where it was and every later start died on it
+    too - the user had to find and delete it themselves to get their program back.
+    """
+    path = tmp_path / "bean_network_tester_profiles.json"
+    path.write_text(_hostile_text("nested too deep"), encoding="utf-8")
+
+    data, error = read_json(str(path), expect=dict)
+    check("the hostile file is refused", data is None and bool(error), f"({error!r})")
+    moved = [p.name for p in tmp_path.iterdir() if ".corrupt-" in p.name]
+    check("it is moved aside, so the next start is clean", moved,
+          f"(files: {sorted(p.name for p in tmp_path.iterdir())})")
+
+    again, error_again = read_json(str(path), expect=dict)
+    check("and the second start finds nothing rather than the same wall",
+          again is None and error_again is None, f"({error_again!r})")
+
+
+def test_a_profile_carrying_infinity_is_dropped_not_stored(tmp_path):
+    """`float()` takes "inf" and "nan"; every other door in this program refuses
+    them by name. A profile file is read straight off disk, so it needs the same
+    refusal - `Infinity` in a saved profile means an impairment nothing can bound."""
+    path = tmp_path / "profiles.json"
+    path.write_text('{"sane": {"loss": 10}, "evil": {"loss": 1e999}}',
+                    encoding="utf-8")
+    store = ProfileStore(str(path))
+
+    check("the sane profile survives", "sane" in store.profiles,
+          f"({sorted(store.profiles)})")
+    check("the one carrying infinity is dropped", "evil" not in store.profiles,
+          f"({store.profiles!r})")
+    check("and the user is told which", "evil" in str(store.problem),
+          f"({store.problem!r})")
+
+
 def test_a_directory_where_a_file_belongs_is_reported_not_crashed(tmp_path):
     """``read_json`` catches ``OSError``, and this is the case that produces one
     without any content being involved: on Linux opening a directory raises

@@ -5,13 +5,12 @@ The shape of a setting (type, label, bounds, section, profile scope) lives in
 settings dict and applies it to an engine.
 """
 import difflib
-import json
 import socket
 
 from . import crashlog
 from . import fields as F
 from . import portmap
-from .jsonfile import write_json
+from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
 from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
@@ -275,6 +274,33 @@ def settings_from_raw(raw, lang=None):
             s[f.key] = str(value or "").strip()
     validate_settings(s, lang)
     return s
+
+
+def validated_patch(raw, lang=None):
+    """Validate a PARTIAL settings dict and hand back only the keys it carried.
+
+    A scenario step is a PATCH, not a settings dict: ``Scenario.settings_at``
+    layers each step over the state built by the ones before it. Returning a full
+    dict here would therefore be a bug with a very quiet symptom - a step that
+    says ``{"loss": 10}`` would also reset every OTHER setting to its default, and
+    the run would look like it was obeying the file.
+
+    So the validation is done on a full dict (that is the only way to check what
+    is cross-field - an expression compiles, a schedule parses) and then the patch
+    is cut back out of it. What comes back is the same keys, converted the way the
+    form converts them: numbers as numbers, expressions normalised.
+
+    Raises the same translated ``ValueError`` the form raises. That is the point:
+    a scenario file and a typed-in value are two doors into the same engine, and
+    before this only one of them was locked.
+    """
+    if not raw:
+        return {}
+    full = settings_from_raw(raw, lang)
+    # `full` starts life as dict(DEFAULT_SETTINGS), so every key the caller was
+    # allowed to pass is in it - the scenario validator has already refused
+    # anything outside that set, with a spelling hint.
+    return {key: full[key] for key in raw}
 
 
 def validate_settings(s, lang=None):
@@ -587,8 +613,12 @@ def _coerce_setting(key, value):
 
 
 def load_config_file(path):
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    # Through jsonfile.load_json, which turns every way a parser can fail into
+    # ValueError - the exception this function's caller in cli.py already maps to
+    # exit code CONFIG. Deliberately NOT read_json: that one QUARANTINES a broken
+    # file, and this path is handed an arbitrary file the user named on the command
+    # line. Renaming somebody's file because we could not parse it is not our call.
+    data = load_json(path)
     if not isinstance(data, dict):
         # Valid JSON of the wrong shape. Without this check the next statement
         # reaches ``data.items()`` and raises AttributeError - and the CLI catches

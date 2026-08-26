@@ -7,10 +7,11 @@ scenario with **zero steps**, which then ran a session that did nothing while
 the UI happily reported "scenario loaded".
 """
 import difflib
-import json
 
 from .i18n import translate
-from .settings import DEFAULT_SETTINGS
+from .jsonfile import load_json
+from .settings import DEFAULT_SETTINGS, validated_patch
+from .validators import parse_number
 
 # The actions a step may carry. ``scenario_runner`` reads THIS tuple rather than
 # listing them again - it used to carry its own copy, which would have accepted a
@@ -39,11 +40,14 @@ def _validate_step(index, step):
     if "at" not in step:
         raise _err("errors.scenario_step_at", step=where)
     try:
-        at = float(step["at"])
-    except (TypeError, ValueError) as exc:
+        # parse_number, not float(): it is the one place that refuses NaN and
+        # Infinity, and "at" was the last number in the program that skipped it.
+        # `float("Infinity")` passed the `>= 0` test below, so the step validated
+        # cleanly and then never fired - a scenario that looked right and quietly
+        # did not do what it said.
+        at = parse_number(step["at"], bounds=(0, None))
+    except ValueError as exc:
         raise _err("errors.scenario_step_at", step=where) from exc
-    if at < 0:
-        raise _err("errors.scenario_step_at", step=where)
 
     settings = step.get("settings")
     if settings is not None:
@@ -62,6 +66,21 @@ def _validate_step(index, step):
                            field=unknown[0], suggestion=close[0])
             raise _err("errors.scenario_unknown_setting", step=where,
                        field=", ".join(sorted(unknown)))
+        # The NAMES were checked above; this checks the VALUES, and it is the
+        # half that was missing. They went from the file straight into
+        # `apply_settings` on the runner's background thread: out-of-range
+        # numbers were applied to the engine as they stood, and a value of the
+        # wrong TYPE killed the timeline mid-session. Doing it HERE means the
+        # complaint arrives when the file is opened - naming the step - instead
+        # of in the fifth minute of a run, on a thread with nobody to tell.
+        try:
+            settings = validated_patch(settings)
+        except ValueError as exc:
+            # The inner message is a finished sentence of its own ("Field 'Loss:'
+            # must be between 0 and 100."), and this one supplies the full stop -
+            # so its own is stripped rather than printed twice.
+            raise _err("errors.scenario_step_value", step=where,
+                       error=str(exc).rstrip(". ")) from exc
 
     action = step.get("action")
     if action is not None and str(action) not in ACTIONS:
@@ -80,11 +99,11 @@ def _validate_step(index, step):
         if action is None:
             raise _err("errors.scenario_duration_without_action", step=where)
         try:
-            duration = float(step["duration"])
-        except (TypeError, ValueError) as exc:
+            # Same reader as "at", for the same reason: `float("Infinity")` used
+            # to pass `>= 0` and become a reset that never ends.
+            duration = parse_number(step["duration"], bounds=(0, None))
+        except ValueError as exc:
             raise _err("errors.scenario_step_duration", step=where) from exc
-        if duration < 0:
-            raise _err("errors.scenario_step_duration", step=where)
 
     unknown = [k for k in step if k not in STEP_KEYS]
     if unknown:
@@ -93,6 +112,13 @@ def _validate_step(index, step):
 
     out = dict(step)
     out["at"] = at
+    # The converted values, not the raw ones: what the engine gets is what was
+    # validated. Only when the step HAD them - `settings_at` and the runner both
+    # ask "is this key in the step", so inventing one would change what it means.
+    if settings is not None:
+        out["settings"] = settings
+    if "duration" in step:
+        out["duration"] = duration
     return out
 
 
@@ -154,9 +180,12 @@ def parse_scenario(data):
 
 
 def load_scenario_file(path):
-    with open(path, encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-        except ValueError as e:
-            raise _err("errors.scenario_bad_json", error=e) from e
+    # load_json, not a bare json.load: it answers deep nesting, an oversized file
+    # and the non-JSON constants (NaN / Infinity) with the same ValueError this
+    # already turns into a translated message. OSError still travels untouched -
+    # "cannot read the file" is a different sentence from "this is not a scenario".
+    try:
+        data = load_json(path)
+    except ValueError as e:
+        raise _err("errors.scenario_bad_json", error=e) from e
     return parse_scenario(data)

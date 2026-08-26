@@ -67,9 +67,18 @@ class ProfileStore:
             if raw is None or raw == "":
                 raw = PRESET_DEFAULTS[key]
             try:
-                out[key] = float(raw)
+                value = float(raw)
             except (TypeError, ValueError):
                 return None
+            # float() accepts "inf" and "nan" - the two values every other door in
+            # this program refuses by name (validators.parse_number, with its own
+            # comment). A stored profile is not a place they can come from honestly:
+            # the form cannot produce one, and since 2026-08-26 neither can the
+            # reader (jsonfile rejects the JSON constants). This is the third lock
+            # on the same door, because this one runs on a file somebody was sent.
+            if value != value or value in (float("inf"), float("-inf")):
+                return None
+            out[key] = value
         return out
 
     def persist(self):
