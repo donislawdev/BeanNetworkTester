@@ -94,10 +94,10 @@ tooltip explaining what it does.
 
 ## Language
 
-Translations live in **`lang/<code>.json`** files (bundled: `lang/pl.json` with full Polish
-characters and `lang/en.json`). On startup the app **scans the `lang/` directory** and detects
-the available languages automatically, and the startup language follows your system locale
-(Polish system -> Polish, no match -> English). A **Language / Jezyk** selector in the top-right
+Translations live in **`lang/<code>.json`** files (bundled: `lang/en.json`, `lang/pl.json` and
+`lang/zh.json`). On startup the app **scans the `lang/` directory** and detects the available
+languages automatically. The startup language follows your system locale when a matching
+translation is available, and otherwise falls back to English. A **Language / Jezyk** selector in the top-right
 corner switches it at any time - the UI rebuilds in the chosen language while keeping your
 current settings.
 

@@ -92,13 +92,13 @@ dowolne pole pojawia się dymek z wyjaśnieniem, co ono robi.
 
 ## Język / Language
 
-Tłumaczenia mieszkają w plikach **`lang/<kod>.json`** (w komplecie: `lang/pl.json` z pełnymi polskimi znakami oraz `lang/en.json`). Przy starcie aplikacja **skanuje katalog `lang/`** i sama wykrywa dostępne języki, a język startowy dobiera według ustawień systemu (system po polsku → polski, brak dopasowania → angielski). W prawym górnym rogu okna jest lista **Język / Language**, którą można przełączyć w dowolnej chwili - UI przebuduje się na wybrany język, zachowując bieżące ustawienia.
+Tłumaczenia mieszkają w plikach **`lang/<kod>.json`** (w komplecie: `lang/en.json`, `lang/pl.json` oraz `lang/zh.json`). Przy starcie aplikacja **skanuje katalog `lang/`** i sama wykrywa dostępne języki, a język startowy dobiera według ustawień systemu (system po polsku → polski, brak dopasowania → angielski). W prawym górnym rogu okna jest lista **Język / Language**, którą można przełączyć w dowolnej chwili - UI przebuduje się na wybrany język, zachowując bieżące ustawienia.
 
 Tłumaczone jest **wszystko** w interfejsie: zakładki, etykiety, przyciski, podpowiedzi, nagłówki kolumn, statystyki, panel sesji, dziennik zdarzeń, komunikaty w logu, okna dialogowe, a także komunikaty błędów (wyjątki pokazywane użytkownikowi). W kodzie używa się wyłącznie **kluczy** (np. `app.tabs.statistics`), a tekst pochodzi z pliku języka. Gdy w wybranym języku brakuje klucza, używany jest angielski, a w ostateczności sam klucz. (Tryb wiersza poleceń - CLI - jest **zawsze po angielsku**, niezależnie od języka systemu i UI.)
 
 **Dodanie nowego języka** nie wymaga zmian w kodzie: skopiuj `lang/en.json` np. do `lang/de.json`, przetłumacz wartości i uzupełnij nagłówek `"_meta": {"code": "de", "name": "Deutsch"}` - język pojawi się na liście po ponownym uruchomieniu. Uszkodzony plik języka jest pomijany (nie wywali aplikacji).
 
-The UI is bilingual (Polish and English). On startup the language follows your system locale (Polish system → Polish, otherwise English) and can be switched anytime via the selector in the top-right corner.
+The UI is available in English, Polish and Simplified Chinese. On startup the language follows your system locale when a matching translation is available. Otherwise English is used. It can be switched anytime via the selector in the top-right corner.
 
 ## Wymagania
 
