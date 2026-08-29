@@ -41,7 +41,7 @@
 # and vendoring is not open to us - the Semgrep Rules License permits use for our
 # own purposes and forbids redistributing the rules, which is what putting them in
 # a public repository would be.
-semgrep==1.173.0; sys_platform != "win32"
+semgrep==1.174.0; sys_platform != "win32"
 
 # The weekly audit of what we PIN. Not the same question as dependency-review,
 # which looks at what a pull request ADDS: this one asks whether an advisory has
