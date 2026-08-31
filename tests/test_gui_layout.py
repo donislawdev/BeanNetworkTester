@@ -344,7 +344,7 @@ def test_table_tooltips_belong_to_the_headers_not_the_whole_table():
         table = app.pages["connections"].table
         assert set(table.tips) == set(table.columns), table.tips
         for key in table.tips.values():
-            for lang in ("en", "pl"):
+            for lang in LANGS:
                 assert bnt.translate(key, lang) != key, (key, lang)
 
         class Ev:

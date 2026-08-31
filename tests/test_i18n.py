@@ -7,10 +7,16 @@ import os
 import string
 
 from beantester import BeanEngine
-from fakes import LANG_DIR, check
+from fakes import LANG_DIR, LANGS, check
 
-SHIPPED_LANGS = ("en", "pl", "zh")
 _FORMATTER = string.Formatter()
+
+# The ASCII semicolon and the full-width one a CJK keyboard produces (U+FF1B).
+# The second is built from its code point rather than typed, the way
+# ``tools/check_public_text.py`` builds the dashes it hunts for: the two are one
+# pixel apart in a review, and a guard that spells its own target out invites a
+# copy of it into the file next door.
+SEMICOLONS = (";", chr(0xFF1B))
 
 
 def _placeholders(value):
@@ -60,6 +66,19 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
                         lambda *a: ("Chinese (Simplified)_China", "936"))
     check("detect: Windows Simplified Chinese -> zh", n.detect_language() == "zh",
           f"({n.detect_language()})")
+    # Traditional Chinese is a different SCRIPT, not a region of the shipped one,
+    # so it takes the same English fallback as any language we do not ship. Both
+    # roads are guarded because they are genuinely separate: the environment
+    # variables below never reach the Windows-name branch above, and narrowing
+    # only that branch left LANG=zh_TW.UTF-8 selecting Simplified.
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Taiwan", "950"))
+    check("detect: Windows Traditional Chinese -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Hong Kong SAR", "950"))
+    check("detect: Windows Traditional Chinese (Hong Kong) -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
     monkeypatch.setattr(locale, "getlocale", lambda *a: ("German_Germany", "1252"))
     check("detect: unshipped locale -> en fallback", n.detect_language() == "en")
 
@@ -68,6 +87,35 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
 
     monkeypatch.setenv("LANG", "zh_CN.UTF-8")
     check("detect: POSIX env 'zh_CN.UTF-8' -> zh", n.detect_language() == "zh")
+
+    monkeypatch.setenv("LANG", "zh_SG.UTF-8")   # Singapore writes Simplified too
+    check("detect: POSIX env 'zh_SG.UTF-8' -> zh", n.detect_language() == "zh",
+          f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh_TW.UTF-8")
+    check("detect: POSIX env 'zh_TW.UTF-8' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh-Hant")       # the script named outright
+    check("detect: POSIX env 'zh-Hant' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+
+
+def test_field_name_strips_a_colon_of_either_width(monkeypatch):
+    """The label a CJK language writes ends in U+FF1A, not in ':'.
+
+    No shipped label needs this yet, which is exactly why it is worth a test: the
+    day one does, the failure is a colon sitting in the middle of a sentence in a
+    language nobody here reads, on a machine nobody here owns. The stripping lives
+    in one place, so the guard can too - and a live language file would only prove
+    today's data, not the rule.
+    """
+    from beantester import i18n
+    label = "延迟" + chr(0xFF1A)      # a label ending in a full-width colon
+    monkeypatch.setitem(i18n._translations, "xx", {"fields.probe": label})
+    check("field_name strips a full-width colon",
+          i18n.field_name("fields.probe", "xx") == "延迟",
+          f"({i18n.field_name('fields.probe', 'xx')!r})")
 
 
 def test_no_semicolons_in_ui_text():
@@ -78,14 +126,20 @@ def test_no_semicolons_in_ui_text():
     is exactly why it is worth a test: 21 tooltips had drifted into semicolons
     before anybody looked. A semicolon joins two independent clauses, so the
     right replacement is almost always a full stop.
+
+    The full-width form is checked for the same reason and was found the hard way:
+    the loop was widened to Chinese while the search stayed ASCII, so the guard
+    reported clean over 34 keys holding 35 of them. A test that covers a language
+    it cannot read is worse than one that skips it - the skip is at least visible.
     """
     import json as _json
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
         offenders = sorted(k for k, v in data.items()
-                           if isinstance(v, str) and ";" in v)
+                           if isinstance(v, str)
+                           and any(mark in v for mark in SEMICOLONS))
         check(f"i18n {code}: no semicolons in user-facing text", not offenders,
               f"({offenders[:6]})")
 
@@ -95,7 +149,7 @@ def test_i18n_coverage():
     import json as _json
     import beantester as n
     langs = {}
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
@@ -151,7 +205,7 @@ def test_the_language_files_stay_sorted():
     its own, so it needs no exception.
     """
     import json as _json
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             keys = list(_json.load(f))
         out_of_order = [(a, b) for a, b in zip(keys, keys[1:], strict=False) if a > b]

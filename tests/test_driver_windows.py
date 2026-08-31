@@ -14,7 +14,7 @@ properties that keep it fixed and keep it safe off Windows.
 import ctypes
 
 from beantester import driver
-from fakes import check
+from fakes import LANGS, check
 
 
 def test_advapi_declares_pointer_sized_prototypes():
@@ -463,7 +463,7 @@ def test_every_open_failure_hint_is_a_key_both_languages_define():
     import os
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for code in ("en", "pl"):
+    for code in LANGS:
         with open(os.path.join(root, "lang", f"{code}.json"), encoding="utf-8") as f:
             texts = json.load(f)
         missing = sorted(k for k in driver.OPEN_ERROR_HINTS.values() if k not in texts)

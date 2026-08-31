@@ -28,6 +28,10 @@ import user_files
 user_files.redirect_to_temp()
 
 import bean_network_tester as bnt
+# The shipped languages, discovered once in fakes.py. A body that loops over them
+# runs in THIS interpreter, not in pytest's, so it cannot see the module-level
+# import the test file made - three of them said NameError the first time.
+from fakes import LANGS
 bnt.set_language({lang!r})
 root = tk.Tk()
 app = bnt.App(root)

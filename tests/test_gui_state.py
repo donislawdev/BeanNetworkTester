@@ -323,7 +323,7 @@ def test_dialogs_are_in_app_and_translated():
         assert "filedialog." in src
 
         for key in ("buttons.ok", "buttons.cancel", "buttons.yes", "buttons.no"):
-            for lang in ("en", "pl"):
+            for lang in LANGS:
                 assert bnt.translate(key, lang) != key, (key, lang)
 
         calls = []

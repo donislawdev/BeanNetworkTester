@@ -3,7 +3,7 @@
 Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
-from fakes import check
+from fakes import LANGS, check
 
 
 
@@ -50,7 +50,7 @@ def test_every_preset_has_a_name_in_every_language():
     import os as _os
     from beantester.presets import PRESETS
     from fakes import ROOT
-    for lang in ("en", "pl"):
+    for lang in LANGS:
         path = _os.path.join(ROOT, "lang", f"{lang}.json")
         with open(path, encoding="utf-8") as f:
             names = _json.load(f)
