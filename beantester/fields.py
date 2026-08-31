@@ -195,6 +195,25 @@ FIELD_DEFS = (
     Field("dst_port", EXPR, "fields.port", "destination", expr_kind=KIND_INT,
           bounds=PORT_BOUNDS, width=18, tip="tips.dest", span=True, cli="dst-port",
           narrows=True),
+    # Which address family the targeting covers - part of the same question as
+    # the IP field above it, which is why it lives in this card and not next to
+    # "LAN mode" and "Internet only". Those two CUT traffic (impairs=all); these
+    # two only say what is aimed at, and a reader who takes the wrong one of those
+    # meanings ends up believing the tool blocks a whole protocol.
+    #
+    # 🔴 NOT narrows=True, and that is a safety decision rather than an omission.
+    # "IPv4 only" still reaches every IPv4 connection on the machine, so counting
+    # it as a bound would silence the blast-radius warning for a session that has
+    # bounded nothing - the same hole `--target *` was fixed for on 2026-08-06.
+    #
+    # span=False on both: one decision seen from two sides, so they share a row
+    # (a BOOL takes a whole row by kind - see Field.span), and the section carries
+    # columns=2 for them. Both at once is legal and means "nothing qualifies";
+    # settings.apply_settings says so once, like the LAN/Internet pair.
+    Field("ipv4_only", BOOL, "fields.ipv4_only", "destination",
+          tip="tips.ipv4_only", span=False, cli="ipv4-only"),
+    Field("ipv6_only", BOOL, "fields.ipv6_only", "destination",
+          tip="tips.ipv6_only", span=False, cli="ipv6-only"),
 
     # -- blocking (firewall) ---------------------------------------------- #
     # Drop traffic to matching destinations outright. IP OR port (each takes part
@@ -323,7 +342,10 @@ SECTIONS = (
             ("latency", "jitter", "spike_prob", "spike_ms"), columns=2),
     Section("impairments", "frames.impairments", ("loss", "corrupt", "dup"), columns=3),
     Section("flapping", "frames.flapping", ("flap_period", "flap_down"), columns=2),
-    Section("destination", "frames.destination", ("dst_ip", "dst_port"), columns=1),
+    # columns=2 for the family pair only: both expression fields above carry
+    # span=True and keep a row each regardless, so this changes nothing they do.
+    Section("destination", "frames.destination",
+            ("dst_ip", "dst_port", "ipv4_only", "ipv6_only"), columns=2),
     Section("block", "frames.block", ("block_ip", "block_port"), columns=1),
     Section("advanced", "frames.advanced",
             ("syn_drop", "max_size", "nat_timeout", "rst_prob", "rst_cooldown"),

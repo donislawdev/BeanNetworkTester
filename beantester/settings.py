@@ -23,6 +23,7 @@ DEFAULT_SETTINGS = dict(
     loss=0, corrupt=0, dup=0, latency=0, jitter=0, down=0, up=0,
     buffer=1000,         # link buffer (ms) for the speed limit; 0 = unbounded. See fields.py
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
+    ipv4_only=False, ipv6_only=False,
     internet_only=False,            # the mirror of lan_mode; loopback survives both
     block_ip="", block_port="",     # firewall: drop traffic to matching IP/port
 
@@ -531,6 +532,13 @@ def apply_settings(engine, s, log=lambda *_: None):
             # validate up front (validate_settings), so a user never reaches this.
             log(f"{T('log.filter_skipped')}: {e}")
             engine.set_dest(False)
+    engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
+    # The same shape as the pair below, and said for the same reason: two "only"
+    # switches that exclude each other leave nothing to aim at, the symptom is a
+    # session that changes nothing, and that looks like a broken tool rather than
+    # like the tool doing what it was told.
+    if g("ipv4_only") and g("ipv6_only"):
+        log(T("log.ipv4_and_ipv6_only"))
     engine.set_lan(bool(g("lan_mode")))
     engine.set_internet_only(bool(g("internet_only")))
     # Both at once is a legal request - it is the union of two impairments, the

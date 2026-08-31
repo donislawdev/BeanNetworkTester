@@ -55,6 +55,13 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         parts.append(tr("summary.rst", v=num("rst_prob")))
     if to_number(g("flap_period")) and to_number(g("flap_down")):
         parts.append(tr("summary.flap", v=num("flap_period")))
+    # Scope, not damage - so they read next to the destination below rather than
+    # among the impairments. Nothing is added at the default (neither switch on),
+    # which keeps the summary of a fresh form exactly what it was.
+    if g("ipv4_only"):
+        parts.append(tr("summary.ipv4_only"))
+    if g("ipv6_only"):
+        parts.append(tr("summary.ipv6_only"))
     if g("lan_mode"):
         parts.append(tr("summary.lan"))
     if g("internet_only"):

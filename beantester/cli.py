@@ -143,6 +143,16 @@ def build_arg_parser():
                    help="affect only these remote ports: number, list, range a-b, "
                         "comparison (>1024), wildcard, re: pattern, ! to exclude "
                         "(e.g. '80,443,8000-8100' or '!53')")
+    # Part of the targeting, next to --dst-ip: they say WHICH traffic is aimed at,
+    # and neither blocks anything. The other family keeps flowing untouched.
+    p.add_argument("--ipv4-only", action="store_true",
+                   help="impair IPv4 traffic only. IPv6 keeps flowing untouched - "
+                        "this aims the tool, it does not block a protocol. Applies "
+                        "with --dst-ip empty too, which means all addresses")
+    p.add_argument("--ipv6-only", action="store_true",
+                   help="impair IPv6 traffic only. IPv4 keeps flowing untouched. "
+                        "Both flags together exclude each other and nothing is "
+                        "impaired, which the log says out loud")
     p.add_argument("--lan-mode", action="store_true",
                    help="LAN mode: cut the internet (public addresses), keep the local network")
     # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
