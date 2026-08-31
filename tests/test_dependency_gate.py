@@ -50,6 +50,32 @@ def test_gpl2_only_blocks_because_it_cannot_be_shipped_with_gpl3():
     check("GPL-2.0-only blocks", len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
 
 
+def test_an_exception_is_a_named_package_with_a_reason_beside_it():
+    """The escape hatch, and the two things that keep it from becoming a habit.
+
+    An entry is a NAME, so it can never widen `ALLOWED` for everything else: the
+    same licence on any other package still blocks, which is what separates "a
+    person looked at this one" from "we stopped checking". And a name with no
+    reason beside it is how a list like this rots - the next reader cannot tell a
+    decision from a way somebody once made a red build green.
+    """
+    for name in dependency_gate.EXCEPTIONS:
+        reason = str(dependency_gate.EXCEPTIONS[name] or "").strip()
+        check(f"the exception for {name} carries a reason", len(reason) > 20,
+              f"({reason!r})")
+
+    licence = "GPL-2.0-only AND GPL-2.0-or-later"      # what PyPI declares for it
+    blocked, passed = dependency_gate.split(
+        [_dep(name="pyinstaller", licence=licence)])
+    check("the named build tool passes", not blocked and len(passed) == 1,
+          f"(blocked={blocked})")
+
+    blocked, _passed = dependency_gate.split([_dep(name="something-else",
+                                                   licence=licence)])
+    check("the same licence on any other package still blocks",
+          len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
+
+
 def test_a_compound_expression_is_judged_by_its_worst_half():
     ok, _ = dependency_gate.split([_dep(licence="MIT OR Apache-2.0")])
     check("both halves allowed passes", not ok, f"({ok})")
