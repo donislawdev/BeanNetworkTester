@@ -55,17 +55,20 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         parts.append(tr("summary.rst", v=num("rst_prob")))
     if to_number(g("flap_period")) and to_number(g("flap_down")):
         parts.append(tr("summary.flap", v=num("flap_period")))
-    # Scope, not damage - so they read next to the destination below rather than
-    # among the impairments. Nothing is added at the default (neither switch on),
-    # which keeps the summary of a fresh form exactly what it was.
-    if g("ipv4_only"):
-        parts.append(tr("summary.ipv4_only"))
-    if g("ipv6_only"):
-        parts.append(tr("summary.ipv6_only"))
-    if g("lan_mode"):
-        parts.append(tr("summary.lan"))
-    if g("internet_only"):
-        parts.append(tr("summary.internet_only"))
+    # The plain on/off switches, as a table rather than four identical branches.
+    # Each one adds a fixed phrase when it is on and nothing when it is off, so
+    # there was never anything to tell them apart except the two names - and the
+    # size and complexity ratchets both count the branches, which is how a fifth
+    # switch would have started costing something it should not.
+    #
+    # Order is the reading order of the form: which traffic is aimed at
+    # (the family pair), then which address classes are cut.
+    for key, phrase in (("ipv4_only", "summary.ipv4_only"),
+                        ("ipv6_only", "summary.ipv6_only"),
+                        ("lan_mode", "summary.lan"),
+                        ("internet_only", "summary.internet_only")):
+        if g(key):
+            parts.append(tr(phrase))
     if scheduled:
         parts.append(tr("summary.schedule"))
     if str(g("target")).strip():

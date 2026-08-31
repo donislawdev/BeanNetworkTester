@@ -93,44 +93,15 @@ connection on this machine until you stop it, and says so before it starts.
 """
 
 
-def build_arg_parser():
-    p = argparse.ArgumentParser(
-        prog=program_name(),
-        # One line, not the 24 argparse generates from about fifty flags. Those
-        # 24 lines sat above every readable thing in --help, and above the message
-        # on a typo too - so the one sentence saying what was wrong arrived at the
-        # bottom of a wall nobody reads. The flags are listed in full immediately
-        # below, which is where a list belongs (clig.dev).
-        usage="%(prog)s [options]",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=_DESCRIPTION,
-        epilog=exitcodes.HELP_TABLE)
-    p.add_argument("--version", action="version",
-                   version=f"{APP_NAME} {__version__}")
-    p.add_argument("--license", action="store_true",
-                   help="print the licence and the third-party notices, then exit")
-    p.add_argument("--gui", action="store_true",
-                   help="open the GUI (only valid on its own - the GUI has its "
-                        "own controls, so it takes no settings flags)")
-    p.add_argument("--config", help="load settings from a JSON file")
-    p.add_argument("--save-config", help="save effective settings to a JSON file and exit")
-    p.add_argument("--preset", metavar="PRESET",
-                   help="load a preset by canonical id or by its name in any UI "
-                        "language (the README lists them)")
-    p.add_argument("--filter", choices=list(CLI_FILTERS), default=None,
-                   help="which traffic to capture at all (IPv4 and IPv6). Ports are "
-                        "filtered with --dst-port, not here")
-    p.add_argument("--loss", type=float, help="packet loss [%%]")
-    p.add_argument("--corrupt", type=float, help="corruption [%%]")
-    p.add_argument("--dup", type=float, help="duplication [%%]")
-    p.add_argument("--latency", type=float, help="latency [ms]")
-    p.add_argument("--jitter", type=float, help="jitter [ms]")
-    p.add_argument("--down", type=float, help="download limit [KB/s]")
-    p.add_argument("--up", type=float, help="upload limit [KB/s]")
-    p.add_argument("--buffer", type=float,
-                   help="link buffer for the speed limit [ms], 0 = unlimited. It "
-                        "bounds the queueing delay a rate-limited link builds up "
-                        "before it drops (bufferbloat)")
+def _add_scope_arguments(p):
+    """The flags that say WHICH traffic is aimed at, rather than what is done to it.
+
+    Split out of ``build_arg_parser`` when the two address-family switches pushed
+    that function past the size ratchet, and the ratchet said what to do about it:
+    split, do not raise the ceiling. This is where the seam already was - process,
+    destination, address family, address class and blocking all answer "which
+    packets", while everything left behind answers "how are they damaged".
+    """
     p.add_argument("--target",
                    help="target processes: name/PID, comma-separated list, range, "
                         "wildcard, re: pattern, ! to exclude "
@@ -176,6 +147,47 @@ def build_arg_parser():
                    help="block (drop) all traffic to these remote ports: number, list, "
                         "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
                         "(blocks on IP OR port, for example '--block-port 443')")
+
+
+def build_arg_parser():
+    p = argparse.ArgumentParser(
+        prog=program_name(),
+        # One line, not the 24 argparse generates from about fifty flags. Those
+        # 24 lines sat above every readable thing in --help, and above the message
+        # on a typo too - so the one sentence saying what was wrong arrived at the
+        # bottom of a wall nobody reads. The flags are listed in full immediately
+        # below, which is where a list belongs (clig.dev).
+        usage="%(prog)s [options]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=_DESCRIPTION,
+        epilog=exitcodes.HELP_TABLE)
+    p.add_argument("--version", action="version",
+                   version=f"{APP_NAME} {__version__}")
+    p.add_argument("--license", action="store_true",
+                   help="print the licence and the third-party notices, then exit")
+    p.add_argument("--gui", action="store_true",
+                   help="open the GUI (only valid on its own - the GUI has its "
+                        "own controls, so it takes no settings flags)")
+    p.add_argument("--config", help="load settings from a JSON file")
+    p.add_argument("--save-config", help="save effective settings to a JSON file and exit")
+    p.add_argument("--preset", metavar="PRESET",
+                   help="load a preset by canonical id or by its name in any UI "
+                        "language (the README lists them)")
+    p.add_argument("--filter", choices=list(CLI_FILTERS), default=None,
+                   help="which traffic to capture at all (IPv4 and IPv6). Ports are "
+                        "filtered with --dst-port, not here")
+    p.add_argument("--loss", type=float, help="packet loss [%%]")
+    p.add_argument("--corrupt", type=float, help="corruption [%%]")
+    p.add_argument("--dup", type=float, help="duplication [%%]")
+    p.add_argument("--latency", type=float, help="latency [ms]")
+    p.add_argument("--jitter", type=float, help="jitter [ms]")
+    p.add_argument("--down", type=float, help="download limit [KB/s]")
+    p.add_argument("--up", type=float, help="upload limit [KB/s]")
+    p.add_argument("--buffer", type=float,
+                   help="link buffer for the speed limit [ms], 0 = unlimited. It "
+                        "bounds the queueing delay a rate-limited link builds up "
+                        "before it drops (bufferbloat)")
+    _add_scope_arguments(p)
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")
