@@ -236,6 +236,21 @@ class BeanCore:
         self.dst_port = ""          # raw expression text
         self.dst_ip_matcher = parse_matcher("", KIND_IP)
         self.dst_port_matcher = parse_matcher("", KIND_INT)
+        # Address family, part of the SAME question as the two matchers above:
+        # which remote ends are in scope. ``None`` means both families - the
+        # default, and the only value that costs nothing in decide().
+        #
+        # Otherwise it is the SET of families that qualify, holding the answer to
+        # "is this address IPv6?": {False} for IPv4 only, {True} for IPv6 only,
+        # and the EMPTY set when the user asked for both at once, where no packet
+        # can qualify. The empty set is why this is a set and not a flag: the
+        # contradictory request then needs no case of its own, here or in the gate.
+        #
+        # It is deliberately NOT a `narrows` field: restricting to one family
+        # still reaches every connection of that family on the machine, so
+        # counting it as a bound would silence the blast-radius warning for a
+        # session that has bounded nothing. Same reasoning `--target *` gets.
+        self.family_wanted = None
         self.lan_only = False       # LAN mode: cuts internet traffic (public addresses)
         # The mirror switch: cuts the local network and leaves the internet up.
         # NOT the exact opposite of the line above - loopback survives both (see
@@ -347,6 +362,29 @@ class BeanCore:
             self.dst_ip_matcher = ip_matcher
             self.dst_port_matcher = port_matcher
 
+    def set_ip_family(self, ipv4_only=False, ipv6_only=False):
+        """Restrict the targeting to one address family (default: neither).
+
+        Both flags at once is a legal request meaning "no packet qualifies", the
+        same way LAN mode plus Internet only means "nothing but loopback gets
+        through": refused nowhere, and said out loud once by ``apply_settings``.
+        Refusing it would break a run somebody meant.
+        """
+        ipv4_only, ipv6_only = bool(ipv4_only), bool(ipv6_only)
+        with self._lock:
+            if not ipv4_only and not ipv6_only:
+                self.family_wanted = None                  # both families: no gate
+            else:
+                wanted = set()
+                if ipv4_only:
+                    wanted.add(False)
+                if ipv6_only:
+                    wanted.add(True)
+                # Both asked for: {False, True} would accept everything, which is
+                # the opposite of what the request means. Two mutually exclusive
+                # "only" switches leave nothing, so the set is emptied on purpose.
+                self.family_wanted = frozenset() if len(wanted) == 2 else frozenset(wanted)
+
     def set_lan(self, enabled):
         with self._lock:
             self.lan_only = bool(enabled)
@@ -354,6 +392,37 @@ class BeanCore:
     def set_internet_only(self, enabled):
         with self._lock:
             self.internet_only = bool(enabled)
+
+    def _out_of_scope(self, remote_ip, remote_port):
+        """Is this remote end outside what the session is aiming at?
+
+        Called only when something IS aimed (see the caller's left half), so the
+        cost of the checks here is paid by the session that asked for them.
+
+        The family test is first because it is the cheapest: an IPv6 address in
+        text form always carries a colon and an IPv4 one never does, so this is a
+        substring test on a string the caller already has. ``::ffff:1.2.3.4``
+        counts as IPv6, which is what it is on the wire.
+
+        An address this cannot read at all (``None`` - ICMP, an unparsed packet)
+        is out of scope while a family is chosen, the same direction
+        ``utils.is_lan_ip`` takes with an address it cannot classify: what cannot
+        be identified must not be damaged. Without a family chosen it is left to
+        the destination matchers, exactly as before.
+        """
+        if self.family_wanted is not None and (
+                remote_ip is None or (":" in remote_ip) not in self.family_wanted):
+            return True
+        # ``dst_active`` is asked again rather than assumed from the caller: a
+        # family alone brings us here with no destination set, and the matchers
+        # must stay as ignorable then as they were before this gate existed -
+        # ``set_dest(False, ...)`` keeps whatever expressions it was handed.
+        if not self.dst_active:
+            return False
+        if self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip):
+            return True
+        return bool(self.dst_port_matcher
+                    and not self.dst_port_matcher.matches(remote_port))
 
     def _address_class_cut(self, remote_ip):
         """Which address-class switch cuts this packet, or ``None``.
@@ -578,12 +647,21 @@ class BeanCore:
                 if not ((is_syn or not is_tcp) and self._owner_targeted is not None
                         and self._owner_targeted(local_port)):
                     return Decision(False, False, [now], scoped=False)
-            # 2) destination targeting (remote IP/port) - filter expressions
-            if self.dst_active:
-                if self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip):
-                    return Decision(False, False, [now], scoped=False)
-                if self.dst_port_matcher and not self.dst_port_matcher.matches(remote_port):
-                    return Decision(False, False, [now], scoped=False)
+            # 2) targeting: the destination expressions and the address family.
+            #
+            # One gate and one branch for all three, and that is not tidiness:
+            # this function sits ON the complexity ceiling pinned in
+            # pyproject.toml, where the rule is that splitting lowers the number
+            # rather than raising it. The three tests answer the same question
+            # ("is this remote end in scope?") and returned the identical verdict
+            # already, so the fold changes nothing a packet can tell apart.
+            #
+            # The left half keeps the common case cheap, exactly like step 2b: two
+            # attribute reads with no targeting armed, and the call happens only in
+            # a session that asked for it.
+            if (self.dst_active or self.family_wanted is not None) and self._out_of_scope(
+                    remote_ip, remote_port):
+                return Decision(False, False, [now], scoped=False)
 
             # 2b) the two address-class switches: LAN mode (cut the internet) and
             # "Internet only" (cut the local network). Both are asked through one

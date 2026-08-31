@@ -133,6 +133,114 @@ def test_dest_port_targeting():
     check("dest port: port 443 impaired", p443.drop is True)
 
 
+def _family_verdicts(core):
+    """(IPv4 verdict, IPv6 verdict) for the same 100%-loss settings."""
+    rng = random.Random(1)
+    v4 = core.decide(100, True, 5000, 0.0, rng, remote_ip="1.2.3.4", remote_port=80)
+    v6 = core.decide(100, True, 5000, 0.0, rng, remote_ip="2001:db8::1", remote_port=80)
+    return v4, v6
+
+
+def test_address_family_targeting():
+    """One family in scope leaves the other ALONE - not blocked, not slowed.
+
+    That distinction is the whole point of the switch and the thing its label has
+    to survive being misread about: an out-of-family packet takes the same exit as
+    a packet outside the destination target, which is "pass it through untouched".
+    """
+    core = BeanCore()
+    core.set_params(100, 0, 0, 0, 0, 0, 0)      # 100% loss for anything in scope
+    v4, v6 = _family_verdicts(core)
+    check("default: both families are impaired", v4.drop is True and v6.drop is True)
+
+    core.set_ip_family(ipv4_only=True)
+    v4, v6 = _family_verdicts(core)
+    check("IPv4 only: IPv4 impaired", v4.drop is True)
+    check("IPv4 only: IPv6 passes untouched and out of scope",
+          v6.drop is False and v6.scoped is False and v6.releases == [0.0])
+
+    core.set_ip_family(ipv6_only=True)
+    v4, v6 = _family_verdicts(core)
+    check("IPv6 only: IPv6 impaired", v6.drop is True)
+    check("IPv6 only: IPv4 passes untouched", v4.drop is False and v4.scoped is False)
+
+    core.set_ip_family()                        # back to the default
+    v4, v6 = _family_verdicts(core)
+    check("cleared: both families impaired again",
+          v4.drop is True and v6.drop is True)
+
+
+def test_both_families_only_means_nothing_qualifies():
+    """Two mutually exclusive "only" switches leave an empty set, and the engine
+    says so by impairing nothing - the same shape as LAN mode plus Internet only.
+    The warning that this is probably a mistake is `apply_settings`' job, not
+    this one: refusing it here would break a run somebody meant."""
+    core = BeanCore()
+    core.set_params(100, 0, 0, 0, 0, 0, 0)
+    core.set_ip_family(ipv4_only=True, ipv6_only=True)
+    v4, v6 = _family_verdicts(core)
+    check("both 'only' switches: nothing is impaired",
+          v4.drop is False and v6.drop is False)
+    check("and nothing is in scope either",
+          v4.scoped is False and v6.scoped is False)
+
+
+def test_an_address_the_family_gate_cannot_read_is_left_alone():
+    """A packet with no remote address (ICMP, an unparsed frame) has no family.
+
+    It goes out of scope while a family is chosen, which is the direction
+    `utils.is_lan_ip` already takes with an address it cannot classify: what
+    cannot be identified must not be damaged. With no family chosen it is left to
+    the destination matchers, exactly as before the gate existed.
+    """
+    core = BeanCore()
+    core.set_params(100, 0, 0, 0, 0, 0, 0)
+    rng = random.Random(1)
+    check("no family chosen: an address-less packet is still impaired",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip=None, remote_port=None).drop is True)
+    core.set_ip_family(ipv4_only=True)
+    check("family chosen: an address-less packet is left alone",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip=None, remote_port=None).drop is False)
+
+
+def test_an_ipv4_mapped_address_counts_as_the_family_it_is_on_the_wire():
+    """`::ffff:1.2.3.4` is an IPv6 packet carrying an IPv4 address, and the gate
+    reads the packet rather than the intent behind the notation."""
+    core = BeanCore()
+    core.set_params(100, 0, 0, 0, 0, 0, 0)
+    rng = random.Random(1)
+    core.set_ip_family(ipv6_only=True)
+    check("IPv6 only: a mapped address is IPv6",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip="::ffff:1.2.3.4", remote_port=80).drop is True)
+    core.set_ip_family(ipv4_only=True)
+    check("IPv4 only: a mapped address is not IPv4",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip="::ffff:1.2.3.4", remote_port=80).drop is False)
+
+
+def test_the_family_gate_and_the_destination_target_both_have_to_pass():
+    """Two halves of one question, and the fold that put them in one branch may
+    not have turned an AND into an OR."""
+    core = BeanCore()
+    core.set_params(100, 0, 0, 0, 0, 0, 0)
+    core.set_dest(True, ip="1.2.3.4")
+    core.set_ip_family(ipv4_only=True)
+    rng = random.Random(1)
+    check("right family, right address: impaired",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip="1.2.3.4", remote_port=80).drop is True)
+    check("right family, wrong address: passed",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip="9.9.9.9", remote_port=80).drop is False)
+    core.set_ip_family(ipv6_only=True)
+    check("wrong family, address the target would accept: passed",
+          core.decide(100, True, 5000, 0.0, rng,
+                      remote_ip="1.2.3.4", remote_port=80).drop is False)
+
+
 def test_syn_drop():
     core = BeanCore()
     core.set_advanced(100, 0)                   # 100% dropped SYN
