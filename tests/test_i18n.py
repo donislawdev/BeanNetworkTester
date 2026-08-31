@@ -12,6 +12,13 @@ from fakes import LANG_DIR, check
 SHIPPED_LANGS = ("en", "pl", "zh")
 _FORMATTER = string.Formatter()
 
+# The ASCII semicolon and the full-width one a CJK keyboard produces (U+FF1B).
+# The second is built from its code point rather than typed, the way
+# ``tools/check_public_text.py`` builds the dashes it hunts for: the two are one
+# pixel apart in a review, and a guard that spells its own target out invites a
+# copy of it into the file next door.
+SEMICOLONS = (";", chr(0xFF1B))
+
 
 def _placeholders(value):
     return {name for _, name, _, _ in _FORMATTER.parse(value)
@@ -78,6 +85,11 @@ def test_no_semicolons_in_ui_text():
     is exactly why it is worth a test: 21 tooltips had drifted into semicolons
     before anybody looked. A semicolon joins two independent clauses, so the
     right replacement is almost always a full stop.
+
+    The full-width form is checked for the same reason and was found the hard way:
+    the loop was widened to Chinese while the search stayed ASCII, so the guard
+    reported clean over 34 keys holding 35 of them. A test that covers a language
+    it cannot read is worse than one that skips it - the skip is at least visible.
     """
     import json as _json
     for code in SHIPPED_LANGS:
@@ -85,7 +97,8 @@ def test_no_semicolons_in_ui_text():
             data = _json.load(f)
         data.pop("_meta", None)
         offenders = sorted(k for k, v in data.items()
-                           if isinstance(v, str) and ";" in v)
+                           if isinstance(v, str)
+                           and any(mark in v for mark in SEMICOLONS))
         check(f"i18n {code}: no semicolons in user-facing text", not offenders,
               f"({offenders[:6]})")
 
