@@ -74,8 +74,46 @@ def test_the_scanner_passes_text_that_is_actually_fine(tmp_path):
     code, output = _scan(
         "Declare full prototypes for the window manager calls.\n"
         "Measured 5098 KB/s against a 5000 KB/s limit.\n"
-        "Co-authored-by: Someone <someone" + AT + "example.invalid>\n", tmp_path)
+        "Co-authored-by: Someone <someone" + AT + "example.invalid>\n"
+        "Signed-off-by: Someone <someone" + AT + "example.invalid>\n", tmp_path)
     check("clean text passes", code == 0, f"({output.strip()[:120]!r})")
+
+
+def test_a_bot_sign_off_does_not_stop_a_dependency_bump(tmp_path):
+    """The trailer Dependabot writes, in the shape it writes it.
+
+    Every commit it authors ends with a sign-off naming a GitHub address, so the
+    address rule stopped a required check on a line neither we nor the bot can
+    edit - measured on the merge commit of an earlier bump, which reported "an
+    email address" for exactly that line and nothing else.
+
+    The address is assembled rather than spelled out, like every other one in this
+    file: the rule that a leak detector may not contain what it hunts for does not
+    get an exception for the address that made us widen it.
+    """
+    trailer = ("Signed-off-by: dependabot[bot] <support" + AT + "github.com>")
+    code, output = _scan(
+        "chore(deps): bump the github-actions group with 2 updates\n\n"
+        + trailer + "\n"
+        "Co-authored-by: dependabot[bot] <49699333+dependabot[bot]"
+        + AT + "users.noreply.github.com>\n", tmp_path)
+    check("a bot sign-off passes", code == 0, f"({output.strip()[:120]!r})")
+
+
+def test_the_same_address_in_prose_is_still_caught(tmp_path):
+    """What the widening must NOT buy: an address anywhere but in a trailer.
+
+    A rule relaxed by shape has to be shown to still refuse the shape next door,
+    or "we allow trailers" quietly becomes "we allow addresses".
+    """
+    code, output = _scan(
+        "Write to support" + AT + "github.com if the bump looks wrong.\n", tmp_path)
+    check("the same address in a sentence is caught", code != 0,
+          f"({output.strip()[:120]!r})")
+    code, output = _scan(
+        "Signed-off-by: someone" + AT + "example.invalid\n", tmp_path)
+    check("a sign-off without the angle brackets is not a trailer", code != 0,
+          f"({output.strip()[:120]!r})")
 
 
 def test_a_literal_from_the_private_list_is_caught_without_being_printed(tmp_path):
