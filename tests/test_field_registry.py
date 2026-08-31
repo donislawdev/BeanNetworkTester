@@ -8,7 +8,7 @@ from beantester import fields as F
 from beantester.cli import build_arg_parser
 from beantester.i18n import set_language, translate
 from beantester.settings import DEFAULT_SETTINGS, MATCH_FIELDS
-from fakes import check
+from fakes import LANGS, check
 
 
 def test_registry_covers_every_setting():
@@ -57,7 +57,7 @@ def test_labels_and_tips_exist_in_every_language():
     for f in F.FIELD_DEFS:
         keys += [f.label] + [k for k in (f.tip, f.hint, f.unit_key) if k]
     keys += [s.label for s in F.SECTIONS] + [s.toggle for s in F.SECTIONS if s.toggle]
-    for lang in ("en", "pl"):
+    for lang in LANGS:
         unresolved = [k for k in keys if translate(k, lang) == k]
         check(f"registry: all field texts resolve in {lang}", not unresolved,
               f"({sorted(set(unresolved))})")
@@ -77,7 +77,7 @@ def test_a_label_ends_with_a_colon_exactly_when_it_precedes_a_box():
     the flapping section contradicted itself in adjacent cells - `Period:` next to
     `Downtime percent`. Nothing enforced either half, in either direction.
     """
-    for lang in ("en", "pl"):
+    for lang in LANGS:
         for field in F.FIELD_DEFS:
             takes_a_box = field.kind not in (F.BOOL, F.CHOICE)
             text = translate(field.label, lang)
@@ -100,9 +100,11 @@ def test_no_message_repeats_the_label_colon():
     from beantester.matchers import KIND_INT, parse_matcher
     from beantester.validators import parse_number
 
-    for lang in ("en", "pl"):
+    for lang in LANGS:
+        # Both widths: a CJK label ends in U+FF1A, and a strip that only knows
+        # the ASCII one would leave it sitting inside the sentence.
         check(f"field_name strips the colon ({lang})",
-              not field_name("fields.latency", lang).endswith(":"),
+              not field_name("fields.latency", lang).endswith((":", chr(0xFF1A))),
               f"({field_name('fields.latency', lang)!r})")
 
         try:

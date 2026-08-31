@@ -83,15 +83,24 @@ PRIVATE = (
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "a private key"),
 )
 
-# Co-author trailers carry an address by design. Matched by SHAPE rather than by
-# spelling the address out: a literal here would be an address in the public tree,
+# Git trailers carry an address by design. Matched by SHAPE rather than by
+# spelling any address out: a literal here would be an address in the public tree,
 # which is the thing this script exists to keep out of it.
 #
 # Case-insensitive because git trailers are, and because GitHub proves it: a
 # squash merge rewrites "Co-Authored-By" as "Co-authored-by", so the first version
 # of this line passed on every branch and then flagged the merge commit it had
 # just approved. Only running it over master found that.
-ALLOWED_LINE = re.compile(r"^co-authored-by: .+ <[^>]+>$", re.I)
+#
+# Sign-off joined co-authorship for a measured reason: Dependabot ends every commit
+# it writes with a Signed-off-by trailer naming a GitHub address, so the next
+# dependency bump would have stopped on a required check for a line neither we nor
+# the bot can edit. Widening this is a real trade and worth saying out loud: any
+# address now passes inside a sign-off line, a maintainer's private one included.
+# That is the same hole co-authorship already had, and both are trailers whose
+# entire purpose is to publish an identity - which is precisely why an address in
+# ordinary prose is still caught.
+ALLOWED_LINE = re.compile(r"^(co-authored-by|signed-off-by): .+ <[^>]+>$", re.I)
 
 # -- this machine's own strings, kept OUT of this file ------------------------ #
 #

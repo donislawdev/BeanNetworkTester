@@ -5,6 +5,17 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LANG_DIR = os.path.join(ROOT, "lang")
 
+# Every language the repository ships, DISCOVERED rather than listed. Nine guards
+# looped over a hardcoded ("en", "pl") and went on reporting green the day a third
+# file landed: label coverage, layout, presets, prefs and scope notes all stopped
+# at two languages while the program shipped three. A pair written into a test is
+# a claim that ages the moment somebody adds a file, and nobody re-reads a green
+# loop. The separate question - whether we ship exactly the set we think we do -
+# is asserted once, in smoke_gui.py, where an appearing or vanishing file is
+# meant to be noticed rather than absorbed.
+LANGS = tuple(sorted(os.path.splitext(name)[0] for name in os.listdir(LANG_DIR)
+                     if name.lower().endswith(".json")))
+
 
 def check(name, cond, detail=""):
     """Assertion helper keeping the original suite's readable messages.

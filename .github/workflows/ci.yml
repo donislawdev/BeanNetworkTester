@@ -490,8 +490,10 @@ jobs:
 
       # Headed render on real Tk under a virtual display (Linux only). The fake-tk
       # smoke cannot see truncation or DPI/layout breakage; this builds the real App
-      # at the minimum supported resolution in BOTH languages (Polish strings are the
-      # longest - that is where layouts crack) and fails on any clipped key widget.
+      # at the minimum supported resolution in EVERY shipped language (the script
+      # discovers them, so a new one is covered the day it lands - Polish strings
+      # are the longest, and that is where layouts crack) and fails on any clipped
+      # key widget.
       # 🔴 Everything here except the last line is armour against the runner's
       # package mirror, and it was paid for: on 2026-08-19 this step burned the
       # job's whole 20-minute budget three times in a row without ever starting
@@ -511,7 +513,7 @@ jobs:
       #   * and run Python UNBUFFERED, because when this hung its output was
       #     still in a pipe buffer and the archived log showed nothing at all -
       #     which is why the first diagnosis blamed the wrong command.
-      - name: GUI render check (real Tk, Xvfb, 1366x768, PL+EN)
+      - name: GUI render check (real Tk, Xvfb, 1366x768, every language)
         if: runner.os == 'Linux'
         env:
           BEAN_NO_ELEVATE: "1"

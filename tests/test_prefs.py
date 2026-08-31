@@ -9,7 +9,7 @@ what the switch promises.
 from beantester.gui import prefs
 from beantester.gui.prefs import PREFS, PREFS_BY_KEY, PREF_GROUPS, coerce
 from beantester.i18n import set_language, translate
-from fakes import check
+from fakes import LANGS, check
 from gui_harness import run_gui
 
 
@@ -84,7 +84,7 @@ def test_pref_texts_resolve_in_every_language():
     for p in PREFS:
         keys += [p.label, p.tip] + [k for k in (p.unit_key, p.hint) if k]
     keys += [label for label, _ in PREF_GROUPS]
-    for lang in ("en", "pl"):
+    for lang in LANGS:
         unresolved = [k for k in keys if translate(k, lang) == k]
         check(f"prefs: all texts resolve in {lang}", not unresolved, f"({unresolved})")
     set_language("pl")
