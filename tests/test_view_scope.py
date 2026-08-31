@@ -674,7 +674,7 @@ def test_every_wording_table_is_complete_and_every_key_has_text():
             "conns.SCOPE_NOTES": conns_page.SCOPE_NOTES,
             "conns.SCOPE_TIPS": conns_page.SCOPE_TIPS,
         }
-        for lang in ("en", "pl"):
+        for lang in LANGS:
             bnt.set_language(lang)
             for name, table in tables.items():
                 assert set(table) == set(scope.STATES), (name, sorted(table))

@@ -75,4 +75,5 @@ onedir, `asInvoker`. Do not reintroduce `--noconsole` / `--onefile` / `--uac-adm
    number in `pyproject.toml` is a decision for the maintainer, not a way to get a
    build green.
 3. Add tests for new behavior (see `tests/` for the style).
-4. Update both `lang/en.json` and `lang/pl.json` when adding UI texts.
+4. Update every `lang/<code>.json` file when adding UI texts - they all carry the
+   same key set as `lang/en.json`, and a test enforces it.

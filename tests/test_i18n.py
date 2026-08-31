@@ -4,9 +4,24 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
 import os
+import string
 
 from beantester import BeanEngine
-from fakes import LANG_DIR, check
+from fakes import LANG_DIR, LANGS, check
+
+_FORMATTER = string.Formatter()
+
+# The ASCII semicolon and the full-width one a CJK keyboard produces (U+FF1B).
+# The second is built from its code point rather than typed, the way
+# ``tools/check_public_text.py`` builds the dashes it hunts for: the two are one
+# pixel apart in a review, and a guard that spells its own target out invites a
+# copy of it into the file next door.
+SEMICOLONS = (";", chr(0xFF1B))
+
+
+def _placeholders(value):
+    return {name for _, name, _, _ in _FORMATTER.parse(value)
+            if name is not None}
 
 
 
@@ -20,6 +35,9 @@ def test_i18n():
     n.set_language("pl")
     check("i18n: translates a known key (PL, diacritics)",
           n.T("app.tabs.connections") == "Połączenia", f"({n.T('app.tabs.connections')})")
+    n.set_language("zh")
+    check("i18n: translates a known key (ZH)",
+          n.T("app.tabs.connections") == "连接", f"({n.T('app.tabs.connections')})")
     check("i18n: detect returns an available code",
           n.detect_language() in dict(n.available_languages()))
     n.set_language(orig)
@@ -44,11 +62,60 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
     monkeypatch.setattr(locale, "getlocale", lambda *a: ("English_United States", "1252"))
     check("detect: Windows 'English_United States' -> en", n.detect_language() == "en",
           f"({n.detect_language()})")
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Simplified)_China", "936"))
+    check("detect: Windows Simplified Chinese -> zh", n.detect_language() == "zh",
+          f"({n.detect_language()})")
+    # Traditional Chinese is a different SCRIPT, not a region of the shipped one,
+    # so it takes the same English fallback as any language we do not ship. Both
+    # roads are guarded because they are genuinely separate: the environment
+    # variables below never reach the Windows-name branch above, and narrowing
+    # only that branch left LANG=zh_TW.UTF-8 selecting Simplified.
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Taiwan", "950"))
+    check("detect: Windows Traditional Chinese -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Hong Kong SAR", "950"))
+    check("detect: Windows Traditional Chinese (Hong Kong) -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
     monkeypatch.setattr(locale, "getlocale", lambda *a: ("German_Germany", "1252"))
     check("detect: unshipped locale -> en fallback", n.detect_language() == "en")
 
     monkeypatch.setenv("LANG", "pl_PL.UTF-8")   # POSIX env var takes the fast path
     check("detect: POSIX env 'pl_PL.UTF-8' -> pl", n.detect_language() == "pl")
+
+    monkeypatch.setenv("LANG", "zh_CN.UTF-8")
+    check("detect: POSIX env 'zh_CN.UTF-8' -> zh", n.detect_language() == "zh")
+
+    monkeypatch.setenv("LANG", "zh_SG.UTF-8")   # Singapore writes Simplified too
+    check("detect: POSIX env 'zh_SG.UTF-8' -> zh", n.detect_language() == "zh",
+          f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh_TW.UTF-8")
+    check("detect: POSIX env 'zh_TW.UTF-8' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh-Hant")       # the script named outright
+    check("detect: POSIX env 'zh-Hant' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+
+
+def test_field_name_strips_a_colon_of_either_width(monkeypatch):
+    """The label a CJK language writes ends in U+FF1A, not in ':'.
+
+    No shipped label needs this yet, which is exactly why it is worth a test: the
+    day one does, the failure is a colon sitting in the middle of a sentence in a
+    language nobody here reads, on a machine nobody here owns. The stripping lives
+    in one place, so the guard can too - and a live language file would only prove
+    today's data, not the rule.
+    """
+    from beantester import i18n
+    label = "延迟" + chr(0xFF1A)      # a label ending in a full-width colon
+    monkeypatch.setitem(i18n._translations, "xx", {"fields.probe": label})
+    check("field_name strips a full-width colon",
+          i18n.field_name("fields.probe", "xx") == "延迟",
+          f"({i18n.field_name('fields.probe', 'xx')!r})")
 
 
 def test_no_semicolons_in_ui_text():
@@ -59,14 +126,20 @@ def test_no_semicolons_in_ui_text():
     is exactly why it is worth a test: 21 tooltips had drifted into semicolons
     before anybody looked. A semicolon joins two independent clauses, so the
     right replacement is almost always a full stop.
+
+    The full-width form is checked for the same reason and was found the hard way:
+    the loop was widened to Chinese while the search stayed ASCII, so the guard
+    reported clean over 34 keys holding 35 of them. A test that covers a language
+    it cannot read is worse than one that skips it - the skip is at least visible.
     """
     import json as _json
-    for code in ("en", "pl"):
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
         offenders = sorted(k for k, v in data.items()
-                           if isinstance(v, str) and ";" in v)
+                           if isinstance(v, str)
+                           and any(mark in v for mark in SEMICOLONS))
         check(f"i18n {code}: no semicolons in user-facing text", not offenders,
               f"({offenders[:6]})")
 
@@ -76,14 +149,16 @@ def test_i18n_coverage():
     import json as _json
     import beantester as n
     langs = {}
-    for code in ("en", "pl"):
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
         langs[code] = data
-    check("i18n files: en and pl have identical key sets",
-          set(langs["en"]) == set(langs["pl"]),
-          f"(diff={sorted(set(langs['en']) ^ set(langs['pl']))[:5]})")
+    english_keys = set(langs["en"])
+    key_diffs = {code: sorted(english_keys ^ set(values))[:5]
+                 for code, values in langs.items() if set(values) != english_keys}
+    check("i18n files: every language matches the English key set",
+          not key_diffs, f"(diffs={key_diffs})")
     empty = [k for d in langs.values() for k, v in d.items() if not str(v).strip()]
     check("i18n files: no empty translations", not empty, f"({empty[:5]})")
     same = [k for k, v in langs["en"].items() if v == k]
@@ -91,6 +166,17 @@ def test_i18n_coverage():
     diacritics = set("ąćęłńóśżźĄĆĘŁŃÓŚŻŹ")
     has_pl = any(diacritics & set(v) for v in langs["pl"].values())
     check("i18n files: PL uses proper diacritics", has_pl)
+    has_zh = any(any("\u4e00" <= char <= "\u9fff" for char in value)
+                 for value in langs["zh"].values())
+    check("i18n files: ZH uses Chinese characters", has_zh)
+    placeholder_diffs = {
+        code: [key for key, value in values.items()
+               if _placeholders(value) != _placeholders(langs["en"][key])]
+        for code, values in langs.items() if code != "en"
+    }
+    placeholder_diffs = {code: keys for code, keys in placeholder_diffs.items() if keys}
+    check("i18n files: placeholders match English",
+          not placeholder_diffs, f"(diffs={placeholder_diffs})")
     # everything referenced in code resolves through the files
     used = ["app.tabs.control", "frames.traffic", "stats.packets", "session.seed",
             "conns.remote_ip", "events.col_type", "filters.udp", "presets.5g",
@@ -112,14 +198,14 @@ def test_the_language_files_stay_sorted():
     was out of order (`log.driver_wait` before `log.driver_still_unloading`) and had
     been for however long, in both files identically.
 
-    Why it is worth a guard rather than a shrug: the two files are edited in
+    Why it is worth a guard rather than a shrug: the language files are edited in
     lockstep and diffed against each other constantly (`test_i18n_coverage` above
     compares their key sets), and a key inserted "roughly where it looks right"
     turns every later diff into a puzzle. `_meta` sorts before every dotted key on
     its own, so it needs no exception.
     """
     import json as _json
-    for code in ("en", "pl"):
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             keys = list(_json.load(f))
         out_of_order = [(a, b) for a, b in zip(keys, keys[1:], strict=False) if a > b]
