@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **Simplified Chinese interface translation.** The GUI now ships with a complete `zh` language
+  file alongside English and Polish. A system set to Simplified Chinese selects it
+  automatically. A system set to Traditional Chinese starts in English instead, because the
+  bundled file is Simplified and the two are different scripts rather than two spellings of
+  one. Either way the language list in Settings switches at any time, and the command line
+  remains in English.
+
 ### Fixed
 
 - **`--doctor` now tells you whether your copy can be tampered with.** The program asks for

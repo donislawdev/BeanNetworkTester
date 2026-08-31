@@ -13,6 +13,29 @@ from .paths import lang_dir
 
 FALLBACK_LANGUAGE = "en"
 
+# Locales whose SCRIPT this project does not ship, and which must therefore not
+# be answered by the language file that merely shares their code.
+#
+# One entry today, and it is the case that shows why the rule is needed at all:
+# `lang/zh.json` is Simplified Chinese, and Simplified and Traditional are two
+# scripts rather than two spellings of one - a Taiwanese or Hong Kong system
+# asking for Chinese would be answered in characters it does not write, using
+# mainland terminology it does not use. Every other unshipped locale falls back
+# to English and this one now does the same, until a Traditional file exists to
+# answer it properly.
+#
+# 🔴 It is matched against the WHOLE locale tag, not the language code, because
+# by the time there is a code the region is gone: `code` is the part before the
+# first underscore, so `zh_TW` and `zh_CN` are the same two letters. MEASURED
+# before writing this: with only the Windows branch narrowed, `LANG=zh_TW.UTF-8`
+# still selected Simplified - the environment path never reaches that branch.
+UNSHIPPED_SCRIPT = ("zh_tw", "zh_hk", "zh_mo", "zh_hant", "(traditional)")
+
+# The colon a form label ends with, in either width - the second (U+FF1A) is what
+# a CJK label carries. Built from its code point, not typed, so the two cannot be
+# mistaken for each other in a review. See field_name().
+LABEL_COLONS = ":" + chr(0xFF1A)
+
 _translations: dict[str, dict[str, str]] = {}   # language code -> {key: text}
 _language_names: dict[str, str] = {}            # code -> name (from "_meta")
 _LANG = None    # resolved lazily on first use (see _resolve_language)
@@ -98,6 +121,7 @@ def detect_language():
         load_languages()
     text = str(loc).lower().replace("-", "_")
     code = text.split(".")[0].split("_")[0]
+    tag = text
     if code not in _translations:
         # getlocale() returns Windows-style names ('Polish_Poland' -> 'polish'),
         # not the POSIX 'pl_PL', so the plain split above misses them. Map those
@@ -106,10 +130,25 @@ def detect_language():
         try:
             import locale
             alias = locale.locale_alias.get(code) or locale.locale_alias.get(text)
+            if not alias and " (" in code and code.endswith(")"):
+                # Windows spells the script in brackets ('Chinese (Simplified)'),
+                # which no alias key matches. The first letter of the bracket is
+                # not a guess: locale_alias names exactly these two that way, and
+                # MEASURED over the whole table they are the ONLY keys shaped
+                # <language>-<one letter> - 'chinese-s' -> zh_CN and 'chinese-t'
+                # -> zh_TW. Every other bracketed Windows name ('Serbian (Latin)'
+                # -> 'serbian-l', 'Uzbek (Latin)' -> 'uzbek-l') builds a key that
+                # does not exist, so it stays unmatched and English answers, which
+                # is what happened before this line existed.
+                language, variant = code[:-1].split(" (", 1)
+                alias = locale.locale_alias.get(f"{language}-{variant[:1]}")
         except Exception:
             alias = None
         if alias:
+            tag = f"{text} {alias.lower()}"
             code = alias.lower().split(".")[0].split("_")[0]
+    if any(mark in tag for mark in UNSHIPPED_SCRIPT):
+        return FALLBACK_LANGUAGE
     return code if code in _translations else FALLBACK_LANGUAGE
 
 
@@ -210,8 +249,15 @@ def field_name(key, lang=None):
     So the colon belongs to the label and stripping it belongs HERE, in one place,
     rather than in each message. The GUI's own short form builds on this and drops
     the parenthetical too, which only a compact list wants.
+
+    Both widths are stripped. A CJK label ends in the full-width colon (U+FF1A),
+    which is correct there - it carries its own spacing, which is why the Chinese
+    prefixes have no trailing space where English does - and ``rstrip(":")`` walks
+    straight past it. No shipped label needs this today; it is here because the
+    one that does would fail silently, mid-sentence, in a language whose reader
+    is least likely to be the person reading this file.
     """
-    return str(translate(key, lang)).rstrip().rstrip(":").rstrip()
+    return str(translate(key, lang)).rstrip().rstrip(LABEL_COLONS).rstrip()
 
 
 def event_kind_label(kind, lang=None):
