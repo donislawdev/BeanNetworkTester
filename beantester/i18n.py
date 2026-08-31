@@ -31,6 +31,11 @@ FALLBACK_LANGUAGE = "en"
 # still selected Simplified - the environment path never reaches that branch.
 UNSHIPPED_SCRIPT = ("zh_tw", "zh_hk", "zh_mo", "zh_hant", "(traditional)")
 
+# The colon a form label ends with, in either width - the second (U+FF1A) is what
+# a CJK label carries. Built from its code point, not typed, so the two cannot be
+# mistaken for each other in a review. See field_name().
+LABEL_COLONS = ":" + chr(0xFF1A)
+
 _translations: dict[str, dict[str, str]] = {}   # language code -> {key: text}
 _language_names: dict[str, str] = {}            # code -> name (from "_meta")
 _LANG = None    # resolved lazily on first use (see _resolve_language)
@@ -244,8 +249,15 @@ def field_name(key, lang=None):
     So the colon belongs to the label and stripping it belongs HERE, in one place,
     rather than in each message. The GUI's own short form builds on this and drops
     the parenthetical too, which only a compact list wants.
+
+    Both widths are stripped. A CJK label ends in the full-width colon (U+FF1A),
+    which is correct there - it carries its own spacing, which is why the Chinese
+    prefixes have no trailing space where English does - and ``rstrip(":")`` walks
+    straight past it. No shipped label needs this today; it is here because the
+    one that does would fail silently, mid-sentence, in a language whose reader
+    is least likely to be the person reading this file.
     """
-    return str(translate(key, lang)).rstrip().rstrip(":").rstrip()
+    return str(translate(key, lang)).rstrip().rstrip(LABEL_COLONS).rstrip()
 
 
 def event_kind_label(kind, lang=None):

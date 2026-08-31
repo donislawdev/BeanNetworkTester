@@ -7,9 +7,8 @@ import os
 import string
 
 from beantester import BeanEngine
-from fakes import LANG_DIR, check
+from fakes import LANG_DIR, LANGS, check
 
-SHIPPED_LANGS = ("en", "pl", "zh")
 _FORMATTER = string.Formatter()
 
 # The ASCII semicolon and the full-width one a CJK keyboard produces (U+FF1B).
@@ -102,6 +101,23 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
           n.detect_language() == "en", f"({n.detect_language()})")
 
 
+def test_field_name_strips_a_colon_of_either_width(monkeypatch):
+    """The label a CJK language writes ends in U+FF1A, not in ':'.
+
+    No shipped label needs this yet, which is exactly why it is worth a test: the
+    day one does, the failure is a colon sitting in the middle of a sentence in a
+    language nobody here reads, on a machine nobody here owns. The stripping lives
+    in one place, so the guard can too - and a live language file would only prove
+    today's data, not the rule.
+    """
+    from beantester import i18n
+    label = "延迟" + chr(0xFF1A)      # a label ending in a full-width colon
+    monkeypatch.setitem(i18n._translations, "xx", {"fields.probe": label})
+    check("field_name strips a full-width colon",
+          i18n.field_name("fields.probe", "xx") == "延迟",
+          f"({i18n.field_name('fields.probe', 'xx')!r})")
+
+
 def test_no_semicolons_in_ui_text():
     """People do not write semicolons in ordinary prose - a full stop or a comma
     (PROJECT_NOTES convention 1b).
@@ -117,7 +133,7 @@ def test_no_semicolons_in_ui_text():
     it cannot read is worse than one that skips it - the skip is at least visible.
     """
     import json as _json
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
@@ -133,7 +149,7 @@ def test_i18n_coverage():
     import json as _json
     import beantester as n
     langs = {}
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             data = _json.load(f)
         data.pop("_meta", None)
@@ -189,7 +205,7 @@ def test_the_language_files_stay_sorted():
     its own, so it needs no exception.
     """
     import json as _json
-    for code in SHIPPED_LANGS:
+    for code in LANGS:
         with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
             keys = list(_json.load(f))
         out_of_order = [(a, b) for a, b in zip(keys, keys[1:], strict=False) if a > b]
