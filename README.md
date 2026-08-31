@@ -95,11 +95,13 @@ tooltip explaining what it does.
 ## Language
 
 Translations live in **`lang/<code>.json`** files (bundled: `lang/en.json`, `lang/pl.json` and
-`lang/zh.json`). On startup the app **scans the `lang/` directory** and detects the available
-languages automatically. The startup language follows your system locale when a matching
-translation is available, and otherwise falls back to English. A **Language / Jezyk** selector in the top-right
-corner switches it at any time - the UI rebuilds in the chosen language while keeping your
-current settings.
+`lang/zh.json`, which is Simplified Chinese). On startup the app **scans the `lang/` directory**
+and detects the available languages automatically. The startup language follows your system
+locale when a matching translation is available, and otherwise falls back to English. A system
+set to Traditional Chinese also gets English: the bundled file is Simplified, and the two are
+different scripts rather than two spellings of one. The **Language** list in the Settings window
+(the gear in the top-right corner) switches it at any time - the UI rebuilds in the chosen
+language while keeping your current settings.
 
 **Everything** in the interface is translated: tabs, labels, buttons, tooltips, column headers,
 statistics, the session panel, the event log, log messages, dialogs, and error messages
