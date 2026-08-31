@@ -67,6 +67,19 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
                         lambda *a: ("Chinese (Simplified)_China", "936"))
     check("detect: Windows Simplified Chinese -> zh", n.detect_language() == "zh",
           f"({n.detect_language()})")
+    # Traditional Chinese is a different SCRIPT, not a region of the shipped one,
+    # so it takes the same English fallback as any language we do not ship. Both
+    # roads are guarded because they are genuinely separate: the environment
+    # variables below never reach the Windows-name branch above, and narrowing
+    # only that branch left LANG=zh_TW.UTF-8 selecting Simplified.
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Taiwan", "950"))
+    check("detect: Windows Traditional Chinese -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+    monkeypatch.setattr(locale, "getlocale",
+                        lambda *a: ("Chinese (Traditional)_Hong Kong SAR", "950"))
+    check("detect: Windows Traditional Chinese (Hong Kong) -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
     monkeypatch.setattr(locale, "getlocale", lambda *a: ("German_Germany", "1252"))
     check("detect: unshipped locale -> en fallback", n.detect_language() == "en")
 
@@ -75,6 +88,18 @@ def test_detect_language_maps_windows_locale_names(monkeypatch):
 
     monkeypatch.setenv("LANG", "zh_CN.UTF-8")
     check("detect: POSIX env 'zh_CN.UTF-8' -> zh", n.detect_language() == "zh")
+
+    monkeypatch.setenv("LANG", "zh_SG.UTF-8")   # Singapore writes Simplified too
+    check("detect: POSIX env 'zh_SG.UTF-8' -> zh", n.detect_language() == "zh",
+          f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh_TW.UTF-8")
+    check("detect: POSIX env 'zh_TW.UTF-8' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
+
+    monkeypatch.setenv("LANG", "zh-Hant")       # the script named outright
+    check("detect: POSIX env 'zh-Hant' -> en fallback",
+          n.detect_language() == "en", f"({n.detect_language()})")
 
 
 def test_no_semicolons_in_ui_text():
