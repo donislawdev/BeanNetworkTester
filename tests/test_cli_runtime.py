@@ -214,6 +214,7 @@ class _TargetedEngine:
     def set_params(self, *_a, **_k): pass
     def set_buffer(self, *_a, **_k): pass
     def set_dest(self, *_a, **_k): pass
+    def set_ip_family(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
     def set_internet_only(self, *_a, **_k): pass
     def set_block(self, *_a, **_k): pass
@@ -374,6 +375,7 @@ def test_exit_code_runtime_without_pydivert():
         def set_params(self, *_a, **_k): pass
         def set_buffer(self, *_a, **_k): pass
         def set_dest(self, *_a, **_k): pass
+        def set_ip_family(self, *_a, **_k): pass
         def set_lan(self, *_a, **_k): pass
         def set_internet_only(self, *_a, **_k): pass
         def set_block(self, *_a, **_k): pass
