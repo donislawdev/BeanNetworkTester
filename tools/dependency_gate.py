@@ -44,7 +44,25 @@ ALLOWED = frozenset({
 # looked at. A name here is a decision with a reason, not a way to make a red
 # build green - and it names the package, never a whole ecosystem.
 EXCEPTIONS = {
-    # (empty on purpose - add "name": "why this is fine" when it happens)
+    # PyPI declares "GPL-2.0-only AND GPL-2.0-or-later" for PyInstaller, and the
+    # rule above is right to stop on the first half. What that expression
+    # describes is a mixed source tree, not the terms this project distributes
+    # under, and the difference is the whole reason the exception exists:
+    #
+    #   * PyInstaller is a BUILD tool. It is never imported by the program and
+    #     never installed on a user's machine - it runs on a runner, in a job
+    #     whose output is an executable;
+    #   * the one piece of it that DOES reach a user is the bootloader, and that
+    #     carries the PyInstaller bootloader exception, which explicitly permits
+    #     building and distributing a program under the licence of that program's
+    #     own choosing. THIRD-PARTY-NOTICES.md has said so, in those terms, since
+    #     before this gate existed.
+    #
+    # So the blocking answer here would be right about the metadata and wrong
+    # about the obligation. Recorded on 2026-08-31, when the 6.22.2 bump was the
+    # first version to declare the expression this way.
+    "pyinstaller": "build tool, and the shipped bootloader carries the "
+                   "PyInstaller bootloader exception (THIRD-PARTY-NOTICES.md)",
 }
 
 
