@@ -106,6 +106,9 @@ def detect_language():
         try:
             import locale
             alias = locale.locale_alias.get(code) or locale.locale_alias.get(text)
+            if not alias and " (" in code and code.endswith(")"):
+                language, variant = code[:-1].split(" (", 1)
+                alias = locale.locale_alias.get(f"{language}-{variant[:1]}")
         except Exception:
             alias = None
         if alias:

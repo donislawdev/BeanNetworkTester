@@ -1,6 +1,7 @@
 # GUI smoke test with a fake tkinter (CI containers have no real Tk).
-# Verifies: the App builds in PL and EN, a language switch rebuilds the UI while
-# keeping settings AND the session state, the tick loop runs, no raw translation
+# Verifies: the App builds in PL and EN, discovers every shipped language, and a
+# language switch rebuilds the UI while keeping settings AND the session state.
+# The tick loop runs and no raw translation
 # keys leak into widget texts, profiles behave, CSV export rotates a stale header.
 import os
 import re
@@ -55,8 +56,9 @@ n.set_language("pl")
 root = tk.Tk()
 app = n.App(root)
 check("GUI: App builds with the fake tkinter (PL)", True)
+language_codes = set(app._lang_name2code.values())
 check("GUI: language selector lists discovered languages",
-      set(app._lang_name2code.values()) == {"en", "pl"}, f"({app._lang_name2code})")
+      language_codes == {"en", "pl", "zh"}, f"({app._lang_name2code})")
 
 # -- no raw translation keys in widget texts (regression: missing T()) -------
 check("GUI: widget texts are translated (no raw i18n keys)", not leaked_keys(root),

@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **Simplified Chinese interface translation.** The GUI now ships with a complete `zh` language
+  file alongside English and Polish. Chinese system locales select it automatically, while the
+  command line remains in English.
+
 ### Fixed
 
 - **`--doctor` now tells you whether your copy can be tampered with.** The program asks for
