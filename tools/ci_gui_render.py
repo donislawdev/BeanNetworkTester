@@ -12,6 +12,12 @@ longer Polish strings, so example-based tests stay green while the UI is broken.
 Truncated wrapping labels (long About-box prose) are reported for the human but do
 NOT fail the run - they legitimately wrap when given less width.
 
+A language whose glyphs are missing on this machine is BUILT and opened but not
+measured, and says so: without a font Tk draws the same box for every character,
+and a box has a width that sails through any clipping test. Linux runners carry
+no CJK font unless one is installed, so a Chinese pass here would otherwise be a
+green nobody earned.
+
 Usage:
     python tools/ci_gui_render.py            # all discovered languages
     python tools/ci_gui_render.py --lang pl  # one language
@@ -33,7 +39,10 @@ try:
 except (AttributeError, ValueError):
     pass
 
+import subprocess                                    # noqa: E402
 import tempfile                                      # noqa: E402
+
+from font_coverage import system_can_draw            # noqa: E402
 import tkinter as tk                                 # noqa: E402
 from tkinter import ttk                              # noqa: E402
 
@@ -205,6 +214,14 @@ def _cancel_afters(root):
 
 
 def check_language(code):
+    # Ask BEFORE building anything: the answer decides whether the numbers this
+    # function prints are evidence or decoration.
+    drawable = system_can_draw(code)
+    if drawable is False:
+        print(f"  [{code}] NOT MEASURED: no installed font covers this language, "
+              f"so Tk draws the same box for every character. The App is still "
+              f"built and every window still opened - a crash here would be real "
+              f"- but the widths below are the box, not the text.")
     n.set_language(code)
     root = tk.Tk()
     root.geometry(GEOMETRY)
@@ -248,22 +265,28 @@ def check_language(code):
     for text, req, got in labels:
         print(f"  [{code}] note: label narrower than requested "
               f"(req={req} got={got}): {text!r}")
+    # Without glyphs the widths describe a box, so they are reported and NOT
+    # counted. The style check below is font-independent and still counts.
+    verdict = "unmeasured" if drawable is False else "CUT"
     for text, req, got in cut:
-        print(f"  [{code}] TRUNCATED LABEL - no wraplength, the text is CUT "
+        print(f"  [{code}] TRUNCATED LABEL - no wraplength, the text is {verdict} "
               f"(req={req} got={got}): {text!r}")
     for name, same in twins:
         print(f"  [{code}] FOCUS LOOKS LIKE HOVER in {name}: {', '.join(same)}")
     for text, req, got in buttons:
-        print(f"  [{code}] CLIPPED BUTTON (req={req} got={got}): {text!r}")
-    ok = not buttons and not cut and not twins
+        print(f"  [{code}] {'unmeasured' if drawable is False else 'CLIPPED'} "
+              f"BUTTON (req={req} got={got}): {text!r}")
+    measured = drawable is not False
+    ok = not twins and (not measured or (not buttons and not cut))
     problems = []
-    if buttons:
+    if buttons and measured:
         problems.append(f"{len(buttons)} clipped button(s)")
-    if cut:
+    if cut and measured:
         problems.append(f"{len(cut)} truncated label(s)")
     if twins:
         problems.append(f"{len(twins)} style(s) where focus looks like hover")
-    print(f"  [{code}] {'OK' if ok else ', '.join(problems)}")
+    state = "OK" if measured else "built, layout NOT measured (no font)"
+    print(f"  [{code}] {state if ok else ', '.join(problems)}")
 
     # Teardown is best-effort: the result above is already computed, and a noisy
     # Tk destroy (registered windows, scheduled callbacks) must never fail the run.
@@ -283,9 +306,14 @@ def main(argv):
 
     # Discover languages and run each in its own process, so a fragile Tk teardown
     # in one language cannot leak into the next.
-    import subprocess
     langs = [code for code, _name in n.available_languages()]
     print(f"GUI render check on real Tk at {GEOMETRY} for: {', '.join(langs)}")
+    # Said once, up front, in the words the reader needs: which of these the run
+    # can actually measure. Buried at the bottom it would be read after the green.
+    undrawable = [code for code in langs if system_can_draw(code) is False]
+    if undrawable:
+        print(f"  no font on this system covers: {', '.join(undrawable)} - those "
+              f"languages are built and opened but their layout is NOT measured")
     ok = True
     for code in langs:
         rc = subprocess.run(
