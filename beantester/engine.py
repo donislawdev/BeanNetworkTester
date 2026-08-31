@@ -486,6 +486,9 @@ class BeanEngine:
         """
         return self.core.process_target_active()
 
+    def set_ip_family(self, *a, **kw):
+        self.core.set_ip_family(*a, **kw)
+
     def set_lan(self, *a):
         self.core.set_lan(*a)
 

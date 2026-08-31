@@ -43,6 +43,10 @@ def settings_to_cli(settings, seed=None, simulate=False):
         args += ["--block-port", block_port]
     if g("lan_mode"):
         args += ["--lan-mode"]
+    if g("ipv4_only"):
+        args += ["--ipv4-only"]
+    if g("ipv6_only"):
+        args += ["--ipv6-only"]
     if g("internet_only"):
         args += ["--internet-only"]
     # START-only, and it changes what the session even SAW - a command without it

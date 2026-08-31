@@ -57,9 +57,10 @@ addopts = "-q"
 #   PLR0913  pylint        - how many arguments a function takes
 #
 # 🔴 Why PLR0913 ALONE out of the pylint refactor rules, and why not the obvious
-# three next to it. PLR0912 (branches) scores `core.decide` at 30 where C90 scores
-# it 29 - the same function, the same axis, a second number that moves at a
-# different rate. PLR0915 (statements) is FUNCTION_CEILING measured worse, because
+# three next to it. PLR0912 (branches) scores `core.decide` at 28 where C90 scores
+# it 27 - the same function, the same axis, a second number that moves at a
+# different rate. (Both were two higher until the targeting tests moved into
+# `core._out_of_scope`; re-measured then rather than left to drift.) PLR0915 (statements) is FUNCTION_CEILING measured worse, because
 # the ratchet in tests/test_code_shape.py counts LOGIC lines and therefore leaves
 # comments free, which this repository is built on. PLR0911 (returns) needs a
 # branch per return, so C90 has already counted them. Argument count is the one
@@ -97,9 +98,12 @@ max-args = 14
 
 [tool.ruff.lint.mccabe]
 # 🔴 THE CEILING IS THE MEASUREMENT, like FILE_CEILING in tests/test_code_shape.py.
-# 29 is `core.decide` today - the twelve-step packet pipeline, which is branchy
-# because the thing it describes is - and 27 is `cli._run_session` behind it.
-# Nothing else in the package passes 24.
+# 27 is `cli._run_session` and `core.decide` today, level. It was 29, which was
+# `decide` alone: adding the address-family gate would have been a thirtieth way
+# through that function, so its three targeting tests - which asked one question
+# and returned one verdict - moved into `core._out_of_scope` instead, and the
+# number came down with them. That is the rule below applied rather than quoted.
+# Nothing else in the package passes 25 (`summary.settings_summary`).
 #
 # The size ratchet already watches how LONG a function is. This watches how many
 # ways through it there are, which is the number that decides whether a person
@@ -109,7 +113,7 @@ max-args = 14
 #
 # Down is routine, up is a decision. Splitting something means lowering this in
 # the same change.
-max-complexity = 29
+max-complexity = 27
 
 [tool.ruff.lint.per-file-ignores]
 # A test suite for a packet mangler asserts, randomises, spawns subprocesses and

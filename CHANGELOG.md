@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Aim at one address family.** Two new switches under the destination target, in the GUI
+  and on the command line, impair IPv4 only or IPv6 only. The other family keeps flowing
+  untouched: nothing is blocked and nothing is slowed, it is simply left alone. They work
+  with the address field empty too, which means all addresses. Turning both on excludes
+  everything and the log says so. Left alone, the program does what it always did and
+  covers both families.
+
 - **Simplified Chinese interface translation.** The GUI now ships with a complete `zh` language
   file alongside English and Polish. A system set to Simplified Chinese selects it
   automatically. A system set to Traditional Chinese starts in English instead, because the

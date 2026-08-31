@@ -93,6 +93,62 @@ connection on this machine until you stop it, and says so before it starts.
 """
 
 
+def _add_scope_arguments(p):
+    """The flags that say WHICH traffic is aimed at, rather than what is done to it.
+
+    Split out of ``build_arg_parser`` when the two address-family switches pushed
+    that function past the size ratchet, and the ratchet said what to do about it:
+    split, do not raise the ceiling. This is where the seam already was - process,
+    destination, address family, address class and blocking all answer "which
+    packets", while everything left behind answers "how are they damaged".
+    """
+    p.add_argument("--target",
+                   help="target processes: name/PID, comma-separated list, range, "
+                        "wildcard, re: pattern, ! to exclude "
+                        "(e.g. 'chrome.exe,!chromedriver' or 're:^fire')")
+    p.add_argument("--dst-ip",
+                   help="affect only traffic to/from these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, comparison, re: "
+                        "pattern, ! to exclude (e.g. '10.0.0.1-10.0.0.50,!10.0.0.7')")
+    p.add_argument("--dst-port",
+                   help="affect only these remote ports: number, list, range a-b, "
+                        "comparison (>1024), wildcard, re: pattern, ! to exclude "
+                        "(e.g. '80,443,8000-8100' or '!53')")
+    # Part of the targeting, next to --dst-ip: they say WHICH traffic is aimed at,
+    # and neither blocks anything. The other family keeps flowing untouched.
+    p.add_argument("--ipv4-only", action="store_true",
+                   help="impair IPv4 traffic only. IPv6 keeps flowing untouched - "
+                        "this aims the tool, it does not block a protocol. Applies "
+                        "with --dst-ip empty too, which means all addresses")
+    p.add_argument("--ipv6-only", action="store_true",
+                   help="impair IPv6 traffic only. IPv4 keeps flowing untouched. "
+                        "Both flags together exclude each other and nothing is "
+                        "impaired, which the log says out loud")
+    p.add_argument("--lan-mode", action="store_true",
+                   help="LAN mode: cut the internet (public addresses), keep the local network")
+    # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
+    # the --lan abbreviation ambiguous and argparse then refuses it outright.
+    p.add_argument("--internet-only", action="store_true",
+                   help="cut the local network (10.x, 192.168.x, 172.16-31.x, "
+                        "link-local, CGNAT), keep the internet. Loopback keeps "
+                        "working. Careful: DNS asked of your router is local "
+                        "traffic, so the internet can stop working with it")
+    p.add_argument("--narrow-filter", action="store_true",
+                   help="push --dst-ip/--dst-port into the WinDivert filter, so the "
+                        "driver never hands over traffic that could not be impaired "
+                        "(much faster at high packet rates). Applied at START only, "
+                        "and then statistics and connections cover the narrowed "
+                        "traffic only - the summary says when it took effect")
+    p.add_argument("--block-ip",
+                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
+                        "! to exclude")
+    p.add_argument("--block-port",
+                   help="block (drop) all traffic to these remote ports: number, list, "
+                        "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
+                        "(blocks on IP OR port, for example '--block-port 443')")
+
+
 def build_arg_parser():
     p = argparse.ArgumentParser(
         prog=program_name(),
@@ -131,41 +187,7 @@ def build_arg_parser():
                    help="link buffer for the speed limit [ms], 0 = unlimited. It "
                         "bounds the queueing delay a rate-limited link builds up "
                         "before it drops (bufferbloat)")
-    p.add_argument("--target",
-                   help="target processes: name/PID, comma-separated list, range, "
-                        "wildcard, re: pattern, ! to exclude "
-                        "(e.g. 'chrome.exe,!chromedriver' or 're:^fire')")
-    p.add_argument("--dst-ip",
-                   help="affect only traffic to/from these remote IPs, IPv4 and IPv6: "
-                        "address, list, range a-b, CIDR, wildcard, comparison, re: "
-                        "pattern, ! to exclude (e.g. '10.0.0.1-10.0.0.50,!10.0.0.7')")
-    p.add_argument("--dst-port",
-                   help="affect only these remote ports: number, list, range a-b, "
-                        "comparison (>1024), wildcard, re: pattern, ! to exclude "
-                        "(e.g. '80,443,8000-8100' or '!53')")
-    p.add_argument("--lan-mode", action="store_true",
-                   help="LAN mode: cut the internet (public addresses), keep the local network")
-    # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
-    # the --lan abbreviation ambiguous and argparse then refuses it outright.
-    p.add_argument("--internet-only", action="store_true",
-                   help="cut the local network (10.x, 192.168.x, 172.16-31.x, "
-                        "link-local, CGNAT), keep the internet. Loopback keeps "
-                        "working. Careful: DNS asked of your router is local "
-                        "traffic, so the internet can stop working with it")
-    p.add_argument("--narrow-filter", action="store_true",
-                   help="push --dst-ip/--dst-port into the WinDivert filter, so the "
-                        "driver never hands over traffic that could not be impaired "
-                        "(much faster at high packet rates). Applied at START only, "
-                        "and then statistics and connections cover the narrowed "
-                        "traffic only - the summary says when it took effect")
-    p.add_argument("--block-ip",
-                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
-                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
-                        "! to exclude")
-    p.add_argument("--block-port",
-                   help="block (drop) all traffic to these remote ports: number, list, "
-                        "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
-                        "(blocks on IP OR port, for example '--block-port 443')")
+    _add_scope_arguments(p)
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")

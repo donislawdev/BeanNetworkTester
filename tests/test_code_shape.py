@@ -493,7 +493,20 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
 # counts, which walk the package only. That is deliberate: the ceiling this band
 # hangs from is repo-wide, so a band scoped to the package would be measuring a
 # different thing from the number it is a percentage of.
-COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary
+# 🔴 5 since 2026-08-31, and the reason matters more than the number: NOTHING grew
+# into this band. The band came down to two functions that were already there.
+# `core.decide` was split for the address-family gate, which lowered the ceiling
+# from 29 to 27 (the rule beside max-complexity), and 70% of 27 is 18 where 70% of
+# 29 was 20 - so `engine._capture_loop` at 20 and `test_layering._module_level` at
+# 19 are in the band without either of them changing by a line.
+#
+# That is worth writing down because the count alone reads like a regression and
+# is the opposite: `decide` went 29 -> 27 and `summary.settings_summary` came back
+# to 25 from the 27 the same change had pushed it to. Lowering a ceiling tightens
+# the band that hangs off it, and this number has to be re-measured when it moves,
+# exactly like the ceiling itself.
+COMPLEX_NEAR_CEILING = 5    # decide, _run_session, settings_summary,
+                            # _capture_loop, test_layering._module_level
 
 
 # Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a

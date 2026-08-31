@@ -368,8 +368,12 @@ MUTATIONS = [
         # function and cannot see the runners-up climbing together underneath it.
         "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "COMPLEX_NEAR_CEILING = 3        # decide, _run_session, settings_summary",
-        "new": "COMPLEX_NEAR_CEILING = 5        # decide, _run_session, settings_summary",
+        # Re-anchored 2026-08-31: the constant moved 3 -> 5 when the complexity
+        # ceiling came down and the band came down with it. The mutation still
+        # proves the same thing - a count frozen looser than today's measurement
+        # is caught by the equality half of that test, not by the "at most" half.
+        "old": "COMPLEX_NEAR_CEILING = 5    # decide, _run_session, settings_summary,",
+        "new": "COMPLEX_NEAR_CEILING = 7    # decide, _run_session, settings_summary,",
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {

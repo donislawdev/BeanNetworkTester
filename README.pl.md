@@ -558,6 +558,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--rst-prob` `--rst-cooldown` | % / s | procent połączeń zrywanych RST-em i czas trzymania zerwanego |
 | `--flap-period` `--flap-down` | s / % | cykliczne zrywanie łącza: co ile i na jaki ułamek okresu |
 | `--rate-schedule` | - | zmienna przepustowość: `"czas:pobieranie:wysyłanie,..."` w KB/s, w pętli |
+| `--ipv4-only` `--ipv6-only` | - | psuj ruch tylko jednej rodziny adresów. Druga płynie bez zmian - to celowanie, nie blokada protokołu. Działa też przy pustym `--dst-ip`, czyli dla wszystkich adresów. Obie flagi naraz wykluczają się, nic nie zostanie zmienione, a log to mówi |
 | `--lan-mode` | - | tryb LAN: odetnij internet (adresy publiczne), zostaw sieć lokalną |
 | `--internet-only` | - | lustro tamtego: odetnij sieć lokalną (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), zostaw internet. Loopback działa dalej. Uwaga: DNS pytany u routera to ruch lokalny, więc internet może przestać działać razem z siecią lokalną |
 | `--narrow-filter` | - | wepchnij `--dst-ip`/`--dst-port` do filtra WinDiverta, żeby sterownik w ogóle nie podawał ruchu, którego nie dałoby się popsuć (dużo szybciej przy dużej liczbie pakietów). Tylko przy STARCIE. Gdy działa, statystyki i połączenia obejmują wyłącznie zawężony ruch |
