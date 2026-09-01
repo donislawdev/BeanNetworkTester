@@ -35,6 +35,66 @@ class Decision(NamedTuple):
     scoped: bool = True
 
 
+def burst_loss_params(loss, mean_burst):
+    """Turn "this much loss, arriving in runs this long" into a two-state chain.
+
+    Returns ``(p, r, achievable)`` - the good-to-bad and bad-to-good transition
+    probabilities, plus the loss fraction that pair actually delivers - or
+    ``None`` when the loss should stay INDEPENDENT, which is the behaviour that
+    predates this function and the one every default still takes.
+
+    The model is Gilbert's two-state burst-noise channel (Gilbert 1960, extended
+    by Elliott 1963), the same one ``tc netem`` offers as ``loss gemodel``. It is
+    used here in its Simple Gilbert form - the good state loses nothing, the bad
+    state loses everything - so ONE draw per packet decides the transition and
+    the verdict follows from the state. That is not a micro-optimisation: it
+    keeps the packet path on exactly the number of RNG draws it made before
+    bursts existed, and a stored ``Reproduce:`` command has to replay identically.
+
+    A tester can answer "how much loss" and "how long a run", so those are the
+    inputs and the transition probabilities are derived from them:
+
+        r = 1 / mean_burst           a bad run is geometric, so its mean is 1/r
+        p = loss * r / (1 - loss)    from the stationary share pi_B = p / (p + r)
+
+    The reparametrisation through the average run length is the one described by
+    Hasslinger and Hohlfeld, "The Gilbert-Elliott Model for Packet Loss in Real
+    Time Services on the Internet", MMB 2008. Their printed formula for ``p``
+    disagrees with the notation of their own figure, so the line above was
+    re-derived here and then MEASURED rather than trusted: over 2 million packets
+    the delivered loss and the delivered mean run length both land on the request
+    inside the sampling noise, from 0.5% upward.
+
+    🔴 Not every request is possible, and that is what ``achievable`` is for.
+    ``p <= 1`` needs ``mean_burst >= loss / (1 - loss)``, so 90% loss cannot
+    arrive in runs of 5 - runs that short leave too little room between them.
+    The pair is CLAMPED to the most that length can carry, and the caller is
+    expected to say so out loud instead of letting a run quietly miss its own
+    setting (``settings.apply_settings``). Measured: 90% asked for in runs of 5
+    delivers 83.3%, and this function's own answer for that case is 83.33%.
+    """
+    if not loss or not mean_burst or mean_burst <= 1.0:
+        # A mean run of one packet is not "bursty with short bursts" - with r = 1
+        # the chain can never leave a loss next to a loss, so it is ANTI
+        # correlated rather than independent (measured: 50% loss at a run length
+        # of 1 lands on a perfectly alternating pattern). Anything at or below
+        # one therefore means the plain independent draw.
+        return None
+    r = 1.0 / mean_burst
+    room = 1.0 - loss
+    if room <= 0.0:
+        # Total loss. Every packet goes whatever the chain says, so the chain may
+        # as well stay bad - and this branch is what keeps the division below
+        # from raising on exactly this input.
+        return (1.0, r, 1.0)
+    p = loss * r / room
+    if p >= 1.0:
+        # More loss than runs this short can carry. The good state then lasts a
+        # single packet, which is the most this run length can deliver.
+        return (1.0, r, 1.0 / (1.0 + r))
+    return (p, r, loss)
+
+
 MAX_FLOWS = 200_000         # hard ceiling on each flow table (see _FlowTable)
 FLOW_ROTATE_S = 30.0        # a flow survives at least this long without traffic
 
@@ -208,6 +268,14 @@ class BeanCore:
         self._lock = threading.Lock()
         # impairments
         self.loss = 0.0
+        # Burst loss: the average length, in PACKETS, of a run of lost packets.
+        # 0 means the independent draw this tool has always made. The chain's two
+        # transition probabilities are derived once per apply (_recompute_burst)
+        # and there is one chain PER DIRECTION - see _loses for why.
+        self.loss_burst = 0.0
+        self._burst_p = None
+        self._burst_r = 0.0
+        self._loss_bad = {True: False, False: False}
         self.corrupt = 0.0
         self.dup = 0.0
         self.latency_s = 0.0
@@ -316,6 +384,78 @@ class BeanCore:
             self.jitter_s = max(0.0, jitter_ms) / 1000.0
             self.rate_down = self._rate_bps(down_kbps)
             self.rate_up = self._rate_bps(up_kbps)
+            # The burst chain is derived from the loss AND from the run length,
+            # so it has to be re-derived here too - see _recompute_burst.
+            self._recompute_burst()
+
+    def set_loss_burst(self, mean_packets):
+        """Average length, in packets, of a run of lost packets. 0 = independent.
+
+        Separate from ``set_params`` rather than an eighth argument to it: that
+        signature is called directly by tests, rigs and every caller that has
+        ever configured a core, and widening it would move all of them for a
+        field most of them do not set.
+        """
+        with self._lock:
+            self.loss_burst = max(0.0, float(mean_packets or 0.0))
+            self._recompute_burst()
+
+    def _recompute_burst(self):
+        """Re-derive the chain from the two fields that feed it.
+
+        Called from BOTH setters that can change either half, and that is the
+        point. ``p`` depends on the loss as much as on the run length, so a
+        single owner would leave the ORDER of two setter calls deciding whether
+        the answer is right - and ``set_params`` is called on its own by tests,
+        by rigs and by anything that only means to change the loss. The symptom
+        would have been quiet: the delivered loss drifting away from the field
+        that asked for it, with nothing going red.
+
+        Only a REAL change restarts the chain. A scenario stepping the speed
+        limit calls every setter on every step change (``scenario_runner``), and
+        restarting here unconditionally would cut every run in flight - at 50
+        packets a second a run of 20 lasts 400 ms, so most of them.
+        """
+        params = burst_loss_params(self.loss, self.loss_burst)
+        p = None if params is None else params[0]
+        r = 0.0 if params is None else params[1]
+        if (p, r) != (self._burst_p, self._burst_r):
+            self._loss_bad[True] = self._loss_bad[False] = False
+        self._burst_p, self._burst_r = p, r
+
+    def _loses(self, rng, is_outbound):
+        """Does this packet fall to the configured loss? Step 8's whole question.
+
+        Independent by default - the draw this tool has always made, reached
+        through one attribute test. With a run length configured it walks the
+        two-state chain instead, ONE CHAIN PER DIRECTION, keyed the same way the
+        token bucket in step 11 is.
+
+        Per direction rather than one shared chain, and that is measured, not
+        tidiness: a shared chain delivers HALF of what the user typed, because
+        with the default two-way filter a run of 20 is split across both
+        directions. Measured over 2 million packets, one direction saw runs of
+        10.4 at a 50/50 mix and 11.9 at 90/10 - so the error follows the traffic
+        and there is not even a fixed factor a reader could correct for. The
+        whole-link outage that really does cut both ways at once is ``flap``
+        (step 5), which is a different impairment on purpose.
+
+        The chain advances only for packets that REACH step 8. Anything the
+        targeting gate, an address-class switch, blocking, NAT, RST, flapping,
+        the MTU hole or SYN dropping already took is not part of the run - so
+        with a process target the run length is counted in the target's packets,
+        which is the number the tester meant.
+        """
+        if self._burst_p is None:
+            return rng.random() < self.loss
+        bad = self._loss_bad[is_outbound]
+        if bad:
+            if rng.random() < self._burst_r:
+                bad = False
+        elif rng.random() < self._burst_p:
+            bad = True
+        self._loss_bad[is_outbound] = bad
+        return bad
 
     def set_buffer(self, buffer_ms):
         """Bounded link buffer for the rate limiter, in ms. 0 == unbounded."""
@@ -543,6 +683,9 @@ class BeanCore:
             self._flow_last.clear()
             self._reset_until.clear()
             self._prune_next = 0.0
+            # A session that ended mid-run must not start the next one inside it:
+            # the same reason the schedule and the token buckets restart here.
+            self._loss_bad[True] = self._loss_bad[False] = False
 
     # -- helpers ------------------------------------------------------------ #
     @staticmethod
@@ -787,8 +930,12 @@ class BeanCore:
             if is_syn and self.syn_drop > 0 and rng.random() < self.syn_drop:
                 return Decision(True, False, [], "syn")
 
-            # 8) loss
-            if self.loss > 0 and rng.random() < self.loss:
+            # 8) loss - independent, or arriving in runs when a burst length is
+            # set. The whole question moves into _loses() rather than growing a
+            # branch here: this function sits ON the complexity ceiling pinned in
+            # pyproject.toml, where the rule is to move code out instead of
+            # raising the number. Measured after the change: still 27.
+            if self.loss > 0 and self._loses(rng, is_outbound):
                 return Decision(True, False, [])
 
             # 9) corruption
