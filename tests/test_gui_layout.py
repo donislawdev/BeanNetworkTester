@@ -276,11 +276,22 @@ def test_every_page_is_registered_and_built():
 
 
 def test_fields_with_a_help_sheet_get_the_question_mark_button():
-    """Filter-expression fields share the syntax cheat sheet; buffer has its own
-    "?" sheet (help_body). The schedule field must NOT grow one."""
+    """Filter-expression fields share the syntax cheat sheet, and a field that
+    declares ``help_body`` gets its own "?" sheet. The schedule must NOT grow one.
+
+    Derived from the registry rather than listed here: the set used to be six
+    names typed out, so adding a field with a help sheet meant editing this line
+    as well as the registry - and the one that gets forgotten is always the test.
+    The expression half stays explicit because those five share ONE sheet for a
+    reason unrelated to any ``help_body``.
+    """
     run_gui("""
-        assert set(app.form.helps) == {"target", "dst_ip", "dst_port", "block_ip", "block_port", "buffer"}, app.form.helps
+        from beantester.fields import FIELD_DEFS
+        expression_help = {"target", "dst_ip", "dst_port", "block_ip", "block_port"}
+        own_sheet = {f.key for f in FIELD_DEFS if f.help_body}
+        assert set(app.form.helps) == expression_help | own_sheet, app.form.helps
         assert "rate_schedule" not in app.form.helps
+        assert own_sheet, "no field declares a help sheet any more"
     """)
 
 

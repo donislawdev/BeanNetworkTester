@@ -13,7 +13,8 @@ def settings_to_cli(settings, seed=None, simulate=False):
     """Build the list of CLI arguments that reproduce the given settings."""
     g = lambda k: settings.get(k, DEFAULT_SETTINGS[k])
     args = []
-    numeric = [("loss", "--loss"), ("corrupt", "--corrupt"), ("dup", "--dup"),
+    numeric = [("loss", "--loss"), ("loss_burst", "--loss-burst"),
+               ("corrupt", "--corrupt"), ("dup", "--dup"),
                ("latency", "--latency"), ("jitter", "--jitter"),
                ("down", "--down"), ("up", "--up"), ("buffer", "--buffer"),
                ("syn_drop", "--syn-drop"), ("max_size", "--max-size"),

@@ -296,14 +296,30 @@ one. With the given probability it appends extra delay (ms) to a **single packet
 momentary "lag" actually arrives. The chance is per packet and applies **in each direction**, so a
 round trip hits it about twice as often as the number suggests.
 
-**Impairment (%)** - *Loss*: percentage of packets vanishing without a trace (5% is already a
+**Impairments** - *Loss*: percentage of packets vanishing without a trace (5% is already a
 clearly failing network). *Corruption*: percentage of packets with a flipped data bit - it affects
 **only payload-bearing packets**. Packets with no data (e.g. pure ACK, SYN) have nothing to flip,
 so they pass untouched and are **not counted as corrupted**. *Duplication*: percentage of packets
 sent twice.
 
+**Losses in a row** - real links rarely lose packets one at a time. A microwave oven, a lift or a
+switch between transmitters takes the connection away for a moment, and everything sent in that
+moment is gone. This field says how many packets are lost in a row **on average**, while *Loss*
+still decides how much is lost in total. It matters more than it looks: 5% spread out is something
+most connections absorb, while the same 5% in runs of twenty stalls a transfer, breaks a live
+connection and sends an application down its reconnect path. Set 0 to spread the loss evenly, which
+is what the tool did before this setting existed.
+
+Two limits worth knowing, and the log states both when you apply the settings. A very high loss
+cannot arrive in very short runs, because runs that short leave too little room between them, so
+the run says what it will really deliver. And a long run length puts the runs far apart, so a short
+session may not see one at all. Each direction gets its own runs, so a run of twenty means twenty
+in a row in that direction.
+
 **Link flapping** - cyclic total loss of traffic: every *Period* seconds the link is dead for the
-given percentage of the time. Simulates a flickering connection.
+given percentage of the time. Simulates a flickering connection. This is **not** the same as losses
+in a row: flapping is a fixed cycle you can predict, the runs above are random and short in the
+middle of otherwise normal traffic.
 
 **Advanced (NAT / connections):**
 - *Target destination (IP/port)* - impair only traffic to/from chosen servers. Both fields accept
@@ -370,7 +386,8 @@ next to the value says so instead of inventing a source. A few of them are worth
   measured median, not a worst case. Aircraft with newer low-orbit equipment behave like
   "Satellite (low orbit)" instead.
 
-A profile stores **what the link is like**: loss, corruption, duplication, latency, jitter, latency
+A profile stores **what the link is like**: loss, how much of it arrives in a row, corruption,
+duplication, latency, jitter, latency
 spikes, link outages (flapping), the speed limits and the buffer. Everything else - the target, the
 destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out of it. Saving a
 profile warns you about the ones you currently have switched on. Use **"Save file..."** for the
@@ -694,6 +711,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | Flag | Unit | Description |
 |---|---|---|
 | `--loss` | % | percentage of dropped packets |
+| `--loss-burst` | packets | average number of packets lost in a row (0 = loss spread evenly). Shapes `--loss`, it does not add to it |
 | `--corrupt` | % | percentage of packets with a flipped bit |
 | `--dup` | % | percentage of packets sent twice |
 | `--latency` | ms | fixed delay added to every packet |

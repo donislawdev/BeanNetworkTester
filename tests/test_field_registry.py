@@ -172,7 +172,8 @@ def test_numeric_fields_declare_bounds():
 
 def test_profile_scope_is_derived():
     check("registry: a profile stores the link-characteristic fields",
-          set(F.PROFILE_FIELDS) == {"loss", "corrupt", "dup", "latency", "jitter",
+          set(F.PROFILE_FIELDS) == {"loss", "loss_burst", "corrupt", "dup",
+                                    "latency", "jitter",
                                     "down", "up", "buffer", "spike_prob",
                                     "spike_ms", "flap_period", "flap_down"},
           f"({F.PROFILE_FIELDS})")

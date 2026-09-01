@@ -30,7 +30,8 @@ from hypothesis import strategies as st
 
 from beantester.core import BeanCore, Decision
 from beantester.engine import BeanEngine
-from beantester.fields import (FIELDS, IMPAIRING_KEYS, NARROWING_KEYS, off_value)
+from beantester.fields import (FIELDS, IMPAIRING_KEYS, NARROWING_KEYS,
+                               PARAMETER_KEYS, off_value)
 from beantester.presets import PRESETS, SETTING_TO_PRESET, preset_to_settings
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
@@ -45,14 +46,26 @@ from fakes import FakeDivert, FakePacket, check
 # had to be remembered in two places - and the one that gets forgotten is always
 # the test, so the damage ships looking harmless.
 #
-# The two additions are PARAMETERS, not triggers: `spike_ms` and `flap_down` arm
-# nothing on their own (they sit behind `spike_prob` and `flap_period`), so the
-# registry rightly does not call them impairments - but a default that shipped
-# with either one hot would still be a default nobody chose, and pass-through is
-# the one place that should insist on the whole form being cold.
+# The additions are PARAMETERS, not triggers: each of them sits behind another
+# field's gate in `decide()` and arms nothing on its own, so the registry rightly
+# does not call them impairments (`Field.parameter_of` names their trigger). They
+# are swept anyway, because a default that shipped with any of them hot would
+# still be a default nobody chose, and pass-through is the one place that should
+# insist on the whole form being cold.
+#
+# 🔴 This dict cannot be derived outright, and saying why is cheaper than
+# rediscovering it: a registry knows that `rst_cooldown` parametrises `rst_prob`,
+# but not that `spike_ms` ought to ship at 0 while `rst_cooldown` ought to ship at
+# 3 s. `rst_cooldown` is therefore the one parameter deliberately outside this
+# sweep - 0 there means "no cooldown at all", a different setting rather than a
+# cold one. What IS now derived is the bookkeeping: a parameter that ought to be
+# here and is not turns
+# ``test_every_cold_parameter_is_in_this_sweep`` red, so the list can no longer
+# quietly fall behind the registry the way it did while it was two names typed by
+# hand.
 IMPAIRMENT_OFF = dict(
     {key: off_value(FIELDS[key]) for key in IMPAIRING_KEYS + NARROWING_KEYS},
-    spike_ms=0, flap_down=0,
+    spike_ms=0, flap_down=0, loss_burst=0,
 )
 
 # The profile fields that can impair traffic, and their "no impairment" value.
@@ -114,6 +127,64 @@ def test_the_perfect_preset_is_completely_harmless():
     for key, off in PRESET_OFF.items():
         check(f"perfect preset {key} is off",
               perfect[key] == off, f"(is {perfect[key]!r})")
+
+
+def test_every_cold_parameter_is_in_this_sweep():
+    """Bookkeeping between the registry and the hand-written half of the sweep.
+
+    ``IMPAIRMENT_OFF`` derives its impairments and its bounds from the registry
+    and then names a few PARAMETERS by hand, because no registry can know which
+    of them ought to ship at zero (see the comment there). That hand half is
+    exactly the shape that falls behind, so it is checked rather than trusted: a
+    parameter whose neutral value IS the registry's off value has to be swept,
+    and one that ships at something else is a deliberate choice this test makes
+    visible instead of silent.
+    """
+    swept, deliberate = [], []
+    for key in PARAMETER_KEYS:
+        (swept if key in IMPAIRMENT_OFF else deliberate).append(key)
+        if key in IMPAIRMENT_OFF:
+            check(f"the sweep uses {key}'s registry off value",
+                  IMPAIRMENT_OFF[key] == off_value(FIELDS[key]),
+                  f"(sweeps {IMPAIRMENT_OFF[key]!r}, registry says "
+                  f"{off_value(FIELDS[key])!r})")
+    for key in deliberate:
+        check(f"{key} is outside the sweep because it ships at a chosen value, "
+              f"not because somebody forgot it",
+              DEFAULT_SETTINGS[key] != off_value(FIELDS[key]),
+              f"(default {DEFAULT_SETTINGS[key]!r} equals the off value, so it "
+              f"belongs in IMPAIRMENT_OFF)")
+    check("the registry knows about some parameters at all "
+          "(an empty sweep would pass every check above)",
+          len(swept) >= 2, f"(swept: {swept})")
+
+
+def test_a_parameter_at_its_maximum_still_damages_nothing():
+    """The property behind ``Field.parameter_of``, and it is the strong one.
+
+    A parameter shapes an impairment, it does not arm one. Turning every one of
+    them up to its registry maximum with the rest of the form at its defaults
+    must therefore still pass every packet through untouched. This says far more
+    than "their defaults are zero": it would catch a parameter wired so that it
+    acts on its own - the mistake that would make ``impairs=""`` a lie and would
+    hide a run's real blast radius from ``settings.unbounded_impairment``.
+    """
+    for key in PARAMETER_KEYS:
+        field = FIELDS[key]
+        settings = dict(DEFAULT_SETTINGS)
+        settings[key] = field.bounds[1]
+        core = core_for(settings)
+        rng = random.Random(11)
+        damaged = 0
+        for i in range(2000):
+            now = i * 0.001
+            decision = core.decide(1200, bool(i % 2), 5000 + (i % 7), now, rng,
+                                   remote_ip="1.2.3.4", remote_port=443,
+                                   is_syn=(i % 50 == 0), is_tcp=bool(i % 3))
+            if not is_pass_through(decision, now):
+                damaged += 1
+        check(f"{key} at its maximum ({field.bounds[1]}) damages nothing on its own",
+              damaged == 0, f"({damaged} of 2000 packets were touched)")
 
 
 def test_perfect_is_the_only_harmless_preset():
