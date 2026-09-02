@@ -362,9 +362,14 @@ Terrible network - plus your own (saved under a name). The program **always star
 network"** (nothing is impaired until you set something). Built-in presets cannot be deleted - the
 "Delete" button is disabled for them.
 
+The wireless ones also lose **in runs** rather than one packet at a time, because that is what a
+radio link does: fading, interference and handovers take the channel away for a stretch. The
+wired ones (DSL, 56k modem) keep their loss evenly spread, because there the loss is a full queue
+rather than a radio going away.
+
 Their numbers come from published measurements wherever measurements exist (Ookla® Speedtest®
-medians for satellite and mobile, peer-reviewed studies for Starlink's 15-second reconfiguration
-and for in-flight Wi-Fi). Every figure is attributed in the comment block at the top of
+medians for satellite and mobile, peer-reviewed studies for Starlink's 15-second reconfiguration,
+for in-flight Wi-Fi and for how many Wi-Fi packets are lost in a row). Every figure is attributed in the comment block at the top of
 `beantester/presets.py`, with the authors, the venue and a DOI, so you can check it rather than
 trust it. Where no such figure exists - "weak Wi-Fi" is not a measurable quantity - the comment
 next to the value says so instead of inventing a source. A few of them are worth a sentence:

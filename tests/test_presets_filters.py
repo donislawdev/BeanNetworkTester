@@ -77,6 +77,45 @@ def test_preset_order_best_to_worst():
     check("presets: perfect before terrible", idx["presets.perfect"] < idx["presets.terrible"])
 
 
+def test_no_preset_sets_a_run_length_it_cannot_use():
+    """A run length shapes the loss, so without loss it is a knob that cannot move.
+
+    Silent in every other way: the preset would look configured, the summary
+    would say nothing, and the field would sit there describing a link the
+    program never produces. It is the same class as a `spike_ms` with no
+    `spike_prob`, and cheap enough to make mechanical.
+    """
+    from beantester.presets import PRESETS, preset_to_settings
+    for key in PRESETS:
+        settings = preset_to_settings(key)
+        if settings["loss_burst"]:
+            check(f"{key} sets a run length and has loss for it to shape",
+                  settings["loss"] > 0,
+                  f"(run={settings['loss_burst']}, loss={settings['loss']})")
+
+
+def test_the_wireless_presets_lose_in_runs_and_the_wired_ones_do_not():
+    """The mechanism split, pinned so a later tidy-up cannot quietly erase it.
+
+    Loss on a radio link comes from fading, interference and handovers, which
+    take the channel away for a stretch. Loss on a wired link is queue overflow,
+    and tail drop on one flow is close to independent. That distinction is the
+    whole reason only some of these presets carry a run length, and nothing else
+    in the tree records it.
+    """
+    from beantester.presets import preset_to_settings
+    for key in ("presets.weak_wifi", "presets.cafe", "presets.metro",
+                "presets.inflight", "presets.3g", "presets.roaming",
+                "presets.satellite"):
+        check(f"{key} loses in runs", preset_to_settings(key)["loss_burst"] > 0,
+              f"(run={preset_to_settings(key)['loss_burst']})")
+    for key in ("presets.dsl", "presets.modem56k", "presets.bufferbloat",
+                "presets.distant", "presets.perfect"):
+        check(f"{key} keeps its loss independent",
+              preset_to_settings(key)["loss_burst"] == 0,
+              f"(run={preset_to_settings(key)['loss_burst']})")
+
+
 def test_resolve_preset_variants():
     import beantester as n
     check("presets: canonical id resolves", n.resolve_preset("presets.3g") == "presets.3g")
