@@ -14,6 +14,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   which is usually what you meant to test. Set 0, the default, to spread it evenly as before.
   Profiles remember it, and the log says how often to expect a run.
 
+- **The wireless presets now lose in runs.** Weak WiFi, Cafe, Train/metro, In-flight Wi-Fi, 3G,
+  Roaming and Satellite pick a run length to match the way a radio link really fails, so picking
+  one of them now stalls a transfer the way the real thing does instead of sprinkling single
+  losses. The wired ones - DSL and 56k modem - keep their loss evenly spread, because there it
+  is a full queue rather than a radio going away. Loss rates are unchanged, and the Wi-Fi
+  figures come from a published measurement.
+
 - **A "Loss runs" counter** on the Statistics tab, in the stats CSV and in the reproduction
   report, says how many runs of lost packets a session actually produced. Zero there, with a
   run length set, means the session was too short to see one rather than the setting doing

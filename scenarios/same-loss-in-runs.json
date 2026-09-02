@@ -1,0 +1,10 @@
+{
+  "loop": true,
+  "steps": [
+    { "at": 0,  "settings": { "latency": 30, "jitter": 10, "loss": 5, "loss_burst": 0,  "down": 1024, "up": 256 } },
+    { "at": 25, "settings": { "loss": 5, "loss_burst": 5 } },
+    { "at": 50, "settings": { "loss": 5, "loss_burst": 15 } },
+    { "at": 75, "settings": { "loss": 5, "loss_burst": 40 } },
+    { "at": 100, "settings": { "loss": 5, "loss_burst": 0 } }
+  ]
+}

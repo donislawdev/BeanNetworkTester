@@ -765,12 +765,19 @@ def preset_table(app, texts):
     program. Column heads come from the program's own field labels, so they match the
     window a reader is looking at.
     """
-    heads = [texts["table.preset"], app["app.fields.loss"], app["app.fields.latency"],
+    heads = [texts["table.preset"], app["app.fields.loss"], app["app.fields.loss_burst"],
+             app["app.fields.latency"],
              app["app.fields.jitter"], app["app.fields.download"], app["app.fields.upload"]]
     rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
     for key, values in presets.PRESETS.items():
+        # The run length sits next to the loss it shapes, and it is here rather
+        # than left out with the other advanced fields for one reason: without it
+        # the loss column means two different things from row to row, and a reader
+        # comparing "2%" against "2%" has no way to see that one of them arrives
+        # in runs. A column that changes meaning silently is worse than a wider table.
         cells = [html.escape(app["app." + key], quote=True),
-                 _cell(values.get("loss"), "%"), _cell(values.get("lat"), "ms"),
+                 _cell(values.get("loss"), "%"), _cell(values.get("loss_burst")),
+                 _cell(values.get("lat"), "ms"),
                  _cell(values.get("jit"), "ms"), _cell(values.get("down"), "KB/s"),
                  _cell(values.get("up"), "KB/s")]
         rows.append("<tr>%s</tr>" % "".join("<td>%s</td>" % c for c in cells))

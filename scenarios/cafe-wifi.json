@@ -1,10 +1,10 @@
 {
   "loop": true,
   "steps": [
-    { "at": 0,   "settings": { "latency": 20,  "jitter": 15, "loss": 1, "down": 1024, "up": 256 } },
-    { "at": 20,  "settings": { "latency": 45,  "jitter": 45, "loss": 3, "down": 512,  "up": 160 } },
-    { "at": 40,  "settings": { "latency": 120, "jitter": 70, "loss": 6, "down": 256,  "up": 96, "flap_period": 12, "flap_down": 20 } },
-    { "at": 65,  "settings": { "latency": 35,  "jitter": 30, "loss": 2, "down": 512,  "up": 160, "flap_period": 0 } },
-    { "at": 85,  "settings": { "latency": 20,  "jitter": 15, "loss": 1, "down": 1024, "up": 256 } }
+    { "at": 0,   "settings": { "latency": 20,  "jitter": 15, "loss": 1, "loss_burst": 3, "down": 1024, "up": 256 } },
+    { "at": 20,  "settings": { "latency": 45,  "jitter": 45, "loss": 3, "loss_burst": 5, "down": 512,  "up": 160 } },
+    { "at": 40,  "settings": { "latency": 120, "jitter": 70, "loss": 6, "loss_burst": 6, "down": 256,  "up": 96, "flap_period": 12, "flap_down": 20 } },
+    { "at": 65,  "settings": { "latency": 35,  "jitter": 30, "loss": 2, "loss_burst": 5, "down": 512,  "up": 160, "flap_period": 0 } },
+    { "at": 85,  "settings": { "latency": 20,  "jitter": 15, "loss": 1, "loss_burst": 3, "down": 1024, "up": 256 } }
   ]
 }

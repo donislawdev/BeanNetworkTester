@@ -64,12 +64,66 @@ from .settings import DEFAULT_SETTINGS
 #              200-2000 ms, "most home links affected" - are a typical range
 #              assembled from general reporting, NOT figures from that paper.
 #              Treat them as a shaped default, not as a measurement.
+#   [WIFI-BLL] da Silva and Pedroso, "Packet Loss Characterization Using Cross
+#              Layer Information and HMM for Wi-Fi Networks", Sensors 22(22):8592,
+#              2022, doi:10.3390/s22228592. A real 802.11b/g/n network, 24 600
+#              minutes of traffic: mean BURST LOSS LENGTH (consecutive packets
+#              lost) 3.00 in the good channel state, 3.03 and 4.66 in the two
+#              intermediate ones, 5.67 in the bad one, and 5.37 over the whole
+#              trace. 🔴 That last figure carries a standard deviation of 31.68
+#              and a maximum burst of 8853, i.e. it is heavy-tailed - see the
+#              note on `loss_burst` below before copying it anywhere.
+#   [E-MODEL]  ITU-T Rec. G.107, the E-model. Defines Burst Ratio as the average
+#              length of observed loss bursts over the length expected under
+#              random loss, so BurstR = 1 means independent loss and BurstR > 1
+#              means bursty. The Recommendation puts the tested range of its own
+#              algorithm at a burst ratio of 2, and allows more than that only
+#              where loss stays under 2%. Restated rather than quoted: ITU
+#              reserves its rights in the TEXT of a Recommendation, and a
+#              definition and a threshold are facts rather than that text. Used
+#              here as a sanity anchor for what counts as ordinary burstiness,
+#              never as the source of a number in the table.
 #   [3GPP-RTT] GENERAL KNOWLEDGE, deliberately not dressed as a citation: UMTS
 #              round trips of roughly 100-200 ms, HSPA 80-150 ms, real
 #              throughput 0.384-2 Mbit/s. Widely reported engineering ranges; no
 #              single document is being leaned on, and inventing a specification
 #              number to make it look sourced would be worse than saying this.
 #
+# HOW `loss_burst` WAS CHOSEN, and why it is not the number the paper prints
+# -----------------------------------------------------------------------------
+# `loss_burst` is the average number of packets lost IN A ROW (0 = the loss is
+# spread evenly). It shapes `loss`, it does not add to it.
+#
+# 🔴 The obvious move - take [WIFI-BLL]'s overall mean of 5.37 and write it down -
+# is wrong, and the reason is worth keeping. That mean comes from a heavy-tailed
+# distribution (sd 31.68, longest burst 8853), so it is dragged upward by rare
+# enormous bursts. Our chain is GEOMETRIC and memoryless: it cannot produce
+# "mostly short, occasionally 8853", so fitting its mean to 5.37 would deliver far
+# more MEDIUM bursts than the measurement ever saw. The three Wi-Fi presets
+# therefore take the paper's PER-STATE means instead, which describe a channel in
+# one condition rather than a mixture of all of them - good state 3.00, the worse
+# intermediate 4.66, bad state 5.67.
+#
+# Sanity check on the other side: under [E-MODEL], a burst ratio of 1 is random
+# loss and the standard is cautious above 2. So single-digit run lengths are the
+# realistic range for a working link, and the run of twenty that flattens a TCP
+# window is a case a tester dials in deliberately - not something a preset should
+# claim a real network does.
+#
+# Where it is left at 0, that is a decision and not an omission:
+#   * `perfect`, `distant`, `bufferbloat` lose nothing, so a run length there
+#     would be a knob that cannot move;
+#   * `dsl` and `modem56k` are wired, where loss is queue overflow rather than a
+#     radio going away, and tail drop on one flow is close to independent;
+#   * `leo` is left alone on the strength of a SOURCE, which is the strongest
+#     reason on this list: [STAR-CON] measured the 15-second reconfiguration
+#     QUEUEING packets rather than dropping them, which is why this preset carries
+#     a latency spike and not an outage. Bursting it would contradict its own
+#     citation;
+#   * `5g` and `lte` lose 0.1-0.3%, little enough that a run length would be an
+#     unsourced number a tester would rarely see act.
+# -----------------------------------------------------------------------------
+
 # 🔴 LICENSING, before somebody improves this: the figures above are FACTS with
 # attribution, which is exactly what is allowed - facts carry no copyright and a
 # handful of them is not a substantial part of any database. That stops being
@@ -79,13 +133,35 @@ from .settings import DEFAULT_SETTINGS
 # Ookla, Speedtest, Starlink, HughesNet and Viasat are trademarks of their
 # respective owners, named here only to identify whose measurements these are.
 # This project is not affiliated with, endorsed by or sponsored by any of them.
+#
+# CHECKED AND CLEAN, so nobody has to check it twice (2026-09-01, at the source
+# rather than from memory):
+#   * [WIFI-BLL] is open access under **CC BY 4.0**, copyright the authors
+#     ("© 2022 by the authors. Licensee MDPI"), verified on the article page.
+#     Two independent reasons it is fine here: individual figures are facts and
+#     carry no copyright at all, and even if they did, CC BY permits reuse with
+#     attribution - which is given, with authors, venue and DOI. No wording is
+#     reproduced, and the underlying trace is NOT ingested, which is the line
+#     that matters (see the Ookla note above).
+#   * [E-MODEL] is an ITU-T Recommendation and ITU reserves its rights in the
+#     TEXT. Nothing of that text is here: one definition in our own words and one
+#     threshold, both attributed, and it is used only as a sanity anchor rather
+#     than as the source of any value in the table. A definition and a number are
+#     not the copyrighted expression.
+#   * Neither belongs in `THIRD-PARTY-NOTICES.md` or `licenses/`. Those carry
+#     what the BUILD ships - libraries, DLLs, fonts, icons (convention 35). A
+#     bibliographic citation in a comment ships no third-party work, which is why
+#     the five older sources here have no entry either.
 # --------------------------------------------------------------------------- #
 PRESETS = {
     # ordered best -> worst (top = best network, bottom = worst)
     "presets.perfect":     dict(loss=0,   corrupt=0,   dup=0,   lat=0,   jit=0,   down=0,     up=0),
     # JUDGEMENT: "good" is not a measurable quantity. Ping 30 ms to a server on
     # the internet, a whisper of loss, and the link is not the bottleneck.
-    "presets.good_wifi":   dict(loss=0.1, corrupt=0,   dup=0,   lat=15,  jit=5,   down=0,     up=0),
+    # `loss_burst` is the exception and is SOURCED: the good-channel state in
+    # [WIFI-BLL] loses 3.00 packets in a row on average.
+    "presets.good_wifi":   dict(loss=0.1, corrupt=0,   dup=0,   lat=15,  jit=5,   down=0,     up=0,
+                                loss_burst=3),
     # 168 Mbit/s down is mid-band 5G. Upload was 8192 (67 Mbit/s), which no
     # market reaches: 5G upload runs 50-120% above 4G, so ~21 Mbit/s. [OOKLA25]
     "presets.5g":          dict(loss=0.1, corrupt=0,   dup=0,   lat=18,  jit=8,   down=20480, up=2560),
@@ -107,8 +183,13 @@ PRESETS = {
     # throughput collapses and jitter dominates. The old 2048/1024 and 1024/384
     # made "weak" and "cafe" faster than most home DSL, which is the one thing
     # they must not be.
-    "presets.weak_wifi":   dict(loss=2,   corrupt=0.2, dup=0.5, lat=80,  jit=40,  down=512,   up=256),
-    "presets.cafe":        dict(loss=3,   corrupt=0.3, dup=1,   lat=120, jit=90,  down=256,   up=96),
+    # The two run lengths ARE sourced: [WIFI-BLL] measures 4.66 packets in a row
+    # in the worse intermediate channel state and 5.67 in the bad one, so a
+    # degraded link takes the first and a crowded one the second.
+    "presets.weak_wifi":   dict(loss=2,   corrupt=0.2, dup=0.5, lat=80,  jit=40,  down=512,   up=256,
+                                loss_burst=5),
+    "presets.cafe":        dict(loss=3,   corrupt=0.3, dup=1,   lat=120, jit=90,  down=256,   up=96,
+                                loss_burst=6),
     # Idle it is a good link; under load the queue is the impairment. 2000 ms of
     # buffer on a 1 Mbit/s uplink is the classic "the video call dies when
     # somebody starts a backup" [BLOAT]. NOTE: the buffer only bites once the
@@ -120,31 +201,48 @@ PRESETS = {
     # cluster near stations. JUDGEMENT: the 10% duty cycle (3 s out of every 30)
     # is a choice, not a measurement - no study gives a canonical figure. It is
     # the only preset that takes the link fully down long enough to make an
-    # application RECONNECT rather than merely degrade.
+    # application RECONNECT rather than merely degrade. The run length is
+    # JUDGEMENT too: it describes the fading BETWEEN those handovers, which is
+    # why it sits a little above the bad Wi-Fi state rather than modelling the
+    # handover itself - the flap already does that.
     "presets.metro":       dict(loss=2,   corrupt=0,   dup=0,   lat=50,  jit=40,  down=1024,  up=256,
-                                spike_prob=5, spike_ms=400, flap_period=30, flap_down=10),
+                                spike_prob=5, spike_ms=400, flap_period=30, flap_down=10,
+                                loss_burst=6),
     # [3GPP-RTT]. The old 384/128 was UMTS R99's kbit/s pair in a KB/s field,
     # which made "3G" deliver 3.1 Mbit/s - HSPA+, not the experience anybody
-    # picks this preset to reproduce.
-    "presets.3g":          dict(loss=1,   corrupt=0,   dup=0,   lat=90,  jit=60,  down=96,    up=32),
+    # picks this preset to reproduce. The run length is JUDGEMENT: a radio link
+    # fades in clusters, but no source gives a run length for UMTS.
+    "presets.3g":          dict(loss=1,   corrupt=0,   dup=0,   lat=90,  jit=60,  down=96,    up=32,
+                                loss_burst=4),
     # JUDGEMENT: roaming varies by operator and agreement more than by
     # technology. The shape is what matters - your traffic goes home first.
-    "presets.roaming":     dict(loss=1.5, corrupt=0,   dup=0,   lat=200, jit=80,  down=256,   up=64),
+    # The run length is JUDGEMENT for the same reason as `3g`.
+    "presets.roaming":     dict(loss=1.5, corrupt=0,   dup=0,   lat=200, jit=80,  down=256,   up=64,
+                                loss_burst=4),
     # Geostationary: SLOW in latency, not in bandwidth - the opposite of what
     # "satellite" suggests. 680 ms ping and 25 Mbit/s, between what HughesNet
-    # delivers (8-20) and Viasat (25-60). [OOKLA25]
-    "presets.satellite":   dict(loss=1,   corrupt=0,   dup=0,   lat=340, jit=100, down=3072,  up=384),
+    # delivers (8-20) and Viasat (25-60). [OOKLA25]. The run length is
+    # JUDGEMENT: rain fade clusters losses, but [OOKLA25] reports rates, not
+    # run lengths.
+    "presets.satellite":   dict(loss=1,   corrupt=0,   dup=0,   lat=340, jit=100, down=3072,  up=384,
+                                loss_burst=4),
     # [MILEHIGH]. 7% loss is the measured MEDIAN for satellite in-flight, not a
     # worst case. Per-user throughput is provider policy, not technology: one
     # operator throttled every user to 100 kbit/s. The flap models losing the
-    # beam. Aircraft on newer LEO kit behave like `presets.leo` instead.
+    # beam. Aircraft on newer LEO kit behave like `presets.leo` instead. The run
+    # length is JUDGEMENT: [MILEHIGH] measures the loss RATE, not how it arrives,
+    # and this is the worst-behaved link in the table that still claims to be a
+    # real one.
     "presets.inflight":    dict(loss=7,   corrupt=0,   dup=0,   lat=375, jit=150, down=64,    up=24,
-                                flap_period=60, flap_down=3),
+                                flap_period=60, flap_down=3, loss_burst=8),
     # V.90 in practice: ~41 kbit/s down, ~33 up. These two were always right.
     "presets.modem56k":    dict(loss=0.5, corrupt=0,   dup=0,   lat=100, jit=30,  down=5,     up=4),
     # Not a real network and not meant to be one: the everything-at-once case.
-    # Its old 256/128 made the WORST preset faster than the 3G one.
-    "presets.terrible":    dict(loss=10,  corrupt=2,   dup=2,   lat=300, jit=150, down=32,    up=16),
+    # Its old 256/128 made the WORST preset faster than the 3G one. The run
+    # length needs no source for the same reason the rest of this row does not:
+    # it is meant to be fatal, not realistic.
+    "presets.terrible":    dict(loss=10,  corrupt=2,   dup=2,   lat=300, jit=150, down=32,    up=16,
+                                loss_burst=15),
 }
 
 

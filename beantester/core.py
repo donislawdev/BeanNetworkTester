@@ -65,6 +65,21 @@ def burst_loss_params(loss, mean_burst):
     the delivered loss and the delivered mean run length both land on the request
     inside the sampling noise, from 0.5% upward.
 
+    On the licensing of all that, checked rather than assumed (2026-09-01), because
+    two of the three names above are the kind an audit stops on:
+
+    * the MMB 2008 paper is NOT open access. What is used from it is an IDEA - that
+      the average run length is the intuitive way in - together with an observation
+      about its printed formula. Ideas and facts carry no copyright, the formula in
+      this function was worked out here, and no wording of theirs is reproduced.
+    * ``tc netem`` is named, not used. It ships under GPL-2.0 as part of iproute2,
+      which convention 35 forbids as a DEPENDENCY - and nothing here depends on it.
+      No line of it was read into this file. It is named because a reader deserves
+      to know the model has a widely deployed implementation to compare against.
+    * Gilbert 1960 and Elliott 1963 are named as the model's origin, which is
+      attribution rather than reproduction. "Burst-noise channel" is the model's
+      own term, not a quotation.
+
     🔴 Not every request is possible, and that is what ``achievable`` is for.
     ``p <= 1`` needs ``mean_burst >= loss / (1 - loss)``, so 90% loss cannot
     arrive in runs of 5 - runs that short leave too little room between them.
