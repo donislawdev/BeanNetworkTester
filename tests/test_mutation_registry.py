@@ -237,6 +237,26 @@ MUTATIONS = [
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
     {
+        # Back to the watchdog as it stood before 2026-09-02, which asked
+        # `is_alive()` and nothing else - so a thread spinning in a regular
+        # expression or blocked on a driver that stopped answering was healthy.
+        "label": "engine: the watchdog stops noticing a capture thread that stalled",
+        "file": "beantester/engine.py",
+        "old": "            if self._capture_has_stalled():",
+        "new": "            if False:",
+        "test": "test_a_capture_thread_that_is_alive_but_no_longer_moving_fails_open",
+    },
+    {
+        # The other direction, and the more expensive one to get wrong: without the
+        # phase, a thread parked in recv() on a link with no traffic looks exactly
+        # like a stalled one, and the watchdog would kill a healthy session.
+        "label": "engine: the stall check forgets which side of recv the thread is on",
+        "file": "beantester/engine.py",
+        "old": "        if self._cap_beat_at is None or self._cap_waiting:",
+        "new": "        if self._cap_beat_at is None:",
+        "test": "test_a_quiet_link_is_never_mistaken_for_a_stalled_capture_thread",
+    },
+    {
         # Back to the state before 2026-09-02: `re.compile` succeeding was the
         # whole check, so a pattern that parses but never finishes went straight
         # onto the capture thread.

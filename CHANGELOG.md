@@ -42,6 +42,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A frozen capture could keep a session looking healthy forever.** The program already stops
+  itself and hands the network back when the thread reading packets dies. A thread that is still
+  alive but no longer doing anything looked fine to it, even though the effect on you is the
+  same: traffic piles up in the driver, the machine loses its connection and the window stops
+  responding. That state is now detected too, and it ends the session and releases the driver
+  the way any other failure does.
+
 - **A filter expression could freeze the whole program.** A regular expression in a target,
   address or port field runs on every packet. Some perfectly valid patterns take practically
   forever on ordinary input, and one of those stopped the capture: the machine quietly lost its

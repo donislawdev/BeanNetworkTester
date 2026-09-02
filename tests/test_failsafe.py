@@ -1180,3 +1180,142 @@ def test_a_worker_the_engine_does_not_own_reports_through_the_same_door():
               not eng.is_running())
     finally:
         eng.stop()
+
+
+# --- alive, and no longer doing anything ------------------------------------- #
+#
+# The other half of fail-open. Until 2026-09-02 the watchdog asked `is_alive()`
+# and nothing else, so the one state this module's own docstring calls dangerous -
+# a process still ALIVE with an open divert and no working capture thread - was
+# the one it could not see. A thread spinning in a regular expression, waiting on
+# a deadlocked lock, or blocked on a driver that stopped answering is alive.
+
+
+class _StallingDivert(QuietDivert):
+    """Hands over one packet whose first field access never returns.
+
+    A real stall, not a poked flag: the capture thread gets past `recv()`, writes
+    its beat, and then blocks INSIDE our own code, which is exactly the shape the
+    watchdog has to tell apart from a quiet link. `release()` lets it finish so the
+    test does not leave a thread parked forever.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.released = threading.Event()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return _StallingPacket(self.released)
+        return super().recv()           # then behave like a quiet link
+
+    def release(self):
+        self.released.set()
+
+
+class _StallingPacket(FakePacket):
+    def __init__(self, released):
+        super().__init__()
+        self._released = released
+
+    @property
+    def raw(self):
+        # `size = len(packet.raw)` is the first thing the loop does after writing
+        # its beat, so blocking here parks the thread on the far side of `recv()`.
+        self._released.wait(30)
+        return b"\x00" * 100
+
+    @raw.setter
+    def raw(self, value):
+        pass                            # FakePacket.__init__ assigns it
+
+
+def test_a_capture_thread_that_is_alive_but_no_longer_moving_fails_open():
+    """The session must stop and the divert must close, as for a DEAD thread.
+
+    The threshold is lowered on the instance rather than waited out: ten seconds is
+    the shipped value and it is chosen against a healthy session's worst gap
+    (31.912 ms measured), not against how long a test may take.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.3
+    divert = _StallingDivert()
+    eng.start("test", divert=divert)
+    try:
+        def stopped_completely():
+            kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
+            return (not eng.is_running() and divert.closed
+                    and ("STOP", "events.fault") in kinds)
+
+        check("stall: the session stops and finishes teardown",
+              _wait_until(stopped_completely),
+              f"(running={eng.is_running()}, closed={divert.closed})")
+        check("stall: the divert is closed (network restored)", divert.closed is True)
+        check("stall: the reason is recorded", eng.stop_reason == "fault",
+              f"({eng.stop_reason})")
+        check("stall: the fault says what happened",
+              "capture thread" in str(eng.fault).lower(), f"({eng.fault})")
+    finally:
+        divert.release()
+
+
+class _GoesQuietDivert(QuietDivert):
+    """One packet, then nothing - an ordinary link that falls silent."""
+
+    def __init__(self):
+        super().__init__()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return FakePacket()
+        return super().recv()
+
+
+def test_a_quiet_link_is_never_mistaken_for_a_stalled_capture_thread():
+    """The half that matters more, because a false stall kills a real test.
+
+    A capture thread parked in `recv()` on a link with no traffic has not beaten
+    for as long as the link has been silent, which can be the whole session. That
+    is indistinguishable from a stall by any counter alone - `_cap_waiting` is the
+    only thing that separates them, and this is what would catch its removal.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.2
+    divert = _GoesQuietDivert()
+    eng.start("test", divert=divert)
+    try:
+        # Long past the threshold and past several watchdog ticks (0.2 s each).
+        time.sleep(1.5)
+        check("quiet link: the session is still running",
+              eng.is_running() is True, f"(stop_reason={eng.stop_reason})")
+        check("quiet link: the divert is still open", divert.closed is False)
+        check("quiet link: nothing was recorded as a fault", eng.fault is None,
+              f"({eng.fault})")
+    finally:
+        eng.stop()
+
+
+def test_the_stall_check_answers_no_for_every_state_that_is_not_one():
+    """The degenerate-but-legal inputs, asked directly so they cannot be missed.
+
+    A session that has not seen its first packet has no beat at all, and a thread
+    that has already died is the liveness check's business, not this one - both
+    would otherwise fail-stop a session for the wrong reason.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.01
+    check("no beat yet: not a stall", eng._capture_has_stalled() is False)
+
+    eng._cap_beat_at = time.monotonic() - 60
+    eng._cap_waiting = False
+    check("no capture thread: not a stall", eng._capture_has_stalled() is False)
+
+    eng._t_cap = threading.Thread(target=lambda: None)
+    eng._t_cap.start()
+    eng._t_cap.join()
+    check("dead capture thread: left to the liveness check",
+          eng._capture_has_stalled() is False)
