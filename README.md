@@ -1044,6 +1044,7 @@ All of them loop except `upload-drop-midway.json`, so you can start one and leav
 | `congested-vpn.json` | A VPN whose **upload** collapses while download stays fine (512 to 160 KB/s), with latency spikes, an MTU of 1400 and occasional resets. |
 | `failing-dns.json` | Aimed at **UDP port 53 only**: name resolution degrades to 60% loss and 1.5 s of ping, goes **100% dead for 13 s**, then comes back. Everything else on the machine keeps working, which is what makes it a DNS test rather than an outage test. |
 | `overloaded-game-server.json` | A server sagging under load: ping, jitter, loss and duplication all climb together, with latency spikes up to 800 ms at 45% of packets. |
+| `same-loss-in-runs.json` | The same 5% loss for the whole run, arriving four different ways: evenly spread, then in runs of 5, 15 and 40 packets. Nothing else changes, so whatever breaks is the SHAPE of the loss and not how much of it there is. The one for finding out whether your reconnect path works. |
 | `upload-drop-midway.json` | **Does not loop** - a one-shot: an upload that starts healthy, degrades, is **cut to zero mid-transfer** with a TCP reset, then partially recovers. For testing resumable uploads and progress bars that lie. |
 | `blocked-endpoint.json` | One backend (`203.0.113.0/24`) is **blocked** at 20 s while everything else keeps working, then unblocked. For testing timeouts, retries and fallbacks against a single dependency. |
 

@@ -890,6 +890,7 @@ Wszystkie chodzą w pętli poza `upload-drop-midway.json`, więc można je włą
 | `congested-vpn.json` | VPN, w którym pada **upload**, a pobieranie trzyma się dobrze (512 → 160 KB/s), ze skokami latencji, MTU 1400 i sporadycznymi resetami. |
 | `failing-dns.json` | Wycelowany **wyłącznie w UDP port 53**: rozwiązywanie nazw degraduje się do 60% strat i 1,5 s pingu, na 13 s **pada w 100%**, po czym wraca. Reszta ruchu działa normalnie - i to właśnie czyni z tego test DNS-u, a nie test awarii. |
 | `overloaded-game-server.json` | Serwer uginający się pod obciążeniem: ping, jitter, straty i duplikacja rosną razem, ze skokami latencji do 800 ms na 45% pakietów. |
+| `same-loss-in-runs.json` | Te same 5% strat przez cały przebieg, przychodzące na cztery sposoby: równomiernie, a potem seriami po 5, 15 i 40 pakietów. Nic innego się nie zmienia, więc to, co pęknie, jest winą KSZTAŁTU straty, a nie jej wielkości. Ten do sprawdzenia, czy ścieżka ponownego łączenia działa. |
 | `upload-drop-midway.json` | **Bez pętli** - jednorazowy: upload zaczyna zdrowo, degraduje się, zostaje **ucięty do zera w połowie transferu** z resetem TCP, potem częściowo wraca. Do testowania wznawialnych wysyłek i pasków postępu, które kłamią. |
 | `blocked-endpoint.json` | Jeden backend (`203.0.113.0/24`) zostaje **zablokowany** w 20 s, reszta działa dalej, po czym blokada znika. Do testowania timeoutów, ponowień i fallbacków wobec pojedynczej zależności. |
 
