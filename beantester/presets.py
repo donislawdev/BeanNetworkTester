@@ -76,10 +76,13 @@ from .settings import DEFAULT_SETTINGS
 #   [E-MODEL]  ITU-T Rec. G.107, the E-model. Defines Burst Ratio as the average
 #              length of observed loss bursts over the length expected under
 #              random loss, so BurstR = 1 means independent loss and BurstR > 1
-#              means bursty, and it cautions against using the algorithm above
-#              BurstR = 2.0 pending further verification (allowing higher when
-#              loss is under 2%). Used here only as a sanity anchor for what
-#              counts as ordinary burstiness, not as a source for any number.
+#              means bursty. The Recommendation puts the tested range of its own
+#              algorithm at a burst ratio of 2, and allows more than that only
+#              where loss stays under 2%. Restated rather than quoted: ITU
+#              reserves its rights in the TEXT of a Recommendation, and a
+#              definition and a threshold are facts rather than that text. Used
+#              here as a sanity anchor for what counts as ordinary burstiness,
+#              never as the source of a number in the table.
 #   [3GPP-RTT] GENERAL KNOWLEDGE, deliberately not dressed as a citation: UMTS
 #              round trips of roughly 100-200 ms, HSPA 80-150 ms, real
 #              throughput 0.384-2 Mbit/s. Widely reported engineering ranges; no
