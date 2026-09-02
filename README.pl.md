@@ -613,7 +613,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--seed N` | ziarno losowości - ten sam przebieg da się powtórzyć |
 | `--duration N` | **czas pracy w sekundach** (0 = do Ctrl+C albo do końca osi czasu z `--scenario`). To samo pole jest w GUI (sekcja „Sesja”) |
 | `--row-limit N` | ustawienie **tylko dla GUI**: maks. wierszy w tabelach (0 = bez limitu, domyślnie 50 000). W samym CLI (bez okna) nic nie robi - jest jedynie zapisywane do pliku konfiguracji i działa dopiero, gdy ten config otworzysz w GUI. Odpowiednik pola „Limit wierszy” |
-| `--interval N` | co ile sekund raportować (musi być > 0) |
+| `--interval N` | co ile sekund raportować (więcej niż 0, najwyżej 86 400 - ten sam sufit co przy `--duration`, więc interwał, który i tak nigdy by nie wystrzelił, jest odrzucany zamiast przyjmowany) |
 | `--log-conns` | wypisz na końcu zaobserwowane połączenia |
 | `--repro-out PLIK` | zapisz raport reprodukcji (JSON) |
 | `--simulate` | sztuczny ruch zamiast WinDivert (test bez Windows, bez sterownika i bez admina) |

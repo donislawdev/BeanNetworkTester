@@ -42,6 +42,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--interval nan` ran forever at full CPU and printed nothing.** The report interval was
+  checked only for being above zero, so `nan` and `inf` got through. With `nan` the run spun on a
+  full processor core, printed no reports, and without `--duration` never ended. With `inf`, or a
+  huge value like `1e18`, the session ended as an internal failure. The interval must now be
+  greater than 0 and at most 86 400 seconds, the same ceiling `--duration` has. A longer one
+  could never report even once, so it is refused with a clear message.
+
 - **`--doctor` now tells you whether your copy can be tampered with.** The program asks for
   administrator rights and then loads its network driver from its own folder, so a folder
   anyone can write to without those rights is worth knowing about. Run `--doctor` without

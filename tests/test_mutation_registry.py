@@ -237,6 +237,16 @@ MUTATIONS = [
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
     {
+        # Back to the check as it stood before 2026-09-02, which is the exact
+        # shape that let NaN through: `float('nan') <= 0` is False.
+        "label": "cli: the report interval is only checked for being above zero",
+        "file": "beantester/cli.py",
+        "old": "if not (0 < interval <= MAX_INTERVAL_S):",
+        "new": "if interval <= 0:",
+        "test": ("test_the_report_interval_is_refused_while_it_is_still_a_number"
+                 "_on_a_command_line"),
+    },
+    {
         "label": "doctor: the JSON report loses the data_dir field",
         "file": "beantester/cli.py",
         "old": 'log.data(dict(event="doctor", ok=ok, data_dir=where,',

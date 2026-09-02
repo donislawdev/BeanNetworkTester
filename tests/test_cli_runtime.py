@@ -91,12 +91,60 @@ def test_exit_code_config_for_bad_input():
         "out of range": ["--loss", "250", "--simulate"],
         "negative duration": ["--duration", "-5", "--simulate"],
         "zero interval": ["--interval", "0", "--simulate"],
+        "nan interval": ["--interval", "nan", "--simulate"],
+        "infinite interval": ["--interval", "inf", "--simulate"],
+        "interval past the ceiling": ["--interval", "86401", "--simulate"],
     }
     for name, argv in cases.items():
         code, out, err = cli(argv)
         check(f"exit: {name} -> CONFIG(3)", code == exitcodes.CONFIG, f"(code={code})")
         check(f"exit: {name} explains itself on stderr", "error:" in err, f"({err!r})")
         check(f"exit: {name} keeps stdout clean", out == "", f"({out!r})")
+
+
+def test_the_report_interval_is_refused_while_it_is_still_a_number_on_a_command_line():
+    """Every rejected interval is rejected by CONFIGURATION, never by the loop.
+
+    ``--interval`` is the only ``type=float`` flag that does not reach
+    ``range_errors``: a reporting cadence is not a field in ``fields.py``, because
+    it changes nothing about the traffic and belongs in no profile. So it was the
+    one numeric door in the program that accepted NaN and infinity, and each of
+    them failed differently once the loop had them (measured 2026-09-02):
+
+    * ``nan``  - ``wake > now`` is false forever, so the loop never sleeps. At
+      100% of a core, printing nothing, and with no ``--duration`` it never
+      returns. Exit code 0.
+    * ``inf``  - ``time.sleep`` raises ``OverflowError`` and the session ends as
+      a fault.
+    * ``1e18`` - the SAME ``OverflowError``, because ``time.sleep`` is int64
+      nanoseconds and gives up above ~9.223e9 s. A finiteness test alone would
+      have closed two values out of that class, which is why the check is a
+      RANGE.
+
+    Asked of ``config_from_args`` rather than of a run, because that is the claim:
+    the value dies before anything is started. It also means a regression here
+    reports a failure instead of hanging the suite on the loop it describes - on
+    virtual time, a NaN interval spins without ever advancing the clock.
+    """
+    # ``--interval=<value>``, not two tokens: argparse reads a leading "-" as the
+    # start of another option, so "-inf" as a separate word never reaches the
+    # check this test is about.
+    for value in ("nan", "inf", "-inf", "1e18", "86400.5"):
+        args = build_arg_parser().parse_args(["--simulate", f"--interval={value}"])
+        try:
+            config_from_args(args)
+        except SystemExit as exc:
+            check(f"interval {value}: refused with CONFIG(3)",
+                  getattr(exc, "code", None) == exitcodes.CONFIG,
+                  f"(code={getattr(exc, 'code', None)})")
+        else:
+            check(f"interval {value}: refused at all", False, "(it was accepted)")
+
+    # The ceiling itself is a legal cadence, not the first illegal one. Without
+    # this the guard could tighten by a second and nothing would notice.
+    args = build_arg_parser().parse_args(["--simulate", "--interval", "86400"])
+    check("interval 86400: the ceiling itself is accepted",
+          config_from_args(args)["interval"] == 86400.0)
 
 
 def test_exit_code_scenario_when_the_scenario_file_is_missing():

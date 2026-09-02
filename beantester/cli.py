@@ -22,7 +22,7 @@ from .appinfo import APP_NAME, command_name, program_name, __version__
 from .clilog import CliLog
 from . import crashlog
 from .engine import BeanEngine
-from .fields import BOOL, FIELD_DEFS
+from .fields import BOOL, FIELD_DEFS, SECONDS
 from .filters import CLI_FILTERS
 from .i18n import T
 from .paths import is_frozen, user_data_dir
@@ -35,6 +35,13 @@ from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        range_errors, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
+
+# The report cadence is bounded by the same ceiling as every other time value in
+# the program, taken from the registry rather than written down a second time -
+# a copy would drift the day somebody decides a run may last longer than a day.
+# See the comment beside the check in `config_from_args` for why it has a ceiling
+# at all.
+MAX_INTERVAL_S = SECONDS[1]
 
 
 class CliError(SystemExit):
@@ -217,7 +224,8 @@ def build_arg_parser():
                         "(the tables are virtualised, so this only bounds the "
                         "filter/sort work, not the rendering)")
     p.add_argument("--interval", type=float, default=2.0,
-                   help="report every N seconds [s] (must be > 0)")
+                   help=f"report every N seconds [s] "
+                        f"(greater than 0, at most {MAX_INTERVAL_S:g})")
     p.add_argument("--log-conns", action="store_true", help="print observed connections at the end")
     p.add_argument("--repro-out", help="save a reproduction report (JSON) to a file at the end")
     p.add_argument("--simulate", action="store_true",
@@ -345,9 +353,26 @@ def config_from_args(args):
         _fail(exitcodes.CONFIG, "; ".join(bad))
 
     interval = float(getattr(args, "interval", 2.0) or 0)
-    if interval <= 0:
-        # 0 used to mean "busy-loop at 100% CPU and spam the log"
-        _fail(exitcodes.CONFIG, "--interval must be greater than 0")
+    # BOTH ends, and the upper one is not tidiness. `--interval` is the only
+    # `type=float` flag that does not reach `range_errors` (it is not a field in
+    # `fields.py`, because a reporting cadence is not a setting - it changes
+    # nothing about the traffic and belongs in no profile), so it was the one
+    # numeric door in the program that took NaN and infinity. Measured 2026-09-02:
+    #   --interval nan   busy-loops at 100% CPU, prints no report, and without
+    #                    --duration never returns at all
+    #   --interval inf   OverflowError out of time.sleep, exit 1 reason=fault
+    #   --interval 1e18  the SAME OverflowError - time.sleep is int64 nanoseconds
+    #                    and gives up above ~9.223e9 s
+    # So a finiteness test would have closed two values out of a class. The bound
+    # closes the class, and 86400 is not a new number: it is `fields.SECONDS`, the
+    # ceiling every other time value here already lives under, including
+    # --duration. A report interval longer than the longest run this tool accepts
+    # cannot fire even once, which makes it a typo rather than a request.
+    # The lower end is older and stays: 0 used to mean "busy-loop at 100% CPU and
+    # spam the log", which is the same failure NaN turned out to be.
+    if not (0 < interval <= MAX_INTERVAL_S):
+        _fail(exitcodes.CONFIG,
+              f"--interval must be greater than 0 and at most {MAX_INTERVAL_S:g}")
 
     min_packets = int(getattr(args, "min_packets", 0) or 0)
     if getattr(args, "fail_on_no_traffic", False):
