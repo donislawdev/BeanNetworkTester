@@ -1619,6 +1619,59 @@ MUTATIONS = [
         "new": '        return ""',
         "test": "test_clearing_the_search_puts_every_style_back",
     },
+    {
+        # The measured reason there are two chains: one shared chain splits every
+        # run across both directions, so each side sees about half the length the
+        # user typed - and the error follows the traffic mix, so there is not even
+        # a constant anyone could correct for.
+        "label": "burst loss: the two run chains collapse into one shared flag",
+        "file": "beantester/core.py",
+        "old": "        self._loss_bad[is_outbound] = bad\n        return bad",
+        "new": "        self._loss_bad[True] = bad\n        return bad",
+        "test": "test_each_direction_gets_a_run_of_the_length_that_was_asked_for",
+    },
+    {
+        # The bug the second analysis caught before it shipped: `p` depends on the
+        # loss as much as on the run length, so leaving this to `set_loss_burst`
+        # alone would let the ORDER of two setter calls decide correctness.
+        "label": "burst loss: changing only the loss leaves the chain stale",
+        "file": "beantester/core.py",
+        "old": "            self.rate_up = self._rate_bps(up_kbps)\n"
+               "            # The burst chain is derived from the loss AND from the run length,\n"
+               "            # so it has to be re-derived here too - see _recompute_burst.\n"
+               "            self._recompute_burst()",
+        "new": "            self.rate_up = self._rate_bps(up_kbps)",
+        "test": "test_changing_only_the_loss_re_derives_the_chain",
+    },
+    {
+        # A clamp that reports the number it was ASKED for is the silent lie this
+        # whole feature was built to avoid: the session would deliver 83% while
+        # every surface said 90%.
+        "label": "burst loss: an impossible pair claims to deliver what was asked",
+        "file": "beantester/core.py",
+        "old": "        return (1.0, r, 1.0 / (1.0 + r))",
+        "new": "        return (1.0, r, loss)",
+        "test": "test_a_pair_that_cannot_exist_is_clamped_and_says_so",
+    },
+    {
+        # Restarting a session inside a run means the first packets of the next
+        # one vanish for a reason belonging to the previous session.
+        "label": "burst loss: a new session starts inside the previous run",
+        "file": "beantester/core.py",
+        "old": "            self._loss_bad[True] = self._loss_bad[False] = False\n"
+               "            self.loss_bursts = 0",
+        "new": "            self.loss_bursts = 0",
+        "test": "test_a_session_never_starts_inside_a_run",
+    },
+    {
+        # The counter exists to tell "too short a session" from "this is not
+        # working", so a counter stuck at zero is worse than none at all.
+        "label": "burst loss: the run counter never counts",
+        "file": "beantester/core.py",
+        "old": "            bad = True\n            self.loss_bursts += 1",
+        "new": "            bad = True",
+        "test": "test_the_run_counter_answers_did_this_fire_at_all",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

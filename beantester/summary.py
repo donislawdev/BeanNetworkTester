@@ -1,4 +1,5 @@
 """Human-readable, translated one-line summary of the active impairments."""
+from .core import burst_loss_params
 from .i18n import translate
 from .settings import DEFAULT_SETTINGS, parse_schedule, setting_expression
 from .utils import number_string, to_number
@@ -24,6 +25,12 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         parts.append(tr("summary.jitter", v=num("jitter")))
     if to_number(g("loss")):
         parts.append(tr("summary.loss", v=num("loss")))
+        # Same loss figure, very different link: the run length is asked of the
+        # function that DECIDES it rather than compared against a threshold here,
+        # so the strip cannot claim runs the engine is not producing.
+        if burst_loss_params(to_number(g("loss")) / 100.0,
+                             to_number(g("loss_burst"))) is not None:
+            parts.append(tr("summary.loss_burst", v=num("loss_burst")))
     if to_number(g("corrupt")):
         parts.append(tr("summary.corrupt", v=num("corrupt")))
     if to_number(g("dup")):

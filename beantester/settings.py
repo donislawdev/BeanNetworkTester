@@ -10,17 +10,19 @@ import socket
 from . import crashlog
 from . import fields as F
 from . import portmap
+from .core import burst_loss_params
 from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
 from .i18n import T, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
 from .targeting import ports_shared_with_others
-from .utils import number_string
+from .utils import number_string, to_number
 from .validators import parse_number, parse_seed
 
 DEFAULT_SETTINGS = dict(
     loss=0, corrupt=0, dup=0, latency=0, jitter=0, down=0, up=0,
+    loss_burst=0,        # average packets lost in a row; 0 = spread evenly. See fields.py
     buffer=1000,         # link buffer (ms) for the speed limit; 0 = unbounded. See fields.py
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
     ipv4_only=False, ipv6_only=False,
@@ -500,6 +502,41 @@ def _destination_is_frozen(engine, dst_ip, dst_port):
             or str(getattr(core, "dst_port", "")) != str(dst_port))
 
 
+def _say_what_the_burst_loss_will_do(loss_pct, mean_burst, log):
+    """Two things a person cannot read off the two fields in front of them.
+
+    Said at APPLY time, before the run, because both of them are the difference
+    between "the tool is broken" and "the tool did what it was told":
+
+    * **Some pairs are impossible.** Runs of five cannot carry 90% loss - runs
+      that short leave too little room between them - so the pair is clamped and
+      the run delivers less loss than the field asks for. Silently delivering a
+      different number than the one on screen is the exact failure this project
+      keeps removing, and the arithmetic behind the clamp lives in ONE place
+      (``core.burst_loss_params``), which is the same place that answers here.
+      Below 50% loss this can never fire.
+    * **A long run can put the runs far apart.** 0.1% loss in runs of 1000 is one
+      run per million packets, which on a quiet connection is hours. The settings
+      look reasonable and nothing happens, which reads exactly like a broken
+      tool. So the run length AND the expected distance between runs are said out
+      loud, in packets, which is the unit the field is in.
+    """
+    loss = to_number(loss_pct) / 100.0
+    params = burst_loss_params(loss, to_number(mean_burst))
+    if params is None:
+        return
+    _p, _r, achievable = params
+    if achievable < loss:
+        log(T("log.loss_burst_clamped", burst=number_string(mean_burst),
+              asked=number_string(loss_pct),
+              delivered=number_string(round(achievable * 100.0, 2))))
+    # Packets per cycle: one run of `mean_burst` for every `mean_burst/achievable`
+    # packets that go past. Rounded to whole packets - the field is in packets and
+    # a fractional one would read as precision this cannot have.
+    log(T("log.loss_burst_gap", burst=number_string(mean_burst),
+          gap=number_string(round(to_number(mean_burst) / achievable))))
+
+
 def apply_settings(engine, s, log=lambda *_: None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
 
@@ -512,6 +549,8 @@ def apply_settings(engine, s, log=lambda *_: None):
     engine.set_params(g("loss"), g("corrupt"), g("dup"),
                       g("latency"), g("jitter"), g("down"), g("up"))
     engine.set_buffer(g("buffer"))
+    engine.set_loss_burst(g("loss_burst"))
+    _say_what_the_burst_loss_will_do(g("loss"), g("loss_burst"), log)
     dst_ip = setting_expression("dst_ip", g("dst_ip"))
     dst_port = setting_expression("dst_port", g("dst_port"))
     # With the driver filter narrowed, the destination fields are START-ONLY, and

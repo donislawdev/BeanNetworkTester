@@ -177,6 +177,8 @@ def build_arg_parser():
                    help="which traffic to capture at all (IPv4 and IPv6). Ports are "
                         "filtered with --dst-port, not here")
     p.add_argument("--loss", type=float, help="packet loss [%%]")
+    p.add_argument("--loss-burst", type=float,
+                   help="average packets lost in a row (0 = spread evenly)")
     p.add_argument("--corrupt", type=float, help="corruption [%%]")
     p.add_argument("--dup", type=float, help="duplication [%%]")
     p.add_argument("--latency", type=float, help="latency [ms]")

@@ -231,14 +231,30 @@ Z podanym prawdopodobieństwem dokleja dodatkowe opóźnienie (ms) do **pojedync
 tak, jak chwilowy „lag” naprawdę wygląda. Szansa liczona jest na pakiet i działa **w każdą stronę**,
 więc pojedyncze odpytanie trafia na nią mniej więcej dwa razy częściej, niż sugeruje ta liczba.
 
-**Zakłócenia (%)** - *Utrata*: procent pakietów znikających bez śladu (5% to już wyraźnie
+**Zakłócenia** - *Utrata*: procent pakietów znikających bez śladu (5% to już wyraźnie
 zrywająca się sieć). *Uszkodzenie*: procent pakietów z przekłamanym bitem danych - dotyczy
 tylko pakietów z ładunkiem (payloadem). Pakiety bez danych (np. czyste ACK, SYN) nie mają czego
 przekłamać, więc przechodzą nietknięte i **nie są liczone jako uszkodzone**.
 *Duplikacja*: procent pakietów wysyłanych podwójnie.
 
+**Straty pod rząd** - prawdziwe łącza rzadko gubią pakiety po jednym. Mikrofalówka, winda albo
+przełączenie się między nadajnikami zabiera połączenie na moment, a wszystko wysłane w tym
+momencie przepada. To pole mówi, ile pakietów ginie pod rząd **średnio**, a *Utrata* nadal
+decyduje, ile ginie w sumie. To znaczy więcej, niż wygląda: 5% rozłożonych równomiernie
+większość połączeń wchłania, a te same 5% w seriach po dwadzieścia zatrzymuje transfer, zrywa
+połączenie na żywo i wysyła aplikację w ścieżkę ponownego łączenia. Ustaw 0, żeby rozłożyć stratę
+równomiernie, czyli tak, jak narzędzie działało, zanim to ustawienie powstało.
+
+Dwa ograniczenia, o których warto wiedzieć, i log mówi o obu przy zastosowaniu ustawień. Bardzo
+wysoka strata nie zmieści się w bardzo krótkich seriach, bo tak krótkie serie zostawiają za mało
+miejsca między sobą, więc przebieg mówi, ile naprawdę zgubi. A długa seria stawia serie daleko od
+siebie, więc krótka sesja może nie zobaczyć żadnej. Każdy kierunek ma własne serie, więc seria po
+dwadzieścia znaczy dwadzieścia pod rząd w tym kierunku.
+
 **Przerwy w łączu (flapping)** - cykliczne całkowite zrywanie ruchu: co *Okres* sekund łącze
-jest martwe przez podany procent czasu. Symuluje migające połączenie.
+jest martwe przez podany procent czasu. Symuluje migające połączenie. To **nie** to samo co straty
+pod rząd: flapping jest stałym cyklem, który da się przewidzieć, a serie wyżej są losowe i krótkie,
+w środku normalnego ruchu.
 
 **Zaawansowane (NAT / połączenia):**
 - *Celuj w cel (IP/port)* - psuj tylko ruch do/od wybranych serwerów. Oba pola przyjmują listy, zakresy, CIDR, wildcardy, porównania, wykluczenia i wyrażenia regularne - patrz [Składnia filtrów](#składnia-filtrów-proces--ip--port). Np. IP `10.0.0.1-10.0.0.50,!10.0.0.7`, port `80,443,8000-8100`. Puste = dowolne.
@@ -269,7 +285,7 @@ Ich liczby pochodzą z opublikowanych pomiarów wszędzie tam, gdzie pomiary ist
 - **Pociąg / metro (tunele)** - jedyny preset, który kładzie łącze całkowicie na kilka sekund (3 s na każde 30), więc aplikacja musi się **połączyć od nowa**, a nie tylko zwolnić.
 - **Wi-Fi w samolocie** - ten klasyczny, satelitarny: ~750 ms pingu i 7% strat, przy czym to jest zmierzona **mediana**, nie najgorszy przypadek. Samoloty z nowszym sprzętem niskoorbitalnym zachowują się jak „Satelita niskoorbitalny”.
 
-Profil zapisuje to, **jakie jest łącze**: stratę, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi. Przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
+Profil zapisuje to, **jakie jest łącze**: stratę, to ile jej przychodzi pod rząd, uszkodzenia, duplikację, opóźnienie, jitter, skoki latencji, przerwy w łączu (flapping), limity prędkości i bufor. Reszta ustawień - cel, adres docelowy, blokada, RST, MTU, wygasanie NAT, harmonogram, seed - do profilu nie wchodzi. Przy zapisie zobaczysz ostrzeżenie z listą tych, które akurat masz włączone. Pełną konfigurację zapisujesz przyciskiem **„Zapisz plik...”**. Wybranie profilu albo presetu ustawia **wszystkie** te pola naraz, także te, których dany preset nie wymienia - wracają wtedy do wartości domyślnej, żeby „Idealna sieć” naprawdę znaczyła idealną. Profile zapisane wcześniejszą wersją wczytują się bez zmian.
 
 W CLI (`--preset`) preset można podać przez **kanoniczne id** albo **nazwę w dowolnym języku UI** (bez rozróżniania wielkości liter i polskich znaków - `"Idealna siec"` też zadziała). Id: `presets.perfect`, `presets.good_wifi`, `presets.5g`, `presets.dsl`, `presets.lte`, `presets.leo`, `presets.distant`, `presets.weak_wifi`, `presets.cafe`, `presets.bufferbloat`, `presets.metro`, `presets.3g`, `presets.roaming`, `presets.satellite`, `presets.inflight`, `presets.modem56k`, `presets.terrible`.
 
@@ -450,7 +466,8 @@ powód (w języku interfejsu), a CLI kończy się czytelnym `error: ...` - nigdy
 ## Statystyki (co znaczą liczniki)
 
 Wykres przepustowości ma teraz oś Y z wartościami (KB/s), siatkę, „ładnie” zaokrągloną skalę oraz bieżące odczyty down/up w rogu. Pobieranie/Wysyłanie (KB/s na żywo), Pakiety (ile przeszło), W kolejce (czekające - rośnie przy
-opóźnieniu/limicie), Utracone, Uszkodzone, Zduplikowane, Bufor przepełn. (porzucone przy
+opóźnieniu/limicie), Utracone, Serie strat (w ilu SERIACH przyszła ta strata - patrz
+„Straty pod rząd”), Uszkodzone, Zduplikowane, Bufor przepełn. (porzucone przy
 przeciążeniu narzędzia), Porzuc. przy stopie (czekały w kolejce, gdy nacisnięto STOP), Nie odesłane
 (narzędzie je przechwyciło, ale nie zdołało odesłać do sieci - padło połączenie albo sterownik
 odrzucił pakiet), Odrzuc. przez limit (porzucone przez pełny bufor limitu prędkości -
@@ -545,6 +562,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | Flaga | Jednostka | Opis |
 |---|---|---|
 | `--loss` | % | procent gubionych pakietów |
+| `--loss-burst` | pakietów | średnia liczba pakietów gubionych pod rząd (0 = strata rozłożona równomiernie). Kształtuje `--loss`, nie dokłada się do niego |
 | `--corrupt` | % | procent pakietów z przekłamanym bitem |
 | `--dup` | % | procent pakietów wysłanych podwójnie |
 | `--latency` | ms | stałe opóźnienie doklejane do każdego pakietu |
@@ -766,6 +784,7 @@ w ogóle policzył - więc każdy wiersz zapisuje to w kolumnie `capture_narrowe
 | `packets_seen` | przechwycone pakiety |
 | `packets_in_scope` | z tego te, które celowanie wybrało do psucia |
 | `dropped_loss` | odrzucone przez ustawienie Strata |
+| `loss_runs` | w ilu SERIACH przyszła ta strata (patrz „Straty pod rząd”). 0 przy ustawionej długości serii znaczy, że sesja była za krótka, żeby zobaczyć choć jedną |
 | `dropped_overflow` | odrzucone, bo kolejka samego narzędzia była pełna |
 | `corrupted` | pakiety z przekłamaną zawartością |
 | `duplicated` | dołożone kopie |

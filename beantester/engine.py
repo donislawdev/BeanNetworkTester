@@ -372,6 +372,9 @@ class BeanEngine:
     def set_buffer(self, *a):
         self.core.set_buffer(*a)
 
+    def set_loss_burst(self, *a):
+        self.core.set_loss_burst(*a)
+
     def set_target(self, active, ports=None):
         """Point the engine at a set of local ports (or a live port container).
 
@@ -576,6 +579,13 @@ class BeanEngine:
             # narrowed to the traffic the tool was asked to impair - and because
             # the stats CSV takes its column order from this dict.
             self.st = dict(seen=0, scoped_seen=0,
+                           # Sits next to drop_loss because it describes the SAME
+                           # loss: how many runs it arrived in. Zeroed here for
+                           # the CSV column order (this dict is where it comes
+                           # from); the value itself is the core's, and
+                           # stats_snapshot merges it - the core zeroes it in
+                           # reset_buckets, which start() calls in the same breath.
+                           loss_bursts=0,
                            drop_loss=0, drop_overflow=0, corrupted=0,
                            duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_internet_only=0,
@@ -898,6 +908,13 @@ class BeanEngine:
             s = dict(self.st)
         with self._cv:
             s["queue"] = len(self._heap)
+        # Counted by the DECISION core, not by this loop: only ``decide()`` can
+        # see a run of losses begin. Read without ``core._lock`` on purpose and
+        # for the same reason ``SocketWatcher.pid_for`` takes none - it is one
+        # int, the capture thread holds that lock for every packet, and a snapshot
+        # is allowed to be a moment old. (A free-threaded build would have to
+        # revisit this, along with the other lock-free reads - backlog B-2.)
+        s["loss_bursts"] = self.core.loss_bursts
         return s
 
     def _bump(self, key, n=1):

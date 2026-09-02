@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Lose packets in runs instead of one at a time.** A new "Losses in a row" field, and
+  `--loss-burst`, sets how many packets are lost in a row on average. "Loss" still decides how
+  much goes missing overall, so 5 percent stays 5 percent and simply arrives in clusters. Spread
+  out, most connections absorb it. In runs of twenty it stalls transfers and forces reconnects,
+  which is usually what you meant to test. Set 0, the default, to spread it evenly as before.
+  Profiles remember it, and the log says how often to expect a run.
+
+- **A "Loss runs" counter** on the Statistics tab, in the stats CSV and in the reproduction
+  report, says how many runs of lost packets a session actually produced. Zero there, with a
+  run length set, means the session was too short to see one rather than the setting doing
+  nothing.
+
 - **Aim at one address family.** Two new switches under the destination target, in the GUI
   and on the command line, impair IPv4 only or IPv6 only. The other family keeps flowing
   untouched: nothing is blocked and nothing is slowed, it is simply left alone. They work

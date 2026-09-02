@@ -213,6 +213,7 @@ class _TargetedEngine:
     def set_seed(self, *_a, **_k): pass
     def set_params(self, *_a, **_k): pass
     def set_buffer(self, *_a, **_k): pass
+    def set_loss_burst(self, *_a, **_k): pass
     def set_dest(self, *_a, **_k): pass
     def set_ip_family(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
@@ -368,29 +369,17 @@ def test_exit_code_runtime_without_pydivert():
     """
     _needs_permission_to_answer("a capture that cannot start")
 
-    class _CannotStartEngine:
-        fault = False
+    class _CannotStartEngine(_TargetedEngine):
+        """The same engine surface, with the ONE method that has to fail.
 
-        def set_seed(self, *_a, **_k): pass
-        def set_params(self, *_a, **_k): pass
-        def set_buffer(self, *_a, **_k): pass
-        def set_dest(self, *_a, **_k): pass
-        def set_ip_family(self, *_a, **_k): pass
-        def set_lan(self, *_a, **_k): pass
-        def set_internet_only(self, *_a, **_k): pass
-        def set_block(self, *_a, **_k): pass
-        def set_advanced(self, *_a, **_k): pass
-        def set_spike(self, *_a, **_k): pass
-        def set_nat(self, *_a, **_k): pass
-        def set_rst(self, *_a, **_k): pass
-        def set_flap(self, *_a, **_k): pass
-        def set_schedule(self, *_a, **_k): pass
-        def set_target(self, *_a, **_k): pass
+        This used to mirror every setter by hand. A second copy of an interface
+        is the copy that falls behind, and it did: the engine gaining a setter
+        turned this test red for a reason that has nothing to do with what it
+        asserts. ``_OneTickEngine`` already subclasses for the same reason.
+        """
 
         def start(self, *_a, **_k):
             raise RuntimeError("WinDivert could not be opened")
-
-        def stop(self, *_a, **_k): pass
 
     out, err = io.StringIO(), io.StringIO()
     clock = FakeClock()
@@ -1076,6 +1065,34 @@ def test_the_lan_abbreviation_still_reaches_lan_mode(monkeypatch):
     check("--lan still means --lan-mode", args.lan_mode is True)
     check("--internet-only did not attach itself to it",
           args.internet_only is False)
+
+
+def test_the_loss_flag_survived_gaining_a_neighbour(monkeypatch):
+    """🔴 MEASURED, and the cost `--loss-burst` was allowed to charge.
+
+    ``allow_abbrev`` is on by decision (ADR 2026-08-02), so a second option
+    starting with ``loss`` changes what the prefixes mean. Measured on this
+    parser: ``--loss`` still resolves, because argparse prefers an EXACT match
+    over a prefix one, and ``--loss-b`` reaches the new flag. What did NOT
+    survive is ``--los``, which used to work and is now ambiguous - a real if
+    small cost, accepted deliberately rather than discovered later, and pinned
+    here so nobody spends an afternoon on it as a bug.
+    """
+    parser = cli_module.build_arg_parser()
+    args = parser.parse_args(["--loss", "5"])
+    check("--loss still means the loss percentage", args.loss == 5.0, f"({args.loss})")
+    check("and it did not swallow the run length", args.loss_burst is None,
+          f"({args.loss_burst})")
+    args = parser.parse_args(["--loss-b", "20"])
+    check("--loss-b reaches the run length", args.loss_burst == 20.0,
+          f"({args.loss_burst})")
+    try:
+        parser.parse_args(["--los", "5"])
+        code = 0
+    except SystemExit as exc:
+        code = exc.code
+    check("--los is now ambiguous, which is the accepted cost of the name",
+          code == 2, f"(exit {code})")
 
 
 def test_a_bounded_run_is_not_warned_about(monkeypatch):

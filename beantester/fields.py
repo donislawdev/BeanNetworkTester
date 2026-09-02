@@ -81,6 +81,14 @@ class Field(NamedTuple):
     help_body: str = ""            # i18n key of the "?" help-sheet body (optional)
     impairs: str = ""              # "" | IMPAIRS_ALL | IMPAIRS_MATCHED (see above)
     narrows: bool = False          # bounds what EVERY later impairment can reach
+    # Key of the impairment this field only SHAPES. A parameter sits behind its
+    # trigger's gate in decide(), so it arms nothing by itself - which is why it
+    # must not declare ``impairs`` (that would warn about a run damaging nothing).
+    # Naming the trigger instead of leaving the field blank is what lets the
+    # pass-through suite derive its own sweep: see PARAMETER_KEYS below, and
+    # tests/test_passthrough.py::test_a_parameter_at_its_maximum_still_damages_nothing,
+    # which used to be two field names typed out by hand in that file.
+    parameter_of: str = ""
 
 
 FIELD_DEFS = (
@@ -164,12 +172,34 @@ FIELD_DEFS = (
           cli="spike-prob", impairs=IMPAIRS_ALL),
     Field("spike_ms", NUMBER, "fields.spike_ms", "latency", unit="ms",
           bounds=MS, width=8, tip="tips.spike", in_profile=True,
-          cli="spike-ms"),
+          cli="spike-ms", parameter_of="spike_prob"),
 
     # -- impairments ------------------------------------------------------- #
     Field("loss", NUMBER, "fields.loss", "impairments", unit="%",
           bounds=PCT, width=6, tip="tips.loss", in_profile=True, cli="loss",
           impairs=IMPAIRS_ALL),
+    # How the loss above is DISTRIBUTED, not how much of it there is: the average
+    # number of packets lost in a row. 0 spreads it evenly, which is what this
+    # tool did before the field existed and is still the default.
+    #
+    # parameter_of="loss" and NOT impairs: decide() step 8 reads it behind
+    # `self.loss > 0`, so a run length on its own damages nothing and calling it
+    # an impairment would warn about a session that changes no packet.
+    #
+    # in_profile because burstiness is a property of the LINK, exactly like the
+    # flapping pair and the buffer: a profile that stored "5% loss" without
+    # saying whether it arrives evenly or in runs stored half of what the link
+    # does to an application.
+    #
+    # The 1000-packet ceiling is a JUDGEMENT, not a measurement. It is far past
+    # anything a transport notices (a run of 1000 is a multi-second outage on
+    # most flows) and it keeps the derived gap between runs inside numbers a
+    # person can read.
+    Field("loss_burst", NUMBER, "fields.loss_burst", "impairments",
+          unit_key="fields.unit_pkt_off", bounds=(0.0, 1000.0), width=6,
+          tip="tips.loss_burst", in_profile=True, cli="loss-burst",
+          parameter_of="loss", help_title="dialogs.loss_burst_help_title",
+          help_body="dialogs.loss_burst_help"),
     Field("corrupt", NUMBER, "fields.corruption", "impairments", unit="%",
           bounds=PCT, width=6, tip="tips.corrupt", in_profile=True, cli="corrupt",
           impairs=IMPAIRS_ALL),
@@ -187,7 +217,7 @@ FIELD_DEFS = (
           cli="flap-period", impairs=IMPAIRS_ALL),
     Field("flap_down", NUMBER, "fields.flap_down_pct", "flapping", unit="%",
           bounds=PCT, width=6, tip="tips.flap", in_profile=True,
-          cli="flap-down"),
+          cli="flap-down", parameter_of="flap_period"),
 
     # -- destination ------------------------------------------------------- #
     Field("dst_ip", EXPR, "fields.ip", "destination", expr_kind=KIND_IP,
@@ -245,7 +275,8 @@ FIELD_DEFS = (
     Field("rst_prob", NUMBER, "fields.rst", "advanced", unit="%",
           bounds=PCT, width=6, tip="tips.rst", cli="rst-prob", impairs=IMPAIRS_ALL),
     Field("rst_cooldown", NUMBER, "fields.rst_cooldown", "advanced", unit="s",
-          bounds=(0.0, 3600.0), width=6, tip="tips.rst_cooldown", cli="rst-cooldown"),
+          bounds=(0.0, 3600.0), width=6, tip="tips.rst_cooldown", cli="rst-cooldown",
+          parameter_of="rst_prob"),
 
     # -- schedule ---------------------------------------------------------- #
     Field("rate_schedule", SCHEDULE, "fields.schedule", "schedule", width=34,
@@ -340,7 +371,12 @@ SECTIONS = (
     Section("speed_limit", "frames.speed_limit", ("down", "up", "buffer"), columns=2),
     Section("latency", "frames.latency",
             ("latency", "jitter", "spike_prob", "spike_ms"), columns=2),
-    Section("impairments", "frames.impairments", ("loss", "corrupt", "dup"), columns=3),
+    # Two columns, not three: it puts "Loss" and the run length that shapes it
+    # on ONE row, with corruption and duplication on the next. Three columns
+    # would split the pair across a row boundary, and two fields that answer
+    # "how much" and "in what shape" read as one setting or as neither.
+    Section("impairments", "frames.impairments",
+            ("loss", "loss_burst", "corrupt", "dup"), columns=2),
     Section("flapping", "frames.flapping", ("flap_period", "flap_down"), columns=2),
     # columns=2 for the family pair only: both expression fields above carry
     # span=True and keep a row each regardless, so this changes nothing they do.
@@ -403,6 +439,11 @@ GLOBALLY_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs == IMPAIR
 # global impairment when its expression covers the whole space; see it for why.
 MATCHED_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs == IMPAIRS_MATCHED)
 NARROWING_KEYS = tuple(f.key for f in FIELD_DEFS if f.narrows)
+# Fields that only SHAPE an impairment (see Field.parameter_of). They damage
+# nothing on their own, and the pass-through suite proves exactly that by turning
+# each of them up to its maximum with every impairment still off - a stronger
+# statement than the two names it used to keep in a list of its own.
+PARAMETER_KEYS = tuple(f.key for f in FIELD_DEFS if f.parameter_of)
 
 
 def overriding_field(field):
