@@ -10,10 +10,10 @@ that carry real risk:
   mis-order the connection table on exactly the large tables the optimisation
   exists for.
 * the **derived columns** (kb / dur / idle) computed inside the sort key.
-* ``SearchIndex`` - the per-keystroke search cache, whose correctness hinges on
-  rebuilding when a row's stamp changes and on never mutating the rows it caches.
+* the **split** between filtering, sorting and totalling: one pass has to answer
+  what two used to, without changing a row or an order.
 """
-from beantester.views import (DERIVED, SearchIndex, avg_packet_bytes, connection_proc,
+from beantester.views import (DERIVED, avg_packet_bytes, connection_proc,
                               filter_sort_connections, traffic_totals)
 from fakes import check
 
@@ -229,66 +229,6 @@ def test_connection_proc_falls_back_to_proc_map():
     check("an explicit proc on the row wins",
           connection_proc({"local_port": 40001, "proc": "firefox.exe"},
                           {40001: "chrome.exe"}) == "firefox.exe")
-
-
-# --- SearchIndex ------------------------------------------------------------- #
-def test_search_index_builds_the_blob_once_per_stamp():
-    calls = {"n": 0}
-
-    def blob_of(item):
-        calls["n"] += 1
-        return item["text"]
-
-    idx = SearchIndex(blob_of, key_of=lambda it: it["id"])
-    item = {"id": 1, "text": "Chrome HTTPS 443", "proc": None}
-
-    idx.blob(item, stamp=item["proc"])
-    idx.blob(item, stamp=item["proc"])          # same stamp -> cache hit
-    check("blob is built once while the stamp is unchanged", calls["n"] == 1,
-          f"(built {calls['n']} times)")
-
-    item["proc"] = "chrome.exe"                  # the process name arrived later
-    idx.blob(item, stamp=item["proc"])          # stamp changed -> rebuild
-    check("blob is rebuilt when the stamp changes", calls["n"] == 2,
-          f"(built {calls['n']} times)")
-
-
-def test_search_index_filter_is_case_insensitive_and_empty_query_returns_all():
-    items = [{"id": i, "text": t} for i, t in enumerate(
-        ["Chrome 443", "firefox 80", "curl 53"])]
-    idx = SearchIndex(lambda it: it["text"], key_of=lambda it: it["id"])
-    hits = idx.filter(items, "CHROME")
-    check("filter is case-insensitive", [h["id"] for h in hits] == [0], f"({hits})")
-    check("empty query returns every item", len(idx.filter(items, "")) == 3)
-
-
-def test_search_index_filter_uses_the_stamp_when_given():
-    items = [{"id": 1, "text": "port 443", "proc": None}]
-    idx = SearchIndex(lambda it: f"{it['text']} {it['proc'] or ''}",
-                      key_of=lambda it: it["id"])
-    # First pass with no proc: the process name is not searchable yet.
-    check("not found before the proc name is known",
-          idx.filter(items, "chrome", stamp_of=lambda it: it["proc"]) == [])
-    items[0]["proc"] = "chrome.exe"
-    check("found once the stamp (proc) updates and the blob is rebuilt",
-          len(idx.filter(items, "chrome", stamp_of=lambda it: it["proc"])) == 1)
-
-
-def test_search_index_clears_when_it_exceeds_its_limit():
-    idx = SearchIndex(lambda it: it["t"], key_of=lambda it: it["id"], limit=2)
-    for i in range(2):
-        idx.blob({"id": i, "t": f"row{i}"})
-    check("cache filled to the limit", len(idx._cache) == 2, f"({len(idx._cache)})")
-    idx.blob({"id": 99, "t": "overflow"})       # exceeding the limit clears first
-    check("cache is bounded: it clears instead of growing past the limit",
-          len(idx._cache) == 1, f"({len(idx._cache)})")
-
-
-def test_search_index_clear_empties_the_cache():
-    idx = SearchIndex(lambda it: it["t"], key_of=lambda it: it["id"])
-    idx.blob({"id": 1, "t": "x"})
-    idx.clear()
-    check("clear() empties the cache", idx._cache == {})
 
 
 # --- field-qualified search --------------------------------------------------- #
