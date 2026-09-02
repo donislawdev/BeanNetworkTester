@@ -440,3 +440,72 @@ def test_a_pattern_that_cannot_finish_leaves_the_table_search_answering_normally
     # 2026-09-02). With the guard the refusal costs ~83 ms on this machine.
     check("and it comes back quickly enough to keep the worker free",
           elapsed < 5.0, f"({elapsed * 1000:.0f} ms)")
+
+
+# --- one filtering pass, not two ---------------------------------------------- #
+
+
+def test_the_split_halves_agree_with_the_pair_they_replace():
+    """`filter_connections` + `sort_connections` + `sum_traffic` == the old pair.
+
+    The model rebuild used to filter the whole table twice - once inside
+    `filter_sort_connections` and again inside `traffic_totals`, compiling the query
+    a second time on the way. The split lets one pass answer both, and the ONLY
+    thing that makes it safe is that it returns the same rows in the same order and
+    the same totals. So that is what is asserted, rather than the number of calls.
+    """
+    from beantester.views import (filter_connections, filter_sort_connections,
+                                  sort_connections, sum_traffic, traffic_totals)
+
+    conns = []
+    for i in range(40):
+        conns.append({"proc": "chrome.exe" if i % 2 else "firefox.exe",
+                      "pid": 100 + i, "proto": "TCP", "dir": "out",
+                      "remote_ip": f"10.0.0.{i}", "remote_port": 443 if i % 3 else 80,
+                      "local_port": 50000 + i, "packets": i, "bytes": 1000 * i,
+                      "sent": 900 * i, "sent_in": 500 * i, "sent_out": 400 * i,
+                      "first": 0.0, "last": float(i)})
+
+    for query in ("", "chrome", "port:443", "nothingmatchesthis"):
+        for col, rev, limit in (("bytes", True, 0), ("packets", False, 0),
+                                ("proc", True, 5), ("bytes", True, 5)):
+            old_rows = filter_sort_connections(conns, query, col, rev,
+                                               now=99.0, proc_map=None, limit=limit)
+            old_totals = traffic_totals(conns, query, None)
+
+            kept = filter_connections(conns, query, None)
+            new_totals = sum_traffic(kept)
+            new_rows = sort_connections(kept, col, rev, now=99.0, limit=limit)
+
+            where = f"({query!r}, {col}, reverse={rev}, limit={limit})"
+            assert new_rows == old_rows, f"rows differ {where}"
+            assert new_totals == old_totals, f"totals differ {where}"
+
+
+def test_summing_before_the_sort_is_why_the_split_is_worth_making():
+    """`sort_connections` may reorder in place, so the sum has to come first.
+
+    Not a style rule - a measurement. Walking 200 000 dicts in sorted order instead
+    of allocation order costs enough to turn the whole change NEGATIVE on an empty
+    query (0.85x, measured 2026-09-02 with internal_tools/bench_conn_model.py).
+    Summing first, 1.04-1.14x, and 1.83-2.00x with something typed in the box. This
+    pins the property that makes that ordering legal: the sum does not depend on the
+    order, and the rows are the SAME objects afterwards.
+    """
+    from beantester.views import filter_connections, sort_connections, sum_traffic
+
+    conns = [{"proc": "a", "sent": 10, "sent_in": 6, "sent_out": 4, "bytes": 3},
+             {"proc": "b", "sent": 20, "sent_in": 11, "sent_out": 9, "bytes": 1},
+             {"proc": "c", "sent": 30, "sent_in": 16, "sent_out": 14, "bytes": 2}]
+
+    kept = filter_connections(conns, "", None)
+    before = sum_traffic(kept)
+    rows = sort_connections(kept, "bytes", True, now=0.0, limit=0)
+    after = sum_traffic(kept)
+
+    check("the sum does not depend on the order", before == after, f"({before}, {after})")
+    check("and it is the true total", before["total"] == 60, f"({before})")
+    check("sorting really did reorder the list in place",
+          [c["proc"] for c in kept] == ["a", "c", "b"], f"({[c['proc'] for c in kept]})")
+    check("the sorted view is the same objects, not copies",
+          all(any(r is k for k in kept) for r in rows))

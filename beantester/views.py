@@ -249,14 +249,21 @@ def _filter_connections(conns, query, proc_map):
     return [c for c in conns if all(t(c, proc_map) for t in tests)]
 
 
-def traffic_totals(conns, query="", proc_map=None):
-    """Summed download / upload / total BYTES over the FILTERED rows.
+def filter_connections(conns, query="", proc_map=None):
+    """The rows a query selects, unsorted, as a NEW list.
 
-    Feeds the connection table's footer. It sums every matching flow, not only the
-    rows that fit under the display limit, so the footer is a true total of what the
-    search selects - which is exactly the number the display cap hides."""
+    The filtering half on its own, so a caller that needs both the sorted view and
+    a total over the whole match can pay for the pass once. ``filter_sort_connections``
+    and ``traffic_totals`` are this plus their own half, and both keep their
+    signatures - they are the surface the facade exports and the tests pin.
+    """
+    return _filter_connections(conns, query, proc_map)
+
+
+def sum_traffic(rows):
+    """Summed download / upload / total DELIVERED bytes over rows already chosen."""
     down = up = total = 0
-    for c in _filter_connections(conns, query, proc_map):
+    for c in rows:
         # DELIVERED, because the footer uses the same three words as the columns
         # above it ("down / up / total") and those are delivered now. A footer
         # summing captured under headings that mean delivered is the same mismatch
@@ -265,6 +272,15 @@ def traffic_totals(conns, query="", proc_map=None):
         up += c.get("sent_out", 0)
         total += c.get("sent", 0)
     return {"down": down, "up": up, "total": total}
+
+
+def traffic_totals(conns, query="", proc_map=None):
+    """Summed download / upload / total BYTES over the FILTERED rows.
+
+    Feeds the connection table's footer. It sums every matching flow, not only the
+    rows that fit under the display limit, so the footer is a true total of what the
+    search selects - which is exactly the number the display cap hides."""
+    return sum_traffic(_filter_connections(conns, query, proc_map))
 
 
 def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
@@ -296,7 +312,23 @@ def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
     also of benchmarking this with keys drawn from a tiny range: Timsort exploits
     the resulting runs and the sort column comes out artificially fast.)
     """
-    out = _filter_connections(conns, query, proc_map)
+    return sort_connections(_filter_connections(conns, query, proc_map),
+                            sort_col, reverse, now, limit)
+
+
+def sort_connections(out, sort_col="bytes", reverse=True, now=None, limit=0):
+    """The sorting half of :func:`filter_sort_connections`, on rows already chosen.
+
+    🔴 MAY REORDER ``out`` IN PLACE. That is deliberate and it is what makes the
+    split worth making: the caller that needs both a sorted view and a total over
+    the whole match hands the same list to this and to ``sum_traffic``, and pays
+    for neither a second filtering pass nor a second copy of two hundred thousand
+    rows. Order does not matter to a sum. Every caller today owns the list it
+    passes, because it came out of ``filter_connections``.
+
+    See ``filter_sort_connections`` above for what ``limit`` buys and the
+    measurement behind the crossover.
+    """
     numeric = sort_col in ("remote_port", "local_port", "packets", "bytes",
                            "bytes_in", "bytes_out", "sent", "sent_in", "sent_out",
                            "down", "up", "kb", "down_seen", "up_seen", "avg",

@@ -264,6 +264,7 @@
   "log.bug_marked": "BUG MARKED",
   "log.config_loaded_from": "Config loaded from",
   "log.config_saved_to": "Config saved to",
+  "log.conns_export_busy": "An export is already running. Wait for it to finish before starting another.",
   "log.conns_saved_to": "Connections saved to",
   "log.copied": "Copied to clipboard",
   "log.csv_error": "CSV save error",

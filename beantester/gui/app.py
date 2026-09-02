@@ -1047,7 +1047,9 @@ class App:
         csv_export.export_stats(self)
 
     def export_connections_csv(self):
-        csv_export.export_connections(self)
+        # Returns the worker: the export runs off this thread now, and a caller
+        # that needs the file on disk before it goes on joins it.
+        return csv_export.export_connections(self)
 
     def mark_bug(self):
         if not self.running:

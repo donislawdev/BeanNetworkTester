@@ -122,7 +122,15 @@ class AsyncModel:
     def _run(self, token, payload):
         try:
             rows = self._build(payload)
-        except Exception as exc:
+        except BaseException as exc:
+            # BaseException, not Exception, and it is the difference between "one
+            # rebuild failed" and "this table is finished". `_pending` is cleared
+            # HERE or by `poll()` reading a result, so a build that ends any other
+            # way leaves it set for ever: `busy()` stays True, the page's 40 ms
+            # catch-up poll re-arms itself indefinitely, and the table never
+            # rebuilds again for the rest of the session. REPRODUCED 2026-09-02 by
+            # raising KeyboardInterrupt out of `build`.
+            #
             # the old model stays on screen: a stale table beats a broken one
             crashlog.note(exc, "gui.model_worker")
             with self._lock:

@@ -264,6 +264,7 @@
   "log.bug_marked": "已标记故障",
   "log.config_loaded_from": "配置已加载自",
   "log.config_saved_to": "配置已保存至",
+  "log.conns_export_busy": "导出已在进行中。请等待其完成后再开始新的导出。",
   "log.conns_saved_to": "连接列表已保存至",
   "log.copied": "已复制到剪贴板",
   "log.csv_error": "保存 CSV 时出错",

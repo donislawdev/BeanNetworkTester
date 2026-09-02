@@ -42,6 +42,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Exporting connections to CSV froze the window.** On a big table the export could take
+  seconds, and during those seconds nothing responded - including STOP. It now runs in the
+  background and tells you in the log when the file is written. A second click while one export
+  is still running is refused with a message instead of two exports fighting over the same file.
+
+- **Searching the connection table is about twice as fast.** With something typed in the search
+  box the table was filtered twice on every refresh, once for the rows and once for the totals
+  under them. Now it is filtered once. With an empty box nothing changes.
+
+- **The connection table could quietly stop updating.** If a refresh failed in an unusual way,
+  the table kept showing what it had and never rebuilt again for the rest of the session, with
+  no sign that anything was wrong. It now recovers on the next refresh.
+
 - **Switching language left timers running against windows that no longer existed.** Changing
   the language rebuilds the whole interface. The parts being replaced were never told, so the
   connection table's refresh, the chart redraw and the field search were still scheduled against

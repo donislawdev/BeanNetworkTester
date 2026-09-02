@@ -264,6 +264,7 @@
   "log.bug_marked": "ZAZNACZONO BŁĄD",
   "log.config_loaded_from": "Wczytano konfigurację z",
   "log.config_saved_to": "Zapisano konfigurację do",
+  "log.conns_export_busy": "Eksport już trwa. Poczekaj, aż się skończy, zanim uruchomisz kolejny.",
   "log.conns_saved_to": "Zapisano połączenia do",
   "log.copied": "Skopiowano do schowka",
   "log.csv_error": "Błąd zapisu CSV",

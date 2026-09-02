@@ -201,3 +201,32 @@ def test_no_thread_is_left_behind():
         assert _collect(model, timeout=5) == [i]
     time.sleep(0.3)
     assert threading.active_count() <= before + 1, "model workers are leaking"
+
+
+def test_a_build_that_fails_outside_Exception_does_not_wedge_the_table():
+    """`_pending` must be cleared however the build ends, or the table is finished.
+
+    It is cleared in exactly two places: here, and by `poll()` reading a result. A
+    build that ends any other way therefore leaves it set for ever - `busy()` stays
+    True, the page's 40 ms catch-up poll re-arms itself indefinitely, and the
+    connection table never rebuilds again for the rest of the session. The user
+    sees a table that quietly stopped following the traffic.
+
+    `KeyboardInterrupt` because it is not an `Exception`: reproduced 2026-09-02
+    against the old handler, which caught that class and nothing wider.
+    """
+    def boom(payload):
+        raise KeyboardInterrupt("outside Exception")
+
+    model = AsyncModel(boom)
+    model.request("one")
+    deadline = time.time() + 5
+    while time.time() < deadline and model.busy():
+        time.sleep(0.02)
+
+    assert not model.busy(), "the model is wedged - it will never rebuild again"
+
+    # ...and it takes work again, which is what "not wedged" has to mean.
+    model._build = lambda payload: [payload]
+    model.request("two")
+    assert _collect(model, timeout=5) == ["two"]

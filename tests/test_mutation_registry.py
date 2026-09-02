@@ -237,6 +237,49 @@ MUTATIONS = [
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
     {
+        # Back onto the UI thread: a full filter and sort with no row cap, then a
+        # row-by-row CSV write, on a table that may hold 200 000 flows.
+        "label": "gui: the connection export is run inline instead of started",
+        "file": "beantester/gui/csv_export.py",
+        "old": "    worker.start()\n    return worker",
+        "new": "    worker.run()\n    return worker",
+        "test": "test_the_connection_export_does_not_run_on_the_ui_thread",
+    },
+    {
+        # One fixed path, two workers: whichever finishes last publishes, and the
+        # other one's file is gone. Easier to hit now that the window stays
+        # responsive during the write.
+        "label": "gui: two clicks can start two exports onto the same file",
+        "file": "beantester/gui/csv_export.py",
+        "old": ("    if not _EXPORT_LOCK.acquire(blocking=False):\n"
+                "        # Two clicks, one file. Refusing out loud beats two workers"
+                " racing to\n"
+                "        # `os.replace` the same path, where the winner is whichever"
+                " finishes last.\n"
+                '        app.log(T("log.conns_export_busy"))\n'
+                "        return None\n"),
+        "new": "    _EXPORT_LOCK.acquire(blocking=False)\n",
+        "test": "test_a_second_export_is_refused_while_the_first_is_still_writing",
+    },
+    {
+        # The split that lets one filtering pass answer both the sorted view and
+        # the footer's total. A half that stops filtering makes them disagree.
+        "label": "views: the filtering half of the split stops filtering",
+        "file": "beantester/views.py",
+        "old": "    return _filter_connections(conns, query, proc_map)\n\n\ndef sum_traffic",
+        "new": "    return list(conns)\n\n\ndef sum_traffic",
+        "test": "test_the_split_halves_agree_with_the_pair_they_replace",
+    },
+    {
+        # `_pending` is cleared here or by poll() reading a result, so a build that
+        # ends any other way wedges the table for the rest of the session.
+        "label": "gui: a model build that fails oddly wedges the table for good",
+        "file": "beantester/gui/model_worker.py",
+        "old": "        except BaseException as exc:",
+        "new": "        except Exception as exc:",
+        "test": "test_a_build_that_fails_outside_Exception_does_not_wedge_the_table",
+    },
+    {
         # Back to a rebuild that destroys every widget without telling the pages,
         # leaving their after() timers armed against commands Tk has deleted.
         "label": "gui: a language switch stops telling the pages to put their timers away",
