@@ -1319,3 +1319,80 @@ def test_the_stall_check_answers_no_for_every_state_that_is_not_one():
     eng._t_cap.join()
     check("dead capture thread: left to the liveness check",
           eng._capture_has_stalled() is False)
+
+
+# --- START and STOP must survive the worker ending badly ---------------------- #
+
+
+def test_a_start_that_fails_outside_Exception_still_gives_the_button_back():
+    """The queue is fed in a `finally`, so `_transition` can never stick.
+
+    `_transition` is only ever cleared by `_poll_transition` reading that queue.
+    A `run()` that ends without putting leaves the flag on "starting" forever:
+    `_start` and `_stop` return immediately while a transition is in flight, and
+    `_poll_transition` keeps re-arming `root.after(30, ...)`. START and STOP are
+    then dead for the life of the window, with a divert possibly still open -
+    which is the one control a network tester must never take away.
+
+    `KeyboardInterrupt` because it is not an `Exception`: the old handler caught
+    that class and nothing else, so anything outside it escaped past the `put`.
+    """
+    run_gui("""
+        def boom(*a, **k):
+            raise KeyboardInterrupt("out of nowhere")
+        app.engine.start = boom
+
+        app._start()
+        app._settle_transition()
+
+        assert app._transition is None, ("the button is stuck on %r"
+                                         % (app._transition,))
+        assert app.running is False
+
+        # ...and it still works afterwards, which is the point of giving it back.
+        app.engine.start = lambda filt, divert=None, duration=0, **kw: None
+        app._start()
+        app._settle_transition()
+        assert app.running is True
+    """, allow_faults=("out of nowhere",))
+
+
+def test_one_window_per_fault_not_one_per_occurrence():
+    """A binding that fires in a series must not stack modal windows.
+
+    `crashlog.record` deduplicates by fingerprint and counts the repeats.
+    `dialogs.show_error` deduplicated nothing, so an exception out of something
+    like `<Configure>` - which fires continuously while a window edge is dragged -
+    buried the user under a stack of modals to close one by one, on top of the
+    original fault and with the rest of the interface not responding.
+    """
+    run_gui("""
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, body: shown.append(body)
+
+        def raise_it():
+            raise ValueError("the same fault")
+
+        for _ in range(5):
+            try:
+                raise_it()
+            except ValueError as exc:
+                app._on_ui_exception(type(exc), exc, exc.__traceback__)
+
+        assert len(shown) == 1, ("one window per fault, got %d" % len(shown))
+
+        # Every occurrence still reaches the log, which is where the repeats live.
+        hits = [l for l in app._log_lines if "the same fault" in l]
+        assert len(hits) == 5, hits
+
+        # A DIFFERENT fault is still shown: this deduplicates, it does not go quiet.
+        def raise_other():
+            raise TypeError("a different fault")
+        try:
+            raise_other()
+        except TypeError as exc:
+            app._on_ui_exception(type(exc), exc, exc.__traceback__)
+        assert len(shown) == 2, shown
+    """, allow_faults=("the same fault", "a different fault"))

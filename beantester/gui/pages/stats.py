@@ -395,6 +395,13 @@ class StatsPage:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.pages.stats")
 
+    def teardown(self):
+        """Put the pending redraw away before the canvas it would draw on goes."""
+        if self._chart_job is not None:
+            with crashlog.quiet("gui.pages.stats"):
+                self.frame.after_cancel(self._chart_job)
+            self._chart_job = None
+
     # -- chart --------------------------------------------------------------- #
     def _on_canvas_configure(self, _=None):
         if self._chart_job is not None:

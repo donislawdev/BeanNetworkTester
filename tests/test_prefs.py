@@ -181,10 +181,12 @@ def test_a_resized_chart_spans_its_whole_window_at_once():
 
 
 def test_log_length_follows_the_preference():
+    # Through `app._logview`, which is where the box's own bookkeeping moved on
+    # 2026-09-02 (see gui/logview.py). `app._log_lines` still reads the same list.
     run_gui("""
         app.set_pref("log_lines", 50)
         for i in range(400):
-            app._append_log_line(f"line {i}")
+            app._logview._append(f"line {i}")
         # kept list is bounded to the preference (plus a small hysteresis margin)
         assert len(app._log_lines) <= 50 + 100, len(app._log_lines)
         assert app._log_lines[-1] == "line 399"

@@ -364,6 +364,20 @@ class ControlForm:
             self._relayout_job = None
             self.set_columns(want)
 
+    def teardown(self):
+        """Put the pending relayout away before the host it is scheduled on goes.
+
+        Called by the page that owns this form, not by the page registry: a form is
+        not a page, and reaching it any other way would mean the registry knowing
+        about widgets one layer down.
+        """
+        if self._relayout_job is not None:
+            try:
+                self.host.after_cancel(self._relayout_job)
+            except Exception as _exc:
+                crashlog.note(_exc, "gui.form")
+            self._relayout_job = None
+
     def set_columns(self, columns):
         """Switch between one and two columns.
 

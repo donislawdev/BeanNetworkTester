@@ -175,6 +175,13 @@ class EventLogWindow(PanelWindow):
                 self.win.after_cancel(self._search_job)
         self._search_job = self.win.after(SEARCH_DEBOUNCE_MS, self._run_search)
 
+    def teardown(self):
+        """Put the search debounce away before the window it is scheduled on goes."""
+        if self._search_job is not None:
+            with crashlog.quiet("gui.windows.event_log"):
+                self.win.after_cancel(self._search_job)
+            self._search_job = None
+
     def _run_search(self):
         self._search_job = None
         self._query = self.search_var.get().strip()

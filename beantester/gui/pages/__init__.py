@@ -84,5 +84,33 @@ def pref_changed(app, key):
             handler(key)
 
 
+def teardown(app):
+    """The UI is about to be destroyed: let each page put its timers away.
+
+    ``_build_ui`` destroys every child of the root and builds new ones, which is
+    what a language change does. Nothing told the pages, so whatever they had
+    scheduled through ``after()`` was still queued against widgets that no longer
+    existed - the connection table's poll and search debounce, the chart's redraw,
+    the Control page's field search. Tk deletes a widget's registered commands when
+    it destroys the widget, so those timers fire into nothing.
+
+    Optional, exactly like ``on_pref_changed``: a page that schedules nothing
+    implements nothing. Broadcast rather than a name in the registry, for the
+    reason written above ``pref_changed`` - how a page is ADDRESSED belongs to the
+    page registry, and ``gui/app.py`` has no room for the alternative.
+
+    A page that raises must not stop the others being torn down, and must not stop
+    the rebuild either: the user asked for a different language, and refusing them
+    one because a timer would not cancel would be a worse answer than a log line.
+    """
+    from ... import crashlog
+    for page in app.pages.values():
+        handler = getattr(page, "teardown", None)
+        if handler is None:
+            continue
+        with crashlog.quiet("gui.pages"):
+            handler()
+
+
 __all__ = ["PAGES", "Page", "ControlPage", "StatsPage", "ConnsPage",
-           "focus_search", "pref_changed"]
+           "focus_search", "pref_changed", "teardown"]

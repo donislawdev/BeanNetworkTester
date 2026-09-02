@@ -638,6 +638,20 @@ class ConnsPage:
         with crashlog.quiet("gui.pages.conns"):
             self._poll_job = self.frame.after(self.POLL_MS, self._drain_model)
 
+    def teardown(self):
+        """Put both timers away before the widgets they are scheduled on go.
+
+        The worker is deliberately left alone: it touches no widget and hands its
+        result to a queue nobody will read any more, so it finishes and is
+        collected. Cancelling it would need a second mechanism to prove it stopped.
+        """
+        for name in ("_poll_job", "_search_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                with crashlog.quiet("gui.pages.conns"):
+                    self.frame.after_cancel(job)
+                setattr(self, name, None)
+
     def _drain_model(self):
         self._poll_job = None
         result = self._model.poll()

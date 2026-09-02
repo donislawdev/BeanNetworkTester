@@ -61,6 +61,14 @@ from fakes import ROOT, check
 # there for a week and were found only because somebody printed the numbers. That is
 # the same defect the crowd counts below exist to catch, one level up.
 FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
+# Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
+# needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
+# own bookkeeping moved to `gui/logview.py` and the fixes went in under the number
+# instead of over it. 🔴 The band matters more than usual now: at 1166 it sits at
+# 816, and `engine.py` is 808 after gaining the capture-thread pulse, so there are
+# EIGHT lines between it and joining `FILES_NEAR_CEILING`. Carving more out of
+# `app.py` from here does not buy room - it lowers the band onto `engine.py` and
+# forces the crowd count up, which is the one direction these numbers may not go.
 # Lowered 2026-08-19 from 1202: fifteen compatibility aliases assigned one per line
 # became a loop over their names, which is also what mypy asked for (a class does not
 # grow attributes from outside its own body). Ten lines out, ten lines off the ceiling.
@@ -69,7 +77,7 @@ FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
 # ceiling exactly, so the two CSV exports moved to `gui/csv_export.py` instead of the
 # number moving up. The crowd band below was re-measured after the drop (`engine.py`
 # is 779, still clear of it) - lowering a ceiling tightens that band too.
-FILE_CEILING = 1192             # beantester/gui/app.py
+FILE_CEILING = 1166             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

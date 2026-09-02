@@ -129,6 +129,14 @@ class PanelWindow:
 
     def close(self):
         self._save_geometry()
+        # The same hook the pages got, for the same reason: a window is destroyed
+        # here, and a timer scheduled on it fires into a command Tk has deleted.
+        # Optional - a panel that schedules nothing implements nothing - and it must
+        # not be able to stop the window closing.
+        handler = getattr(self, "teardown", None)
+        if handler is not None:
+            with crashlog.quiet("gui.windows"):
+                handler()
         win, self.win, self.body = self.win, None, None
         if win is None:
             return

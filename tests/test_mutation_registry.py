@@ -237,6 +237,55 @@ MUTATIONS = [
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
     {
+        # Back to a rebuild that destroys every widget without telling the pages,
+        # leaving their after() timers armed against commands Tk has deleted.
+        "label": "gui: a language switch stops telling the pages to put their timers away",
+        "file": "beantester/gui/app.py",
+        "old": "        if getattr(self, \"pages\", None):\n            teardown_pages(self)\n",
+        "new": "",
+        "test": "test_a_language_switch_cancels_what_the_pages_had_scheduled",
+    },
+    {
+        # The guard that reads as thorough and is not: a DESTROYED Tk widget is not
+        # None, so `box is None` passes and every call after it raises TclError.
+        "label": "gui: the log box guard trusts the attribute instead of the widget",
+        "file": "beantester/gui/logview.py",
+        "old": "        try:\n            return bool(box.winfo_exists())",
+        "new": "        try:\n            return True",
+        "test": "test_logging_into_a_destroyed_box_is_not_an_error",
+    },
+    {
+        # `crashlog.record` deduplicates and counts. The dialog deduplicated
+        # nothing, so a binding firing in a series stacked modal windows.
+        "label": "gui: every occurrence of one fault opens its own modal window again",
+        "file": "beantester/gui/app.py",
+        "old": "        if key in self._ui_errors_shown:\n            return\n",
+        "new": "",
+        "test": "test_one_window_per_fault_not_one_per_occurrence",
+    },
+    {
+        # The exact shape before 2026-09-02: the put outside the try, and a catch
+        # narrow enough for anything else to escape past it - which leaves
+        # `_transition` set forever and START/STOP dead for the life of the window.
+        "label": "gui: a transition worker can end without ever feeding the queue",
+        "file": "beantester/gui/app.py",
+        "old": ("            err = None\n"
+                "            try:\n"
+                "                work()\n"
+                "            except BaseException as e:  # carried to the main thread,"
+                " never swallowed\n"
+                "                err = e\n"
+                "            finally:\n"
+                "                self._ui_queue.put((kind, err))"),
+        "new": ("            try:\n"
+                "                work()\n"
+                "                err = None\n"
+                "            except Exception as e:\n"
+                "                err = e\n"
+                "            self._ui_queue.put((kind, err))"),
+        "test": "test_a_start_that_fails_outside_Exception_still_gives_the_button_back",
+    },
+    {
         # Back to the watchdog as it stood before 2026-09-02, which asked
         # `is_alive()` and nothing else - so a thread spinning in a regular
         # expression or blocked on a driver that stopped answering was healthy.

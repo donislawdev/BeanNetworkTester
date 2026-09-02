@@ -42,6 +42,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Switching language left timers running against windows that no longer existed.** Changing
+  the language rebuilds the whole interface. The parts being replaced were never told, so the
+  connection table's refresh, the chart redraw and the field search were still scheduled against
+  widgets that had just been thrown away. They are now put away first.
+
+- **One glitch could bury you in error windows.** When something in the interface failed
+  repeatedly, and some things fail on every mouse move, each occurrence opened its own error
+  window to close by hand. You now get one window per problem. Repeats still go to the log and
+  the crash report, which is where the count of them lives.
+
+- **A failed start or stop could kill the START button for good.** If the work behind the button
+  ended in an unusual way, the program stayed convinced a start was still in progress, and START
+  and STOP did nothing for the rest of the session - possibly with the driver still loaded. The
+  outcome is now always reported back, so the button always comes back.
+
 - **A frozen capture could keep a session looking healthy forever.** The program already stops
   itself and hands the network back when the thread reading packets dies. A thread that is still
   alive but no longer doing anything looked fine to it, even though the effect on you is the

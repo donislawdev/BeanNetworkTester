@@ -651,3 +651,86 @@ def test_the_gui_says_the_same_thing_before_an_unbounded_start():
         assert warned(list(app._log_lines)), \
             "clearing the target mid-session went unannounced: %r" % app._log_lines
     """)
+
+
+# --- the rebuild has to tell the pages first ---------------------------------- #
+#
+# ``_build_ui`` destroys every child of the root, which is what a language change
+# does. Nothing told the pages, so whatever they had scheduled through ``after()``
+# was still queued against widgets that no longer existed - and Tk deletes a
+# widget's registered commands when it destroys it, so those timers fire into
+# nothing. Seven of them existed across the pages, the form and the panels.
+
+
+def test_a_language_switch_cancels_what_the_pages_had_scheduled():
+    """Every page timer is cancelled BEFORE its widget is destroyed, not after.
+
+    Asserted through ``after_cancel`` actually being called, not just through the
+    attribute ending up None: setting the field to None without cancelling leaves
+    the timer armed, which is the bug wearing the fix's clothes.
+    """
+    run_gui("""
+        conns = app.pages["connections"]
+        stats = app.pages["statistics"]
+        control = app.pages["control"]
+
+        conns._poll_job = "poll-1"
+        conns._search_job = "search-1"
+        stats._chart_job = "chart-1"
+        control._job = "control-1"
+        app.form._relayout_job = "form-1"
+
+        cancelled = []
+        for widget, page in ((conns.frame, conns), (stats.frame, stats),
+                             (control.frame, control)):
+            widget.after_cancel = lambda job, c=cancelled: c.append(job)
+        app.form.host.after_cancel = lambda job, c=cancelled: c.append(job)
+
+        app.lang_var.set("English")
+        app._switch_language()
+
+        for job in ("poll-1", "search-1", "chart-1", "control-1", "form-1"):
+            assert job in cancelled, (job, cancelled)
+    """)
+
+
+def test_the_teardown_of_one_page_cannot_stop_the_rebuild():
+    """A page that raises must not cost the user the language they asked for.
+
+    The same rule ``pref_changed`` lives by, and for the same reason: refusing a
+    rebuild because a timer would not cancel is a worse answer than a log line.
+    """
+    run_gui("""
+        def explode():
+            raise RuntimeError("teardown exploded")
+        app.pages["statistics"].teardown = explode
+
+        app.lang_var.set("English")
+        app._switch_language()
+
+        assert app.pages, "the UI must have been rebuilt anyway"
+        assert app.log_box is not None
+    """, allow_faults=("teardown exploded",))
+
+
+def test_logging_into_a_destroyed_box_is_not_an_error():
+    """A destroyed Tk widget is NOT None - it is the same object with a dead path.
+
+    ``App.log`` drains synchronously when it is on the main thread, and the box
+    attribute keeps pointing at the corpse from the moment ``_build_ui`` destroys
+    it until a new one is attached. A guard written as ``if box is None`` passes
+    there and every call after it raises TclError, in a window nothing catches.
+    """
+    run_gui("""
+        app.log("before")
+        box = app.log_box
+        box.destroy()
+        assert box.winfo_exists() == 0, "the fake must model a destroyed widget"
+
+        app.log("during the rebuild")           # must not raise
+
+        # ...and the line is not lost: it is applied to the widget that comes next.
+        app._build_ui()
+        assert any("during the rebuild" in line for line in app._log_lines), \
+            app._log_lines[-3:]
+    """)
