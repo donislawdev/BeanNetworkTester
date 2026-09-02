@@ -138,6 +138,7 @@
   "errors.config_unknown_setting_hint": "Unknown setting in the config file: {field}. Did you mean '{suggestion}'?",
   "errors.field_number": "The '{name}' field must be a number.",
   "errors.field_range": "Field '{name}' must be between {min} and {max}.",
+  "errors.filter_regex_too_slow": "Field '{field}': '{term}' is a valid regular expression, but it is too slow to run on every packet. A repeat inside another repeat, like ([0-9]+)+, is the usual cause.",
   "errors.scenario_bad_json": "Not a valid JSON file: {error}.",
   "errors.scenario_duration_without_action": "Scenario, step {step}: \"duration\" only applies to an \"action\" - this step has none.",
   "errors.scenario_empty": "Scenario: the step list is empty.",

@@ -42,6 +42,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A filter expression could freeze the whole program.** A regular expression in a target,
+  address or port field runs on every packet. Some perfectly valid patterns take practically
+  forever on ordinary input, and one of those stopped the capture: the machine quietly lost its
+  network and the window stopped responding, with no way out but Task Manager. The tool now tries
+  a pattern before accepting it, and refuses one that is too slow with a message saying why.
+  Patterns people actually write are unaffected.
+
 - **`--interval nan` ran forever at full CPU and printed nothing.** The report interval was
   checked only for being above zero, so `nan` and `inf` got through. With `nan` the run spun on a
   full processor core, printed no reports, and without `--duration` never ended. With `inf`, or a

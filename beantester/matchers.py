@@ -44,6 +44,7 @@ the GUI can show it and the CLI can turn it into a clean error message.
 import fnmatch
 import ipaddress
 import re
+import time
 import warnings
 
 from .i18n import field_name, translate
@@ -464,6 +465,101 @@ def _compare_predicate(op, number):
     return lambda c: c is not None and c <= number
 
 
+# -- refusing a pattern that cannot be run per packet ---------------------------- #
+#
+# `re.compile` answers "does this parse", never "will this ever finish". A pattern
+# that parses can still backtrack catastrophically, and the compiled matcher is
+# then called ON EVERY PACKET, on the capture thread, inside `core._lock`. The
+# consequences do not stop at a slow filter: the capture thread stops draining the
+# divert, so WinDivert queues the user's traffic and the machine quietly loses its
+# network, while the UI thread blocks on the same lock the moment any page asks
+# `App.coverage()`. Task Manager becomes the only way out. Reproduced 2026-09-02
+# with `re:^([1:]+)+x$` against an ordinary IPv6 address.
+#
+# So the pattern is TRIED here, at parse time, on the UI or CLI thread, where
+# taking a few milliseconds costs nothing and refusing is still possible.
+#
+# CPython has no timeout to lean on: `re` exposes none, and `Pattern.search` takes
+# only `pos`/`endpos` (checked on 3.14.7, not remembered). What makes a wall-clock
+# probe bounded instead is the LADDER: catastrophic backtracking grows with input
+# length, so the probe walks lengths upward and stops at the first one over budget.
+# The worst case is therefore one growth step past the budget, not forever.
+#
+# MEASURED 2026-09-02, milliseconds per search at 8 / 12 / 16 / 20 / 24 characters:
+#   ^([1:]+)+x$    0.016  0.132  2.076  37.4  684
+#   ^((a*)*)*b$    7.6    1254
+#   ^chrome|firefox   and   ^10\.0\.\d+        0.001 flat at every length
+# The margin between "fine" and "not fine" is four orders of magnitude, which is
+# why a clock is a fair judge here and why this does not flake on a slow runner.
+#
+# 🔴 The textbook example does NOT work: `^(a+)+$` is 0.001 ms at every length,
+# because CPython optimises it away. A guard tested with it would prove nothing
+# and look thorough. The two patterns above are the ones that actually blow up.
+# The budget covers the WHOLE trial, not each search in it, which is what keeps
+# the cost of a refusal small: the ladder stops at the first length that has spent
+# it, so a pattern is refused after roughly one growth step rather than after
+# finishing the step it exploded on.
+#
+# 5 ms is chosen against the other side of the gap, not against the attack.
+# MEASURED 2026-09-02, worst single search over this whole ladder, for patterns a
+# user might reasonably write: 50 alternations 0.0046 ms, a long character class
+# with an extension list 0.0036 ms, lookahead plus negative lookahead 0.0011 ms,
+# the full IPv6 form 0.0021 ms, a backreference 0.0010 ms, nested groups with
+# alternation 0.0049 ms. The heaviest legitimate pattern measured is a THOUSAND
+# times under this budget, and the whole ladder costs it 0.03 ms.
+REGEX_BUDGET_S = 0.005
+# Repeating units, not sentences: what makes a pattern explode is a long run of
+# characters it can consume. One per alphabet these fields really carry - ports and
+# IPv4 (digits), process names (letters), IPv6 text (hex and colons, the shape the
+# reproduction used), dotted names.
+_REGEX_PROBE_UNITS = ("1", "a", "1:", "a.")
+# Up to 45, the longest IPv6 address in text form, which is the longest value an
+# IP matcher is ever handed. A process name can be longer, and that is said out
+# loud rather than covered badly: a pattern that is still fast at 45 characters
+# and slow at 300 exists, and the capture-thread heartbeat in `engine.py` is what
+# catches it.
+#
+# Close steps at the bottom on purpose. The cost of a refusal is whatever the
+# first over-budget length cost, so the rungs have to be near each other exactly
+# where the explosion starts - `^((a*)*)*b$` is 7.6 ms at 8 characters and 1254 ms
+# at 12, and a ladder that stepped straight from 8 to 12 would pay the second
+# number to learn what the first already showed.
+_REGEX_PROBE_LENGTHS = (6, 8, 10, 12, 14, 16, 20, 24, 32, 45)
+
+
+def _blows_the_budget(rx):
+    """True when climbing the ladder spends more than the budget.
+
+    Lengths outer, alphabets inner: the ladder climbs for every alphabet at once,
+    so a pattern that explodes on letters but not on digits is caught at the
+    shortest length that shows it rather than after a full pass over the other.
+    """
+    deadline = time.perf_counter() + REGEX_BUDGET_S
+    for length in _REGEX_PROBE_LENGTHS:
+        for unit in _REGEX_PROBE_UNITS:
+            rx.search((unit * length)[:length])
+            if time.perf_counter() > deadline:
+                return True
+    return False
+
+
+def _refuse_if_too_slow(rx, field, term):
+    """Raise when a compiled pattern is too slow to sit on the packet path.
+
+    TWICE, and the second run is the one that decides, because a wall clock cannot
+    tell "this pattern burned five milliseconds" from "this thread lost the CPU for
+    five milliseconds". The obvious answer to that is a CPU clock, and it does not
+    work here: `time.get_clock_info("thread_time")` REPORTS a resolution of 1e-07
+    on this platform and MEASURES 15.625 ms (200 000 reads returned six distinct
+    values, 2026-09-02), which cannot see a 5 ms budget at all. A second run can:
+    a scheduling hiccup does not repeat in the same place, and backtracking does,
+    every time, deterministically. A good pattern never pays for this - it takes
+    the first run only, at 0.04 ms.
+    """
+    if _blows_the_budget(rx) and _blows_the_budget(rx):
+        raise _err("errors.filter_regex_too_slow", field, term)
+
+
 def _compile_regex(pattern, field, term):
     pattern = pattern.strip()
     if not pattern:
@@ -478,9 +574,11 @@ def _compile_regex(pattern, field, term):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             warnings.simplefilter("ignore", DeprecationWarning)
-            return re.compile(pattern, re.IGNORECASE)
+            rx = re.compile(pattern, re.IGNORECASE)
     except re.error as exc:
         raise _err("errors.bad_filter_regex", field, term) from exc
+    _refuse_if_too_slow(rx, field, term)
+    return rx
 
 
 def _is_glob(body):

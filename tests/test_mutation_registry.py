@@ -237,6 +237,29 @@ MUTATIONS = [
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
     {
+        # Back to the state before 2026-09-02: `re.compile` succeeding was the
+        # whole check, so a pattern that parses but never finishes went straight
+        # onto the capture thread.
+        "label": "matchers: a pattern that cannot finish is no longer refused",
+        "file": "beantester/matchers.py",
+        "old": "    if _blows_the_budget(rx) and _blows_the_budget(rx):",
+        "new": "    if False:",
+        "test": "test_a_pattern_that_cannot_finish_is_refused_at_parse_time",
+    },
+    {
+        # The other way to make the guard useless without touching its call: stop
+        # the ladder before it reaches a length where backtracking shows. The
+        # budget cannot be loosened instead - a mutant with no ceiling would run
+        # the explosive pattern at 45 characters and hang the suite rather than
+        # fail it.
+        "label": "matchers: the probe ladder stops before backtracking shows",
+        "file": "beantester/matchers.py",
+        "old": "_REGEX_PROBE_LENGTHS = (6, 8, 10, 12, 14, 16, 20, 24, 32, 45)",
+        "new": "_REGEX_PROBE_LENGTHS = (6,)",
+        "test": ("test_a_pattern_that_cannot_finish_leaves_the_table_search"
+                 "_answering_normally"),
+    },
+    {
         # Back to the check as it stood before 2026-09-02, which is the exact
         # shape that let NaN through: `float('nan') <= 0` is False.
         "label": "cli: the report interval is only checked for being above zero",

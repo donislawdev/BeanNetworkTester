@@ -138,6 +138,7 @@
   "errors.config_unknown_setting_hint": "配置文件中存在未知设置：{field}。你是不是想写“{suggestion}”？",
   "errors.field_number": "“{name}”字段必须是数字。",
   "errors.field_range": "字段“{name}”必须介于 {min} 和 {max} 之间。",
+  "errors.filter_regex_too_slow": "字段“{field}”：“{term}”是有效的正则表达式，但对每个数据包运行都太慢。最常见的原因是重复中嵌套重复，例如 ([0-9]+)+。",
   "errors.scenario_bad_json": "不是有效的 JSON 文件：{error}。",
   "errors.scenario_duration_without_action": "场景第 {step} 步：“duration”只能与“action”一起使用，但此步骤没有 action。",
   "errors.scenario_empty": "场景：步骤列表为空。",

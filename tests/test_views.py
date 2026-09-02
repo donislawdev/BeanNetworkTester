@@ -400,3 +400,43 @@ def test_the_query_is_compiled_once_not_per_row():
     tests = compile_query("proc:chrome port:443 dropped:>0")
     check("one predicate per term", len(tests) == 3, f"({len(tests)})")
     check("an empty query compiles to nothing to do", compile_query("   ") == [])
+
+
+def test_a_pattern_that_cannot_finish_leaves_the_table_search_answering_normally():
+    """The SECOND door onto the same regex, and it is not the same failure.
+
+    The session filter puts a matcher on the capture thread inside ``core._lock``,
+    so a pattern that backtracks catastrophically there takes the machine's network
+    and the window with it. Here the matcher runs on the model worker, so the cost
+    is milder and quieter: the table stops refreshing, ``AsyncModel.busy()`` stays
+    True and the worker leaks. Both doors go through ``parse_matcher``, so both are
+    closed by the same guard - this pins that the search box actually inherits it,
+    rather than assuming a shared function is a shared behaviour.
+
+    "Answering normally" means the term simply matches nothing, which is what
+    ``compile_query`` already does with every value it cannot use: the box is typed
+    into character by character, so half of a pattern must never throw or blank the
+    table.
+    """
+    import time
+
+    from beantester.views import compile_query
+
+    # The process name is one the pattern MATCHES. A row it would miss anyway
+    # cannot tell "the term was refused" from "the term ran and did not match",
+    # and the first draft of this test used one - it passed with the guard removed.
+    row = {"proc": "aaab", "pid": 1, "proto": "TCP", "dir": "out",
+           "remote_ip": "1.1.1.1", "remote_port": 443, "local_port": 5000}
+    started = time.perf_counter()
+    tests = compile_query(r"proc:re:^((a*)*)*b$")
+    elapsed = time.perf_counter() - started
+
+    check("the search box does not raise on a pattern it refuses",
+          isinstance(tests, list) and len(tests) == 1, f"({tests!r})")
+    check("the refused term matches nothing, even a row it would have hit",
+          not all(t(row, None) for t in tests))
+    # Generous on purpose: the point is "bounded", not a stopwatch reading. The
+    # same call without the guard did not return in 25 seconds (measured
+    # 2026-09-02). With the guard the refusal costs ~83 ms on this machine.
+    check("and it comes back quickly enough to keep the worker free",
+          elapsed < 5.0, f"({elapsed * 1000:.0f} ms)")
