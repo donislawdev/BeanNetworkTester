@@ -20,7 +20,7 @@ from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
 # Internal stat keys are engine-speak ("seen"); a CSV is read by people and
 # by spreadsheets, so it gets column names that mean something.
 CSV_COLUMNS = {"seen": "packets_seen", "scoped_seen": "packets_in_scope",
-               "drop_loss": "dropped_loss",
+               "drop_loss": "dropped_loss", "loss_bursts": "loss_runs",
                "drop_overflow": "dropped_overflow", "drop_syn": "dropped_syn",
                "drop_mtu": "dropped_mtu", "drop_nat": "dropped_nat",
                "drop_rst": "dropped_rst", "rst_reset": "connections_reset",

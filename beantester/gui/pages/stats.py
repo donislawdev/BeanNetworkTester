@@ -64,6 +64,7 @@ CELLS = (
     ("seen", "stats.packets", "", "tips.stat_seen"),
     ("queue", "stats.queued", "", "tips.stat_queue"),
     ("drop_loss", "stats.dropped", "", "tips.stat_loss"),
+    ("loss_bursts", "stats.loss_runs", "", "tips.stat_loss_runs"),
     ("corrupted", "stats.corrupted", "", "tips.stat_corrupted"),
     ("duplicated", "stats.duplicated", "", "tips.stat_duplicated"),
     ("drop_overflow", "stats.overflow", "", "tips.stat_overflow"),
@@ -490,7 +491,7 @@ class StatsPage:
         # can be impaired), and drop_overflow / drop_shutdown / drop_send stay on
         # the FULL traffic on purpose - they are what the TOOL lost, including
         # traffic the user never targeted, and narrowing them would hide it.
-        for key in ("seen", "queue", "drop_loss", "corrupted", "duplicated",
+        for key in ("seen", "queue", "drop_loss", "loss_bursts", "corrupted", "duplicated",
                     "drop_overflow", "drop_shutdown", "drop_send",
                     "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",

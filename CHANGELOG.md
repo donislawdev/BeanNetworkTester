@@ -25,6 +25,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
     Profiles saved by earlier versions load unchanged and keep the even spread.
   - This is not the same as "Link outages (flapping)" further down, which cuts the connection
     on a fixed cycle on purpose. Runs are random and short, in the middle of normal traffic.
+  - A **"Loss runs"** counter on the Statistics tab, in the stats CSV as `loss_runs` and in the
+    reproduction report, says how many runs actually happened. It answers the one question the
+    drop count cannot: zero there, with a run length set, means the session was too short to
+    see one rather than the setting doing nothing.
 
 - **Aim at one address family.** Two new switches under the destination target, in the GUI
   and on the command line, impair IPv4 only or IPv6 only. The other family keeps flowing

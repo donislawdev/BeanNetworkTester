@@ -583,7 +583,8 @@ beneath it (in the UI language), and the CLI ends with a readable `error: ...` -
 
 The throughput chart has a Y axis with values (KB/s), a grid, a "nicely" rounded scale and current
 down/up readouts in the corner. Download/Upload (KB/s live), Packets (how many passed), Queued
-(waiting - grows with delay/limit), Lost, Corrupted, Duplicated, Buffer overflow (dropped when the
+(waiting - grows with delay/limit), Lost, Loss runs (how many RUNS that loss arrived
+in - see "Losses in a row"), Corrupted, Duplicated, Buffer overflow (dropped when the
 tool is overloaded), Dropped at stop (were still queued when STOP was pressed), Send failed (the
 tool captured them but could not put them back on the wire - the connection went down, or the driver
 refused), Rate-limit drop (dropped by a full speed-limit buffer - counted separately from
@@ -934,6 +935,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `packets_seen` | packets captured |
 | `packets_in_scope` | of those, the ones targeting selected for impairment |
 | `dropped_loss` | dropped by the Loss setting |
+| `loss_runs` | how many RUNS that loss arrived in (see "Losses in a row"). 0 with a run length set means the session was too short to see one |
 | `dropped_overflow` | dropped because the tool's own queue was full (see the note on it below) |
 | `corrupted` | packets whose payload was flipped |
 | `duplicated` | extra copies queued |

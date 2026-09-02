@@ -97,6 +97,10 @@ def build_repro_report(engine, settings):
         # from before this change is not comparable with one from after.
         effective_loss_pct=round(impairment_loss_pct(stats), 2),
         effective_corruption_pct=round(corruption_pct(stats), 2),
+        # How many RUNS the loss arrived in. Zero with a run length configured
+        # means the session was too short to see one, which is the difference
+        # between a run that proved nothing and a tool that is broken.
+        loss_runs=stats.get("loss_bursts", 0),
         # connections_reset held drop_rst - the PACKETS a reset connection swallows
         # during its cooldown, which for a 30 s cooldown on a busy flow is thousands
         # against a handful of actual resets. The three RST numbers answer three

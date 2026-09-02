@@ -466,7 +466,8 @@ powód (w języku interfejsu), a CLI kończy się czytelnym `error: ...` - nigdy
 ## Statystyki (co znaczą liczniki)
 
 Wykres przepustowości ma teraz oś Y z wartościami (KB/s), siatkę, „ładnie” zaokrągloną skalę oraz bieżące odczyty down/up w rogu. Pobieranie/Wysyłanie (KB/s na żywo), Pakiety (ile przeszło), W kolejce (czekające - rośnie przy
-opóźnieniu/limicie), Utracone, Uszkodzone, Zduplikowane, Bufor przepełn. (porzucone przy
+opóźnieniu/limicie), Utracone, Serie strat (w ilu SERIACH przyszła ta strata - patrz
+„Straty pod rząd”), Uszkodzone, Zduplikowane, Bufor przepełn. (porzucone przy
 przeciążeniu narzędzia), Porzuc. przy stopie (czekały w kolejce, gdy nacisnięto STOP), Nie odesłane
 (narzędzie je przechwyciło, ale nie zdołało odesłać do sieci - padło połączenie albo sterownik
 odrzucił pakiet), Odrzuc. przez limit (porzucone przez pełny bufor limitu prędkości -
@@ -783,6 +784,7 @@ w ogóle policzył - więc każdy wiersz zapisuje to w kolumnie `capture_narrowe
 | `packets_seen` | przechwycone pakiety |
 | `packets_in_scope` | z tego te, które celowanie wybrało do psucia |
 | `dropped_loss` | odrzucone przez ustawienie Strata |
+| `loss_runs` | w ilu SERIACH przyszła ta strata (patrz „Straty pod rząd”). 0 przy ustawionej długości serii znaczy, że sesja była za krótka, żeby zobaczyć choć jedną |
 | `dropped_overflow` | odrzucone, bo kolejka samego narzędzia była pełna |
 | `corrupted` | pakiety z przekłamaną zawartością |
 | `duplicated` | dołożone kopie |

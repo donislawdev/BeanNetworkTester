@@ -300,6 +300,60 @@ def test_a_session_never_starts_inside_a_run():
           f"({core._loss_bad})")
 
 
+def test_the_run_counter_answers_did_this_fire_at_all():
+    """A drop count cannot say whether the MODEL did anything.
+
+    0.1% loss in runs of 1000 is one run per million packets, which on a quiet
+    connection is hours: the settings look reasonable, nothing happens, and that
+    reads exactly like a broken tool. So the runs are counted, and the count is
+    the difference between "too short a session" and "this is not working".
+    """
+    core = _core(loss=5, burst=20)
+    check("a fresh core has counted nothing", core.loss_bursts == 0,
+          f"({core.loss_bursts})")
+    dropped, runs = _drops(core, packets=50000)
+    started = len(runs[True]) + len(runs[False])
+    check("the counter matches the runs actually observed",
+          abs(core.loss_bursts - started) <= 1,
+          f"(counted {core.loss_bursts}, observed {started})")
+    check("and it counted something at all", core.loss_bursts > 0,
+          f"({core.loss_bursts} with {dropped} packets dropped)")
+
+    # The one packet of slack above is real and worth naming: a run still in
+    # progress when the window ends has been STARTED but not yet observed as
+    # finished, so the two can differ by exactly one.
+    quiet = _core(loss=5, burst=0)
+    _drops(quiet, packets=20000)
+    check("independent loss starts no runs at all", quiet.loss_bursts == 0,
+          f"({quiet.loss_bursts})")
+
+
+def test_the_run_counter_reaches_the_statistics_snapshot():
+    """It is counted by the core and read by the engine, so the wiring is a
+    separate question from the counting - and this is the half a scenario, the
+    CSV, the repro report and the tile all depend on."""
+    from beantester.engine import BeanEngine
+
+    engine = BeanEngine()
+    engine.set_params(50, 0, 0, 0, 0, 0, 0)
+    engine.set_loss_burst(10)
+    engine.core.reset_buckets(0.0)
+    check("a stopped engine reports the counter at zero",
+          engine.stats_snapshot()["loss_bursts"] == 0,
+          f"({engine.stats_snapshot()['loss_bursts']})")
+
+    rng = random.Random(4)
+    for i in range(5000):
+        engine.core.decide(1200, bool(i % 2), 5000, i * 0.001, rng,
+                           remote_ip="1.2.3.4", remote_port=443, is_tcp=True)
+    snapshot = engine.stats_snapshot()
+    check("the engine reports what the core counted",
+          snapshot["loss_bursts"] == engine.core.loss_bursts,
+          f"(snapshot {snapshot['loss_bursts']}, core {engine.core.loss_bursts})")
+    check("and it is not zero after a run of impaired traffic",
+          snapshot["loss_bursts"] > 0, f"({snapshot['loss_bursts']})")
+
+
 def test_turning_bursts_off_returns_to_the_independent_draw():
     core = _core(loss=10, burst=30)
     check("armed", core._burst_p is not None, "")

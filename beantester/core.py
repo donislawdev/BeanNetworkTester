@@ -276,6 +276,12 @@ class BeanCore:
         self._burst_p = None
         self._burst_r = 0.0
         self._loss_bad = {True: False, False: False}
+        # Runs STARTED, both directions together. The engine merges it into the
+        # statistics snapshot, because "did the model fire at all" is not
+        # answerable from the drop count: a long run length can space the runs
+        # far enough apart that a short session sees none, and a session that
+        # changed nothing has to be distinguishable from a tool that is broken.
+        self.loss_bursts = 0
         self.corrupt = 0.0
         self.dup = 0.0
         self.latency_s = 0.0
@@ -454,6 +460,7 @@ class BeanCore:
                 bad = False
         elif rng.random() < self._burst_p:
             bad = True
+            self.loss_bursts += 1
         self._loss_bad[is_outbound] = bad
         return bad
 
@@ -686,6 +693,7 @@ class BeanCore:
             # A session that ended mid-run must not start the next one inside it:
             # the same reason the schedule and the token buckets restart here.
             self._loss_bad[True] = self._loss_bad[False] = False
+            self.loss_bursts = 0
 
     # -- helpers ------------------------------------------------------------ #
     @staticmethod
