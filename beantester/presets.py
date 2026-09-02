@@ -130,6 +130,25 @@ from .settings import DEFAULT_SETTINGS
 # Ookla, Speedtest, Starlink, HughesNet and Viasat are trademarks of their
 # respective owners, named here only to identify whose measurements these are.
 # This project is not affiliated with, endorsed by or sponsored by any of them.
+#
+# CHECKED AND CLEAN, so nobody has to check it twice (2026-09-01, at the source
+# rather than from memory):
+#   * [WIFI-BLL] is open access under **CC BY 4.0**, copyright the authors
+#     ("© 2022 by the authors. Licensee MDPI"), verified on the article page.
+#     Two independent reasons it is fine here: individual figures are facts and
+#     carry no copyright at all, and even if they did, CC BY permits reuse with
+#     attribution - which is given, with authors, venue and DOI. No wording is
+#     reproduced, and the underlying trace is NOT ingested, which is the line
+#     that matters (see the Ookla note above).
+#   * [E-MODEL] is an ITU-T Recommendation and ITU reserves its rights in the
+#     TEXT. Nothing of that text is here: one definition in our own words and one
+#     threshold, both attributed, and it is used only as a sanity anchor rather
+#     than as the source of any value in the table. A definition and a number are
+#     not the copyrighted expression.
+#   * Neither belongs in `THIRD-PARTY-NOTICES.md` or `licenses/`. Those carry
+#     what the BUILD ships - libraries, DLLs, fonts, icons (convention 35). A
+#     bibliographic citation in a comment ships no third-party work, which is why
+#     the five older sources here have no entry either.
 # --------------------------------------------------------------------------- #
 PRESETS = {
     # ordered best -> worst (top = best network, bottom = worst)
