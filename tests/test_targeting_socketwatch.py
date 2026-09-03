@@ -518,7 +518,27 @@ def test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in
     targeting.note_socket(7000, 100)
     check("inside the window the stranger's socket IS in scope", 7000 in targeting)
 
+    # 🔴 The rebuild, with the stranger's socket announced WHILE the walk is
+    # resolving names - the same interposition as
+    # test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added, and since
+    # 2026-09-03 the ONLY way a port reaches the rescue at all: `_late_owners` is
+    # emptied at the START of a walk now (it used to be emptied at the end, which
+    # let it hoard entries across failed walks). Announcing before the walk, the
+    # way this test used to, no longer reaches the owner check - it left the guard
+    # green whatever that check did, which the mutation registry reported as
+    # SURVIVED. This is the case the check exists for: the event names pid 100,
+    # and this very walk is in the middle of deciding 100 is no longer ours.
+    seen = []
+
+    def name_of(pid, cheap=False):
+        if not seen:
+            seen.append(pid)
+            targeting.note_socket(7000, 100)
+        return table.names.get(pid, "")
+
+    table.name_of = name_of
     targeting.refresh()          # the resolver's next tick
+    check("the event really landed mid-walk", seen, "(the interposition never ran)")
     check("the rebuild drops the pid", targeting.pids() == set(), f"({targeting.pids()})")
     check("...and the stranger's port with it", 7000 not in targeting,
           f"({sorted(targeting.ports())})")
