@@ -30,6 +30,7 @@ from ..validators import parse_number, parse_seed
 from . import dialogs
 from .accordion import CollapsibleSection
 from .labels import wrapping_label
+from .rates import DEFAULT_UNIT, RATE_FIELD_KEYS, rate_with_unit
 from .scaling import scaled
 from .theme import popdown_height, unhighlight_combobox
 from .tooltip import add_tooltip
@@ -107,6 +108,7 @@ class ControlForm:
         self.errors = {}            # section id -> error label (packed only when set)
         self.notes = {}             # section id -> override note label
         self.helps = {}             # settings key -> its "?" cheat-sheet button
+        self.rate_hints = {}        # rate field key -> its converted-value label
         self._invalid = set()       # section ids whose fields currently fail validation
         self.columns = 1
         self.column_frames = []
@@ -114,6 +116,7 @@ class ControlForm:
         self.host = ttk.Frame(parent)
         self.host.pack(fill="both", expand=True)
         self._build()
+        self.sync_rate_hints()
         self.host.bind("<Configure>", self._on_host_configure)
 
     # -- construction -------------------------------------------------------- #
@@ -121,6 +124,7 @@ class ControlForm:
         app = self.app
         self.sections, self.entries, self.labels = {}, {}, {}
         self.errors, self.notes, self.helps = {}, {}, {}
+        self.rate_hints = {}
 
         # Real column FRAMES, not grid columns: in a grid the row height is
         # shared across columns, so one tall section on the left blew a hole
@@ -293,9 +297,49 @@ class ControlForm:
         if field.hint:
             ttk.Label(cell, text=T(field.hint), style="Hint.TLabel").pack(
                 side="left", padx=(scaled(8), 0))
+        if field.key in RATE_FIELD_KEYS:
+            # The same number in the unit the reader picked. The ENTRY stays in
+            # KB/s because that is what a config file, the schedule string and the
+            # command line all carry (see gui/rates.py), so this is the one place
+            # that says what the typed number means in Mbit/s or MB/s. Empty while
+            # the preference IS KB/s: repeating the value beside itself is noise.
+            hint = ttk.Label(cell, text="", style="Hint.TLabel")
+            hint.pack(side="left", padx=(scaled(8), 0))
+            self.rate_hints[field.key] = hint
 
         entry.bind("<KeyRelease>", lambda e, s=sec.id: self._on_edit(s), add="+")
         entry.bind("<FocusOut>", lambda e, s=sec.id: self._on_edit(s), add="+")
+        if field.key in RATE_FIELD_KEYS:
+            entry.bind("<KeyRelease>", lambda e: self.sync_rate_hints(), add="+")
+            entry.bind("<FocusOut>", lambda e: self.sync_rate_hints(), add="+")
+
+    def sync_rate_hints(self):
+        """Rewrite "(= 8.39 Mbit/s)" beside every rate field. Cheap, and idempotent.
+
+        Called on every keystroke in one of those fields and by ``App.set_pref``
+        when the unit changes, rather than on a timer: the two things that can
+        move it are a typed character and a dropdown, and both are events. With
+        the base unit selected the labels go EMPTY - a value repeated beside
+        itself is noise, not information.
+        """
+        unit = self.app.pref("rate_unit")
+        for key, label in self.rate_hints.items():
+            if not label.winfo_exists():
+                continue
+            var = self.app.vars.get(key)
+            if unit == DEFAULT_UNIT or var is None:
+                label.config(text="")
+                continue
+            # A half-typed value is not an error here: this readout is a comment on
+            # what is in the box, so while the box says "12x" it simply says nothing
+            # rather than colouring the field or logging.
+            try:
+                kbps = float(str(var.get()).strip() or 0)
+            except (TypeError, ValueError):
+                label.config(text="")
+                continue
+            label.config(text=T("fields.rate_converted").format(
+                value=rate_with_unit(kbps, unit)))
 
     # -- events -------------------------------------------------------------- #
     def _show_match_help(self):

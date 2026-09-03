@@ -27,7 +27,8 @@ from ...validators import parse_number
 from ..accordion import CollapsibleSection
 from ..form import ControlForm
 from ..labels import wrapping_label
-from ..prefs import ACTION, BOOL, NUMBER, PREF_GROUPS, PREFS_BY_KEY, prefs_in_section
+from ..prefs import (ACTION, BOOL, CHOICE, NUMBER, PREF_GROUPS, PREFS_BY_KEY,
+                     prefs_in_section)
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from ..theme import popdown_height, unhighlight_combobox
@@ -246,6 +247,36 @@ class SettingsWindow(PanelWindow):
                              command=lambda p=pref: getattr(app, p.action)())
             btn.pack(side="left")
             add_tooltip(btn, pref.tip)
+            return
+
+        if pref.kind == CHOICE:
+            # label | readonly combobox | hint. Readonly for the same reason the
+            # traffic filter is: the value is one of a fixed set, and a typable box
+            # invites a spelling this build has no branch for.
+            label = ttk.Label(row, text=T(pref.label), style="Card.TLabel")
+            label.pack(side="left", padx=(0, scaled(6)))
+            labels = [text for _, text in pref.choices]
+            by_label = {text: value for value, text in pref.choices}
+            current = app.pref(pref.key)
+            shown = next((text for value, text in pref.choices if value == current),
+                         labels[0])
+            var = tk.StringVar(value=shown)
+            box = ttk.Combobox(row, textvariable=var, values=labels,
+                               state="readonly", width=pref.width)
+            box.pack(side="left")
+            # The dropdown carries the VALUE, never the label: the labels are what
+            # a person reads and the values are what ui.json and every reader of
+            # the preference see, and collapsing the two is how a stored setting
+            # starts depending on the interface language.
+            box.bind("<<ComboboxSelected>>",
+                     lambda e, k=pref.key, v=var, m=by_label:
+                     self._store(k, m.get(v.get())), add="+")
+            add_tooltip(box, pref.tip)
+            add_tooltip(label, pref.tip)
+            if pref.hint:
+                ttk.Label(row, text=T(pref.hint), style="Hint.TLabel").pack(
+                    side="left", padx=(scaled(8), 0))
+            self._pref_vars[pref.key] = var
             return
 
         # NUMBER: label | entry | unit | hint, with live validation like the form

@@ -2099,6 +2099,46 @@ MUTATIONS = [
         "new": '        self._last_sent = getattr(self, "_last_sent", {True: -1, False: -1})',
         "test": "test_a_restarted_session_does_not_inherit_the_previous_high_water_mark",
     },
+    {
+        # The comfortable answer: a megabit as 1024*1024 bits makes 1024 KB/s come
+        # out as exactly 8.00, which is the number a reader expects and is 4.9%
+        # wrong. Nothing but an assertion on the digits can catch it, because the
+        # wrong version looks MORE right than the correct one.
+        "label": "units: a megabit becomes binary, so 1024 KB/s reads 8.00",
+        "file": "beantester/gui/rates.py",
+        "old": '    ("mbit", "Mbit/s", 1024.0 * 8.0 / 1_000_000.0),',
+        "new": '    ("mbit", "Mbit/s", 1024.0 * 8.0 / 1_048_576.0),',
+        "test": "test_a_kilobyte_here_is_1024_bytes_and_a_megabit_is_a_million_bits",
+    },
+    {
+        # Writing the LABEL into ui.json instead of the value. It survives the
+        # restart, matches no known unit, falls back to KB/s - and reads as "the
+        # preference does not stick" rather than as a bug in the write.
+        "label": "units: the dropdown stores its label instead of its value",
+        "file": "beantester/gui/panels/settings.py",
+        "old": "                     self._store(k, m.get(v.get())), add=\"+\")",
+        "new": "                     self._store(k, v.get()), add=\"+\")",
+        "test": "test_the_dropdown_stores_the_value_and_never_the_label",
+    },
+    {
+        # The view over the registry replaced by a list of names - the drift this
+        # project keeps paying for, and invisible until a third rate field exists.
+        "label": "units: the rate fields become a hand-written list",
+        "file": "beantester/gui/rates.py",
+        "old": "RATE_FIELD_KEYS = tuple(f.key for f in FIELD_DEFS if f.unit == BASE_LABEL)",
+        "new": 'RATE_FIELD_KEYS = ("down",)',
+        "test": "test_the_rate_fields_are_a_view_over_the_registry_not_a_list_of_names",
+    },
+    {
+        # "1024 KB/s" printed beside a box that says 1024. Harmless-looking, and
+        # the reason the readout exists at all is that it says something the box
+        # does not.
+        "label": "units: the converted readout repeats the value in the base unit",
+        "file": "beantester/gui/form.py",
+        "old": "            if unit == DEFAULT_UNIT or var is None:",
+        "new": "            if var is None:",
+        "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

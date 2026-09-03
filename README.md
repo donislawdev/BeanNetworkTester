@@ -267,6 +267,19 @@ KB/s. 0 = no limit. Ping is small packets, so a speed limit barely changes it - 
 use a file download. A positive value always limits something: an extremely small limit (below
 1 B/s) is floored to 1 B/s, it does not silently turn into "no limit".
 
+**Speed unit (Settings window)** - whether the Statistics page, the chart and the readout next to
+these two fields show throughput in `KB/s`, `Mbit/s` or `MB/s`. It changes what you READ, never
+what you type: the limits themselves stay in KB/s, because that is the number a saved
+configuration file, the throughput schedule, the shipped scenarios, `--down`/`--up` and the NDJSON
+output all carry. Pick a unit and a grey `(= 8.39 Mbit/s)` appears beside the field, so you can
+type the number the tool wants while reading the number your link is sold in.
+
+> **`K` here is 1024, and a megabit is a decimal million** - the two conventions do not cancel out,
+> so 1024 KB/s is **8.39 Mbit/s**, not 8. That is the honest conversion, not a rounding error: a
+> byte is 8 bits, `1024 x 1024 x 8 = 8 388 608` bits per second, and megabit means 10^6 bits
+> everywhere a link is sold. Divide by 8.39, not by 8, when you want a limit to match an
+> advertised speed.
+
 **Buffer** - the capacity of the link buffer for a speed limit, in milliseconds (0 = unlimited
 buffer). It sets how much queueing delay may build up on a rate-limited link before it starts
 dropping the excess (bufferbloat). Without this buffer the token bucket could "run away" tens of

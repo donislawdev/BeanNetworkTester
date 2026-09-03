@@ -1,6 +1,14 @@
-"""Throughput chart: grid, Y axis in KB/s, down/up series and live readouts."""
+"""Throughput chart: grid, Y axis, down/up series and live readouts.
+
+The series are KB/s, which is what the engine counts and what the caller
+holds. The Y axis is LABELLED in whichever unit the reader picked (see
+``gui/rates.py``), so the picture is the same and only the numbers beside it
+change - the docstring used to say "Y axis in KB/s" and that stopped being
+true the moment the preference existed.
+"""
 from ..i18n import T
 from ..utils import nice_ceiling
+from .rates import BASE_LABEL, DEFAULT_UNIT, UNIT_LABEL, in_unit
 from .scaling import chart_geometry, scaled
 from .theme import DOWN_C, FONT, GRID_C, MUT, UP_C
 
@@ -18,8 +26,16 @@ def _axis_label(value, peak):
     return f"{value:.2f}"
 
 
-def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7):
-    """Redraw the throughput chart on the given canvas."""
+def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7,
+                          unit=DEFAULT_UNIT):
+    """Redraw the throughput chart on the given canvas.
+
+    ``unit`` changes the AXIS LABELS and the caption only. The history and the
+    plot scale stay in KB/s, which is what the caller holds and what the
+    engine counts - converting the data as well would mean the "nice" ceiling
+    were computed on one scale and drawn on another, and the shape of the line
+    is the same either way.
+    """
     c = canvas
     try:
         width = c.winfo_width()
@@ -46,10 +62,11 @@ def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7):
         y = y0 + ph - ph * frac
         c.create_line(x0, y, x0 + pw, y, fill=GRID_C)
         c.create_text(g["ml"] - scaled(8), y, anchor="e", fill=MUT, font=(FONT, 8),
-                      text=_axis_label(peak * frac, peak))
+                      text=_axis_label(in_unit(peak * frac, unit),
+                                       in_unit(peak, unit)))
     # the unit caption sits ABOVE the plot, not on top of the topmost value
     c.create_text(scaled(6), y0 - scaled(12), anchor="w", fill=MUT, font=(FONT, 8),
-                  text="KB/s")
+                  text=UNIT_LABEL.get(unit, BASE_LABEL))
 
     # X axis labels (time) - inside the bottom margin, not clipped by the edge
     n = len(down_hist)
