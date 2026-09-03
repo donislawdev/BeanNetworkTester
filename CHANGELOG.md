@@ -42,6 +42,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Two copies of the program running at once could damage your saved files.** Settings,
+  profiles and window state are written to a temporary file first and then swapped into place,
+  so a crash halfway through cannot leave half a file. The temporary file was named after the
+  one being saved, though, which meant two copies of the program saving at the same moment were
+  writing into the same temporary file - and one of them could end up saving a mixture of both.
+  The first copy is also what adopts your files from an older version on first start, so the
+  same collision could damage a profile file while it was being carried over. Each save now uses
+  a temporary file of its own. Nothing changes for a single copy, which is the normal case.
+
+- **Saving could close the program instead of reporting a problem.** A value that cannot be
+  written to a settings or profile file used to escape as a crash rather than an error message.
+  It is now reported the same way every other bad save already was.
+
 - **Exporting connections to CSV froze the window.** On a big table the export could take
   seconds, and during those seconds nothing responded - including STOP. It now runs in the
   background and tells you in the log when the file is written. A second click while one export

@@ -12,6 +12,7 @@ reason is package managers - see ``user_data_dir``.
 import os
 import shutil
 import sys
+import tempfile
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(PACKAGE_DIR)
@@ -127,6 +128,45 @@ def directory_is_writable(path):
     return True
 
 
+def temp_beside(path):
+    """A temp file NO other writer will pick, in the same directory as ``path``.
+
+    Every atomic write in this program is "write a temp file, then ``os.replace``
+    it over the target", and the temp name was ``<target>.tmp`` in all three
+    places that do it. That name is a FUNCTION OF THE TARGET, so two writers of
+    one file are two writers of one temp file: the second truncates what the
+    first is still writing, and the first then publishes the result as the user's
+    profiles, settings or window state. Nothing stops that - the program has no
+    single-instance lock, and the mutex in ``driver.py`` guards the DRIVER, not
+    these files. Two copies running at once is an ordinary thing to do.
+
+    The same DIRECTORY, not the system temp dir: ``os.replace`` is only atomic
+    within one filesystem, and that is the whole point of the dance.
+
+    What it costs, said out loud because it is a real trade and not a free win:
+    the old name healed itself, since the next write reused it. A unique one
+    cannot, so a process killed between the create and the replace leaves a stray
+    ``.tmp`` behind for good. That is a corrupt user file traded for a stray one,
+    which is the right way round - and where a leftover would do more than sit
+    there (``crashes/``, which has to be EMPTY before it can be removed), the
+    caller sweeps by prefix instead of relying on one known name.
+
+    One more consequence, decided rather than overlooked: on POSIX ``mkstemp``
+    creates the file 0600, and ``os.replace`` carries that mode onto the target, so
+    a config file that used to be 0644 becomes owner-only. On Windows - where a
+    real capture session can only run - the mode is not what decides access at all,
+    and everywhere else these files sit in the user's own data directory, so the
+    change is a tightening in a private place. Copying the old file's mode across
+    would buy nothing and add a failure path to a function that must not have one.
+    """
+    directory, name = os.path.split(path)
+    # No makedirs: a missing directory is the CALLER's error to report, and
+    # mkstemp raising OSError here is how it finds out (see jsonfile.write_json).
+    fd, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
+    os.close(fd)
+    return tmp
+
+
 def _same_directory(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
@@ -165,14 +205,18 @@ def migrate_user_files(source=None, target=None):
         # Scoop's persist leaves behind, and it must be skipped rather than copied.
         if os.path.exists(dst) or not os.path.isfile(src):
             continue
-        tmp = dst + ".tmp"
+        # Two copies of the program launched together both migrate, and they used
+        # to do it through one `<dst>.tmp`: the loser's half-copy became the
+        # user's adopted profile file. See temp_beside.
+        tmp = None
         try:
+            tmp = temp_beside(dst)
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)        # atomic, so a half-copy is never readable
         except OSError as e:
             problems.append(f"{name}: {e}")
             try:
-                if os.path.exists(tmp):
+                if tmp and os.path.exists(tmp):
                     os.remove(tmp)
             except OSError as _exc:
                 # The leftover is harmless, the silence would not be (convention 30).

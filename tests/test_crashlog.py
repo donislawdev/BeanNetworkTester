@@ -490,15 +490,87 @@ def test_a_breadcrumb_that_cannot_be_serialised_is_swallowed(isolated):
     """The state comes from the UI. A value json cannot write must not take the
     process down ON THE WAY TO DESCRIBING A CRASH - and must not leave the half
     written temp file behind either, because a stray .tmp keeps the directory from
-    ever being cleaned up again."""
+    ever being cleaned up again.
+
+    The leftover is looked for by SCANNING, not by name: the temp file is unique
+    per writer now (``paths.temp_beside``), so a check for one known name would
+    pass without looking at anything - green, and blind to the very leftover it
+    was written to catch.
+    """
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
     try:
         assert not crashlog.breadcrumb(page=object(), running=False, windows=[])
-        tmp = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME + ".tmp")
-        assert not os.path.exists(tmp), "a failed write left its temp file behind"
+        left = [n for n in os.listdir(crashlog.crash_dir()) if n.endswith(".tmp")]
+        assert not left, f"a failed write left its temp file behind: {left}"
     finally:
         crashlog._cleanup_native()
+
+
+def test_two_breadcrumb_writers_do_not_share_one_temp_file(isolated, monkeypatch):
+    """Two copies of the GUI both leave a breadcrumb, through one temp file.
+
+    Worse odds than any other writer in the program: this one is written from the
+    TICK, so "both at the same moment" is not a corner case, it is 1.4 chances a
+    second for as long as two windows are open. The interleaving is forced at the
+    instant that matters (see the same test in test_jsonfile.py for why it is
+    forced rather than raced).
+    """
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    real_replace = os.replace
+    second = []
+
+    def let_the_other_writer_in(src, dst):
+        if not second:                          # guard first: the second writer
+            second.append("did not finish")     # publishes through here as well
+            second[0] = crashlog.breadcrumb(page="second", running=False, windows=[])
+        return real_replace(src, dst)
+
+    try:
+        monkeypatch.setattr(os, "replace", let_the_other_writer_in)
+        first = crashlog.breadcrumb(page="first", running=True, windows=[])
+        # NOT monkeypatch.undo(): one monkeypatch object serves the whole test,
+        # `isolated` included, so undoing here would also put `user_data_dir` back
+        # and point the cleanup below at the user's REAL crashes folder. Teardown
+        # restores os.replace anyway, and the patch is a pass-through from here.
+
+        assert second == [True], f"the second writer failed ({second})"
+        assert first is True, ("the first writer failed - it tried to publish a temp "
+                               "file the second had already taken")
+        with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
+                  encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["page"] in ("first", "second"), f"a mix of two writers: {data}"
+        left = [n for n in os.listdir(crashlog.crash_dir()) if n.endswith(".tmp")]
+        assert not left, f"a temp breadcrumb survived both writers: {left}"
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit(isolated):
+    """The leftover a unique name cannot heal on its own.
+
+    The old ``breadcrumb.json.tmp`` was reused by the next write, so an orphan
+    fixed itself. A unique one does not, and an orphan HERE does more than sit
+    there: ``crashes/`` is removed only when it is EMPTY, so a single stray temp
+    file would make every healthy run leave a folder behind for ever. Both name
+    shapes are swept - the one this version writes and the fixed one a version
+    before it could have left.
+    """
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    directory = crashlog.crash_dir()
+    for name in (crashlog.BREADCRUMB_NAME + ".tmp",             # pre-2026-09-03
+                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp"):     # what temp_beside makes
+        with open(os.path.join(directory, name), "w", encoding="utf-8") as f:
+            f.write("{half writ")
+
+    crashlog._cleanup_native()
+
+    assert not os.path.isdir(directory), (
+        "a stray temp breadcrumb kept the folder alive: "
+        f"{sorted(os.listdir(directory))}")
 
 
 def test_the_running_gui_actually_leaves_one(isolated):

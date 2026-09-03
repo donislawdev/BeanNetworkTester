@@ -64,7 +64,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from .appinfo import __version__
-from .paths import user_data_dir
+from .paths import temp_beside, user_data_dir
 
 CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
@@ -509,8 +509,13 @@ def breadcrumb(**state):
     payload["pid"] = os.getpid()
     payload["threads"] = [t.name for t in threading.enumerate()]
     path = os.path.join(directory, BREADCRUMB_NAME)
-    tmp = path + ".tmp"
+    # Unique per writer: two copies of the GUI both leave a breadcrumb, and they
+    # used to leave it through one `breadcrumb.json.tmp`. See paths.temp_beside -
+    # and note that this one is written from a TICK, so "two writers at the same
+    # moment" is not a corner case here, it is 1.4 chances a second.
+    tmp = None
     try:
+        tmp = temp_beside(path)
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
@@ -520,7 +525,7 @@ def breadcrumb(**state):
         # a value json cannot serialise must not take the process down on the way
         # to describing a crash.
         try:
-            if os.path.exists(tmp):
+            if tmp and os.path.exists(tmp):
                 os.remove(tmp)
         except OSError:
             pass
@@ -542,7 +547,12 @@ def _cleanup_native():
     The breadcrumb goes the same way and for the same reason: it describes the
     state a native crash happened IN, so a clean exit means nobody wants it. Its
     ``.tmp`` is removed too - a process killed mid-write leaves one, and a stray
-    temp file would stop the directory from ever being cleaned up again.
+    temp file would stop the directory from ever being cleaned up again. That
+    sweep is by PREFIX rather than by one known name, because the temp file is now
+    unique per writer (``paths.temp_beside``): there is no single name left to
+    remove, and an orphan here is exactly the leftover the paragraph above says
+    must not survive. The old fixed name matches the same prefix, so a temp file
+    left behind by a version before this one is still cleaned up.
     """
     global _native_stream, _native_path, _breadcrumb_last
     try:
@@ -550,9 +560,15 @@ def _cleanup_native():
     except Exception:
         pass
     _breadcrumb_last = None
-    for name in (BREADCRUMB_NAME, BREADCRUMB_NAME + ".tmp"):
+    directory = crash_dir()
+    try:
+        stale = [n for n in os.listdir(directory)
+                 if n.startswith(BREADCRUMB_NAME) and n.endswith(".tmp")]
+    except OSError:
+        stale = []
+    for name in [BREADCRUMB_NAME, *stale]:
         try:
-            os.remove(os.path.join(crash_dir(), name))
+            os.remove(os.path.join(directory, name))
         except OSError:
             pass
     stream, path = _native_stream, _native_path
@@ -569,7 +585,6 @@ def _cleanup_native():
         except OSError:
             pass
     try:
-        directory = crash_dir()
         if os.path.isdir(directory) and not os.listdir(directory):
             os.rmdir(directory)
     except OSError:

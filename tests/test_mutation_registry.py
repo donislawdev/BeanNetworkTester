@@ -150,6 +150,31 @@ MUTATIONS = [
         "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
     },
     {
+        # The name that shipped: derived from the target, so two writers of one
+        # file are two writers of one temp file. This is not an invented break.
+        "label": "jsonfile: the temp file gets a predictable name again",
+        "file": "beantester/jsonfile.py",
+        "old": "        tmp = temp_beside(path)",
+        "new": '        tmp = f"{path}.tmp"',
+        "test": "test_two_writers_do_not_share_one_temp_file",
+    },
+    {
+        # TypeError back out of the tuple: a value json has no rule for escapes
+        # the writer again, past its own temp-file cleanup.
+        "label": "jsonfile: a value json cannot write escapes the writer",
+        "file": "beantester/jsonfile.py",
+        "old": "    except (OSError, TypeError, ValueError) as e:",
+        "new": "    except (OSError, ValueError) as e:",
+        "test": "test_a_value_json_cannot_write_is_an_error_not_a_crash",
+    },
+    {
+        "label": "paths: two copies migrate through one temp file again",
+        "file": "beantester/paths.py",
+        "old": "            tmp = temp_beside(dst)",
+        "new": '            tmp = dst + ".tmp"',
+        "test": "test_two_copies_migrating_at_once_do_not_share_one_temp_file",
+    },
+    {
         # The 2026-08-26 report in one line. "The screen" is SM_CXSCREEN on
         # Windows, which is the PRIMARY monitor whatever the window is on, so this
         # patch is not an invented break: it is the code that shipped.
@@ -1593,6 +1618,24 @@ MUTATIONS = [
         "old": ".hexdigest()[:12]",
         "new": ".hexdigest()",
         "test": "test_different_faults_get_different_fingerprints",
+    },
+    {
+        # Written from the GUI tick, so the shared name is 1.4 chances a second
+        # for as long as two windows are open.
+        "label": "crashlog: the breadcrumb temp file gets a predictable name again",
+        "file": "beantester/crashlog.py",
+        "old": "        tmp = temp_beside(path)",
+        "new": '        tmp = path + ".tmp"',
+        "test": "test_two_breadcrumb_writers_do_not_share_one_temp_file",
+    },
+    {
+        # Back to removing one known name. With a unique temp file that sweeps
+        # nothing, and one orphan keeps `crashes/` alive for ever after.
+        "label": "crashlog: the sweep for orphaned temp breadcrumbs stops sweeping",
+        "file": "beantester/crashlog.py",
+        "old": "    for name in [BREADCRUMB_NAME, *stale]:",
+        "new": "    for name in [BREADCRUMB_NAME]:",
+        "test": "test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit",
     },
     {
         # One byte of the recorded driver hash. The version resource still reads
