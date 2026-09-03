@@ -2012,6 +2012,18 @@ MUTATIONS = [
         "test": "test_ctypes_opens_only_local_windows_libraries",
     },
     {
+        # The bypass an outside review found, and the measurement confirmed: the
+        # scan read `socket.x(...)` and nothing else, so `import socket as s`
+        # walked straight through - as did the from-import form. Registering the
+        # IMPORT is what closes it, because a statement names its module whatever
+        # the local name becomes.
+        "label": "telemetry: a module reaches for socket under an alias",
+        "file": "beantester/views.py",
+        "old": "def sort_events(",
+        "new": "import socket as _s\n\n\ndef sort_events(",
+        "test": "test_only_named_files_may_import_a_module_that_reaches_outside",
+    },
+    {
         # The RUNTIME half, and the only one of the three that no AST can answer:
         # the module name is assembled from two strings. Measured: the audit hook
         # reported urllib, http, http.client and ssl the moment the line ran.

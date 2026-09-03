@@ -13,6 +13,15 @@ Two layers, and neither contains the other
   executes - and this package has such code: ``utils.host_identity`` has a
   ``gethostbyname`` fallback that MEASURED runs on no ordinary path, because
   ``_route_source_ip`` answers first.
+  🔴 It resolves ALIASES, and that was not free knowledge. An outside review
+  pointed at the shape and measurement confirmed it: the first version matched
+  ``socket.x(...)`` literally, so ``import socket as s`` and ``from socket import
+  create_connection`` both walked through, as did ``import subprocess as sp`` and
+  ``os.popen`` (which was simply missing from the list). The fix has two halves,
+  and the second is the one that matters: local names are resolved against what
+  was imported, AND the IMPORT itself is registered per file - because a statement
+  names its module whatever the local name becomes, so a module reaching for one
+  of these fails before anything has to work out what it did with the name.
 * **Runtime (audit hook, PEP 578).** Runs the CLI for real and watches what the
   interpreter reports. Sees what is not written down literally, which is exactly
   where a static scan is blind. MEASURED 2026-09-03 on CPython 3.14.7:
@@ -80,11 +89,44 @@ FORBIDDEN_MODULES = {
     "wsgiref", "asyncio", "ssl", "boto3", "paramiko", "pycurl",
 }
 
+# Modules whose USE is policed rather than banned. Naming them here is what makes
+# the scan alias-proof: `import socket as s` still carries the name `socket` in
+# the import statement, so resolving local names against this set catches
+# `s.create_connection(...)` and `from socket import create_connection` alike.
+# Measured 2026-09-03 - before this existed, all three of those shapes walked
+# straight through, and so did `import subprocess as sp; sp.run(...)`.
+WATCHED_MODULES = {"socket", "webbrowser", "subprocess", "os", "ctypes"}
+
+# Which files may import the three that can reach outside this process at all.
+# This is the stronger half of the alias answer: an import names its module
+# whatever it calls it locally, so a new module reaching for `socket` fails here
+# before anything has to work out what it did with it.
+ALLOWED_IMPORTS = {
+    ("beantester/utils.py", "socket"):
+        "the route probe and the machine's own name",
+    ("beantester/settings.py", "socket"):
+        "the machine's own services file, for port labels",
+    ("beantester/gui/app.py", "webbrowser"):
+        "the support page, opened on a click",
+    ("beantester/gui/panels/about.py", "webbrowser"):
+        "the support page, from the About window",
+    ("beantester/winenv.py", "subprocess"):
+        "list2cmdline, a pure string helper - nothing here spawns anything",
+}
+
 # The exceptions, each with the reason it exists. A call on one of these modules
 # that is not listed here fails, and an entry naming code that is gone fails too -
 # the registry is exact in BOTH directions, like the probe inventory in
 # `internal_tools/baseline.py`. Stale permission is how an allowlist rots into a
 # blindfold.
+#
+# 🔴 Instance methods are deliberately NOT chased. ``s.send(...)`` on a socket
+# object is invisible here, and it does not need to be: a socket cannot exist
+# without passing through ``socket.socket`` or ``socket.create_connection``,
+# which are gated above. The gate sits at CREATION, which is one place instead of
+# every method a socket has. Verified rather than assumed - both
+# ``socket.socket(); s.send(...)`` and the ``sendto`` form are caught by the
+# canary below, at the constructor.
 ALLOWED_CALLS = {
     ("beantester/utils.py", "socket", "socket"):
         "the connected-UDP route probe: it records a default peer to ask the "
@@ -116,9 +158,16 @@ ALLOWED_LIBRARIES = {
 # WebRequest`, `bitsadmin`. MEASURED: the shipped package spawns NOTHING today,
 # so this is a floor rather than a budget. `winenv.py` imports subprocess for
 # `list2cmdline`, a pure string helper, which is why the import is not the test.
+# 🔴 `popen` was missing until 2026-09-03 and `os.popen("curl ...")` walked
+# through - the plainest spelling of the thing this check exists to stop. The
+# lesson is not "add popen": it is that a list of names is only as good as the
+# person who wrote it, so the canary below carries a case for each family rather
+# than trusting the list to be complete.
 SPAWN_CALLS = {"run", "Popen", "call", "check_call", "check_output", "system",
-               "spawnl", "spawnv", "spawnle", "spawnve", "execv", "execve",
-               "execvp", "startfile"}
+               "popen", "startfile", "posix_spawn", "posix_spawnp",
+               "spawnl", "spawnle", "spawnlp", "spawnv", "spawnve", "spawnvp",
+               "execl", "execle", "execlp", "execv", "execve", "execvp",
+               "execvpe", "fork", "forkpty"}
 
 # An endpoint appears in the code as a string before anything calls it, so a URL
 # outside these two files is an early warning. The rule is the PLACE, not a list
@@ -154,10 +203,23 @@ def _docstring_nodes(tree):
     return out
 
 
+LOADERS = ("windll", "cdll", "oledll")
+
+
 def _library_name(node):
-    """The ctypes library a node names, or None. Handles both loader forms."""
-    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute):
-        if node.value.attr in ("windll", "cdll", "oledll"):
+    """The ctypes library a node names, or None. Handles every loader form.
+
+    Three spellings reach the same place and all three are read: the attribute
+    chain ``ctypes.windll.kernel32``, the same chain after ``from ctypes import
+    windll`` (where the base is a bare name), and the explicit
+    ``ctypes.WinDLL("iphlpapi.dll")``. An alias on ``ctypes`` itself needs no
+    special case - the loader attribute is what is matched, not the module name.
+    """
+    if isinstance(node, ast.Attribute):
+        base = node.value
+        if isinstance(base, ast.Attribute) and base.attr in LOADERS:
+            return node.attr
+        if isinstance(base, ast.Name) and base.id in LOADERS:
             return node.attr
     if isinstance(node, ast.Call):
         name = getattr(node.func, "attr", "") or getattr(node.func, "id", "")
@@ -166,6 +228,47 @@ def _library_name(node):
             if isinstance(first, ast.Constant) and isinstance(first.value, str):
                 return first.value
     return None
+
+
+def _local_names(tree):
+    """What the local names in this module actually refer to.
+
+    Returns ``(modules, symbols)``: ``modules`` maps a local name to the watched
+    module it stands for (``import socket as s`` -> ``{"s": "socket"}``), and
+    ``symbols`` maps a bare name to the ``(module, attribute)`` it was imported
+    from (``from subprocess import run`` -> ``{"run": ("subprocess", "run")}``).
+
+    Without this the scan only sees one spelling out of three, which is exactly
+    how it looked until somebody fed it the other two.
+    """
+    modules, symbols = {}, {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if top in WATCHED_MODULES:
+                    modules[alias.asname or alias.name] = top
+        elif isinstance(node, ast.ImportFrom):
+            top = (node.module or "").split(".")[0]
+            if top in WATCHED_MODULES:
+                for alias in node.names:
+                    symbols[alias.asname or alias.name] = (top, alias.name)
+    return modules, symbols
+
+
+def _url_scheme(text):
+    """The scheme of a URL literal, or ``''``. Never raises.
+
+    🔴 The first version did ``split("://")[0].rsplit(None, 1)[-1]`` and a string
+    that is exactly ``"://"`` made it raise ``IndexError`` - so a module carrying
+    that literal would have taken the whole guard down instead of reporting
+    anything. A scanner that crashes is worse than one that misses: the miss is
+    silent, the crash is a red build nobody can read.
+    """
+    head = text.split("://")[0].strip()
+    if not head:
+        return ""
+    return head.rsplit(None, 1)[-1].lower()
 
 
 def findings(source, rel):
@@ -179,28 +282,38 @@ def findings(source, rel):
     found = []
     tree = ast.parse(source)
     docstrings = _docstring_nodes(tree)
+    modules, symbols = _local_names(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 top = alias.name.split(".")[0]
                 if top in FORBIDDEN_MODULES:
                     found.append(("import", alias.name, node.lineno))
+                elif top in ("socket", "webbrowser", "subprocess"):
+                    # Reported whether or not it is registered - the test decides.
+                    # An import states its module whatever the local name becomes,
+                    # so this is the check an alias cannot walk around.
+                    found.append(("watched-import", (rel, top), node.lineno))
         elif isinstance(node, ast.ImportFrom):
             top = (node.module or "").split(".")[0]
             if top in FORBIDDEN_MODULES:
                 found.append(("import", node.module, node.lineno))
+            elif top in ("socket", "webbrowser", "subprocess"):
+                found.append(("watched-import", (rel, top), node.lineno))
         elif isinstance(node, ast.Call):
             func = node.func
+            owner = name = None
             if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-                owner, name = func.value.id, func.attr
-                if owner in ("socket", "webbrowser"):
-                    found.append(("call", (rel, owner, name), node.lineno))
-                if owner in ("subprocess", "os") and name in SPAWN_CALLS:
-                    found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
+                owner, name = modules.get(func.value.id), func.attr
+            elif isinstance(func, ast.Name) and func.id in symbols:
+                owner, name = symbols[func.id]
+            if owner in ("socket", "webbrowser"):
+                found.append(("call", (rel, owner, name), node.lineno))
+            if owner in ("subprocess", "os") and name in SPAWN_CALLS:
+                found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if id(node) not in docstrings and "://" in node.value:
-                scheme = node.value.split("://")[0].rsplit(None, 1)[-1].lower()
-                if scheme in ("http", "https", "ftp", "ws", "wss"):
+                if _url_scheme(node.value) in ("http", "https", "ftp", "ws", "wss"):
                     found.append(("url", node.value[:60], node.lineno))
         library = _library_name(node)
         if library:
@@ -241,6 +354,23 @@ def test_every_socket_and_browser_use_is_a_named_exception():
     stale = sorted(entry for entry in ALLOWED_CALLS if entry not in used)
     check("no exception is listed for code that is gone", not stale,
           f"(remove it from ALLOWED_CALLS: {stale})")
+
+
+def test_only_named_files_may_import_a_module_that_reaches_outside():
+    """The alias-proof half: an import names its module whatever it calls it.
+
+    ``import socket as s`` and ``from socket import create_connection`` both
+    carry the word ``socket`` in the statement, so registering the IMPORT catches
+    a new module reaching for one of these before anything has to work out what
+    it did with the name afterwards. Exact in both directions, like the calls.
+    """
+    used = {detail for _rel, detail, _line in _scan().get("watched-import", [])}
+    unlisted = sorted(i for i in used if i not in ALLOWED_IMPORTS)
+    check("only named files import socket, webbrowser or subprocess", not unlisted,
+          f"(add it to ALLOWED_IMPORTS with the reason: {unlisted})")
+    stale = sorted(entry for entry in ALLOWED_IMPORTS if entry not in used)
+    check("no import permission outlives the import", not stale,
+          f"(remove it from ALLOWED_IMPORTS: {stale})")
 
 
 def test_ctypes_opens_only_local_windows_libraries():
@@ -393,6 +523,11 @@ def test_the_only_connection_goes_to_the_documented_route_probe():
 
 
 # -- the canary: the guard has to be shown able to fail ---------------------- #
+# 🔴 Every ALIAS shape below was measured walking straight through on
+# 2026-09-03, which is why they are here one by one rather than as a single
+# representative case: the scan read exactly one spelling out of three, and a
+# canary that only ever tries the spelling the author had in mind proves nothing
+# about the two they did not.
 BAD_CODE = (
     ("a plain import of a network client", "import urllib.request\n", "import"),
     ("a from-import of one", "from http.client import HTTPConnection\n", "import"),
@@ -400,12 +535,33 @@ BAD_CODE = (
      "import ctypes\nctypes.windll.wininet.InternetOpenW(0, 0, 0, 0, 0)\n", "library"),
     ("the same one loaded by string",
      "import ctypes\nctypes.WinDLL('winhttp')\n", "library"),
+    ("the same one after from-importing the loader",
+     "from ctypes import windll\nwindll.wininet.InternetOpenW(0)\n", "library"),
     ("shelling out to curl",
      "import subprocess\nsubprocess.run(['curl', 'https://x.example'])\n", "spawn"),
+    ("shelling out under an alias",
+     "import subprocess as sp\nsp.run(['curl', 'https://x.example'])\n", "spawn"),
+    ("shelling out through a from-import",
+     "from subprocess import Popen\nPopen(['curl'])\n", "spawn"),
+    ("os.popen, the plainest spelling of all",
+     "import os\nos.popen('curl https://x.example')\n", "spawn"),
+    ("the exec family", "import os\nos.execl('/bin/sh', 'sh')\n", "spawn"),
+    ("posix_spawn", "import os\nos.posix_spawn('/bin/sh', [], {})\n", "spawn"),
     ("an endpoint written into the code", "ENDPOINT = 'https://telemetry.example/v1'\n",
      "url"),
     ("a socket call in a module with no permission",
      "import socket\nsocket.create_connection(('x.example', 443))\n", "call"),
+    ("the same call under an alias",
+     "import socket as s\ns.create_connection(('x.example', 443))\n", "call"),
+    ("the same call through a from-import",
+     "from socket import create_connection\ncreate_connection(('x.example', 443))\n",
+     "call"),
+    ("a socket built to send with",
+     "import socket\ns = socket.socket()\ns.send(b'secret')\n", "call"),
+    ("and the datagram form",
+     "import socket\ns = socket.socket()\ns.sendto(b'secret', ('h', 1))\n", "call"),
+    ("an unregistered module importing socket at all",
+     "import socket as s\n", "watched-import"),
 )
 
 
