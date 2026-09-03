@@ -352,6 +352,14 @@ def test_a_real_run_raises_no_network_audit_event():
 
     This is the half that sees through a computed name, a dynamic import and a
     third-party Python library, none of which the AST above can read.
+
+    🔴 The library check is VACUOUS on the Linux leg and that is worth saying,
+    because a green run there would otherwise read as proof it does not give.
+    MEASURED 2026-09-03 in WSL: the same five socket events fire with the same
+    destinations, so the connection half is real on both runners, but `dlopen`
+    comes back EMPTY - nothing loads a Windows library on Linux. The static
+    ``test_ctypes_opens_only_local_windows_libraries`` above reads source, so it
+    is the half that covers this everywhere.
     """
     result = _audit_run()
     check("the audited CLI run succeeded", result["exit"] == 0, f"({result['exit']})")
