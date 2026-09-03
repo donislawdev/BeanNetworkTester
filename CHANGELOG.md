@@ -40,6 +40,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   one. Either way the language list in Settings switches at any time, and the command line
   remains in English.
 
+### Changed
+
+- **The scrollbar on the Control page now runs the whole height of the page.** It used to start
+  below the "Search" row, so there was an empty strip beside the search box. Nothing about
+  scrolling changes, the bar is simply where the page ends.
+- **The search row no longer repeats the Ctrl+F shortcut on its right.** Hovering the search box
+  still tells you the shortcut, and that spot still shows which match you are on ("2 / 7") while
+  you are searching.
+
 ### Fixed
 
 - **Two copies of the program running at once could damage your saved files.** Settings, profiles

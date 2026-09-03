@@ -349,11 +349,13 @@ def test_reset_ui_layout_forgets_window_state():
 
 
 def test_the_control_search_bar_can_be_switched_off_and_back_on():
-    """The box goes away, and comes back ABOVE the page body.
+    """The box goes away, and comes back BETWEEN the scrollbar and the page body.
 
     The order is the part that can go wrong silently: pack hands out space in
     CALL order, so a bar re-packed after the scroller exists lands UNDER the whole
-    page unless it names what to sit before.
+    page unless it names what to sit before - and a bar that names the SCROLLBAR
+    instead of the body takes the width first, leaving the scrollbar short of the
+    search row (see the layout test of the same order).
 
     Upgraded 2026-08-20: the fake now models pack order, so this asserts the bar
     is BACK ABOVE the page body rather than merely that the call carried
@@ -372,9 +374,12 @@ def test_the_control_search_bar_can_be_switched_off_and_back_on():
         app.set_pref("show_control_search", True)
         page.on_pref_changed("show_control_search")
         assert page._bar.winfo_ismapped(), "the bar did not come back"
-        assert page._bar.pack_info.get("before") is page.scroll.vsb, (
+        assert page._bar.pack_info.get("before") is page.scroll.canvas, (
             "re-packed without before= - it would sit under the page body")
         packed = page.frame.pack_slaves()
+        assert packed.index(page.scroll.vsb) < packed.index(page._bar), (
+            "the bar came back AHEAD of the scrollbar, which then stops short of "
+            "this row: %r" % (packed,))
         assert packed.index(page._bar) < packed.index(page.scroll.canvas), (
             "the bar came back UNDER the page body: %r" % (packed,))
 
