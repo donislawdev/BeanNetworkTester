@@ -636,12 +636,15 @@ def test_the_window_says_whether_the_narrowing_actually_happened():
     """
     run_gui("""
         def start_with(narrow, narrowed):
-            app._log_lines = []
+            # cleared in place, not rebound: `_log_lines` is a read-only property
+            # over LogView's list (the log's state moved to gui/logview.py), and
+            # assigning to it raises. The list itself is the live one.
+            app._log_lines.clear()
             app.engine._narrowed = narrowed
             app._pending_start_settings = dict(app._settings_from_widgets(),
                                                narrow_filter=narrow)
             app._finish_start(None)
-            app._drain_log()
+            app._logview.drain()        # was App._drain_log before gui/logview.py
             return "\\n".join(app._log_lines)
 
         # not asked for: the log must not gain a line about it either way

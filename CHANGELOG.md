@@ -42,31 +42,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
-- **Two copies of the program running at once could damage your saved files.** Settings,
-  profiles and window state are written to a temporary file first and then swapped into place,
-  so a crash halfway through cannot leave half a file. The temporary file was named after the
-  one being saved, though, which meant two copies of the program saving at the same moment were
-  writing into the same temporary file - and one of them could end up saving a mixture of both.
-  The first copy is also what adopts your files from an older version on first start, so the
-  same collision could damage a profile file while it was being carried over. Each save now uses
-  a temporary file of its own. Nothing changes for a single copy, which is the normal case.
+- **Two copies of the program running at once could damage your saved files.** Settings, profiles
+  and window state are written to a temporary file and then swapped into place, so a crash halfway
+  through cannot leave half a file. That temporary file was named after the one being saved, so two
+  copies saving at the same moment wrote into one and either could end up with a mixture. The same
+  collision could damage a profile carried over from an older version on first start. Each save now
+  uses a temporary file of its own.
 
-- **Changing settings mid-session could judge a packet by half the old settings and half the
-  new.** Applying settings - from "Apply changes", from the command line, or from a scenario step -
-  set roughly fifteen values one after another, and a packet that arrived in between was handled
-  by a mixture: the new loss with the old destination filter, say. The window was tiny, but a
-  scenario step is exactly where somebody is watching, and it also meant a run could not be
-  reproduced exactly from its seed. Settings now change as one. Process targeting is still applied
-  a moment afterwards, because working out which connections belong to a process means asking the
-  operating system, and nothing that slow may hold up the traffic being tested.
+- **Changing settings mid-session could judge a packet by half the old settings and half the new.**
+  Applying settings set about fifteen values one after another, so a packet arriving in between met
+  a mixture: the new loss with the old destination filter, say. The window was tiny, but a scenario
+  step is exactly where somebody is watching, and it meant a run could not be reproduced from its
+  seed. Settings now change as one. Process targeting still follows a moment later, because it
+  means asking the operating system which connections a process owns.
 
 - **When targeting a process, a closed connection could stay targeted after trouble reading the
-  system's connection list.** The tool keeps a short list of connections it learned about between
-  two scans so none is missed. That list was only ever cleared by a scan that worked, so if scans
-  kept failing it kept old entries - and once a scan finally succeeded, a connection that had
-  closed in the meantime could be treated as still belonging to the target. On Windows the port
-  it used may already belong to another program by then, so the wrong traffic could be affected.
-  The list is now cleared at the start of every scan, whether or not the scan succeeds.
+  system's connection list.** The tool keeps a short list of connections learned between two scans,
+  and only a scan that worked cleared it. If scans kept failing it held old entries, so once one
+  succeeded, a connection that had closed meanwhile could still count as the target's - and on
+  Windows its port may belong to another program by then. The list is now cleared at the start of
+  every scan.
 
 - **A scenario could apply one more step after it was stopped.** Stopping a session or a scenario
   asked the timeline to end and moved on without waiting, so it could still change the settings

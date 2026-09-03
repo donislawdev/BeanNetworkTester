@@ -1124,7 +1124,8 @@ beantester/              pakiet z implementacją
   appinfo.py             tożsamość aplikacji i odczyt wersji (jedno źródło: VERSION.txt)
   i18n.py  paths.py  utils.py  processes.py  synthetic.py  legal.py  scenario_runner.py
   gui/                   interfejs tkinter
-    app.py               kompozycja okna, stan, log, start/stop, dirty-state
+    app.py               kompozycja okna, stan, start/stop, dirty-state
+    logview.py           okno logu: jego kolejka, bufor linii i widget
     form.py              formularz generowany z fields.FIELD_DEFS
     form_search.py       dopasowanie wpisanego hasła do rejestru pól (czyste)
     scaling.py           DPI, skalowane piksele, geometria okna/wykresu/tooltipa

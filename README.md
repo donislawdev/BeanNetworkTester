@@ -1281,7 +1281,8 @@ beantester/              the implementation package
   appinfo.py             app identity and version reader (one source: VERSION.txt)
   i18n.py  paths.py  utils.py  processes.py  synthetic.py  legal.py  scenario_runner.py
   gui/                   the tkinter interface
-    app.py               window composition, state, log, start/stop, dirty-state
+    app.py               window composition, state, start/stop, dirty-state
+    logview.py           the log box: its queue, its line buffer and its widget
     form.py              form generated from fields.FIELD_DEFS
     form_search.py       matching a typed query against the field registry (pure)
     scaling.py           DPI, scaled pixels, window/chart/tooltip geometry
