@@ -1267,6 +1267,21 @@ MUTATIONS = [
         # Cleared only on success, as shipped: a socket table that keeps hiccupping
         # leaves the dict growing, and growing STALE - the rescue then puts a port
         # back in scope whose socket closed long ago.
+        # The shipped shape: an unguarded check-then-act, in five copies. Two
+        # readers both find the catalogue empty and both scan lang/.
+        "label": "i18n: the lazy load goes back to being unguarded",
+        "file": "beantester/i18n.py",
+        "old": "    if _translations:\n"
+               "        return\n"
+               "    with _load_lock:\n"
+               "        if not _translations:       "
+               "# somebody else may have loaded it while we\n"
+               "            load_languages()        "
+               "# waited - checked again inside the lock",
+        "new": "    if not _translations:\n        load_languages()",
+        "test": "test_a_cold_catalogue_is_loaded_once_however_many_threads_ask",
+    },
+    {
         "label": "targeting: late owners survive a walk that failed",
         "file": "beantester/targeting.py",
         "old": "            with self._ports_lock:\n"
@@ -2008,6 +2023,14 @@ PROVEN_BY_HAND = {
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody
 # looked at must not read the same. This list is allowed to grow only when a guard
 # is added without its proof - and every entry is a debt.
+# 🔴 These three lists are keyed by TEST NAME, so a property with no test of its
+# own has no slot here and must not be given one by borrowing a neighbour's name -
+# that is what "filed under exactly one state" catches. One such property exists as
+# of 2026-09-03: `i18n.load_languages` publishes `_language_names` before
+# `_translations` because the second is what every "loaded yet?" check reads, and
+# the window is two adjacent stores, so a guard would need a reader racing a loader
+# in a loop - slow, flaky, and green most of the time for the wrong reason. It is
+# recorded where it can be read next to the code, in a comment at the assignment.
 NOT_PROVEN = {
     "test_a_resize_after_the_label_is_gone_is_not_a_crash": "never mutated",
     "test_the_ui_rebuild_does_not_pile_up_configure_handlers_on_the_root": "never mutated",
