@@ -299,6 +299,19 @@ one. With the given probability it appends extra delay (ms) to a **single packet
 momentary "lag" actually arrives. The chance is per packet and applies **in each direction**, so a
 round trip hits it about twice as often as the number suggests.
 
+**Testing out-of-order delivery** - this is what the spike pair is for, and it is the reason the
+section is called "Latency (ping) and packet order". A spiked packet arrives after packets that
+were sent later than it, so *Spike chance* and *Spike size* reorder traffic **without** smearing
+every other packet's delay the way jitter does - which matters when the thing under test is a UDP
+protocol that has to survive reordering on its own: a game, QUIC, telemetry, voice. Set a spike
+size larger than the gap between your packets, or nothing will overtake anything.
+
+Whether that actually happened is a separate question from whether it was configured, so the tool
+counts it: **Reordered** on the Statistics page (and `packets_reordered` in the stats CSV). 0 with a
+spike set means your traffic was too sparse for any packet to overtake another - not that the
+setting was ignored. The count is per direction, so two busy connections can overtake each other
+without either end seeing anything out of order.
+
 **Impairments** - *Loss*: percentage of packets vanishing without a trace (5% is already a
 clearly failing network). *Corruption*: percentage of packets with a flipped data bit - it affects
 **only payload-bearing packets**. Packets with no data (e.g. pure ACK, SYN) have nothing to flip,
@@ -1263,6 +1276,7 @@ the root, so all existing commands (README, reproduction reports, PyInstaller) w
 bean_network_tester.py   launcher + compatibility facade (re-exports the public API)
 beantester/              the implementation package
   core.py                pure per-packet decision core (BeanCore)
+  damage.py              how much a session damaged: drop reasons, loss/corruption shares
   engine.py              capture/inject threads, statistics (BeanEngine)
   matchers.py            filter expressions (list/range/!/>/</wildcard/re:) - shared
                          by the process, IP and port fields; a single source of truth

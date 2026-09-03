@@ -14,6 +14,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   overtake each other, instead of looking the same as an application that coped. An existing
   stats CSV is rotated to a dated backup the first time the new column is written.
 
+### Changed
+
+- **The "Latency (ping)" card is now "Latency (ping) and packet order", and the spike
+  tooltip says what the spike is good for.** Delaying a slice of packets is how you test a
+  protocol that has to survive out-of-order delivery, and the field search matches names
+  rather than tooltips - so searching the Control page for "order" (or "kolejnosc") found
+  nothing at all, in either language. It now finds the card and all four fields in it.
+
 ## [0.6.0] - 2026-09-03
 
 ### Added

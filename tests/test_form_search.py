@@ -141,3 +141,35 @@ def test_an_accented_label_is_reachable_without_its_accents():
     check("search: and it is still reachable WITH the accents",
           entry.key in [e.key for e in S.find(index, entry.label)])
     set_language("en")
+
+
+# The word each language's "Latency (ping) and packet order" card uses for ORDER.
+# A dict rather than one string because the guard is about the SECTION TITLE doing
+# its job in the language somebody is actually reading, and Chinese does not
+# contain the English word.
+ORDER_WORD = {"en": "order", "pl": "kolejnosc", "zh": "顺序"}
+
+
+def test_the_spike_pair_is_findable_by_the_effect_it_is_used_for():
+    """Searching for packet ORDER must reach the spike fields, in every language.
+
+    This is a copy-pinning test on purpose, and the exception is argued rather
+    than assumed. ``form_search`` matches names - field labels, section titles and
+    CLI flags - and deliberately NOT tooltip bodies (owner decision, 2026-08-18).
+    So the ONLY thing that puts these two fields in front of somebody testing a
+    UDP protocol against reordering is the word living in a NAME. Explaining it in
+    the tooltip instead is invisible to the search, and nothing would say so.
+
+    Measured on 2026-09-04, before the section was renamed from "Latency (ping)":
+    zero hits for this word in both en and pl. After: the section and all four
+    fields inside it. Reword the card freely - just keep a word for order in it,
+    or this reddens and tells you what you took away.
+    """
+    for code, word in ORDER_WORD.items():
+        set_language(code)
+        index = S.build_index()
+        hits = {e.key for e in S.find(index, word)}
+        for key in ("spike_prob", "spike_ms"):
+            check(f"search[{code}]: {word!r} reaches {key}", key in hits,
+                  f"(hits: {sorted(hits)})")
+    set_language("en")
