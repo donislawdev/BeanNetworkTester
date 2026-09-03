@@ -158,7 +158,7 @@ class TargetResolver:
             try:
                 targeting.adopt_new_pids()
             except Exception as exc:
-                crashlog.once("targeting.adopt", exc)
+                crashlog.note(exc, "targeting.adopt")   # note, not once: see below
 
             # THE FLOOR, and it is not optional. Targeting narrows traffic to one
             # application, so every packet from every OTHER application is a miss:
@@ -200,6 +200,16 @@ class TargetResolver:
                 # The session must not die because a socket table hiccupped; the
                 # port set simply goes stale until the next pass. But it stops
                 # being invisible.
-                crashlog.once("targeting.resolver", exc)
+                #
+                # `note`, not `once`, and the difference is not stylistic. `once`
+                # keys on the SUBSYSTEM NAME alone, so the first failure here would
+                # silence every LATER one - including a different fault entirely,
+                # which is the one worth reading. The cost argument that puts
+                # `once` in the packet path does not apply: this line runs only
+                # when something has ALREADY failed, at most once per
+                # `min_interval`, so the traceback it builds is paid for out of a
+                # budget that is otherwise unspent. Repeats stay cheap on disk
+                # because `record` de-duplicates them by fingerprint.
+                crashlog.note(exc, "targeting.resolver")
             self._last_rebuild = time.monotonic()
             self._wake.wait(timeout=self.interval)

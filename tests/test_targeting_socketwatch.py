@@ -524,6 +524,49 @@ def test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in
           f"({sorted(targeting.ports())})")
 
 
+def test_a_failing_refresh_does_not_leave_late_owners_behind():
+    """The late-port list was emptied only by a walk that SUCCEEDED.
+
+    Two consequences, and the second is the one that matters. It grew, fed by
+    every socket event of every process already targeted - and it grew STALE: the
+    rescue in ``refresh`` keeps a port whose RECORDED owner is still targeted, so
+    once a walk finally succeeded it could put back in scope a port whose socket
+    had closed long before, and which the OS may since have handed to somebody
+    else. That is the "until the next rebuild" bound this class documents, quietly
+    stretched to "until a refresh happens to work".
+
+    A socket table that keeps failing is not a hypothetical: the resolver loop
+    catches exactly this and carries on by design, which is what makes the
+    accumulation invisible.
+    """
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the target resolved", targeting.pids() == {100})
+
+    def explode(now=None, force=False):
+        raise OSError("the socket table hiccupped")
+
+    table.refresh = explode
+    for port in range(6000, 6060):          # the target keeps opening sockets
+        targeting.note_socket(port, 100)
+        try:
+            targeting.refresh()             # ...and every rebuild fails
+        except OSError:
+            pass                            # the resolver loop swallows this
+
+    check("a walk that failed does not hoard the ports noted before it",
+          not targeting._late_owners, f"({len(targeting._late_owners)} left)")
+
+    # And the staleness half: the sockets are long gone, the table is healthy
+    # again, so the next successful walk must not rescue any of them.
+    table.refresh = lambda now=None, force=False: True
+    table.ports = {5000: 100}
+    targeting.refresh()
+    check("a port whose socket closed while refresh was failing is not rescued",
+          sorted(targeting.ports()) == [5000], f"({sorted(targeting.ports())})")
+
+
 def test_the_pending_queue_cannot_grow_without_a_bound():
     """It is fed by every socket event on the machine. A fork bomb, or simply a
     busy server, must not turn that into an unbounded queue of OS lookups."""

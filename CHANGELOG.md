@@ -51,6 +51,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   same collision could damage a profile file while it was being carried over. Each save now uses
   a temporary file of its own. Nothing changes for a single copy, which is the normal case.
 
+- **When targeting a process, a closed connection could stay targeted after trouble reading the
+  system's connection list.** The tool keeps a short list of connections it learned about between
+  two scans so none is missed. That list was only ever cleared by a scan that worked, so if scans
+  kept failing it kept old entries - and once a scan finally succeeded, a connection that had
+  closed in the meantime could be treated as still belonging to the target. On Windows the port
+  it used may already belong to another program by then, so the wrong traffic could be affected.
+  The list is now cleared at the start of every scan, whether or not the scan succeeds.
+
 - **A scenario could apply one more step after it was stopped.** Stopping a session or a scenario
   asked the timeline to end and moved on without waiting, so it could still change the settings
   once more - which showed up as a scenario line in the log after the session had already

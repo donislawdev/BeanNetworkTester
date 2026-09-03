@@ -1249,9 +1249,31 @@ MUTATIONS = [
         "old": "            try:\n"
                "                targeting.adopt_new_pids()\n"
                "            except Exception as exc:\n"
-               "                crashlog.once(\"targeting.adopt\", exc)",
+               "                crashlog.note(exc, \"targeting.adopt\")"
+               "   # note, not once: see below",
         "new": "            targeting.adopt_new_pids()",
         "test": "test_a_failing_adoption_does_not_kill_the_resolver",
+    },
+    {
+        # `once` keys on the subsystem NAME, so the first failure silences every
+        # later one - including a different fault, which is the one worth reading.
+        "label": "targeting: only the resolver's FIRST kind of failure is recorded",
+        "file": "beantester/target_resolver.py",
+        "old": "                crashlog.note(exc, \"targeting.resolver\")",
+        "new": "                crashlog.once(\"targeting.resolver\", exc)",
+        "test": "test_a_second_kind_of_resolver_failure_is_recorded_too",
+    },
+    {
+        # Cleared only on success, as shipped: a socket table that keeps hiccupping
+        # leaves the dict growing, and growing STALE - the rescue then puts a port
+        # back in scope whose socket closed long ago.
+        "label": "targeting: late owners survive a walk that failed",
+        "file": "beantester/targeting.py",
+        "old": "            with self._ports_lock:\n"
+               "                self._late_owners = {}\n"
+               "            self.table.refresh(force=force)",
+        "new": "            self.table.refresh(force=force)",
+        "test": "test_a_failing_refresh_does_not_leave_late_owners_behind",
     },
     {
         "label": "targeting: a pid whose name will not resolve is written off",

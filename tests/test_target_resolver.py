@@ -16,6 +16,7 @@ import threading
 import time
 
 import bean_network_tester as bnt
+from beantester import crashlog
 from beantester.engine import BeanEngine
 from beantester.synthetic import SyntheticDivert
 from beantester.target_resolver import TargetResolver
@@ -259,6 +260,62 @@ def test_a_failing_refresh_does_not_kill_the_resolver():
     try:
         time.sleep(0.15)
         check("the resolver survived a broken table", resolver.is_running())
+    finally:
+        resolver.stop()
+
+
+def test_a_second_kind_of_resolver_failure_is_recorded_too():
+    """``crashlog.once`` keys on the SUBSYSTEM NAME, not on the fault.
+
+    So the first thing that went wrong in the resolver used to silence every later
+    one - including a completely different fault, which is the one worth reading.
+    A resolver whose table hiccupped once at startup and then began failing for a
+    real reason reported the hiccup and nothing else, for the life of the session.
+
+    The cost argument that puts ``once`` in the packet path does not reach here:
+    this line runs only when something has ALREADY failed, at most once per
+    ``min_interval``. Repeats stay cheap on disk because ``record`` de-duplicates
+    them by fingerprint - which is a different key from the subsystem, and that is
+    the whole point.
+    """
+    class _BrokenTwice:
+        """First pass fails one way, every pass after it fails another."""
+
+        def __init__(self):
+            self.calls = 0
+
+        def refresh(self, *a, **k):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("socket table exploded")
+            raise OSError("the handle is gone")
+
+        def snapshot(self):
+            return {}
+
+        def name_of(self, pid):
+            return ""
+
+        def ancestors(self, pid, depth=8):
+            return []
+
+    def kinds():
+        return {r["type"] for r in crashlog.recent(200)
+                if r.get("subsystem") == "targeting.resolver"}
+
+    table = _BrokenTwice()
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    resolver = TargetResolver(interval=0.02, min_interval=0.01)
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver kept going past the first failure",
+              _wait(lambda: table.calls >= 3), f"({table.calls} passes)")
+        # The SECOND kind is the assertion. The first may already be in the table
+        # from another test in this file, and with `once` that is exactly the
+        # silence being tested - the subsystem is burned by whoever failed first.
+        check("a different fault in the same subsystem is recorded, not swallowed",
+              _wait(lambda: "OSError" in kinds()), f"({sorted(kinds())})")
     finally:
         resolver.stop()
 
