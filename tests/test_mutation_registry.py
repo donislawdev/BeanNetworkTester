@@ -1814,14 +1814,25 @@ MUTATIONS = [
         "test": "test_the_statistics_copy_menu_is_dark_like_every_other_context_menu",
     },
     {
-        # pack hands out space in CALL order, so the bar comes back UNDER the
-        # whole page body. The fake cannot render it - it can only see that the
-        # call no longer says where to sit.
+        # pack hands out space in CALL order, so a bar packed with nothing to sit
+        # before goes in last and lands UNDER the whole page body. The fake cannot
+        # render that - it can see the order and that the call stopped saying it.
         "label": "gui: the search bar comes back without saying where to sit",
         "file": "beantester/gui/pages/control.py",
-        "old": "            self._pack_bar(before=self.scroll.vsb)",
-        "new": "            self._pack_bar()",
+        "old": "                       pady=(scaled(12), scaled(3)), before=self.scroll.canvas)",
+        "new": "                       pady=(scaled(12), scaled(3)))",
         "test": "test_the_control_search_bar_can_be_switched_off_and_back_on",
+    },
+    {
+        # The SAME call, broken the other way, and it is a different defect with a
+        # different guard: named before the SCROLLBAR the bar takes the full width
+        # first, so the scrollbar covers only what sits below this row. Measured on
+        # real Tk: 269 px of a 300 px frame instead of 299.
+        "label": "gui: the scrollbar stops short of the search row",
+        "file": "beantester/gui/pages/control.py",
+        "old": "before=self.scroll.canvas)",
+        "new": "before=self.scroll.vsb)",
+        "test": "test_the_scrollbar_covers_the_page_not_only_what_sits_below_the_search_bar",
     },
     {
         # The marks live on the FORM, so hiding the bar without clearing leaves
@@ -1926,15 +1937,6 @@ MUTATIONS = [
         "old": '            widget.pack(side="left", anchor="w", padx=(0, _gap_after(field)))',
         "new": '            widget.pack(side="left", anchor="w")',
         "test": "test_the_two_lan_switches_share_one_row",
-    },
-    {
-        # Without the idle hint the row is one cluster in a band of nothing -
-        # the shape that has now been reported twice.
-        "label": "gui: the search bar loses its idle right-hand anchor",
-        "file": "beantester/gui/pages/control.py",
-        "old": '        return "" if self.query_var.get().strip() else "Ctrl+F"',
-        "new": '        return ""',
-        "test": "test_clearing_the_search_puts_every_style_back",
     },
     {
         # The measured reason there are two chains: one shared chain splits every

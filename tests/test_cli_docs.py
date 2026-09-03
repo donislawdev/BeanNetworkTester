@@ -29,7 +29,7 @@ from fakes import ROOT, check
 # stop a real typo in OUR flags hiding behind somebody else's.
 IGNORE = {"--help", "--noconfirm", "--noconsole", "--onefile", "--uac-admin",
           "--bundle", "--repo", "--predicate-type"}
-READMES = ("README.md", "README.pl.md")
+READMES = ("README.md",)
 
 
 def _parser_flags():

@@ -67,6 +67,36 @@ def test_control_page_body_is_scrollable():
     """)
 
 
+def test_the_scrollbar_covers_the_page_not_only_what_sits_below_the_search_bar():
+    """The scrollbar has to claim the page's cavity BEFORE the search bar does.
+
+    pack hands out space in CALL order, so the slave packed first with
+    ``side="right"`` takes the full height and the ``side="top"`` bar after it
+    lands to its LEFT. The other way round the bar takes the full width first and
+    the scrollbar reaches only from under the bar downwards, which leaves a dead
+    strip beside the search row - what the page looked like until 2026-09-03.
+
+    The fake tkinter models pack ORDER but not geometry, so this holds the
+    mechanism. MEASURED on real Tk (one 300 px frame, both orders side by side):
+    scrollbar first it runs 299 px and the bar comes out 17 px narrower, exactly
+    the scrollbar; scrollbar last it runs 269 px and the bar is full width.
+    """
+    run_gui("""
+        page = app.pages["control"]
+        packed = page.frame.pack_slaves()
+        vsb, bar, canvas = page.scroll.vsb, page._bar, page.scroll.canvas
+        for widget in (vsb, bar, canvas):
+            assert widget in packed, (widget, packed)
+        assert packed.index(vsb) < packed.index(bar), (
+            "the search bar took the width before the scrollbar, which then "
+            "stops short of this row: %r" % (packed,))
+        assert packed.index(bar) < packed.index(canvas), (
+            "the search bar landed under the page body: %r" % (packed,))
+        assert vsb.pack_info.get("side") == "right", vsb.pack_info
+        assert bar.pack_info.get("side") == "top", bar.pack_info
+    """)
+
+
 def test_statistics_is_split_so_nothing_is_cut_off():
     run_gui("""
         page = app.pages["statistics"]
@@ -470,10 +500,10 @@ def test_clearing_the_search_puts_every_style_back():
         page.clear()
         assert app.form.labels["loss"].cget("style") == before, (
             app.form.labels["loss"].cget("style"))
-        # An empty box says the shortcut, never a position: the right end of the
-        # bar is what keeps the row anchored while nothing is being searched.
+        # An empty box reports nothing at either end: no position to give, and
+        # no other surface to point at.
         assert page._note.cget("text") == ""
-        assert page._count.cget("text") == "Ctrl+F", page._count.cget("text")
+        assert page._count.cget("text") == "", page._count.cget("text")
     """)
 
 
@@ -702,16 +732,15 @@ def test_a_query_of_nothing_but_punctuation_is_not_a_search():
             page.query_var.set(query)
             page._apply()
             if query.strip() in ("--", ""):
-                # No POSITION - which is the claim. A box that strips to nothing
-                # is idle and says the shortcut instead; one with characters in
-                # it that match nothing says nothing at all.
-                idle = "Ctrl+F" if not query.strip() else ""
-                assert page._count.cget("text") == idle, (query, page._count.cget("text"))
+                # No POSITION - which is the claim. Nothing matched, so the count
+                # is blank whether the box strips to nothing or holds characters
+                # that match nothing.
+                assert page._count.cget("text") == "", (query, page._count.cget("text"))
                 assert not page._marks, query
             # whatever it finds, it must not raise and must not leave the page
             # marked once it is cleared
         page.clear()
-        assert not page._marks and page._count.cget("text") == "Ctrl+F"
+        assert not page._marks and page._count.cget("text") == ""
     """)
 
 

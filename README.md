@@ -18,22 +18,28 @@ interface with tooltips and a command-line mode for CI.
 ⭐ **If it saved you time, leave a star.** That is how the next tester who needs it finds out it
 exists.
 
-> This is the English documentation. Polish version: [README.pl.md](README.pl.md).
-
 **What it can do**
 
-- **Add lag and jitter** - fixed or random delay.
-- **Drop, corrupt or duplicate packets** - fake a flaky link.
-- **Cap download/upload speed** - throttle to a set KB/s.
-- **Tear connections down** - TCP resets or a dead link.
+- **Add lag and jitter** - fixed or random delay, plus occasional spikes.
+- **Drop, corrupt or duplicate packets** - loss can arrive in bursts, the way a real wireless
+  link fails.
+- **Cap download/upload speed** - throttle to a set KB/s, with a buffer that adds queuing delay
+  before it starts dropping.
+- **Tear connections down** - TCP resets, a dead link, or new connections that never come up.
 - **Flap the link on and off** - outages that come and go.
-- **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet).
-- **Aim at one app** - by process, PID, IP or port.
+- **Break the path, not only the packets** - an MTU black hole and NAT-style idle timeouts.
+- **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet) and internet
+  only (no local network).
+- **Aim at one app** - by process name, PID, IP, port, or one address family.
 - **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite, In-flight Wi-Fi and more.
 - **Run scripted scenarios** - timed steps that change the network on their own.
+- **Schedule the speed limit** - a repeating timeline of rates, without writing a scenario.
 - **Reproducible by seed** - replay the exact same random loss and jitter.
-- **Watch it live** - chart, connections table, counters.
-- **Command-line mode** - scriptable for CI.
+- **Hand a bug over** - a report with every setting, the counters and the command line that
+  repeats the run.
+- **Watch it live** - chart, counters, a searchable connections table and an event log.
+- **Export to CSV** - session statistics and a snapshot of the connections table.
+- **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, fully offline** - sends no data anywhere.
 
 <p align="center">
@@ -88,9 +94,6 @@ tooltip explaining what it does.
 
 > Note: selecting a preset only fills in the fields - impairment starts only on **START**.
 > Without administrator rights the WinDivert driver will not load.
-
-🌐 The project website - what it does in short, with the download one click away:
-**[beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/)**
 
 ## Language
 
@@ -302,13 +305,13 @@ clearly failing network). *Corruption*: percentage of packets with a flipped dat
 so they pass untouched and are **not counted as corrupted**. *Duplication*: percentage of packets
 sent twice.
 
-**Losses in a row** - real links rarely lose packets one at a time. A microwave oven, a lift or a
-switch between transmitters takes the connection away for a moment, and everything sent in that
-moment is gone. This field says how many packets are lost in a row **on average**, while *Loss*
-still decides how much is lost in total. It matters more than it looks: 5% spread out is something
-most connections absorb, while the same 5% in runs of twenty stalls a transfer, breaks a live
-connection and sends an application down its reconnect path. Set 0 to spread the loss evenly, which
-is what the tool did before this setting existed.
+**Losses in a row (burst)** - real links rarely lose packets one at a time. A microwave oven, a
+lift or a switch between transmitters takes the connection away for a moment, and everything sent
+in that moment is gone. This field says how many packets are lost in a row **on average**, while
+*Loss* still decides how much is lost in total. It matters more than it looks: 5% spread out is
+something most connections absorb, while the same 5% in runs of twenty stalls a transfer, breaks a
+live connection and sends an application down its reconnect path. Set 0 to spread the loss evenly,
+which is what the tool did before this setting existed.
 
 Two limits worth knowing, and the log states both when you apply the settings. A very high loss
 cannot arrive in very short runs, because runs that short leave too little room between them, so

@@ -54,25 +54,86 @@ sys.path.insert(0, ROOT)
 
 # Two loopback addresses, so an IP expression can name one and miss the other.
 # Windows binds any 127.x on the loopback adapter (verified before this was
-# written - the whole shape of the check depends on it).
-BLOCKED_ADDR, BLOCKED_PORT = "127.5.5.5", 9091
-BYSTANDER_ADDR, BYSTANDER_PORT = "127.9.9.9", 9200
+# written - the whole shape of the check depends on it). The ADDRESSES stay
+# literal because the two IP phases name them by prefix and nothing else on the
+# machine competes for them. The PORTS do not: see `open_pair`.
+BLOCKED_ADDR = "127.5.5.5"
+BYSTANDER_ADDR = "127.9.9.9"
 
 ROUNDS = 20                 # datagrams per endpoint per phase
 SILENT_AT_MOST = 0          # a blocked endpoint must answer nothing at all
 ALIVE_AT_LEAST = 18         # a bystander must stay essentially untouched
-
-FILTER = ("udp and (udp.SrcPort == %d or udp.DstPort == %d or "
-          "udp.SrcPort == %d or udp.DstPort == %d)"
-          % (BLOCKED_PORT, BLOCKED_PORT, BYSTANDER_PORT, BYSTANDER_PORT))
+DRAWS = 20                  # attempts to land the two ports in different decades
 
 
-def echo(addr, port, stop):
-    """A UDP echo server. UDP so the count is exact - no retransmission to hide
-    a partial block, and no connect timeout to wait through."""
+def traffic_filter(blocked_port, bystander_port):
+    """The driver filter: this script's own two UDP ports, nothing else.
+
+    This is the BOUND on the damage (convention 6), so it is built from the ports
+    actually in use rather than from a constant that might describe a socket
+    nobody opened.
+    """
+    return ("udp and (udp.SrcPort == %d or udp.DstPort == %d or "
+            "udp.SrcPort == %d or udp.DstPort == %d)"
+            % (blocked_port, blocked_port, bystander_port, bystander_port))
+
+
+def open_pair():
+    """Two bound echo sockets, on ports the OS picked, in different decades.
+
+    🔴 Why the ports are asked for rather than named. Windows RESERVES port
+    ranges (Hyper-V, WSL, WinNAT) and a reserved port refuses `bind` with
+    `WinError 10013`, a PERMISSION error rather than "in use". This script used
+    to name 9091, which sits inside `9001-9100` - a range measured as reserved on
+    a real machine 2026-09-03. It survived only because reservations are PER
+    PROTOCOL and this echo is UDP, which is not "it works", it is "it missed".
+    Its TCP twin, `ci_targeting_smoke.py`, was unrunnable for exactly that reason.
+
+    🔴 Why they must differ in more than the last digit. The port phase turns the
+    blocked port into a PREFIX GLOB (`54321` -> `5432*`), so a bystander in the
+    same decade would be named by the expression under test, and the check would
+    then report the expression working correctly as a bug. Windows hands out
+    ephemeral ports close together, so that collision is real rather than
+    theoretical - the pair is redrawn until it holds. Rejected sockets are kept
+    open while drawing, or the OS would hand the same port straight back.
+    """
+    keep, rejects = [], []
+    try:
+        blocked, blocked_port = _bind(BLOCKED_ADDR)
+        keep.append(blocked)
+        for _ in range(DRAWS):
+            other, other_port = _bind(BYSTANDER_ADDR)
+            if not str(other_port).startswith(port_glob(blocked_port)[:-1]):
+                keep.append(other)
+                return blocked, blocked_port, other, other_port
+            rejects.append(other)
+        raise OSError("could not land two ports in different decades in %d draws"
+                      % DRAWS)
+    except BaseException:
+        for sock in keep:
+            sock.close()
+        raise
+    finally:
+        for sock in rejects:
+            sock.close()
+
+
+def _bind(addr):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((addr, port))
+    sock.bind((addr, 0))
     sock.settimeout(0.2)
+    return sock, sock.getsockname()[1]
+
+
+def port_glob(port):
+    """The wildcard the port phase blocks with: the port, last digit starred."""
+    return str(port)[:-1] + "*"
+
+
+def echo(sock, stop):
+    """A UDP echo server on an already-bound socket. UDP so the count is exact -
+    no retransmission to hide a partial block, and no connect timeout to wait
+    through."""
     while not stop.is_set():
         try:
             data, peer = sock.recvfrom(2048)
@@ -122,29 +183,40 @@ def main():
 
     from beantester.engine import BeanEngine
 
-    stop = threading.Event()
-    for addr, port in ((BLOCKED_ADDR, BLOCKED_PORT), (BYSTANDER_ADDR, BYSTANDER_PORT)):
-        threading.Thread(target=echo, args=(addr, port, stop), daemon=True).start()
-    time.sleep(0.4)
+    try:
+        blocked, blocked_port, other, bystander_port = open_pair()
+    except OSError as exc:
+        # Not a SKIP: the three checks above are the known reasons this cannot
+        # run, and "the machine would not give me two loopback ports" is not one
+        # of them. A check that cannot run says so, and this one says why.
+        print("FAIL: could not open the two echo sockets (%s)" % exc)
+        return 1
 
+    stop = threading.Event()
+    for sock in (blocked, other):
+        threading.Thread(target=echo, args=(sock, stop), daemon=True).start()
+
+    glob = port_glob(blocked_port)
     # (label, block ip, block port, bystander is meaningful here)
     phases = [
         ("control - nothing blocked", "", "", True),
         ("block ip by prefix wildcard '127.5.*'", "127.5.*", "", True),
-        ("block port by wildcard '909*'", "", "909*", True),
+        ("block port by wildcard '%s'" % glob, "", glob, True),
         ("block ip by ONE-OCTET wildcard '127.*'", "127.*", "", False),
     ]
 
+    print("ports this run: blocked %d (glob %s), bystander %d\n"
+          % (blocked_port, glob, bystander_port))
     engine = BeanEngine()
-    engine.start(FILTER)
+    engine.start(traffic_filter(blocked_port, bystander_port))
     results = []
     try:
         for label, ip, port, bystander_counts in phases:
             engine.set_block(bool(ip or port), ip, port)
             time.sleep(0.2)
-            named = answered(BLOCKED_ADDR, BLOCKED_PORT)
-            other = answered(BYSTANDER_ADDR, BYSTANDER_PORT)
-            results.append((label, ip, port, named, other, bystander_counts))
+            named = answered(BLOCKED_ADDR, blocked_port)
+            seen = answered(BYSTANDER_ADDR, bystander_port)
+            results.append((label, ip, port, named, seen, bystander_counts))
     finally:
         engine.stop()
         stop.set()
@@ -153,27 +225,27 @@ def main():
         driver.release_on_exit()
 
     problems = []
-    for label, ip, port, named, other, bystander_counts in results:
+    for label, ip, port, named, seen, bystander_counts in results:
         blocking = bool(ip or port)
         if not blocking:
-            if named < ALIVE_AT_LEAST or other < ALIVE_AT_LEAST:
+            if named < ALIVE_AT_LEAST or seen < ALIVE_AT_LEAST:
                 problems.append("%s: the control phase did not pass traffic "
                                 "(%d/%d and %d/%d) - every later verdict would be "
-                                "meaningless" % (label, named, ROUNDS, other, ROUNDS))
+                                "meaningless" % (label, named, ROUNDS, seen, ROUNDS))
             continue
         if named > SILENT_AT_MOST:
             problems.append("%s: the NAMED endpoint still answered %d of %d"
                             % (label, named, ROUNDS))
-        if bystander_counts and other < ALIVE_AT_LEAST:
+        if bystander_counts and seen < ALIVE_AT_LEAST:
             problems.append("%s: the bystander was hit too (%d of %d) - the block "
-                            "took more than it named" % (label, other, ROUNDS))
+                            "took more than it named" % (label, seen, ROUNDS))
 
     print("phase                                     named  bystander")
-    for label, _ip, _port, named, other, bystander_counts in results:
+    for label, _ip, _port, named, seen, bystander_counts in results:
         note = "" if bystander_counts else "   (bystander N/A: a one-octet " \
                                            "loopback prefix covers every 127.x)"
         print("  %-38s %2d/%-2d  %2d/%-2d%s"
-              % (label, named, ROUNDS, other, ROUNDS, note))
+              % (label, named, ROUNDS, seen, ROUNDS, note))
 
     for line in problems:
         print("FAIL: %s" % line)

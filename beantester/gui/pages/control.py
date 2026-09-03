@@ -67,11 +67,15 @@ class ControlPage:
             "profiles": self._build_profiles,
         })
         app.form = self.form
-        # Applied only now, with the scroller and the form already built: putting
-        # the bar BACK needs `before=` to name the scroller, and hiding it runs a
-        # clear, which talks to the form. `_build_search_bar` packed it, so that
-        # is the state this starts from.
-        self._search_shown = True
+        # 🔴 The bar is BUILT above and packed only here, and the order is the
+        # whole point: the scrollbar has to claim the cavity first, or it covers
+        # only the part of the page below the bar (see `_pack_bar`). So the
+        # scroller goes in first and `_sync_search_visibility` is the single
+        # place that puts the bar in - starting from "nothing packed", which is
+        # also the right starting state when the preference asks for no bar.
+        # Hiding it runs a clear, which talks to the form, so it could not have
+        # happened any earlier than this either.
+        self._search_shown = False
         self._sync_search_visibility()
         # A query typed before a language switch (or before the window was
         # widened into two columns) is still in the box after the rebuild, so the
@@ -81,23 +85,26 @@ class ControlPage:
 
     # -- search -------------------------------------------------------------- #
     def _build_search_bar(self):
-        """A toolbar with BOTH ends anchored: box on the left, count on the right.
+        """A toolbar: box on the left, count and note pinned to the right.
 
-        🔴 Third shape, and the first two were rejected for the SAME complaint -
-        "it looks like it was dropped on the page". Worth knowing before moving
-        it again, because the obvious fix is to move it back:
+        🔴 Fourth shape. The first two were rejected for the SAME complaint -
+        "it looks like it was dropped on the page" - and the third for a
+        different one, so both reasons are worth knowing before moving it again:
 
         * everything packed LEFT (until 2026-08-11) - "a stray label floating
           above the first section with the whole width empty beside it";
         * everything packed RIGHT (until 2026-08-20) - the same, mirrored, and an
-          alignment fix in between did not settle it either.
+          alignment fix in between did not settle it either;
+        * a group at each end, the right one showing the shortcut name while the
+          box was empty (until 2026-09-03) - it did anchor the row, but it
+          repeated what the box's own tooltip already says.
 
-        So the side was never the problem. A row with one cluster in it has a
-        band of nothing next to that cluster wherever the cluster goes. This one
-        has a group at each end, which is the shape the Connections toolbar
-        already uses and nobody has reported: the gap in the middle then reads as
-        the space BETWEEN two groups rather than as emptiness beside one. It also
-        puts "Szukaj" in the same place on both pages that have it.
+        So the side was never the problem: a row with one cluster in it has a
+        band of nothing next to that cluster wherever the cluster goes. What
+        closes the row now is not a label but the SCROLLBAR, which runs the full
+        height of the page and therefore ends this row too (see `_pack_bar`), so
+        the count has something to sit against without a placeholder standing in
+        for it.
 
         Nothing may move while typing, which is what the packing order protects:
         the label and the box are pinned to the left margin, the count is pinned
@@ -106,7 +113,6 @@ class ControlPage:
         """
         bar = ttk.Frame(self.frame)
         self._bar = bar
-        self._pack_bar()
         self.query_var = tk.StringVar(value=_LAST_QUERY[0])
         ttk.Label(bar, text=T("fields.search")).pack(side="left",
                                                      padx=(0, scaled(6)))
@@ -121,11 +127,9 @@ class ControlPage:
         add_tooltip(entry, "tips.control_search", shortcut="Ctrl+F")
         self._entry = entry
         # Pinned to the right margin at a fixed width, so the number changing
-        # from "1 / 9" to "10 / 90" cannot push anything.
-        # Filled at build, not left blank: a page that opens with an empty box
-        # must already show the shortcut, or the row starts life lopsided.
-        # `_targets` and `query_var` both exist by now (see __init__).
-        self._count.config(text=self._count_text())
+        # from "1 / 9" to "10 / 90" cannot push anything, and so the note beside
+        # it does not shift the moment a count appears. It starts BLANK: what
+        # closes this row is the scrollbar, not a label standing in for one.
         self._count.pack(side="right")
         # Free to grow leftwards into the middle: "..." is in the Settings
         # window, or "nothing matches". There is nothing to its left to shove.
@@ -140,24 +144,31 @@ class ControlPage:
             self.app.root.bind("<Control-f>", lambda e: _dispatch(self.app))
             self.app.root.bind("<Control-F>", lambda e: _dispatch(self.app))
 
-    def _pack_bar(self, **extra):
-        """Where the bar sits, in ONE place - it is packed twice.
-
-        Once at build time and once when the preference brings it back, and two
-        copies of these numbers would drift the day somebody tunes one of them.
+    def _pack_bar(self):
+        """Where the bar sits, in ONE place - between the scrollbar and the body.
 
         The padding is low rather than high on purpose: sitting under the tab
         strip with a wide gap below it, the bar looked attached to the tabs. Tight
         to the content it belongs to, it reads as the page's own header row.
 
-        🔴 Bringing it back passes ``before=``. pack hands out space in CALL
-        order, so a bar re-packed after the scroller exists would land UNDER the
-        page body - and the fake tkinter cannot see that (it checks that
-        ``before=`` names a sibling and keeps children in creation order), so this
-        one is answered by a live render, not by the suite.
+        🔴 ``before=`` is not the caller's business and not optional - pack hands
+        out space in CALL order, and BOTH neighbours depend on this one call
+        landing between them:
+
+        * packed after the canvas (no ``before=``) the bar lands UNDER the whole
+          page body;
+        * packed before the SCROLLBAR the bar takes the full width first, so the
+          scrollbar is left with the cavity below it - and the strip beside this
+          row, which the page had until 2026-09-03, is empty.
+
+        MEASURED on real Tk, one frame 300 px tall, both orders side by side:
+        scrollbar first it runs 299 px and the bar comes out 17 px narrower
+        (exactly the scrollbar), the other way round 269 px and full width. The
+        fake tkinter models pack ORDER, so the suite holds the order and a live
+        render answers for the geometry.
         """
-        self._bar.pack(side="top", fill="x", padx=(0, scaled(14)),
-                       pady=(scaled(12), scaled(3)), **extra)
+        self._bar.pack(side="top", fill="x", padx=(0, scaled(4)),
+                       pady=(scaled(12), scaled(3)), before=self.scroll.canvas)
 
     def search_is_visible(self):
         """Is the search bar on the page? (the preference, read live)"""
@@ -175,7 +186,7 @@ class ControlPage:
             return
         self._search_shown = want
         if want:
-            self._pack_bar(before=self.scroll.vsb)
+            self._pack_bar()
         else:
             self._hide_search()
 
@@ -255,8 +266,8 @@ class ControlPage:
         self._at = 0
         if not query.strip():
             self._restore_folds()
-            # Not blank: the idle right end carries the shortcut, which is what
-            # stops the row reading as one cluster in a band of nothing.
+            # Both ends of the bar go quiet: an empty box has no position to
+            # report and nothing to say about the other surface either.
             self._say(self._count_text(), "")
             return
         if self._targets:
@@ -294,22 +305,19 @@ class ControlPage:
         self._note.config(text=note)
 
     def _count_text(self):
-        """What the right end of the bar says: the position, or the shortcut.
+        """What the right end of the bar says: the position, or nothing.
 
-        🔴 The shortcut is not decoration - it is what keeps the row anchored at
-        BOTH ends. With an empty box the count and the note are both blank, and a
-        toolbar with one cluster on the left and nothing else is exactly the
-        shape that has now been reported twice (see ``_build_search_bar``). The
-        idle state is the state the page is looked at in, so it is the one that
-        has to hold.
+        Blank whenever there is no position to report, an idle box included. It
+        showed the shortcut name until 2026-09-03, to keep the row anchored at
+        both ends - but the box's own tooltip says it too, and the row is closed
+        by the scrollbar now (see ``_build_search_bar``).
 
-        Same label, same fixed width, so nothing moves when it turns into a
-        count. A key name is not translated - the tooltips pass these as literals
-        too.
+        The label keeps its fixed width either way, so nothing moves when a count
+        appears.
         """
         if self._targets:
             return "%d / %d" % (self._at + 1, len(self._targets))
-        return "" if self.query_var.get().strip() else "Ctrl+F"
+        return ""
 
     def _note_text(self, elsewhere):
         if elsewhere:
