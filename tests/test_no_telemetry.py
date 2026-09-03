@@ -281,6 +281,14 @@ def test_a_url_literal_lives_only_where_the_licence_needs_one():
 # API: installed in the pytest interpreter it would slow every later test and
 # leak into all of them. `tests/gui_harness.py` runs subprocesses for the same
 # class of reason.
+# What it costs, so nobody has to wonder: MEASURED 2026-09-03 on a bench that
+# refuses a verdict when the difference is inside the noise
+# (`internal_tools/bench_audit_hook.py`, two full runs). An installed hook charges
+# **~235-310 ns per audit event** - the RATIO repeated at 4.66x and 4.76x, the
+# absolute did not, so the range is the honest form. This run raises 2010 events,
+# about half a millisecond, and the bench REFUSED a conclusion on this workload in
+# both runs: against a 1.2 s run whose own spread is 50-200 ms it cannot be seen.
+# The second that `--duration 1` waits out is what this test costs, not the hook.
 AUDIT_SCRIPT = """
 import io, json, sys
 sys.path.insert(0, {root!r})
