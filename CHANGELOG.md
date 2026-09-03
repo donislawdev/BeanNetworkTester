@@ -52,6 +52,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the same `--loss-burst` flag, but the name now carries the word most people go looking for -
   and typing "burst" into the search box on the Control page finds it.
 
+### Docs
+
+- **The README's "What it can do" list now covers what the tool actually does.** It had grown
+  stale as settings were added, so the front page advertised a smaller program than the one you
+  get. Burst loss, latency spikes, the buffer, the MTU black hole, dropped new connections, NAT
+  timeouts, the speed-limit schedule, "internet only", picking one address family, the
+  reproduction report, the CSV exports and the event log are all named now.
+
 ### Removed
 
 - **The Polish README is gone and the documentation here is English only.** Everything it

@@ -20,18 +20,26 @@ exists.
 
 **What it can do**
 
-- **Add lag and jitter** - fixed or random delay.
-- **Drop, corrupt or duplicate packets** - fake a flaky link.
-- **Cap download/upload speed** - throttle to a set KB/s.
-- **Tear connections down** - TCP resets or a dead link.
+- **Add lag and jitter** - fixed or random delay, plus occasional spikes.
+- **Drop, corrupt or duplicate packets** - loss can arrive in bursts, the way a real wireless
+  link fails.
+- **Cap download/upload speed** - throttle to a set KB/s, with a buffer that adds queuing delay
+  before it starts dropping.
+- **Tear connections down** - TCP resets, a dead link, or new connections that never come up.
 - **Flap the link on and off** - outages that come and go.
-- **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet).
-- **Aim at one app** - by process, PID, IP or port.
+- **Break the path, not only the packets** - an MTU black hole and NAT-style idle timeouts.
+- **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet) and internet
+  only (no local network).
+- **Aim at one app** - by process name, PID, IP, port, or one address family.
 - **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite, In-flight Wi-Fi and more.
 - **Run scripted scenarios** - timed steps that change the network on their own.
+- **Schedule the speed limit** - a repeating timeline of rates, without writing a scenario.
 - **Reproducible by seed** - replay the exact same random loss and jitter.
-- **Watch it live** - chart, connections table, counters.
-- **Command-line mode** - scriptable for CI.
+- **Hand a bug over** - a report with every setting, the counters and the command line that
+  repeats the run.
+- **Watch it live** - chart, counters, a searchable connections table and an event log.
+- **Export to CSV** - session statistics and a snapshot of the connections table.
+- **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, fully offline** - sends no data anywhere.
 
 <p align="center">
