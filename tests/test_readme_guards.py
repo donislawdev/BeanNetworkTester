@@ -21,7 +21,12 @@ import re
 
 from fakes import ROOT, check
 
-READMES = ("README.md", "README.pl.md")
+# One README since 2026-09-03 (owner's decision): the Polish translation is gone
+# and the Polish documentation lives on the project website instead. The tuple
+# stays a tuple rather than collapsing into the literal - every guard below is
+# written to walk a SET of READMEs, and a second language would otherwise have to
+# reintroduce the loop into each of them.
+READMES = ("README.md",)
 
 
 def _read(name):
@@ -135,7 +140,7 @@ def test_both_readmes_document_every_connections_column():
     import json
     import os as _os
     from beantester.gui.pages.conns import COLUMNS
-    for readme, lang in zip(READMES, ("en", "pl"), strict=True):
+    for readme, lang in zip(READMES, ("en",), strict=True):
         with open(_os.path.join(ROOT, "lang", f"{lang}.json"), encoding="utf-8") as f:
             names = json.load(f)
         text = _read(readme)
@@ -179,10 +184,11 @@ def test_no_semicolons_in_readme_prose():
     continues, and that is what the exemption actually hid: a semicolon lived in
     a nested bullet of README.md while this guard reported the file clean.
     MEASURED before removing it - of the indented lines outside fences, 16 in
-    README.md and 8 in README.pl.md, EVERY one is list text and none is code.
-    Both files fence all their code, so the exemption protected nothing and
-    blinded the check. Should an indented code block ever arrive, this test will
-    say so and the answer is to fence it, which is better markdown regardless.
+    README.md and 8 in the Polish README that then existed, EVERY one was list
+    text and none was code. The file fences all its code, so the exemption
+    protected nothing and blinded the check. Should an indented code block ever
+    arrive, this test will say so and the answer is to fence it, which is better
+    markdown regardless.
     """
     for readme in READMES:
         offenders, fenced = [], False
@@ -197,15 +203,6 @@ def test_no_semicolons_in_readme_prose():
                 offenders.append(f"{number}: {prose.strip()[:60]}")
         check(f"{readme}: no semicolons in prose", not offenders,
               f"({offenders[:4]})")
-
-
-def test_polish_readme_pipeline_keeps_lan_and_blocking():
-    """The regression that happened: the PL brief skipped LAN mode and blocking."""
-    sec = _section(_read("README.pl.md"), "Jak to działa")
-    order = [w for _, w in sorted((sec.find(w), w) for w in
-             ("celowanie", "tryb LAN", "blokada", "NAT") if sec.find(w) >= 0)]
-    check("README.pl.md 'Jak to działa' keeps celowanie -> tryb LAN -> blokada -> NAT",
-          order == ["celowanie", "tryb LAN", "blokada", "NAT"], f"(got {order})")
 
 
 def test_both_readmes_list_every_job_the_ci_workflow_runs():

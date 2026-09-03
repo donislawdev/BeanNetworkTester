@@ -882,9 +882,9 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
     # An SBOM attestation is what `sbom-path` makes, and its predicate type is SPDX.
     makes_sbom = "sbom-path:" in yaml_body
     check("the attestation workflow still makes an SBOM attestation", makes_sbom,
-          "(if this changed, the predicate type in both READMEs has to change with it)")
+          "(if this changed, the predicate type in the README has to change with it)")
 
-    for readme in ("README.md", "README.pl.md"):
+    for readme in ("README.md",):
         with open(os.path.join(ROOT, readme), encoding="utf-8") as handle:
             text = handle.read()
         line = [ln for ln in text.splitlines() if "gh attestation verify" in ln

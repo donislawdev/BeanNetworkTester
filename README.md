@@ -18,8 +18,6 @@ interface with tooltips and a command-line mode for CI.
 ⭐ **If it saved you time, leave a star.** That is how the next tester who needs it finds out it
 exists.
 
-> This is the English documentation. Polish version: [README.pl.md](README.pl.md).
-
 **What it can do**
 
 - **Add lag and jitter** - fixed or random delay.
@@ -88,9 +86,6 @@ tooltip explaining what it does.
 
 > Note: selecting a preset only fills in the fields - impairment starts only on **START**.
 > Without administrator rights the WinDivert driver will not load.
-
-🌐 The project website - what it does in short, with the download one click away:
-**[beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/)**
 
 ## Language
 

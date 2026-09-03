@@ -52,6 +52,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the same `--loss-burst` flag, but the name now carries the word most people go looking for -
   and typing "burst" into the search box on the Control page finds it.
 
+### Removed
+
+- **The Polish README is gone and the documentation here is English only.** Everything it
+  covered is in `README.md`, and the Polish walkthroughs live on the project website, which has
+  a full Polish version. The program itself is untouched and still speaks Polish, Chinese and
+  English.
+
 ### Fixed
 
 - **Two copies of the program running at once could damage your saved files.** Settings, profiles
