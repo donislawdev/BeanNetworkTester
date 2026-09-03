@@ -1264,9 +1264,6 @@ MUTATIONS = [
         "test": "test_a_second_kind_of_resolver_failure_is_recorded_too",
     },
     {
-        # Cleared only on success, as shipped: a socket table that keeps hiccupping
-        # leaves the dict growing, and growing STALE - the rescue then puts a port
-        # back in scope whose socket closed long ago.
         # The shipped shape: an unguarded check-then-act, in five copies. Two
         # readers both find the catalogue empty and both scan lang/.
         "label": "i18n: the lazy load goes back to being unguarded",
@@ -1282,6 +1279,9 @@ MUTATIONS = [
         "test": "test_a_cold_catalogue_is_loaded_once_however_many_threads_ask",
     },
     {
+        # Cleared only on success, as shipped: a socket table that keeps hiccupping
+        # leaves the dict growing, and growing STALE - the rescue then puts a port
+        # back in scope whose socket closed long ago.
         "label": "targeting: late owners survive a walk that failed",
         "file": "beantester/targeting.py",
         "old": "            with self._ports_lock:\n"
@@ -1289,6 +1289,35 @@ MUTATIONS = [
                "            self.table.refresh(force=force)",
         "new": "            self.table.refresh(force=force)",
         "test": "test_a_failing_refresh_does_not_leave_late_owners_behind",
+    },
+    {
+        # The shipped shape: fourteen setters, fourteen separate holds of the lock
+        # a packet is judged under, so a packet in the middle sees a mixture.
+        #
+        # 🔴 There is deliberately NO companion entry turning `core._lock` back
+        # into a plain `Lock`. That mutation does not FAIL, it DEADLOCKS - the
+        # batch holds the lock and the first setter inside it waits forever - and
+        # this runner has no timeout, so the "proof" would be a hung suite rather
+        # than a red one. The reentrancy is REQUIRED by the entry below; it is not
+        # separately provable this way, and pretending otherwise would be the kind
+        # of claim this whole registry exists to refuse.
+        "label": "settings: an apply goes back to separate lock holds per setter",
+        "file": "beantester/settings.py",
+        "old": "    with _batch(engine):",
+        "new": "    with nullcontext():",
+        "test": "test_a_packet_decided_during_an_apply_never_sees_half_of_it",
+    },
+    {
+        # A compiled matcher stringified back into text is a matcher compiled
+        # AGAIN - and inside the batch, which is the one place compilation may not
+        # happen. Not invented: it is what the first version of this batch did,
+        # and the guard is what found it.
+        "label": "settings: a batched apply recompiles its port expressions",
+        "file": "beantester/core.py",
+        "old": "            parse_matcher(port if isinstance(port, Matcher) "
+               "else port_expression(port),",
+        "new": "            parse_matcher(port_expression(port),",
+        "test": "test_an_apply_holds_the_core_lock_over_assignments_only",
     },
     {
         "label": "targeting: a pid whose name will not resolve is written off",

@@ -6,11 +6,12 @@ settings dict and applies it to an engine.
 """
 import difflib
 import socket
+from contextlib import nullcontext
 
 from . import crashlog
 from . import fields as F
 from . import portmap
-from .core import burst_loss_params
+from .core import burst_loss_params, compile_endpoint
 from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
 from .i18n import T, translate
@@ -537,8 +538,27 @@ def _say_what_the_burst_loss_will_do(loss_pct, mean_burst, log):
           gap=number_string(round(to_number(mean_burst) / achievable))))
 
 
+def _batch(engine):
+    """Hold the core's lock across a whole apply - when there is a core to ask.
+
+    ``getattr`` for the same reason ``_destination_is_frozen`` below uses it, and
+    it is not defensive habit: ``apply_settings`` is handed engine doubles by the
+    tests and by ``ScenarioRunner``'s fakes, and an object without a ``core`` is
+    simply not running one. A passthrough on ``BeanEngine`` instead would have to
+    be mirrored by every one of those doubles to keep them working.
+    """
+    batch = getattr(getattr(engine, "core", None), "batch", None)
+    return batch() if callable(batch) else nullcontext()
+
+
 def apply_settings(engine, s, log=lambda *_: None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
+
+    Applied as ONE batch, under a single hold of the core's lock: the setters used
+    to take and release it one at a time, so a packet decided in the middle was
+    judged by a mixture of the old configuration and the new. See
+    :meth:`BeanCore.batch` - including what that batch deliberately does NOT
+    cover, which is process targeting.
 
     ``filter`` and ``duration`` are deliberately NOT applied here: both belong to
     the session and are consumed by ``BeanEngine.start()``. Applying them live
@@ -546,10 +566,13 @@ def apply_settings(engine, s, log=lambda *_: None):
     move a deadline the engine is already counting against.
     """
     g = lambda k: s.get(k, DEFAULT_SETTINGS[k])
-    engine.set_params(g("loss"), g("corrupt"), g("dup"),
-                      g("latency"), g("jitter"), g("down"), g("up"))
-    engine.set_buffer(g("buffer"))
-    engine.set_loss_burst(g("loss_burst"))
+    # -- prepare: everything that can take time, or say something ------------- #
+    # Nothing below this comment touches the engine, and that is the shape of the
+    # fix. Compiling an expression, parsing a schedule and writing a log line all
+    # happen BEFORE the batch opens, so what the batch holds `core._lock` for is
+    # assignments and nothing else. The log lines come out in the order they
+    # always did - only their interleaving with the setters is gone, and setters
+    # do not log.
     _say_what_the_burst_loss_will_do(g("loss"), g("loss_burst"), log)
     dst_ip = setting_expression("dst_ip", g("dst_ip"))
     dst_port = setting_expression("dst_port", g("dst_port"))
@@ -560,26 +583,24 @@ def apply_settings(engine, s, log=lambda *_: None):
     # user just asked to impair would never arrive, and every counter would read
     # healthy. Refusing out loud is the only honest option - silently applying half
     # of it is the failure mode this whole audit exists to remove.
+    dest = None                                 # None = leave the destination alone
     if _destination_is_frozen(engine, dst_ip, dst_port):
         log(T("log.dest_frozen_while_narrowed"))
     else:
         try:
-            engine.set_dest(bool(dst_ip or dst_port), dst_ip, dst_port)
+            dest = (bool(dst_ip or dst_port), *compile_endpoint(dst_ip, dst_port))
         except ValueError as e:
             # Tolerant like the schedule below: a bad expression disables destination
             # targeting instead of killing a scenario thread. The GUI and the CLI
             # validate up front (validate_settings), so a user never reaches this.
             log(f"{T('log.filter_skipped')}: {e}")
-            engine.set_dest(False)
-    engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
+            dest = (False, *compile_endpoint(None, None))
     # The same shape as the pair below, and said for the same reason: two "only"
     # switches that exclude each other leave nothing to aim at, the symptom is a
     # session that changes nothing, and that looks like a broken tool rather than
     # like the tool doing what it was told.
     if g("ipv4_only") and g("ipv6_only"):
         log(T("log.ipv4_and_ipv6_only"))
-    engine.set_lan(bool(g("lan_mode")))
-    engine.set_internet_only(bool(g("internet_only")))
     # Both at once is a legal request - it is the union of two impairments, the
     # same as --loss 100 - but it is far more likely to be a mistake, and the
     # symptom (nothing but loopback moves) looks like the tool is broken rather
@@ -590,22 +611,45 @@ def apply_settings(engine, s, log=lambda *_: None):
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     try:
-        engine.set_block(bool(block_ip or block_port), block_ip, block_port)
+        block = (bool(block_ip or block_port), *compile_endpoint(block_ip, block_port))
     except ValueError as e:
         # Tolerant like destination above: a bad expression disables blocking
         # instead of killing a scenario thread. GUI and CLI validate up front.
         log(f"{T('log.filter_skipped')}: {e}")
-        engine.set_block(False)
-    engine.set_advanced(g("syn_drop"), g("max_size"))
-    engine.set_spike(g("spike_prob"), g("spike_ms"))
-    engine.set_nat(g("nat_timeout"))
-    engine.set_rst(g("rst_prob"), g("rst_cooldown"))
-    engine.set_flap(g("flap_period") > 0, g("flap_period"), g("flap_down"))
+        block = (False, *compile_endpoint(None, None))
     try:
-        engine.set_schedule(parse_schedule(g("rate_schedule")))
+        schedule = parse_schedule(g("rate_schedule"))
     except ValueError as e:
         log(f"{T('log.schedule_skipped')}: {e}")
-        engine.set_schedule([])
+        schedule = []
+
+    # -- apply: one lock hold, so no packet sees half of this ----------------- #
+    with _batch(engine):
+        engine.set_params(g("loss"), g("corrupt"), g("dup"),
+                          g("latency"), g("jitter"), g("down"), g("up"))
+        engine.set_buffer(g("buffer"))
+        engine.set_loss_burst(g("loss_burst"))
+        if dest is not None:
+            engine.set_dest(*dest)
+        engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
+        engine.set_lan(bool(g("lan_mode")))
+        engine.set_internet_only(bool(g("internet_only")))
+        engine.set_block(*block)
+        engine.set_advanced(g("syn_drop"), g("max_size"))
+        engine.set_spike(g("spike_prob"), g("spike_ms"))
+        engine.set_nat(g("nat_timeout"))
+        engine.set_rst(g("rst_prob"), g("rst_cooldown"))
+        engine.set_flap(g("flap_period") > 0, g("flap_period"), g("flap_down"))
+        engine.set_schedule(schedule)
+
+    # OUTSIDE the batch, deliberately, and this is the boundary of what "atomic"
+    # means here: resolving a target walks the socket table, which this project
+    # has measured at 1.7 s cold, and the capture thread waits for whatever the
+    # core's lock is holding. So the impairment parameters and the gates change
+    # as one, and process targeting follows a moment later. A scenario step may
+    # legally carry `target`, so that window is real rather than theoretical -
+    # closing it would mean holding the packet path across an OS walk, which is
+    # the trade this refuses to make. See BeanCore.batch.
     apply_targeting(engine, str(g("target")).strip(), log)
 
 

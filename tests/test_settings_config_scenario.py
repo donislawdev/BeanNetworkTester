@@ -4,6 +4,7 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
 import json
+import random
 
 from beantester import BeanEngine
 from fakes import check
@@ -81,6 +82,133 @@ def test_apply_settings_maps_engine():
           and c.block_ip == "203.0.113.0/24" and c.block_port == "8080"
           and c.block_ip_matcher.matches("203.0.113.9")
           and c.block_port_matcher.matches(8080))
+
+
+def test_a_packet_decided_during_an_apply_never_sees_half_of_it():
+    """The setters used to take and release the core's lock ONE AT A TIME.
+
+    So a packet judged in the middle of an apply was judged by a mixture: the new
+    loss with the old destination gate, a new rate limit with the old schedule.
+    It matters in two places in particular - a scenario step, where the mixed
+    window falls exactly where the tester is looking, and reproducibility under
+    ``--seed``, where the mixture is in no seed.
+
+    The pair of settings is chosen so that a MIXTURE IS VISIBLE, which is most of
+    the difficulty here: the two dicts move a gate and an impairment in opposite
+    directions, so their halves make four distinct answers of which only two are
+    legal.
+
+        A: no destination gate, loss 100            ->  (scoped=True,  drop=True)
+        B: gate on 10/8 (our packet is not), loss 0 ->  (False, False)
+        a blend of the two                          ->  (True, False)
+
+    🔴 And the interleaving is FORCED, not raced, because racing it does not work:
+    the first version of this test ran a reader thread flat out against 300
+    applies and the mutation that removes the batch SURVIVED it. The window is the
+    ~5 us an apply spends on its assignments, and a thread that holds the GIL for
+    that whole stretch never lets the reader into it. So the reader is released
+    from INSIDE the apply, right after the loss has changed and before the gate
+    has - the one instant at which a mixture exists at all - and the applier waits
+    there to give it every chance. With the batch the reader blocks on the core's
+    lock and samples a finished configuration; without it, it walks straight in.
+    """
+    import threading
+
+    from beantester import BeanEngine, apply_settings
+
+    both_halves_on = dict(loss=100, dst_ip="", dst_port="", target="")
+    both_halves_off = dict(loss=0, dst_ip="10.0.0.0/8", dst_port="", target="")
+    legal = {(True, True), (False, False)}
+
+    sh = BeanEngine()
+    apply_settings(sh, both_halves_on)
+    rng = random.Random(4321)
+    take, sampled, seen = threading.Event(), threading.Event(), []
+
+    def reader():
+        take.wait(timeout=5)
+        d = sh.core.decide(1400, True, 50000, 1000.0, rng,
+                           remote_ip="93.184.216.34", remote_port=443, is_tcp=True)
+        seen.append((d.scoped, d.drop))
+        sampled.set()
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+
+    # set_loss_burst is the third setter an apply calls: the loss is already new
+    # and the destination gate is still old, so this is exactly where a mixture
+    # lives. Shadowed on the instance, so nothing global is touched.
+    real = sh.set_loss_burst
+
+    def let_the_reader_in(*a, **kw):
+        real(*a, **kw)
+        take.set()
+        sampled.wait(timeout=0.5)       # returns False when the lock holds it out
+
+    sh.set_loss_burst = let_the_reader_in
+    try:
+        apply_settings(sh, both_halves_off)
+    finally:
+        del sh.set_loss_burst
+        take.set()
+        t.join(timeout=5)
+
+    check("the reader was let in from inside the apply", seen, "(it never sampled)")
+    check("no packet was judged by a configuration neither dict describes",
+          set(seen) <= legal, f"(saw {sorted(set(seen))})")
+
+
+def test_an_apply_holds_the_core_lock_over_assignments_only():
+    """What the batch may NOT contain, pinned as a property.
+
+    Whatever the batch holds, the capture thread waits for (convention 20).
+    Compiling a filter expression is the one part of an apply that can take real
+    time - a pathological ``re:`` pattern is why ``matchers`` carries a time
+    budget at all - so it happens before the lock is taken, not inside it.
+    Measured 2026-09-03: two benign expressions cost 19.5 us median against 5.3 us
+    for every assignment in an apply put together.
+
+    The probe is the matcher factory itself: it records whether the core's lock
+    was already held by THIS thread at the moment it was asked to compile, which
+    is what being inside a batch means.
+
+    ``_is_owned()`` and not ``acquire(blocking=False)``: an RLock grants itself
+    again to the thread that already holds it, so an acquire would succeed inside
+    a batch and prove nothing. The first draft of this test asked for ``_count``
+    instead - which the PYTHON RLock has and the C one shipped by CPython does
+    not, so ``getattr(..., None)`` made every reading False and the guard passed
+    without looking at anything.
+
+    What is counted is a REAL compilation, not every call to the factory: the
+    setters still call it from inside the batch, with matchers the caller already
+    compiled, and ``parse_matcher`` hands those straight back. That passthrough is
+    exactly what lets the setters keep one signature, so this pins it too - remove
+    it and these calls become real compilations under the lock, and this goes red.
+    """
+    from beantester import BeanEngine, apply_settings
+    from beantester import core as core_mod
+    from beantester.matchers import Matcher
+
+    sh = BeanEngine()
+    compiled = []
+    real_parse = core_mod.parse_matcher
+
+    def watching_parse(text, *a, **kw):
+        if not isinstance(text, Matcher):
+            compiled.append(sh.core._lock._is_owned())
+        return real_parse(text, *a, **kw)
+
+    core_mod.parse_matcher = watching_parse
+    try:
+        apply_settings(sh, dict(loss=5, dst_ip="10.0.0.0/8", dst_port="80,443",
+                                block_ip="203.0.113.0/24", block_port="8080",
+                                target=""))
+    finally:
+        core_mod.parse_matcher = real_parse
+
+    check("the apply really compiled something", compiled, "(nothing was compiled)")
+    check("no expression was compiled while the core's lock was held",
+          not any(compiled), f"({compiled})")
 
 
 def test_apply_settings_bad_schedule_fallback():

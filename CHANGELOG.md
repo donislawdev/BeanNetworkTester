@@ -51,6 +51,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   same collision could damage a profile file while it was being carried over. Each save now uses
   a temporary file of its own. Nothing changes for a single copy, which is the normal case.
 
+- **Changing settings mid-session could judge a packet by half the old settings and half the
+  new.** Applying settings - from "Apply changes", from the command line, or from a scenario step -
+  set roughly fifteen values one after another, and a packet that arrived in between was handled
+  by a mixture: the new loss with the old destination filter, say. The window was tiny, but a
+  scenario step is exactly where somebody is watching, and it also meant a run could not be
+  reproduced exactly from its seed. Settings now change as one. Process targeting is still applied
+  a moment afterwards, because working out which connections belong to a process means asking the
+  operating system, and nothing that slow may hold up the traffic being tested.
+
 - **When targeting a process, a closed connection could stay targeted after trouble reading the
   system's connection list.** The tool keeps a short list of connections it learned about between
   two scans so none is missed. That list was only ever cleared by a scan that worked, so if scans
