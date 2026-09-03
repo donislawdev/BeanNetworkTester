@@ -947,6 +947,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_overflow` | dropped because the tool's own queue was full (see the note on it below) |
 | `corrupted` | packets whose payload was flipped |
 | `duplicated` | extra copies queued |
+| `packets_reordered` | packets that left the tool in a different order than they went in. 0 with jitter or a spike configured means the packets were too far apart for any of them to overtake another. Counted per direction, so two busy connections can overtake each other without either end seeing anything out of order |
 | `dropped_syn` | TCP SYNs dropped ("connections that never open") |
 | `dropped_mtu` | dropped for exceeding the max size (MTU black hole) |
 | `dropped_nat` | dropped because the NAT mapping had expired |

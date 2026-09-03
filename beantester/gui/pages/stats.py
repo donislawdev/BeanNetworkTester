@@ -13,7 +13,7 @@ window on a 4K screen no longer shows four narrow cells and a lot of nothing.
 import tkinter as tk
 from tkinter import ttk
 
-from ...engine import impairment_loss_pct
+from ...damage import impairment_loss_pct
 from ...i18n import T, event_kind_label
 from ...views import sort_events
 from ..chart import draw_throughput_chart
@@ -67,6 +67,7 @@ CELLS = (
     ("loss_bursts", "stats.loss_runs", "", "tips.stat_loss_runs"),
     ("corrupted", "stats.corrupted", "", "tips.stat_corrupted"),
     ("duplicated", "stats.duplicated", "", "tips.stat_duplicated"),
+    ("reordered", "stats.reordered", "", "tips.stat_reordered"),
     ("drop_overflow", "stats.overflow", "", "tips.stat_overflow"),
     ("drop_shutdown", "stats.shutdown_dropped", "", "tips.stat_shutdown"),
     ("drop_send", "stats.send_failed", "", "tips.stat_send_failed"),
@@ -499,6 +500,7 @@ class StatsPage:
         # the FULL traffic on purpose - they are what the TOOL lost, including
         # traffic the user never targeted, and narrowing them would hide it.
         for key in ("seen", "queue", "drop_loss", "loss_bursts", "corrupted", "duplicated",
+                    "reordered",
                     "drop_overflow", "drop_shutdown", "drop_send",
                     "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",

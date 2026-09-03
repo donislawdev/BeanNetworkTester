@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **A "Reordered" figure on the Statistics page, and a `packets_reordered` column in the
+  stats CSV.** Jitter and the latency spike change the order packets go out in, but nothing
+  ever said whether that actually happened, and it depends on how busy the traffic is rather
+  than on the setting alone. Zero with jitter set now means the packets were too far apart to
+  overtake each other, instead of looking the same as an application that coped. An existing
+  stats CSV is rotated to a dated backup the first time the new column is written.
+
 ## [0.6.0] - 2026-09-03
 
 ### Added

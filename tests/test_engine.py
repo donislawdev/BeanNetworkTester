@@ -12,7 +12,7 @@ import pytest
 
 from beantester import BeanEngine
 from beantester.core import BeanCore
-from beantester.engine import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
+from beantester.damage import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
                                impairment_loss_pct)
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
