@@ -48,7 +48,17 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-PORT = 9097
+# 🔴 No literal port here, and this is the one thing in the file worth reading
+# before changing it. Windows RESERVES port ranges (Hyper-V, WSL, WinNAT), and a
+# reserved port does not refuse `bind` with "in use" - it refuses with
+# `WinError 10013`, a PERMISSION error - so a literal that happens to fall inside
+# one makes this check unrunnable on that machine until a reboot moves the range.
+# MEASURED 2026-09-03 with a bare socket, outside this tool: TCP 9097 gave 10013
+# while UDP 9097 bound fine, and `netsh int ipv4 show excludedportrange
+# protocol=tcp` named 9001-9100. The symptom was indistinguishable from broken
+# targeting - the listener died on a daemon thread, both children were refused,
+# and the first `int()` of an empty line raised - which is why the port is now
+# asked FOR. It also means two runs of this script can overlap.
 CHILD = """
 import socket, sys, time
 sock = socket.create_connection(("127.0.0.1", %d), timeout=5)
@@ -61,11 +71,31 @@ while time.time() < end:
 """
 
 
-def echo(stop):
+def open_listener():
+    """A loopback listener on a port the OS picked, plus that port.
+
+    Bound AND listening before it is handed to the thread, which also closes a
+    race the old ``time.sleep(0.3)`` was papering over: a child connecting before
+    ``listen()`` got its connection refused and printed nothing for the caller to
+    read. Raises ``OSError`` exactly like ``bind`` does - the caller decides what
+    a machine that will not hand out a loopback port means.
+
+    No ``SO_REUSEADDR``: with port 0 the OS never hands back a port sitting in
+    TIME_WAIT, so the option only described an intent that no longer exists.
+    """
     server = socket.socket()
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("127.0.0.1", PORT))
+    server.bind(("127.0.0.1", 0))
     server.listen(8)
+    return server, server.getsockname()[1]
+
+
+def child_port(proc):
+    """The local port a child printed, or ``None`` when it never got that far."""
+    line = (proc.stdout.readline() or "").strip()
+    return int(line) if line.isdigit() else None
+
+
+def echo(server, stop):
     server.settimeout(0.2)
 
     def serve(conn):
@@ -110,18 +140,38 @@ def main():
     from beantester.engine import BeanEngine
     from beantester.settings import apply_targeting
 
+    try:
+        server, port = open_listener()
+    except OSError as exc:
+        # Deliberately NOT a skip. The three checks above are the known reasons
+        # this cannot run; "the machine would not give me a loopback port" is not
+        # one of them, and a runner should be told rather than shown a tick.
+        print("FAIL: no loopback listener (%s)" % exc)
+        return 1
     stop = threading.Event()
-    threading.Thread(target=echo, args=(stop,), daemon=True).start()
-    time.sleep(0.3)
+    threading.Thread(target=echo, args=(server, stop), daemon=True).start()
 
     # stderr to /dev/null: the children are terminated while they are still
     # talking, so each one prints a connection-aborted traceback that means
     # nothing here and would read like a failure in a CI log.
     quiet = dict(stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    target = subprocess.Popen([sys.executable, "-c", CHILD % PORT], **quiet)
-    other = subprocess.Popen([sys.executable, "-c", CHILD % PORT], **quiet)
-    target_port = int(target.stdout.readline().strip())
-    other_port = int(other.stdout.readline().strip())
+    target = subprocess.Popen([sys.executable, "-c", CHILD % port], **quiet)
+    other = subprocess.Popen([sys.executable, "-c", CHILD % port], **quiet)
+    target_port, other_port = child_port(target), child_port(other)
+    if target_port is None or other_port is None:
+        # A child that never reached the echo server. Said in one sentence rather
+        # than raised out of `int("")`, and the children are collected here
+        # because this path used to return without touching them.
+        stop.set()
+        for proc in (target, other):
+            proc.terminate()
+            proc.wait(timeout=5)
+        # No cause in the sentence: the child could have been refused, or reached
+        # the server and died after. It names the fact and the port to look at,
+        # which is all this side of the pipe actually knows.
+        print("FAIL: a child never reported its port, so nothing was measured "
+              "(echo server on 127.0.0.1:%d)" % port)
+        return 1
 
     engine = BeanEngine()
     targeting = apply_targeting(engine, str(target.pid), log=lambda *_: None)
@@ -131,7 +181,7 @@ def main():
               % target.pid)
         return 1
 
-    engine.start("tcp and (tcp.SrcPort == %d or tcp.DstPort == %d)" % (PORT, PORT))
+    engine.start("tcp and (tcp.SrcPort == %d or tcp.DstPort == %d)" % (port, port))
     try:
         time.sleep(3.0)                    # let both children talk under capture
         rows = {row.get("local_port"): row
