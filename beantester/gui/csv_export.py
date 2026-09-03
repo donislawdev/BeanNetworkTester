@@ -10,6 +10,7 @@ The column tables live here too, and they are the source the README guard reads.
 """
 import csv
 import os
+import threading
 import time
 
 from .. import crashlog
@@ -137,6 +138,12 @@ CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
                    "avg_bytes", "duration_s", "idle_s"]
 
 
+# One export at a time, and the thing being protected is the FILE, not the window:
+# `CONNECTIONS_CSV_FILE` is one fixed path, so two windows would collide on it as
+# surely as two clicks. Module scope is therefore right rather than lazy.
+_EXPORT_LOCK = threading.Lock()
+
+
 def export_connections(app):
     """Write the CURRENT connection view (search + sort) to a CSV snapshot.
 
@@ -145,7 +152,40 @@ def export_connections(app):
     table is. The file is overwritten atomically each time (tmp + os.replace):
     it is a snapshot of "the connections as they are now", not an append log
     like the stats CSV.
+
+    OFF THE UI THREAD, because everything after the snapshot is unbounded work on
+    a table that may hold 200 000 flows: a full filter and sort with no row cap,
+    then a row-by-row CSV write. This is the one path that stayed on the UI thread
+    after `gui/model_worker.py` moved the table's own rebuild off it, and its
+    docstring says why that matters - a frozen window is a STOP button the user
+    cannot press, on a machine whose networking they have deliberately broken.
+
+    What is read from the App is read HERE, on the UI thread, and handed over as
+    plain data - the same shape `ConnsPage.refresh` uses. The worker touches no
+    widget. It calls `app.log`, which is thread-safe by contract.
+
+    Returns the worker thread so a caller that needs the file on disk before it
+    goes on can join it. The GUI does not. ``None`` back means an export was
+    already running and this click was refused.
     """
+    if not _EXPORT_LOCK.acquire(blocking=False):
+        # Two clicks, one file. Refusing out loud beats two workers racing to
+        # `os.replace` the same path, where the winner is whichever finishes last.
+        app.log(T("log.conns_export_busy"))
+        return None
+    try:
+        payload = _connections_payload(app)
+    except BaseException:
+        _EXPORT_LOCK.release()
+        raise
+    worker = threading.Thread(target=_write_connections, args=(app, payload),
+                              name="conns-csv", daemon=True)
+    worker.start()
+    return worker
+
+
+def _connections_payload(app):
+    """UI thread: everything the writer needs, as plain data."""
     now = app.engine.now_ref()
     snapshot = app.engine.connections_snapshot(limit=None)
     # The export follows the view: what you exported and what you were looking
@@ -153,10 +193,24 @@ def export_connections(app):
     # that produced it.
     if app.scoped_view():
         snapshot = [c for c in snapshot if c.get("scoped")]
+    return {"now": now, "snapshot": snapshot, "query": app.conn_query,
+            "sort": dict(app.conn_sort), "proc_map": app.proc_map}
+
+
+def _write_connections(app, payload):
+    """Worker thread: filter, sort and write. Touches no widget."""
+    try:
+        _write_connections_now(app, payload)
+    finally:
+        _EXPORT_LOCK.release()
+
+
+def _write_connections_now(app, payload):
+    now, proc_map = payload["now"], payload["proc_map"]
     rows = filter_sort_connections(
-        snapshot, app.conn_query,
-        app.conn_sort["col"], app.conn_sort["reverse"],
-        now=now, proc_map=app.proc_map, limit=0)
+        payload["snapshot"], payload["query"],
+        payload["sort"]["col"], payload["sort"]["reverse"],
+        now=now, proc_map=proc_map, limit=0)
     path = CONNECTIONS_CSV_FILE
     tmp = path + ".tmp"
     try:
@@ -167,7 +221,7 @@ def export_connections(app):
                 last = c.get("last", now)
                 packets = c.get("packets", 0) or 0
                 writer.writerow([formula_safe(v) for v in (
-                    connection_proc(c, app.proc_map) or "?",
+                    connection_proc(c, proc_map) or "?",
                     c.get("pid") or "",
                     c.get("proto", "IP"), c.get("remote_ip", ""),
                     c.get("remote_port", ""), c.get("local_port", ""),

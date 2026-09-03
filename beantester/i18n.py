@@ -7,6 +7,7 @@ no code changes are needed.
 """
 import os
 import string
+import threading
 
 from .jsonfile import load_json
 from .paths import lang_dir
@@ -39,6 +40,10 @@ LABEL_COLONS = ":" + chr(0xFF1A)
 _translations: dict[str, dict[str, str]] = {}   # language code -> {key: text}
 _language_names: dict[str, str] = {}            # code -> name (from "_meta")
 _LANG = None    # resolved lazily on first use (see _resolve_language)
+
+# Guards the LAZY load only - never a lookup, and never load_languages() itself.
+# See _ensure_loaded for both halves of why.
+_load_lock = threading.Lock()
 
 
 def load_languages(directory=None):
@@ -86,21 +91,59 @@ def load_languages(directory=None):
             continue
         names[code] = str(meta.get("name") or code)
         translations[code] = {str(k): str(v) for k, v in data.items()}
-    _translations, _language_names = translations, names
+    # NAMES first, translations second, and the order is the point: `_translations`
+    # is what every "have we loaded yet" check reads, so it has to be the LAST
+    # thing published. Assigned the other way round, a reader that arrived between
+    # the two stores saw a loaded catalogue beside an empty name map, and
+    # available_languages() answered with codes where names belong.
+    #
+    # 🔴 NOT guarded by a test, and said out loud rather than left to look proven:
+    # the window is two adjacent stores, so observing it needs a reader racing a
+    # loader in a loop - a guard that would be slow, flaky, and green most of the
+    # time for the wrong reason. The line above is cheap and correct; the claim
+    # that it is TESTED would not be.
+    _language_names = names
+    _translations = translations
     return set(translations)
+
+
+def _ensure_loaded():
+    """Load the catalogue once, however many threads ask at the same time.
+
+    The lazy branch used to be five copies of ``if not _translations:
+    load_languages()``, unguarded, with readers on the engine's worker threads and
+    the UI thread. Two of them would both scan ``lang/`` and both publish - the
+    same answer twice over, at the cost of a second pass over every file.
+
+    Both entry points happen to load eagerly today (``run_cli`` and
+    ``App._build_ui`` each call ``set_language`` as one of their first statements,
+    before any worker thread exists), so this is hardening rather than a bug being
+    fixed. That is exactly the argument this project refuses to accept on its own:
+    "nobody reaches it today" is a fact about the callers, not a property of the
+    module.
+
+    The fast path is unchanged - one truthiness test on a global - so ``T()`` pays
+    nothing for this. The lock is taken only when there is nothing loaded yet, and
+    it deliberately does NOT wrap ``load_languages`` itself: that one is public,
+    tests call it directly to reload, and a lock around it would be a lock held
+    across disk I/O for callers who are not racing anybody.
+    """
+    if _translations:
+        return
+    with _load_lock:
+        if not _translations:       # somebody else may have loaded it while we
+            load_languages()        # waited - checked again inside the lock
 
 
 def loaded_language_codes():
     """Codes of the currently loaded languages (loads them on first use)."""
-    if not _translations:
-        load_languages()
+    _ensure_loaded()
     return list(_translations)
 
 
 def available_languages():
     """``[(code, display name), ...]`` with the fallback (English) listed first."""
-    if not _translations:
-        load_languages()
+    _ensure_loaded()
     codes = sorted(_translations, key=lambda c: (c != FALLBACK_LANGUAGE, c))
     return [(c, _language_names.get(c, c)) for c in codes]
 
@@ -117,8 +160,7 @@ def detect_language():
             loc = locale.getlocale()[0] or ""
         except Exception:
             loc = ""
-    if not _translations:
-        load_languages()
+    _ensure_loaded()
     text = str(loc).lower().replace("-", "_")
     code = text.split(".")[0].split("_")[0]
     tag = text
@@ -167,8 +209,7 @@ def _resolve_language():
 def set_language(lang):
     """Switch the UI language; unknown codes fall back to English."""
     global _LANG
-    if not _translations:
-        load_languages()
+    _ensure_loaded()
     lang = str(lang or "").strip().lower()
     _LANG = lang if lang in _translations else FALLBACK_LANGUAGE
 
@@ -216,8 +257,7 @@ def translate(key, lang=None, **fmt):
     """
     if not isinstance(key, str):
         return key
-    if not _translations:
-        load_languages()
+    _ensure_loaded()
     text = _translations.get(lang or _resolve_language(), {}).get(key)
     if text is None:
         text = _translations.get(FALLBACK_LANGUAGE, {}).get(key, key)

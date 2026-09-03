@@ -420,3 +420,88 @@ def test_add_term_keeps_the_comma_escape_of_a_regex():
           f"({split_terms(out)})")
     check("the regex term is intact", split_terms(out)[0] == "re:^a,b$",
           f"({split_terms(out)[0]!r})")
+
+
+# --- a pattern that would never finish on the packet path ---------------------- #
+#
+# `re.compile` answers "does this parse", never "will this ever finish", and the
+# compiled matcher is then called on EVERY packet, on the capture thread, inside
+# `core._lock`. The consequence is not a slow filter: the capture thread stops
+# draining the divert, WinDivert queues the machine's traffic, and the UI thread
+# blocks on the same lock the moment a page asks `App.coverage()`.
+#
+# The reproduction, 2026-09-02: `re:^([1:]+)+x$` against an ordinary IPv6 address
+# did not return in 25 seconds.
+
+
+def test_a_pattern_that_cannot_finish_is_refused_at_parse_time():
+    """The two shapes that really explode in CPython, on the kinds that can see them.
+
+    🔴 NOT `^(a+)+$`. The textbook ReDoS example is 0.001 ms at every input length
+    here, because CPython optimises it away, so a guard written with it would pass
+    while proving nothing. Measured 2026-09-02, milliseconds at 8 / 12 / 16 / 20 /
+    24 characters: `^([1:]+)+x$` is 0.016 / 0.132 / 2.076 / 37.4 / 684, and
+    `^((a*)*)*b$` is 7.6 / 1254.
+    """
+    for text, kind, field in ((r"re:^([1:]+)+x$", KIND_IP, "fields.ip"),
+                              (r"re:^((a*)*)*b$", KIND_PROCESS, "fields.target")):
+        with pytest.raises(ValueError) as caught:
+            parse_matcher(text, kind, field)
+        # A ValueError like every other parse error, because every caller already
+        # handles that one: the CLI turns it into exit code CONFIG, the form marks
+        # the field red, `apply_settings` logs it and disables the target rather
+        # than killing a scenario thread.
+        check(f"{text}: says it is too SLOW, not that it is malformed",
+              "too slow" in str(caught.value).lower()
+              or "za wolne" in str(caught.value).lower(),
+              f"({str(caught.value)[:90]!r})")
+
+
+def test_the_patterns_a_person_would_actually_write_are_still_accepted():
+    """The half that matters more: a refusal breaks somebody's working filter.
+
+    Every one of these is heavier than average and none of them backtracks.
+    Measured 2026-09-02, worst SINGLE search over the whole probe ladder: 0.0046 ms
+    for the alternation, 0.0036 ms for the character class, 0.0049 ms for the
+    nested groups. The budget is 5 ms, so the gap between "fine" and "not fine" is
+    three orders of magnitude - which is why a wall clock is a fair judge here and
+    why this does not flake on a loaded runner.
+    """
+    # The repeat counts carry `\,`, which is the mini-language's escape and what a
+    # user has to type: an unescaped comma is a TERM SEPARATOR, so `{1,40}` splits
+    # the expression in two. Both halves happen to compile, so writing it the
+    # natural way makes this test pass while measuring something else entirely -
+    # found by writing it the natural way first.
+    fine = [
+        (r"re:^chrome|firefox$", KIND_PROCESS),
+        (r"re:" + "|".join(f"proc{n}" for n in range(50)), KIND_PROCESS),
+        (r"re:^[a-zA-Z0-9._\-]{1\,40}\.(exe|dll|sys)$", KIND_PROCESS),
+        (r"re:^(?=.*chrome)(?!.*helper).*$", KIND_PROCESS),
+        (r"re:^((a|b|c)+(d|e)*)+$", KIND_PROCESS),
+        (r"re:^10\.0\.\d+", KIND_IP),
+        (r"re:^([0-9a-f]{1\,4}:){7}[0-9a-f]{1\,4}$", KIND_IP),
+        (r"re:.*", KIND_PROCESS),
+        (r"re:^8(0|443)$", KIND_INT),
+    ]
+    for text, kind in fine:
+        try:
+            parse_matcher(text, kind, "fields.target")
+        except ValueError as exc:
+            check(f"{text[:40]}: accepted", False, f"({exc})")
+        else:
+            check(f"{text[:40]}: accepted", True)
+
+
+def test_refusing_a_slow_pattern_changes_nothing_about_a_good_one():
+    """The regression a speed guard can cause: matching quietly narrowing.
+
+    A check that runs the pattern before handing it over could leave it consumed,
+    recompiled differently, or anchored somewhere it was not. So this asserts the
+    BEHAVIOUR of an accepted regex, not that parsing returned an object.
+    """
+    m = _proc(r"re:^chrome")
+    check("regex still matches what it should", m.matches(1, "chrome.exe"))
+    check("regex still rejects what it should not", not m.matches(1, "notchrome.exe"))
+    ip = _ip(r"re:^10\.0\.")
+    check("ip regex still matches", ip.matches("10.0.0.1"))
+    check("ip regex still misses", not ip.matches("10.1.0.1"))

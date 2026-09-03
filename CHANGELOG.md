@@ -42,6 +42,96 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Two copies of the program running at once could damage your saved files.** Settings, profiles
+  and window state are written to a temporary file and then swapped into place, so a crash halfway
+  through cannot leave half a file. That temporary file was named after the one being saved, so two
+  copies saving at the same moment wrote into one and either could end up with a mixture. The same
+  collision could damage a profile carried over from an older version on first start. Each save now
+  uses a temporary file of its own.
+
+- **Changing settings mid-session could judge a packet by half the old settings and half the new.**
+  Applying settings set about fifteen values one after another, so a packet arriving in between met
+  a mixture: the new loss with the old destination filter, say. The window was tiny, but a scenario
+  step is exactly where somebody is watching, and it meant a run could not be reproduced from its
+  seed. Settings now change as one. Process targeting still follows a moment later, because it
+  means asking the operating system which connections a process owns.
+
+- **When targeting a process, a closed connection could stay targeted after trouble reading the
+  system's connection list.** The tool keeps a short list of connections learned between two scans,
+  and only a scan that worked cleared it. If scans kept failing it held old entries, so once one
+  succeeded, a connection that had closed meanwhile could still count as the target's - and on
+  Windows its port may belong to another program by then. The list is now cleared at the start of
+  every scan.
+
+- **A scenario could apply one more step after it was stopped.** Stopping a session or a scenario
+  asked the timeline to end and moved on without waiting, so it could still change the settings
+  once more - which showed up as a scenario line in the log after the session had already
+  stopped. Stopping now waits for it, and the wait is too short to notice.
+
+- **A crash while the program was closing could leave no report at all.** The part that records
+  a crash with no error message - the kind that just makes the program vanish - was switched off
+  a moment before the network capture was released, which is one of the places such a crash can
+  happen. It is now switched off last.
+
+- **A long session could fill the crash log with copies of one fault.** Repeated faults are
+  counted rather than written out again, but that stopped working once the program had seen a
+  great many different ones: from then on, anything new was written to the log on every single
+  occurrence. It now keeps counting the faults that are actually happening and forgets the
+  oldest ones instead.
+
+- **Saving could close the program instead of reporting a problem.** A value that cannot be
+  written to a settings or profile file used to escape as a crash rather than an error message.
+  It is now reported the same way every other bad save already was.
+
+- **Exporting connections to CSV froze the window.** On a big table the export could take
+  seconds, and during those seconds nothing responded - including STOP. It now runs in the
+  background and tells you in the log when the file is written. A second click while one export
+  is still running is refused with a message instead of two exports fighting over the same file.
+
+- **Searching the connection table is about twice as fast.** With something typed in the search
+  box the table was filtered twice on every refresh, once for the rows and once for the totals
+  under them. Now it is filtered once. With an empty box nothing changes.
+
+- **The connection table could quietly stop updating.** If a refresh failed in an unusual way,
+  the table kept showing what it had and never rebuilt again for the rest of the session, with
+  no sign that anything was wrong. It now recovers on the next refresh.
+
+- **Switching language left timers running against windows that no longer existed.** Changing
+  the language rebuilds the whole interface. The parts being replaced were never told, so the
+  connection table's refresh, the chart redraw and the field search were still scheduled against
+  widgets that had just been thrown away. They are now put away first.
+
+- **One glitch could bury you in error windows.** When something in the interface failed
+  repeatedly, and some things fail on every mouse move, each occurrence opened its own error
+  window to close by hand. You now get one window per problem. Repeats still go to the log and
+  the crash report, which is where the count of them lives.
+
+- **A failed start or stop could kill the START button for good.** If the work behind the button
+  ended in an unusual way, the program stayed convinced a start was still in progress, and START
+  and STOP did nothing for the rest of the session - possibly with the driver still loaded. The
+  outcome is now always reported back, so the button always comes back.
+
+- **A frozen capture could keep a session looking healthy forever.** The program already stops
+  itself and hands the network back when the thread reading packets dies. A thread that is still
+  alive but no longer doing anything looked fine to it, even though the effect on you is the
+  same: traffic piles up in the driver, the machine loses its connection and the window stops
+  responding. That state is now detected too, and it ends the session and releases the driver
+  the way any other failure does.
+
+- **A filter expression could freeze the whole program.** A regular expression in a target,
+  address or port field runs on every packet. Some perfectly valid patterns take practically
+  forever on ordinary input, and one of those stopped the capture: the machine quietly lost its
+  network and the window stopped responding, with no way out but Task Manager. The tool now tries
+  a pattern before accepting it, and refuses one that is too slow with a message saying why.
+  Patterns people actually write are unaffected.
+
+- **`--interval nan` ran forever at full CPU and printed nothing.** The report interval was
+  checked only for being above zero, so `nan` and `inf` got through. With `nan` the run spun on a
+  full processor core, printed no reports, and without `--duration` never ended. With `inf`, or a
+  huge value like `1e18`, the session ended as an internal failure. The interval must now be
+  greater than 0 and at most 86 400 seconds, the same ceiling `--duration` has. A longer one
+  could never report even once, so it is refused with a clear message.
+
 - **`--doctor` now tells you whether your copy can be tampered with.** The program asks for
   administrator rights and then loads its network driver from its own folder, so a folder
   anyone can write to without those rights is worth knowing about. Run `--doctor` without

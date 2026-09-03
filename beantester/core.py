@@ -10,9 +10,11 @@
 import random
 import threading
 import time
+from contextlib import contextmanager
 from typing import List, NamedTuple, Optional
 
-from .matchers import KIND_INT, KIND_IP, PORT_BOUNDS, parse_matcher, port_expression
+from .matchers import (KIND_INT, KIND_IP, PORT_BOUNDS, Matcher, parse_matcher,
+                       port_expression)
 from .utils import clamp01, is_lan_ip, is_local_ip
 
 
@@ -276,11 +278,56 @@ class _FlowTable:
         return key in self._new or key in self._old
 
 
+def compile_endpoint(ip, port):
+    """Compile an (ip, port) filter pair into matchers. NO LOCK IS HELD HERE.
+
+    One definition for both endpoint pairs the core carries - the destination
+    (:meth:`BeanCore.set_dest`) and the block list (:meth:`BeanCore.set_block`)
+    compile identically, and a second copy would drift at the first edit.
+
+    🔴 It is a MODULE-LEVEL function, and that is the point rather than tidiness.
+    Compiling an expression is the one part of applying settings that can take
+    real time - a pathological ``re:`` pattern is why ``matchers`` grew a time
+    budget - and it must never happen under ``BeanCore._lock``, because the
+    CAPTURE THREAD waits for whatever that lock holds (convention 20). Callers
+    that apply several settings at once (``settings.apply_settings``) call this
+    FIRST and hand the matchers in, so the batched apply holds the lock over
+    assignments only. MEASURED on this machine 2026-09-03: two benign expressions
+    cost 19.5 us median and 84 us at the worst, against 5.3 us for every
+    assignment in an apply put together - four times the whole batch, for input
+    that is not even trying.
+    """
+    # `port_expression` normalises a port field that may still hold a legacy
+    # NUMBER, and a compiled matcher is not one - passing it through would
+    # stringify it and hand `parse_matcher` text to compile all over again. Caught
+    # by test_an_apply_holds_the_core_lock_over_assignments_only, which counts
+    # real compilations rather than calls: without this line the batched apply
+    # recompiled both port expressions under the lock, which is precisely what
+    # hoisting the compilation out was for.
+    return (parse_matcher(ip, KIND_IP, "fields.ip"),
+            parse_matcher(port if isinstance(port, Matcher) else port_expression(port),
+                          KIND_INT, "fields.port", bounds=PORT_BOUNDS))
+
+
 class BeanCore:
     """Decide what to do with a single packet. No network dependency."""
 
     def __init__(self):
-        self._lock = threading.Lock()
+        # REENTRANT, so a caller applying a whole settings dict can hold the lock
+        # across every setter and no packet is judged by a mixture of the old
+        # configuration and the new one (see `batch`). Every setter below takes
+        # this lock on its own, so a batch that holds it would deadlock a plain
+        # Lock - which is the only reason this is an RLock.
+        #
+        # It is taken on EVERY packet in decide(), so the surcharge was measured
+        # rather than assumed, on every interpreter this project supports
+        # (2026-09-03, `with` statement, paired in one process): 3.11 0.99x,
+        # 3.12 1.02x, 3.13 1.15-1.19x (+16 to +19 ns, the worst), 3.14 1.03-1.06x.
+        # Against one decide() call at 1826 ns that is 0.3% on the interpreter CI
+        # runs and 1.0% on the worst one. The batch also REPLACES twelve separate
+        # acquire/release pairs with one, so the total time this lock is held
+        # during an apply goes down, not up.
+        self._lock = threading.RLock()
         # impairments
         self.loss = 0.0
         # Burst loss: the average length, in PACKETS, of a run of lost packets.
@@ -394,6 +441,38 @@ class BeanCore:
         if bps <= 0 and kbps > 0:
             bps = 1
         return max(0, bps)
+
+    @contextmanager
+    def batch(self):
+        """Hold the lock across several setters, so a packet sees ONE of them.
+
+        ``settings.apply_settings`` calls fourteen setters. Each took and released
+        this lock on its own, so a packet decided between two of them was judged
+        by a MIXTURE of the old configuration and the new: new loss with the old
+        destination gate, a new rate limit with the old schedule. It matters in
+        two places in particular - a scenario step, where the mixed window falls
+        exactly where the tester is looking, and reproducibility under ``--seed``,
+        where the mixture is not in the seed.
+
+        What it costs, and it is not what it looks like: the batch replaces twelve
+        separate acquire/release pairs with one, so the TOTAL time the lock is
+        held during an apply goes down. MEASURED 2026-09-03: 5.3 us median for
+        every assignment in an apply together (p99 15.9, max 25.8), against ~1.1 us
+        of pure lock overhead saved. For scale, ``portmap.refresh`` holds its own
+        lock ~18 us and that is the figure this project already accepted for the
+        capture thread.
+
+        🔴 **Nothing that can take real time may run inside this.** Compiling an
+        expression is the obvious one (:func:`compile_endpoint` exists so callers
+        can do it first) and resolving a process target is the other - that walks
+        the socket table, which this project has measured at 1.7 s cold. So
+        ``apply_settings`` leaves ``apply_targeting`` OUTSIDE the batch, and the
+        atomicity this offers is over the impairment parameters and the gates, not
+        over process targeting. A scenario step may legally carry ``target``, so
+        that boundary is real and is stated here rather than glossed.
+        """
+        with self._lock:
+            yield self
 
     def set_params(self, loss_pct, corrupt_pct, dup_pct,
                    latency_ms, jitter_ms, down_kbps, up_kbps):
@@ -512,10 +591,13 @@ class BeanCore:
 
         Raises a translated ``ValueError`` on a malformed expression; callers
         (GUI, CLI, ``apply_settings``) validate before applying.
+
+        ``ip``/``port`` may also be matchers that are already compiled, which is
+        how a batched apply keeps the compilation out from under the lock -
+        ``parse_matcher`` returns a ``Matcher`` unchanged, so this signature did
+        not have to grow a second form. See :func:`compile_endpoint`.
         """
-        ip_matcher = parse_matcher(ip, KIND_IP, "fields.ip")
-        port_matcher = parse_matcher(port_expression(port), KIND_INT, "fields.port",
-                                     bounds=PORT_BOUNDS)
+        ip_matcher, port_matcher = compile_endpoint(ip, port)
         with self._lock:
             self.dst_active = bool(active)
             # raw text is kept for summaries/reports; the matchers do the work
@@ -623,10 +705,10 @@ class BeanCore:
         part, so ``port='443'`` with no IP blocks 443 to any address rather than
         blocking everything. Raises a translated ``ValueError`` on a malformed
         expression; callers (GUI, CLI, ``apply_settings``) validate before applying.
+
+        Takes already-compiled matchers too, for the same reason as ``set_dest``.
         """
-        ip_matcher = parse_matcher(ip, KIND_IP, "fields.ip")
-        port_matcher = parse_matcher(port_expression(port), KIND_INT, "fields.port",
-                                     bounds=PORT_BOUNDS)
+        ip_matcher, port_matcher = compile_endpoint(ip, port)
         with self._lock:
             self.block_active = bool(active)
             self.block_ip = ip_matcher.raw

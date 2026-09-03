@@ -5,6 +5,7 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 """
 import os
 import string
+import time
 
 from beantester import BeanEngine
 from fakes import LANG_DIR, LANGS, check
@@ -251,6 +252,60 @@ def test_lang_discovery_and_meta():
     finally:
         n.load_languages()            # restore the real language files
         n.set_language("pl")
+
+
+def test_a_cold_catalogue_is_loaded_once_however_many_threads_ask():
+    """The lazy load used to be an unguarded check-then-act, in five places.
+
+    Readers live on the engine's worker threads and on the UI thread, so two of
+    them could both find the catalogue empty and both scan ``lang/`` - the same
+    answer produced twice, at the cost of a second pass over every file.
+
+    Both entry points happen to load eagerly today (``run_cli`` and
+    ``App._build_ui`` call ``set_language`` among their first statements, before
+    any worker exists), which is a fact about the CALLERS and not a property of
+    this module. This pins the property.
+    """
+    import threading
+
+    from beantester import i18n
+
+    saved = (i18n._translations, i18n._language_names, i18n._LANG)
+    loads, seen, ready = [], [], threading.Barrier(6)
+    real_load = i18n.load_languages
+
+    def slow_load(directory=None):
+        loads.append(1)
+        time.sleep(0.05)            # widen the window a racing reader would use
+        return real_load(directory)
+
+    i18n.load_languages = slow_load
+    try:
+        i18n._translations, i18n._language_names = {}, {}       # a cold module
+        errors = []
+
+        def reader():
+            ready.wait(timeout=5)
+            try:
+                seen.append(i18n.T("app.name"))
+            except Exception as exc:                # noqa: BLE001 - reported below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=reader) for _ in range(5)]
+        for t in threads:
+            t.start()
+        ready.wait(timeout=5)
+        for t in threads:
+            t.join(timeout=5)
+
+        check("no reader failed on a half-loaded catalogue", not errors, f"({errors})")
+        check("the catalogue was scanned once, not once per thread",
+              len(loads) == 1, f"({len(loads)} loads for {len(threads)} readers)")
+        check("and every reader got the same answer",
+              len(set(seen)) == 1 and seen[0], f"({set(seen)})")
+    finally:
+        i18n.load_languages = real_load
+        i18n._translations, i18n._language_names, i18n._LANG = saved
 
 
 def test_fallback_chain():

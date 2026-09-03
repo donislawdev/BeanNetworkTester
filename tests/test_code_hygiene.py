@@ -133,6 +133,20 @@ def test_the_decision_core_never_swallows_an_exception_silently():
 # against. Measured 2026-08-21: no name in the package is used only from a rig
 # today, so this costs nothing now and stops costing something later.
 USAGE_TREES = ("beantester", "tests", "tools", "lang", "scenarios")
+# 🔴 ...but a mention from the TEST tree is not LIFE. The trees above decide what
+# gets READ. This decides what counts as a consumer, and they are different
+# questions. A definition whose only callers are its own tests is dead code with a
+# test suite attached: it passes, it reads as maintained, and nothing in the
+# program would notice if it vanished.
+#
+# MEASURED, and it is why this line exists: `views.SearchIndex` was ~90 lines of
+# search cache with five tests, a docstring pricing its benefit, and ZERO
+# consumers - and this guard called it alive for months because `test_views.py`
+# named it. Removing the tests from the walk instead would blind the scan to the
+# GUI tests, which are Python source inside `run_gui("""...""")` strings and are
+# the only place several live names appear (see the block below). So the mentions
+# are still collected, and marked.
+TEST_TREES = ("tests/",)
 USAGE_FILES = ("bean_network_tester.py", "smoke_gui.py", "build.py",
                "BeanNetworkTester.spec")
 USAGE_EXTS = (".py", ".json", ".spec")
@@ -172,6 +186,38 @@ KNOWN_UNUSED = {
     "get_field": "an OVERRIDE of string.Formatter.get_field - the base class calls "
                  "it, so no line in this package ever names it. Deleting it would "
                  "restore attribute access inside translation templates",
+
+    # The nine this guard could not see until TEST_TREES stopped counting as life
+    # (2026-09-02). Each one is here with what it actually is, not with a shrug:
+    # the point of this dict is that an unused name carries a REASON, and "nobody
+    # has decided yet" is a reason as long as it says so. Tracked as B-16.
+    "_settle_transition": "EXISTS for the tests and says so in its own docstring: "
+                          "the live UI drains _ui_queue from _tick and never needs "
+                          "it, so a headless test can drive the async start/stop "
+                          "deterministically. Deleting it deletes those tests",
+    "reset_default_table": "the same, and its docstring is one word long: (tests). "
+                           "Drops the shared port table so one test cannot inherit "
+                           "another's",
+    "install_tk": "SUPERSEDED by App._on_ui_exception, which does strictly more "
+                  "(records, logs, and shows one dialog per fingerprint) and owns "
+                  "report_callback_exception. Not deleted yet for one reason: its "
+                  "two tests are the ONLY guard on the source=\"tk-callback\" tag "
+                  "reaching the file, and the live path has none. The tag needs a "
+                  "test on App._on_ui_exception before this can go - B-16",
+    "recent": "reads the crash log back 'for the UI', and there is no crash panel. "
+              "No consumer, no decision taken - B-16",
+    "set_enabled": "the global off switch for crash recording. Nothing turns it "
+                   "off. No consumer, no decision taken - B-16",
+    "driver_used": "an accessor for _DRIVER_USED[0], which driver.py reads "
+                   "directly at the one place that cares. Redundant wrapper - B-16",
+    "notices_text": "reads THIRD-PARTY-NOTICES.md. The About window shows the "
+                    "about.third_party LABEL and never the file. Either the window "
+                    "is missing something or this is - B-16",
+    "show_info": "the third of show_error / show_warning / show_info. The family is "
+                 "complete and only two members are called. Deleting it is a "
+                 "decision about that symmetry - B-16",
+    "time_left": "seconds until the deadline. Nothing asks. No consumer, no "
+                 "decision taken - B-16",
 }
 
 
@@ -245,8 +291,9 @@ def _unreferenced():
             if not found:
                 continue
             site = enclosing(rel, number) if in_package else None
+            outside = "TESTS" if rel.startswith(TEST_TREES) else "EXTERNAL"
             for word in found:
-                mentions.setdefault(word, set()).add(site or "EXTERNAL")
+                mentions.setdefault(word, set()).add(site or outside)
 
     dead = set()
     while True:
@@ -259,13 +306,38 @@ def _unreferenced():
                 continue
             # A mention from a dead site is not life, and neither is a function
             # naming itself - recursion keeps nothing alive.
+            # "TESTS" is deliberately absent from this list: a test is not a
+            # consumer. A definition that genuinely exists FOR the tests says so in
+            # KNOWN_UNUSED, where the reason is written down and read.
             living = [s for s in mentions.get(name, ())
-                      if s == "EXTERNAL" or (s not in dead and s != key)]
+                      if s == "EXTERNAL"
+                      or (s != "TESTS" and s not in dead and s != key)]
             if not living:
                 dead.add(key)
                 grew = True
         if not grew:
             return sorted(dead), files, len(definitions)
+
+
+def test_a_definition_only_its_own_tests_name_is_not_counted_as_alive():
+    """The guard for the guard: without this, TEST_TREES could be reverted silently.
+
+    Filling KNOWN_UNUSED makes the scan green again, so the test above passes just
+    as happily whether a test mention counts as life or not - and the whole point of
+    that distinction is that `views.SearchIndex` was ~90 lines with five tests, a
+    docstring pricing its benefit and no consumers, and this file called it alive
+    for months.
+
+    `_settle_transition` is the probe because it is the clearest case in the tree:
+    its own docstring says the live UI never needs it and it exists so a headless
+    test can drive the async start/stop. If it is ever called from the package, this
+    goes red and says so, which is the right kind of red.
+    """
+    dead, _, _ = _unreferenced()
+    names = {name for name, _rel, _line in dead}
+    check("a definition whose only callers are tests is reported unused",
+          "_settle_transition" in names,
+          "(a test mention is being counted as a consumer again)")
 
 
 def test_no_definition_in_the_package_is_unreferenced():

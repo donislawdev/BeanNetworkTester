@@ -16,6 +16,7 @@ already failing, so:
 
 This tests all four.
 """
+import faulthandler
 import json
 import os
 import sys
@@ -248,6 +249,23 @@ def test_once_records_the_first_occurrence_only(isolated):
 
 
 # -- 6) it is bounded ---------------------------------------------------------- #
+def _distinct_fault(i):
+    """A fault with a fingerprint of its OWN: raised from its own generated line.
+
+    The fingerprint is the exception type plus the top frames, so a loop raising
+    the same ValueError over and over produces one record however many times it
+    runs. Loading the table needs faults that differ, and this is the cheapest way
+    to make them differ the way real ones do.
+    """
+    namespace = {}
+    exec(f"def f{i}():\n    raise ValueError('distinct fault {i}')", namespace)
+    try:
+        namespace[f"f{i}"]()
+    except ValueError as exc:
+        return exc
+    return None
+
+
 def test_the_in_memory_table_is_bounded(isolated):
     """A program with thousands of DISTINCT faults must not be memory-bombed by the
     thing that is supposed to be diagnosing it.
@@ -257,18 +275,76 @@ def test_the_in_memory_table_is_bounded(isolated):
     each gets its own fingerprint - which is what actually loads the table.
     """
     for i in range(crashlog.MAX_RECORDS + 200):
-        namespace = {}
-        exec(f"def f{i}():\n    raise ValueError('distinct fault {i}')", namespace)
-        try:
-            namespace[f"f{i}"]()
-        except ValueError as exc:
-            crashlog.record(exc, source="test")
+        crashlog.record(_distinct_fault(i), source="test")
 
     prints = {e["fingerprint"] for e in _entries(isolated)}
     assert len(prints) > 100, f"the faults were not distinct ({len(prints)})"
     assert len(crashlog._seen) <= crashlog.MAX_RECORDS, (
         f"the crash table grew to {len(crashlog._seen)} "
         f"(ceiling {crashlog.MAX_RECORDS})")
+
+
+def test_a_repeating_fault_is_still_deduplicated_when_the_table_is_full(isolated,
+                                                                       monkeypatch):
+    """The ceiling used to be a cliff, and it fell exactly where it hurts.
+
+    Past MAX_RECORDS the table REFUSED new fingerprints, so a fault that started
+    after the table filled never got a slot - every occurrence looked new, built a
+    full context and wrote to disk again. MEASURED before the fix, the same
+    repeating fault: 137 us and zero writes with a slot, 1926 us and a write per
+    occurrence without one. The de-duplication this module is built around
+    switched itself off for whatever broke last.
+
+    MAX_RECORDS is lowered here rather than filled for real: the true 2000 takes
+    about three seconds to load, and the behaviour under test is the same at four.
+    """
+    monkeypatch.setattr(crashlog, "MAX_RECORDS", 4)
+    for i in range(4):
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    late = _boom("a fault that started after the table was full")
+    crashlog.record(late, source="late")            # one record, one disk write
+    written = len(_entries(isolated))
+    for _ in range(20):
+        crashlog.record(late, source="late")
+
+    assert len(_entries(isolated)) == written, (
+        "a repeating fault wrote to disk again on every occurrence once the "
+        f"table was full ({len(_entries(isolated)) - written} extra writes)")
+    assert len(crashlog._seen) <= 4, (
+        f"the table grew past its own ceiling ({len(crashlog._seen)})")
+    busiest = crashlog.recent(1)[0]
+    assert busiest["count"] == 21, (
+        f"the repeating fault lost its counter (counted {busiest['count']} of 21)")
+
+
+def test_the_table_makes_room_by_dropping_the_coldest_fault_not_the_busiest(
+        isolated, monkeypatch):
+    """Which end the table drops is the whole design, so it gets its own guard.
+
+    A bounded table that evicts by ARRIVAL would throw out the fault that is
+    firing right now to make room for four one-off ones - and the fault firing
+    right now is the one whose de-duplication is worth having. Every occurrence
+    moves its record to the fresh end, so eviction always takes the fault nobody
+    has seen for longest.
+    """
+    monkeypatch.setattr(crashlog, "MAX_RECORDS", 4)
+    for i in range(4):
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    busy = _boom("the fault that keeps firing")
+    crashlog.record(busy, source="busy")
+    for i in range(100, 103):                       # newcomers arrive
+        crashlog.record(_distinct_fault(i), source="fill")
+    crashlog.record(busy, source="busy")            # it fires again: freshest now
+    written = len(_entries(isolated))
+    for i in range(200, 203):                       # three more push it back
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    crashlog.record(busy, source="busy")
+    assert len(_entries(isolated)) == written + 3, (
+        "the busiest fault was evicted by faults seen once each, so it wrote to "
+        f"disk again ({len(_entries(isolated)) - written} writes, expected 3)")
 
 
 def test_disabled_records_nothing(isolated):
@@ -395,6 +471,45 @@ def test_cleanup_removes_the_empty_native_file_and_dir(isolated):
     assert not os.path.isdir(directory), "the now-empty crashes dir was left behind"
 
 
+def test_the_diverts_are_closed_while_the_native_handler_is_still_armed(isolated):
+    """The order of two atexit handlers, and the reason the whole module exists.
+
+    `atexit` is LIFO. `engine.py` registers `_stop_live_engines` at IMPORT and
+    `install()` registers `_cleanup_native` later, so the cleanup runs FIRST - and
+    it used to disable faulthandler while a ctypes call into the WinDivert kernel
+    driver was still to come. A segfault inside `divert.close()` at exit would then
+    have left nothing at all: no Python traceback, because there is none for a hard
+    crash, and no native report, because the handler that writes one was already
+    off.
+
+    A stand-in engine in `_LIVE_ENGINES` answers the question directly, and it is
+    the only half that can be answered without a real segfault: was the handler
+    still armed at the moment the divert was closed?
+    """
+    from beantester import engine
+
+    armed = []
+
+    class StandInEngine:
+        """Holds no divert; only reports what the handler state was when asked."""
+
+        def stop(self, reason=""):
+            armed.append(faulthandler.is_enabled())
+
+    held = StandInEngine()                  # a strong reference: _LIVE_ENGINES is weak
+    engine._LIVE_ENGINES.add(held)
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        crashlog._cleanup_native()
+    finally:
+        engine._LIVE_ENGINES.discard(held)
+
+    assert armed == [True], (
+        "the divert was closed with the native crash handler already off, so a "
+        f"hard crash in it would have gone unrecorded (saw {armed})")
+
+
 def test_cleanup_keeps_a_non_empty_native_file(isolated):
     """A run that actually segfaulted wrote to the file - that must be preserved."""
     directory = crashlog.crash_dir()
@@ -490,15 +605,87 @@ def test_a_breadcrumb_that_cannot_be_serialised_is_swallowed(isolated):
     """The state comes from the UI. A value json cannot write must not take the
     process down ON THE WAY TO DESCRIBING A CRASH - and must not leave the half
     written temp file behind either, because a stray .tmp keeps the directory from
-    ever being cleaned up again."""
+    ever being cleaned up again.
+
+    The leftover is looked for by SCANNING, not by name: the temp file is unique
+    per writer now (``paths.temp_beside``), so a check for one known name would
+    pass without looking at anything - green, and blind to the very leftover it
+    was written to catch.
+    """
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
     try:
         assert not crashlog.breadcrumb(page=object(), running=False, windows=[])
-        tmp = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME + ".tmp")
-        assert not os.path.exists(tmp), "a failed write left its temp file behind"
+        left = [n for n in os.listdir(crashlog.crash_dir()) if n.endswith(".tmp")]
+        assert not left, f"a failed write left its temp file behind: {left}"
     finally:
         crashlog._cleanup_native()
+
+
+def test_two_breadcrumb_writers_do_not_share_one_temp_file(isolated, monkeypatch):
+    """Two copies of the GUI both leave a breadcrumb, through one temp file.
+
+    Worse odds than any other writer in the program: this one is written from the
+    TICK, so "both at the same moment" is not a corner case, it is 1.4 chances a
+    second for as long as two windows are open. The interleaving is forced at the
+    instant that matters (see the same test in test_jsonfile.py for why it is
+    forced rather than raced).
+    """
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    real_replace = os.replace
+    second = []
+
+    def let_the_other_writer_in(src, dst):
+        if not second:                          # guard first: the second writer
+            second.append("did not finish")     # publishes through here as well
+            second[0] = crashlog.breadcrumb(page="second", running=False, windows=[])
+        return real_replace(src, dst)
+
+    try:
+        monkeypatch.setattr(os, "replace", let_the_other_writer_in)
+        first = crashlog.breadcrumb(page="first", running=True, windows=[])
+        # NOT monkeypatch.undo(): one monkeypatch object serves the whole test,
+        # `isolated` included, so undoing here would also put `user_data_dir` back
+        # and point the cleanup below at the user's REAL crashes folder. Teardown
+        # restores os.replace anyway, and the patch is a pass-through from here.
+
+        assert second == [True], f"the second writer failed ({second})"
+        assert first is True, ("the first writer failed - it tried to publish a temp "
+                               "file the second had already taken")
+        with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
+                  encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["page"] in ("first", "second"), f"a mix of two writers: {data}"
+        left = [n for n in os.listdir(crashlog.crash_dir()) if n.endswith(".tmp")]
+        assert not left, f"a temp breadcrumb survived both writers: {left}"
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit(isolated):
+    """The leftover a unique name cannot heal on its own.
+
+    The old ``breadcrumb.json.tmp`` was reused by the next write, so an orphan
+    fixed itself. A unique one does not, and an orphan HERE does more than sit
+    there: ``crashes/`` is removed only when it is EMPTY, so a single stray temp
+    file would make every healthy run leave a folder behind for ever. Both name
+    shapes are swept - the one this version writes and the fixed one a version
+    before it could have left.
+    """
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    directory = crashlog.crash_dir()
+    for name in (crashlog.BREADCRUMB_NAME + ".tmp",             # pre-2026-09-03
+                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp"):     # what temp_beside makes
+        with open(os.path.join(directory, name), "w", encoding="utf-8") as f:
+            f.write("{half writ")
+
+    crashlog._cleanup_native()
+
+    assert not os.path.isdir(directory), (
+        "a stray temp breadcrumb kept the folder alive: "
+        f"{sorted(os.listdir(directory))}")
 
 
 def test_the_running_gui_actually_leaves_one(isolated):

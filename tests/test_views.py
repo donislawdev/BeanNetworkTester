@@ -10,10 +10,10 @@ that carry real risk:
   mis-order the connection table on exactly the large tables the optimisation
   exists for.
 * the **derived columns** (kb / dur / idle) computed inside the sort key.
-* ``SearchIndex`` - the per-keystroke search cache, whose correctness hinges on
-  rebuilding when a row's stamp changes and on never mutating the rows it caches.
+* the **split** between filtering, sorting and totalling: one pass has to answer
+  what two used to, without changing a row or an order.
 """
-from beantester.views import (DERIVED, SearchIndex, avg_packet_bytes, connection_proc,
+from beantester.views import (DERIVED, avg_packet_bytes, connection_proc,
                               filter_sort_connections, traffic_totals)
 from fakes import check
 
@@ -231,66 +231,6 @@ def test_connection_proc_falls_back_to_proc_map():
                           {40001: "chrome.exe"}) == "firefox.exe")
 
 
-# --- SearchIndex ------------------------------------------------------------- #
-def test_search_index_builds_the_blob_once_per_stamp():
-    calls = {"n": 0}
-
-    def blob_of(item):
-        calls["n"] += 1
-        return item["text"]
-
-    idx = SearchIndex(blob_of, key_of=lambda it: it["id"])
-    item = {"id": 1, "text": "Chrome HTTPS 443", "proc": None}
-
-    idx.blob(item, stamp=item["proc"])
-    idx.blob(item, stamp=item["proc"])          # same stamp -> cache hit
-    check("blob is built once while the stamp is unchanged", calls["n"] == 1,
-          f"(built {calls['n']} times)")
-
-    item["proc"] = "chrome.exe"                  # the process name arrived later
-    idx.blob(item, stamp=item["proc"])          # stamp changed -> rebuild
-    check("blob is rebuilt when the stamp changes", calls["n"] == 2,
-          f"(built {calls['n']} times)")
-
-
-def test_search_index_filter_is_case_insensitive_and_empty_query_returns_all():
-    items = [{"id": i, "text": t} for i, t in enumerate(
-        ["Chrome 443", "firefox 80", "curl 53"])]
-    idx = SearchIndex(lambda it: it["text"], key_of=lambda it: it["id"])
-    hits = idx.filter(items, "CHROME")
-    check("filter is case-insensitive", [h["id"] for h in hits] == [0], f"({hits})")
-    check("empty query returns every item", len(idx.filter(items, "")) == 3)
-
-
-def test_search_index_filter_uses_the_stamp_when_given():
-    items = [{"id": 1, "text": "port 443", "proc": None}]
-    idx = SearchIndex(lambda it: f"{it['text']} {it['proc'] or ''}",
-                      key_of=lambda it: it["id"])
-    # First pass with no proc: the process name is not searchable yet.
-    check("not found before the proc name is known",
-          idx.filter(items, "chrome", stamp_of=lambda it: it["proc"]) == [])
-    items[0]["proc"] = "chrome.exe"
-    check("found once the stamp (proc) updates and the blob is rebuilt",
-          len(idx.filter(items, "chrome", stamp_of=lambda it: it["proc"])) == 1)
-
-
-def test_search_index_clears_when_it_exceeds_its_limit():
-    idx = SearchIndex(lambda it: it["t"], key_of=lambda it: it["id"], limit=2)
-    for i in range(2):
-        idx.blob({"id": i, "t": f"row{i}"})
-    check("cache filled to the limit", len(idx._cache) == 2, f"({len(idx._cache)})")
-    idx.blob({"id": 99, "t": "overflow"})       # exceeding the limit clears first
-    check("cache is bounded: it clears instead of growing past the limit",
-          len(idx._cache) == 1, f"({len(idx._cache)})")
-
-
-def test_search_index_clear_empties_the_cache():
-    idx = SearchIndex(lambda it: it["t"], key_of=lambda it: it["id"])
-    idx.blob({"id": 1, "t": "x"})
-    idx.clear()
-    check("clear() empties the cache", idx._cache == {})
-
-
 # --- field-qualified search --------------------------------------------------- #
 def _search_rows():
     return [
@@ -400,3 +340,112 @@ def test_the_query_is_compiled_once_not_per_row():
     tests = compile_query("proc:chrome port:443 dropped:>0")
     check("one predicate per term", len(tests) == 3, f"({len(tests)})")
     check("an empty query compiles to nothing to do", compile_query("   ") == [])
+
+
+def test_a_pattern_that_cannot_finish_leaves_the_table_search_answering_normally():
+    """The SECOND door onto the same regex, and it is not the same failure.
+
+    The session filter puts a matcher on the capture thread inside ``core._lock``,
+    so a pattern that backtracks catastrophically there takes the machine's network
+    and the window with it. Here the matcher runs on the model worker, so the cost
+    is milder and quieter: the table stops refreshing, ``AsyncModel.busy()`` stays
+    True and the worker leaks. Both doors go through ``parse_matcher``, so both are
+    closed by the same guard - this pins that the search box actually inherits it,
+    rather than assuming a shared function is a shared behaviour.
+
+    "Answering normally" means the term simply matches nothing, which is what
+    ``compile_query`` already does with every value it cannot use: the box is typed
+    into character by character, so half of a pattern must never throw or blank the
+    table.
+    """
+    import time
+
+    from beantester.views import compile_query
+
+    # The process name is one the pattern MATCHES. A row it would miss anyway
+    # cannot tell "the term was refused" from "the term ran and did not match",
+    # and the first draft of this test used one - it passed with the guard removed.
+    row = {"proc": "aaab", "pid": 1, "proto": "TCP", "dir": "out",
+           "remote_ip": "1.1.1.1", "remote_port": 443, "local_port": 5000}
+    started = time.perf_counter()
+    tests = compile_query(r"proc:re:^((a*)*)*b$")
+    elapsed = time.perf_counter() - started
+
+    check("the search box does not raise on a pattern it refuses",
+          isinstance(tests, list) and len(tests) == 1, f"({tests!r})")
+    check("the refused term matches nothing, even a row it would have hit",
+          not all(t(row, None) for t in tests))
+    # Generous on purpose: the point is "bounded", not a stopwatch reading. The
+    # same call without the guard did not return in 25 seconds (measured
+    # 2026-09-02). With the guard the refusal costs ~83 ms on this machine.
+    check("and it comes back quickly enough to keep the worker free",
+          elapsed < 5.0, f"({elapsed * 1000:.0f} ms)")
+
+
+# --- one filtering pass, not two ---------------------------------------------- #
+
+
+def test_the_split_halves_agree_with_the_pair_they_replace():
+    """`filter_connections` + `sort_connections` + `sum_traffic` == the old pair.
+
+    The model rebuild used to filter the whole table twice - once inside
+    `filter_sort_connections` and again inside `traffic_totals`, compiling the query
+    a second time on the way. The split lets one pass answer both, and the ONLY
+    thing that makes it safe is that it returns the same rows in the same order and
+    the same totals. So that is what is asserted, rather than the number of calls.
+    """
+    from beantester.views import (filter_connections, filter_sort_connections,
+                                  sort_connections, sum_traffic, traffic_totals)
+
+    conns = []
+    for i in range(40):
+        conns.append({"proc": "chrome.exe" if i % 2 else "firefox.exe",
+                      "pid": 100 + i, "proto": "TCP", "dir": "out",
+                      "remote_ip": f"10.0.0.{i}", "remote_port": 443 if i % 3 else 80,
+                      "local_port": 50000 + i, "packets": i, "bytes": 1000 * i,
+                      "sent": 900 * i, "sent_in": 500 * i, "sent_out": 400 * i,
+                      "first": 0.0, "last": float(i)})
+
+    for query in ("", "chrome", "port:443", "nothingmatchesthis"):
+        for col, rev, limit in (("bytes", True, 0), ("packets", False, 0),
+                                ("proc", True, 5), ("bytes", True, 5)):
+            old_rows = filter_sort_connections(conns, query, col, rev,
+                                               now=99.0, proc_map=None, limit=limit)
+            old_totals = traffic_totals(conns, query, None)
+
+            kept = filter_connections(conns, query, None)
+            new_totals = sum_traffic(kept)
+            new_rows = sort_connections(kept, col, rev, now=99.0, limit=limit)
+
+            where = f"({query!r}, {col}, reverse={rev}, limit={limit})"
+            assert new_rows == old_rows, f"rows differ {where}"
+            assert new_totals == old_totals, f"totals differ {where}"
+
+
+def test_summing_before_the_sort_is_why_the_split_is_worth_making():
+    """`sort_connections` may reorder in place, so the sum has to come first.
+
+    Not a style rule - a measurement. Walking 200 000 dicts in sorted order instead
+    of allocation order costs enough to turn the whole change NEGATIVE on an empty
+    query (0.85x, measured 2026-09-02 with internal_tools/bench_conn_model.py).
+    Summing first, 1.04-1.14x, and 1.83-2.00x with something typed in the box. This
+    pins the property that makes that ordering legal: the sum does not depend on the
+    order, and the rows are the SAME objects afterwards.
+    """
+    from beantester.views import filter_connections, sort_connections, sum_traffic
+
+    conns = [{"proc": "a", "sent": 10, "sent_in": 6, "sent_out": 4, "bytes": 3},
+             {"proc": "b", "sent": 20, "sent_in": 11, "sent_out": 9, "bytes": 1},
+             {"proc": "c", "sent": 30, "sent_in": 16, "sent_out": 14, "bytes": 2}]
+
+    kept = filter_connections(conns, "", None)
+    before = sum_traffic(kept)
+    rows = sort_connections(kept, "bytes", True, now=0.0, limit=0)
+    after = sum_traffic(kept)
+
+    check("the sum does not depend on the order", before == after, f"({before}, {after})")
+    check("and it is the true total", before["total"] == 60, f"({before})")
+    check("sorting really did reorder the list in place",
+          [c["proc"] for c in kept] == ["a", "c", "b"], f"({[c['proc'] for c in kept]})")
+    check("the sorted view is the same objects, not copies",
+          all(any(r is k for k in kept) for r in rows))

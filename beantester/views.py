@@ -54,62 +54,6 @@ FALSE_WORDS = {"no", "n", "false", "0", "nie"}
 _BOUNDS = {"port": PORT_BOUNDS, "lport": PORT_BOUNDS}
 
 
-class SearchIndex:
-    """Cached lowercase search text, one entry per row.
-
-    Searching a table means matching the query against every column of every row.
-    That is fine for the four columns the connection log has today. It is not fine
-    for the tables this tool is heading towards: measured over **30 columns**, a
-    plain scan costs 307 ms at 100 000 rows, **1.6 s at 500 000** and 3.5 s at a
-    million - per keystroke, on the UI thread.
-
-    Nearly all of that is rebuilding the same strings over and over: the fields a
-    search looks at (process, protocol, addresses, ports) do not change over a
-    flow's life. So join and lowercase them ONCE, keep the result, and a search
-    becomes a substring test - which is ~25x cheaper and, more importantly, flat in
-    the number of columns.
-
-    The cache is owned by the PAGE, not written into the engine's rows. The capture
-    thread writes to those dicts continuously; adding a key to one from the UI
-    thread can resize it under a reader's feet ("dictionary changed size during
-    iteration"), and a caching layer that corrupts the thing it is caching is not a
-    good trade.
-    """
-
-    def __init__(self, blob_of, key_of, limit=250_000):
-        self._blob_of = blob_of         # item -> the text to search (uncached)
-        self._key_of = key_of           # item -> stable identity
-        self._limit = int(limit)
-        self._cache = {}                # key -> (stamp, blob)
-
-    def blob(self, item, stamp=None):
-        """The search text for ``item``, built at most once per ``stamp``.
-
-        ``stamp`` is whatever makes the text stale - for a connection that is the
-        process name, which starts out unknown and is filled in later.
-        """
-        key = self._key_of(item)
-        hit = self._cache.get(key)
-        if hit is not None and hit[0] == stamp:
-            return hit[1]
-        blob = self._blob_of(item).lower()
-        if len(self._cache) >= self._limit:
-            self._cache.clear()         # bounded: a table this size churns anyway
-        self._cache[key] = (stamp, blob)
-        return blob
-
-    def filter(self, items, query, stamp_of=None):
-        q = (query or "").strip().lower()
-        if not q:
-            return list(items)
-        if stamp_of is None:
-            return [it for it in items if q in self.blob(it)]
-        return [it for it in items if q in self.blob(it, stamp_of(it))]
-
-    def clear(self):
-        self._cache.clear()
-
-
 def sort_events(events, sort_col="t", reverse=False):
     """Sort events (tuples: t, iso, type, description) by the chosen column."""
     idx = {"t": 0, "time": 1, "type": 2, "desc": 3}.get(sort_col, 0)
@@ -186,9 +130,18 @@ def compile_query(query):
     """Turn a search string into a list of predicates, ONCE per query.
 
     Compiling per row would put the expression parser on the path of every one of
-    a hundred thousand rows on every keystroke, which is the shape of the problem
-    ``SearchIndex`` exists to solve, reintroduced one layer up. So parse here and
-    return closures; the row loop then only calls them.
+    a hundred thousand rows on every search, so parse here and return closures.
+    The row loop then only calls them.
+
+    🔴 The row text itself is built fresh every time and deliberately NOT cached.
+    A cache was written for exactly that (``SearchIndex``, removed 2026-09-02) and
+    it cannot be correct here: ``_connection_blob`` reads ``dir`` and ``proto``,
+    and ``engine._log_conn`` rewrites BOTH on every packet of a flow - ``dir``
+    holds the direction of the last one, so it flips continuously on anything
+    two-way. A cache keyed on the process name, which is what that class was built
+    around, would serve a stale direction and quietly return the wrong rows. Keyed
+    on everything that moves, it missed 7 of 12 active flows per second (measured
+    2026-09-02), and a miss costs more than not caching at all. See the ADR.
 
     A term is either ``field:value`` or bare text. Terms are ANDed, because that is
     what narrowing means and what every search box a tester has used does.
@@ -249,14 +202,21 @@ def _filter_connections(conns, query, proc_map):
     return [c for c in conns if all(t(c, proc_map) for t in tests)]
 
 
-def traffic_totals(conns, query="", proc_map=None):
-    """Summed download / upload / total BYTES over the FILTERED rows.
+def filter_connections(conns, query="", proc_map=None):
+    """The rows a query selects, unsorted, as a NEW list.
 
-    Feeds the connection table's footer. It sums every matching flow, not only the
-    rows that fit under the display limit, so the footer is a true total of what the
-    search selects - which is exactly the number the display cap hides."""
+    The filtering half on its own, so a caller that needs both the sorted view and
+    a total over the whole match can pay for the pass once. ``filter_sort_connections``
+    and ``traffic_totals`` are this plus their own half, and both keep their
+    signatures - they are the surface the facade exports and the tests pin.
+    """
+    return _filter_connections(conns, query, proc_map)
+
+
+def sum_traffic(rows):
+    """Summed download / upload / total DELIVERED bytes over rows already chosen."""
     down = up = total = 0
-    for c in _filter_connections(conns, query, proc_map):
+    for c in rows:
         # DELIVERED, because the footer uses the same three words as the columns
         # above it ("down / up / total") and those are delivered now. A footer
         # summing captured under headings that mean delivered is the same mismatch
@@ -265,6 +225,15 @@ def traffic_totals(conns, query="", proc_map=None):
         up += c.get("sent_out", 0)
         total += c.get("sent", 0)
     return {"down": down, "up": up, "total": total}
+
+
+def traffic_totals(conns, query="", proc_map=None):
+    """Summed download / upload / total BYTES over the FILTERED rows.
+
+    Feeds the connection table's footer. It sums every matching flow, not only the
+    rows that fit under the display limit, so the footer is a true total of what the
+    search selects - which is exactly the number the display cap hides."""
+    return sum_traffic(_filter_connections(conns, query, proc_map))
 
 
 def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
@@ -296,7 +265,23 @@ def filter_sort_connections(conns, query="", sort_col="bytes", reverse=True,
     also of benchmarking this with keys drawn from a tiny range: Timsort exploits
     the resulting runs and the sort column comes out artificially fast.)
     """
-    out = _filter_connections(conns, query, proc_map)
+    return sort_connections(_filter_connections(conns, query, proc_map),
+                            sort_col, reverse, now, limit)
+
+
+def sort_connections(out, sort_col="bytes", reverse=True, now=None, limit=0):
+    """The sorting half of :func:`filter_sort_connections`, on rows already chosen.
+
+    🔴 MAY REORDER ``out`` IN PLACE. That is deliberate and it is what makes the
+    split worth making: the caller that needs both a sorted view and a total over
+    the whole match hands the same list to this and to ``sum_traffic``, and pays
+    for neither a second filtering pass nor a second copy of two hundred thousand
+    rows. Order does not matter to a sum. Every caller today owns the list it
+    passes, because it came out of ``filter_connections``.
+
+    See ``filter_sort_connections`` above for what ``limit`` buys and the
+    measurement behind the crossover.
+    """
     numeric = sort_col in ("remote_port", "local_port", "packets", "bytes",
                            "bytes_in", "bytes_out", "sent", "sent_in", "sent_out",
                            "down", "up", "kb", "down_seen", "up_seen", "avg",

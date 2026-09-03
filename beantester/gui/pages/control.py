@@ -224,6 +224,21 @@ class ControlPage:
                 self.frame.after_cancel(self._job)
         self._job = self.frame.after(SEARCH_DEBOUNCE_MS, self._apply)
 
+    def teardown(self):
+        """Put the search debounce away, and the form's relayout with it.
+
+        The form belongs to this page (it is handed to ``app.form`` from here), so
+        this is where its timer is somebody's responsibility.
+        """
+        if self._job is not None:
+            with crashlog.quiet("gui.pages.control"):
+                self.frame.after_cancel(self._job)
+            self._job = None
+        form = getattr(self, "form", None)
+        if form is not None:
+            with crashlog.quiet("gui.pages.control"):
+                form.teardown()
+
     def clear(self):
         self.query_var.set("")
         self._apply()

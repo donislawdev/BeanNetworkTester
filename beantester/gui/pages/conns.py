@@ -29,8 +29,8 @@ from tkinter import ttk
 from ...i18n import T
 from ...matchers import add_term
 from ...utils import human_bytes
-from ...views import (avg_packet_bytes, connection_proc, filter_sort_connections,
-                      traffic_totals)
+from ...views import (avg_packet_bytes, connection_proc, filter_connections,
+                      sort_connections, sum_traffic)
 from .. import dialogs
 from ..model_worker import AsyncModel
 from ..labels import wrapping_label
@@ -638,6 +638,20 @@ class ConnsPage:
         with crashlog.quiet("gui.pages.conns"):
             self._poll_job = self.frame.after(self.POLL_MS, self._drain_model)
 
+    def teardown(self):
+        """Put both timers away before the widgets they are scheduled on go.
+
+        The worker is deliberately left alone: it touches no widget and hands its
+        result to a queue nobody will read any more, so it finishes and is
+        collected. Cancelling it would need a second mechanism to prove it stopped.
+        """
+        for name in ("_poll_job", "_search_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                with crashlog.quiet("gui.pages.conns"):
+                    self.frame.after_cancel(job)
+                setattr(self, name, None)
+
     def _drain_model(self):
         self._poll_job = None
         result = self._model.poll()
@@ -660,15 +674,28 @@ class ConnsPage:
         # moment its port left the socket table; see engine._log_conn).
         if request.get("scoped_only"):
             conns = [c for c in conns if c.get("scoped")]
+        # ONE filtering pass for both answers. It used to be two - the sort filtered
+        # and then the footer's total filtered the whole table again, compiling the
+        # query a second time - which is a doubled pass on the thread that exists to
+        # keep the table cheap. MEASURED 2026-09-02 at 10k / 50k / 200k rows
+        # (internal_tools/bench_conn_model.py): 1.83x to 2.00x faster with something
+        # typed in the search box, and level with it empty, where the old second
+        # pass was only a list copy.
+        kept = filter_connections(conns, request["query"], request["proc_map"])
+        # SUMMED BEFORE THE SORT, and that order is measured rather than tidy: the
+        # sort reorders `kept` in place, and walking two hundred thousand dicts in
+        # sorted order instead of allocation order costs enough to turn the whole
+        # change NEGATIVE on an empty query (0.85x). Summing first, 1.04-1.14x.
+        # Order does not matter to a sum, so this costs nothing to obey.
+        #
+        # Summed over the FILTERED set and not the limited `shown`: the footer must
+        # count every matching flow, not only the rows the cap let through.
+        totals = sum_traffic(kept)
         # the limit is passed IN, so it can bound the sort itself instead of only
         # trimming its result (see views.filter_sort_connections)
-        shown = filter_sort_connections(
-            conns, request["query"],
-            request["sort"]["col"], request["sort"]["reverse"],
-            now=request["now"], proc_map=request["proc_map"], limit=request["limit"])
-        # summed over the FILTERED set (not the limited `shown`): the footer must
-        # count every matching flow, not only the rows the cap let through
-        totals = traffic_totals(conns, request["query"], request["proc_map"])
+        shown = sort_connections(kept, request["sort"]["col"],
+                                 request["sort"]["reverse"],
+                                 now=request["now"], limit=request["limit"])
         # Whether a target is narrowing at all. With no target every flow is in
         # scope, so the whole-table tint would mean nothing - it fires only when
         # targeting is on (per-row scope is then checked live in _tag_of). One

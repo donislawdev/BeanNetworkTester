@@ -767,7 +767,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--seed N` | randomness seed - the same run can be repeated |
 | `--duration N` | **run time in seconds** (0 = until Ctrl+C, or until a `--scenario` timeline runs out). The same field is in the GUI ("Session") |
 | `--row-limit N` | a **GUI-only** setting: max rows in the tables (0 = no limit, default 50 000). In headless CLI (no window) it does nothing - it is only saved to the config file and takes effect when that config is opened in the GUI. The "Row limit" field's equivalent |
-| `--interval N` | how often to report, in seconds (must be > 0) |
+| `--interval N` | how often to report, in seconds (greater than 0, at most 86 400 - the same ceiling `--duration` has, so an interval that could never fire is refused instead of accepted) |
 | `--log-conns` | print the observed connections at the end |
 | `--repro-out FILE` | save a reproduction report (JSON) |
 | `--simulate` | synthetic traffic instead of WinDivert (test with no Windows, no driver, no admin) |
@@ -1281,7 +1281,8 @@ beantester/              the implementation package
   appinfo.py             app identity and version reader (one source: VERSION.txt)
   i18n.py  paths.py  utils.py  processes.py  synthetic.py  legal.py  scenario_runner.py
   gui/                   the tkinter interface
-    app.py               window composition, state, log, start/stop, dirty-state
+    app.py               window composition, state, start/stop, dirty-state
+    logview.py           the log box: its queue, its line buffer and its widget
     form.py              form generated from fields.FIELD_DEFS
     form_search.py       matching a typed query against the field registry (pure)
     scaling.py           DPI, scaled pixels, window/chart/tooltip geometry

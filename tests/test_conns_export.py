@@ -32,7 +32,8 @@ def test_export_connections_csv_writes_the_current_view():
         ]
         app.conn_query = ""
         app.conn_sort = {"col": "up", "reverse": True}     # sort by upload, desc
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
         # the header mirrors the table's columns
@@ -89,7 +90,8 @@ def test_a_failed_connections_export_leaves_no_tmp_file_behind():
         ]
         app.conn_query = ""
         app.conn_sort = {"col": "packets", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         assert not os.path.exists(path + ".tmp"), "a half-written .tmp was left behind"
         assert not os.path.exists(path), "a failed export must not create the real file"
@@ -115,7 +117,8 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
         ]
         app.conn_query = ""
         app.conn_sort = {"col": "packets", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
         assert len(rows) == 2, rows
@@ -146,7 +149,8 @@ def test_export_connections_csv_honours_the_search():
         ]
         app.conn_query = "chrome"                          # only one row matches
         app.conn_sort = {"col": "up", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
         assert len(rows) == 2, rows            # header + the single matching row
@@ -174,7 +178,8 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
         app.engine.connections_snapshot = lambda limit=None: [row]
         app.conn_query = ""
         app.conn_sort = {"col": "bytes", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
         avg = rows[0].index("avg_bytes")
@@ -239,7 +244,8 @@ def test_both_exports_tell_the_user_the_whole_path():
         app.engine.connections_snapshot = lambda limit=None: []
         app.conn_query = ""
         app.conn_sort = {"col": "up", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         for name in ("stats.csv", "conns.csv"):
             said = [l for l in lines if name in l]
@@ -278,7 +284,8 @@ def test_a_process_name_cannot_arrive_as_a_spreadsheet_formula():
         ]
         app.conn_query = ""
         app.conn_sort = {"col": "up", "reverse": True}
-        app.export_connections_csv()
+        app.export_connections_csv().join(20)   # the export runs off-thread now
+        app._logview.drain()   # ...and a worker's log line lands on the next tick
 
         rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
         name = rows[1][0]
@@ -286,4 +293,85 @@ def test_a_process_name_cannot_arrive_as_a_spreadsheet_formula():
         assert "HYPERLINK" in name, "the name itself must survive: %r" % name
         assert rows[1][6] == "4", "packets stopped being a number: %r" % rows[1][6]
         assert rows[1][8] == "3", "dropped stopped being a number: %r" % rows[1][8]
+    ''')
+
+
+def test_a_second_export_is_refused_while_the_first_is_still_writing():
+    """Two clicks, one file - definition of done, point 9.
+
+    `CONNECTIONS_CSV_FILE` is a single fixed path, so two workers racing to
+    `os.replace` it would publish whichever finished last and silently discard the
+    other. Now that the write is off the UI thread the window stays responsive
+    during it, which makes the second click EASIER than it used to be.
+
+    The lock is held by the test rather than by a real first export, so this asks
+    the question without racing to ask it.
+    """
+    run_gui('''
+        import os, tempfile
+        import beantester.gui.csv_export as m
+        # Redirected BEFORE anything runs: the second half of this test does a real
+        # export, and without this it writes to the shipped default path - which
+        # left a stray CSV in the repository the first time it ran.
+        m.CONNECTIONS_CSV_FILE = os.path.join(tempfile.mkdtemp(), "conns.csv")
+
+        assert m._EXPORT_LOCK.acquire(blocking=False), "the lock must start free"
+        try:
+            worker = app.export_connections_csv()
+        finally:
+            m._EXPORT_LOCK.release()
+        app._logview.drain()
+
+        assert worker is None, "a refused export must not start a second worker"
+        assert any(bnt.T("log.conns_export_busy") in line
+                   for line in app._log_lines), app._log_lines[-3:]
+
+        # ...and the refusal does not poison the next one.
+        again = app.export_connections_csv()
+        assert again is not None, "the export must work again once the first is done"
+        again.join(20)
+    ''')
+
+
+def test_the_connection_export_does_not_run_on_the_ui_thread():
+    """The whole point of S-08, asked directly rather than through a stopwatch.
+
+    Everything after the snapshot is unbounded work on a table that may hold
+    200 000 flows: a full filter and sort with NO row cap, then a row-by-row CSV
+    write. On the UI thread that is a frozen window, and a frozen window is a STOP
+    button the user cannot press on a machine whose networking they deliberately
+    broke. `gui/model_worker.py` moved the table's own rebuild off that thread for
+    exactly this reason and this path was left behind.
+
+    A timing assertion would be the flaky way to ask the same thing.
+    """
+    run_gui('''
+        import os, tempfile, threading
+        import beantester.gui.csv_export as m
+        path = os.path.join(tempfile.mkdtemp(), "conns.csv")
+        m.CONNECTIONS_CSV_FILE = path
+
+        where = {}
+        real = m.filter_sort_connections
+        def spy(*a, **k):
+            where["thread"] = threading.current_thread()
+            return real(*a, **k)
+        m.filter_sort_connections = spy
+
+        app.engine.now_ref = lambda: 10.0
+        app.engine.connections_snapshot = lambda limit=None: [
+            dict(local_port=51000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
+                 packets=4, bytes=3072, bytes_in=2048, bytes_out=1024, dropped=0,
+                 scoped=True, pid=7, first=0.0, last=5.0, dir="in", proc="chrome.exe",
+                 sent=3072, sent_in=2048, sent_out=1024),
+        ]
+        app.conn_query = ""
+        app.conn_sort = {"col": "packets", "reverse": True}
+
+        app.export_connections_csv().join(20)
+
+        assert where.get("thread") is not None, "the writer never ran"
+        assert where["thread"] is not threading.main_thread(), \
+            "the export is back on the UI thread"
+        assert os.path.exists(path), "and it still has to produce the file"
     ''')

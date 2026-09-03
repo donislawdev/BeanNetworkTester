@@ -124,6 +124,37 @@ MUTATIONS = [
         "test": "test_a_timeline_that_breaks_takes_the_session_down_with_it",
     },
     {
+        # The shipped stop(): a flag and a return. The thread is still between two
+        # steps and applies one more set of settings after the caller moved on.
+        "label": "scenario: stop() goes back to setting a flag and returning",
+        "file": "beantester/scenario_runner.py",
+        "old": "        thread = self._thread\n"
+               "        if (thread is not None and thread.is_alive()\n"
+               "                and thread is not threading.current_thread()):\n"
+               "            thread.join(timeout=timeout)",
+        "new": "        return",
+        "test": "test_stop_returns_with_the_thread_already_gone",
+    },
+    {
+        # Joining the calling thread raises - and raises INSIDE the net that
+        # handles the timeline's own failure, because worker_failed comes back here
+        # on the runner thread.
+        "label": "scenario: stop() joins whichever thread called it",
+        "file": "beantester/scenario_runner.py",
+        "old": "                and thread is not threading.current_thread()):",
+        "new": "                and True):",
+        "test": "test_stopping_from_inside_the_runner_thread_does_not_raise",
+    },
+    {
+        # start() back to clearing the stop flag over a thread it never stopped:
+        # the orphan keeps applying its own timeline to the same engine.
+        "label": "scenario: start() abandons the thread it already owns",
+        "file": "beantester/scenario_runner.py",
+        "old": "        self.stop()\n        self._wake.clear()",
+        "new": "        self._wake.clear()",
+        "test": "test_starting_again_leaves_no_orphan_applying_the_old_timeline",
+    },
+    {
         # The exact shape that walked past all four JSON loaders: RecursionError is
         # neither OSError nor ValueError, so re-raising it is the bug restored.
         "label": "jsonfile: deep nesting escapes the reader again",
@@ -148,6 +179,31 @@ MUTATIONS = [
                "# OSError if it is not there",
         "new": "    size = 0",
         "test": "test_no_loader_can_be_taken_down_by_a_hostile_file",
+    },
+    {
+        # The name that shipped: derived from the target, so two writers of one
+        # file are two writers of one temp file. This is not an invented break.
+        "label": "jsonfile: the temp file gets a predictable name again",
+        "file": "beantester/jsonfile.py",
+        "old": "        tmp = temp_beside(path)",
+        "new": '        tmp = f"{path}.tmp"',
+        "test": "test_two_writers_do_not_share_one_temp_file",
+    },
+    {
+        # TypeError back out of the tuple: a value json has no rule for escapes
+        # the writer again, past its own temp-file cleanup.
+        "label": "jsonfile: a value json cannot write escapes the writer",
+        "file": "beantester/jsonfile.py",
+        "old": "    except (OSError, TypeError, ValueError) as e:",
+        "new": "    except (OSError, ValueError) as e:",
+        "test": "test_a_value_json_cannot_write_is_an_error_not_a_crash",
+    },
+    {
+        "label": "paths: two copies migrate through one temp file again",
+        "file": "beantester/paths.py",
+        "old": "            tmp = temp_beside(dst)",
+        "new": '            tmp = dst + ".tmp"',
+        "test": "test_two_copies_migrating_at_once_do_not_share_one_temp_file",
     },
     {
         # The 2026-08-26 report in one line. "The screen" is SM_CXSCREEN on
@@ -235,6 +291,151 @@ MUTATIONS = [
         "old": '        log.data(dict(), f"user files: {where}")\n',
         "new": "",
         "test": "test_doctor_says_where_the_users_own_files_are",
+    },
+    {
+        # Back onto the UI thread: a full filter and sort with no row cap, then a
+        # row-by-row CSV write, on a table that may hold 200 000 flows.
+        "label": "gui: the connection export is run inline instead of started",
+        "file": "beantester/gui/csv_export.py",
+        "old": "    worker.start()\n    return worker",
+        "new": "    worker.run()\n    return worker",
+        "test": "test_the_connection_export_does_not_run_on_the_ui_thread",
+    },
+    {
+        # One fixed path, two workers: whichever finishes last publishes, and the
+        # other one's file is gone. Easier to hit now that the window stays
+        # responsive during the write.
+        "label": "gui: two clicks can start two exports onto the same file",
+        "file": "beantester/gui/csv_export.py",
+        "old": ("    if not _EXPORT_LOCK.acquire(blocking=False):\n"
+                "        # Two clicks, one file. Refusing out loud beats two workers"
+                " racing to\n"
+                "        # `os.replace` the same path, where the winner is whichever"
+                " finishes last.\n"
+                '        app.log(T("log.conns_export_busy"))\n'
+                "        return None\n"),
+        "new": "    _EXPORT_LOCK.acquire(blocking=False)\n",
+        "test": "test_a_second_export_is_refused_while_the_first_is_still_writing",
+    },
+    {
+        # The split that lets one filtering pass answer both the sorted view and
+        # the footer's total. A half that stops filtering makes them disagree.
+        "label": "views: the filtering half of the split stops filtering",
+        "file": "beantester/views.py",
+        "old": "    return _filter_connections(conns, query, proc_map)\n\n\ndef sum_traffic",
+        "new": "    return list(conns)\n\n\ndef sum_traffic",
+        "test": "test_the_split_halves_agree_with_the_pair_they_replace",
+    },
+    {
+        # `_pending` is cleared here or by poll() reading a result, so a build that
+        # ends any other way wedges the table for the rest of the session.
+        "label": "gui: a model build that fails oddly wedges the table for good",
+        "file": "beantester/gui/model_worker.py",
+        "old": "        except BaseException as exc:",
+        "new": "        except Exception as exc:",
+        "test": "test_a_build_that_fails_outside_Exception_does_not_wedge_the_table",
+    },
+    {
+        # Back to a rebuild that destroys every widget without telling the pages,
+        # leaving their after() timers armed against commands Tk has deleted.
+        "label": "gui: a language switch stops telling the pages to put their timers away",
+        "file": "beantester/gui/app.py",
+        "old": "        if getattr(self, \"pages\", None):\n            teardown_pages(self)\n",
+        "new": "",
+        "test": "test_a_language_switch_cancels_what_the_pages_had_scheduled",
+    },
+    {
+        # The guard that reads as thorough and is not: a DESTROYED Tk widget is not
+        # None, so `box is None` passes and every call after it raises TclError.
+        "label": "gui: the log box guard trusts the attribute instead of the widget",
+        "file": "beantester/gui/logview.py",
+        "old": "        try:\n            return bool(box.winfo_exists())",
+        "new": "        try:\n            return True",
+        "test": "test_logging_into_a_destroyed_box_is_not_an_error",
+    },
+    {
+        # `crashlog.record` deduplicates and counts. The dialog deduplicated
+        # nothing, so a binding firing in a series stacked modal windows.
+        "label": "gui: every occurrence of one fault opens its own modal window again",
+        "file": "beantester/gui/app.py",
+        "old": "        if key in self._ui_errors_shown:\n            return\n",
+        "new": "",
+        "test": "test_one_window_per_fault_not_one_per_occurrence",
+    },
+    {
+        # The exact shape before 2026-09-02: the put outside the try, and a catch
+        # narrow enough for anything else to escape past it - which leaves
+        # `_transition` set forever and START/STOP dead for the life of the window.
+        "label": "gui: a transition worker can end without ever feeding the queue",
+        "file": "beantester/gui/app.py",
+        "old": ("            err = None\n"
+                "            try:\n"
+                "                work()\n"
+                "            except BaseException as e:  # carried to the main thread,"
+                " never swallowed\n"
+                "                err = e\n"
+                "            finally:\n"
+                "                self._ui_queue.put((kind, err))"),
+        "new": ("            try:\n"
+                "                work()\n"
+                "                err = None\n"
+                "            except Exception as e:\n"
+                "                err = e\n"
+                "            self._ui_queue.put((kind, err))"),
+        "test": "test_a_start_that_fails_outside_Exception_still_gives_the_button_back",
+    },
+    {
+        # Back to the watchdog as it stood before 2026-09-02, which asked
+        # `is_alive()` and nothing else - so a thread spinning in a regular
+        # expression or blocked on a driver that stopped answering was healthy.
+        "label": "engine: the watchdog stops noticing a capture thread that stalled",
+        "file": "beantester/engine.py",
+        "old": "            if self._capture_has_stalled():",
+        "new": "            if False:",
+        "test": "test_a_capture_thread_that_is_alive_but_no_longer_moving_fails_open",
+    },
+    {
+        # The other direction, and the more expensive one to get wrong: without the
+        # phase, a thread parked in recv() on a link with no traffic looks exactly
+        # like a stalled one, and the watchdog would kill a healthy session.
+        "label": "engine: the stall check forgets which side of recv the thread is on",
+        "file": "beantester/engine.py",
+        "old": "        if self._cap_beat_at is None or self._cap_waiting:",
+        "new": "        if self._cap_beat_at is None:",
+        "test": "test_a_quiet_link_is_never_mistaken_for_a_stalled_capture_thread",
+    },
+    {
+        # Back to the state before 2026-09-02: `re.compile` succeeding was the
+        # whole check, so a pattern that parses but never finishes went straight
+        # onto the capture thread.
+        "label": "matchers: a pattern that cannot finish is no longer refused",
+        "file": "beantester/matchers.py",
+        "old": "    if _blows_the_budget(rx) and _blows_the_budget(rx):",
+        "new": "    if False:",
+        "test": "test_a_pattern_that_cannot_finish_is_refused_at_parse_time",
+    },
+    {
+        # The other way to make the guard useless without touching its call: stop
+        # the ladder before it reaches a length where backtracking shows. The
+        # budget cannot be loosened instead - a mutant with no ceiling would run
+        # the explosive pattern at 45 characters and hang the suite rather than
+        # fail it.
+        "label": "matchers: the probe ladder stops before backtracking shows",
+        "file": "beantester/matchers.py",
+        "old": "_REGEX_PROBE_LENGTHS = (6, 8, 10, 12, 14, 16, 20, 24, 32, 45)",
+        "new": "_REGEX_PROBE_LENGTHS = (6,)",
+        "test": ("test_a_pattern_that_cannot_finish_leaves_the_table_search"
+                 "_answering_normally"),
+    },
+    {
+        # Back to the check as it stood before 2026-09-02, which is the exact
+        # shape that let NaN through: `float('nan') <= 0` is False.
+        "label": "cli: the report interval is only checked for being above zero",
+        "file": "beantester/cli.py",
+        "old": "if not (0 < interval <= MAX_INTERVAL_S):",
+        "new": "if interval <= 0:",
+        "test": ("test_the_report_interval_is_refused_while_it_is_still_a_number"
+                 "_on_a_command_line"),
     },
     {
         "label": "doctor: the JSON report loses the data_dir field",
@@ -1048,9 +1249,75 @@ MUTATIONS = [
         "old": "            try:\n"
                "                targeting.adopt_new_pids()\n"
                "            except Exception as exc:\n"
-               "                crashlog.once(\"targeting.adopt\", exc)",
+               "                crashlog.note(exc, \"targeting.adopt\")"
+               "   # note, not once: see below",
         "new": "            targeting.adopt_new_pids()",
         "test": "test_a_failing_adoption_does_not_kill_the_resolver",
+    },
+    {
+        # `once` keys on the subsystem NAME, so the first failure silences every
+        # later one - including a different fault, which is the one worth reading.
+        "label": "targeting: only the resolver's FIRST kind of failure is recorded",
+        "file": "beantester/target_resolver.py",
+        "old": "                crashlog.note(exc, \"targeting.resolver\")",
+        "new": "                crashlog.once(\"targeting.resolver\", exc)",
+        "test": "test_a_second_kind_of_resolver_failure_is_recorded_too",
+    },
+    {
+        # The shipped shape: an unguarded check-then-act, in five copies. Two
+        # readers both find the catalogue empty and both scan lang/.
+        "label": "i18n: the lazy load goes back to being unguarded",
+        "file": "beantester/i18n.py",
+        "old": "    if _translations:\n"
+               "        return\n"
+               "    with _load_lock:\n"
+               "        if not _translations:       "
+               "# somebody else may have loaded it while we\n"
+               "            load_languages()        "
+               "# waited - checked again inside the lock",
+        "new": "    if not _translations:\n        load_languages()",
+        "test": "test_a_cold_catalogue_is_loaded_once_however_many_threads_ask",
+    },
+    {
+        # Cleared only on success, as shipped: a socket table that keeps hiccupping
+        # leaves the dict growing, and growing STALE - the rescue then puts a port
+        # back in scope whose socket closed long ago.
+        "label": "targeting: late owners survive a walk that failed",
+        "file": "beantester/targeting.py",
+        "old": "            with self._ports_lock:\n"
+               "                self._late_owners = {}\n"
+               "            self.table.refresh(force=force)",
+        "new": "            self.table.refresh(force=force)",
+        "test": "test_a_failing_refresh_does_not_leave_late_owners_behind",
+    },
+    {
+        # The shipped shape: fourteen setters, fourteen separate holds of the lock
+        # a packet is judged under, so a packet in the middle sees a mixture.
+        #
+        # 🔴 There is deliberately NO companion entry turning `core._lock` back
+        # into a plain `Lock`. That mutation does not FAIL, it DEADLOCKS - the
+        # batch holds the lock and the first setter inside it waits forever - and
+        # this runner has no timeout, so the "proof" would be a hung suite rather
+        # than a red one. The reentrancy is REQUIRED by the entry below; it is not
+        # separately provable this way, and pretending otherwise would be the kind
+        # of claim this whole registry exists to refuse.
+        "label": "settings: an apply goes back to separate lock holds per setter",
+        "file": "beantester/settings.py",
+        "old": "    with _batch(engine):",
+        "new": "    with nullcontext():",
+        "test": "test_a_packet_decided_during_an_apply_never_sees_half_of_it",
+    },
+    {
+        # A compiled matcher stringified back into text is a matcher compiled
+        # AGAIN - and inside the batch, which is the one place compilation may not
+        # happen. Not invented: it is what the first version of this batch did,
+        # and the guard is what found it.
+        "label": "settings: a batched apply recompiles its port expressions",
+        "file": "beantester/core.py",
+        "old": "            parse_matcher(port if isinstance(port, Matcher) "
+               "else port_expression(port),",
+        "new": "            parse_matcher(port_expression(port),",
+        "test": "test_an_apply_holds_the_core_lock_over_assignments_only",
     },
     {
         "label": "targeting: a pid whose name will not resolve is written off",
@@ -1450,6 +1717,56 @@ MUTATIONS = [
         "test": "test_different_faults_get_different_fingerprints",
     },
     {
+        # Written from the GUI tick, so the shared name is 1.4 chances a second
+        # for as long as two windows are open.
+        "label": "crashlog: the breadcrumb temp file gets a predictable name again",
+        "file": "beantester/crashlog.py",
+        "old": "        tmp = temp_beside(path)",
+        "new": '        tmp = path + ".tmp"',
+        "test": "test_two_breadcrumb_writers_do_not_share_one_temp_file",
+    },
+    {
+        # Back to removing one known name. With a unique temp file that sweeps
+        # nothing, and one orphan keeps `crashes/` alive for ever after.
+        "label": "crashlog: the sweep for orphaned temp breadcrumbs stops sweeping",
+        "file": "beantester/crashlog.py",
+        "old": "    for name in [BREADCRUMB_NAME, *stale]:",
+        "new": "    for name in [BREADCRUMB_NAME]:",
+        "test": "test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit",
+    },
+    {
+        # atexit is LIFO, so without this call the diverts are closed by engine.py's
+        # own handler AFTER faulthandler is off - which is what shipped.
+        "label": "crashlog: the diverts are closed after the native handler is off",
+        "file": "beantester/crashlog.py",
+        "old": "            live._stop_live_engines()       "
+               "# idempotent: stop() forgets the engine",
+        "new": "            pass",
+        "test": "test_the_diverts_are_closed_while_the_native_handler_is_still_armed",
+    },
+    {
+        # The shipped cliff: full table -> new fingerprints refused -> every
+        # occurrence of a fault that arrived late is a fresh record and a write.
+        "label": "crashlog: the crash table refuses new faults instead of making room",
+        "file": "beantester/crashlog.py",
+        "old": "        _seen[fingerprint] = entry\n"
+               "        if len(_seen) > MAX_RECORDS:\n"
+               "            _seen.popitem(last=False)       "
+               "# the least recently seen fault",
+        "new": "        if len(_seen) < MAX_RECORDS:\n"
+               "            _seen[fingerprint] = entry",
+        "test": "test_a_repeating_fault_is_still_deduplicated_when_the_table_is_full",
+    },
+    {
+        # Bounded, but evicting by ARRIVAL: the fault firing right now is thrown
+        # out to make room for faults seen once each.
+        "label": "crashlog: the crash table evicts by arrival instead of by recency",
+        "file": "beantester/crashlog.py",
+        "old": "            _seen.move_to_end(fingerprint)",
+        "new": "            pass",
+        "test": "test_the_table_makes_room_by_dropping_the_coldest_fault_not_the_busiest",
+    },
+    {
         # One byte of the recorded driver hash. The version resource still reads
         # 2.2 - which is exactly what a swapped kernel driver looks like.
         "label": "legal: the recorded WinDivert driver hash stops matching",
@@ -1735,6 +2052,14 @@ PROVEN_BY_HAND = {
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody
 # looked at must not read the same. This list is allowed to grow only when a guard
 # is added without its proof - and every entry is a debt.
+# 🔴 These three lists are keyed by TEST NAME, so a property with no test of its
+# own has no slot here and must not be given one by borrowing a neighbour's name -
+# that is what "filed under exactly one state" catches. One such property exists as
+# of 2026-09-03: `i18n.load_languages` publishes `_language_names` before
+# `_translations` because the second is what every "loaded yet?" check reads, and
+# the window is two adjacent stores, so a guard would need a reader racing a loader
+# in a loop - slow, flaky, and green most of the time for the wrong reason. It is
+# recorded where it can be read next to the code, in a comment at the assignment.
 NOT_PROVEN = {
     "test_a_resize_after_the_label_is_gone_is_not_a_crash": "never mutated",
     "test_the_ui_rebuild_does_not_pile_up_configure_handlers_on_the_root": "never mutated",

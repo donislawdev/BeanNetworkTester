@@ -1180,3 +1180,219 @@ def test_a_worker_the_engine_does_not_own_reports_through_the_same_door():
               not eng.is_running())
     finally:
         eng.stop()
+
+
+# --- alive, and no longer doing anything ------------------------------------- #
+#
+# The other half of fail-open. Until 2026-09-02 the watchdog asked `is_alive()`
+# and nothing else, so the one state this module's own docstring calls dangerous -
+# a process still ALIVE with an open divert and no working capture thread - was
+# the one it could not see. A thread spinning in a regular expression, waiting on
+# a deadlocked lock, or blocked on a driver that stopped answering is alive.
+
+
+class _StallingDivert(QuietDivert):
+    """Hands over one packet whose first field access never returns.
+
+    A real stall, not a poked flag: the capture thread gets past `recv()`, writes
+    its beat, and then blocks INSIDE our own code, which is exactly the shape the
+    watchdog has to tell apart from a quiet link. `release()` lets it finish so the
+    test does not leave a thread parked forever.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.released = threading.Event()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return _StallingPacket(self.released)
+        return super().recv()           # then behave like a quiet link
+
+    def release(self):
+        self.released.set()
+
+
+class _StallingPacket(FakePacket):
+    def __init__(self, released):
+        super().__init__()
+        self._released = released
+
+    @property
+    def raw(self):
+        # `size = len(packet.raw)` is the first thing the loop does after writing
+        # its beat, so blocking here parks the thread on the far side of `recv()`.
+        self._released.wait(30)
+        return b"\x00" * 100
+
+    @raw.setter
+    def raw(self, value):
+        pass                            # FakePacket.__init__ assigns it
+
+
+def test_a_capture_thread_that_is_alive_but_no_longer_moving_fails_open():
+    """The session must stop and the divert must close, as for a DEAD thread.
+
+    The threshold is lowered on the instance rather than waited out: ten seconds is
+    the shipped value and it is chosen against a healthy session's worst gap
+    (31.912 ms measured), not against how long a test may take.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.3
+    divert = _StallingDivert()
+    eng.start("test", divert=divert)
+    try:
+        def stopped_completely():
+            kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
+            return (not eng.is_running() and divert.closed
+                    and ("STOP", "events.fault") in kinds)
+
+        check("stall: the session stops and finishes teardown",
+              _wait_until(stopped_completely),
+              f"(running={eng.is_running()}, closed={divert.closed})")
+        check("stall: the divert is closed (network restored)", divert.closed is True)
+        check("stall: the reason is recorded", eng.stop_reason == "fault",
+              f"({eng.stop_reason})")
+        check("stall: the fault says what happened",
+              "capture thread" in str(eng.fault).lower(), f"({eng.fault})")
+    finally:
+        divert.release()
+
+
+class _GoesQuietDivert(QuietDivert):
+    """One packet, then nothing - an ordinary link that falls silent."""
+
+    def __init__(self):
+        super().__init__()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return FakePacket()
+        return super().recv()
+
+
+def test_a_quiet_link_is_never_mistaken_for_a_stalled_capture_thread():
+    """The half that matters more, because a false stall kills a real test.
+
+    A capture thread parked in `recv()` on a link with no traffic has not beaten
+    for as long as the link has been silent, which can be the whole session. That
+    is indistinguishable from a stall by any counter alone - `_cap_waiting` is the
+    only thing that separates them, and this is what would catch its removal.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.2
+    divert = _GoesQuietDivert()
+    eng.start("test", divert=divert)
+    try:
+        # Long past the threshold and past several watchdog ticks (0.2 s each).
+        time.sleep(1.5)
+        check("quiet link: the session is still running",
+              eng.is_running() is True, f"(stop_reason={eng.stop_reason})")
+        check("quiet link: the divert is still open", divert.closed is False)
+        check("quiet link: nothing was recorded as a fault", eng.fault is None,
+              f"({eng.fault})")
+    finally:
+        eng.stop()
+
+
+def test_the_stall_check_answers_no_for_every_state_that_is_not_one():
+    """The degenerate-but-legal inputs, asked directly so they cannot be missed.
+
+    A session that has not seen its first packet has no beat at all, and a thread
+    that has already died is the liveness check's business, not this one - both
+    would otherwise fail-stop a session for the wrong reason.
+    """
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.01
+    check("no beat yet: not a stall", eng._capture_has_stalled() is False)
+
+    eng._cap_beat_at = time.monotonic() - 60
+    eng._cap_waiting = False
+    check("no capture thread: not a stall", eng._capture_has_stalled() is False)
+
+    eng._t_cap = threading.Thread(target=lambda: None)
+    eng._t_cap.start()
+    eng._t_cap.join()
+    check("dead capture thread: left to the liveness check",
+          eng._capture_has_stalled() is False)
+
+
+# --- START and STOP must survive the worker ending badly ---------------------- #
+
+
+def test_a_start_that_fails_outside_Exception_still_gives_the_button_back():
+    """The queue is fed in a `finally`, so `_transition` can never stick.
+
+    `_transition` is only ever cleared by `_poll_transition` reading that queue.
+    A `run()` that ends without putting leaves the flag on "starting" forever:
+    `_start` and `_stop` return immediately while a transition is in flight, and
+    `_poll_transition` keeps re-arming `root.after(30, ...)`. START and STOP are
+    then dead for the life of the window, with a divert possibly still open -
+    which is the one control a network tester must never take away.
+
+    `KeyboardInterrupt` because it is not an `Exception`: the old handler caught
+    that class and nothing else, so anything outside it escaped past the `put`.
+    """
+    run_gui("""
+        def boom(*a, **k):
+            raise KeyboardInterrupt("out of nowhere")
+        app.engine.start = boom
+
+        app._start()
+        app._settle_transition()
+
+        assert app._transition is None, ("the button is stuck on %r"
+                                         % (app._transition,))
+        assert app.running is False
+
+        # ...and it still works afterwards, which is the point of giving it back.
+        app.engine.start = lambda filt, divert=None, duration=0, **kw: None
+        app._start()
+        app._settle_transition()
+        assert app.running is True
+    """, allow_faults=("out of nowhere",))
+
+
+def test_one_window_per_fault_not_one_per_occurrence():
+    """A binding that fires in a series must not stack modal windows.
+
+    `crashlog.record` deduplicates by fingerprint and counts the repeats.
+    `dialogs.show_error` deduplicated nothing, so an exception out of something
+    like `<Configure>` - which fires continuously while a window edge is dragged -
+    buried the user under a stack of modals to close one by one, on top of the
+    original fault and with the rest of the interface not responding.
+    """
+    run_gui("""
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, body: shown.append(body)
+
+        def raise_it():
+            raise ValueError("the same fault")
+
+        for _ in range(5):
+            try:
+                raise_it()
+            except ValueError as exc:
+                app._on_ui_exception(type(exc), exc, exc.__traceback__)
+
+        assert len(shown) == 1, ("one window per fault, got %d" % len(shown))
+
+        # Every occurrence still reaches the log, which is where the repeats live.
+        hits = [l for l in app._log_lines if "the same fault" in l]
+        assert len(hits) == 5, hits
+
+        # A DIFFERENT fault is still shown: this deduplicates, it does not go quiet.
+        def raise_other():
+            raise TypeError("a different fault")
+        try:
+            raise_other()
+        except TypeError as exc:
+            app._on_ui_exception(type(exc), exc, exc.__traceback__)
+        assert len(shown) == 2, shown
+    """, allow_faults=("the same fault", "a different fault"))

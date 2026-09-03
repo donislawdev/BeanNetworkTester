@@ -186,5 +186,11 @@ def test_a_destination_change_is_allowed_when_nothing_was_narrowed():
 
     engine = _PlainEngine()
     apply_settings(engine, dict(DEFAULT_SETTINGS, dst_ip="1.1.1.1"), lambda *_: None)
+    # `.raw` if it arrived compiled: since the apply became a single batch, the
+    # expressions are compiled BEFORE the lock is taken and handed to `set_dest`
+    # as matchers (see core.compile_endpoint). What this test is about is that the
+    # new destination reaches the engine at all, not which of the two shapes
+    # `set_dest` accepts it in.
+    applied = engine.applied[-1][1] if engine.applied else None
     check("an ordinary session still applies a new destination",
-          engine.applied and engine.applied[-1][1] == "1.1.1.1", str(engine.applied))
+          getattr(applied, "raw", applied) == "1.1.1.1", str(engine.applied))

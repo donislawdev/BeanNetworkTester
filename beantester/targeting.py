@@ -157,6 +157,28 @@ class ProcessTargeting:
         """Rebuild the port set from the current socket table."""
         now = self.clock() if now is None else now
         with self._lock:
+            # Emptied HERE, before the walk, and it used to be emptied at the end
+            # of it. Two things follow, and both matter:
+            #
+            # * a walk that FAILS no longer leaves the dict behind. It is only ever
+            #   cleared on success, so a socket table that kept hiccupping left
+            #   this growing - and worse than growing, growing STALE: the rescue
+            #   below keeps a port whose recorded owner is still targeted, so once
+            #   a refresh finally succeeded it could put a port back in scope whose
+            #   socket had closed long before, and which the OS may since have
+            #   handed to somebody else. That breaks the "until the next rebuild"
+            #   bound this class documents and that the recycled-pid guard pins.
+            # * what survives the walk is now exactly what the walk could not have
+            #   seen - a port noted BEFORE the collection started is in the fresh
+            #   snapshot already if its socket is still open, and if it is not, it
+            #   has no business being rescued.
+            #
+            # The bound is therefore TEMPORAL (one walk) rather than numeric, which
+            # is what a ceiling like MAX_PENDING_PIDS below is approximating: the
+            # dict is keyed by PORT, so it could never exceed the port space, and
+            # a count would only start dropping legitimate rescues in a burst.
+            with self._ports_lock:
+                self._late_owners = {}
             self.table.refresh(force=force)
             port_pid = self.table.snapshot()
             pids, names = set(), set()
@@ -195,10 +217,9 @@ class ProcessTargeting:
                 self._pids = frozenset(pids)
                 # ...but a port the live map handed us WHILE this walk was running is
                 # newer than the walk, so it survives it - if it is still ours (see
-                # `late` above). Cleared afterwards: it is part of _ports now, and the
-                # next snapshot judges it like any other.
+                # `late` above). It is part of _ports from here on, and the next
+                # walk empties the dict again before it starts.
                 self._ports = resolved | late
-                self._late_owners = {}
                 self._pending_pids = frozenset()
                 self._not_ours = frozenset()
             self._names = tuple(sorted(n for n in names if n))

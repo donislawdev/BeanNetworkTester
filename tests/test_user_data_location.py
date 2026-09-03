@@ -183,6 +183,46 @@ def test_a_failed_copy_is_reported_and_leaves_no_half_written_file(tmp_path, mon
     check("no half-written file and no .tmp is left", leftovers == [], f"({leftovers})")
 
 
+def test_two_copies_migrating_at_once_do_not_share_one_temp_file(tmp_path, monkeypatch):
+    """Two copies of the program launched together both adopt the same file.
+
+    This is the first thing either of them does, so "at the same moment" needs no
+    unlucky timing at all - a double click does it. Through one ``<dst>.tmp`` the
+    second truncated what the first was copying, and the loser then published a
+    half-copy as the user's adopted profile file.
+
+    Forced at the instant that matters rather than raced, for the reason spelled
+    out in ``test_jsonfile.py``: a collision reproduced sometimes is a guard that
+    proves nothing on the run where it passes.
+    """
+    source, target = _dirs(tmp_path)
+    (source / paths.PROFILE_NAME).write_text('{"slow": {}}', encoding="utf-8")
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / paths.PROFILE_NAME).write_text('{"fast": {}}', encoding="utf-8")
+
+    real_replace = os.replace
+    second = []
+
+    def let_the_other_copy_in(src, dst):
+        if not second:                              # guard first: the second copy
+            second.append(["did not finish"])       # publishes through here too
+            second[0] = paths.migrate_user_files(str(other), str(target))
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", let_the_other_copy_in)
+    first = paths.migrate_user_files(str(source), str(target))
+
+    check("the second copy migrated without a problem", second == [[]], f"({second})")
+    check("the first copy did too - it published a temp file of its own, not one "
+          "the second had already taken", first == [], f"({first})")
+    adopted = (target / paths.PROFILE_NAME).read_text(encoding="utf-8")
+    check("the adopted file is one copy's data, not a mix of two",
+          adopted in ('{"slow": {}}', '{"fast": {}}'), f"({adopted!r})")
+    leftovers = sorted(p.name for p in target.iterdir() if p.name.endswith(".tmp"))
+    check("neither copy left a temp file behind", leftovers == [], f"({leftovers})")
+
+
 def test_an_unusable_data_directory_does_not_stop_the_program(tmp_path, monkeypatch):
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("I am a file", encoding="utf-8")

@@ -518,10 +518,73 @@ def test_a_recycled_pid_reaches_further_through_the_push_path_but_not_further_in
     targeting.note_socket(7000, 100)
     check("inside the window the stranger's socket IS in scope", 7000 in targeting)
 
+    # 🔴 The rebuild, with the stranger's socket announced WHILE the walk is
+    # resolving names - the same interposition as
+    # test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added, and since
+    # 2026-09-03 the ONLY way a port reaches the rescue at all: `_late_owners` is
+    # emptied at the START of a walk now (it used to be emptied at the end, which
+    # let it hoard entries across failed walks). Announcing before the walk, the
+    # way this test used to, no longer reaches the owner check - it left the guard
+    # green whatever that check did, which the mutation registry reported as
+    # SURVIVED. This is the case the check exists for: the event names pid 100,
+    # and this very walk is in the middle of deciding 100 is no longer ours.
+    seen = []
+
+    def name_of(pid, cheap=False):
+        if not seen:
+            seen.append(pid)
+            targeting.note_socket(7000, 100)
+        return table.names.get(pid, "")
+
+    table.name_of = name_of
     targeting.refresh()          # the resolver's next tick
+    check("the event really landed mid-walk", seen, "(the interposition never ran)")
     check("the rebuild drops the pid", targeting.pids() == set(), f"({targeting.pids()})")
     check("...and the stranger's port with it", 7000 not in targeting,
           f"({sorted(targeting.ports())})")
+
+
+def test_a_failing_refresh_does_not_leave_late_owners_behind():
+    """The late-port list was emptied only by a walk that SUCCEEDED.
+
+    Two consequences, and the second is the one that matters. It grew, fed by
+    every socket event of every process already targeted - and it grew STALE: the
+    rescue in ``refresh`` keeps a port whose RECORDED owner is still targeted, so
+    once a walk finally succeeded it could put back in scope a port whose socket
+    had closed long before, and which the OS may since have handed to somebody
+    else. That is the "until the next rebuild" bound this class documents, quietly
+    stretched to "until a refresh happens to work".
+
+    A socket table that keeps failing is not a hypothetical: the resolver loop
+    catches exactly this and carries on by design, which is what makes the
+    accumulation invisible.
+    """
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("the target resolved", targeting.pids() == {100})
+
+    def explode(now=None, force=False):
+        raise OSError("the socket table hiccupped")
+
+    table.refresh = explode
+    for port in range(6000, 6060):          # the target keeps opening sockets
+        targeting.note_socket(port, 100)
+        try:
+            targeting.refresh()             # ...and every rebuild fails
+        except OSError:
+            pass                            # the resolver loop swallows this
+
+    check("a walk that failed does not hoard the ports noted before it",
+          not targeting._late_owners, f"({len(targeting._late_owners)} left)")
+
+    # And the staleness half: the sockets are long gone, the table is healthy
+    # again, so the next successful walk must not rescue any of them.
+    table.refresh = lambda now=None, force=False: True
+    table.ports = {5000: 100}
+    targeting.refresh()
+    check("a port whose socket closed while refresh was failing is not rescued",
+          sorted(targeting.ports()) == [5000], f"({sorted(targeting.ports())})")
 
 
 def test_the_pending_queue_cannot_grow_without_a_bound():

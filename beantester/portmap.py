@@ -701,7 +701,29 @@ class PortTable:
             return True
 
     def refresh_if_stale(self, now=None, miss=False):
-        """Refresh when the map is older than the (miss) interval."""
+        """Refresh when the map is older than the (miss) interval.
+
+        **Reads ``_last`` and ``_ports`` WITHOUT ``_lock``, deliberately** - every
+        neighbour here takes it (``snapshot``, ``shared_ports``, ``collected``),
+        and the one other exception, ``pid_for``, carries its reason in writing.
+        This one had none, which is the silence this project treats as a defect in
+        its own right. Three things make it safe, and they are the reason rather
+        than a rationalisation for one that was missing:
+
+        * **Nothing here can be read half-written.** ``_ports`` is only ever
+          REPLACED (one assignment in ``refresh``, under the lock), never mutated
+          in place, and every write to ``_last`` is under the lock too. A reader
+          without the lock therefore sees the old value or the new one, never a
+          torn one.
+        * **The answer is ADVISORY.** All it decides is whether to ASK for a
+          refresh; ``refresh`` itself re-decides under the lock, behind the
+          generation guard that discards an older collection. Being wrong here
+          costs one extra collection, or one cycle's delay - never a wrong map.
+        * **The capture thread walks this path.** ``process_for_port`` calls it for
+          every unknown port. Taking the lock here would put an acquire back on the
+          path that the measurement in ``refresh`` (0.495 ms -> 0.018 ms, by moving
+          work OUT from under the lock) exists to keep clear.
+        """
         now = self.clock() if now is None else now
         limit = self.miss_interval if miss else self.interval
         if (now - self._last) >= limit or not self._ports:

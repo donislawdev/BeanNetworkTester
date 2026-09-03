@@ -225,6 +225,12 @@ class BeanEngine:
         self._t_cap = None          # capture thread (joined on stop)
         self._t_inj = None          # inject thread (joined on stop)
         self._t_wd = None           # watchdog thread (deadline + worker health)
+        # The capture thread's pulse, read by the watchdog. Two values, because one
+        # cannot answer the question: a thread that has not moved is either blocked
+        # in `recv()` on a quiet link, which is normal and may last all session, or
+        # stuck in our own code, which is the failure. `_cap_waiting` says which.
+        self._cap_waiting = False
+        self._cap_beat_at = None
         self._stop_lock = threading.RLock()
         self._deadline = None       # monotonic time to stop at (None = no limit)
         self._duration = 0.0        # the requested session length, for reports
@@ -1013,6 +1019,11 @@ class BeanEngine:
         if self._qpc_freq is None:
             self._qpc_freq = winenv.qpc_frequency()
         self._wait_sample_at = 0.0      # sample the first packet, then on the tick
+        # Cleared, not carried: a beat left over from the previous session is older
+        # than CAPTURE_STALL_S the moment this one starts, so an engine reused for
+        # a second run would fail-stop itself before its capture thread drew breath.
+        self._cap_waiting = False
+        self._cap_beat_at = None
         # always establish a concrete seed - this makes EVERY session reproducible
         self._effective_seed = self._seed if self._seed is not None else random.randrange(1, 2**31 - 1)
         self._rng = random.Random(self._effective_seed)
@@ -1529,11 +1540,66 @@ class BeanEngine:
                     self._fail_stop(RuntimeError(
                         f"worker thread {t.name} died unexpectedly"), blocking=False)
                     return
+            if self._capture_has_stalled():
+                # The other half of fail-open. The check above sees a thread that
+                # DIED. This one sees a thread that is perfectly alive and no
+                # longer doing anything, which produces the identical outcome for
+                # the user and used to produce no reaction at all.
+                self._fail_stop(RuntimeError(
+                    "capture thread stopped making progress"), blocking=False)
+                return
+
+    # How long the capture thread may spend between two `recv()` calls before the
+    # session is stopped. See `_capture_has_stalled` for why the number is this
+    # size and what it was measured against.
+    CAPTURE_STALL_S = 10.0
+
+    def _capture_has_stalled(self):
+        """Is the capture thread alive, out of `recv()`, and no longer moving?
+
+        The docstring at the top of this module says the dangerous state is a
+        process still ALIVE with an open divert and no working capture thread, and
+        until 2026-09-02 the watchdog only ever asked `is_alive()`. A thread
+        spinning in a regular expression, waiting on a deadlocked lock or blocked
+        on a driver that stopped answering is alive by that test, so the one state
+        the whole fail-open argument exists for was the one it could not see.
+
+        `_cap_waiting` is what makes this answerable at all. A stopped counter on
+        its own means either "blocked in recv on a quiet link", which is normal and
+        can last the whole session, or "stuck in our own code", which is the
+        failure - and they are indistinguishable without knowing WHICH side of
+        `recv()` the thread is on. Bumping a counter before `recv()` does not
+        separate them either: both look like a counter that stopped.
+
+        Ten seconds, and the size is deliberate rather than tuned, because the cost
+        of being wrong is not symmetric: a missed stall is the failure this exists
+        to catch, while a false one STOPS a running test on a machine that was
+        merely busy. MEASURED 2026-09-02 over healthy 20 s sessions
+        (`internal_tools/probe_capture_beat.py`), and run TWICE because a maximum
+        is the least repeatable thing a sample has: the median gap between two
+        beats came back at 1.075 and 1.061 ms, p99 at 8.679 and 2.573 ms, and the
+        WORST gap at 31.912 and 13.315 ms. The larger worst case is the one this
+        is set against, so ten seconds is 313 times a healthy session's worst
+        observed gap. That measurement is conservative in the right direction too:
+        the synthetic divert paces itself to ~900 packets/s while a real session
+        runs an order of magnitude faster, so it beats more often, not less.
+        """
+        if self._cap_beat_at is None or self._cap_waiting:
+            return False
+        t = self._t_cap
+        if t is None or not t.is_alive():
+            return False        # already reported by the liveness check above
+        return (time.monotonic() - self._cap_beat_at) > self.CAPTURE_STALL_S
 
     # -- worker threads -------------------------------------------------------- #
     def _capture_loop(self):
         rng = self._rng
         while self._running:
+            # Three stores per packet and not one allocation: `True`/`False` are
+            # singletons and `now` below is a float this loop already reads. That
+            # matters because this is the hot path - see the module's "What this
+            # actually sustains" section.
+            self._cap_waiting = True
             try:
                 packet = self._divert.recv()
             except Exception as e:
@@ -1545,6 +1611,17 @@ class BeanEngine:
                     self._fail_stop(e)
                 break
             now = time.monotonic()
+            # BEAT FIRST, then clear the flag, and the order is the whole safety of
+            # this pair. Written the other way round there is a window one bytecode
+            # wide where `_cap_waiting` is already False and `_cap_beat_at` is still
+            # the PREVIOUS beat - so a link that was quiet for a minute and then
+            # carried one packet would look, to a watchdog tick landing exactly
+            # there, like a thread that left recv() a minute ago and never came
+            # back. That is the expensive direction: it stops a healthy session.
+            # This way the flag only ever turns False after the beat behind it is
+            # already current.
+            self._cap_beat_at = now
+            self._cap_waiting = False
             # Sampled on TIME, not on a packet count. A count-based sample never
             # fires on a quiet link - 24 packets in 12 seconds would never reach
             # a 1-in-256 - and quiet links are exactly where a 2-second driver

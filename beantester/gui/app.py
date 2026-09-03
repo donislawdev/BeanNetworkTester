@@ -51,7 +51,8 @@ from . import crash as gui_crash
 from . import dialogs
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
-from .pages import PAGES
+from .logview import LogView
+from .pages import PAGES, teardown as teardown_pages
 from .profiles import ProfileStore
 from .rates import PeakWindow
 from . import scope
@@ -121,11 +122,13 @@ class App:
         gui_crash.install(self)
         self._restore_geometry()
 
-        # Log lines are queued here and applied to the tkinter widget only from
-        # the main thread (in _tick): tkinter is NOT thread-safe and the
+        # Log lines are queued and applied to the tkinter widget only from the
+        # main thread (in _tick): tkinter is NOT thread-safe and the
         # engine/scenario/target-refresher threads all call self.log().
-        self._log_queue = queue.Queue()
-        self._log_lines = []
+        self._logview = LogView(self)
+        # Fingerprints of the faults that already opened a dialog this session, so
+        # a binding that fires in a series shows one window and not a stack of them.
+        self._ui_errors_shown = set()
         self.engine = BeanEngine(self.log)
         self.running = False
         self._applied_target = None     # last expression pushed to the engine
@@ -327,6 +330,10 @@ class App:
         # A Toplevel is a child of the root too, so destroying every child used to
         # take the open panel windows with it, leaving WindowManager to close
         # windows that were already gone (see WindowManager.toplevels).
+        # Before the destroy loop, not after: a page can only cancel a timer while
+        # the widget it was scheduled on still exists.
+        if getattr(self, "pages", None):
+            teardown_pages(self)
         owned = self.windows.toplevels()
         for widget in root.winfo_children():
             if widget in owned:
@@ -479,13 +486,13 @@ class App:
         self.log_wrap.pack(side="top", fill="x")
         log_sb = ttk.Scrollbar(self.log_wrap, orient="vertical")
         log_sb.pack(side="right", fill="y")
-        self.log_box = tk.Text(self.log_wrap, height=LOG_LINES, state="disabled",
-                               font=(MONO_FONT, 9), bg=FIELD, fg=MUT,
-                               insertbackground=FG, relief="flat", borderwidth=0,
-                               highlightthickness=0, wrap="none",
-                               yscrollcommand=log_sb.set)
-        self.log_box.pack(side="left", fill="both", expand=True)
-        log_sb.config(command=self.log_box.yview)
+        log_box = tk.Text(self.log_wrap, height=LOG_LINES, state="disabled",
+                          font=(MONO_FONT, 9), bg=FIELD, fg=MUT,
+                          insertbackground=FG, relief="flat", borderwidth=0,
+                          highlightthickness=0, wrap="none",
+                          yscrollcommand=log_sb.set)
+        log_box.pack(side="left", fill="both", expand=True)
+        log_sb.config(command=log_box.yview)
 
         # ...and only then the notebook, which takes whatever is left
         nb_holder = ttk.Frame(root)
@@ -508,12 +515,10 @@ class App:
         self.select_page(self._page_id)
         self._sync_running_ui()
 
-        if self._log_lines:                       # restore the log after a rebuild
-            self.log_box.config(state="normal")
-            tail = self._log_lines[-self.pref("log_lines"):]
-            self.log_box.insert("end", "\n".join(tail) + "\n")
-            self.log_box.config(state="disabled")
-            self.log_box.see("end")
+        # LAST, and after the notebook: attaching restores the log into the fresh
+        # widget, and it must be the widget this build made rather than the one the
+        # previous language left behind.
+        self._logview.attach(log_box)
         self._form_changed = True
 
     def _settings_for_form(self):
@@ -569,7 +574,7 @@ class App:
         self._filter_key = self._filter_cli_key()      # display names are localised
         self._lang = new
         self.ui.set("language", new)
-        self._log_lines = []          # the log starts fresh in the new language
+        self._logview.forget()        # the log starts fresh in the new language
         self._build_ui()
         # the open secondary windows are part of the UI: rebuild them in the new
         # language as well, or they sit there in the old one until reopened
@@ -1042,7 +1047,9 @@ class App:
         csv_export.export_stats(self)
 
     def export_connections_csv(self):
-        csv_export.export_connections(self)
+        # Returns the worker: the export runs off this thread now, and a caller
+        # that needs the file on disk before it goes on joins it.
+        return csv_export.export_connections(self)
 
     def mark_bug(self):
         if not self.running:
@@ -1437,12 +1444,23 @@ class App:
         self._transition = kind
 
         def run():
+            # The `put` is in a `finally` and the catch is BaseException, and both
+            # halves are load-bearing. `_transition` is only ever cleared by
+            # `_poll_transition` reading this queue, so a `run()` that ends without
+            # putting leaves the flag on "starting" or "stopping" FOREVER: `_start`
+            # and `_stop` return immediately while a transition is in flight, and
+            # `_poll_transition` re-arms `root.after(30, ...)` in a loop. START and
+            # STOP are then dead for the life of the window, with a divert possibly
+            # still open - which is the one control a network tester must never
+            # take away. A one-line escape past a bare `except Exception` was all it
+            # took, so the queue is fed no matter how this ends.
+            err = None
             try:
                 work()
-                err = None
-            except Exception as e:      # carried to the main thread, never swallowed
+            except BaseException as e:  # carried to the main thread, never swallowed
                 err = e
-            self._ui_queue.put((kind, err))
+            finally:
+                self._ui_queue.put((kind, err))
 
         self._transition_thread = threading.Thread(target=run, daemon=True)
         self._transition_thread.start()
@@ -1506,13 +1524,33 @@ class App:
 
         It is also written to the CRASH LOG, with the seed, the settings and the
         counters attached - so "it broke" turns into a report somebody can act on.
+
+        ONE WINDOW PER FAULT, not one per occurrence. `crashlog.record` deduplicates
+        by fingerprint and counts the repeats. `dialogs.show_error` deduplicated
+        nothing, so an exception out of a binding that fires in a series - dragging
+        a window edge fires `<Configure>` continuously - buried the user under a
+        stack of modal windows to close one by one, on top of the original fault
+        and with the rest of the interface not responding. Every later occurrence
+        still reaches the log and the crash record, which is where the count lives.
         """
         import traceback
+        record = None
         if value is not None:
             value.__traceback__ = tb
-            crashlog.record(value, source="tk-callback")
+            record = crashlog.record(value, source="tk-callback")
         detail = "".join(traceback.format_exception_only(exc, value)).strip()
         self.log(T("log.ui_error", e=detail))
+        # The FINGERPRINT, never the message: `crashlog` builds it from the
+        # exception type and the frames, so it is the same for every repeat of one
+        # fault. Keying on the formatted detail instead would put the message in
+        # the key, and one varying number in it - a port, a path - would make every
+        # occurrence look new, which is the storm this is here to stop. The
+        # fallback for a fault carrying no exception object is its type, for the
+        # same reason.
+        key = record["fingerprint"] if record else getattr(exc, "__name__", str(exc))
+        if key in self._ui_errors_shown:
+            return
+        self._ui_errors_shown.add(key)
         try:
             dialogs.show_error(self.root, T("dialogs.internal_error_title"),
                                T("dialogs.internal_error", e=detail))
@@ -1751,7 +1789,7 @@ class App:
         try:
             self._drain_ui_queue()      # finished async start/stop (main thread only)
             gui_crash.leave_breadcrumb(self)   # state a NATIVE crash cannot write
-            self._drain_log()           # worker-thread log lines (main thread only)
+            self._logview.drain()       # worker-thread log lines (main thread only)
             self._drain_target_warning()   # render the target verdict (main thread)
             self._drain_engine_warning()   # "the tool itself is dropping packets"
             self._sample()
@@ -1779,51 +1817,14 @@ class App:
             self.root.after(TICK_MS, self._tick)
 
     # -- logging ------------------------------------------------------------------ #
+    # The box's own bookkeeping lives in gui/logview.py (see its docstring for why).
+    # These two stay because they are the surface everything else calls.
     def log(self, msg):
         """Thread-safe logging entry point (worker threads never touch widgets)."""
-        stamp = time.strftime("%H:%M:%S")
-        self._log_queue.put(f"[{stamp}] {msg}")
-        if threading.current_thread() is threading.main_thread():
-            self._drain_log()
+        self._logview.log(msg)
 
     def clear_log(self):
-        self._log_lines = []
-        try:
-            self.log_box.config(state="normal")
-            self.log_box.delete("1.0", "end")
-            self.log_box.config(state="disabled")
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-
-    def _drain_log(self):
-        """Apply queued log lines to the widget. Main thread only."""
-        if getattr(self, "log_box", None) is None:
-            return                      # UI not built yet; lines stay queued
-        while True:
-            try:
-                line = self._log_queue.get_nowait()
-            except queue.Empty:
-                break
-            self._append_log_line(line)
-
-    def _append_log_line(self, line):
-        # How many lines to keep is a saved preference. A little hysteresis (trim
-        # only past keep + 100) keeps this off the hot path: we do not reslice the
-        # whole list on every single line once the cap is reached.
-        keep = self.pref("log_lines")
-        self._log_lines.append(line)
-        if len(self._log_lines) > keep + 100:
-            self._log_lines = self._log_lines[-keep:]
-        self.log_box.config(state="normal")
-        self.log_box.insert("end", line + "\n")
-        try:            # keep the widget bounded too, not just the in-memory list
-            count = int(self.log_box.index("end-1c").split(".")[0])
-            if count > keep + 100:
-                self.log_box.delete("1.0", f"{count - keep}.0")
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        self.log_box.see("end")
-        self.log_box.config(state="disabled")
+        self._logview.clear()
 
 
 # -- backwards-compatible attribute names --------------------------------------- #
@@ -1845,6 +1846,19 @@ for _name, _key in (("loss_var", "loss"), ("corr_var", "corrupt"), ("dup_var", "
                     ("flap_period", "flap_period"), ("flap_downpct", "flap_down"),
                     ("filter_var", "filter")):
     setattr(App, _name, _var_property(_key))
+
+
+# The log's own state moved to gui/logview.py, but two of its names are read from
+# outside this class - `gui/crash.py` puts the tail into every crash report, and the
+# GUI tests read both - so they stay as names. Read-only on purpose: the widget is
+# handed over by `_build_ui` and the list is emptied through `LogView.forget()`, so
+# there is no caller that should be assigning to either.
+# Through setattr for the reason the block below spells out: a plain assignment
+# here is a type error, because a class does not grow attributes from outside its
+# own body.
+for _attr, _get in (("log_box", lambda self: self._logview.box),
+                    ("_log_lines", lambda self: self._logview.lines)):
+    setattr(App, _attr, property(_get))
 
 
 # Older private names kept working (docs, scripts, the GUI smoke). Written as a

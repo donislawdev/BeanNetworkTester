@@ -46,6 +46,70 @@ def test_write_is_atomic_and_leaves_no_tmp(tmp_path):
           f"(found {leftovers})")
 
 
+def test_two_writers_do_not_share_one_temp_file(tmp_path, monkeypatch):
+    """Two copies of the program saving the same file at the same moment.
+
+    Nothing stops that from happening: there is no single-instance lock, and the
+    mutex in ``driver.py`` guards the DRIVER, not these files. The temp name used
+    to be ``<target>.tmp`` - a function of the TARGET - so both writers opened one
+    file, the second truncating what the first was still writing, and the first
+    then published the result as the user's profiles.
+
+    The interleaving is FORCED rather than raced, at the one instant that matters:
+    writer A has finished its temp file and is about to publish it. Two threads
+    would reproduce the collision only sometimes, and a test that reproduces a bug
+    sometimes proves nothing on the run where it passes.
+    """
+    path = str(tmp_path / "profiles.json")
+    first_data = {"writer": "A", "rows": list(range(50))}
+    second_data = {"writer": "B", "rows": list(range(50))}
+    real_replace = os.replace
+    second = []
+
+    def let_the_other_writer_in(src, dst):
+        # Guard BEFORE the nested save, not after: the second writer publishes
+        # through this same function and would otherwise recurse for ever.
+        if not second:
+            second.append("did not finish")
+            second[0] = write_json(path, second_data)
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", let_the_other_writer_in)
+    first = write_json(path, first_data)
+    # No undo() here on purpose: one monkeypatch object serves the whole test, so
+    # undoing reverts every patch a fixture made too. Teardown restores it, and
+    # the patch is a pass-through once the second writer has run.
+
+    check("the second writer reported success", second == [None], f"(got {second!r})")
+    check("the first writer reported success too - it published a file of its own, "
+          "not one the second had already taken", first is None, f"(err={first!r})")
+    back, read_error = read_json(path)
+    check("the file both writers touched is readable", read_error is None,
+          f"(err={read_error!r})")
+    check("and it holds one writer's data, not a mix of the two",
+          back in (first_data, second_data), f"(got {back!r})")
+    leftovers = [p for p in os.listdir(tmp_path) if p.endswith(".tmp")]
+    check("neither writer left a temp file behind", not leftovers, f"(found {leftovers})")
+
+
+def test_a_value_json_cannot_write_is_an_error_not_a_crash(tmp_path):
+    """``json`` raises ``TypeError`` for a value it has no rule for - a set, a
+    widget, a ``datetime`` - and that walked straight out of ``write_json``, past
+    its own temp-file cleanup, and took down whatever was saving. It is the same
+    event as a non-finite float from the caller's side, and the reader's half made
+    that decision long ago: ``load_json`` splits by KIND, not by which exceptions
+    somebody happened to list.
+    """
+    path = str(tmp_path / "state.json")
+    error = write_json(path, {"windows": {"main", "stats"}})   # a set
+
+    check("a value json cannot write is reported, not raised",
+          isinstance(error, str) and error, f"(error={error!r})")
+    check("the target file was not created", not os.path.exists(path))
+    leftovers = [p for p in os.listdir(tmp_path) if p.endswith(".tmp")]
+    check("and no temp file is left behind", not leftovers, f"(found {leftovers})")
+
+
 def test_write_overwrites_existing_content(tmp_path):
     path = str(tmp_path / "state.json")
     write_json(path, {"v": 1})
