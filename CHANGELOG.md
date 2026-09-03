@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-03
+
 ### Added
 
 - **Lose packets in runs instead of one at a time.** A new "Losses in a row" field, and
