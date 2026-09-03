@@ -48,6 +48,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The search row no longer repeats the Ctrl+F shortcut on its right.** Hovering the search box
   still tells you the shortcut, and that spot still shows which match you are on ("2 / 7") while
   you are searching.
+- **The "Losses in a row" field is now called "Losses in a row (burst)".** The same setting and
+  the same `--loss-burst` flag, but the name now carries the word most people go looking for -
+  and typing "burst" into the search box on the Control page finds it.
 
 ### Fixed
 

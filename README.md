@@ -302,13 +302,13 @@ clearly failing network). *Corruption*: percentage of packets with a flipped dat
 so they pass untouched and are **not counted as corrupted**. *Duplication*: percentage of packets
 sent twice.
 
-**Losses in a row** - real links rarely lose packets one at a time. A microwave oven, a lift or a
-switch between transmitters takes the connection away for a moment, and everything sent in that
-moment is gone. This field says how many packets are lost in a row **on average**, while *Loss*
-still decides how much is lost in total. It matters more than it looks: 5% spread out is something
-most connections absorb, while the same 5% in runs of twenty stalls a transfer, breaks a live
-connection and sends an application down its reconnect path. Set 0 to spread the loss evenly, which
-is what the tool did before this setting existed.
+**Losses in a row (burst)** - real links rarely lose packets one at a time. A microwave oven, a
+lift or a switch between transmitters takes the connection away for a moment, and everything sent
+in that moment is gone. This field says how many packets are lost in a row **on average**, while
+*Loss* still decides how much is lost in total. It matters more than it looks: 5% spread out is
+something most connections absorb, while the same 5% in runs of twenty stalls a transfer, breaks a
+live connection and sends an application down its reconnect path. Set 0 to spread the loss evenly,
+which is what the tool did before this setting existed.
 
 Two limits worth knowing, and the log states both when you apply the settings. A very high loss
 cannot arrive in very short runs, because runs that short leave too little room between them, so
