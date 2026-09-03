@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from beantester import scenario_runner
+from beantester import crashlog, scenario_runner
 from beantester.scenario_runner import ScenarioRunner
 from fakes import check, wait_until
 
@@ -148,6 +148,96 @@ def test_a_looping_scenario_keeps_running_past_its_duration(spy_apply):
         runner.stop()
         _join(runner)
     check("stop() actually stops the loop", not runner._thread.is_alive())
+
+
+def test_stop_returns_with_the_thread_already_gone(spy_apply):
+    """``stop()`` used to set a flag and return, which is not the same thing.
+
+    The thread was still between two steps, so up to one more ``apply_settings``
+    landed on the engine AFTER the caller believed the scenario was over.
+    ``BeanEngine.stop()`` calls this while tearing a session down, and
+    ``start_scenario`` calls it to replace a runner - in that second case the old
+    timeline's last step could overwrite the new one's first.
+
+    The wait is asserted to be SHORT as well, because a join that is correct and
+    slow is its own bug here: STOP is the control the user reaches for to undo
+    what they just did to their own network.
+    """
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
+    wait_until(lambda: bool(spy_apply))       # it is running and applying steps
+
+    began = time.monotonic()
+    runner.stop()
+    waited = time.monotonic() - began
+
+    check("stop() returns only once the thread is actually gone",
+          not runner._thread.is_alive())
+    check("and it does not hold the caller up for a whole step interval",
+          waited < 0.1, f"(waited {waited:.3f}s)")
+    applied = len(spy_apply)
+    time.sleep(0.25)
+    check("nothing is applied to the engine after stop() has returned",
+          len(spy_apply) == applied, f"({len(spy_apply)} vs {applied})")
+
+
+def test_starting_again_leaves_no_orphan_applying_the_old_timeline(spy_apply):
+    """``start()`` on a runner that still owns a thread.
+
+    It set ``_stop`` back to False and overwrote ``_thread``: the previous thread
+    kept running with its stop flag freshly cleared, applying ITS timeline to the
+    same engine, and unreachable - ``stop()`` only ever knew about the current
+    thread. ``BeanEngine.start_scenario`` builds a fresh runner each time, so this
+    is the object's own guarantee rather than a path the program walks; the engine
+    side has its own guard (``test_engine.py::
+    test_a_second_scenario_stops_the_first_instead_of_orphaning_it``).
+    """
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
+    wait_until(lambda: bool(spy_apply))
+    first = runner._thread
+
+    runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
+
+    check("the first thread is gone before the second one is handed out",
+          not first.is_alive())
+    check("and the runner really did hand out a second one",
+          runner._thread is not first and runner._thread.is_alive())
+    runner.stop()
+
+
+def test_stopping_from_inside_the_runner_thread_does_not_raise(spy_apply,
+                                                               monkeypatch):
+    """The runner's own failure path comes back through ``stop()``.
+
+    ``_loop`` catches, calls ``engine.worker_failed``, and on the real engine that
+    is ``_fail_stop`` -> ``_worker_stop`` -> ``_stop_locked`` -> ``stop_scenario()``
+    -> ``ScenarioRunner.stop()`` - on the runner thread itself. A join without the
+    current-thread check raises ``RuntimeError`` there, i.e. inside the net that
+    exists to handle a failure. The fake engine below is the real call chain
+    collapsed to its one relevant step.
+    """
+    def explode(*_a, **_kw):
+        raise TypeError("a value the engine cannot use")
+
+    monkeypatch.setattr(scenario_runner, "apply_settings", explode)
+
+    def joins(): return [r for r in crashlog.recent(50) if r["type"] == "RuntimeError"]
+
+    before = len(joins())               # counted, not assumed empty: the crash
+                                        # table is global and outlives one test
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    engine.worker_failed = lambda error: runner.stop()      # what the engine does
+    runner.start(FakeScenario(loop=False, duration=5.0), base_settings={})
+    _join(runner)
+
+    check("the runner thread ended without a second exception",
+          not runner._thread.is_alive())
+    check("and the crash log holds the timeline's fault, not a join error",
+          len(joins()) == before, f"({[r['type'] for r in joins()]})")
 
 
 def test_a_completed_timeline_reports_that_it_finished(spy_apply):

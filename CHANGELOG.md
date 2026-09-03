@@ -51,6 +51,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   same collision could damage a profile file while it was being carried over. Each save now uses
   a temporary file of its own. Nothing changes for a single copy, which is the normal case.
 
+- **A scenario could apply one more step after it was stopped.** Stopping a session or a scenario
+  asked the timeline to end and moved on without waiting, so it could still change the settings
+  once more - which showed up as a scenario line in the log after the session had already
+  stopped. Stopping now waits for it, and the wait is too short to notice.
+
 - **A crash while the program was closing could leave no report at all.** The part that records
   a crash with no error message - the kind that just makes the program vanish - was switched off
   a moment before the network capture was released, which is one of the places such a crash can

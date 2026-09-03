@@ -124,6 +124,37 @@ MUTATIONS = [
         "test": "test_a_timeline_that_breaks_takes_the_session_down_with_it",
     },
     {
+        # The shipped stop(): a flag and a return. The thread is still between two
+        # steps and applies one more set of settings after the caller moved on.
+        "label": "scenario: stop() goes back to setting a flag and returning",
+        "file": "beantester/scenario_runner.py",
+        "old": "        thread = self._thread\n"
+               "        if (thread is not None and thread.is_alive()\n"
+               "                and thread is not threading.current_thread()):\n"
+               "            thread.join(timeout=timeout)",
+        "new": "        return",
+        "test": "test_stop_returns_with_the_thread_already_gone",
+    },
+    {
+        # Joining the calling thread raises - and raises INSIDE the net that
+        # handles the timeline's own failure, because worker_failed comes back here
+        # on the runner thread.
+        "label": "scenario: stop() joins whichever thread called it",
+        "file": "beantester/scenario_runner.py",
+        "old": "                and thread is not threading.current_thread()):",
+        "new": "                and True):",
+        "test": "test_stopping_from_inside_the_runner_thread_does_not_raise",
+    },
+    {
+        # start() back to clearing the stop flag over a thread it never stopped:
+        # the orphan keeps applying its own timeline to the same engine.
+        "label": "scenario: start() abandons the thread it already owns",
+        "file": "beantester/scenario_runner.py",
+        "old": "        self.stop()\n        self._wake.clear()",
+        "new": "        self._wake.clear()",
+        "test": "test_starting_again_leaves_no_orphan_applying_the_old_timeline",
+    },
+    {
         # The exact shape that walked past all four JSON loaders: RecursionError is
         # neither OSError nor ValueError, so re-raising it is the bug restored.
         "label": "jsonfile: deep nesting escapes the reader again",
