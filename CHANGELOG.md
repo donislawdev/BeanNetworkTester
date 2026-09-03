@@ -51,6 +51,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   same collision could damage a profile file while it was being carried over. Each save now uses
   a temporary file of its own. Nothing changes for a single copy, which is the normal case.
 
+- **A crash while the program was closing could leave no report at all.** The part that records
+  a crash with no error message - the kind that just makes the program vanish - was switched off
+  a moment before the network capture was released, which is one of the places such a crash can
+  happen. It is now switched off last.
+
+- **A long session could fill the crash log with copies of one fault.** Repeated faults are
+  counted rather than written out again, but that stopped working once the program had seen a
+  great many different ones: from then on, anything new was written to the log on every single
+  occurrence. It now keeps counting the faults that are actually happening and forgets the
+  oldest ones instead.
+
 - **Saving could close the program instead of reporting a problem.** A value that cannot be
   written to a settings or profile file used to escape as a crash rather than an error message.
   It is now reported the same way every other bad save already was.

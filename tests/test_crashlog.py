@@ -16,6 +16,7 @@ already failing, so:
 
 This tests all four.
 """
+import faulthandler
 import json
 import os
 import sys
@@ -248,6 +249,23 @@ def test_once_records_the_first_occurrence_only(isolated):
 
 
 # -- 6) it is bounded ---------------------------------------------------------- #
+def _distinct_fault(i):
+    """A fault with a fingerprint of its OWN: raised from its own generated line.
+
+    The fingerprint is the exception type plus the top frames, so a loop raising
+    the same ValueError over and over produces one record however many times it
+    runs. Loading the table needs faults that differ, and this is the cheapest way
+    to make them differ the way real ones do.
+    """
+    namespace = {}
+    exec(f"def f{i}():\n    raise ValueError('distinct fault {i}')", namespace)
+    try:
+        namespace[f"f{i}"]()
+    except ValueError as exc:
+        return exc
+    return None
+
+
 def test_the_in_memory_table_is_bounded(isolated):
     """A program with thousands of DISTINCT faults must not be memory-bombed by the
     thing that is supposed to be diagnosing it.
@@ -257,18 +275,76 @@ def test_the_in_memory_table_is_bounded(isolated):
     each gets its own fingerprint - which is what actually loads the table.
     """
     for i in range(crashlog.MAX_RECORDS + 200):
-        namespace = {}
-        exec(f"def f{i}():\n    raise ValueError('distinct fault {i}')", namespace)
-        try:
-            namespace[f"f{i}"]()
-        except ValueError as exc:
-            crashlog.record(exc, source="test")
+        crashlog.record(_distinct_fault(i), source="test")
 
     prints = {e["fingerprint"] for e in _entries(isolated)}
     assert len(prints) > 100, f"the faults were not distinct ({len(prints)})"
     assert len(crashlog._seen) <= crashlog.MAX_RECORDS, (
         f"the crash table grew to {len(crashlog._seen)} "
         f"(ceiling {crashlog.MAX_RECORDS})")
+
+
+def test_a_repeating_fault_is_still_deduplicated_when_the_table_is_full(isolated,
+                                                                       monkeypatch):
+    """The ceiling used to be a cliff, and it fell exactly where it hurts.
+
+    Past MAX_RECORDS the table REFUSED new fingerprints, so a fault that started
+    after the table filled never got a slot - every occurrence looked new, built a
+    full context and wrote to disk again. MEASURED before the fix, the same
+    repeating fault: 137 us and zero writes with a slot, 1926 us and a write per
+    occurrence without one. The de-duplication this module is built around
+    switched itself off for whatever broke last.
+
+    MAX_RECORDS is lowered here rather than filled for real: the true 2000 takes
+    about three seconds to load, and the behaviour under test is the same at four.
+    """
+    monkeypatch.setattr(crashlog, "MAX_RECORDS", 4)
+    for i in range(4):
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    late = _boom("a fault that started after the table was full")
+    crashlog.record(late, source="late")            # one record, one disk write
+    written = len(_entries(isolated))
+    for _ in range(20):
+        crashlog.record(late, source="late")
+
+    assert len(_entries(isolated)) == written, (
+        "a repeating fault wrote to disk again on every occurrence once the "
+        f"table was full ({len(_entries(isolated)) - written} extra writes)")
+    assert len(crashlog._seen) <= 4, (
+        f"the table grew past its own ceiling ({len(crashlog._seen)})")
+    busiest = crashlog.recent(1)[0]
+    assert busiest["count"] == 21, (
+        f"the repeating fault lost its counter (counted {busiest['count']} of 21)")
+
+
+def test_the_table_makes_room_by_dropping_the_coldest_fault_not_the_busiest(
+        isolated, monkeypatch):
+    """Which end the table drops is the whole design, so it gets its own guard.
+
+    A bounded table that evicts by ARRIVAL would throw out the fault that is
+    firing right now to make room for four one-off ones - and the fault firing
+    right now is the one whose de-duplication is worth having. Every occurrence
+    moves its record to the fresh end, so eviction always takes the fault nobody
+    has seen for longest.
+    """
+    monkeypatch.setattr(crashlog, "MAX_RECORDS", 4)
+    for i in range(4):
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    busy = _boom("the fault that keeps firing")
+    crashlog.record(busy, source="busy")
+    for i in range(100, 103):                       # newcomers arrive
+        crashlog.record(_distinct_fault(i), source="fill")
+    crashlog.record(busy, source="busy")            # it fires again: freshest now
+    written = len(_entries(isolated))
+    for i in range(200, 203):                       # three more push it back
+        crashlog.record(_distinct_fault(i), source="fill")
+
+    crashlog.record(busy, source="busy")
+    assert len(_entries(isolated)) == written + 3, (
+        "the busiest fault was evicted by faults seen once each, so it wrote to "
+        f"disk again ({len(_entries(isolated)) - written} writes, expected 3)")
 
 
 def test_disabled_records_nothing(isolated):
@@ -393,6 +469,45 @@ def test_cleanup_removes_the_empty_native_file_and_dir(isolated):
 
     assert not os.path.exists(path), "the empty native-crash file was left behind"
     assert not os.path.isdir(directory), "the now-empty crashes dir was left behind"
+
+
+def test_the_diverts_are_closed_while_the_native_handler_is_still_armed(isolated):
+    """The order of two atexit handlers, and the reason the whole module exists.
+
+    `atexit` is LIFO. `engine.py` registers `_stop_live_engines` at IMPORT and
+    `install()` registers `_cleanup_native` later, so the cleanup runs FIRST - and
+    it used to disable faulthandler while a ctypes call into the WinDivert kernel
+    driver was still to come. A segfault inside `divert.close()` at exit would then
+    have left nothing at all: no Python traceback, because there is none for a hard
+    crash, and no native report, because the handler that writes one was already
+    off.
+
+    A stand-in engine in `_LIVE_ENGINES` answers the question directly, and it is
+    the only half that can be answered without a real segfault: was the handler
+    still armed at the moment the divert was closed?
+    """
+    from beantester import engine
+
+    armed = []
+
+    class StandInEngine:
+        """Holds no divert; only reports what the handler state was when asked."""
+
+        def stop(self, reason=""):
+            armed.append(faulthandler.is_enabled())
+
+    held = StandInEngine()                  # a strong reference: _LIVE_ENGINES is weak
+    engine._LIVE_ENGINES.add(held)
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        crashlog._cleanup_native()
+    finally:
+        engine._LIVE_ENGINES.discard(held)
+
+    assert armed == [True], (
+        "the divert was closed with the native crash handler already off, so a "
+        f"hard crash in it would have gone unrecorded (saw {armed})")
 
 
 def test_cleanup_keeps_a_non_empty_native_file(isolated):

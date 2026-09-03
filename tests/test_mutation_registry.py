@@ -1638,6 +1638,38 @@ MUTATIONS = [
         "test": "test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit",
     },
     {
+        # atexit is LIFO, so without this call the diverts are closed by engine.py's
+        # own handler AFTER faulthandler is off - which is what shipped.
+        "label": "crashlog: the diverts are closed after the native handler is off",
+        "file": "beantester/crashlog.py",
+        "old": "            live._stop_live_engines()       "
+               "# idempotent: stop() forgets the engine",
+        "new": "            pass",
+        "test": "test_the_diverts_are_closed_while_the_native_handler_is_still_armed",
+    },
+    {
+        # The shipped cliff: full table -> new fingerprints refused -> every
+        # occurrence of a fault that arrived late is a fresh record and a write.
+        "label": "crashlog: the crash table refuses new faults instead of making room",
+        "file": "beantester/crashlog.py",
+        "old": "        _seen[fingerprint] = entry\n"
+               "        if len(_seen) > MAX_RECORDS:\n"
+               "            _seen.popitem(last=False)       "
+               "# the least recently seen fault",
+        "new": "        if len(_seen) < MAX_RECORDS:\n"
+               "            _seen[fingerprint] = entry",
+        "test": "test_a_repeating_fault_is_still_deduplicated_when_the_table_is_full",
+    },
+    {
+        # Bounded, but evicting by ARRIVAL: the fault firing right now is thrown
+        # out to make room for faults seen once each.
+        "label": "crashlog: the crash table evicts by arrival instead of by recency",
+        "file": "beantester/crashlog.py",
+        "old": "            _seen.move_to_end(fingerprint)",
+        "new": "            pass",
+        "test": "test_the_table_makes_room_by_dropping_the_coldest_fault_not_the_busiest",
+    },
+    {
         # One byte of the recorded driver hash. The version resource still reads
         # 2.2 - which is exactly what a swapped kernel driver looks like.
         "label": "legal: the recorded WinDivert driver hash stops matching",

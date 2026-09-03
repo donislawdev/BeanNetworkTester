@@ -48,7 +48,10 @@ The two things that would break it at scale
 * **Duplicate storms.** A crash inside the tick loop fires 1.4 times a second,
   forever. Records are therefore FINGERPRINTED (exception type + the top frames)
   and counted, not appended: the tenth thousand occurrence of a bug costs one
-  integer, not another disk write.
+  integer, not another disk write. The table that holds those counters is bounded,
+  and it makes room by dropping the coldest fault rather than by refusing the
+  newest - refusing was the same thing as switching the de-duplication off for
+  whatever broke last.
 * **Unbounded disk.** The log rotates and is capped, so a program left running for
   a fortnight with a repeating fault cannot fill the volume it is diagnosing.
 """
@@ -60,6 +63,7 @@ import platform
 import sys
 import threading
 import traceback
+from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -82,7 +86,9 @@ ERROR = "error"
 DEBUG = "debug"
 
 _lock = threading.Lock()
-_seen: dict[str, dict] = {}         # fingerprint -> record (with a count)
+# Ordered because the order IS the eviction policy: freshest last, so the table
+# makes room by dropping the fault nobody has seen for longest. See _record.
+_seen: OrderedDict[str, dict] = OrderedDict()   # fingerprint -> record (+ a count)
 _context_provider = None            # set by the App/CLI: returns a dict of state
 _installed = False
 _enabled = True
@@ -211,6 +217,9 @@ def _record(exc, source, subsystem, severity, note):
         if existing is not None:
             existing["count"] += 1
             existing["last_seen"] = _now_iso()
+            # Freshest last. The eviction below drops the OTHER end of the table,
+            # and a fault firing right now is the last thing it may drop.
+            _seen.move_to_end(fingerprint)
             # A repeating fault (a crash inside the tick loop fires 1.4x a second)
             # costs one integer from here on - not another disk write.
             return existing
@@ -230,8 +239,28 @@ def _record(exc, source, subsystem, severity, note):
                 traceback.format_exception(exc_type, exc, tb))[:8000],
             "context": _collect_context(),
         }
-        if len(_seen) < MAX_RECORDS:
-            _seen[fingerprint] = entry
+        # The table used to REFUSE a new fingerprint once it was full, and that
+        # turned the ceiling into a cliff: a fault arriving late never got a slot,
+        # so every one of its occurrences looked new, built a full context and
+        # wrote to disk again. MEASURED on this machine (2026-09-03), the same
+        # repeating fault: 137 us and zero writes with a slot, 1926 us and a write
+        # PER OCCURRENCE without one - 14x, with the expensive half built inside
+        # the lock every other caller of this module waits on. In other words the
+        # de-duplication this module is built around stopped working exactly when
+        # the program was failing most.
+        #
+        # So the table makes room instead of refusing: in a shipped build it is a
+        # dedup CACHE and nothing else, since neither read-back helper at the
+        # bottom of this module has a caller in the package (B-16) and the crash
+        # log on disk already holds every fault's first occurrence. What eviction
+        # costs is therefore one counter nobody reads. What REFUSING costs is the
+        # ability to recognise the fault that is happening now, which is the half
+        # worth having. (Naming those two helpers here would have been enough to
+        # make the dead-code scan call them alive - it counts words, comments
+        # included. Their names are in tests/test_code_hygiene.py.)
+        _seen[fingerprint] = entry
+        if len(_seen) > MAX_RECORDS:
+            _seen.popitem(last=False)       # the least recently seen fault
 
     _write(entry)
     return entry
@@ -555,6 +584,27 @@ def _cleanup_native():
     left behind by a version before this one is still cleaned up.
     """
     global _native_stream, _native_path, _breadcrumb_last
+    # Close the diverts BEFORE the handler that would record a hard crash inside
+    # one of them goes away. `atexit` is LIFO, `engine.py` registers its own
+    # `_stop_live_engines` at IMPORT and `install()` registers this handler later,
+    # so this one runs FIRST - and it used to disable faulthandler while a ctypes
+    # call into the WinDivert kernel driver was still to come. MEASURED rather than
+    # reasoned (2026-09-03): with a stand-in engine in `_LIVE_ENGINES`,
+    # `faulthandler.is_enabled()` read False at the moment `stop()` ran, so a
+    # segfault in `divert.close()` at exit would have left nothing at all - the one
+    # failure this whole module exists for.
+    #
+    # Looked up in `sys.modules` rather than imported: `engine` imports THIS module,
+    # so an import here would be a cycle, and importing a module at interpreter
+    # shutdown is its own hazard. A process that never loaded the engine has no
+    # divert to close. The registration in `engine.py` stays as the net for the
+    # case where `install()` never ran at all.
+    live = sys.modules.get("beantester.engine")
+    if live is not None:
+        try:
+            live._stop_live_engines()       # idempotent: stop() forgets the engine
+        except Exception:
+            pass
     try:
         faulthandler.disable()
     except Exception:
