@@ -1991,6 +1991,49 @@ MUTATIONS = [
         "new": "            bad = True",
         "test": "test_the_run_counter_answers_did_this_fire_at_all",
     },
+    {
+        # The plainest way to break convention 36, and the one a session in a
+        # hurry would reach for: an update check, a crash reporter, a "quick
+        # ping home". The static layer answers this one.
+        "label": "telemetry: a network client is imported into the shipped package",
+        "file": "beantester/summary.py",
+        "old": "def settings_summary",
+        "new": "import urllib.request\n\n\ndef settings_summary",
+        "test": "test_the_shipped_package_imports_no_network_client",
+    },
+    {
+        # The bypass a module-name scan cannot see: `windll.wininet` needs no
+        # import statement, so nothing about its spelling looks like networking.
+        # This is the entry that justifies the ctypes half existing at all.
+        "label": "telemetry: a network library reached through ctypes",
+        "file": "beantester/winenv.py",
+        "old": "        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))",
+        "new": "        ctypes.windll.wininet.InternetOpenW(0, 0, 0, 0, 0)",
+        "test": "test_ctypes_opens_only_local_windows_libraries",
+    },
+    {
+        # The bypass an outside review found, and the measurement confirmed: the
+        # scan read `socket.x(...)` and nothing else, so `import socket as s`
+        # walked straight through - as did the from-import form. Registering the
+        # IMPORT is what closes it, because a statement names its module whatever
+        # the local name becomes.
+        "label": "telemetry: a module reaches for socket under an alias",
+        "file": "beantester/views.py",
+        "old": "def sort_events(",
+        "new": "import socket as _s\n\n\ndef sort_events(",
+        "test": "test_only_named_files_may_import_a_module_that_reaches_outside",
+    },
+    {
+        # The RUNTIME half, and the only one of the three that no AST can answer:
+        # the module name is assembled from two strings. Measured: the audit hook
+        # reported urllib, http, http.client and ssl the moment the line ran.
+        "label": "telemetry: a client imported under a computed name at runtime",
+        "file": "beantester/cli.py",
+        "old": '    """Run the CLI. Returns the process exit code (see ``exitcodes``)."""',
+        "new": '    """Run the CLI. Returns the process exit code (see ``exitcodes``)."""\n'
+               "    __import__('url' + 'lib.request')",
+        "test": "test_a_real_run_raises_no_network_audit_event",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
