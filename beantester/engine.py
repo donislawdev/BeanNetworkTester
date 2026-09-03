@@ -135,7 +135,6 @@ class BeanEngine:
         self._divert = None
         self._running = False
         self._heap = []
-        self._counter = itertools.count()
         self._cv = threading.Condition()
         self.max_queue = 20000
         self._slock = threading.Lock()
@@ -564,12 +563,19 @@ class BeanEngine:
                            driver_wait_peak_ms=0.0)
         # counters back to zero means the warning should be able to fire again:
         # a fresh measurement window that overflows must say so afresh
-        # Highest arrival number already sent, per direction, for the `reordered`
-        # counter above. Reset here with the counters it feeds, or a restarted
-        # session would judge its first packets against the last session's high
-        # water mark and report every one of them as overtaken. Touched ONLY by
-        # the inject thread while a session runs, and this method runs before
-        # that thread exists (__init__ and start(), both before the workers).
+        # Arrival numbering, and the high-water mark it is judged against for the
+        # `reordered` counter above. ONE fact in two variables, so they are reset
+        # in one place: the mark only means anything against numbers from the same
+        # numbering, and a session that inherited one without the other would judge
+        # its first packets against a stranger. `stop()` clears the heap, so no
+        # entry from the previous session can collide with a reused number - which
+        # matters, because the number is also the heap's tie-breaker and two equal
+        # keys would push it into comparing packet objects.
+        #
+        # Both are touched ONLY by the inject thread while a session runs, and this
+        # method runs before that thread exists (from __init__ and from start(),
+        # both before the workers are spawned).
+        self._counter = itertools.count()
         self._last_sent = {True: -1, False: -1}
         self._overflow_warned = 0.0
         self._send_warned = 0.0
