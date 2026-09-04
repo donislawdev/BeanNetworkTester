@@ -5,29 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-### Added
-
-- **A "Reordered" figure on the Statistics page, and a `packets_reordered` column in the
-  stats CSV.** Jitter and the latency spike change the order packets go out in, but nothing
-  ever said whether that actually happened, and it depends on how busy the traffic is rather
-  than on the setting alone. Zero with jitter set now means the packets were too far apart to
-  overtake each other, instead of looking the same as an application that coped. An existing
-  stats CSV is rotated to a dated backup the first time the new column is written.
-
-### Changed
-
-- **The "Latency (ping)" card is now "Latency (ping) and packet order", and the spike
-  tooltip says what the spike is good for.** Delaying a slice of packets is how you test a
-  protocol that has to survive out-of-order delivery, and the field search matches names
-  rather than tooltips - so searching the Control page for "order" (or "kolejnosc") found
-  nothing at all, in either language. It now finds the card and all four fields in it.
-- **A speed unit you can pick: `KB/s`, `Mbit/s` or `MB/s` (Settings window).** The Statistics
-  page, the chart, the session peak and average, and a grey readout beside Download and Upload all
-  follow it. It changes what you READ, never what you type - the limits stay in KB/s, which is what
-  a saved config file, the schedule, the scenarios, `--down`/`--up` and the NDJSON output carry.
-  `K` here is 1024 and a megabit is a decimal million, so 1024 KB/s reads as 8.39 Mbit/s, not 8.
-
-## [0.6.0] - 2026-09-03
+## [0.6.0] - 2026-09-04
 
 ### Added
 
@@ -64,6 +42,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   one. Either way the language list in Settings switches at any time, and the command line
   remains in English.
 
+- **A "Reordered" figure on the Statistics page, and a `packets_reordered` column in the
+  stats CSV.** Jitter and the latency spike change the order packets go out in, but nothing
+  ever said whether that actually happened, and it depends on how busy the traffic is rather
+  than on the setting alone. Zero with jitter set now means the packets were too far apart to
+  overtake each other, instead of looking the same as an application that coped. An existing
+  stats CSV is rotated to a dated backup the first time the new column is written.
+
 ### Changed
 
 - **The scrollbar on the Control page now runs the whole height of the page.** It used to start
@@ -75,6 +60,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The "Losses in a row" field is now called "Losses in a row (burst)".** The same setting and
   the same `--loss-burst` flag, but the name now carries the word most people go looking for -
   and typing "burst" into the search box on the Control page finds it.
+- **The "Latency (ping)" card is now "Latency (ping) and packet order", and the spike
+  tooltip says what the spike is good for.** Delaying a slice of packets is how you test a
+  protocol that has to survive out-of-order delivery, and the field search matches names
+  rather than tooltips - so searching the Control page for "order" (or "kolejnosc") found
+  nothing at all, in either language. It now finds the card and all four fields in it.
+- **A speed unit you can pick: `KB/s`, `Mbit/s` or `MB/s` (Settings window).** The Statistics
+  page, the chart, the session peak and average, and a grey readout beside Download and Upload all
+  follow it. It changes what you READ, never what you type - the limits stay in KB/s, which is what
+  a saved config file, the schedule, the scenarios, `--down`/`--up` and the NDJSON output carry.
+  `K` here is 1024 and a megabit is a decimal million, so 1024 KB/s reads as 8.39 Mbit/s, not 8.
 
 ### Docs
 
