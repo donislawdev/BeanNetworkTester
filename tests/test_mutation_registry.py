@@ -2139,6 +2139,19 @@ MUTATIONS = [
         "new": "            if var is None:",
         "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
     },
+    {
+        # The WIRING rather than the label: the page stops reacting to the
+        # preference, so the readout keeps naming the unit you just changed away
+        # from until something else rebuilds the form. Worth its own entry because
+        # this reaction has already moved once (out of App.set_pref, which sits on
+        # the size ratchet) and the test had to be pointed at the real path before
+        # it could see the difference.
+        "label": "units: the Control page stops reacting to the unit preference",
+        "file": "beantester/gui/pages/control.py",
+        "old": "            self.form.sync_rate_hints()",
+        "new": "            pass",
+        "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

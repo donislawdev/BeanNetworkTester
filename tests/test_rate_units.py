@@ -14,7 +14,7 @@ switch is not allowed to touch).
 """
 from beantester import fields as F
 from beantester.gui import rates
-from beantester.gui.prefs import CHOICE, PREFS, PREFS_BY_KEY, coerce
+from beantester.gui.prefs import CHOICE, PREFS, coerce
 from fakes import check
 from gui_harness import run_gui
 
@@ -154,20 +154,31 @@ def test_the_converted_readout_appears_only_when_there_is_something_to_convert()
     here would make it one.
     """
     run_gui("""
+        from beantester.gui.pages import pref_changed
+
         app.select_page("control")
         form = app.form
         assert set(form.rate_hints) == {"down", "up"}, sorted(form.rate_hints)
 
+        def pick(unit):
+            # The production path: the Settings window persists and then TELLS the
+            # pages (SettingsWindow._store -> pages.pref_changed). Calling
+            # form.sync_rate_hints() directly here would test the label and leave
+            # the WIRING unguarded - which is the half that broke when the reaction
+            # moved out of App.set_pref.
+            app.set_pref("rate_unit", unit)
+            pref_changed(app, "rate_unit")
+
         app.vars["down"].set("1024")
-        app.set_pref("rate_unit", "kb")
+        pick("kb")
         assert form.rate_hints["down"].kw.get("text") == "", \\
             form.rate_hints["down"].kw.get("text")
 
-        app.set_pref("rate_unit", "mbit")
+        pick("mbit")
         shown = form.rate_hints["down"].kw.get("text")
         assert "8.39" in shown and "Mbit/s" in shown, shown
 
-        app.set_pref("rate_unit", "mb")
+        pick("mb")
         shown = form.rate_hints["down"].kw.get("text")
         assert "1.00" in shown and "MB/s" in shown, shown
 

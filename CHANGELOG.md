@@ -23,11 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   nothing at all, in either language. It now finds the card and all four fields in it.
 - **A speed unit you can pick: `KB/s`, `Mbit/s` or `MB/s` (Settings window).** The Statistics
   page, the chart, the session peak and average, and a grey readout beside Download and Upload all
-  follow it. It changes what you READ, never what you type - the limits stay in KB/s, because that
-  is the number a saved config file, the throughput schedule, the shipped scenarios, `--down`,
-  `--up` and the NDJSON output all carry. `K` here is 1024 and a megabit is a decimal million, so
-  1024 KB/s reads as 8.39 Mbit/s rather than 8, which is the honest conversion and not a rounding
-  error.
+  follow it. It changes what you READ, never what you type - the limits stay in KB/s, which is what
+  a saved config file, the schedule, the scenarios, `--down`/`--up` and the NDJSON output carry.
+  `K` here is 1024 and a megabit is a decimal million, so 1024 KB/s reads as 8.39 Mbit/s, not 8.
 
 ## [0.6.0] - 2026-09-03
 

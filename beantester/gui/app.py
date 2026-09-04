@@ -720,19 +720,6 @@ class App:
         unclean exit, unlike session state that is written on close)."""
         self.ui.set(prefs.ui_key(key), value)
         self.ui.persist()
-        if key == "rate_unit":
-            # PUSHED, not polled. The readout sits on the Control page while the
-            # dropdown that moves it is in another window, so waiting for the next
-            # rebuild would make the preference look ignored. Only the Control
-            # form is told: the settings surface holds no rate field (its sections
-            # are the table limit and the scope card), so the Settings window's own
-            # form has nothing to rewrite - and `rate_hints` is keyed off the
-            # registry, so a rate field moved there later would start arriving here
-            # rather than needing this line changed.
-            form = getattr(self, "form", None)
-            if form is not None:
-                with crashlog.quiet("gui.app"):
-                    form.sync_rate_hints()
 
     def chart_samples(self):
         """Chart history length in samples, derived from the seconds preference and
