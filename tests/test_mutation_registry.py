@@ -1884,8 +1884,11 @@ MUTATIONS = [
         # Without its own row the drop falls through to the unnamed default and
         # is reported as packet LOSS - the exact confusion drop_flap was split
         # out to end.
+        # Moved with DROP_BY_REASON when damage.py was carved out of engine.py
+        # (2026-09-04). The registry reported it the same day: a pattern that no
+        # longer matches is a SKIP, and a skip reads like a pass.
         "label": "engine: the Internet-only drop loses its own counter",
-        "file": "beantester/engine.py",
+        "file": "beantester/damage.py",
         "old": '                  "internet_only": "drop_internet_only", "block": "drop_block",',
         "new": '                  "block": "drop_block",',
         "test": "test_every_drop_counter_and_drop_reason_is_classified",
@@ -2033,6 +2036,121 @@ MUTATIONS = [
         "new": '    """Run the CLI. Returns the process exit code (see ``exitcodes``)."""\n'
                "    __import__('url' + 'lib.request')",
         "test": "test_a_real_run_raises_no_network_audit_event",
+    },
+    {
+        # The counter simply not counting. Its own tile would read 0 for ever,
+        # which is indistinguishable from a session where nothing overtook
+        # anything - the exact confusion the counter exists to end.
+        "label": "reordering: an overtaken packet is not counted",
+        "file": "beantester/engine.py",
+        "old": '            self._bump("reordered")',
+        "new": "            pass",
+        "test": "test_a_packet_that_is_overtaken_is_counted_as_reordered",
+    },
+    {
+        # The other direction, and the one a bare "does it count?" test misses:
+        # a counter that increments per delivered packet passes the test above
+        # and means nothing.
+        "label": "reordering: every packet counts as reordered",
+        "file": "beantester/engine.py",
+        "old": "        if arrived < self._last_sent[is_out]:",
+        "new": "        if True:",
+        "test": "test_packets_that_keep_their_order_are_not_counted",
+    },
+    {
+        # One shared high-water mark instead of one per direction. Ordinary
+        # two-way traffic then ticks the counter for inbound and outbound
+        # packets overtaking each other, which no receiver can observe.
+        "label": "reordering: one high-water mark shared by both directions",
+        "file": "beantester/engine.py",
+        "old": "        if arrived < self._last_sent[is_out]:\n"
+               '            self._bump("reordered")\n'
+               "        else:\n"
+               "            self._last_sent[is_out] = arrived",
+        "new": "        if arrived < self._last_sent[True]:\n"
+               '            self._bump("reordered")\n'
+               "        else:\n"
+               "            self._last_sent[True] = arrived",
+        "test": "test_the_two_directions_are_judged_separately",
+    },
+    {
+        # Marking a packet as sent on the FAILURE path. The packet behind it is
+        # then judged against one that never reached the stack and reported as
+        # overtaken by it. Surgical on purpose: it touches only the except
+        # branch, so the other four tests here stay green and this one is shown
+        # to be load-bearing on its own.
+        "label": "reordering: a refused send still moves the mark",
+        "file": "beantester/engine.py",
+        "old": '                self._bump("drop_send")\n'
+               '                self._charge_flow(key, "dropped")\n',
+        "new": '                self._bump("drop_send")\n'
+               '                self._charge_flow(key, "dropped")\n'
+               "                self._note_order(arrived,\n"
+               '                                 bool(getattr(packet, "is_outbound", True)))\n',
+        "test": "test_a_packet_the_driver_refused_does_not_make_the_next_one_look_overtaken",
+    },
+    {
+        # The mark surviving a restart while the counter is zeroed. The next
+        # session then reports reordering it never did, on its very first
+        # packets, and the numbers look plausible.
+        "label": "reordering: a restart keeps the previous high-water mark",
+        "file": "beantester/engine.py",
+        "old": "        self._last_sent = {True: -1, False: -1}",
+        "new": '        self._last_sent = getattr(self, "_last_sent", {True: -1, False: -1})',
+        "test": "test_a_restarted_session_does_not_inherit_the_previous_high_water_mark",
+    },
+    {
+        # The comfortable answer: a megabit as 1024*1024 bits makes 1024 KB/s come
+        # out as exactly 8.00, which is the number a reader expects and is 4.9%
+        # wrong. Nothing but an assertion on the digits can catch it, because the
+        # wrong version looks MORE right than the correct one.
+        "label": "units: a megabit becomes binary, so 1024 KB/s reads 8.00",
+        "file": "beantester/gui/rates.py",
+        "old": '    ("mbit", "Mbit/s", 1024.0 * 8.0 / 1_000_000.0),',
+        "new": '    ("mbit", "Mbit/s", 1024.0 * 8.0 / 1_048_576.0),',
+        "test": "test_a_kilobyte_here_is_1024_bytes_and_a_megabit_is_a_million_bits",
+    },
+    {
+        # Writing the LABEL into ui.json instead of the value. It survives the
+        # restart, matches no known unit, falls back to KB/s - and reads as "the
+        # preference does not stick" rather than as a bug in the write.
+        "label": "units: the dropdown stores its label instead of its value",
+        "file": "beantester/gui/panels/settings.py",
+        "old": "                     self._store(k, m.get(v.get())), add=\"+\")",
+        "new": "                     self._store(k, v.get()), add=\"+\")",
+        "test": "test_the_dropdown_stores_the_value_and_never_the_label",
+    },
+    {
+        # The view over the registry replaced by a list of names - the drift this
+        # project keeps paying for, and invisible until a third rate field exists.
+        "label": "units: the rate fields become a hand-written list",
+        "file": "beantester/gui/rates.py",
+        "old": "RATE_FIELD_KEYS = tuple(f.key for f in FIELD_DEFS if f.unit == BASE_LABEL)",
+        "new": 'RATE_FIELD_KEYS = ("down",)',
+        "test": "test_the_rate_fields_are_a_view_over_the_registry_not_a_list_of_names",
+    },
+    {
+        # "1024 KB/s" printed beside a box that says 1024. Harmless-looking, and
+        # the reason the readout exists at all is that it says something the box
+        # does not.
+        "label": "units: the converted readout repeats the value in the base unit",
+        "file": "beantester/gui/form.py",
+        "old": "            if unit == DEFAULT_UNIT or var is None:",
+        "new": "            if var is None:",
+        "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
+    },
+    {
+        # The WIRING rather than the label: the page stops reacting to the
+        # preference, so the readout keeps naming the unit you just changed away
+        # from until something else rebuilds the form. Worth its own entry because
+        # this reaction has already moved once (out of App.set_pref, which sits on
+        # the size ratchet) and the test had to be pointed at the real path before
+        # it could see the difference.
+        "label": "units: the Control page stops reacting to the unit preference",
+        "file": "beantester/gui/pages/control.py",
+        "old": "            self.form.sync_rate_hints()",
+        "new": "            pass",
+        "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
     },
 ]
 

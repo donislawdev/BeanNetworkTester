@@ -3,7 +3,7 @@ import json
 import time
 
 from .appinfo import TOOL_ID, command_name
-from .engine import corruption_pct, impairment_loss_pct
+from .damage import corruption_pct, impairment_loss_pct
 from .i18n import translate
 from .settings import DEFAULT_SETTINGS, setting_expression
 from .utils import bytes_to_mb, number_string, to_number
@@ -101,6 +101,11 @@ def build_repro_report(engine, settings):
         # means the session was too short to see one, which is the difference
         # between a run that proved nothing and a tool that is broken.
         loss_runs=stats.get("loss_bursts", 0),
+        # How many packets left this tool AFTER one that arrived later than they
+        # did. Zero with jitter or a latency spike configured means the traffic
+        # was too sparse for anything to overtake anything, not that the delay
+        # was never applied - the same distinction loss_runs draws above.
+        reordered=stats.get("reordered", 0),
         # connections_reset held drop_rst - the PACKETS a reset connection swallows
         # during its cooldown, which for a 30 s cooldown on a busy flow is thousands
         # against a handful of actual resets. The three RST numbers answer three

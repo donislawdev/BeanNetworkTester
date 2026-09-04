@@ -267,6 +267,19 @@ KB/s. 0 = no limit. Ping is small packets, so a speed limit barely changes it - 
 use a file download. A positive value always limits something: an extremely small limit (below
 1 B/s) is floored to 1 B/s, it does not silently turn into "no limit".
 
+**Speed unit (Settings window)** - whether the Statistics page, the chart and the readout next to
+these two fields show throughput in `KB/s`, `Mbit/s` or `MB/s`. It changes what you READ, never
+what you type: the limits themselves stay in KB/s, because that is the number a saved
+configuration file, the throughput schedule, the shipped scenarios, `--down`/`--up` and the NDJSON
+output all carry. Pick a unit and a grey `(= 8.39 Mbit/s)` appears beside the field, so you can
+type the number the tool wants while reading the number your link is sold in.
+
+> **`K` here is 1024, and a megabit is a decimal million** - the two conventions do not cancel out,
+> so 1024 KB/s is **8.39 Mbit/s**, not 8. That is the honest conversion, not a rounding error: a
+> byte is 8 bits, `1024 x 1024 x 8 = 8 388 608` bits per second, and megabit means 10^6 bits
+> everywhere a link is sold. Divide by 8.39, not by 8, when you want a limit to match an
+> advertised speed.
+
 **Buffer** - the capacity of the link buffer for a speed limit, in milliseconds (0 = unlimited
 buffer). It sets how much queueing delay may build up on a rate-limited link before it starts
 dropping the excess (bufferbloat). Without this buffer the token bucket could "run away" tens of
@@ -298,6 +311,19 @@ no delay and a mean of ~12 ms, not 0). When latency is larger than jitter the ef
 one. With the given probability it appends extra delay (ms) to a **single packet**, which is how
 momentary "lag" actually arrives. The chance is per packet and applies **in each direction**, so a
 round trip hits it about twice as often as the number suggests.
+
+**Testing out-of-order delivery** - this is what the spike pair is for, and it is the reason the
+section is called "Latency (ping) and packet order". A spiked packet arrives after packets that
+were sent later than it, so *Spike chance* and *Spike size* reorder traffic **without** smearing
+every other packet's delay the way jitter does - which matters when the thing under test is a UDP
+protocol that has to survive reordering on its own: a game, QUIC, telemetry, voice. Set a spike
+size larger than the gap between your packets, or nothing will overtake anything.
+
+Whether that actually happened is a separate question from whether it was configured, so the tool
+counts it: **Reordered** on the Statistics page (and `packets_reordered` in the stats CSV). 0 with a
+spike set means your traffic was too sparse for any packet to overtake another - not that the
+setting was ignored. The count is per direction, so two busy connections can overtake each other
+without either end seeing anything out of order.
 
 **Impairments** - *Loss*: percentage of packets vanishing without a trace (5% is already a
 clearly failing network). *Corruption*: percentage of packets with a flipped data bit - it affects
@@ -947,6 +973,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_overflow` | dropped because the tool's own queue was full (see the note on it below) |
 | `corrupted` | packets whose payload was flipped |
 | `duplicated` | extra copies queued |
+| `packets_reordered` | packets that left the tool in a different order than they went in. 0 with jitter or a spike configured means the packets were too far apart for any of them to overtake another. Counted per direction, so two busy connections can overtake each other without either end seeing anything out of order |
 | `dropped_syn` | TCP SYNs dropped ("connections that never open") |
 | `dropped_mtu` | dropped for exceeding the max size (MTU black hole) |
 | `dropped_nat` | dropped because the NAT mapping had expired |
@@ -1262,6 +1289,7 @@ the root, so all existing commands (README, reproduction reports, PyInstaller) w
 bean_network_tester.py   launcher + compatibility facade (re-exports the public API)
 beantester/              the implementation package
   core.py                pure per-packet decision core (BeanCore)
+  damage.py              how much a session damaged: drop reasons, loss/corruption shares
   engine.py              capture/inject threads, statistics (BeanEngine)
   matchers.py            filter expressions (list/range/!/>/</wildcard/re:) - shared
                          by the process, IP and port fields; a single source of truth

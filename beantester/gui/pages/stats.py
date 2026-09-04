@@ -13,12 +13,12 @@ window on a 4K screen no longer shows four narrow cells and a lot of nothing.
 import tkinter as tk
 from tkinter import ttk
 
-from ...engine import impairment_loss_pct
+from ...damage import impairment_loss_pct
 from ...i18n import T, event_kind_label
 from ...views import sort_events
 from ..chart import draw_throughput_chart
 from ..labels import wrapping_label
-from ..rates import average_kbps
+from ..rates import average_kbps, format_rate, rate_with_unit, RATE_FIELD_KEYS, UNIT_LABEL
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from .. import scope
@@ -67,6 +67,7 @@ CELLS = (
     ("loss_bursts", "stats.loss_runs", "", "tips.stat_loss_runs"),
     ("corrupted", "stats.corrupted", "", "tips.stat_corrupted"),
     ("duplicated", "stats.duplicated", "", "tips.stat_duplicated"),
+    ("reordered", "stats.reordered", "", "tips.stat_reordered"),
     ("drop_overflow", "stats.overflow", "", "tips.stat_overflow"),
     ("drop_shutdown", "stats.shutdown_dropped", "", "tips.stat_shutdown"),
     ("drop_send", "stats.send_failed", "", "tips.stat_send_failed"),
@@ -134,6 +135,10 @@ class StatsPage:
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self._on_subpage())
 
         self.stat_labels = {}
+        self.cap_labels = {}
+        # Which unit the rate captions currently SAY, so the tick can rewrite them
+        # when the preference changes and skip the work when it has not.
+        self._unit_shown = None
         self.sess_labels = {}
         self._cells = []
         self._grid_cols = 0
@@ -172,6 +177,7 @@ class StatsPage:
                                 style="StatCap.TLabel")
             caption.pack(padx=scaled(10), pady=(0, scaled(8)), anchor="w")
             self.stat_labels[key] = value
+            self.cap_labels[key] = caption
             for w in (cell, value, caption):
                 add_tooltip(w, tip)
                 self._attach_copy(w, value, "live")
@@ -319,10 +325,16 @@ class StatsPage:
     def live_text(self):
         """The counter grid, same rule - `CELLS` is the source, units included."""
         rows = []
+        # The copied text says the same unit the screen does: this is what ends up
+        # pasted into a bug report, so a caption disagreeing with the number beside
+        # it travels further than the window it came from.
+        chosen = UNIT_LABEL.get(self.app.pref("rate_unit"), "")
         for key, cap, unit, _tip in CELLS:
             label = self.stat_labels.get(key)
             if label is None:
                 continue
+            if key in RATE_FIELD_KEYS:
+                unit = chosen
             caption = T(cap) + (" (%s)" % unit if unit else "")
             rows.append("%s: %s" % (caption, label.cget("text")))
         return "\n".join(rows)
@@ -432,7 +444,8 @@ class StatsPage:
         self._chart_job = None
         try:
             draw_throughput_chart(self.canvas, self.app.down_hist, self.app.up_hist,
-                                  sample_interval_s=self.app.TICK_MS / 1000.0)
+                                  sample_interval_s=self.app.TICK_MS / 1000.0,
+                                  unit=self.app.pref("rate_unit"))
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.stats")
 
@@ -486,19 +499,43 @@ class StatsPage:
             note.config(text=T(SCOPE_NOTES[state]))
             retip(note, SCOPE_TIPS[state])
 
+    def _sync_rate_captions(self, unit):
+        """Rewrite the "(KB/s)" in the throughput captions when the unit changes.
+
+        On the tick rather than at build time, for the same reason the scope notes
+        are: the preference flips in another window while this page is already
+        built, and a caption naming a unit the number is no longer in is the exact
+        class of lie convention 5 is about. Memoised on the unit, so an unchanged
+        preference costs one comparison.
+        """
+        if unit == self._unit_shown:
+            return
+        self._unit_shown = unit
+        label = UNIT_LABEL.get(unit, "")
+        with crashlog.quiet("gui.pages.stats"):
+            for key, cap, _unit, _tip in CELLS:
+                if key not in RATE_FIELD_KEYS:
+                    continue
+                caption = self.cap_labels.get(key)
+                if caption is not None:
+                    caption.config(text=T(cap) + (f" ({label})" if label else ""))
+
     def refresh_counters(self):
         self._sync_scope_note()
         self._chart_frame.config(text=self._throughput_title())
         snap = self.app.last_snapshot or {}
         rates = self.app.last_rates
-        self.stat_labels["down"].config(text=f"{rates[0]:.0f}")
-        self.stat_labels["up"].config(text=f"{rates[1]:.0f}")
+        unit = self.app.pref("rate_unit")
+        self.stat_labels["down"].config(text=format_rate(rates[0], unit))
+        self.stat_labels["up"].config(text=format_rate(rates[1], unit))
+        self._sync_rate_captions(unit)
         # `seen` is the only counter here with a scoped twin. The impairment
         # counters are already scoped by construction (nothing outside the target
         # can be impaired), and drop_overflow / drop_shutdown / drop_send stay on
         # the FULL traffic on purpose - they are what the TOOL lost, including
         # traffic the user never targeted, and narrowing them would hide it.
         for key in ("seen", "queue", "drop_loss", "loss_bursts", "corrupted", "duplicated",
+                    "reordered",
                     "drop_overflow", "drop_shutdown", "drop_send",
                     "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",
@@ -510,6 +547,7 @@ class StatsPage:
         app = self.app
         snap = app.last_snapshot or {}
         info = app.engine.session_info()
+        unit = app.pref("rate_unit")
         host, ipv4, ipv6 = host_identity()
         self.sess_labels["host"].config(text=host)
         self.sess_labels["private_ipv4"].config(text=ipv4)
@@ -538,7 +576,8 @@ class StatsPage:
         self.sess_labels["driver_wait"].config(
             text=f"{waited:.2f} ms" if waited else "-")
         self.sess_labels["peak_rate"].config(
-            text=f"{app.peak_down:.0f} / {app.peak_up:.0f} KB/s")
+            text="%s / %s" % (format_rate(app.peak_down, unit),
+                             rate_with_unit(app.peak_up, unit)))
         down_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_in"))
         up_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_out"))
         total_mb = round(down_mb + up_mb, 2)
@@ -549,7 +588,7 @@ class StatsPage:
         total_bytes = (app.scoped_stat(snap, "bytes_in")
                        + app.scoped_stat(snap, "bytes_out"))
         avg = average_kbps(total_bytes, elapsed)
-        self.sess_labels["avg_rate"].config(text=f"{avg:.0f} KB/s")
+        self.sess_labels["avg_rate"].config(text=rate_with_unit(avg, unit))
 
     def refresh_events(self):
         events = self.app.engine.events_snapshot()[-300:]

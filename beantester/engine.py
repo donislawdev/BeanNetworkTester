@@ -99,78 +99,13 @@ from . import filters
 from . import portmap
 from . import winenv
 from .core import BeanCore
+from .damage import DROP_BY_REASON
 from .i18n import T
 from .scenario_runner import ScenarioRunner
 from .target_resolver import TargetResolver
 from . import crashlog
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
-
-# Which counter a dropped packet lands in, by the reason BeanCore.decide() gave.
-# Module level on purpose: written as a literal inside the capture loop it was
-# rebuilt for every dropped packet, and a session set to 100% loss drops as often
-# as it sees. It is also the SINGLE SOURCE for what counts as damage below.
-DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
-                  "rst": "drop_rst", "lan": "drop_lan",
-                  "internet_only": "drop_internet_only", "block": "drop_block",
-                  "flap": "drop_flap", "rate": "drop_rate"}
-
-# Damage the simulated link inflicted: every reason decide() can name, plus the
-# unnamed default (the configured Loss). Derived from the map above so that a new
-# impairment cannot quietly fall outside the figure - which is exactly how
-# "Effective loss" came to read 0.0% through a session losing 90% to a speed
-# limit. Guarded by
-# test_engine.py::test_every_drop_counter_and_drop_reason_is_classified.
-IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
-
-# Losses the TOOL caused, not the link: its delay queue filled up, the session
-# ended with packets still parked in it, or re-injecting one failed outright.
-# Deliberately NOT part of the loss figure.
-# The README defines the term - traffic dropped above a speed limit is counted
-# "because that is how a congested link behaves" - and tips.stat_shutdown says of
-# these outright "They were not lost in the network". Both have their own tiles,
-# and overflow additionally raises a log warning and a banner. Counting them here
-# would also let the figure exceed 100%: the delay queue holds out-of-scope
-# packets too, so with a narrow target it can drop more than were ever in scope.
-TOOL_DROP_KEYS = ("drop_overflow", "drop_shutdown", "drop_send")
-
-
-def impairment_loss_pct(stats):
-    """Share of the traffic the tool was aiming at that the impairments killed.
-
-    Numerator: every drop ``decide()`` made. Denominator: packets that passed the
-    targeting gate (``scoped_seen``), not everything captured - with a target set,
-    other applications' traffic is watched but never impaired, so counting it only
-    dilutes the answer. Measured before this became one function: 50% loss with a
-    third of the traffic in scope reported 16.7% while the target application
-    itself saw 50.1%.
-
-    Both parts are per-packet and every drop counted here happened to a packet
-    that was in scope, so the result cannot exceed 100%. With no targeting set,
-    ``scoped_seen == seen`` and this is simply the loss the session inflicted.
-
-    Takes a stats dict rather than an engine so the GUI can compute it from the
-    snapshot it already holds. A snapshot without ``scoped_seen`` (an older file,
-    a partial fake) falls back to ``seen``.
-    """
-    scoped = stats.get("scoped_seen", stats.get("seen", 0))
-    if not scoped:
-        return 0.0
-    return 100.0 * sum(stats.get(k, 0) for k in IMPAIRMENT_DROP_KEYS) / scoped
-
-
-def corruption_pct(stats):
-    """Share of the targeted traffic whose payload was actually altered.
-
-    Same denominator as ``impairment_loss_pct``, for the same reason. ``corrupted``
-    counts successful payload flips only - a packet with no payload (a bare ACK)
-    has nothing to corrupt and is not counted.
-    """
-    scoped = stats.get("scoped_seen", stats.get("seen", 0))
-    if not scoped:
-        return 0.0
-    return 100.0 * stats.get("corrupted", 0) / scoped
-
 
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
@@ -200,7 +135,6 @@ class BeanEngine:
         self._divert = None
         self._running = False
         self._heap = []
-        self._counter = itertools.count()
         self._cv = threading.Condition()
         self.max_queue = 20000
         self._slock = threading.Lock()
@@ -593,7 +527,16 @@ class BeanEngine:
                            # reset_buckets, which start() calls in the same breath.
                            loss_bursts=0,
                            drop_loss=0, drop_overflow=0, corrupted=0,
-                           duplicated=0, drop_syn=0, drop_mtu=0, drop_nat=0,
+                           duplicated=0,
+                           # Packets the injector sent AFTER one that arrived
+                           # later than they did - see _inject_loop for what this
+                           # can and cannot say. It sits beside `duplicated`
+                           # because both describe what the tool DID to a packet
+                           # rather than a packet it dropped, and nothing else in
+                           # here describes the ordering effect of latency,
+                           # jitter and the latency spike.
+                           reordered=0,
+                           drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_internet_only=0,
                            drop_block=0, drop_flap=0,
                            drop_rate=0, drop_shutdown=0, drop_send=0,
@@ -620,6 +563,20 @@ class BeanEngine:
                            driver_wait_peak_ms=0.0)
         # counters back to zero means the warning should be able to fire again:
         # a fresh measurement window that overflows must say so afresh
+        # Arrival numbering, and the high-water mark it is judged against for the
+        # `reordered` counter above. ONE fact in two variables, so they are reset
+        # in one place: the mark only means anything against numbers from the same
+        # numbering, and a session that inherited one without the other would judge
+        # its first packets against a stranger. `stop()` clears the heap, so no
+        # entry from the previous session can collide with a reused number - which
+        # matters, because the number is also the heap's tie-breaker and two equal
+        # keys would push it into comparing packet objects.
+        #
+        # Both are touched ONLY by the inject thread while a session runs, and this
+        # method runs before that thread exists (from __init__ and from start(),
+        # both before the workers are spawned).
+        self._counter = itertools.count()
+        self._last_sent = {True: -1, False: -1}
         self._overflow_warned = 0.0
         self._send_warned = 0.0
         self._driver_wait_warned = 0.0
@@ -2001,6 +1958,42 @@ class BeanEngine:
             self._warn_overflow()       # outside the lock: it logs, and logging waits
         return queued
 
+    def _note_order(self, arrived, is_out):
+        """Did this packet leave after one that arrived AFTER it? Then it was overtaken.
+
+        The injector knows both orders: the heap entry carries the number the packet
+        was given when it ARRIVED, and the order packets leave this loop is the order
+        the stack sees them in. An arrival number lower than the highest already sent
+        on this direction means something that arrived later went out first.
+
+        Why the counter exists at all: "10% got +50 ms" is NOT "10% arrived out of
+        order". Whether anything overtakes anything depends on the gap between
+        packets, which is a property of the TRAFFIC - at two packets a second a 50 ms
+        spike reorders nothing. Without this number a run where reordering never
+        happened reads exactly like a run the application coped with, which is the
+        hole ``loss_bursts`` was added to close for runs of loss.
+
+        🔴 PER DIRECTION, NOT PER FLOW - said here rather than left to be discovered.
+        Two interleaved flows can overtake each other without either receiver seeing
+        anything out of order, and this counts that. Per flow would mean a dict lookup
+        per packet on this thread. The end-to-end answer is the rig
+        (``internal_tools/probe_reorder_truth.py``), which numbers its own datagrams
+        and counts gaps at the RECEIVER instead of reading this counter.
+
+        Called only after ``send()`` returned, so the number describes what reached
+        the stack rather than what the loop intended: a packet the driver refused
+        leaves the mark alone and cannot make the packet behind it look overtaken by
+        one that never went out.
+
+        It lives outside ``_inject_loop`` because the loop is already four levels deep
+        at the call site and the nesting ratchet (``tests/test_code_shape.py``) is
+        answered by moving code out, not by raising the number.
+        """
+        if arrived < self._last_sent[is_out]:
+            self._bump("reordered")
+        else:
+            self._last_sent[is_out] = arrived
+
     def _inject_loop(self):
         while self._running:
             with self._cv:
@@ -2008,7 +2001,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not self._running:
                     break
-                release, _, packet, _, key, modified = self._heap[0]
+                release, arrived, packet, _, key, modified = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))
@@ -2057,6 +2050,8 @@ class BeanEngine:
                     # heading the session panel used for delivered: measured
                     # bytes_in = 5 122 600 B in a row that received 409 600 B.
                     self._log_delivered(key, size, is_out)
+                    # AFTER the send, deliberately - see _note_order.
+                    self._note_order(arrived, bool(is_out))
             except Exception as e:
                 # The packet is already off the heap: not delivered, and until this
                 # counter existed, not recorded either - it simply left the

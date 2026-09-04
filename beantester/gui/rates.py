@@ -24,7 +24,74 @@ The rule below evicts a sample only when the one BEHIND it is still old enough t
 anchor the window, so the span is always >= WINDOW once the session is warm.
 """
 from collections import deque
-from typing import Optional
+from typing import Any, Optional
+
+from ..fields import FIELD_DEFS
+
+# -- units ------------------------------------------------------------------ #
+# Everything inside this program counts throughput in KB/s, where K is 1024: the
+# CLI flags, the config file, the schedule string, the shipped scenarios and the
+# NDJSON `down_kbps`/`up_kbps` fields all carry that number, and several of them
+# are frozen contracts. So the unit preference is a DISPLAY choice and nothing
+# else - it converts on the way to the screen and never on the way to a file.
+#
+# 🔴 The Mbit/s factor is the one number here that surprises people, so it is
+# derived in the open rather than typed: 1 KB/s is 1024 bytes, a byte is 8 bits,
+# and a megabit is 1e6 bits (decimal, as every network interface and every ISP
+# means it). That makes 1024 KB/s come out as 8.389 Mbit/s and NOT 8.0. Rounding
+# it to 8 would be a 4.9% lie in the direction people already expect, which is
+# exactly the kind of number that never gets questioned again.
+BASE_LABEL = "KB/s"
+RATE_UNITS = (
+    ("kb", BASE_LABEL, 1.0),
+    ("mbit", "Mbit/s", 1024.0 * 8.0 / 1_000_000.0),
+    ("mb", "MB/s", 1.0 / 1024.0),
+)
+UNIT_FACTOR = {key: factor for key, _, factor in RATE_UNITS}
+UNIT_LABEL = {key: label for key, label, _ in RATE_UNITS}
+DEFAULT_UNIT = RATE_UNITS[0][0]
+
+# Which settings fields carry a throughput in the base unit. A VIEW over the
+# field registry rather than a list of names, so a third rate field is picked up
+# by declaring its unit and nothing here has to remember it.
+RATE_FIELD_KEYS = tuple(f.key for f in FIELD_DEFS if f.unit == BASE_LABEL)
+
+
+def in_unit(kbps: Any, unit: str) -> float:
+    """A KB/s figure expressed in ``unit``. Unknown units read as the base one.
+
+    ``Any`` rather than ``float`` deliberately: one caller is a half-typed entry
+    box, so this takes whatever the widget holds and answers 0.0 for anything that
+    is not a number. Narrowing the annotation would push that decision out to
+    three call sites (see ``format_rate``).
+    """
+    try:
+        value = float(kbps)
+    except (TypeError, ValueError):
+        return 0.0
+    return value * UNIT_FACTOR.get(unit, 1.0)
+
+
+def format_rate(kbps: Any, unit: str) -> str:
+    """``kbps`` rendered in ``unit``, with the precision that unit needs.
+
+    KB/s keeps the whole numbers it has always printed. The other two are smaller
+    numbers - 1024 KB/s is 1.0 MB/s - so printing them the same way would round a
+    real speed limit to "0" and make the readout look broken. Three significant
+    figures, which is what ``utils.human_bytes`` settled on for the same reason.
+    """
+    value = in_unit(kbps, unit)
+    if unit == DEFAULT_UNIT:
+        return f"{value:.0f}"
+    if value >= 100:
+        return f"{value:.0f}"
+    return f"{value:.1f}" if value >= 10 else f"{value:.2f}"
+
+
+def rate_with_unit(kbps: Any, unit: str) -> str:
+    """``format_rate`` plus the unit, for the places that print both together."""
+    return f"{format_rate(kbps, unit)} {UNIT_LABEL.get(unit, BASE_LABEL)}"
+
 
 WINDOW_S = 1.0          # average over this much time
 WARMUP_S = 0.8          # below this the window is too young to trust

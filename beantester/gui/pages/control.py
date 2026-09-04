@@ -178,6 +178,15 @@ class ControlPage:
         """A preference was written in the Settings window (see gui/pages)."""
         if key == "show_control_search":
             self._sync_search_visibility()
+        elif key == "rate_unit":
+            # The converted readout beside Download and Upload. PUSHED rather than
+            # left to the next rebuild: the dropdown that moves it lives in another
+            # window, and a label still naming the old unit reads as the preference
+            # having been ignored. It belongs on the PAGE rather than in
+            # ``App.set_pref`` for the reason ``pref_changed`` gives about itself -
+            # gui/app.py sits ON the size ratchet with no headroom, so a reaction
+            # put there has to come straight back out.
+            self.form.sync_rate_hints()
 
     def _sync_search_visibility(self):
         """Bring the bar in or out, once per actual change."""
