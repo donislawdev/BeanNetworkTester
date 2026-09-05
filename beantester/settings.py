@@ -626,6 +626,14 @@ def apply_settings(engine, s, log=lambda *_: None):
     # instead of being refused: refusing would break a run somebody meant.
     if g("lan_mode") and g("internet_only"):
         log(T("log.lan_and_internet_only"))
+    # Said out loud for the same reason as the two above, and it is the one trap
+    # asymmetry brings that no counter would reveal: a one-way traffic filter is
+    # applied IN THE DRIVER, so the other direction is never handed over at all.
+    # Half the values the user just typed would then describe traffic this
+    # session cannot see, the summary would still list them, and the numbers on
+    # screen would look like the tool ignoring its own form.
+    if g("asym") and g("filter") in ("out", "in"):
+        log(T("log.asym_one_way_filter"))
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     try:

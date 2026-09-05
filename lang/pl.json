@@ -273,6 +273,7 @@
   "log.applied_changes": "Zastosowano zmiany",
   "log.apply_needed": "Kliknij „Zastosuj zmiany”, aby przekazać to do działającej sesji.",
   "log.apply_needs_start": "Zastosuj zmiany działa po uruchomieniu (START).",
+  "log.asym_one_way_filter": "Filtr ruchu przechwytuje tylko jeden kierunek, więc wartości dla drugiego kierunku nie zostaną zastosowane.",
   "log.block_ip_added": "Blokowanie",
   "log.bug_marked": "ZAZNACZONO BŁĄD",
   "log.config_loaded_from": "Wczytano konfigurację z",

@@ -273,6 +273,7 @@
   "log.applied_changes": "Applied changes",
   "log.apply_needed": "Click \"Apply changes\" to push this to the running session.",
   "log.apply_needs_start": "Apply changes works after start (START).",
+  "log.asym_one_way_filter": "The traffic filter captures one direction only, so the values for the other direction will not be applied.",
   "log.block_ip_added": "Blocking",
   "log.bug_marked": "BUG MARKED",
   "log.config_loaded_from": "Config loaded from",

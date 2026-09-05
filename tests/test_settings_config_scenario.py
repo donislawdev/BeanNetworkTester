@@ -676,3 +676,41 @@ def test_internet_only_reaches_the_engine_through_apply_settings():
     check("internet only: armed on the core", engine.core.internet_only is True)
     apply_settings(engine, dict(DEFAULT_SETTINGS), lambda *_: None)
     check("internet only: disarmed again", engine.core.internet_only is False)
+
+
+def test_a_one_way_filter_under_asymmetry_is_said_out_loud():
+    """The one trap asymmetry brings that no counter would reveal.
+
+    The traffic filter's ``out`` and ``in`` variants are applied IN THE DRIVER
+    (``filters.FILTER_DEFS``), so the other direction is never handed to this
+    process at all. Half the values the user just typed then describe traffic the
+    session cannot see - and nothing would say so: the summary would still list
+    them, the counters would show one direction's work, and the whole thing would
+    read as the tool ignoring its own form.
+
+    Said once per apply rather than refused, which is the answer the two LAN
+    switches and the address-family pair already give: refusing would break a run
+    somebody meant, and impairing one direction on purpose is a legitimate ask.
+    """
+    from beantester import DEFAULT_SETTINGS, apply_settings
+    from beantester.i18n import T
+
+    warning = T("log.asym_one_way_filter")
+
+    def lines_for(**overrides):
+        said = []
+        apply_settings(BeanEngine(), dict(DEFAULT_SETTINGS, **overrides), said.append)
+        return said
+
+    for one_way in ("out", "in"):
+        check(f"asymmetry with a {one_way}-only filter says so",
+              warning in lines_for(asym=True, filter=one_way, latency=200,
+                                   latency_up=20))
+    check("a one-way filter WITHOUT asymmetry has nothing to warn about",
+          warning not in lines_for(filter="out", latency=200))
+    check("asymmetry with the default two-way filter is silent",
+          warning not in lines_for(asym=True, latency=200, latency_up=20))
+    # A protocol filter is not a direction, and warning there would be noise on a
+    # perfectly ordinary run.
+    check("a protocol filter is not a one-way filter",
+          warning not in lines_for(asym=True, filter="tcp", latency_up=20))

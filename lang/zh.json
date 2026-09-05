@@ -273,6 +273,7 @@
   "log.applied_changes": "已应用更改",
   "log.apply_needed": "点击“应用更改”即可把这些设置推送到当前会话。",
   "log.apply_needs_start": "启动会话后才能应用更改。",
+  "log.asym_one_way_filter": "流量过滤器只捕获一个方向，因此另一个方向的数值不会生效。",
   "log.block_ip_added": "正在阻断",
   "log.bug_marked": "已标记故障",
   "log.config_loaded_from": "配置已加载自",
