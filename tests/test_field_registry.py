@@ -264,3 +264,43 @@ def test_every_registry_field_reaches_the_settings_through_its_cli_flag():
         else:
             check(f"{field.key}: {flag} {raw} reaches settings[{field.key!r}]",
                   str(got) == str(raw), f"(got {got!r})")
+
+
+def test_a_field_that_waits_on_a_switch_names_a_real_one_and_what_it_mirrors():
+    """The accounting for ``live_when`` / ``mirror_of``, which three places read.
+
+    ``settings.armed_global_impairments`` asks whether the switch is on before it
+    calls an upload value armed, the form greys the field while it is off, and
+    the form copies the mirror across when it goes on. A typo in either key would
+    not raise anywhere: the warning would silently stop covering a field, and the
+    copy would silently skip one - leaving exactly the blank box the switch
+    exists to avoid.
+    """
+    for field in F.FIELD_DEFS:
+        if not field.live_when:
+            continue
+        switch = F.FIELDS.get(field.live_when)
+        check(f"{field.key}: live_when names a field that exists",
+              switch is not None, f"({field.live_when!r})")
+        if switch is not None:
+            check(f"{field.key}: and that field is a switch",
+                  switch.kind == F.BOOL, f"({switch.key} is {switch.kind})")
+            check(f"{field.key}: which is not itself waiting on one",
+                  not switch.live_when, f"({switch.key} waits on {switch.live_when!r})")
+        check(f"{field.key}: names the field it mirrors",
+              bool(field.mirror_of), "(nothing to copy across when the switch goes on)")
+        mirror = F.FIELDS.get(field.mirror_of)
+        check(f"{field.key}: and that field exists", mirror is not None,
+              f"({field.mirror_of!r})")
+        if mirror is not None:
+            check(f"{field.key}: with the same kind, bounds and unit as its mirror",
+                  (mirror.kind, mirror.bounds, mirror.unit)
+                  == (field.kind, field.bounds, field.unit),
+                  f"({mirror.key}: {mirror.kind}/{mirror.bounds}/{mirror.unit!r} vs "
+                  f"{field.kind}/{field.bounds}/{field.unit!r})")
+            check(f"{field.key}: and its mirror is not itself gated",
+                  not mirror.live_when, f"({mirror.key} waits on {mirror.live_when!r})")
+    # The canary: an empty scan satisfies every check above.
+    check("some field waits on a switch at all",
+          len(F.CONDITIONAL_IMPAIRING_KEYS) >= 1,
+          f"({F.CONDITIONAL_IMPAIRING_KEYS})")

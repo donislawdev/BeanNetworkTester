@@ -233,7 +233,7 @@ class ControlForm:
         if field.kind == F.BOOL:
             widget = ttk.Checkbutton(row, text=T(field.label),
                                      variable=app.vars[field.key],
-                                     command=app.on_form_changed)
+                                     command=lambda f=field: self._on_switch(f))
             widget.pack(side="left", anchor="w", padx=(0, _gap_after(field)))
             add_tooltip(widget, field.tip)
             self.entries[field.key] = widget
@@ -344,6 +344,36 @@ class ControlForm:
     def _show_match_help(self):
         dialogs.show_help(self.app.root, T("dialogs.match_help_title"),
                           T("dialogs.match_help"))
+
+    def _on_switch(self, field):
+        """A checkbox was clicked. Some of them govern other fields.
+
+        Turning a switch ON copies each dependent field's mirror across, which is
+        the whole reason the asymmetry card can exist without teaching anybody a
+        new rule: the second set of boxes is never blank, so no reader has to
+        work out what an empty one would have meant. It describes the same link
+        it described a moment ago, and only an edit changes anything.
+
+        Copying happens on the way ON only. On the way off the values stay where
+        they are - they are inert either way, and wiping them would throw away
+        work for somebody who unticked the box to compare against a symmetric
+        run and then ticked it back.
+        """
+        var = self.app.vars.get(field.key)
+        if var is not None and F.is_active(field, var.get()):
+            self._copy_mirrors(field.key)
+        self.apply_overrides()
+        self.app.on_form_changed()
+
+    def _copy_mirrors(self, switch_key):
+        """Fill every field this switch governs from the one it mirrors."""
+        for other in F.FIELD_DEFS:
+            if other.live_when != switch_key or not other.mirror_of:
+                continue
+            source = self.app.vars.get(other.mirror_of)
+            target = self.app.vars.get(other.key)
+            if source is not None and target is not None:
+                target.set(source.get())
 
     def _add_help_button(self, parent, field):
         """The "?" for any registry field that declares its own help sheet.
@@ -489,6 +519,20 @@ class ControlForm:
         """
         return bool(FIELDS[key].start_only and getattr(self.app, "running", False))
 
+    def is_dormant(self, key):
+        """True when the switch this field needs is currently off.
+
+        The mirror image of ``is_overridden``: that one asks whether another
+        field has TAKEN OVER, this one whether the field is being read at all.
+        Both end in the same place - a box that changes nothing must not look
+        editable - which is why ``apply_overrides`` treats them together.
+        """
+        field = FIELDS[key]
+        if not field.live_when:
+            return False
+        var = self.app.vars.get(field.live_when)
+        return not (var is not None and F.is_active(FIELDS[field.live_when], var.get()))
+
     def is_overridden(self, key):
         """True when another field currently takes precedence over ``key``."""
         field = FIELDS[key]
@@ -512,11 +556,11 @@ class ControlForm:
             note_keys = []
             for key in sec.fields:
                 field = FIELDS[key]
-                if not (field.overridden_by or field.start_only):
+                if not (field.overridden_by or field.start_only or field.live_when):
                     continue
                 overridden = self.is_overridden(key)
                 locked = self.is_locked(key)
-                dead = overridden or locked
+                dead = overridden or locked or self.is_dormant(key)
                 if overridden and field.override_note:
                     note_keys.append(field.override_note)
                 elif locked:

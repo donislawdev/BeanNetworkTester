@@ -12,14 +12,15 @@ its argparse flag). Everything else is derived:
 ``SECTIONS`` describes how the fields are grouped on the Control page; the page
 is a renderer of this table, not a hand-written form.
 
-Layering: this module depends only on ``matchers`` (expression kinds) and
-``processes`` (the target field's i18n key) - no tkinter, no i18n lookups at
-import time.
+Layering: this module depends only on ``matchers`` (expression kinds),
+``processes`` (the target field's i18n key) and ``utils`` (number formatting for
+``widget_value``) - no tkinter, no i18n lookups at import time.
 """
 from typing import NamedTuple, Optional, Tuple
 
 from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS
 from .processes import TARGET_FIELD
+from .utils import number_string
 
 # -- field kinds ----------------------------------------------------------- #
 NUMBER = "number"        # float, optional inclusive bounds
@@ -98,6 +99,11 @@ class Field(NamedTuple):
     # another field's value. See ``settings.armed_global_impairments``, which
     # already carries one case the registry cannot state on its own.
     live_when: str = ""
+    # Key of the field this one is the other direction's counterpart of. The form
+    # copies that field's value across when ``live_when`` is switched on, which is
+    # what makes the second set of boxes never blank: switching it on describes
+    # the same link it described a moment ago, and only an edit changes anything.
+    mirror_of: str = ""
 
 
 FIELD_DEFS = (
@@ -243,27 +249,34 @@ FIELD_DEFS = (
     # ``settings.armed_global_impairments`` reads both.
     Field("latency_up", NUMBER, "fields.latency_up", "asymmetry", unit="ms",
           bounds=MS, tip="tips.latency_up", in_profile=True, preset_key="lat_up",
-          cli="latency-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="latency-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="latency"),
     Field("jitter_up", NUMBER, "fields.jitter_up", "asymmetry", unit="ms",
           bounds=MS, tip="tips.jitter_up", in_profile=True, preset_key="jit_up",
-          cli="jitter-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="jitter-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="jitter"),
     Field("spike_prob_up", NUMBER, "fields.spike_prob_up", "asymmetry", unit="%",
           bounds=PCT, width=6, tip="tips.spike_up", in_profile=True,
-          cli="spike-prob-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="spike-prob-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="spike_prob"),
     # Parameter of the spike ABOVE it, exactly as spike_ms is of spike_prob: it
     # sits behind that gate in decide() step 10 and arms nothing by itself.
     Field("spike_ms_up", NUMBER, "fields.spike_ms_up", "asymmetry", unit="ms",
           bounds=MS, width=8, tip="tips.spike_up", in_profile=True,
-          cli="spike-ms-up", parameter_of="spike_prob_up", live_when="asym"),
+          cli="spike-ms-up", parameter_of="spike_prob_up", live_when="asym",
+          mirror_of="spike_ms"),
     Field("loss_up", NUMBER, "fields.loss_up", "asymmetry", unit="%",
           bounds=PCT, width=6, tip="tips.loss_up", in_profile=True,
-          cli="loss-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="loss-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="loss"),
     Field("corrupt_up", NUMBER, "fields.corruption_up", "asymmetry", unit="%",
           bounds=PCT, width=6, tip="tips.corrupt_up", in_profile=True,
-          cli="corrupt-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="corrupt-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="corrupt"),
     Field("dup_up", NUMBER, "fields.duplication_up", "asymmetry", unit="%",
           bounds=PCT, width=6, tip="tips.dup_up", in_profile=True,
-          cli="dup-up", impairs=IMPAIRS_ALL, live_when="asym"),
+          cli="dup-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="dup"),
 
     # -- flapping ---------------------------------------------------------- #
     # in_profile: the outage is PERIODIC and phase-locked to the session start
@@ -539,6 +552,25 @@ PARAMETER_KEYS = tuple(f.key for f in FIELD_DEFS if f.parameter_of)
 def overriding_field(field):
     """The field that makes ``field`` inert, or None."""
     return FIELDS.get(field.overridden_by) if field.overridden_by else None
+
+
+def widget_value(key, value):
+    """A stored profile value, in the form its widget variable expects.
+
+    Both loops that fill the form from a preset or a profile used to call
+    ``number_string`` on every value, which held only for as long as every
+    profile field WAS a number. The asymmetry switch is a checkbox, and
+    ``number_string(False)`` is the string ``"0"`` - a value real tkinter
+    coerces back to False by luck, and one that a profile storing the switch ON
+    would have delivered as ``"1"`` and that would have worked for the same
+    wrong reason. The next checkbox to join the profile scope would have
+    inherited the bug in silence.
+
+    Here rather than in the GUI because it is a property of the FIELD, and it
+    lives beside ``off_value`` for the same reason: both answer "what does this
+    field's value look like" from the registry, without a widget in sight.
+    """
+    return bool(value) if FIELDS[key].kind == BOOL else number_string(value)
 
 
 def off_value(field):

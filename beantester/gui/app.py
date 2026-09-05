@@ -30,7 +30,7 @@ from ..fields import BOOL as F_BOOL
 from ..fields import CHOICE as F_CHOICE
 from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
-from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value
+from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import crashlog, winenv
 from . import csv_export
@@ -319,7 +319,7 @@ class App:
         # so a freshly opened tool already claimed to be degrading the link while
         # the profile box said nothing of the sort.
         for key, value in preset_to_settings(DEFAULT_PROFILE).items():
-            self.vars[key].set(number_string(value))
+            self.vars[key].set(widget_value(key, value))
 
     # -- UI construction ------------------------------------------------------- #
     def _build_ui(self):
@@ -968,7 +968,7 @@ class App:
             return
         self._set_profile_key(key)
         for setting, value in preset_to_settings(preset).items():
-            self.vars[setting].set(number_string(value))
+            self.vars[setting].set(widget_value(setting, value))
         self._sync_profile_widgets()
         self.form.validate_all()
         self.form.apply_overrides()
