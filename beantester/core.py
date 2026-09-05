@@ -309,6 +309,42 @@ def compile_endpoint(ip, port):
                           KIND_INT, "fields.port", bounds=PORT_BOUNDS))
 
 
+class _Impairments:
+    """Every value ONE direction applies, resolved once per apply.
+
+    ``decide()`` picks the set for the packet's direction with a single index and
+    then reads plain attributes, which is why asymmetry costs no BRANCH: the
+    function sits exactly on the complexity ceiling pinned in ``pyproject.toml``
+    (27, measured), so a per-direction ``if`` in the packet path would have to be
+    paid for by taking something else out.
+
+    MEASURED 2026-09-05, against ``internal_tools/bench_decide.py`` on the same
+    tree (4750 ns/packet for the impairing mix, spread 6.6%): one index plus seven
+    attribute reads costs ~39 ns/packet, while indexing seven separate
+    per-direction tuples costs ~172 ns - a fifth of the price for the same answer,
+    and both are under the spread the rig itself can resolve. The canary drifted
+    on that run, so read those two against each other and not as absolutes.
+
+    The burst-loss chain rides along because its transition probabilities are
+    DERIVED from the loss (``p = loss * r / (1 - loss)``), so two directions
+    losing different amounts need two different chains - see ``_recompute``.
+    """
+    __slots__ = ("loss", "corrupt", "dup", "latency_s", "jitter_s",
+                 "spike_prob", "spike_s", "burst_p", "burst_r")
+
+    def __init__(self, loss, corrupt, dup, latency_s, jitter_s,
+                 spike_prob, spike_s, burst_p, burst_r):
+        self.loss = loss
+        self.corrupt = corrupt
+        self.dup = dup
+        self.latency_s = latency_s
+        self.jitter_s = jitter_s
+        self.spike_prob = spike_prob
+        self.spike_s = spike_s
+        self.burst_p = burst_p
+        self.burst_r = burst_r
+
+
 class BeanCore:
     """Decide what to do with a single packet. No network dependency."""
 
@@ -335,8 +371,6 @@ class BeanCore:
         # transition probabilities are derived once per apply (_recompute_burst)
         # and there is one chain PER DIRECTION - see _loses for why.
         self.loss_burst = 0.0
-        self._burst_p = None
-        self._burst_r = 0.0
         self._loss_bad = {True: False, False: False}
         # Runs STARTED, both directions together. The engine merges it into the
         # statistics snapshot, because "did the model fire at all" is not
@@ -348,6 +382,23 @@ class BeanCore:
         self.dup = 0.0
         self.latency_s = 0.0
         self.jitter_s = 0.0
+        # Asymmetry: the seven values above (plus the two spike values below)
+        # describe the DOWNLOAD direction once ``asymmetric`` is on, and these
+        # describe the UPLOAD direction. Off - the default, and what every file
+        # written before this existed decodes to - they are unread and one set of
+        # values applies both ways, which is what this tool did before.
+        #
+        # A switch rather than "empty means the same as download": an empty
+        # numeric field means ZERO everywhere else in this program, and in a
+        # repro command the inheritance would not be visible at all. The GUI
+        # copies the download values across when the switch goes on, so the
+        # second column is never blank and never has to be explained.
+        self.asymmetric = False
+        self.loss_up = 0.0
+        self.corrupt_up = 0.0
+        self.dup_up = 0.0
+        self.latency_up_s = 0.0
+        self.jitter_up_s = 0.0
         self.rate_down = 0          # B/s (inbound), 0 = unlimited
         self.rate_up = 0            # B/s (outbound)
         self._bucket = {True: 0.0, False: 0.0}
@@ -413,6 +464,8 @@ class BeanCore:
         self.max_size = 0
         self.spike_prob = 0.0       # chance of a latency spike
         self.spike_s = 0.0          # extra delay during a spike
+        self.spike_prob_up = 0.0    # ...and the same pair for the upload
+        self.spike_up_s = 0.0       #    direction, read only when asymmetric
         # NAT mapping expiry
         self.nat_timeout_s = 0.0    # >0 => after this many idle s the mapping disappears
         # RST injection (connection reset)
@@ -428,6 +481,10 @@ class BeanCore:
         self._flow_last = _FlowTable()      # flowkey -> last activity
         self._reset_until = _FlowTable()    # flowkey -> RST cooldown deadline
         self._prune_next = 0.0      # earliest time the next rotation may run
+        # Derived, never set from outside: one resolved value set per direction,
+        # indexed by ``is_outbound`` exactly like ``_bucket`` and ``_loss_bad``.
+        self._dir = (None, None)
+        self._recompute()
 
     # -- setters ----------------------------------------------------------- #
     @staticmethod
@@ -485,9 +542,35 @@ class BeanCore:
             self.jitter_s = max(0.0, jitter_ms) / 1000.0
             self.rate_down = self._rate_bps(down_kbps)
             self.rate_up = self._rate_bps(up_kbps)
-            # The burst chain is derived from the loss AND from the run length,
-            # so it has to be re-derived here too - see _recompute_burst.
-            self._recompute_burst()
+            # Every per-direction value is derived from the fields above (and,
+            # for the burst chain, from the run length too), so it has to be
+            # re-derived here - see _recompute.
+            self._recompute()
+
+    def set_asymmetry(self, enabled, loss_pct, corrupt_pct, dup_pct,
+                      latency_ms, jitter_ms, spike_prob_pct, spike_ms):
+        """The values the UPLOAD direction applies, and whether they are used.
+
+        Separate from ``set_params`` for the reason ``set_loss_burst`` gives
+        below - that signature is called positionally by 60-odd tests and rigs -
+        and separate from ``set_spike`` because these eight arrive from one
+        switch in the form and have to land inside ONE lock hold, or a packet
+        could be judged with the new upload loss and the old upload latency.
+
+        ``enabled`` is stored rather than inferred from the values: "upload loses
+        nothing" is a legitimate asymmetric link, and inferring the switch from a
+        row of zeros would make that link impossible to ask for.
+        """
+        with self._lock:
+            self.asymmetric = bool(enabled)
+            self.loss_up = clamp01(loss_pct / 100.0)
+            self.corrupt_up = clamp01(corrupt_pct / 100.0)
+            self.dup_up = clamp01(dup_pct / 100.0)
+            self.latency_up_s = max(0.0, latency_ms) / 1000.0
+            self.jitter_up_s = max(0.0, jitter_ms) / 1000.0
+            self.spike_prob_up = clamp01(spike_prob_pct / 100.0)
+            self.spike_up_s = max(0.0, spike_ms) / 1000.0
+            self._recompute()
 
     def set_loss_burst(self, mean_packets):
         """Average length, in packets, of a run of lost packets. 0 = independent.
@@ -499,32 +582,65 @@ class BeanCore:
         """
         with self._lock:
             self.loss_burst = max(0.0, float(mean_packets or 0.0))
-            self._recompute_burst()
+            self._recompute()
 
-    def _recompute_burst(self):
-        """Re-derive the chain from the two fields that feed it.
+    def _recompute(self):
+        """Re-derive both directions' value sets from the fields that feed them.
 
-        Called from BOTH setters that can change either half, and that is the
-        point. ``p`` depends on the loss as much as on the run length, so a
-        single owner would leave the ORDER of two setter calls deciding whether
-        the answer is right - and ``set_params`` is called on its own by tests,
-        by rigs and by anything that only means to change the loss. The symptom
-        would have been quiet: the delivered loss drifting away from the field
-        that asked for it, with nothing going red.
+        Called from EVERY setter that can change any half, and that is the point.
+        ``p`` depends on the loss as much as on the run length, so a single owner
+        would leave the ORDER of two setter calls deciding whether the answer is
+        right - and ``set_params`` is called on its own by tests, by rigs and by
+        anything that only means to change the loss. The symptom would have been
+        quiet: the delivered loss drifting away from the field that asked for it,
+        with nothing going red.
 
-        Only a REAL change restarts the chain. A scenario stepping the speed
-        limit calls every setter on every step change (``scenario_runner``), and
-        restarting here unconditionally would cut every run in flight - at 50
-        packets a second a run of 20 lasts 400 ms, so most of them.
+        With the asymmetry switch off both directions get the SAME object, so
+        "asymmetry is off" is not a state the packet path can read - there is
+        nothing there to get wrong, and one apply allocates one value set instead
+        of two.
+
+        Only a REAL change restarts a chain, and only the direction that changed.
+        A scenario stepping the speed limit calls every setter on every step
+        change (``scenario_runner``), and restarting unconditionally would cut
+        every run in flight - at 50 packets a second a run of 20 lasts 400 ms, so
+        most of them. 🔴 Per DIRECTION for the same reason, which is what an
+        asymmetric link makes reachable: while the chains shared one pair of
+        probabilities, raising the UPLOAD loss re-derived the pair and cut the
+        run the DOWNLOAD direction was in the middle of - a direction nobody
+        touched, losing its run because the other one moved.
         """
-        params = burst_loss_params(self.loss, self.loss_burst)
+        down = self._resolve(self.loss, self.corrupt, self.dup, self.latency_s,
+                             self.jitter_s, self.spike_prob, self.spike_s)
+        if self.asymmetric:
+            up = self._resolve(self.loss_up, self.corrupt_up, self.dup_up,
+                               self.latency_up_s, self.jitter_up_s,
+                               self.spike_prob_up, self.spike_up_s)
+        else:
+            up = down
+        for outbound, fresh in ((False, down), (True, up)):
+            old = self._dir[outbound]
+            if old is None or (fresh.burst_p, fresh.burst_r) != (old.burst_p, old.burst_r):
+                self._loss_bad[outbound] = False
+        self._dir = (down, up)
+
+    def _resolve(self, loss, corrupt, dup, latency_s, jitter_s, spike_prob, spike_s):
+        """One direction's fields -> the value set ``decide()`` reads.
+
+        The run length is deliberately NOT per direction: a tester answers "how
+        much loss" per direction and "how long a run" once, and two run lengths
+        would be a fourth number to reconcile for a distinction no link makes
+        obvious. Two directions losing different AMOUNTS already get different
+        transition probabilities out of the same run length, which is the part
+        that would otherwise be wrong.
+        """
+        params = burst_loss_params(loss, self.loss_burst)
         p = None if params is None else params[0]
         r = 0.0 if params is None else params[1]
-        if (p, r) != (self._burst_p, self._burst_r):
-            self._loss_bad[True] = self._loss_bad[False] = False
-        self._burst_p, self._burst_r = p, r
+        return _Impairments(loss, corrupt, dup, latency_s, jitter_s,
+                            spike_prob, spike_s, p, r)
 
-    def _loses(self, rng, is_outbound):
+    def _loses(self, rng, is_outbound, imp):
         """Does this packet fall to the configured loss? Step 8's whole question.
 
         Independent by default - the draw this tool has always made, reached
@@ -547,13 +663,13 @@ class BeanCore:
         with a process target the run length is counted in the target's packets,
         which is the number the tester meant.
         """
-        if self._burst_p is None:
-            return rng.random() < self.loss
+        if imp.burst_p is None:
+            return rng.random() < imp.loss
         bad = self._loss_bad[is_outbound]
         if bad:
-            if rng.random() < self._burst_r:
+            if rng.random() < imp.burst_r:
                 bad = False
-        elif rng.random() < self._burst_p:
+        elif rng.random() < imp.burst_p:
             bad = True
             self.loss_bursts += 1
         self._loss_bad[is_outbound] = bad
@@ -743,6 +859,10 @@ class BeanCore:
         with self._lock:
             self.spike_prob = clamp01(prob_pct / 100.0)
             self.spike_s = max(0.0, spike_ms) / 1000.0
+            # Both values ride in the per-direction set, so this setter re-derives
+            # it like every other one. Missing this line would leave the packet
+            # path on the spike from the PREVIOUS apply.
+            self._recompute()
 
     def set_nat(self, timeout_s):
         with self._lock:
@@ -1067,20 +1187,25 @@ class BeanCore:
             # branch here: this function sits ON the complexity ceiling pinned in
             # pyproject.toml, where the rule is to move code out instead of
             # raising the number. Measured after the change: still 27.
-            if self.loss > 0 and self._loses(rng, is_outbound):
+            # The values from here down are read PER DIRECTION: one index, then
+            # plain attributes. Resolved in _recompute, so nothing below has to
+            # ask whether asymmetry is on - see _Impairments for the measurement
+            # that chose this shape over indexing each field separately.
+            imp = self._dir[is_outbound]
+            if imp.loss > 0 and self._loses(rng, is_outbound, imp):
                 return Decision(True, False, [])
 
             # 9) corruption
-            corrupt = self.corrupt > 0 and rng.random() < self.corrupt
+            corrupt = imp.corrupt > 0 and rng.random() < imp.corrupt
 
             # 10) latency + jitter + latency spike
-            delay = self.latency_s
-            if self.jitter_s > 0:
-                delay += rng.uniform(-self.jitter_s, self.jitter_s)
+            delay = imp.latency_s
+            if imp.jitter_s > 0:
+                delay += rng.uniform(-imp.jitter_s, imp.jitter_s)
                 if delay < 0:
                     delay = 0.0
-            if self.spike_prob > 0 and rng.random() < self.spike_prob:
-                delay += self.spike_s
+            if imp.spike_prob > 0 and rng.random() < imp.spike_prob:
+                delay += imp.spike_s
             release = now + delay
 
             # 11) throughput limit (time-variable, per-direction token bucket with
@@ -1117,7 +1242,7 @@ class BeanCore:
 
             releases = [release]
             # 12) duplication
-            if self.dup > 0 and rng.random() < self.dup:
+            if imp.dup > 0 and rng.random() < imp.dup:
                 dup_release = release + rng.uniform(0.0, 0.02)
                 # a duplicate is a second copy on the wire: charge the bucket for it,
                 # or the shaped link quietly carries (1 + dup%) of its limit. If the
