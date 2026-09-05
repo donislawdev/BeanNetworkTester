@@ -101,6 +101,7 @@ def values(version, digest, asset):
     home = _read_json("site", "pages", "home", "page.json")["languages"]["en"]
     tagline = _read_json("site", "i18n", "en.json")["site.tagline"]
     repo = site["repo_url"].rstrip("/")
+    slug = repo.split("github.com/", 1)[-1]      # owner/name, which is what a CDN wants
     tag = f"v{version}"
     # Every entry here is used by a template, and a test keeps it that way in both
     # directions: an unknown placeholder is a typo, a dead entry is a manifest that
@@ -123,6 +124,14 @@ def values(version, digest, asset):
         "PROJECT_URL": site["base_url"].rstrip("/"),
         "REPO_URL": repo,
         "RELEASE_NOTES_URL": f"{repo}/releases/tag/{tag}",
+        # 🔴 A CDN, and PINNED to the tag - Chocolatey's moderation held 0.5.0 back over
+        # this on 2026-09-05. `{repo}/raw/...` is treated as raw.githubusercontent.com,
+        # which is not a CDN; jsDelivr, Statically and the Githack variants are. The
+        # BRANCH was the second fault, and nobody had complained about it yet: an icon on
+        # `master` follows whatever the branch does next, under a package that is already
+        # approved. Same bytes either way (measured that day: 21 155 B, image/png, from
+        # both hosts), so this moves the address and not the picture.
+        "ICON_URL": f"https://cdn.jsdelivr.net/gh/{slug}@{tag}/bean.png",
         "RELEASE_DATE": release_date(version),
         "TAGLINE": tagline,
         "DESCRIPTION": home["description"],
