@@ -24,6 +24,12 @@ from .validators import parse_number, parse_seed
 DEFAULT_SETTINGS = dict(
     loss=0, corrupt=0, dup=0, latency=0, jitter=0, down=0, up=0,
     loss_burst=0,        # average packets lost in a row; 0 = spread evenly. See fields.py
+    # Asymmetry: off, and seven cold values. Off is what every profile, config
+    # file and repro command written before this existed decodes to, so the
+    # values below are unread until somebody asks for them. See fields.py.
+    asym=False,
+    latency_up=0, jitter_up=0, spike_prob_up=0, spike_ms_up=0,
+    loss_up=0, corrupt_up=0, dup_up=0,
     buffer=1000,         # link buffer (ms) for the speed limit; 0 = unbounded. See fields.py
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
     ipv4_only=False, ipv6_only=False,
@@ -126,10 +132,21 @@ def armed_global_impairments(s):
     A narrow block - ``10.*``, ``172.16.0.0/12``, one port - is untouched and
     still bounds its own damage, which is what makes it not a narrowing.
     """
-    armed = [key for key in F.GLOBALLY_IMPAIRING_KEYS
-             if F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key]))]
+    def live(key):
+        return F.is_active(FIELDS[key], s.get(key, DEFAULT_SETTINGS[key]))
+
+    armed = [key for key in F.GLOBALLY_IMPAIRING_KEYS if live(key)]
     armed += [key for key in F.MATCHED_IMPAIRING_KEYS
               if _expression_covers_everything(key, s.get(key, DEFAULT_SETTINGS[key]))]
+    # ...and the third case the registry cannot state statically, for the same
+    # reason as the second: an upload loss of 50% damages every packet leaving
+    # this machine or nothing at all, and which of the two is decided by the
+    # switch named in ``Field.live_when``. Both halves have to be read - the
+    # value alone would warn about a run that touches nothing every time somebody
+    # turns asymmetry back off, and the switch alone would warn about a run whose
+    # seven values are all zero.
+    armed += [key for key in F.CONDITIONAL_IMPAIRING_KEYS
+              if live(FIELDS[key].live_when) and live(key)]
     return tuple(armed)
 
 
@@ -632,6 +649,12 @@ def apply_settings(engine, s, log=lambda *_: None):
                           g("latency"), g("jitter"), g("down"), g("up"))
         engine.set_buffer(g("buffer"))
         engine.set_loss_burst(g("loss_burst"))
+        # Inside the same batch as set_params: the two describe one link seen
+        # from its two ends, and a packet judged between them would get the new
+        # download values with the previous upload ones.
+        engine.set_asymmetry(bool(g("asym")), g("loss_up"), g("corrupt_up"),
+                             g("dup_up"), g("latency_up"), g("jitter_up"),
+                             g("spike_prob_up"), g("spike_ms_up"))
         if dest is not None:
             engine.set_dest(*dest)
         engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))

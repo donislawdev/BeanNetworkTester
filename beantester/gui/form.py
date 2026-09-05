@@ -237,6 +237,13 @@ class ControlForm:
             widget.pack(side="left", anchor="w", padx=(0, _gap_after(field)))
             add_tooltip(widget, field.tip)
             self.entries[field.key] = widget
+            # A checkbox can declare a help sheet too, and the switch that turns
+            # a whole card on is the field most likely to need one: a tooltip has
+            # to fit on a hover, and "the values higher up the page now describe
+            # downloads only" is a paragraph, not a phrase. Until asymmetry
+            # arrived every field with a sheet happened to take an entry box, so
+            # the branch below was the only one that drew the button.
+            self._add_help_button(widget.master, field)
             return
 
         if field.kind == F.CHOICE:
@@ -284,16 +291,8 @@ class ControlForm:
             help_btn.pack(side="left", padx=(scaled(8), 0))
             add_tooltip(help_btn, "tips.match_syntax")
             self.helps[field.key] = help_btn
-        elif field.help_body:
-            # Same "?" affordance for any registry field that declares its own
-            # help sheet (not only filter expressions): hover shows the short tip,
-            # a click opens the full explanation via dialogs.show_help.
-            help_btn = ttk.Button(cell, text=T("fields.match_help"),
-                                  style="Help.TButton", width=2,
-                                  command=lambda f=field: self._show_field_help(f))
-            help_btn.pack(side="left", padx=(scaled(8), 0))
-            add_tooltip(help_btn, field.tip)
-            self.helps[field.key] = help_btn
+        else:
+            self._add_help_button(cell, field)
         if field.hint:
             ttk.Label(cell, text=T(field.hint), style="Hint.TLabel").pack(
                 side="left", padx=(scaled(8), 0))
@@ -345,6 +344,22 @@ class ControlForm:
     def _show_match_help(self):
         dialogs.show_help(self.app.root, T("dialogs.match_help_title"),
                           T("dialogs.match_help"))
+
+    def _add_help_button(self, parent, field):
+        """The "?" for any registry field that declares its own help sheet.
+
+        Hover shows the short tip, a click opens the full explanation through
+        ``dialogs.show_help``. Shared by the checkbox and the entry paths so the
+        affordance cannot come out different depending on the widget kind.
+        """
+        if not field.help_body:
+            return
+        help_btn = ttk.Button(parent, text=T("fields.match_help"),
+                              style="Help.TButton", width=2,
+                              command=lambda f=field: self._show_field_help(f))
+        help_btn.pack(side="left", padx=(scaled(8), 0))
+        add_tooltip(help_btn, field.tip)
+        self.helps[field.key] = help_btn
 
     def _show_field_help(self, field):
         """Open the "?" help sheet a field declares (help_title / help_body)."""

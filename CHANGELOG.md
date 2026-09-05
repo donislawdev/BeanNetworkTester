@@ -7,6 +7,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Different values for uploads and downloads.** A new "Asymmetry" card with a tick box:
+  leave it off and one set of numbers applies both ways, exactly as before. Tick it and the
+  fields higher up the page describe downloads only, while seven new fields describe uploads -
+  latency, jitter, spike chance and size, loss, corruption and duplication. The new fields start
+  as copies of what you already typed, so switching it on changes nothing until you edit them.
+  Real home and mobile lines are not the same in both directions, and an app that browses fine
+  can still struggle to send: a video call, a file upload, a game reporting your moves. On the
+  command line: `--asym` plus `--loss-up`, `--corrupt-up`, `--dup-up`, `--latency-up`,
+  `--jitter-up`, `--spike-prob-up` and `--spike-ms-up`. Profiles remember all of it, and the
+  session description says what the upload half is doing.
+
+### Changed
+
+- **Some command-line shortcuts stopped working, and the full flags did not.** Adding the
+  upload flags means `--latency` is no longer the only option starting with "latency", so
+  short forms like `--lat`, `--jit`, `--j`, `--cor` and `--spike-p` are now ambiguous and are
+  refused. Every full flag still works, so saved reproduction commands and every example in
+  this documentation are unaffected - only hand-typed abbreviations need writing out in full.
+
 - **A blocked connection can be refused instead of ignored.** A new "Refuse blocked
   connections" checkbox in the Block card, and `--block-reject`. Without it a blocked
   connection gets no answer and the program you are testing waits until it gives up on its

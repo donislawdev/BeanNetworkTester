@@ -175,7 +175,14 @@ def test_profile_scope_is_derived():
           set(F.PROFILE_FIELDS) == {"loss", "loss_burst", "corrupt", "dup",
                                     "latency", "jitter",
                                     "down", "up", "buffer", "spike_prob",
-                                    "spike_ms", "flap_period", "flap_down"},
+                                    "spike_ms", "flap_period", "flap_down",
+                                    # asymmetry: the switch and the seven values
+                                    # it governs. A profile that stored "200 ms"
+                                    # without saying it was download-only would
+                                    # store a link nobody has.
+                                    "asym", "latency_up", "jitter_up",
+                                    "spike_prob_up", "spike_ms_up",
+                                    "loss_up", "corrupt_up", "dup_up"},
           f"({F.PROFILE_FIELDS})")
     non_profile = {k for k, _ in F.NON_PROFILE_FIELDS}
     check("registry: profile and non-profile fields partition the model",
