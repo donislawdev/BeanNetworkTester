@@ -2182,6 +2182,16 @@ MUTATIONS = [
         "test": "test_a_blocked_connection_is_refused_only_when_the_mode_is_on",
     },
     {
+        # The rate limit goes back to a log line per failed injection. The RST
+        # feature could only fail slowly (a cooldown per flow); a refusal fires on
+        # every SYN retransmit, and the GUI applies every line on the UI thread.
+        "label": "block: a failed refusal is logged per packet again",
+        "file": "beantester/engine.py",
+        "old": "            self._warn_rst_failed(e)",
+        "new": "            self.log(f\"{T('log.rst_inject_failed')} ({e})\")",
+        "test": "test_a_reset_that_cannot_be_injected_is_reported_once_not_per_packet",
+    },
+    {
         # The two limits that would forge a reset nobody receives. UDP first: a
         # blocked datagram would get a TCP reset built from a packet with no TCP
         # header at all.

@@ -321,3 +321,38 @@ def test_what_the_refusal_deliberately_does_not_answer():
     assert udp["drop_block"] >= 1, udp
     assert udp_sent == [], "a UDP packet was answered with a TCP reset"
     assert udp["block_rejected"] == 0, udp["block_rejected"]
+
+
+class FailingRstDivert(RecordingTcpDivert):
+    """Every injection fails - a busy driver, or a handle that went away."""
+
+    def send(self, p, recalculate_checksum=True):
+        raise OSError("driver busy")
+
+
+def test_a_reset_that_cannot_be_injected_is_reported_once_not_per_packet():
+    """The refuse mode has no cooldown, so a failing injection repeats per SYN.
+
+    MEASURED 2026-09-05 against the LAN peer: five SYN retransmits, five resets, in
+    two seconds, for ONE connect(). The RST feature could only ever fail slowly - it
+    holds a flow in cooldown for seconds - so this path had no rate limit, and with
+    a client reconnecting in a loop it would be a log line per packet, applied on
+    the GUI's UI thread. The engine already learned that above OVERFLOW_WARN_S.
+
+    The counters are asserted next to the log for a reason: "we tried to refuse" and
+    "the refusal reached the stack" are different facts, and a session where the
+    driver refuses every injection must show the gap rather than hide it.
+    """
+    lines = []
+    div = FailingRstDivert([_tcp_packet(5000 + i, 6000, syn=True) for i in range(4)])
+    eng = BeanEngine(log_fn=lines.append)
+    eng.set_block(True, None, "6000", True)
+    eng.start("test", divert=div)
+    _drain(eng, 4)
+    eng.stop()
+    s = eng.stats_snapshot()
+
+    assert s["block_rejected"] >= 4, s["block_rejected"]   # every one was attempted
+    assert s["rst_sent"] == 0, s["rst_sent"]               # ...and none arrived
+    complaints = [line for line in lines if "driver busy" in line]
+    assert len(complaints) == 1, complaints
