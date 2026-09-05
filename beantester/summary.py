@@ -5,6 +5,35 @@ from .settings import DEFAULT_SETTINGS, parse_schedule, setting_expression
 from .utils import number_string, to_number
 
 
+def _upload_parts(g, tr, num):
+    """The upload half of the description, or nothing when the link is symmetric.
+
+    A function of its own so that ``settings_summary`` gains NO branch: it sits
+    one step below the complexity ceiling pinned in ``pyproject.toml``, where the
+    rule is to move code out rather than raise the number.
+
+    An asymmetric run with every upload value at zero still says so. Silence
+    there would be the misleading answer: the reader would take the numbers above
+    to apply in both directions, which is exactly what they no longer do.
+    """
+    if not g("asym"):
+        return []
+    inner = []
+    for key, phrase in (("latency_up", "summary.latency"),
+                        ("jitter_up", "summary.jitter"),
+                        ("loss_up", "summary.loss"),
+                        ("corrupt_up", "summary.corrupt"),
+                        ("dup_up", "summary.dup")):
+        if to_number(g(key)):
+            inner.append(tr(phrase, v=num(key)))
+    if to_number(g("spike_prob_up")) and to_number(g("spike_ms_up")):
+        inner.append(tr("summary.spikes", ms=num("spike_ms_up"),
+                        p=num("spike_prob_up")))
+    if not inner:
+        return [tr("summary.asym_up_clean")]
+    return [tr("summary.asym_up", v=", ".join(inner))]
+
+
 def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     """Return a readable description of the active impairments in the given language.
 
@@ -52,6 +81,9 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
             parts.append(tr("summary.up", v=num("up")))
     if to_number(g("spike_prob")) and to_number(g("spike_ms")):
         parts.append(tr("summary.spikes", ms=num("spike_ms"), p=num("spike_prob")))
+    # Everything named so far describes DOWNLOADS once this is on, so the upload
+    # half is said right after them rather than at the end among the switches.
+    parts += _upload_parts(g, tr, num)
     if to_number(g("syn_drop")):
         parts.append(tr("summary.syn", v=num("syn_drop")))
     if to_number(g("max_size")):

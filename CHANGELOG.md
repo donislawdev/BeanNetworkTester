@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Different values for uploads and downloads.** A new "Asymmetry" card. Leave it off and
+  one set of numbers applies both ways, as before. Tick it and the fields above it describe
+  downloads only, while seven new ones describe uploads: latency, jitter, spike chance and
+  size, loss, corruption and duplication. They start as copies of what you already typed, so
+  nothing changes until you edit them. Reach for it when an app browses fine but struggles to
+  send: a video call, a file upload. On the command line: `--asym`, then `--loss-up`,
+  `--latency-up` and the rest. Profiles remember it.
+
 - **A blocked connection can be refused instead of ignored.** A new "Refuse blocked
   connections" checkbox in the Block card, and `--block-reject`. Without it a blocked
   connection gets no answer and the program you are testing waits until it gives up on its
@@ -18,6 +26,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **A "connections_refused" column in the stats CSV** counts the refusals a session sent.
   An existing stats CSV is rotated to a dated backup the first time the new column is
   written.
+
+### Changed
+
+- **A warning when a one-way traffic filter would ignore half your asymmetry settings.**
+  The "Outgoing only" and "Incoming only" traffic filters work inside the driver, so the other
+  direction never reaches the tool at all. With asymmetry on, that means half the values you
+  typed describe traffic this session cannot see - and until now nothing said so: the session
+  description still listed them and the counters looked like the tool ignoring its own form.
+  The run now says it once, and still runs, because impairing one direction on purpose is a
+  perfectly good thing to ask for.
+
+- **Some command-line shortcuts stopped working, and the full flags did not.** Adding the
+  upload flags means `--latency` is no longer the only option starting with "latency", so
+  short forms like `--lat`, `--jit`, `--j`, `--cor` and `--spike-p` are now ambiguous and are
+  refused. Every full flag still works, so saved reproduction commands and every example in
+  this documentation are unaffected - only hand-typed abbreviations need writing out in full.
 
 ## [0.6.0] - 2026-09-04
 

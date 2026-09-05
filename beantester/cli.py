@@ -202,6 +202,26 @@ def build_arg_parser():
                         "bounds the queueing delay a rate-limited link builds up "
                         "before it drops (bufferbloat)")
     _add_scope_arguments(p)
+    # Asymmetry. The flags read `<what>-up`, which is how every other modifier in
+    # this parser reads (--loss-burst, --spike-prob, --rst-cooldown, --flap-down).
+    # 🔴 The abbreviation cost was MEASURED before the names were chosen, exactly
+    # as it was for --loss-burst: `allow_abbrev` is on (ADR 2026-08-02), so a
+    # second option starting with `latency` makes `--lat` ambiguous. 18 prefixes
+    # that work today stop working (--lat, --jit, --j, --cor, --spike-p and the
+    # longer forms of each). Every FULL flag survives, because an exact match
+    # beats a prefix one, so no repro command and no documented example moves.
+    # Guarded by test_cli_runtime.py::test_the_flags_that_gained_an_up_neighbour_still_work.
+    p.add_argument("--asym", action="store_true",
+                   help="apply the --*-up values to the upload direction. Without "
+                        "it the link is symmetric and those values are unused")
+    p.add_argument("--loss-up", type=float, help="packet loss, upload [%%]")
+    p.add_argument("--corrupt-up", type=float, help="corruption, upload [%%]")
+    p.add_argument("--dup-up", type=float, help="duplication, upload [%%]")
+    p.add_argument("--latency-up", type=float, help="latency, upload [ms]")
+    p.add_argument("--jitter-up", type=float, help="jitter, upload [ms]")
+    p.add_argument("--spike-prob-up", type=float,
+                   help="latency spike probability, upload [%%]")
+    p.add_argument("--spike-ms-up", type=float, help="latency spike size, upload [ms]")
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")

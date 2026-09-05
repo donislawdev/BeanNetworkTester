@@ -12,14 +12,15 @@ its argparse flag). Everything else is derived:
 ``SECTIONS`` describes how the fields are grouped on the Control page; the page
 is a renderer of this table, not a hand-written form.
 
-Layering: this module depends only on ``matchers`` (expression kinds) and
-``processes`` (the target field's i18n key) - no tkinter, no i18n lookups at
-import time.
+Layering: this module depends only on ``matchers`` (expression kinds),
+``processes`` (the target field's i18n key) and ``utils`` (number formatting for
+``widget_value``) - no tkinter, no i18n lookups at import time.
 """
 from typing import NamedTuple, Optional, Tuple
 
 from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS
 from .processes import TARGET_FIELD
+from .utils import number_string
 
 # -- field kinds ----------------------------------------------------------- #
 NUMBER = "number"        # float, optional inclusive bounds
@@ -89,6 +90,20 @@ class Field(NamedTuple):
     # tests/test_passthrough.py::test_a_parameter_at_its_maximum_still_damages_nothing,
     # which used to be two field names typed out by hand in that file.
     parameter_of: str = ""
+    # Key of a SWITCH that must be on for this field to reach the packet path at
+    # all. Different from ``overridden_by``, which names a field that makes this
+    # one inert when it IS set - this names one that makes it inert when it is
+    # NOT. It exists because the blast-radius question cannot be answered
+    # statically for such a field: an upload loss of 50% damages every packet
+    # going out, or nothing whatsoever, and which of the two is decided by
+    # another field's value. See ``settings.armed_global_impairments``, which
+    # already carries one case the registry cannot state on its own.
+    live_when: str = ""
+    # Key of the field this one is the other direction's counterpart of. The form
+    # copies that field's value across when ``live_when`` is switched on, which is
+    # what makes the second set of boxes never blank: switching it on describes
+    # the same link it described a moment ago, and only an edit changes anything.
+    mirror_of: str = ""
 
 
 FIELD_DEFS = (
@@ -206,6 +221,62 @@ FIELD_DEFS = (
     Field("dup", NUMBER, "fields.duplication", "impairments", unit="%",
           bounds=PCT, width=6, tip="tips.dup", in_profile=True, cli="dup",
           impairs=IMPAIRS_ALL),
+
+    # -- asymmetry (separate values for the upload direction) -------------- #
+    # A SWITCH rather than "leave it empty to mean the same as download". An
+    # empty numeric field means zero everywhere else in this program, and in a
+    # repro command the inheritance would not be visible at all - so the reading
+    # a newcomer would give an empty box is the one that would be wrong. With the
+    # switch off nothing here is read and the form is the form it always was;
+    # turning it on copies the download values across, so the second set is never
+    # blank and never has to be explained.
+    #
+    # It arms nothing on its own (every value below defaults to 0, and this
+    # switch only decides WHICH set of values applies), so it declares no
+    # ``impairs`` - see tests/test_passthrough.py.
+    Field("asym", BOOL, "fields.asym", "asymmetry",
+          tip="tips.asym", span=True, cli="asym", in_profile=True,
+          help_title="dialogs.asym_help_title", help_body="dialogs.asym_help"),
+    # 🔴 ``impairs=IMPAIRS_ALL`` **and** ``live_when="asym"`` on all seven.
+    # Both halves are load-bearing and each alone is wrong:
+    #   * without ``impairs``, ``--asym --loss-up 50`` cuts half the traffic on
+    #     this machine and raises NO blast-radius warning, because the download
+    #     loss it would look at is zero. That is the rule this project puts in
+    #     red: never damage traffic globally without saying so.
+    #   * without ``live_when``, a value left behind after the switch goes back
+    #     off warns about a run that touches nothing - and that is not a corner,
+    #     it is what toggling the switch off normally leaves behind.
+    # ``settings.armed_global_impairments`` reads both.
+    Field("latency_up", NUMBER, "fields.latency_up", "asymmetry", unit="ms",
+          bounds=MS, tip="tips.latency_up", in_profile=True, preset_key="lat_up",
+          cli="latency-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="latency"),
+    Field("jitter_up", NUMBER, "fields.jitter_up", "asymmetry", unit="ms",
+          bounds=MS, tip="tips.jitter_up", in_profile=True, preset_key="jit_up",
+          cli="jitter-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="jitter"),
+    Field("spike_prob_up", NUMBER, "fields.spike_prob_up", "asymmetry", unit="%",
+          bounds=PCT, width=6, tip="tips.spike_up", in_profile=True,
+          cli="spike-prob-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="spike_prob"),
+    # Parameter of the spike ABOVE it, exactly as spike_ms is of spike_prob: it
+    # sits behind that gate in decide() step 10 and arms nothing by itself.
+    Field("spike_ms_up", NUMBER, "fields.spike_ms_up", "asymmetry", unit="ms",
+          bounds=MS, width=8, tip="tips.spike_up", in_profile=True,
+          cli="spike-ms-up", parameter_of="spike_prob_up", live_when="asym",
+          mirror_of="spike_ms"),
+    Field("loss_up", NUMBER, "fields.loss_up", "asymmetry", unit="%",
+          bounds=PCT, width=6, tip="tips.loss_up", in_profile=True,
+          cli="loss-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="loss"),
+    Field("corrupt_up", NUMBER, "fields.corruption_up", "asymmetry", unit="%",
+          bounds=PCT, width=6, tip="tips.corrupt_up", in_profile=True,
+          cli="corrupt-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="corrupt"),
+    Field("dup_up", NUMBER, "fields.duplication_up", "asymmetry", unit="%",
+          bounds=PCT, width=6, tip="tips.dup_up", in_profile=True,
+          cli="dup-up", impairs=IMPAIRS_ALL, live_when="asym",
+          mirror_of="dup"),
 
     # -- flapping ---------------------------------------------------------- #
     # in_profile: the outage is PERIODIC and phase-locked to the session start
@@ -388,6 +459,15 @@ SECTIONS = (
     # "how much" and "in what shape" read as one setting or as neither.
     Section("impairments", "frames.impairments",
             ("loss", "loss_burst", "corrupt", "dup"), columns=2),
+    # Its own card rather than a second value beside each field it mirrors. The
+    # two sections above pair their fields on purpose - "Loss" sits next to the
+    # run length that shapes it, latency next to its jitter - and interleaving an
+    # upload value into those rows would break every one of those pairs to gain
+    # an adjacency that only matters while the switch is on. One card, one
+    # switch, and the seven values it governs read as the one thing they are.
+    Section("asymmetry", "frames.asymmetry",
+            ("asym", "latency_up", "jitter_up", "spike_prob_up", "spike_ms_up",
+             "loss_up", "corrupt_up", "dup_up"), columns=2),
     Section("flapping", "frames.flapping", ("flap_period", "flap_down"), columns=2),
     # columns=2 for the family pair only: both expression fields above carry
     # span=True and keep a row each regardless, so this changes nothing they do.
@@ -445,7 +525,18 @@ NON_PROFILE_FIELDS = tuple((f.key, f.label) for f in FIELD_DEFS if not f.in_prof
 # reads them, and tests/test_passthrough.py derives its pass-through invariant from
 # them, so a new impairment is declared once instead of remembered twice.
 IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs)
-GLOBALLY_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS if f.impairs == IMPAIRS_ALL)
+# Damages every captured packet WHENEVER IT IS SET - nothing else has to be
+# switched on first, so the registry can answer the blast-radius question from
+# the value alone.
+GLOBALLY_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS
+                                if f.impairs == IMPAIRS_ALL and not f.live_when)
+# ...and the ones where it cannot: the same damage, but only while the switch
+# named by ``live_when`` is on. Kept out of the tuple above so that a value left
+# behind by a switch that is now off is not reported as armed - and folded back
+# in by ``settings.armed_global_impairments``, which is the only place that has
+# the other field's value to look at.
+CONDITIONAL_IMPAIRING_KEYS = tuple(f.key for f in FIELD_DEFS
+                                   if f.impairs == IMPAIRS_ALL and f.live_when)
 # Damages only what it NAMES - which stops being a limit the moment the expression
 # names everything. `settings.armed_global_impairments` promotes one of these to a
 # global impairment when its expression covers the whole space; see it for why.
@@ -461,6 +552,25 @@ PARAMETER_KEYS = tuple(f.key for f in FIELD_DEFS if f.parameter_of)
 def overriding_field(field):
     """The field that makes ``field`` inert, or None."""
     return FIELDS.get(field.overridden_by) if field.overridden_by else None
+
+
+def widget_value(key, value):
+    """A stored profile value, in the form its widget variable expects.
+
+    Both loops that fill the form from a preset or a profile used to call
+    ``number_string`` on every value, which held only for as long as every
+    profile field WAS a number. The asymmetry switch is a checkbox, and
+    ``number_string(False)`` is the string ``"0"`` - a value real tkinter
+    coerces back to False by luck, and one that a profile storing the switch ON
+    would have delivered as ``"1"`` and that would have worked for the same
+    wrong reason. The next checkbox to join the profile scope would have
+    inherited the bug in silence.
+
+    Here rather than in the GUI because it is a property of the FIELD, and it
+    lives beside ``off_value`` for the same reason: both answer "what does this
+    field's value look like" from the registry, without a widget in sight.
+    """
+    return bool(value) if FIELDS[key].kind == BOOL else number_string(value)
 
 
 def off_value(field):

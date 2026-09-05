@@ -1007,3 +1007,108 @@ def test_the_two_lan_switches_share_one_row():
         gap = gap[1] if isinstance(gap, (tuple, list)) else gap
         assert gap, "no room to the right of the first switch: %r" % (lan.pack_info,)
     """)
+
+
+def test_turning_asymmetry_on_copies_the_download_values_across():
+    """🔴 The design decision this whole card rests on, in the one place a user
+    meets it.
+
+    The alternative was "leave the upload box empty to mean the same as
+    download". An empty numeric box means ZERO everywhere else in this program,
+    so the reading a newcomer would give it is the one that would be wrong - and
+    in a reproduction command the inheritance would not be visible at all.
+
+    The switch removes the question instead of answering it: ticking it copies
+    each field's mirror across, so the second set of boxes is never blank and
+    describes the same link it described a moment ago. Only an edit changes
+    anything. The pairs come from ``Field.mirror_of`` rather than from a list
+    here, so a value added to the card later cannot be left out of the copy.
+    """
+    run_gui("""
+        from beantester.fields import FIELD_DEFS
+        mirrors = [(f.key, f.mirror_of) for f in FIELD_DEFS
+                   if f.live_when == "asym" and f.mirror_of]
+        assert len(mirrors) == 7, mirrors
+
+        for _up, base in mirrors:                 # distinct values, so a copy shows
+            app.vars[base].set("42")
+        for up, _base in mirrors:
+            app.vars[up].set("")
+        assert not app.vars["asym"].get()
+
+        app.vars["asym"].set(True)                # what the checkbox variable does
+        app.form._on_switch(__import__("beantester.fields", fromlist=["FIELDS"])
+                            .FIELDS["asym"])      # ...and then its command
+        for up, base in mirrors:
+            assert app.vars[up].get() == app.vars[base].get() == "42", (up, base,
+                app.vars[up].get())
+
+        # Turning it back off leaves the work alone: the values are inert either
+        # way, and wiping them would punish somebody comparing against a
+        # symmetric run.
+        app.vars["latency_up"].set("7")
+        app.vars["asym"].set(False)
+        app.form._on_switch(__import__("beantester.fields", fromlist=["FIELDS"])
+                            .FIELDS["asym"])
+        assert app.vars["latency_up"].get() == "7", app.vars["latency_up"].get()
+    """)
+
+
+def test_the_upload_fields_look_dead_while_the_switch_is_off():
+    """An editable box that changes nothing is a lie about what the tool is
+    doing - the rule ``apply_overrides`` already enforced for a field another
+    field had taken over. A field waiting on a switch is the same statement seen
+    from the other side, so it goes through the same place."""
+    run_gui("""
+        from beantester.fields import FIELD_DEFS
+        upload = [f.key for f in FIELD_DEFS if f.live_when == "asym"]
+        assert upload
+
+        app.vars["asym"].set(False)
+        app.form.apply_overrides()
+        for key in upload:
+            assert app.form.is_dormant(key), key
+            assert app.form.entries[key].cget("state") == "disabled", key
+
+        app.vars["asym"].set(True)
+        app.form.apply_overrides()
+        for key in upload:
+            assert not app.form.is_dormant(key), key
+            assert app.form.entries[key].cget("state") == "normal", key
+        # the switch itself is never dormant - nothing gates it
+        assert not app.form.is_dormant("asym")
+    """)
+
+
+def test_a_profile_switch_reaches_the_form_as_a_switch_not_as_text():
+    """🔴 FOUND by the asymmetry work, and it is a class rather than one field.
+
+    Both loops that fill the form from a preset or profile called
+    ``number_string`` on every value. That held for as long as every profile
+    field was a number - and ``asym`` is the first that is not. The switch went
+    in as the string ``"0"``, which real tkinter coerces back to False by luck,
+    and a profile storing it ON would have arrived as ``"1"`` and worked for the
+    same wrong reason. The next checkbox to join the profile scope would have
+    inherited it in silence.
+    """
+    run_gui("""
+        from beantester.fields import FIELD_DEFS
+        from beantester.presets import settings_to_preset
+        from beantester.settings import DEFAULT_SETTINGS
+
+        switches = [f.key for f in FIELD_DEFS if f.in_profile and f.kind == "bool"]
+        assert switches, "no switch is stored in a profile any more"
+
+        for key in switches:                       # a fresh form: off, as a BOOL
+            assert app.vars[key].get() is False, (key, repr(app.vars[key].get()))
+
+        app.profiles.set("asymmetric link",
+                         settings_to_preset(dict(DEFAULT_SETTINGS, asym=True,
+                                                 latency=200, latency_up=30)))
+        app.select_profile("asymmetric link")
+        assert app.vars["asym"].get() is True, repr(app.vars["asym"].get())
+        assert app.vars["latency_up"].get() == "30", app.vars["latency_up"].get()
+
+        app.select_profile("presets.perfect")      # ...and back off, still a BOOL
+        assert app.vars["asym"].get() is False, repr(app.vars["asym"].get())
+    """)

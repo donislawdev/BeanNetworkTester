@@ -40,6 +40,18 @@ def _core(loss=0.0, burst=0.0):
     return core
 
 
+def _chain(core, outbound=True):
+    """The transition probabilities one direction is walking.
+
+    They moved into the per-direction value set when asymmetry arrived: two
+    directions losing different amounts need two chains, because ``p`` is derived
+    from the loss. With the switch off both directions share one set, so either
+    index answers - and a test that says which one it means still reads right
+    when they differ.
+    """
+    return core._dir[outbound]
+
+
 def _drops(core, packets=PACKETS, seed=7, alternate=False):
     """Run packets through decide(); return (dropped, {direction: [run lengths]}).
 
@@ -249,14 +261,14 @@ def test_changing_only_the_loss_re_derives_the_chain():
     chain would still be a perfectly valid chain for the OLD number.
     """
     core = _core(loss=5, burst=20)
-    before = core._burst_p
+    before = _chain(core).burst_p
     core.set_params(20, 0, 0, 0, 0, 0, 0)
-    check("a new loss gives a new transition probability", core._burst_p != before,
-          f"(p stayed {before})")
+    check("a new loss gives a new transition probability",
+          _chain(core).burst_p != before, f"(p stayed {before})")
     expected, _r, _a = burst_loss_params(0.2, 20.0)
     check("and it is the one the new loss implies",
-          abs(core._burst_p - expected) < 1e-12,
-          f"(p={core._burst_p}, expected {expected})")
+          abs(_chain(core).burst_p - expected) < 1e-12,
+          f"(p={_chain(core).burst_p}, expected {expected})")
 
 
 def test_re_applying_the_same_settings_does_not_cut_a_run_in_flight():
@@ -356,12 +368,49 @@ def test_the_run_counter_reaches_the_statistics_snapshot():
 
 def test_turning_bursts_off_returns_to_the_independent_draw():
     core = _core(loss=10, burst=30)
-    check("armed", core._burst_p is not None, "")
+    check("armed", _chain(core).burst_p is not None, "")
     core.set_loss_burst(0)
-    check("disarmed", core._burst_p is None, f"(p={core._burst_p})")
+    check("disarmed", _chain(core).burst_p is None, f"(p={_chain(core).burst_p})")
     dropped, runs = _drops(core, packets=50000)
     check("and the losses stop clustering", _mean(runs[True]) < 1.2,
           f"(mean run {_mean(runs[True]):.2f})")
     check("while still losing about the configured share",
           abs(100.0 * dropped / 50000 - 10.0) < 1.0,
           f"(delivered {100.0 * dropped / 50000:.2f}%)")
+
+
+def test_raising_the_upload_loss_does_not_cut_a_download_run_in_flight():
+    """One chain per direction means one PAIR OF PROBABILITIES per direction.
+
+    While both directions shared a single pair, re-deriving it reset both runs -
+    so changing a value for a direction nobody was asking about ended the run the
+    other direction was in the middle of. Unreachable until the two directions
+    could hold different losses, and silent when it happened: the run simply came
+    out shorter than the tester asked for, in a direction they had not touched.
+    """
+    core = BeanCore()
+    core.set_params(50, 0, 0, 0, 0, 0, 0)
+    core.set_loss_burst(50)
+    core.set_asymmetry(True, 50, 0, 0, 0, 0, 0, 0)     # same loss both ways, for now
+    core.reset_buckets(0.0)
+
+    rng = random.Random(3)
+    for i in range(200):                               # get the DOWNLOAD into a run
+        core.decide(1200, False, 5000, i * 0.001, rng, remote_ip="1.2.3.4",
+                    remote_port=443, is_tcp=True)
+        if core._loss_bad[False]:
+            break
+    check("the download chain reached a bad run to test with",
+          core._loss_bad[False], "")
+
+    core.set_asymmetry(True, 90, 0, 0, 0, 0, 0, 0)     # change the UPLOAD only
+    check("the download run survives a change to the upload",
+          core._loss_bad[False], "(the run was cut)")
+    check("...and the upload chain did restart",
+          not core._loss_bad[True], "")
+    check("...with the probability its own new loss implies",
+          abs(_chain(core, True).burst_p - burst_loss_params(0.9, 50.0)[0]) < 1e-12,
+          f"(p={_chain(core, True).burst_p})")
+    check("while the download keeps its own",
+          abs(_chain(core, False).burst_p - burst_loss_params(0.5, 50.0)[0]) < 1e-12,
+          f"(p={_chain(core, False).burst_p})")

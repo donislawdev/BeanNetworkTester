@@ -1339,3 +1339,73 @@ def test_the_size_ceiling_holds_inside_a_single_second():
         peak = max(peak, len(table))
     check("the table never passes its ceiling, whatever the clock does",
           peak <= 1000, f"(peak={peak})")
+
+
+# --------------------------------------------------------------------------- #
+# Asymmetry: separate values for download and upload
+# --------------------------------------------------------------------------- #
+def _delay(core, outbound, rng=None):
+    """The delay one direction adds, with no jitter and no spike in the way."""
+    rng = rng or random.Random(1)
+    return core.decide(100, outbound, None, 5.0, rng).releases[0] - 5.0
+
+
+def test_with_the_switch_off_both_directions_get_the_same_values():
+    """Values for the upload direction are STORED but unread until the switch.
+
+    This is what every profile, preset and repro command written before
+    asymmetry existed decodes to, so it is the behaviour that must not move.
+    """
+    core = BeanCore()
+    core.set_params(0, 0, 0, 100, 0, 0, 0)
+    core.set_asymmetry(False, 0, 0, 0, 20, 0, 0, 0)     # upload values, unused
+    check("download unchanged", abs(_delay(core, False) - 0.1) < 1e-9,
+          f"({_delay(core, False)})")
+    check("upload gets the same value, not the stored one",
+          abs(_delay(core, True) - 0.1) < 1e-9, f"({_delay(core, True)})")
+
+
+def test_the_switch_makes_the_two_directions_differ():
+    core = BeanCore()
+    core.set_params(0, 0, 0, 200, 0, 0, 0)
+    core.set_asymmetry(True, 0, 0, 0, 30, 0, 0, 0)
+    check("download keeps the base value", abs(_delay(core, False) - 0.2) < 1e-9,
+          f"({_delay(core, False)})")
+    check("upload uses its own", abs(_delay(core, True) - 0.03) < 1e-9,
+          f"({_delay(core, True)})")
+
+
+def test_an_upload_that_impairs_nothing_is_a_legal_link():
+    """"Fast up, slow down" is the shape of most consumer links, so a row of
+    zeros for the upload must be reachable - which is why the switch is stored
+    rather than inferred from the values."""
+    core = BeanCore()
+    core.set_params(100, 0, 0, 500, 0, 0, 0)            # 100% loss downward
+    core.set_asymmetry(True, 0, 0, 0, 0, 0, 0, 0)
+    rng = random.Random(5)
+    down = [core.decide(100, False, None, 0.0, rng).drop for _ in range(200)]
+    up = [core.decide(100, True, None, 0.0, rng).drop for _ in range(200)]
+    check("every download packet is dropped", all(down), f"({sum(down)}/200)")
+    check("and no upload packet is", not any(up), f"({sum(up)}/200)")
+    check("while the upload adds no delay", abs(_delay(core, True)) < 1e-9,
+          f"({_delay(core, True)})")
+
+
+def test_every_impairment_can_differ_by_direction():
+    """The accounting test: each value the switch covers must actually be read
+    per direction. A field wired into the registry but not into the value set
+    would impair BOTH directions with the download number, and the only symptom
+    would be a number quietly ignored."""
+    core = BeanCore()
+    core.set_params(10, 20, 30, 100, 40, 0, 0)
+    core.set_spike(50, 60)
+    core.set_asymmetry(True, 1, 2, 3, 4, 5, 6, 7)
+    down, up = core._dir[False], core._dir[True]
+    for name, expected_down, expected_up in (
+            ("loss", 0.10, 0.01), ("corrupt", 0.20, 0.02), ("dup", 0.30, 0.03),
+            ("latency_s", 0.100, 0.004), ("jitter_s", 0.040, 0.005),
+            ("spike_prob", 0.50, 0.06), ("spike_s", 0.060, 0.007)):
+        check(f"{name} is per direction",
+              abs(getattr(down, name) - expected_down) < 1e-9
+              and abs(getattr(up, name) - expected_up) < 1e-9,
+              f"(down={getattr(down, name)}, up={getattr(up, name)})")

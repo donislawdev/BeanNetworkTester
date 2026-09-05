@@ -1908,8 +1908,11 @@ MUTATIONS = [
         # --narrow-filter went missing for weeks.
         "label": "repro: a flag drops out of the reproduction command",
         "file": "beantester/repro.py",
-        "old": '    if g("internet_only"):\n        args += ["--internet-only"]',
-        "new": "    pass",
+        # The seven switches became a table when the complexity ratchet fired on
+        # the seventh, so the mutation drops one ROW instead of one branch. Same
+        # statement, and the same test still has to redden.
+        "old": '("internet_only", "--internet-only"),\n',
+        "new": "",
         "test": "test_every_setting_with_a_flag_reaches_the_reproduction_command",
     },
     {
@@ -1958,11 +1961,14 @@ MUTATIONS = [
         # alone would let the ORDER of two setter calls decide correctness.
         "label": "burst loss: changing only the loss leaves the chain stale",
         "file": "beantester/core.py",
-        "old": "            self.rate_up = self._rate_bps(up_kbps)\n"
-               "            # The burst chain is derived from the loss AND from the run length,\n"
-               "            # so it has to be re-derived here too - see _recompute_burst.\n"
-               "            self._recompute_burst()",
-        "new": "            self.rate_up = self._rate_bps(up_kbps)",
+        # `_recompute_burst` became `_recompute` when the value sets went per
+        # direction (it now re-derives both of them, not only the chain), so the
+        # pattern follows the rename. Same statement: drop the re-derivation from
+        # the setter that can change the loss.
+        "old": "            # for the burst chain, from the run length too), so it has to be\n"
+               "            # re-derived here - see _recompute.\n"
+               "            self._recompute()",
+        "new": "            pass",
         "test": "test_changing_only_the_loss_re_derives_the_chain",
     },
     {
@@ -2209,6 +2215,73 @@ MUTATIONS = [
         "old": "    <iconUrl>{{ICON_URL}}</iconUrl>",
         "new": "    <iconUrl>{{REPO_URL}}/raw/master/bean.png</iconUrl>",
         "test": "test_the_chocolatey_icon_is_a_pinned_cdn_url",
+    },
+    {
+        # Two directions losing different amounts need two chains, because p is
+        # derived from the loss. Sharing one pair meant re-deriving it reset BOTH
+        # runs, so a change to the upload ended the download's run in flight.
+        "label": "core: the burst chains share one reset again",
+        "file": "beantester/core.py",
+        "old": "                self._loss_bad[outbound] = False",
+        "new": "                self._loss_bad[True] = self._loss_bad[False] = False",
+        "test": "test_raising_the_upload_loss_does_not_cut_a_download_run_in_flight",
+    },
+    {
+        # ...and the other half of the same fix: both chains derived from the
+        # DOWNLOAD loss, so the upload walks a chain built for the wrong number.
+        "label": "core: both burst chains come from the download loss",
+        "file": "beantester/core.py",
+        "old": "        params = burst_loss_params(loss, self.loss_burst)",
+        "new": "        params = burst_loss_params(self.loss, self.loss_burst)",
+        "test": "test_raising_the_upload_loss_does_not_cut_a_download_run_in_flight",
+    },
+    {
+        # The rejected design, where an absent upload value simply means zero. A
+        # profile written before asymmetry then silently becomes "7% down, 0% up"
+        # - it still LOADS, which is why loading was never the question.
+        "label": "core: upload values are read whether or not the switch is on",
+        "file": "beantester/core.py",
+        "old": "        if self.asymmetric:",
+        "new": "        if True:",
+        "test": "test_a_profile_written_before_asymmetry_still_means_what_it_meant",
+    },
+    {
+        # Without impairs, `--asym --loss-up 50` cuts half of everything this
+        # machine sends, with no target and no deadline, and starts in silence.
+        "label": "fields: an upload impairment stops declaring its blast radius",
+        "file": "beantester/fields.py",
+        "old": '          cli="loss-up", impairs=IMPAIRS_ALL, live_when="asym",',
+        "new": '          cli="loss-up", live_when="asym",',
+        "test": "test_an_upload_impairment_earns_the_blast_radius_warning",
+    },
+    {
+        # ...and without live_when it cries wolf on the ordinary path of trying
+        # the feature and unticking the box again.
+        "label": "fields: an upload impairment forgets which switch reads it",
+        "file": "beantester/fields.py",
+        "old": '          cli="loss-up", impairs=IMPAIRS_ALL, live_when="asym",',
+        "new": '          cli="loss-up", impairs=IMPAIRS_ALL,',
+        "test": "test_an_upload_value_left_behind_by_the_switch_warns_about_nothing",
+    },
+    {
+        # The switch is the first BOOL in the profile scope. Dropped from it,
+        # every saved asymmetric profile comes back symmetric with all seven
+        # values present - the wrong link, described in full.
+        "label": "fields: the asymmetry switch leaves the profile scope",
+        "file": "beantester/fields.py",
+        "old": '          tip="tips.asym", span=True, cli="asym", in_profile=True,',
+        "new": '          tip="tips.asym", span=True, cli="asym", in_profile=False,',
+        "test": "test_the_switch_survives_a_profile_round_trip",
+    },
+    {
+        # The uniform number_string both form loaders used before a profile field
+        # could be a checkbox: the switch arrives as the string "0", which real
+        # tkinter coerces back to False by luck.
+        "label": "fields: a profile switch reaches the form as text",
+        "file": "beantester/fields.py",
+        "old": "    return bool(value) if FIELDS[key].kind == BOOL else number_string(value)",
+        "new": "    return number_string(value)",
+        "test": "test_a_profile_switch_reaches_the_form_as_a_switch_not_as_text",
     },
 ]
 

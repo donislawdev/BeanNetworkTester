@@ -760,6 +760,10 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--rst-prob` `--rst-cooldown` | % / s | percentage of connections torn with RST and how long the tear-down is held |
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
+| `--asym` | - | give uploads their own values. Without it one set of numbers applies both ways, which is the default |
+| `--loss-up` `--corrupt-up` `--dup-up` | % | the same three impairments, for packets this machine SENDS. Used only with `--asym` |
+| `--latency-up` `--jitter-up` | ms | delay and its variation, for packets this machine SENDS. Used only with `--asym` |
+| `--spike-prob-up` `--spike-ms-up` | % / ms | the occasional longer delay, for packets this machine SENDS. Used only with `--asym` |
 | `--ipv4-only` `--ipv6-only` | - | impair one address family only. The other keeps flowing untouched - this aims the tool, it does not block a protocol. Works with `--dst-ip` empty too, which means all addresses. Both flags at once exclude each other, nothing is impaired, and the log says so |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
 | `--internet-only` | - | the mirror: cut off the local network (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), keep the internet. Loopback keeps working. Careful: DNS asked of your router is local traffic, so the internet can stop working with it |

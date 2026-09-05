@@ -316,6 +316,9 @@ class BeanEngine:
     def set_loss_burst(self, *a):
         self.core.set_loss_burst(*a)
 
+    def set_asymmetry(self, *a):
+        self.core.set_asymmetry(*a)
+
     def set_target(self, active, ports=None):
         """Point the engine at a set of local ports (or a live port container).
 

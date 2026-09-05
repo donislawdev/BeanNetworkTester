@@ -262,6 +262,7 @@ class _TargetedEngine:
     def set_params(self, *_a, **_k): pass
     def set_buffer(self, *_a, **_k): pass
     def set_loss_burst(self, *_a, **_k): pass
+    def set_asymmetry(self, *_a, **_k): pass
     def set_dest(self, *_a, **_k): pass
     def set_ip_family(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
@@ -1327,3 +1328,74 @@ def test_a_mistyped_preset_is_offered_the_nearest_one(monkeypatch):
     # A name close to a translated one resolves through the same vocabulary.
     _, _, err, _ = _real_run(monkeypatch, ["--preset", "satelite"])
     check("a misspelt English name is matched too", "did you mean" in err, f"({err!r})")
+
+
+def test_the_flags_that_gained_an_up_neighbour_still_work():
+    """🔴 MEASURED, and the cost the asymmetry flags were allowed to charge.
+
+    The same shape as ``--loss-burst`` above, seven times over. ``allow_abbrev``
+    is on by decision (ADR 2026-08-02), so a second option starting with
+    ``latency`` changes what the prefixes mean. Measured on this parser before
+    the names were chosen: 18 prefixes that used to work stop working
+    (``--lat``, ``--jit``, ``--j``, ``--cor``, ``--spike-p`` and the longer
+    forms of each), and every FULL flag survives, because argparse prefers an
+    exact match over a prefix one.
+
+    That second half is the one that matters and the reason the cost was
+    acceptable: ``settings_to_cli`` emits full flags, so no stored ``Reproduce:``
+    command and no documented example moves. Only a hand-typed abbreviation does.
+
+    The alternative measured against this was ``--up-latency``, which costs one
+    prefix instead of eighteen and was NOT taken: every other modifier in this
+    parser reads ``<noun>-<modifier>`` (``--loss-burst``, ``--spike-prob``,
+    ``--rst-cooldown``, ``--flap-down``, ``--nat-timeout``), and ``--up-`` would
+    also read as belonging to ``--up``, the upload SPEED limit.
+    """
+    parser = cli_module.build_arg_parser()
+    for flag, dest, neighbour in (("--latency", "latency", "latency_up"),
+                                  ("--jitter", "jitter", "jitter_up"),
+                                  ("--loss", "loss", "loss_up"),
+                                  ("--corrupt", "corrupt", "corrupt_up"),
+                                  ("--dup", "dup", "dup_up"),
+                                  ("--spike-ms", "spike_ms", "spike_ms_up"),
+                                  ("--spike-prob", "spike_prob", "spike_prob_up")):
+        args = parser.parse_args([flag, "7"])
+        check(f"{flag} still means what it meant",
+              getattr(args, dest) == 7.0, f"({getattr(args, dest)})")
+        check(f"{flag} did not swallow its -up neighbour",
+              getattr(args, neighbour) is None, f"({getattr(args, neighbour)})")
+        args = parser.parse_args([f"{flag}-up", "3"])
+        check(f"{flag}-up reaches the upload value",
+              getattr(args, neighbour) == 3.0, f"({getattr(args, neighbour)})")
+
+    for prefix in ("--lat", "--jit", "--j", "--cor", "--spike-p"):
+        try:
+            parser.parse_args([prefix, "5"])
+            code = 0
+        except SystemExit as exc:
+            code = exc.code
+        check(f"{prefix} is now ambiguous, which is the accepted cost of the names",
+              code == 2, f"(exit {code})")
+
+
+def test_an_upload_impairment_earns_the_blast_radius_warning(monkeypatch):
+    """🔴 The rule this project writes in red: never damage traffic globally in
+    silence. ``--asym --loss-up 50`` cuts half of everything this machine SENDS,
+    with no target and no deadline, and the download loss the warning used to
+    look at is zero - so without ``impairs`` on the upload fields it would have
+    started without a word.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--asym", "--loss-up", "50"])
+    check("warning: an upload-only impairment is still machine-wide", _warned(err))
+
+
+def test_an_upload_value_left_behind_by_the_switch_warns_about_nothing(monkeypatch):
+    """The other half, and the reason ``Field.live_when`` exists.
+
+    Turning the switch back off leaves the seven values sitting in the form, and
+    they impair nothing at all. Warning about them would cry wolf on the ordinary
+    path of using the feature and then changing your mind - and a warning that
+    fires when nothing is wrong is how a real one stops being read.
+    """
+    _, _, err, _ = _real_run(monkeypatch, ["--loss-up", "50"])
+    check("no warning when the switch that reads it is off", not _warned(err))

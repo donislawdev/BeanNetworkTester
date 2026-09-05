@@ -177,3 +177,107 @@ def _split_command(command):
     for part in parts[2:] if len(parts) > 1 and parts[0] == "python" else parts[1:]:
         argv.append(part.strip('"'))
     return argv
+
+
+# The seven values asymmetry splits, as (settings key, upload key).
+_ASYMMETRIC_PAIRS = (("loss", "loss_up"), ("corrupt", "corrupt_up"),
+                     ("dup", "dup_up"), ("latency", "latency_up"),
+                     ("jitter", "jitter_up"), ("spike_prob", "spike_prob_up"),
+                     ("spike_ms", "spike_ms_up"))
+
+
+def test_a_profile_written_before_asymmetry_still_means_what_it_meant():
+    """🔴 The migration this feature could have broken in SILENCE.
+
+    A profile file names only the keys it carries, and `ProfileStore._clean`
+    fills every key it does not mention with that field's default. So a profile
+    written before asymmetry existed loads without any error whatever the design
+    is - the question was never whether it LOADS, it is what it then MEANS.
+
+    Had the upload values simply defaulted to zero, "latency 200" would have
+    quietly become "200 ms down, 0 ms up", and
+    `test_a_profile_from_every_release_still_loads_with_its_own_defaults` above
+    could not have seen it: that guard flags a field zero-filled against a
+    NON-ZERO default, and every upload value's default is zero.
+
+    The switch is what makes the old meaning survive by construction - absent
+    `asym` reads as off, and then the download values apply both ways. This test
+    is the proof, and it is written not to depend on the stored corpus: it builds
+    the profile from the keys that existed BEFORE the change, so it keeps testing
+    the pre-asymmetry shape however the corpus is regenerated later.
+    """
+    import json as _json
+
+    from beantester.core import BeanCore
+    from beantester.presets import SETTING_TO_PRESET, preset_to_settings
+    from beantester.settings import apply_settings
+    from beantester.gui.profiles import ProfileStore
+
+    old_shape = {SETTING_TO_PRESET[key]: value for key, value in (
+        ("loss", 7), ("corrupt", 3), ("dup", 2), ("latency", 200),
+        ("jitter", 40), ("spike_prob", 5), ("spike_ms", 90),
+        ("down", 512), ("up", 128), ("buffer", 1000),
+        ("loss_burst", 0), ("flap_period", 0), ("flap_down", 0))}
+    check("the fixture really is pre-asymmetry (no upload key in it)",
+          not [k for k in old_shape if k.endswith("_up")], f"({sorted(old_shape)})")
+
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(), "profiles.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        _json.dump({"written before asymmetry": old_shape}, handle)
+
+    values = ProfileStore(path).get("written before asymmetry")
+    check("it loads", values is not None, "(the store dropped it)")
+    settings = preset_to_settings(values)
+
+    core = BeanCore()
+    apply_settings(core, settings)
+    down, up = core._dir[False], core._dir[True]
+
+    # First that the file's numbers ARRIVED. Without this the checks below would
+    # pass just as well on a profile that loaded as nothing but zeros, which is
+    # the exact failure this file exists to catch.
+    check("the stored latency reached the core",
+          abs(down.latency_s - 0.2) < 1e-9, f"({down.latency_s})")
+    check("the stored loss reached the core",
+          abs(down.loss - 0.07) < 1e-9, f"({down.loss})")
+    for key, up_key in _ASYMMETRIC_PAIRS:
+        attr = {"loss": "loss", "corrupt": "corrupt", "dup": "dup",
+                "latency": "latency_s", "jitter": "jitter_s",
+                "spike_prob": "spike_prob", "spike_ms": "spike_s"}[key]
+        check(f"{key}: the upload direction still gets the stored value, "
+              f"not a zero from {up_key}",
+              getattr(up, attr) == getattr(down, attr),
+              f"(down={getattr(down, attr)}, up={getattr(up, attr)})")
+
+
+def test_the_switch_survives_a_profile_round_trip():
+    """`asym` is the first BOOL in the profile scope, and `_clean` floats
+    everything it stores. A switch that came back as 0.0 and was then read as
+    False would turn every saved asymmetric profile symmetric on reload - the
+    values would all be there, and the link would be the wrong one."""
+    import json as _json
+    import tempfile
+
+    from beantester.gui.profiles import ProfileStore
+    from beantester.presets import settings_to_preset, preset_to_settings
+    from beantester.settings import DEFAULT_SETTINGS
+
+    saved = dict(DEFAULT_SETTINGS, asym=True, latency=200, latency_up=30)
+    path = os.path.join(tempfile.mkdtemp(), "profiles.json")
+    store = ProfileStore(path)
+    store.set("asymmetric link", settings_to_preset(saved))
+    check("it saved", store.persist() is None, f"({store.problem})")
+
+    with open(path, encoding="utf-8") as handle:
+        on_disk = _json.load(handle)["asymmetric link"]
+    check("the switch is on disk as a number, not dropped",
+          "asym" in on_disk, f"({sorted(on_disk)})")
+
+    reloaded = preset_to_settings(ProfileStore(path).get("asymmetric link"))
+    check("the switch comes back on", bool(reloaded["asym"]),
+          f"({reloaded['asym']!r})")
+    check("with its own upload value", float(reloaded["latency_up"]) == 30.0,
+          f"({reloaded['latency_up']!r})")
+    check("and the download value beside it", float(reloaded["latency"]) == 200.0,
+          f"({reloaded['latency']!r})")

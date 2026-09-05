@@ -22,7 +22,17 @@ def settings_to_cli(settings, seed=None, simulate=False):
                ("nat_timeout", "--nat-timeout"), ("rst_prob", "--rst-prob"),
                ("rst_cooldown", "--rst-cooldown"),
                ("flap_period", "--flap-period"), ("flap_down", "--flap-down"),
-               ("duration", "--duration")]
+               ("duration", "--duration"),
+               # The upload half. These go out whenever they DIFFER from the
+               # default, exactly like every line above - and `--asym` below
+               # decides whether the run reads them, so a command carrying a
+               # value without the switch reproduces a symmetric session, which
+               # is what that session was.
+               ("loss_up", "--loss-up"), ("corrupt_up", "--corrupt-up"),
+               ("dup_up", "--dup-up"), ("latency_up", "--latency-up"),
+               ("jitter_up", "--jitter-up"),
+               ("spike_prob_up", "--spike-prob-up"),
+               ("spike_ms_up", "--spike-ms-up")]
     for key, flag in numeric:
         if to_number(g(key)) != to_number(DEFAULT_SETTINGS[key]):
             args += [flag, number_string(g(key))]
@@ -42,27 +52,32 @@ def settings_to_cli(settings, seed=None, simulate=False):
     block_port = setting_expression("block_port", g("block_port"))
     if block_port:
         args += ["--block-port", block_port]
-    # Whether the block answered or stayed silent decides what the application
-    # under test DID, so a run that leaves it out cannot be reproduced from its
-    # own command - which is the whole job of this line.
-    if g("block_reject"):
-        args += ["--block-reject"]
-    if g("lan_mode"):
-        args += ["--lan-mode"]
-    if g("ipv4_only"):
-        args += ["--ipv4-only"]
-    if g("ipv6_only"):
-        args += ["--ipv6-only"]
-    if g("internet_only"):
-        args += ["--internet-only"]
-    # START-only, and it changes what the session even SAW - a command without it
-    # re-runs a wider capture, so `packets` and every percentage derived from it
-    # describe a different run. It was missing until the guard below went looking
-    # (test_summary_repro_views.py::test_every_setting_with_a_flag_reaches_the_
-    # reproduction_command); the repro REPORT has carried `narrowed` all along,
-    # which is why nobody noticed the command did not.
-    if g("narrow_filter"):
-        args += ["--narrow-filter"]
+    # The plain on/off switches, as a table rather than seven identical branches
+    # - the shape `settings_summary` took for the same reason, and the same
+    # reason it matters here: the complexity ratchet counts the branches, so the
+    # seventh switch would have cost something it should not. Order is the order
+    # they were emitted in, because a repro command is compared by eye against
+    # older ones.
+    #
+    # Each line still carries WHY it has to be in the command at all:
+    #  * block_reject - whether the block answered or stayed silent decides what
+    #    the application under test DID, so a run without it is not the same run;
+    #  * asym - which half of the numbers above the session actually applied.
+    #    Without it a command carrying seven upload values replays them as a
+    #    symmetric run, and that difference is the point of the session;
+    #  * narrow_filter - START-only, and it changes what the session even SAW, so
+    #    `packets` and every percentage from it describe a different run. It was
+    #    missing until the guard below went looking (test_summary_repro_views.py
+    #    ::test_every_setting_with_a_flag_reaches_the_reproduction_command); the
+    #    repro REPORT has carried `narrowed` all along, which is why nobody
+    #    noticed the command did not.
+    for key, flag in (("block_reject", "--block-reject"), ("asym", "--asym"),
+                      ("lan_mode", "--lan-mode"), ("ipv4_only", "--ipv4-only"),
+                      ("ipv6_only", "--ipv6-only"),
+                      ("internet_only", "--internet-only"),
+                      ("narrow_filter", "--narrow-filter")):
+        if g(key):
+            args.append(flag)
     filt = g("filter")
     if filt and filt != "both":
         args += ["--filter", str(filt)]
