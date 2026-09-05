@@ -2152,6 +2152,15 @@ MUTATIONS = [
         "new": "            pass",
         "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
     },
+    {
+        # The exact line Chocolatey's moderation refused, and the branch pin that
+        # came with it. One line carries both faults, so one mutation restores both.
+        "label": "packaging: the Chocolatey icon goes back to a branch on github.com",
+        "file": "packaging/chocolatey/bean-network-tester.nuspec.in",
+        "old": "    <iconUrl>{{ICON_URL}}</iconUrl>",
+        "new": "    <iconUrl>{{REPO_URL}}/raw/master/bean.png</iconUrl>",
+        "test": "test_the_chocolatey_icon_is_a_pinned_cdn_url",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

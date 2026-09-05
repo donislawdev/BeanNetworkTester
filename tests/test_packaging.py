@@ -117,6 +117,25 @@ def test_the_download_is_checksummed(tmp_path, monkeypatch):
           "-Checksum64 '94359ea6" in install and "-ChecksumType64 'sha256'" in install)
 
 
+def test_the_chocolatey_icon_is_a_pinned_cdn_url(tmp_path, monkeypatch):
+    """Not `github.com/.../raw/`, and not a branch. Both were wrong until 2026-09-05.
+
+    Chocolatey's moderation held 0.5.0 back over the first half: it treats
+    `github.com/<owner>/<repo>/raw/...` exactly as `raw.githubusercontent.com`, and
+    neither is a CDN. The second half is the one nobody had complained about, and it
+    is the one that bites later - an icon pinned to a BRANCH follows whatever that
+    branch does next, under a package that is already approved and out of reach.
+    """
+    nuspec = _rendered(tmp_path, monkeypatch)["chocolatey/bean-network-tester.nuspec"]
+    found = re.search(r"<iconUrl>(.*?)</iconUrl>", nuspec)
+    check("the nuspec carries an icon at all", found is not None)
+    url = found.group(1) if found else ""
+    for host in ("raw.githubusercontent.com", "github.com"):
+        check(f"the icon is not served from {host}", host not in url, f"({url})")
+    check("the icon is pinned to the tag being packaged, not to a branch",
+          f"@v{appinfo.__version__}/" in url, f"({url})")
+
+
 # -- the inputs that would look fine and be wrong ------------------------------- #
 def test_the_binary_marker_never_reaches_the_url(tmp_path, monkeypatch):
     """`sha256sum` writes `<hash>  *<file>`, and that star is not part of the name."""

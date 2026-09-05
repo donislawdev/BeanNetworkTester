@@ -44,7 +44,11 @@ package carries no binaries and owes no `VERIFICATION.txt`. `chocolateybeforemod
 releases the WinDivert driver before an upgrade or an uninstall, because the kernel
 holds `WinDivert64.sys` open while it is loaded and an open file cannot be deleted.
 Its package folder is read-only for plain users, which is one of the two reasons the
-program stopped keeping user files in its own directory.
+program stopped keeping user files in its own directory. Its `iconUrl` is a CDN address
+pinned to the release tag, and both halves are load-bearing: moderation refuses
+`github.com/<owner>/<repo>/raw/...` exactly as it refuses `raw.githubusercontent.com`,
+and an icon pointing at a branch would keep changing under a package that is already
+approved.
 
 **WinGet.** `ArchiveBinariesDependOnPath: true` is the line that matters. The default
 for a portable inside an archive is a symlink, and this executable cannot be reached

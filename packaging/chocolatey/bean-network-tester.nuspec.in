@@ -9,7 +9,7 @@
     <title>{{APP_NAME}}</title>
     <authors>{{PUBLISHER}}</authors>
     <projectUrl>{{PROJECT_URL}}</projectUrl>
-    <iconUrl>{{REPO_URL}}/raw/master/bean.png</iconUrl>
+    <iconUrl>{{ICON_URL}}</iconUrl>
     <copyright>{{COPYRIGHT}}</copyright>
     <licenseUrl>{{LICENSE_URL}}</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
