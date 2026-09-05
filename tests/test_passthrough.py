@@ -30,7 +30,7 @@ from hypothesis import strategies as st
 
 from beantester.core import BeanCore, Decision
 from beantester.engine import BeanEngine
-from beantester.fields import (FIELDS, IMPAIRING_KEYS, NARROWING_KEYS,
+from beantester.fields import (BOOL, FIELDS, IMPAIRING_KEYS, NARROWING_KEYS,
                                PARAMETER_KEYS, off_value)
 from beantester.presets import PRESETS, SETTING_TO_PRESET, preset_to_settings
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
@@ -65,7 +65,7 @@ from fakes import FakeDivert, FakePacket, check
 # hand.
 IMPAIRMENT_OFF = dict(
     {key: off_value(FIELDS[key]) for key in IMPAIRING_KEYS + NARROWING_KEYS},
-    spike_ms=0, flap_down=0, loss_burst=0,
+    spike_ms=0, flap_down=0, loss_burst=0, block_reject=False,
 )
 
 # The profile fields that can impair traffic, and their "no impairment" value.
@@ -172,7 +172,12 @@ def test_a_parameter_at_its_maximum_still_damages_nothing():
     for key in PARAMETER_KEYS:
         field = FIELDS[key]
         settings = dict(DEFAULT_SETTINGS)
-        settings[key] = field.bounds[1]
+        # A checkbox has no bounds and its maximum is True. `block_reject` is the
+        # first parameter that is not a number, and until it arrived this line
+        # would have died on `bounds[1]` - a crash rather than a finding, which is
+        # the worst way for a guard to meet something new.
+        most = True if field.kind == BOOL else field.bounds[1]
+        settings[key] = most
         core = core_for(settings)
         rng = random.Random(11)
         damaged = 0
@@ -183,7 +188,7 @@ def test_a_parameter_at_its_maximum_still_damages_nothing():
                                    is_syn=(i % 50 == 0), is_tcp=bool(i % 3))
             if not is_pass_through(decision, now):
                 damaged += 1
-        check(f"{key} at its maximum ({field.bounds[1]}) damages nothing on its own",
+        check(f"{key} at its maximum ({most}) damages nothing on its own",
               damaged == 0, f"({damaged} of 2000 packets were touched)")
 
 

@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **A blocked connection can be refused instead of ignored.** A new "Refuse blocked
+  connections" checkbox in the Block card, and `--block-reject`. Without it a blocked
+  connection gets no answer and the program you are testing waits until it gives up on its
+  own; with it, the program reports "connection refused" in about two seconds, the same as
+  for a port that is really closed. Most applications treat those as two different failures,
+  and testing one is not testing the other. Connections this computer starts, over TCP only:
+  UDP and connections arriving from outside are still blocked in silence.
+
+- **A "connections_refused" column in the stats CSV** counts the refusals a session sent.
+  An existing stats CSV is rotated to a dated backup the first time the new column is
+  written.
+
 ## [0.6.0] - 2026-09-04
 
 ### Added

@@ -42,6 +42,11 @@ def settings_to_cli(settings, seed=None, simulate=False):
     block_port = setting_expression("block_port", g("block_port"))
     if block_port:
         args += ["--block-port", block_port]
+    # Whether the block answered or stayed silent decides what the application
+    # under test DID, so a run that leaves it out cannot be reproduced from its
+    # own command - which is the whole job of this line.
+    if g("block_reject"):
+        args += ["--block-reject"]
     if g("lan_mode"):
         args += ["--lan-mode"]
     if g("ipv4_only"):

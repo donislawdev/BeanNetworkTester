@@ -8,8 +8,9 @@ divert's ``make_rst`` hook, and ``SyntheticDivert`` carries a real protocol mix.
 import time
 
 from beantester import BeanEngine
+from beantester.core import BeanCore
 from beantester.synthetic import (SyntheticDivert, _SyntheticPacket, _SyntheticTCP,
-                                  build_synthetic_rst)
+                                  _SyntheticUDP, build_synthetic_rst)
 
 
 def _tcp_packet(local_port, remote_port, is_outbound=True, size=120, syn=False):
@@ -210,3 +211,113 @@ def test_simulate_mode_exercises_syn_drop():
     eng.stop()
     s = eng.stats_snapshot()
     assert s["drop_syn"] > 0, "no SYN packets were generated/dropped in simulate mode"
+
+
+def _udp_packet(local_port, remote_port):
+    """The same conversation over UDP, where a reset does not exist."""
+    p = _SyntheticPacket(raw=b"\x00" * 120, is_outbound=True, port=local_port,
+                         src_addr="10.0.0.2", dst_addr="8.8.8.8",
+                         udp=_SyntheticUDP())
+    p.src_port, p.dst_port = local_port, remote_port
+    return p
+
+
+def _blocked_run(packet, reject):
+    """One packet against a block on port 6000. Returns (stats, injected)."""
+    div = RecordingTcpDivert([packet])
+    eng = BeanEngine()
+    eng.set_block(True, None, "6000", reject)
+    eng.start("test", divert=div)
+    _drain(eng, 1)
+    eng.stop()
+    return eng.stats_snapshot(), div.sent
+
+
+def test_a_blocked_connection_is_refused_only_when_the_mode_is_on():
+    """The whole point of the mode: silence, or an answer, from the same block.
+
+    Both halves are asserted in one test on purpose. "It sends a reset" is only
+    interesting next to "it did not before" - a test that checked the mode ON
+    alone would pass just as happily if the block sent a reset unconditionally,
+    which would change what every existing block does.
+    """
+    quiet, quiet_sent = _blocked_run(_tcp_packet(5000, 6000, syn=True), False)
+    loud, loud_sent = _blocked_run(_tcp_packet(5000, 6000, syn=True), True)
+
+    assert quiet["drop_block"] >= 1 and loud["drop_block"] >= 1, (quiet, loud)
+    assert quiet_sent == [], "a block with the mode off answered anyway"
+    assert len(loud_sent) == 1, loud_sent
+    assert loud_sent[0].tcp.rst is True
+    assert loud["rst_sent"] >= 1, loud["rst_sent"]
+
+
+def test_every_forged_reset_is_counted_under_its_own_cause():
+    """A refusal is not a connection torn down, and they may not share a number.
+
+    `rst_reset` ships to the user as `connections_reset` in the stats CSV and in
+    the reproduction report, and it means an ESTABLISHED connection was cut and
+    put in cooldown. A blocked connection is refused at the door and has no
+    cooldown at all. One number for both would make both unreadable.
+    """
+    blocked, _ = _blocked_run(_tcp_packet(5000, 6000, syn=True), True)
+    assert blocked["block_rejected"] >= 1, blocked["block_rejected"]
+    assert blocked["rst_reset"] == 0, blocked["rst_reset"]
+
+    # ...and the other cause still lands where it always did.
+    div = RecordingTcpDivert([_tcp_packet(5000, 7000) for _ in range(3)])
+    eng = BeanEngine()
+    eng.set_rst(100, 3.0)
+    eng.start("test", divert=div)
+    _drain(eng, 3)
+    eng.stop()
+    reset = eng.stats_snapshot()
+    assert reset["rst_reset"] >= 1, reset["rst_reset"]
+    assert reset["block_rejected"] == 0, reset["block_rejected"]
+
+
+def test_the_reset_that_answers_a_syn_acknowledges_it():
+    """RFC 793: a bare RST is discarded in SYN_SENT, and this was MEASURED.
+
+    2026-07-28: the shape below without an ACK left the client hanging until its
+    own timeout while `rst_sent` reported success. 2026-09-05, against the LAN
+    peer: with the ACK it ends the connect with WinError 10061, three runs of
+    three, and in the same time a genuinely closed port takes.
+    """
+    syn = _tcp_packet(5000, 6000, syn=True)
+    fields = BeanCore.build_rst_fields(syn)
+    assert fields["ack_num"] == syn.tcp.seq_num + 1, fields
+    assert fields["seq_num"] == 0, fields
+    rst = build_synthetic_rst(syn, fields)
+    assert rst.tcp.ack is True and rst.tcp.ack_num == syn.tcp.seq_num + 1
+
+    # A conversation already under way keeps the shape that was measured working
+    # for it: no ACK, and the packet's own ack_num as the sequence.
+    live = _tcp_packet(5000, 6000)
+    fields = BeanCore.build_rst_fields(live)
+    assert fields["ack_num"] is None, fields
+    assert fields["seq_num"] == live.tcp.ack_num, fields
+    assert build_synthetic_rst(live, fields).tcp.ack is False
+
+
+def test_what_the_refusal_deliberately_does_not_answer():
+    """Two shapes that would forge a reset nobody receives, so they must not.
+
+    An inbound SYN is somebody connecting TO this machine: the reset is aimed at
+    the local end, which has no such connection yet, so it would be discarded and
+    only the counters would move. UDP has no reset at all - its refusal is an ICMP
+    port-unreachable this tool does not build. Both limits are in the tooltip,
+    because an option that does nothing in someone's setup has to say so.
+    """
+    # Coming IN, the remote end is the SOURCE, so the blocked port has to be the
+    # source port for the block to match at all - the first draft of this test put
+    # it on the destination and measured a packet nothing blocked.
+    inbound, inbound_sent = _blocked_run(
+        _tcp_packet(6000, 5000, is_outbound=False, syn=True), True)
+    assert inbound["drop_block"] >= 1, inbound
+    assert inbound_sent == [], "an inbound SYN was answered with a reset"
+    assert inbound["block_rejected"] == 0, inbound["block_rejected"]
+
+    udp, udp_sent = _blocked_run(_udp_packet(5000, 6000), True)
+    assert udp["drop_block"] >= 1, udp
+    assert udp_sent == [], "a UDP packet was answered with a TCP reset"
+    assert udp["block_rejected"] == 0, udp["block_rejected"]

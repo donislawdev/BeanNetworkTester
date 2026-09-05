@@ -63,7 +63,12 @@ def build_synthetic_rst(packet, fields):
     hands it to ``divert.send`` and counts ``rst_sent`` - so the RST path is
     testable without WinDivert.
     """
-    tcp = _SyntheticTCP(rst=True, seq_num=fields.get("seq_num", 0))
+    # The ACK half matters here as much as on the wire: `--simulate` is where the
+    # refuse mode is exercised without a driver, and a synthetic reset that always
+    # came back without an ACK would agree with a broken real one.
+    ack = fields.get("ack_num")
+    tcp = _SyntheticTCP(rst=True, seq_num=fields.get("seq_num", 0),
+                        ack=ack is not None, ack_num=ack or 0)
     rst = _SyntheticPacket(
         raw=b"\x00" * 40,
         is_outbound=False,

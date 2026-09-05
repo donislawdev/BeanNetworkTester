@@ -404,6 +404,7 @@ class BeanCore:
         self.block_port = ""        # raw expression text
         self.block_ip_matcher = parse_matcher("", KIND_IP)
         self.block_port_matcher = parse_matcher("", KIND_INT)
+        self.block_reject = False   # answer a blocked connection instead of dropping
         # advanced impairments
         self.flap_enabled = False
         self.flap_period_s = 0.0
@@ -695,7 +696,7 @@ class BeanCore:
             return "internet_only"
         return None
 
-    def set_block(self, active, ip=None, port=None):
+    def set_block(self, active, ip=None, port=None, reject=False):
         """Blocking (firewall). ``ip``/``port`` are filter expressions (see
         :mod:`beantester.matchers`), so lists, ranges, CIDR, wildcards, ``re:``
         patterns and ``!`` exclusions all work.
@@ -706,6 +707,13 @@ class BeanCore:
         blocking everything. Raises a translated ``ValueError`` on a malformed
         expression; callers (GUI, CLI, ``apply_settings``) validate before applying.
 
+        With ``reject`` the block ANSWERS instead of staying silent: an outbound TCP
+        packet that matches gets a forged reset, so the client sees "connection
+        refused" where it would otherwise wait out its own timeout. It shapes the
+        block and arms nothing by itself. Silent for UDP (its refusal is an ICMP
+        port-unreachable this tool does not build) and for inbound packets - see
+        ``decide()`` step 2c, which says why both are refusals nobody would receive.
+
         Takes already-compiled matchers too, for the same reason as ``set_dest``.
         """
         ip_matcher, port_matcher = compile_endpoint(ip, port)
@@ -715,6 +723,10 @@ class BeanCore:
             self.block_port = port_matcher.raw
             self.block_ip_matcher = ip_matcher
             self.block_port_matcher = port_matcher
+            # Set under the SAME lock hold as the matchers it modifies: a packet
+            # arriving mid-apply must not meet the new destinations with the old
+            # answer, which is the atomicity the settings path was rebuilt for.
+            self.block_reject = bool(reject)
 
     def set_flap(self, enabled, period_s, down_pct):
         with self._lock:
@@ -939,7 +951,22 @@ class BeanCore:
                     (self.block_ip_matcher and self.block_ip_matcher.matches(remote_ip))
                     or (self.block_port_matcher
                         and self.block_port_matcher.matches(remote_port))):
-                return Decision(True, False, [], "block")
+                # `block_reject` answers instead of staying silent - the difference
+                # between a refusal and a timeout, which is two different code paths
+                # in every client. Carried as a boolean expression rather than an
+                # `if` for the reason step 2b gives above: this function scores 27
+                # against `max-complexity = 27`, so one more BRANCH here fails the
+                # build, while an operator inside the call is free.
+                #
+                # OUTBOUND ONLY, and TCP only, and both are measured rather than
+                # cautious. An inbound SYN is somebody connecting TO this machine:
+                # `build_rst_fields` aims its reset at the LOCAL end, which for an
+                # inbound SYN is a connection the local stack does not have yet, so
+                # the segment is discarded and only `rst_sent` would move - a
+                # counter rising for an effect nobody got. UDP has no reset at all;
+                # its refusal is an ICMP port-unreachable this tool cannot build.
+                return Decision(True, False, [], "block",
+                                self.block_reject and is_tcp and is_outbound)
 
             key = self._flowkey(local_port, remote_ip, remote_port)
 
@@ -1111,22 +1138,40 @@ class BeanCore:
 
     @staticmethod
     def build_rst_fields(pkt):
-        """Return the RST fields to inject (aimed at the local end)."""
+        """Return the RST fields to inject (aimed at the local end).
+
+        ``ack_num`` is ``None`` for a reset of a conversation already under way -
+        the shape this has always injected - and a number for a reset that answers
+        a SYN, where it is not optional. See the branch below.
+        """
         is_out = bool(getattr(pkt, "is_outbound", True))
         tcp = getattr(pkt, "tcp", None)
         if tcp is None:
             return None
+        ack = None
         if is_out:
             # observed local->remote; the RST pretends to come from remote->local
             seq = getattr(tcp, "ack_num", 0)
             src_ip, dst_ip = getattr(pkt, "dst_addr", None), getattr(pkt, "src_addr", None)
             src_port, dst_port = pkt.dst_port, pkt.src_port
+            # 🔴 A SYN carries no ack_num, so the line above would send seq=0 with no
+            # ACK - which a stack in SYN_SENT is entitled to ignore (RFC 793), and
+            # which was MEASURED doing exactly that on 2026-07-28. What a closed port
+            # really sends is RST|ACK acknowledging the SYN, and that is what this
+            # builds. MEASURED 2026-09-05 against the LAN peer, three runs each:
+            # the old shape left connect() hanging to its own timeout while three
+            # resets went out and were thrown away; this one ends it with
+            # ConnectionRefusedError (WinError 10061) - and it ends it exactly as a
+            # genuinely closed port does, 2008 ms against 2003 ms, because Windows
+            # retries the SYN five times before reporting a refusal either way.
+            if getattr(tcp, "syn", False) and not getattr(tcp, "ack", False):
+                seq, ack = 0, (getattr(tcp, "seq_num", 0) + 1) & 0xFFFFFFFF
         else:
             seq = getattr(tcp, "seq_num", 0)
             src_ip, dst_ip = getattr(pkt, "src_addr", None), getattr(pkt, "dst_addr", None)
             src_port, dst_port = pkt.src_port, pkt.dst_port
         return dict(direction_inbound=True, src_ip=src_ip, dst_ip=dst_ip,
-                    src_port=src_port, dst_port=dst_port, seq_num=seq)
+                    src_port=src_port, dst_port=dst_port, seq_num=seq, ack_num=ack)
 
     @staticmethod
     def corrupt_packet(packet, rng=random):

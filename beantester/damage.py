@@ -21,6 +21,17 @@ DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
                   "internet_only": "drop_internet_only", "block": "drop_block",
                   "flap": "drop_flap", "rate": "drop_rate"}
 
+# Which counter a forged reset belongs to, by the reason that asked for it. Two
+# causes, and they must not share a number: `rst_reset` means an ESTABLISHED
+# connection was torn down and put in cooldown - it ships to the user as
+# `connections_reset` in the stats CSV and in the reproduction report - while a
+# blocked connection is refused at the door and has no cooldown at all. Counting
+# a refusal as a teardown would make both numbers unreadable, which is the shape
+# of silent lie this project keeps removing. Guarded by
+# test_rst_local.py::test_every_forged_reset_is_counted_under_its_own_cause, which
+# lives with the rest of the reset path rather than with the counters.
+RST_BY_REASON = {"rst": "rst_reset", "block": "block_rejected"}
+
 # Damage the simulated link inflicted: every reason decide() can name, plus the
 # unnamed default (the configured Loss). Derived from the map above so that a new
 # impairment cannot quietly fall outside the figure - which is exactly how
