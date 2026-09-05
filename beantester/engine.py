@@ -99,7 +99,7 @@ from . import filters
 from . import portmap
 from . import winenv
 from .core import BeanCore
-from .damage import DROP_BY_REASON
+from .damage import DROP_BY_REASON, RST_BY_REASON
 from .i18n import T
 from .scenario_runner import ScenarioRunner
 from .target_resolver import TargetResolver
@@ -147,6 +147,7 @@ class BeanEngine:
         self._rng_evict = random.Random(0)
         self._overflow_warned = 0.0     # rate-limit for the queue-overflow warning
         self._send_warned = 0.0         # rate-limit for the failed-injection warning
+        self._rst_warned = 0.0          # rate-limit for the failed-reset warning
         self._seed = None           # None => random; int => reproducible
         self._rng = random
         self._effective_seed = None  # actually used seed (always concrete after start)
@@ -546,6 +547,15 @@ class BeanEngine:
                            # different questions - the repro report used to answer the
                            # first one with the second one's number.
                            rst_reset=0, rst_sent=0,
+                           # A FOURTH question, and it sits beside rst_sent rather
+                           # than inside rst_reset: how many blocked connections were
+                           # refused rather than dropped in silence. 🔴 It reaches
+                           # the stats CSV as `connections_refused` whether or not
+                           # anybody adds it to a map - that file carries EVERY key
+                           # in here, and the rename map only makes the names
+                           # readable. This comment said the opposite for one commit,
+                           # until the GUI smoke printed the header.
+                           block_rejected=0,
                            bytes_in=0, bytes_out=0,
                            bytes_in_total=0, bytes_out_total=0,
                            # The same DELIVERED bytes as bytes_in/bytes_out, but
@@ -579,6 +589,7 @@ class BeanEngine:
         self._last_sent = {True: -1, False: -1}
         self._overflow_warned = 0.0
         self._send_warned = 0.0
+        self._rst_warned = 0.0
         self._driver_wait_warned = 0.0
         self._wait_sample_at = 0.0
         with self._clock:
@@ -1655,7 +1666,11 @@ class BeanEngine:
                     # (put in cooldown, its traffic dropped) whether or not an RST
                     # can be built and injected for it. rst_sent answers the other
                     # question, and the gap between them is worth seeing.
-                    self._bump("rst_reset")
+                    #
+                    # By CAUSE, through a map rather than an `if`: this function is
+                    # one of the twelve already nested four deep, and that count is
+                    # its own ratchet (tests/test_code_shape.py) with no headroom.
+                    self._bump(RST_BY_REASON.get(dec.reason, "rst_reset"))
                     self._send_rst(packet)
                 self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
                 self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
@@ -1725,8 +1740,16 @@ class BeanEngine:
             self._divert.send(rst, recalculate_checksum=True)
             self._bump("rst_sent")
         except Exception as e:
-            if self._running:
-                self.log(f"{T('log.rst_inject_failed')} ({e})")
+            # 🔴 RATE-LIMITED since the block gained a refuse mode, and the reason is
+            # a measurement rather than a worry. The RST feature holds a flow in
+            # cooldown for seconds, so a failing injection could only repeat that
+            # slowly; a refused connection has no cooldown and Windows retransmits
+            # the SYN - MEASURED 2026-09-05: five SYNs, five resets, in two seconds
+            # for ONE connect() - so a client that reconnects in a loop turns a busy
+            # driver into a log line per packet. The engine already learned this
+            # above OVERFLOW_WARN_S: "a per-packet log line becomes the second bug",
+            # and the GUI applies every queued line on the UI thread.
+            self._warn_rst_failed(e)
 
     def _build_rst_packet(self, packet, fields):
         """Construct the RST packet to inject; ``None`` if it cannot be built.
@@ -1764,8 +1787,16 @@ class BeanEngine:
             rst.src_addr, rst.dst_addr = fields["src_ip"], fields["dst_ip"]
             rst.src_port, rst.dst_port = fields["src_port"], fields["dst_port"]
             rst.tcp.rst = True
-            rst.tcp.syn = rst.tcp.fin = rst.tcp.psh = rst.tcp.ack = False
+            rst.tcp.syn = rst.tcp.fin = rst.tcp.psh = False
             rst.tcp.seq_num = fields["seq_num"]
+            # Set from the fields rather than branched on: an `ack_num` of None is
+            # the reset of a conversation already under way (no ACK, the shape this
+            # has always sent), a number is the answer to a SYN, where RFC 793 makes
+            # the ACK the difference between a refusal and a segment SYN_SENT throws
+            # away. build_rst_fields carries the measurement behind it.
+            ack = fields.get("ack_num")
+            rst.tcp.ack = ack is not None
+            rst.tcp.ack_num = ack or 0
             rst.payload = b""
             # ...and marked as loopback, like every real packet on that path. The
             # flag alone was tried first and measured to change nothing (the
@@ -1809,6 +1840,20 @@ class BeanEngine:
     # (App._drain_log), so a burst of failures froze the window on top of losing
     # the packets.
     SEND_WARN_S = 5.0
+
+    def _warn_rst_failed(self, exc):
+        """Say - once every SEND_WARN_S - that a forged reset would not go out.
+
+        Its own timestamp rather than ``_send_warned``: these are different
+        failures with different consequences (a lost packet against a connection
+        that hangs instead of being refused), and sharing one clock would let a
+        burst of the common one silence the rare one entirely.
+        """
+        now = time.monotonic()
+        if now - self._rst_warned < self.SEND_WARN_S:
+            return
+        self._rst_warned = now
+        self.log(f"{T('log.rst_inject_failed')} ({exc})")
 
     def _warn_send_failed(self, exc):
         """Say - once every SEND_WARN_S - that injection is failing, and how often."""

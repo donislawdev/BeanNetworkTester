@@ -262,6 +262,17 @@ FIELD_DEFS = (
     Field("block_port", EXPR, "fields.port", "block", expr_kind=KIND_INT,
           bounds=PORT_BOUNDS, width=18, tip="tips.block", span=True, cli="block-port",
           impairs=IMPAIRS_MATCHED),
+    # A PARAMETER of the block, so no `impairs`: on its own it blocks nothing and
+    # `unbounded_impairment` must not warn about a run that damages nothing. It
+    # names `block_ip` because a parameter names one trigger and the pair is one
+    # gate - `block_active` is set from either field, and step 2c reads them as an
+    # OR. A checkbox rather than a drop/reject dropdown: CHOICE is not a general
+    # kind in this form (it is the traffic filter wearing one - see
+    # gui/form.py), two values are a checkbox, and if a third mode ever arrives
+    # (ICMP port-unreachable for UDP) that is the moment to generalise it, with a
+    # second user to design against.
+    Field("block_reject", BOOL, "fields.block_reject", "block",
+          tip="tips.block_reject", cli="block-reject", parameter_of="block_ip"),
 
     # -- advanced ---------------------------------------------------------- #
     Field("syn_drop", NUMBER, "fields.syn_drop", "advanced", unit="%",
@@ -382,7 +393,8 @@ SECTIONS = (
     # span=True and keep a row each regardless, so this changes nothing they do.
     Section("destination", "frames.destination",
             ("dst_ip", "dst_port", "ipv4_only", "ipv6_only"), columns=2),
-    Section("block", "frames.block", ("block_ip", "block_port"), columns=1),
+    Section("block", "frames.block", ("block_ip", "block_port", "block_reject"),
+            columns=1),
     Section("advanced", "frames.advanced",
             ("syn_drop", "max_size", "nat_timeout", "rst_prob", "rst_cooldown"),
             columns=2, extra="advanced"),

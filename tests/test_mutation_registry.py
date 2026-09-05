@@ -2153,6 +2153,55 @@ MUTATIONS = [
         "test": "test_the_converted_readout_appears_only_when_there_is_something_to_convert",
     },
     {
+        # The reset that answers a SYN loses its ACK - which is the shape the
+        # project measured being IGNORED in SYN_SENT twice, a year and a month
+        # apart. It looks like it works: the reset goes out and rst_sent counts it.
+        "label": "block: the reset answering a SYN goes back to having no ACK",
+        "file": "beantester/core.py",
+        "old": "                seq, ack = 0, (getattr(tcp, \"seq_num\", 0) + 1) & 0xFFFFFFFF",
+        "new": "                seq, ack = getattr(tcp, \"ack_num\", 0), None",
+        "test": "test_the_reset_that_answers_a_syn_acknowledges_it",
+    },
+    {
+        # A refusal counted as a connection torn down. Both numbers reach the user
+        # (connections_reset in the CSV and the repro report), and neither would
+        # mean anything afterwards.
+        "label": "block: a refusal is counted as a connection torn down",
+        "file": "beantester/engine.py",
+        "old": "                    self._bump(RST_BY_REASON.get(dec.reason, \"rst_reset\"))",
+        "new": "                    self._bump(\"rst_reset\")",
+        "test": "test_every_forged_reset_is_counted_under_its_own_cause",
+    },
+    {
+        # The mode stops being a mode: every block answers, which changes what
+        # every existing block does to the traffic it was already blocking.
+        "label": "block: the refuse mode is ignored and every block answers",
+        "file": "beantester/core.py",
+        "old": "                                self.block_reject and is_tcp and is_outbound)",
+        "new": "                                is_tcp and is_outbound)",
+        "test": "test_a_blocked_connection_is_refused_only_when_the_mode_is_on",
+    },
+    {
+        # The rate limit goes back to a log line per failed injection. The RST
+        # feature could only fail slowly (a cooldown per flow); a refusal fires on
+        # every SYN retransmit, and the GUI applies every line on the UI thread.
+        "label": "block: a failed refusal is logged per packet again",
+        "file": "beantester/engine.py",
+        "old": "            self._warn_rst_failed(e)",
+        "new": "            self.log(f\"{T('log.rst_inject_failed')} ({e})\")",
+        "test": "test_a_reset_that_cannot_be_injected_is_reported_once_not_per_packet",
+    },
+    {
+        # The two limits that would forge a reset nobody receives. UDP first: a
+        # blocked datagram would get a TCP reset built from a packet with no TCP
+        # header at all.
+        "label": "block: the refusal stops checking that this is outbound TCP",
+        "file": "beantester/core.py",
+        "old": "                                self.block_reject and is_tcp and is_outbound)",
+        "new": "                                self.block_reject)",
+        "test": "test_what_the_refusal_deliberately_does_not_answer",
+    },
+    {
         # The exact line Chocolatey's moderation refused, and the branch pin that
         # came with it. One line carries both faults, so one mutation restores both.
         "label": "packaging: the Chocolatey icon goes back to a branch on github.com",

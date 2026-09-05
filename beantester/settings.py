@@ -29,6 +29,7 @@ DEFAULT_SETTINGS = dict(
     ipv4_only=False, ipv6_only=False,
     internet_only=False,            # the mirror of lan_mode; loopback survives both
     block_ip="", block_port="",     # firewall: drop traffic to matching IP/port
+    block_reject=False,             # ...and answer instead of dropping in silence
 
     syn_drop=0, max_size=0, spike_prob=0, spike_ms=0,
     nat_timeout=0, rst_prob=0, rst_cooldown=3,
@@ -611,12 +612,14 @@ def apply_settings(engine, s, log=lambda *_: None):
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     try:
-        block = (bool(block_ip or block_port), *compile_endpoint(block_ip, block_port))
+        block = (bool(block_ip or block_port), *compile_endpoint(block_ip, block_port),
+                 bool(g("block_reject")))
     except ValueError as e:
         # Tolerant like destination above: a bad expression disables blocking
         # instead of killing a scenario thread. GUI and CLI validate up front.
+        # The mode goes with it: with no block there is nothing to refuse.
         log(f"{T('log.filter_skipped')}: {e}")
-        block = (False, *compile_endpoint(None, None))
+        block = (False, *compile_endpoint(None, None), False)
     try:
         schedule = parse_schedule(g("rate_schedule"))
     except ValueError as e:

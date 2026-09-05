@@ -26,6 +26,10 @@ CSV_COLUMNS = {"seen": "packets_seen", "scoped_seen": "packets_in_scope",
                "drop_overflow": "dropped_overflow", "drop_syn": "dropped_syn",
                "drop_mtu": "dropped_mtu", "drop_nat": "dropped_nat",
                "drop_rst": "dropped_rst", "rst_reset": "connections_reset",
+               # Next to connections_reset on purpose, and named apart from it: one
+               # is a conversation cut off mid-flight, the other a connection that
+               # was never allowed to start.
+               "block_rejected": "connections_refused",
                "drop_lan": "dropped_lan",
                "drop_internet_only": "dropped_local_network",
                "drop_block": "dropped_block",

@@ -781,6 +781,15 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 |---|---|---|
 | `--block-ip` | block remote IP addresses (IPv4 and IPv6) | `--block-ip 1.2.3.4`<br>`--block-ip "10.0.0.0/8,!10.0.0.1"` |
 | `--block-port` | block remote ports (0-65535) | `--block-port 443`<br>`--block-port "80,443,8000-8100"` |
+| `--block-reject` | refuse blocked TCP connections instead of dropping them in silence | `--block-port 443 --block-reject` |
+
+**Refused or ignored** - by default a blocked connection gets no answer at all, and the
+program you are testing waits until it gives up on its own. With `--block-reject` it is
+refused instead, so the program reports "connection refused" in about two seconds, the same
+as it would for a port that is really closed. Those are two different code paths in most
+applications, and a test suite that only ever saw one of them has only tested one of them.
+The refusal covers **connections this computer starts, over TCP**: traffic over UDP, and
+connections arriving from outside, are still blocked in silence.
 
 > In `cmd.exe`/PowerShell **quote the expression** if it contains a comma, `!`, `>`, `<` or `*` -
 > otherwise the shell interprets it its own way. The command that recreates the session
@@ -986,6 +995,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_at_stop` | queued packets discarded when the session stopped |
 | `dropped_send_failed` | the driver refused to re-inject them |
 | `connections_reset` | connections actually torn down |
+| `connections_refused` | blocked connections that were refused instead of ignored (`--block-reject`) |
 | `rst_sent` | RST packets that reached the stack |
 | `bytes_in` / `bytes_out` | delivered bytes, all captured traffic |
 | `bytes_in_total` / `bytes_out_total` | captured bytes, before impairment |

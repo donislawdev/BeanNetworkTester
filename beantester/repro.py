@@ -42,6 +42,11 @@ def settings_to_cli(settings, seed=None, simulate=False):
     block_port = setting_expression("block_port", g("block_port"))
     if block_port:
         args += ["--block-port", block_port]
+    # Whether the block answered or stayed silent decides what the application
+    # under test DID, so a run that leaves it out cannot be reproduced from its
+    # own command - which is the whole job of this line.
+    if g("block_reject"):
+        args += ["--block-reject"]
     if g("lan_mode"):
         args += ["--lan-mode"]
     if g("ipv4_only"):
@@ -116,6 +121,11 @@ def build_repro_report(engine, settings):
         syn_dropped=stats["drop_syn"],
         nat_expired=stats["drop_nat"],
         blocked=stats["drop_block"],
+        # ...and how many of those blocked connections were REFUSED rather than
+        # ignored. "23 packets blocked" does not say what the application under
+        # test met, and that is the difference the report exists to preserve: a
+        # refusal it handled in milliseconds, or a silence it sat out.
+        blocked_refused=stats.get("block_rejected", 0),
         local_network_dropped=stats.get("drop_internet_only", 0),
         rate_dropped=stats["drop_rate"],
         peak_queue=stats.get("peak_queue", stats["queue"]),

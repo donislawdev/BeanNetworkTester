@@ -154,6 +154,11 @@ def _add_scope_arguments(p):
                    help="block (drop) all traffic to these remote ports: number, list, "
                         "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
                         "(blocks on IP OR port, for example '--block-port 443')")
+    p.add_argument("--block-reject", action="store_true",
+                   help="refuse blocked TCP connections instead of dropping them in "
+                        "silence, so the client reports 'connection refused' rather "
+                        "than waiting out its own timeout (TCP only, and only for "
+                        "connections this machine makes)")
 
 
 def build_arg_parser():
