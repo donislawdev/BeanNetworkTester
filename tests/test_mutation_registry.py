@@ -653,7 +653,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 12        # make_gear_icon at 5, eleven more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 11        # make_gear_icon at 5, ten more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -720,6 +720,32 @@ MUTATIONS = [
         "old": "CLASS_ATTR_CEILING = 80         # gui/app.py::App",
         "new": "CLASS_ATTR_CEILING = 88         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
+    },
+    {
+        # The bucket is a virtual FINISH TIME, not a token count, so a link that
+        # has been quiet leaves it in the past. Charging from a stale one banks
+        # the idleness as burst credit: the shaper adds no delay until the bucket
+        # catches up, and `queued` goes negative so the bounded buffer cannot
+        # tail-drop either. Found UNGUARDED on 2026-09-06 - deleting this clamp
+        # survived all 1405 tests - while giving the token bucket its own
+        # function, and the test was written from this mutation rather than from
+        # the code.
+        "label": "rate: an idle shaped link banks its silence as burst credit",
+        "file": "beantester/core.py",
+        "old": "        b = self._bucket[is_outbound]\n        if b < now:\n            b = now\n",
+        "new": "        b = self._bucket[is_outbound]\n",
+        "test": "test_an_idle_shaped_link_does_not_bank_burst_credit",
+    },
+    {
+        # The other half of what the shared helper now owns: the duplicate is a
+        # second copy on the wire and has to be charged for, or a shaped link
+        # quietly carries (1 + dup%) of its limit. This one WAS guarded before the
+        # extraction and the entry records that it still is afterwards.
+        "label": "rate: a duplicate rides the shaped link for free",
+        "file": "beantester/core.py",
+        "old": "                if rate <= 0 or self._charge(is_outbound, size, now, rate) is not None:",
+        "new": "                if True:",
+        "test": "test_a_duplicate_is_charged_to_the_speed_limit",
     },
     {
         # The suite's own axes, added 2026-09-06. Aimed at a test GROWING, which

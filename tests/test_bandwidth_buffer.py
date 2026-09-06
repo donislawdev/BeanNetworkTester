@@ -182,3 +182,49 @@ def test_tiny_positive_rate_is_not_silently_unlimited():
     assert core.rate_down == 0 and core.rate_up == 0
     core.set_schedule([(1.0, 0.0004, 0)])              # same rule inside a schedule
     assert core.schedule[0][1] == 1, core.schedule
+
+
+def test_an_idle_shaped_link_does_not_bank_burst_credit():
+    """The bucket is clamped to ``now`` before it is charged - `_charge`, step 11.
+
+    ``self._bucket`` is a VIRTUAL FINISH TIME, not a token count: the moment the
+    link becomes free after everything queued so far. A link that has been quiet
+    leaves that moment in the PAST, and charging from a stale one is charging a
+    link that has been paying for its idleness. Two things then break at once:
+    the packet is scheduled from a moment already gone, so the shaper adds no
+    delay at all until the bucket catches up to the present, and ``queued``
+    (``b - now``) comes out NEGATIVE, so the bounded-buffer tail-drop cannot fire
+    either. The longer the pause, the bigger the burst that walks through a link
+    with a speed limit on it.
+
+    🔴 Found unguarded on 2026-09-06, while giving the token bucket its own
+    function: deleting the clamp survived the WHOLE suite. It is one line, it
+    predates this test by months, and nothing in 1405 tests noticed - so this is
+    written from the mutation rather than from the code, which is the only way it
+    could have been written honestly.
+    """
+    core = BeanCore()
+    core.set_params(0, 0, 0, 0, 0, 100, 100)      # 100 KB/s each way
+    core.set_buffer(0)                             # unbounded buffer: isolate the clamp
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+
+    # One packet at t=0 leaves the link busy until ~0.0146 s (1500 B at 100 KB/s).
+    first = core.decide(1500, True, 5000, 0.0, rng, remote_ip="1.2.3.4")
+    assert first.releases and first.releases[0] > 0.0, first.releases
+
+    # Now go quiet for ten seconds. The finish time is long past by the time the
+    # next packet arrives, and the link may not treat that as credit.
+    later = 10.0
+    delays = []
+    for _ in range(5):
+        d = core.decide(1500, True, 5000, later, rng, remote_ip="1.2.3.4")
+        assert d.releases, "a shaped packet is delayed, never dropped, with buffer=0"
+        delays.append(d.releases[0] - later)
+
+    # Each of the five queues behind the one before it: ~14.6 ms apart. Without
+    # the clamp the first few are released at or before `later` (the stale finish
+    # time is still in the past) and the sequence does not climb.
+    assert all(x > 0 for x in delays), delays
+    assert delays == sorted(delays), delays
+    assert delays[-1] > delays[0] * 3, delays

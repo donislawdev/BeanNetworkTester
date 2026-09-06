@@ -147,7 +147,11 @@ FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
 # percentage OF, and depth here runs 0 to 5.
 DEPTH_CEILING = 5               # beantester/gui/icon.py::make_gear_icon
 DEPTH_BAND = 4                  # absolute: see above
-DEPTHS_NEAR_CEILING = 12        # make_gear_icon at 5, eleven more at 4
+# Lowered 2026-09-06 from 12, the routine direction: `core.decide` gave the
+# token bucket its own function, which took `core.py::decide` out of the band
+# without anyone aiming at this axis. Lowering a crowd count is free; the test
+# below is what forces it, and that is the whole point of pinning it.
+DEPTHS_NEAR_CEILING = 11        # make_gear_icon at 5, ten more at 4
 
 
 def _logic_lines(source):

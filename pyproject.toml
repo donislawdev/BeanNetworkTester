@@ -113,7 +113,23 @@ max-args = 14
 #
 # Down is routine, up is a decision. Splitting something means lowering this in
 # the same change.
-max-complexity = 27
+#
+# 2026-09-06: 27 -> 26. `core.decide` went 27 -> 24 by giving the token bucket its
+# own function, so the ceiling is now `summary.settings_summary` at 26.
+# 🔴 WHY IT WAS WORTH DOING, since the number moved by one: the ceiling is pinned
+# to the measurement, so whatever stands at the top has ZERO headroom - and what
+# stood there was `decide`, whose complexity is the product's own feature list.
+# Adding a 13th impairment is step 3 of the "how to add an impairment" recipe, and
+# it took `decide` to 28: **the recipe blocked its own required check** (measured
+# by mutation, 2026-09-06). Below somebody else's ceiling `decide` has room again.
+# 🔴 AND HOW MUCH: two more impairments, not six. Extraction gives back less than
+# it looks like - each moved body costs one `if` for checking the helper's answer,
+# so a gate with a single nested branch yields nothing at all. The whole harvest
+# left in `decide` is about three points. This axis cannot absorb the twelve-step
+# pipeline growing indefinitely, and the next time it jams the honest options are
+# to lower `settings_summary` (which hands its ceiling to `decide` again) or to
+# decide that a pipeline of N product features is allowed to score N.
+max-complexity = 26
 
 [tool.ruff.lint.per-file-ignores]
 # A test suite for a packet mangler asserts, randomises, spawns subprocesses and

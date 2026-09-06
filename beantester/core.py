@@ -983,6 +983,64 @@ class BeanCore:
         with self._lock:
             return bool(self.target_active)
 
+    def _charge(self, is_outbound, size, now, rate):
+        """Admit one packet to the shaped link, or refuse it. MAY NOT be called
+        without ``rate > 0`` (it divides by it) and assumes ``self._lock`` is held.
+
+        Returns the moment the link becomes free again after carrying this packet,
+        or ``None`` when the bounded buffer has no room for it. ``self._bucket`` is
+        advanced only when the packet is admitted, so a refusal leaves the link
+        exactly as it was.
+
+        ``b`` is the link's virtual finish time: the moment it becomes free after
+        everything queued so far. The delay a packet sits through before its own
+        transmit is ``b - now``.
+
+        A real shaped link buffers only so much before it drops. With
+        ``buffer_s == 0`` the buffer is unbounded (legacy behaviour: the bucket
+        could run tens of seconds ahead, which both injected huge latency AND meant
+        a rate INCREASE never took effect - the stale bucket kept gating every later
+        high-rate step). With ``buffer_s > 0`` a packet that would push the queueing
+        delay past the buffer is TAIL-DROPPED: the delivered rate stays exactly at
+        ``rate``, the added latency is bounded by ``buffer_s``, and after a rate
+        rise the buffer drains within ``buffer_s`` instead of never. An empty buffer
+        (``queued == 0``) always accepts the packet, so a tiny buffer throttles hard
+        but never blacks the link out completely.
+
+        🔴 ONE function for what used to be two copies of this arithmetic. Step 11
+        admitted the packet and step 12 admitted its duplicate, and the second copy
+        was written without the ``b < now`` clamp - correct only because step 11 had
+        just run and left the bucket at or beyond ``now``. That is a true fact about
+        today's ordering and not a property either step stated, so it was one
+        reordering away from being wrong in a way no counter would have shown.
+        """
+        b = self._bucket[is_outbound]
+        if b < now:
+            b = now
+        queued = b - now
+        if self.buffer_s > 0 and queued > 0 and queued + size / rate > self.buffer_s:
+            return None
+        b += size / rate
+        self._bucket[is_outbound] = b
+        return b
+
+    def _shape(self, is_outbound, size, now, rate, release):
+        """Step 11 for one packet: the release time after shaping, or ``None``.
+
+        ``None`` means the bounded buffer refused the packet and the caller must
+        drop it with reason ``rate`` - the counter that reason maps to is
+        ``damage.DROP_BY_REASON``, and moving this out of ``decide`` does not move
+        the attribution with it.
+
+        A packet is never released EARLIER than it already would have been: the
+        shaped link can delay a packet, and nothing here may undo a delay that
+        latency, jitter or a spike has already decided on.
+        """
+        finish = self._charge(is_outbound, size, now, rate)
+        if finish is None:
+            return None
+        return finish if finish > release else release
+
     def decide(self, size, is_outbound, local_port, now, rng,
                remote_ip=None, remote_port=None, is_syn=False, is_tcp=False):
         with self._lock:
@@ -1228,35 +1286,20 @@ class BeanCore:
             down_bps, up_bps = self._current_rates(now)
             rate = up_bps if is_outbound else down_bps
             if rate > 0:
-                b = self._bucket[is_outbound]
-                if b < now:
-                    b = now
-                queued = b - now
-                if self.buffer_s > 0 and queued > 0 and \
-                        queued + size / rate > self.buffer_s:
+                release = self._shape(is_outbound, size, now, rate, release)
+                if release is None:
                     return Decision(True, False, [], "rate")
-                b += size / rate
-                self._bucket[is_outbound] = b
-                if b > release:
-                    release = b
 
             releases = [release]
             # 12) duplication
             if imp.dup > 0 and rng.random() < imp.dup:
                 dup_release = release + rng.uniform(0.0, 0.02)
-                # a duplicate is a second copy on the wire: charge the bucket for it,
+                # A duplicate is a second copy on the wire: charge the bucket for it,
                 # or the shaped link quietly carries (1 + dup%) of its limit. If the
-                # bounded buffer has no room for the copy, the copy is what gets
-                # dropped - the original already went through.
-                if rate > 0:
-                    b = self._bucket[is_outbound]
-                    if self.buffer_s > 0 and (b - now) > 0 and \
-                            (b - now) + size / rate > self.buffer_s:
-                        pass                # no room for the duplicate; original stands
-                    else:
-                        self._bucket[is_outbound] = b + size / rate
-                        releases.append(dup_release)
-                else:
+                # bounded buffer has no room for the copy, the COPY is what gets
+                # dropped - the original already went through, so this appends
+                # nothing rather than returning a drop.
+                if rate <= 0 or self._charge(is_outbound, size, now, rate) is not None:
                     releases.append(dup_release)
 
             return Decision(False, corrupt, releases)
