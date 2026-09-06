@@ -17,13 +17,13 @@ from ...damage import impairment_loss_pct
 from ...i18n import T, event_kind_label
 from ...views import sort_events
 from ..chart import draw_throughput_chart
-from ..labels import wrapping_label
+from ..labels import sync_note, wrapping_label
 from ..rates import average_kbps, format_rate, rate_with_unit, RATE_FIELD_KEYS, UNIT_LABEL
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from .. import scope
 from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C, style_menu
-from ..tooltip import add_tooltip, retip
+from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
 
@@ -486,18 +486,11 @@ class StatsPage:
         The tooltip moves with it. It used to be bound once and never touched
         again, so toggling the preference re-worded the note and left the bubble
         underneath still explaining the other state - the same contradiction one
-        hover deeper.
+        hover deeper. That repair was made on this page and on the Connections
+        page separately, which is why the mechanism now lives in one place.
         """
-        note = getattr(self, "_scope_note", None)
-        if note is None:
-            return
-        state = self.app.coverage().state
-        if state == getattr(self, "_scope_note_state", None):
-            return
-        self._scope_note_state = state
-        with crashlog.quiet("gui.pages.stats"):
-            note.config(text=T(SCOPE_NOTES[state]))
-            retip(note, SCOPE_TIPS[state])
+        sync_note(self, SCOPE_NOTES, SCOPE_TIPS, self.app.coverage().state,
+                  "gui.pages.stats")
 
     def _sync_rate_captions(self, unit):
         """Rewrite the "(KB/s)" in the throughput captions when the unit changes.

@@ -11,6 +11,8 @@ exactly what happened to the "these are all captured connections" note.
 from tkinter import ttk
 
 from .scaling import scaled
+from .tooltip import retip
+from ..i18n import T
 from .. import crashlog
 
 
@@ -51,3 +53,32 @@ def wrapping_label(parent, text="", style="Muted.TLabel", pad=16, **kw):
                       anchor="w", wraplength=scaled(600), **kw)
     bind_wraplength(label, parent, pad)
     return label
+
+
+def sync_note(owner, notes, tips, state, subsystem, attr="_scope_note"):
+    """Re-word a note built by ``wrapping_label`` - and its bubble - on a new state.
+
+    Both scope notes on the Statistics and Connections pages were this, written
+    twice: the same nine lines, differing only in which i18n maps they read and
+    which subsystem they record under. Structurally identical code in two files is
+    code that gets FIXED in one of them, and this pair has the scar - the tooltip
+    used to be bound once and never touched again, so re-wording the note left the
+    bubble underneath still explaining the other state, and that was repaired on
+    each page separately.
+
+    The state comparison is what makes it cheap enough to call from a refresh that
+    runs several times a second: a state that has not moved does no widget work at
+    all. ``crashlog.quiet`` rather than a bare guard because the note may already
+    be destroyed - a language switch rebuilds the page under a refresh that is
+    already in flight, which is the ordinary case here and not an edge one.
+    """
+    note = getattr(owner, attr, None)
+    if note is None:
+        return
+    seen = attr + "_state"
+    if state == getattr(owner, seen, None):
+        return
+    setattr(owner, seen, state)
+    with crashlog.quiet(subsystem):
+        note.config(text=T(notes[state]))
+        retip(note, tips[state])
