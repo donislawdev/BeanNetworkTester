@@ -719,3 +719,133 @@ def test_the_strictly_typed_modules_only_ever_grow():
     gained = sorted(strict - STRICTLY_TYPED)
     check("a newly strict module is recorded here as well", not gained,
           f"({gained} - add it to STRICTLY_TYPED, that is what makes it stick)")
+
+
+# 🔴 THE FOURTH AXIS, added 2026-09-06: the CLASS. The three axes above measure
+# files, functions and branches, and a class is none of them - which is not a
+# gap in principle but a measured hole in practice. `gui/logview.py` was carved
+# out of `app.py` in September and took ninety lines of FILE off the number that
+# is watched; `App` came out of it with the same 96 methods it went in with. The
+# same is true of `gui/crash.py` and `gui/csv_export.py` before it. Three carves,
+# a file ratchet that moved every time, and the object a reader actually has to
+# hold in their head did not shrink once.
+#
+# What this buys that FILE_CEILING cannot: a class is the unit of state. Ninety-six
+# methods over eighty attributes is eighty things any of the ninety-six may have
+# changed, and splitting the FILE it lives in does not divide that by anything.
+#
+# Today's measurement, and both are `gui/app.py::App`. Same rule as every ratchet
+# in this file: down is routine, up is the owner's decision, and the numbers must
+# BE the measurement rather than sit above it (two tests below enforce that, the
+# same pair that guards the ceilings).
+CLASS_METHOD_CEILING = 96       # gui/app.py::App
+CLASS_ATTR_CEILING = 80         # gui/app.py::App
+# The crowd counts, on the same 70% band as the sizes. Methods: App (96) and
+# BeanEngine (69) against a band of 67.2. Attributes: App (80) and BeanCore (57)
+# against a band of 56.0 - and BeanCore is the interesting one, because it is a
+# 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
+# attributes is what a decision core with twelve pipeline steps accumulates.
+CLASSES_NEAR_METHOD_CEILING = 2     # App, BeanEngine
+CLASSES_NEAR_ATTR_CEILING = 2       # App, BeanCore
+
+
+def _classes():
+    """Every class in the package as (methods, attributes, name), biggest first.
+
+    METHODS are the class body's own defs - a nested helper inside one of them is
+    that method's business, not another entry in this class's surface. ATTRIBUTES
+    are the distinct `self.x = ...` targets anywhere inside the class, which is
+    the honest count of its state: `__init__` is where most of them are bound, but
+    an attribute grown in a later method is exactly the kind this axis exists to
+    notice.
+    """
+    methods, attributes = [], []
+    for path in _package_files():
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            own = [m for m in node.body
+                   if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            state = {sub.attr for sub in ast.walk(node)
+                     if isinstance(sub, ast.Attribute)
+                     and isinstance(sub.value, ast.Name) and sub.value.id == "self"
+                     and isinstance(sub.ctx, ast.Store)}
+            methods.append((len(own), f"{rel}::{node.name}"))
+            attributes.append((len(state), f"{rel}::{node.name}"))
+    methods.sort(reverse=True)
+    attributes.sort(reverse=True)
+    return methods, attributes
+
+
+def test_no_class_has_grown_past_the_ratchet():
+    """The axis a file split cannot answer - see CLASS_METHOD_CEILING."""
+    methods, attributes = _classes()
+    check("the class scan actually read the package (an empty scan passes)",
+          len(methods) >= 30, f"({len(methods)} classes)")
+
+    worst_methods = methods[0]
+    check(f"no class has more than {CLASS_METHOD_CEILING} methods",
+          worst_methods[0] <= CLASS_METHOD_CEILING,
+          f"({worst_methods[1]} has {worst_methods[0]} - move behaviour out, "
+          f"do not raise the number)")
+    worst_attributes = attributes[0]
+    check(f"no class holds more than {CLASS_ATTR_CEILING} attributes",
+          worst_attributes[0] <= CLASS_ATTR_CEILING,
+          f"({worst_attributes[1]} holds {worst_attributes[0]} - move state out, "
+          f"do not raise the number)")
+
+
+def test_no_second_class_is_creeping_up_on_the_class_ceilings():
+    """The crowd knob for this axis, for the reason written above CROWD_BAND.
+
+    A ceiling watches the worst class. It cannot see two classes climbing
+    together, which is the shape this package actually drifts into: `App` and
+    `BeanEngine` have been the top two on both counts for every release measured.
+    """
+    methods, attributes = _classes()
+    method_band = CLASS_METHOD_CEILING * CROWD_BAND
+    crowded = [f"{name} ({n})" for n, name in methods if n >= method_band]
+    check(f"at most {CLASSES_NEAR_METHOD_CEILING} class(es) within "
+          f"{CROWD_BAND:.0%} of the method ceiling ({method_band:.0f})",
+          len(crowded) <= CLASSES_NEAR_METHOD_CEILING, f"({crowded})")
+
+    attr_band = CLASS_ATTR_CEILING * CROWD_BAND
+    crowded = [f"{name} ({n})" for n, name in attributes if n >= attr_band]
+    check(f"at most {CLASSES_NEAR_ATTR_CEILING} class(es) within "
+          f"{CROWD_BAND:.0%} of the attribute ceiling ({attr_band:.0f})",
+          len(crowded) <= CLASSES_NEAR_ATTR_CEILING, f"({crowded})")
+
+
+def test_the_class_numbers_are_the_measurement_not_a_number_above_them():
+    """Both ceilings and both counts, pinned - the rule that made this axis worth
+    adding in the first place.
+
+    A ceiling standing above the truth grants headroom nobody decided to grant,
+    and the next arrival slips in under it in silence. That is not hypothetical
+    here: `FILE_CEILING` sat twelve lines above `gui/app.py` for a week after
+    `gui/crash.py` was carved out, and was found only because somebody printed the
+    numbers. This is the same test, one axis over, written at the same time as the
+    axis so the gap never opens.
+    """
+    methods, attributes = _classes()
+    check("the method ceiling IS the largest class, not a number above it",
+          methods[0][0] == CLASS_METHOD_CEILING,
+          f"({methods[0][1]} has {methods[0][0]}, ceiling is "
+          f"{CLASS_METHOD_CEILING} - move the ceiling to {methods[0][0]})")
+    check("the attribute ceiling IS the widest class, not a number above it",
+          attributes[0][0] == CLASS_ATTR_CEILING,
+          f"({attributes[0][1]} holds {attributes[0][0]}, ceiling is "
+          f"{CLASS_ATTR_CEILING} - move the ceiling to {attributes[0][0]})")
+
+    in_method_band = sum(1 for n, _ in methods if n >= CLASS_METHOD_CEILING * CROWD_BAND)
+    in_attr_band = sum(1 for n, _ in attributes if n >= CLASS_ATTR_CEILING * CROWD_BAND)
+    check("the method crowd count is today's measurement, not a looser number",
+          in_method_band == CLASSES_NEAR_METHOD_CEILING,
+          f"(measured {in_method_band}, frozen at {CLASSES_NEAR_METHOD_CEILING} "
+          f"- lower it)")
+    check("the attribute crowd count is today's measurement, not a looser number",
+          in_attr_band == CLASSES_NEAR_ATTR_CEILING,
+          f"(measured {in_attr_band}, frozen at {CLASSES_NEAR_ATTR_CEILING} "
+          f"- lower it)")

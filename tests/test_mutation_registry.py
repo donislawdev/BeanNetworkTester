@@ -655,6 +655,30 @@ MUTATIONS = [
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
     {
+        # The FOURTH axis, added 2026-09-06. Aimed at the class GROWING rather
+        # than at a loosened constant, because that is the direction this axis
+        # exists for: three carves out of `app.py` moved the file ratchet every
+        # time and left `App` at the same 96 methods, so the object a reader has
+        # to hold in their head was never once measured.
+        "label": "ratchet: a class quietly grows another method",
+        "file": "beantester/gui/app.py",
+        "old": "    def _reveal(self):\n",
+        "new": "    def _ratchet_probe(self):\n"
+               "        return None\n\n"
+               "    def _reveal(self):\n",
+        "test": "test_no_class_has_grown_past_the_ratchet",
+    },
+    {
+        # The same axis from the other side: a ceiling parked above the truth.
+        # Kept separate from the entry above because they fail for different
+        # reasons, and an entry that reddens both proves neither.
+        "label": "ratchet: the class attribute ceiling is raised above the truth",
+        "file": "tests/test_code_shape.py",
+        "old": "CLASS_ATTR_CEILING = 80         # gui/app.py::App",
+        "new": "CLASS_ATTR_CEILING = 88         # gui/app.py::App",
+        "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
+    },
+    {
         # Half the package is only ever named from the suite, so a scan that stops
         # reading tests/ calls a live helper dead. This is the noisy direction and
         # the one that gets a guard switched off.
