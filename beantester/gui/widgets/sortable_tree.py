@@ -52,6 +52,7 @@ Kept from the original:
 import sys
 from tkinter import ttk
 
+from ...i18n import T
 from ..scaling import column_width, scaled
 from ..tooltip import make_bubble
 from ..wheel import wheel_units
@@ -420,7 +421,6 @@ class SortableTree:
         note = getattr(self, "_empty_note", None)
         if note is None:
             return
-        from ...i18n import T
         try:
             if empty and self._empty_text:
                 note.config(text=T(self._empty_text))
@@ -621,7 +621,6 @@ class SortableTree:
             self._tip_job = None
 
     def _show_tip(self, column, x_root, y_root):
-        from ...i18n import T
         self._tip_job = None
         if column != self._tip_column:
             return
@@ -746,7 +745,6 @@ class SortableTree:
     # -- copying --------------------------------------------------------------- #
     def copy_text(self, header=False):
         """The selected rows as tab-separated text (what Ctrl+C puts on the clipboard)."""
-        from ...i18n import T
         rows = self.selected_rows()
         if not rows:
             return ""
@@ -769,11 +767,9 @@ class SortableTree:
 
     # -- headers --------------------------------------------------------------- #
     def _width_for(self, col, key):
-        from ...i18n import T
         return column_width(T(key) + "  " + DESC, self._min_chars.get(col, 6))
 
     def refresh_headers(self):
-        from ...i18n import T
         for col, key in self.columns.items():
             arrow = ""
             if col == self.sort["col"]:
