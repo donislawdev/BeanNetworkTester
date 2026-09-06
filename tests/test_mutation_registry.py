@@ -722,13 +722,35 @@ MUTATIONS = [
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
     {
-        # Half the package is only ever named from the suite, so a scan that stops
-        # reading tests/ calls a live helper dead. This is the noisy direction and
-        # the one that gets a guard switched off.
-        "label": "dead code: the usage scan stops reading the test suite",
-        "file": "tests/test_code_hygiene.py",
-        "old": 'USAGE_TREES = ("beantester", "tests", "tools", "lang", "scenarios")',
-        "new": 'USAGE_TREES = ("beantester", "tools", "lang", "scenarios")',
+        # The rule itself: a definition nothing names must be caught.
+        #
+        # 🔴 RE-AIMED 2026-09-06, after this entry SURVIVED on CI. It used to drop
+        # `tests` from `USAGE_TREES`, on the reasoning that half the package is
+        # only ever named from the suite, so a scan that stops reading tests/
+        # would call a live helper dead. That reasoning stopped being true on
+        # 2026-09-02, when a mention from the test tree stopped counting as LIFE
+        # (backlog B-16): the twelve definitions that would go dead are now all in
+        # KNOWN_UNUSED already, so removing the tree changes the `unexpected` list
+        # from empty to empty.
+        #
+        # MEASURED while re-aiming, and it is worth writing down because it is
+        # larger than this one entry: dropping ANY of the five trees - `tests`,
+        # `tools`, `lang` or `scenarios` - leaves the guard green. `USAGE_TREES`
+        # is a knob no mutation can reach any more, and its real job (an allow
+        # list, so that a tree existing only on the maintainer's machine cannot
+        # make a name look alive locally and dead on CI) is a property about
+        # ABSENT directories, which nothing present can demonstrate. Aiming at the
+        # rule is honest; aiming at a knob that no longer moves the answer is the
+        # SKIP-shaped non-result this registry exists to avoid.
+        #
+        # Verified by hand before being written down: an unreferenced helper added
+        # to `summary.py` reddens this test by name.
+        "label": "dead code: a definition nothing names is left in the package",
+        "file": "beantester/summary.py",
+        "old": "def settings_summary(",
+        "new": "def _orphan_helper(value):\n"
+               "    return value\n\n\n"
+               "def settings_summary(",
         "test": "test_no_definition_in_the_package_is_unreferenced",
     },
     {
