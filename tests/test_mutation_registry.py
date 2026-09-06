@@ -569,12 +569,15 @@ MUTATIONS = [
         # function and cannot see the runners-up climbing together underneath it.
         "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        # Re-anchored 2026-08-31: the constant moved 3 -> 5 when the complexity
-        # ceiling came down and the band came down with it. The mutation still
-        # proves the same thing - a count frozen looser than today's measurement
-        # is caught by the equality half of that test, not by the "at most" half.
-        "old": "COMPLEX_NEAR_CEILING = 5    # decide, _run_session, settings_summary,",
-        "new": "COMPLEX_NEAR_CEILING = 7    # decide, _run_session, settings_summary,",
+        # Re-anchored 2026-08-31 (3 -> 5) and again 2026-09-06 (5 -> 4, when
+        # `_run_session` was split into three phases and left the band). The
+        # mutation still proves the same thing - a count frozen looser than
+        # today's measurement is caught by the equality half of that test, not by
+        # the "at most" half. Re-anchoring is the routine cost of a pattern that
+        # pins exact source text; a stale one reports SKIP, which reads like a
+        # result and is not one.
+        "old": "COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,",
+        "new": "COMPLEX_NEAR_CEILING = 7    # decide, settings_summary, _capture_loop,",
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {

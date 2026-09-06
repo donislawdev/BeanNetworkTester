@@ -60,7 +60,17 @@ from fakes import ROOT, check
 # was carved out of `app.py` and left it at 1287, so twelve lines of allowance sat
 # there for a week and were found only because somebody printed the numbers. That is
 # the same defect the crowd counts below exist to catch, one level up.
-FUNCTION_CEILING = 133          # beantester/cli.py::_run_session
+# Lowered 2026-09-06 from 133 (`cli.py::_run_session`), the routine door again:
+# that function was split into the three phases it always had - open, drive,
+# report - which each have a different FAILURE contract, and the largest function
+# in the package is now `gui/app.py::_build_ui`.
+# 🔴 There is NO headroom downwards here, and the arithmetic is worth stating
+# because it is not obvious: the band is 70% of the ceiling, and the two runners-up
+# (`app.py::__init__` and `core.decide`) both sit at exactly 86. 86 / 0.7 = 122.9,
+# so the moment `_build_ui` loses a single line the band drops under 86 and BOTH
+# of them join the crowd, taking the count from 2 to 4. Carving `_build_ui`
+# therefore has to happen in the same change as carving one of those two.
+FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
 # needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
 # own bookkeeping moved to `gui/logview.py` and the fixes went in under the number
@@ -94,7 +104,7 @@ FILE_CEILING = 1166             # beantester/gui/app.py
 # lines of headroom before it joins the count.
 CROWD_BAND = 0.70
 FILES_NEAR_CEILING = 1          # beantester/gui/app.py
-FUNCTIONS_NEAR_CEILING = 3      # _run_session, _build_ui, build_arg_parser
+FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
 
 # 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph
 # above, that nesting depth was not measured. It is now, because nothing else can
@@ -513,8 +523,13 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
 # to 25 from the 27 the same change had pushed it to. Lowering a ceiling tightens
 # the band that hangs off it, and this number has to be re-measured when it moves,
 # exactly like the ceiling itself.
-COMPLEX_NEAR_CEILING = 5    # decide, _run_session, settings_summary,
-                            # _capture_loop, test_layering._module_level
+# 5 -> 4 on 2026-09-06: `_run_session` left the band by being split into three
+# phases. `decide` stays at 27 and stays the ceiling - its twelve steps are a
+# pipeline whose ORDER is a contract pinned by two other tests, so splitting it to
+# move a metric would be damaging something that works in order to make a number
+# look better.
+COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,
+                            # test_layering._module_level
 
 
 # Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a
