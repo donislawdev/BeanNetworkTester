@@ -722,6 +722,20 @@ MUTATIONS = [
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
     {
+        # The suite's own axes, added 2026-09-06. Aimed at a test GROWING, which
+        # is the direction they exist for: 23 359 logic lines of tests guarded the
+        # package while nothing measured their shape, and one test at a hundred
+        # lines is not "more tests" - it is one test nobody can follow, which will
+        # not say what broke when it fails. The ceiling is pinned to this exact
+        # function, so one statement is enough to cross it.
+        "label": "ratchet: a test function grows past the suite ceiling",
+        "file": "tests/test_concurrency_chaos.py",
+        "old": "def test_the_model_worker_survives_a_live_connection_table():",
+        "new": "def test_the_model_worker_survives_a_live_connection_table():\n"
+               "    _ratchet_probe = 1",
+        "test": "test_no_test_function_has_grown_past_the_ratchet",
+    },
+    {
         # The rule itself: a definition nothing names must be caught.
         #
         # 🔴 RE-AIMED 2026-09-06, after this entry SURVIVED on CI. It used to drop
@@ -1244,7 +1258,12 @@ MUTATIONS = [
         "test": "test_the_repository_scanners_stay_out_of_what_is_not_in_the_repository",
     },
     {
-        "label": "shape: the package walk finds no files to measure",
+        # Since 2026-09-06 this one line is the walk for BOTH trees (the package
+        # and the suite), so emptying it proves both canaries at once. It briefly
+        # existed twice, when the suite axes arrived with their own copy, and the
+        # runner said "occurs 2 times, not 1" instead of running - which is how a
+        # duplicated helper turns a proven guard into a non-result.
+        "label": "shape: the tree walk finds no files to measure",
         "file": "tests/test_code_shape.py",
         "old": "        out += [os.path.join(dirpath, n) for n in filenames if n.endswith(\".py\")]",
         "new": "        out += []",
