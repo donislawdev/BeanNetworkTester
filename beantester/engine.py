@@ -307,17 +307,35 @@ class BeanEngine:
         return max(0.0, self._deadline - (time.monotonic() if now is None else now))
 
     # -- thin delegates to the decision core -------------------------------- #
-    def set_params(self, *a):
-        self.core.set_params(*a)
+    #
+    # They are the surface the engine is DRIVEN through: `settings.apply_settings`
+    # uses all fifteen, and so do ten test modules and one CI script - 67 call
+    # sites, which is why they are a facade rather than dead weight.
+    #
+    # 🔴 Each one repeats its core signature instead of forwarding `*a`, and that
+    # is the whole point of them being written out. `*a` erases the signature, so
+    # a wrong argument count on THIS seam - the one between the decision core and
+    # the threads that feed it - could only ever fail at runtime, and mypy had
+    # nothing to check here no matter how many modules around it were annotated.
+    # `tests/test_engine.py::test_every_core_setter_has_a_forwarder_that_matches_it`
+    # keeps the two sides identical, which also closes the other half of the cost:
+    # a new impairment field needs a forwarder, and nothing used to say so until
+    # the AttributeError arrived.
+    def set_params(self, loss_pct, corrupt_pct, dup_pct,
+                   latency_ms, jitter_ms, down_kbps, up_kbps):
+        self.core.set_params(loss_pct, corrupt_pct, dup_pct,
+                             latency_ms, jitter_ms, down_kbps, up_kbps)
 
-    def set_buffer(self, *a):
-        self.core.set_buffer(*a)
+    def set_buffer(self, buffer_ms):
+        self.core.set_buffer(buffer_ms)
 
-    def set_loss_burst(self, *a):
-        self.core.set_loss_burst(*a)
+    def set_loss_burst(self, mean_packets):
+        self.core.set_loss_burst(mean_packets)
 
-    def set_asymmetry(self, *a):
-        self.core.set_asymmetry(*a)
+    def set_asymmetry(self, enabled, loss_pct, corrupt_pct, dup_pct,
+                      latency_ms, jitter_ms, spike_prob_pct, spike_ms):
+        self.core.set_asymmetry(enabled, loss_pct, corrupt_pct, dup_pct,
+                                latency_ms, jitter_ms, spike_prob_pct, spike_ms)
 
     def set_target(self, active, ports=None):
         """Point the engine at a set of local ports (or a live port container).
@@ -411,11 +429,11 @@ class BeanEngine:
         # responsibility) and start() reconciles the two either way.
         return current
 
-    def set_flap(self, *a):
-        self.core.set_flap(*a)
+    def set_flap(self, enabled, period_s, down_pct):
+        self.core.set_flap(enabled, period_s, down_pct)
 
-    def set_dest(self, *a):
-        self.core.set_dest(*a)
+    def set_dest(self, active, ip=None, port=None):
+        self.core.set_dest(active, ip=ip, port=port)
 
     def targeting_active(self):
         """True when process or destination targeting is narrowing traffic."""
@@ -433,35 +451,35 @@ class BeanEngine:
         """
         return self.core.process_target_active()
 
-    def set_ip_family(self, *a, **kw):
-        self.core.set_ip_family(*a, **kw)
+    def set_ip_family(self, ipv4_only=False, ipv6_only=False):
+        self.core.set_ip_family(ipv4_only=ipv4_only, ipv6_only=ipv6_only)
 
-    def set_lan(self, *a):
-        self.core.set_lan(*a)
+    def set_lan(self, enabled):
+        self.core.set_lan(enabled)
 
-    def set_internet_only(self, *a):
-        self.core.set_internet_only(*a)
+    def set_internet_only(self, enabled):
+        self.core.set_internet_only(enabled)
 
-    def set_block(self, *a):
-        self.core.set_block(*a)
+    def set_block(self, active, ip=None, port=None, reject=False):
+        self.core.set_block(active, ip=ip, port=port, reject=reject)
 
-    def set_advanced(self, *a):
-        self.core.set_advanced(*a)
+    def set_advanced(self, syn_drop_pct, max_size):
+        self.core.set_advanced(syn_drop_pct, max_size)
 
-    def set_spike(self, *a):
-        self.core.set_spike(*a)
+    def set_spike(self, prob_pct, spike_ms):
+        self.core.set_spike(prob_pct, spike_ms)
 
-    def set_nat(self, *a):
-        self.core.set_nat(*a)
+    def set_nat(self, timeout_s):
+        self.core.set_nat(timeout_s)
 
-    def set_rst(self, *a):
-        self.core.set_rst(*a)
+    def set_rst(self, prob_pct, cooldown_s):
+        self.core.set_rst(prob_pct, cooldown_s)
 
-    def set_schedule(self, *a):
-        self.core.set_schedule(*a)
+    def set_schedule(self, steps_kbps):
+        self.core.set_schedule(steps_kbps)
 
-    def reset_now(self, *a):
-        self.core.reset_now(*a)
+    def reset_now(self, duration_s=2.0, now=None):
+        self.core.reset_now(duration_s, now=now)
         self.log_event("RESET", "events.manual_reset")
 
     # -- scenario ------------------------------------------------------------ #

@@ -1628,3 +1628,57 @@ def test_a_full_queue_says_so_instead_of_quietly_eating_packets():
     check("a reset re-arms the warning", any("queue" in line.lower()
                                              or "kolejka" in line.lower()
                                              for line in lines), f"({lines})")
+
+
+def test_every_core_setter_has_a_forwarder_that_matches_it():
+    """The engine's `set_*` methods are the surface it is DRIVEN through.
+
+    `settings.apply_settings` uses all fifteen, and so do ten test modules and one
+    CI script - 67 call sites, which is why they exist rather than being deleted
+    in favour of reaching into `.core`. But they used to forward `*a`, and that
+    cost two things nothing else could recover.
+
+    The first is mypy: `*a` erases the signature, so a wrong argument count on the
+    seam between the decision core and the threads that feed it could only fail at
+    runtime, and no amount of annotating the modules around it would ever help.
+
+    The second is the recipe. A new impairment field adds `core.set_x`, and the
+    forwarder is easy to forget because the notes' own "how to add an impairment"
+    list does not mention it - the failure arrives later, as an AttributeError
+    from `apply_settings`, in whatever ran first. This test is that missing step:
+    a core setter with no forwarder, or one whose parameters have drifted, is red
+    here instead.
+
+    Compared by NAME and by parameter list, not by call: two signatures that agree
+    on shape while disagreeing on order would pass a call-through test that only
+    ever passes positionally.
+    """
+    import inspect
+
+    core_setters = {name for name, _ in inspect.getmembers(BeanCore, inspect.isfunction)
+                    if name.startswith("set_")}
+    check("the scan found the core's setters at all (an empty scan passes)",
+          len(core_setters) >= 10, f"({sorted(core_setters)})")
+
+    missing = sorted(n for n in core_setters if not hasattr(BeanEngine, n))
+    check("every core setter has a forwarder on the engine", not missing,
+          f"({missing} - apply_settings drives the ENGINE, so a core-only setter "
+          "is an AttributeError waiting for whoever sets that field first)")
+
+    # `set_target` is the declared exception and says so here rather than being
+    # skipped in silence: the engine's version does substantially more than
+    # forward (it points the resolver at the target and is the ONE place that
+    # happens), so its signature is its own.
+    drifted = []
+    for name in sorted(core_setters - {"set_target"}):
+        core_params = list(inspect.signature(getattr(BeanCore, name)).parameters)
+        engine_params = list(inspect.signature(getattr(BeanEngine, name)).parameters)
+        if core_params != engine_params:
+            drifted.append(f"{name}: core{core_params} vs engine{engine_params}")
+    check("and its parameters are the same ones, in the same order", not drifted,
+          f"({drifted})")
+
+    check("set_target is still the exception this test knows about",
+          list(inspect.signature(BeanEngine.set_target).parameters)
+          == ["self", "active", "ports"],
+          "(if it became a plain forwarder, drop it from the exception above)")

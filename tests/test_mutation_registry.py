@@ -655,6 +655,20 @@ MUTATIONS = [
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
     {
+        # The step the notes' "how to add an impairment" recipe does not mention:
+        # a new core setter needs a forwarder, and forgetting one used to surface
+        # much later as an AttributeError out of apply_settings, in whatever ran
+        # first. Aimed at the ADDITION rather than at a deleted forwarder, because
+        # that is the direction a session actually takes.
+        "label": "engine: a new core setter arrives without its forwarder",
+        "file": "beantester/core.py",
+        "old": "    def set_nat(self, timeout_s):",
+        "new": "    def set_brand_new_thing(self, x):\n"
+               "        return x\n\n"
+               "    def set_nat(self, timeout_s):",
+        "test": "test_every_core_setter_has_a_forwarder_that_matches_it",
+    },
+    {
         # The other half, and the one no other check in the repository can reach:
         # a loop built entirely out of lazy imports. It runs, it passes every
         # direction check, and it becomes an ImportError the day somebody hoists
