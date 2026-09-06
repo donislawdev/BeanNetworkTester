@@ -230,8 +230,8 @@ def _psutil_port_pid_map(owners=None):
     """Same shape - and the same collapse - as the native path. See port_pid_map."""
     try:
         import psutil
-    except Exception:
-        return None
+    except ImportError:
+        return None          # a supported state, not a fault: nothing to record
     try:
         out = {}
         for conn in psutil.net_connections(kind="inet"):
@@ -242,7 +242,13 @@ def _psutil_port_pid_map(owners=None):
             if port:
                 _put(out, owners, int(port), int(pid))
         return out
-    except Exception:
+    except Exception as _exc:
+        # The LAST resort for the whole port map. Silence here is
+        # indistinguishable from a machine with no sockets open, and what reads
+        # it is the targeting gate - so a failure looked exactly like "the
+        # process you targeted owns nothing". note(), not once(): this is the
+        # refresh path, not the packet path (convention 30).
+        crashlog.note(_exc, "portmap.psutil.ports")
         return None
 
 
@@ -250,8 +256,8 @@ def _psutil_process_table():
     """``{pid: (name, ppid, created)}`` for every process (the slow, portable path)."""
     try:
         import psutil
-    except Exception:
-        return {}
+    except ImportError:
+        return {}            # a supported state, not a fault: nothing to record
     try:
         table = {}
         for proc in psutil.process_iter(["pid", "name", "ppid", "create_time"]):
@@ -262,7 +268,11 @@ def _psutil_process_table():
             table[int(pid)] = (str(info.get("name") or ""), info.get("ppid"),
                                info.get("create_time"))
         return table
-    except Exception:
+    except Exception as _exc:
+        # The whole process table, so silence turns every row's process into "?"
+        # - the symptom this module exists to prevent, reported as if no name
+        # could be resolved rather than as a failure to resolve them.
+        crashlog.note(_exc, "portmap.psutil.processes")
         return {}
 
 
@@ -322,7 +332,11 @@ def _toolhelp_process_table():
             return out or None
         finally:
             k32.CloseHandle(snap)
-    except Exception:
+    except Exception as _exc:
+        # Same shape as the psutil table below it, one layer down: the native
+        # snapshot failing wholesale is a fact worth having when the names are
+        # missing.
+        crashlog.note(_exc, "portmap.toolhelp")
         return None
 
 
@@ -445,7 +459,11 @@ def _native_info_api():
                 wintypes.ULONG, ctypes.POINTER(wintypes.ULONG)]
             _NATIVE_INFO_API[0] = (ctypes, wintypes, k32, ntdll,
                                    PROCESS_BASIC_INFORMATION)
-        except Exception:
+        except Exception as _exc:
+            # This disables the fast per-PID route for the whole session, and it
+            # runs once, so the record costs nothing and explains why every later
+            # lookup took the slow path.
+            crashlog.note(_exc, "portmap.native_info_api")
             _NATIVE_INFO_API[0] = False
     return _NATIVE_INFO_API[0] or None
 
@@ -657,7 +675,12 @@ class PortTable:
         if native is not None:
             try:
                 ports = native.port_pid_map(owners)
-            except Exception:                        # pragma: no cover
+            except Exception as _exc:                # pragma: no cover
+                # `native_broke` below retires the native path for the rest of
+                # the session. That is the right behaviour and it used to happen
+                # without a word: the session silently changed how it resolves
+                # every port and nothing said why.
+                crashlog.note(_exc, "portmap.native.port_pid_map")
                 ports = None
             if ports is None:
                 native_broke = True                  # it stopped answering

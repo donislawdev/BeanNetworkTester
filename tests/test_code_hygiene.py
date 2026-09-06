@@ -374,3 +374,122 @@ def test_the_known_unused_list_only_ever_shrinks():
     revived = sorted(name for name in KNOWN_UNUSED if name not in still_dead)
     check("no name on the exception list has quietly gained a caller", not revived,
           f"({revived} - it is used again, so take it out of KNOWN_UNUSED)")
+
+
+# -- the same shape, everywhere else: an INVENTORY rather than a rule ----------- #
+#
+# The guard above holds `core.py` to an absolute rule and says, in its own
+# docstring, why the rest of the package is not held to it: most broad handlers
+# out here are legitimate control-flow fallbacks - a parse returning None on bad
+# input, a DPI probe falling back to a default, a widget query answered by a
+# toolkit that has already destroyed the widget.
+#
+# That reasoning is right and this does not touch it. What it leaves open is the
+# COUNT. Finding F3 was a silent `except Exception: return False` in the decision
+# core; the same shape exists 93 times elsewhere, and nothing could tell a new one
+# from the 93 that were considered and kept. So the population is frozen instead
+# of the practice: today's numbers, per file, and they may only go DOWN.
+#
+# Measured 2026-09-06 with the same two predicates the core guard uses, so the two
+# can never drift into meaning different things by "silent" and "broad".
+#
+# 🔴 A file absent from this map must have ZERO. That is what makes the map a
+# ratchet rather than a list of the usual suspects: a NEW file full of silent
+# handlers cannot slip in by simply not being mentioned.
+SILENT_BROAD_HANDLERS = {
+    "gui/app.py": 13,
+    # 12 on 2026-09-06, then seven were dealt with in the same change - the file
+    # this inventory was built to look at first, because it is on the targeting
+    # path. The five left are per-PID lookups (`_make_native`, the two halves of
+    # `_native_process_info`, `_psutil_created`, `_psutil_process_info`), where a
+    # process that exited between the listing and the query, or one that denies a
+    # handle, is an ORDINARY event: recording those would fill the crash log with
+    # the normal running of the machine. The seven that went were the whole-table
+    # collapses and the capability probes, where silence is indistinguishable
+    # from an empty machine.
+    "portmap.py": 5,
+    # The recorder itself, and the one module allowed to swallow by this
+    # repository's own rule (see the per-file ignore in pyproject.toml): a crash
+    # reporter that raises while reporting a crash is worse than a quiet one.
+    "crashlog.py": 10,
+    "gui/widgets/sortable_tree.py": 9,
+    "cli.py": 5,
+    "engine.py": 5,
+    "gui/tooltip.py": 4,
+    "legal.py": 4,
+    "winenv.py": 4,
+    "gui/scrollable.py": 3,
+    "gui/windows.py": 3,
+    "gui/form.py": 2,
+    "gui/icon.py": 2,
+    "gui/pages/stats.py": 2,
+    "gui/scaling.py": 2,
+    "gui/theme.py": 2,
+    "i18n.py": 2,
+    "utils.py": 2,
+    "driver.py": 1,
+    "filters.py": 1,
+    "gui/chart.py": 1,
+    "gui/csv_export.py": 1,
+    "gui/pages/conns.py": 1,
+    "matchers.py": 1,
+    "settings.py": 1,
+}
+
+
+def _silent_broad_handlers():
+    """Per package file: how many broad handlers neither record nor re-raise."""
+    counts = {}
+    root = os.path.join(ROOT, "beantester")
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+        for name in sorted(filenames):
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(dirpath, name)
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            tree = ast.parse(open(path, encoding="utf-8").read())
+            found = sum(1 for node in ast.walk(tree)
+                        if isinstance(node, ast.ExceptHandler)
+                        and _is_broad_handler(node)
+                        and not _handler_reaches_crashlog_or_reraises(node))
+            if found:
+                counts[rel] = found
+    return counts
+
+
+def test_no_file_grows_a_new_silently_swallowed_exception():
+    """The population of the F3 shape may fall and may not rise.
+
+    Nothing here says any of the 93 is wrong. It says that the next one is a
+    DECISION: either it is a fallback worth keeping, and the number beside its
+    file goes up in the same change with a reason - which is the owner's call, the
+    same as raising any ceiling in this repository - or it routes to `crashlog`
+    like the convention asks.
+    """
+    measured = _silent_broad_handlers()
+    check("the handler scan actually read the package (an empty scan passes)",
+          sum(measured.values()) > 50, f"({sum(measured.values())} found)")
+
+    grown = sorted(f"{name}: {n} (was {SILENT_BROAD_HANDLERS.get(name, 0)})"
+                   for name, n in measured.items()
+                   if n > SILENT_BROAD_HANDLERS.get(name, 0))
+    check("no file swallows more broadly than it did", not grown,
+          f"({grown} - route the new one to crashlog.quiet/once/note, or raise "
+          "its number here on purpose)")
+
+
+def test_the_silent_handler_inventory_is_todays_measurement():
+    """The pinning half, for the reason every ceiling in this repository has one.
+
+    A number parked above the truth grants room nobody decided to grant, and the
+    next arrival slips in under it in silence - which is precisely the failure
+    this inventory exists to prevent, wearing its own badge. So fixing a handler
+    comes with a two-character chore: bring its number down with it.
+    """
+    measured = _silent_broad_handlers()
+    stale = sorted(f"{name}: {frozen} frozen, {measured.get(name, 0)} measured"
+                   for name, frozen in SILENT_BROAD_HANDLERS.items()
+                   if measured.get(name, 0) != frozen)
+    check("every frozen count is the measurement, not a number above it",
+          not stale, f"({stale} - lower it, that is what makes the fix stick)")
