@@ -21,6 +21,7 @@ silently:
 import json
 import os
 import time
+from typing import Any, Optional, Tuple, Union
 from . import crashlog
 from .paths import temp_beside
 
@@ -32,10 +33,10 @@ from .paths import temp_beside
 # 300 KB. Four megabytes is roughly seventy-five times the largest real file and
 # thirteen times that worst case, which is the point: the limit must never be the
 # thing a user meets, only the thing a hostile file meets.
-MAX_BYTES = 4 * 1024 * 1024
+MAX_BYTES: int = 4 * 1024 * 1024
 
 
-def _reject_constant(name):
+def _reject_constant(name: str) -> Any:
     """``json`` calls this for ``NaN`` / ``Infinity`` / ``-Infinity``.
 
     Those three are not JSON - the format has no way to write them, and Python's
@@ -47,7 +48,7 @@ def _reject_constant(name):
     raise ValueError(f"{name} is not a value a JSON file may carry")
 
 
-def load_json(path):
+def load_json(path: str) -> Any:
     """Parse a JSON file. ``ValueError`` for the CONTENT, ``OSError`` for the FILE.
 
     The one place every reader goes through, because before this there were four
@@ -87,7 +88,7 @@ def load_json(path):
             raise ValueError("not enough memory to read this file") from exc
 
 
-def quarantine(path):
+def quarantine(path: str) -> Optional[str]:
     """Move a broken file aside. Returns the backup path, or None."""
     try:
         # isfile, not exists: a DIRECTORY carrying one of these names is what a
@@ -104,7 +105,9 @@ def quarantine(path):
         return None
 
 
-def read_json(path, expect=dict):
+def read_json(path: str,
+              expect: Optional[Union[type, Tuple[type, ...]]] = dict
+              ) -> Tuple[Any, Optional[str]]:
     """Read a JSON file.
 
     Returns ``(data, error)``:
@@ -131,7 +134,7 @@ def read_json(path, expect=dict):
     return data, None
 
 
-def write_json(path, data, indent=2):
+def write_json(path: str, data: Any, indent: int = 2) -> Optional[str]:
     """Atomically write JSON. Returns an error message, or None on success.
 
     ``allow_nan=False`` so the WRITER refuses exactly what the READER refuses. The

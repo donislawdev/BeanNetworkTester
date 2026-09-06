@@ -690,6 +690,14 @@ STRICTLY_TYPED = {
     "beantester.utils",
     "beantester.gui.rates",
     "beantester.gui.scope",
+    # 2026-09-06. The list had not grown once since the day it was written, and a
+    # ratchet that never moves is a decision to stay where it is that nobody
+    # actually made. These three are the next cheapest leaves: no tkinter, narrow
+    # public APIs, and two of them sit at the bottom of the layering, where a
+    # wrong type travels furthest.
+    "beantester.damage",
+    "beantester.jsonfile",
+    "beantester.filters",
 }
 
 

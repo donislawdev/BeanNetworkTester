@@ -11,12 +11,13 @@ Nothing here imports anything: it sits at the bottom of the layering, below
 ``core`` and ``engine``, so the GUI, the repro report and the tests can all ask
 "how much damage did this session do" without dragging the engine in.
 """
+from typing import Any, Dict, Mapping, Tuple
 
 # Which counter a dropped packet lands in, by the reason BeanCore.decide() gave.
 # Module level on purpose: written as a literal inside the capture loop it was
 # rebuilt for every dropped packet, and a session set to 100% loss drops as often
 # as it sees. It is also the SINGLE SOURCE for what counts as damage below.
-DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
+DROP_BY_REASON: Dict[str, str] = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
                   "rst": "drop_rst", "lan": "drop_lan",
                   "internet_only": "drop_internet_only", "block": "drop_block",
                   "flap": "drop_flap", "rate": "drop_rate"}
@@ -30,7 +31,7 @@ DROP_BY_REASON = {"syn": "drop_syn", "mtu": "drop_mtu", "nat": "drop_nat",
 # of silent lie this project keeps removing. Guarded by
 # test_rst_local.py::test_every_forged_reset_is_counted_under_its_own_cause, which
 # lives with the rest of the reset path rather than with the counters.
-RST_BY_REASON = {"rst": "rst_reset", "block": "block_rejected"}
+RST_BY_REASON: Dict[str, str] = {"rst": "rst_reset", "block": "block_rejected"}
 
 # Damage the simulated link inflicted: every reason decide() can name, plus the
 # unnamed default (the configured Loss). Derived from the map above so that a new
@@ -38,7 +39,7 @@ RST_BY_REASON = {"rst": "rst_reset", "block": "block_rejected"}
 # "Effective loss" came to read 0.0% through a session losing 90% to a speed
 # limit. Guarded by
 # test_engine.py::test_every_drop_counter_and_drop_reason_is_classified.
-IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
+IMPAIRMENT_DROP_KEYS: Tuple[str, ...] = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
 
 # Losses the TOOL caused, not the link: its delay queue filled up, the session
 # ended with packets still parked in it, or re-injecting one failed outright.
@@ -49,10 +50,10 @@ IMPAIRMENT_DROP_KEYS = (*dict.fromkeys(DROP_BY_REASON.values()), "drop_loss")
 # and overflow additionally raises a log warning and a banner. Counting them here
 # would also let the figure exceed 100%: the delay queue holds out-of-scope
 # packets too, so with a narrow target it can drop more than were ever in scope.
-TOOL_DROP_KEYS = ("drop_overflow", "drop_shutdown", "drop_send")
+TOOL_DROP_KEYS: Tuple[str, ...] = ("drop_overflow", "drop_shutdown", "drop_send")
 
 
-def impairment_loss_pct(stats):
+def impairment_loss_pct(stats: Mapping[str, Any]) -> float:
     """Share of the traffic the tool was aiming at that the impairments killed.
 
     Numerator: every drop ``decide()`` made. Denominator: packets that passed the
@@ -76,7 +77,7 @@ def impairment_loss_pct(stats):
     return 100.0 * sum(stats.get(k, 0) for k in IMPAIRMENT_DROP_KEYS) / scoped
 
 
-def corruption_pct(stats):
+def corruption_pct(stats: Mapping[str, Any]) -> float:
     """Share of the targeted traffic whose payload was actually altered.
 
     Same denominator as ``impairment_loss_pct``, for the same reason. ``corrupted``

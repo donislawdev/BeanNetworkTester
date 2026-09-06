@@ -174,7 +174,14 @@ warn_unused_ignores = true
 # because a flag turned on over 66 unannotated modules would have to be silenced
 # everywhere, and a check that is silenced everywhere teaches that silence is
 # normal.
-module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]
+#
+# Three more on 2026-09-06, and the reason is the ratchet itself: it had not moved
+# since the day it was created, which is a decision to stay at three modules that
+# nobody actually took. These are the next cheapest leaves - no tkinter, narrow
+# APIs, and `damage`/`filters` sit at the bottom of the layering where a wrong
+# type travels furthest. The rate to keep is one module per release, not a target.
+module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope",
+          "beantester.damage", "beantester.jsonfile", "beantester.filters"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 

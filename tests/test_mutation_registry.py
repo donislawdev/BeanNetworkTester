@@ -1853,8 +1853,8 @@ MUTATIONS = [
         # vanishes cannot fail, which is why the list is recorded twice.
         "label": "types: a module loses its strict typing quietly",
         "file": "pyproject.toml",
-        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]',
-        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope"]',
+        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope",',
+        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope",',
         "test": "test_the_strictly_typed_modules_only_ever_grow",
     },
     {
