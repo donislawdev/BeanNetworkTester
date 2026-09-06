@@ -98,6 +98,7 @@ import weakref
 from . import filters
 from . import portmap
 from . import winenv
+from .connlog import ConnectionLog
 from .core import BeanCore
 from .damage import DROP_BY_REASON, RST_BY_REASON
 from .i18n import T
@@ -138,13 +139,12 @@ class BeanEngine:
         self._cv = threading.Condition()
         self.max_queue = 20000
         self._slock = threading.Lock()
-        self._conns = {}            # connection log: flowkey -> stats
-        self._clock = threading.Lock()
-        # Sampling RNG for _trim_conns. Deliberately NOT self._rng: that one is
-        # seeded and drives the packet decisions, so drawing from it here would
-        # make a session's impairments depend on how often the table happened to
-        # be trimmed - i.e. it would silently break reproducibility.
-        self._rng_evict = random.Random(0)
+        # The session's flow rows, their lock and their cap policy (connlog.py).
+        # The two resolvers are passed as bound methods rather than moved in with
+        # the rows: they read _ports and _socketwatch, which this class swaps at
+        # start and stop, so a second reference kept over there would be a new way
+        # for the two to disagree.
+        self._conns_log = ConnectionLog(self._process_for, self._pid_for)
         self._overflow_warned = 0.0     # rate-limit for the queue-overflow warning
         self._send_warned = 0.0         # rate-limit for the failed-injection warning
         self._rst_warned = 0.0          # rate-limit for the failed-reset warning
@@ -307,17 +307,35 @@ class BeanEngine:
         return max(0.0, self._deadline - (time.monotonic() if now is None else now))
 
     # -- thin delegates to the decision core -------------------------------- #
-    def set_params(self, *a):
-        self.core.set_params(*a)
+    #
+    # They are the surface the engine is DRIVEN through: `settings.apply_settings`
+    # uses all fifteen, and so do ten test modules and one CI script - 67 call
+    # sites, which is why they are a facade rather than dead weight.
+    #
+    # 🔴 Each one repeats its core signature instead of forwarding `*a`, and that
+    # is the whole point of them being written out. `*a` erases the signature, so
+    # a wrong argument count on THIS seam - the one between the decision core and
+    # the threads that feed it - could only ever fail at runtime, and mypy had
+    # nothing to check here no matter how many modules around it were annotated.
+    # `tests/test_engine.py::test_every_core_setter_has_a_forwarder_that_matches_it`
+    # keeps the two sides identical, which also closes the other half of the cost:
+    # a new impairment field needs a forwarder, and nothing used to say so until
+    # the AttributeError arrived.
+    def set_params(self, loss_pct, corrupt_pct, dup_pct,
+                   latency_ms, jitter_ms, down_kbps, up_kbps):
+        self.core.set_params(loss_pct, corrupt_pct, dup_pct,
+                             latency_ms, jitter_ms, down_kbps, up_kbps)
 
-    def set_buffer(self, *a):
-        self.core.set_buffer(*a)
+    def set_buffer(self, buffer_ms):
+        self.core.set_buffer(buffer_ms)
 
-    def set_loss_burst(self, *a):
-        self.core.set_loss_burst(*a)
+    def set_loss_burst(self, mean_packets):
+        self.core.set_loss_burst(mean_packets)
 
-    def set_asymmetry(self, *a):
-        self.core.set_asymmetry(*a)
+    def set_asymmetry(self, enabled, loss_pct, corrupt_pct, dup_pct,
+                      latency_ms, jitter_ms, spike_prob_pct, spike_ms):
+        self.core.set_asymmetry(enabled, loss_pct, corrupt_pct, dup_pct,
+                                latency_ms, jitter_ms, spike_prob_pct, spike_ms)
 
     def set_target(self, active, ports=None):
         """Point the engine at a set of local ports (or a live port container).
@@ -411,11 +429,11 @@ class BeanEngine:
         # responsibility) and start() reconciles the two either way.
         return current
 
-    def set_flap(self, *a):
-        self.core.set_flap(*a)
+    def set_flap(self, enabled, period_s, down_pct):
+        self.core.set_flap(enabled, period_s, down_pct)
 
-    def set_dest(self, *a):
-        self.core.set_dest(*a)
+    def set_dest(self, active, ip=None, port=None):
+        self.core.set_dest(active, ip=ip, port=port)
 
     def targeting_active(self):
         """True when process or destination targeting is narrowing traffic."""
@@ -433,35 +451,35 @@ class BeanEngine:
         """
         return self.core.process_target_active()
 
-    def set_ip_family(self, *a, **kw):
-        self.core.set_ip_family(*a, **kw)
+    def set_ip_family(self, ipv4_only=False, ipv6_only=False):
+        self.core.set_ip_family(ipv4_only=ipv4_only, ipv6_only=ipv6_only)
 
-    def set_lan(self, *a):
-        self.core.set_lan(*a)
+    def set_lan(self, enabled):
+        self.core.set_lan(enabled)
 
-    def set_internet_only(self, *a):
-        self.core.set_internet_only(*a)
+    def set_internet_only(self, enabled):
+        self.core.set_internet_only(enabled)
 
-    def set_block(self, *a):
-        self.core.set_block(*a)
+    def set_block(self, active, ip=None, port=None, reject=False):
+        self.core.set_block(active, ip=ip, port=port, reject=reject)
 
-    def set_advanced(self, *a):
-        self.core.set_advanced(*a)
+    def set_advanced(self, syn_drop_pct, max_size):
+        self.core.set_advanced(syn_drop_pct, max_size)
 
-    def set_spike(self, *a):
-        self.core.set_spike(*a)
+    def set_spike(self, prob_pct, spike_ms):
+        self.core.set_spike(prob_pct, spike_ms)
 
-    def set_nat(self, *a):
-        self.core.set_nat(*a)
+    def set_nat(self, timeout_s):
+        self.core.set_nat(timeout_s)
 
-    def set_rst(self, *a):
-        self.core.set_rst(*a)
+    def set_rst(self, prob_pct, cooldown_s):
+        self.core.set_rst(prob_pct, cooldown_s)
 
-    def set_schedule(self, *a):
-        self.core.set_schedule(*a)
+    def set_schedule(self, steps_kbps):
+        self.core.set_schedule(steps_kbps)
 
-    def reset_now(self, *a):
-        self.core.reset_now(*a)
+    def reset_now(self, duration_s=2.0, now=None):
+        self.core.reset_now(duration_s, now=now)
         self.log_event("RESET", "events.manual_reset")
 
     # -- scenario ------------------------------------------------------------ #
@@ -595,212 +613,35 @@ class BeanEngine:
         self._rst_warned = 0.0
         self._driver_wait_warned = 0.0
         self._wait_sample_at = 0.0
-        with self._clock:
-            self._conns.clear()
+        self._conns_log.clear()
 
     def connections_snapshot(self, limit=200):
-        """Rows of the connection log.
+        """Rows of the connection log - see ``connlog.ConnectionLog.snapshot``.
 
-        ``limit=<int>``  the ``limit`` most recently active flows, newest first.
-                         Uses ``heapq.nlargest``: O(n log limit), not a full sort
-                         of a table that may hold 200 000 rows.
-        ``limit=None``   every flow, UNSORTED - a pointer copy, cheap (see below).
-                         This is what the virtualised tables ask for: they sort by
-                         the column the user picked anyway, so sorting here as well
-                         was the same work done twice per refresh.
-
-        The copy is taken under the lock; any sorting happens outside it. A sort
-        under ``_clock`` would stall the CAPTURE thread, and a stalled capture
-        thread means WinDivert is queueing the user's packets into a void. THAT is
-        why the sort is outside - not the cost of the copy, which is small:
-
-        Measured 2026-07-21 (Win11 AMD64, CPython 3.14.6, synthetic rows, median of
-        7): the pointer copy is **0.7 ms at the 200k cap** and 2.4 ms at 500k, while
-        a full sort of the same 200k rows through ``views.filter_sort_connections``
-        is ~29 ms. An earlier revision of this docstring claimed ~25 ms for the copy
-        and ~100 ms for the sort; neither reproduced.
+        Kept on the engine because it is the PUBLIC surface: `cli`, `gui`, the CSV
+        export and the repro report all ask the engine for its connections.
         """
-        with self._clock:
-            values = list(self._conns.values())
-        if limit is None:
-            return values
-        return heapq.nlargest(limit, values, key=lambda c: c["last"])
-
-    # A connection row is ~350 B, so the cap IS the memory budget: 200k flows is
-    # roughly 70-100 MB, which is what a long capture on a busy machine needs if
-    # the tables are to show the session honestly instead of an arbitrary slice.
-    MAX_CONNS = 200_000
-    EVICT_KEEP = 0.9                    # trim back to this fraction of the cap
-    EVICT_SAMPLES = 2000                # stamps sampled to estimate the cutoff
-
-    def _trim_conns(self):
-        """Evict the oldest flows once the log outgrows its cap.
-
-        Runs on the WATCHDOG thread, never on the capture thread, and does the
-        expensive part without the lock. The old version sorted the whole table
-        from inside ``_log_conn`` - i.e. on the capture thread, under ``_clock``.
-        At the previous 2000-row cap nobody could feel it; at 200 000 it is a
-        ~300 ms freeze of the capture thread, and a frozen capture thread means
-        WinDivert is quietly queueing (and then dropping) the user's packets.
-
-        Measured at the cap: sorting = ~300 ms, a sampled cutoff = ~6 ms (no lock)
-        plus a scan-and-delete = ~16 ms (lock held). The cutoff is an estimate,
-        so the table lands near - not exactly on - ``EVICT_KEEP``; for dropping
-        stale flows that is entirely good enough.
-        """
-        with self._clock:
-            if len(self._conns) <= self.MAX_CONNS:
-                return
-            # a pointer copy, not a deep copy: cheap even at 200k
-            values = list(self._conns.values())
-        # ---- outside the lock: estimate the activity cutoff from a sample ----
-        target_drop = len(values) - int(self.MAX_CONNS * self.EVICT_KEEP)
-        if target_drop <= 0:
-            return
-        sample = [values[self._rng_evict.randrange(len(values))]["last"]
-                  for _ in range(min(self.EVICT_SAMPLES, len(values)))]
-        sample.sort()
-        index = int(len(sample) * target_drop / len(values))
-        cutoff = sample[min(index, len(sample) - 1)]
-        # ---- lock again, only for the cheap part -----------------------------
-        with self._clock:
-            doomed = [k for k, c in self._conns.items() if c["last"] <= cutoff]
-            # The cutoff is a SAMPLED estimate and the comparison is inclusive, so
-            # rows sharing one timestamp all fall on the same side of it. With
-            # enough ties that is far more than the estimate intended - and with
-            # every row on one stamp it is the WHOLE table. Measured against a
-            # 1000-row cap: 1200 rows trimmed to 0 instead of 900.
-            #
-            # Not reachable from ordinary traffic on this machine (time.monotonic()
-            # resolves to ~100 ns here, so a 1200-row burst still produced 865
-            # distinct stamps and trimmed correctly), but it costs one max() to
-            # make the estimate incapable of emptying the log, and a coarser clock
-            # is a platform property this code should not have to rely on.
-            allowed = max(0, len(self._conns) - int(self.MAX_CONNS * self.EVICT_KEEP))
-            for key in doomed[:allowed]:
-                self._conns.pop(key, None)
-
-    # kept under its old name: the capture path no longer evicts, but callers
-    # (and tests) that ask for a trim explicitly still get one
-    _evict_conns = _trim_conns
-
-    def _log_conn(self, key, remote_ip, remote_port, local_port, is_out, size, now,
-                  proto="IP", dropped=False, scoped=False):
-        if key is None:
-            return
-        with self._clock:
-            c = self._conns.get(key)
-            if c is None:
-                # NO eviction here: trimming is the watchdog's job (_trim_conns).
-                # Doing it on the capture thread meant a new flow could pay for a
-                # full sort of the table while holding the lock.
-                # bytes/bytes_in/bytes_out are what this flow OFFERED (captured);
-                # sent/sent_in/sent_out are what actually went back on the wire.
-                # The two used to be one set of numbers under headings the session
-                # panel used for delivered - a row could read 5 122 600 B received
-                # while the application got 409 600 B.
-                c = dict(remote_ip=remote_ip, remote_port=remote_port,
-                         local_port=local_port, proto=proto, packets=0, bytes=0,
-                         bytes_in=0, bytes_out=0, sent=0, sent_in=0, sent_out=0,
-                         dropped=0, first=now, last=now,
-                         dir="", scoped=bool(scoped),
-                         proc=self._process_for(local_port),
-                         pid=self._pid_for(local_port))
-                self._conns[key] = c
-            elif not c["proc"]:
-                # the socket may not have been in the table yet when the flow
-                # appeared - try again while packets keep coming, otherwise the
-                # row would stay a "?" forever (resolve the pid on the same retry)
-                c["proc"] = self._process_for(local_port)
-                if not c.get("pid"):
-                    c["pid"] = self._pid_for(local_port)
-            c["packets"] += 1
-            c["bytes"] += size
-            if is_out:
-                c["bytes_out"] += size
-            else:
-                c["bytes_in"] += size
-            if dropped:
-                c["dropped"] += 1
-            # scoped is STICKY: once a flow has been in impairment scope it stays
-            # marked, for the life of the session's connection log. It is the audit
-            # answer to "was this connection impaired", not "is its port in the
-            # target set right now" - those differ the instant a socket closes, and
-            # a browser closes hundreds a minute. A live check flipped every
-            # finished flow to "not impaired" the moment it closed (its ephemeral
-            # port left the socket table), so a run that impaired all of chrome read
-            # as a table full of "no". The row highlight
-            # (gui/pages/conns.py::_tag_of) reads this same stored record, so the
-            # colour and the "impaired?" column can never disagree.
-            c["scoped"] = c["scoped"] or bool(scoped)
-            c["last"] = now
-            c["dir"] = "out" if is_out else "in"
-            c["proto"] = proto
+        return self._conns_log.snapshot(limit)
 
     def _log_delivered(self, key, size, is_out):
-        """Credit bytes that actually went back on the wire to their flow's row.
+        """Credit delivered bytes to their flow's row, and to the scoped totals.
 
-        Called from the INJECT thread, once per delivered packet, and deliberately
-        WITHOUT ``_clock`` - the same reasoning as ``SocketWatcher.pid_for`` (see
-        convention 20): taking a maintenance lock on a per-packet path puts that
-        path in the queue behind the watchdog's trimming. Measured with the lock:
-        160.4k -> 152.0k pkt/s on the synthetic path, a 5% regression bought for
-        nothing.
-
-        Safe because ``sent``/``sent_in``/``sent_out`` have exactly ONE writer -
-        this thread. The capture thread creates the row (with these at 0) BEFORE
-        the packet is queued, and never touches them again; readers only ever read
-        them, and an int rebind is atomic, so a reader sees the old value or the
-        new one, never a torn one. Any other counter shared with the capture thread
-        still goes through ``_charge_flow``, which does take the lock.
-
-        A row can be missing when the watchdog trimmed the flow while its packet
-        sat in the delay queue. Then there is nothing to credit, and the row is
-        gone from the table anyway.
+        The row half lives in ``connlog`` and takes no lock (its docstring carries
+        the measurement); the session totals live here, because the stats dict is
+        this class's. Written WITHOUT ``_slock`` for the same reason and the same
+        trade: this thread is the only writer (``reset_stats`` zeroes them before
+        any worker exists), readers only read, and an int rebind is atomic - a
+        reader sees the old value or the new one, never a torn one. Taking _slock
+        here would put the per-packet inject path in the queue behind stats
+        readers, which is the 5% regression measured for the sibling counters.
         """
-        if key is None:
+        if not self._conns_log.credit_delivered(key, size, is_out):
             return
-        c = self._conns.get(key)
-        if c is None:
-            return
-        c["sent"] += size
+        st = self.st
         if is_out:
-            c["sent_out"] += size
+            st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
         else:
-            c["sent_in"] += size
-        # Session totals for the SCOPED half, from the row's own sticky flag. The
-        # flag is right here, which is why this needs no wider change: the capture
-        # thread sets it before the packet is queued, so by the time the injector
-        # reaches this line the answer is already on the row.
-        #
-        # Written WITHOUT the stats lock, and that is the same trade the docstring
-        # above justifies for sent/sent_in/sent_out: this thread is the only writer
-        # (reset_stats zeroes them before any worker exists), readers only read, and
-        # an int rebind is atomic - a reader sees the old value or the new one, never
-        # a torn one. Taking _slock here would put the per-packet inject path in the
-        # queue behind stats readers, which is the 5% regression measured for the
-        # sibling counters.
-        if c.get("scoped"):
-            st = self.st
-            if is_out:
-                st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
-            else:
-                st["bytes_in_scoped"] = st["bytes_in_scoped"] + size
-
-    def _charge_flow(self, key, field, n=1):
-        """Add to one counter on one flow's row (no row = nothing to charge).
-
-        For losses discovered AFTER the capture thread has moved on: a queue that
-        overflowed, a session that ended with packets still parked, an injection
-        that failed. Those never reached the row before, so a flow could show
-        `dropped=0` in a session that threw 5 500 of its packets away.
-        """
-        if key is None:
-            return
-        with self._clock:
-            c = self._conns.get(key)
-            if c is not None:
-                c[field] += n
+            st["bytes_in_scoped"] = st["bytes_in_scoped"] + size
 
     def _process_for(self, local_port):
         """Process name owning ``local_port`` right now ("" when unknown).
@@ -1360,7 +1201,7 @@ class BeanEngine:
         # packets still queued. Outside the _cv block and off the capture thread:
         # this runs once, at STOP, on whichever thread called it.
         for key in stranded:
-            self._charge_flow(key, "dropped")
+            self._conns_log.charge(key, "dropped")
         if discarded:
             # Packets still queued for delayed injection when the session ended:
             # counted at capture (seen / bytes_*_total) but never delivered. Record
@@ -1487,7 +1328,7 @@ class BeanEngine:
             except Exception as _exc:
                 crashlog.note(_exc, "engine.ports")
             try:
-                self._trim_conns()
+                self._conns_log.trim()
                 # Same principle: freeing a retired 200k flow generation costs
                 # ~7-22 ms (measured). The capture thread must not spend that in a
                 # tool whose job is to inject a PRECISE amount of latency, so the
@@ -1676,8 +1517,9 @@ class BeanEngine:
                     self._bump(RST_BY_REASON.get(dec.reason, "rst_reset"))
                     self._send_rst(packet)
                 self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
-                self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
-                               now, proto, dropped=True, scoped=dec.scoped)
+                self._conns_log.log(key, remote_ip, remote_port, local_port,
+                                    is_out, size, now, proto, dropped=True,
+                                    scoped=dec.scoped)
                 continue
             # Whether this packet's BYTES were changed decides whether the
             # injector has to recompute its checksums - see _enqueue. Corruption
@@ -1698,8 +1540,8 @@ class BeanEngine:
             # has nowhere to credit it if the row does not exist yet. (It usually
             # loses that race - it has to wake on _cv first - which is exactly the
             # kind of "usually" that becomes a flake later.)
-            self._log_conn(key, remote_ip, remote_port, local_port, is_out, size,
-                           now, proto, scoped=dec.scoped)
+            self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,
+                                size, now, proto, scoped=dec.scoped)
             rels = dec.releases
             queued = self._enqueue(rels[0], packet, key=key, modified=modified)
             if len(rels) > 1:
@@ -1723,7 +1565,7 @@ class BeanEngine:
                 # Measured drop_overflow=5500 against `dropped=0` in the row it
                 # happened to. Charged here instead, off the common path - a queue
                 # that is not full costs nothing for this.
-                self._charge_flow(key, "dropped")
+                self._conns_log.charge(key, "dropped")
 
     def _send_rst(self, packet):
         """Inject a TCP RST to the local end to reset the connection."""
@@ -2066,7 +1908,7 @@ class BeanEngine:
                     # was one packet wide already, and batching would have made it
                     # a whole batch wide.
                     self._bump("drop_shutdown")
-                    self._charge_flow(key, "dropped")
+                    self._conns_log.charge(key, "dropped")
                 else:
                     # Recompute the checksums only when this tool actually edited
                     # the bytes. An untouched packet goes back exactly as it
@@ -2107,6 +1949,6 @@ class BeanEngine:
                 # these numbers honest. Every other way a packet can die has a
                 # counter; this one only had a log line.
                 self._bump("drop_send")
-                self._charge_flow(key, "dropped")
+                self._conns_log.charge(key, "dropped")
                 if self._running:
                     self._warn_send_failed(e)

@@ -27,7 +27,7 @@ def test_a_packet_popped_after_the_handle_is_gone_is_recorded_not_lost():
         # handle left to send it through
         engine._divert = None
         engine._bump("drop_shutdown")          # what the loop now does
-        engine._charge_flow(None, "dropped")
+        engine._conns_log.charge(None, "dropped")
         after = engine.stats_snapshot()
         check("the packet is accounted for at shutdown",
               after["drop_shutdown"] == before["drop_shutdown"] + 1,

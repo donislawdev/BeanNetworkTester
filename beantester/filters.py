@@ -15,11 +15,12 @@ Two rules this file exists to enforce:
   deciding about ports, with different semantics). Ports belong to the port
   field, which understands lists, ranges and exclusions anyway.
 """
+from typing import Any, Dict, List, Optional, Tuple
 
 _ALL_IP = "(ip or ipv6)"
 _ALL_PROTO = "(tcp or udp or icmp or icmpv6)"
 
-FILTER_DEFS = [
+FILTER_DEFS: List[Tuple[str, str, str]] = [
     ("both", "filters.both", f"{_ALL_IP} and {_ALL_PROTO}"),
     ("out",  "filters.out",  f"outbound and {_ALL_IP} and {_ALL_PROTO}"),
     ("in",   "filters.in",   f"inbound and {_ALL_IP} and {_ALL_PROTO}"),
@@ -29,42 +30,44 @@ FILTER_DEFS = [
     ("loopback", "filters.loopback", f"loopback and {_ALL_IP} and {_ALL_PROTO}"),
 ]
 
-FILTERS = {name: wd for _, name, wd in FILTER_DEFS}
-CLI_FILTERS = {key: wd for key, _, wd in FILTER_DEFS}
+FILTERS: Dict[str, str] = {name: wd for _, name, wd in FILTER_DEFS}
+CLI_FILTERS: Dict[str, str] = {key: wd for key, _, wd in FILTER_DEFS}
 
 # Explicit lookups instead of the old index gymnastics
 # (``list(CLI_FILTERS)[list(FILTERS).index(name)]``), which silently depended on
 # both dicts keeping the same insertion order.
-_BY_CLI = {key: (key, name, wd) for key, name, wd in FILTER_DEFS}
-_BY_I18N = {name: (key, name, wd) for key, name, wd in FILTER_DEFS}
-DEFAULT_FILTER = FILTER_DEFS[0][0]
+_BY_CLI: Dict[str, Tuple[str, str, str]] = {
+    key: (key, name, wd) for key, name, wd in FILTER_DEFS}
+_BY_I18N: Dict[str, Tuple[str, str, str]] = {
+    name: (key, name, wd) for key, name, wd in FILTER_DEFS}
+DEFAULT_FILTER: str = FILTER_DEFS[0][0]
 
 
-def cli_key_for(i18n_key, default=DEFAULT_FILTER):
+def cli_key_for(i18n_key: str, default: str = DEFAULT_FILTER) -> str:
     """i18n filter key -> CLI key (``filters.both`` -> ``both``)."""
     entry = _BY_I18N.get(i18n_key)
     return entry[0] if entry else default
 
 
-def i18n_key_for(cli_key, default=FILTER_DEFS[0][1]):
+def i18n_key_for(cli_key: str, default: str = FILTER_DEFS[0][1]) -> str:
     """CLI filter key -> i18n key (``both`` -> ``filters.both``)."""
     entry = _BY_CLI.get(cli_key)
     return entry[1] if entry else default
 
 
-def windivert_for(cli_key):
+def windivert_for(cli_key: str) -> str:
     """CLI filter key -> WinDivert filter expression."""
     entry = _BY_CLI.get(cli_key)
     return entry[2] if entry else CLI_FILTERS[DEFAULT_FILTER]
 
 
-def i18n_keys():
+def i18n_keys() -> List[str]:
     """Filter i18n keys in canonical order (drives the GUI combobox)."""
     return [name for _, name, _ in FILTER_DEFS]
 
 
 # -- narrowing the handle's filter to what could possibly be impaired ------------ #
-def filter_compiles(text):
+def filter_compiles(text: str) -> bool:
     """Would WinDivert accept this filter? ``False`` when it cannot be asked.
 
     ``WinDivertHelperCompileFilter`` is a DLL helper - no handle, no admin - so
@@ -91,7 +94,8 @@ def filter_compiles(text):
         return False
 
 
-def narrowed_filter(base, dst_ip_matcher=None, dst_port_matcher=None):
+def narrowed_filter(base: str, dst_ip_matcher: Optional[Any] = None,
+                    dst_port_matcher: Optional[Any] = None) -> Tuple[str, bool]:
     """``base`` AND the destination expressions, when that can be PROVEN safe.
 
     Returns ``(filter_text, narrowed)``. ``narrowed`` is False whenever anything

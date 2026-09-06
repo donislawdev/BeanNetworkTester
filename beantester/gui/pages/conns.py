@@ -33,11 +33,11 @@ from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
 from .. import dialogs
 from ..model_worker import AsyncModel
-from ..labels import wrapping_label
+from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
 from ..theme import CONN_COLORS, style_menu
-from ..tooltip import add_tooltip, retip
+from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
 
@@ -547,16 +547,8 @@ class ConnsPage:
         capture verdict lands when a session starts. A note describing the other
         state is the misleading sentence it exists to prevent.
         """
-        note = getattr(self, "_scope_note", None)
-        if note is None:
-            return
-        state = self.app.coverage().state
-        if state == getattr(self, "_scope_note_state", None):
-            return
-        self._scope_note_state = state
-        with crashlog.quiet("gui.pages.conns"):
-            note.config(text=T(SCOPE_NOTES[state]))
-            retip(note, SCOPE_TIPS[state])
+        sync_note(self, SCOPE_NOTES, SCOPE_TIPS, self.app.coverage().state,
+                  "gui.pages.conns")
 
     def refresh(self, force=False):
         """Repaint always (cheap); rebuild off-thread (never blocks the UI).

@@ -656,7 +656,30 @@ def _plan_the_end_of_the_scenario(log, cfg, scen, engine):
              f"is no --duration, so the session keeps going until you stop it.")
 
 
-def _run_session(args, cfg, log, sleep, clock, engine):
+def _run_session(cfg, log, sleep, clock, engine):
+    """The CLI session, in three phases: open, drive, report.
+
+    Split out of one 133-line function on 2026-09-06. The phases are not a
+    tidying: each one has a different failure contract. ``_open_session`` may
+    only fail through ``_fail`` (nothing has been touched yet, so an exit is
+    free), ``_drive_session`` must turn ANY failure into a coded exit because
+    the driver is open and the engine has to be stopped, and
+    ``_report_session`` can still turn a successful run into a failing one.
+    """
+    engine, scen = _open_session(cfg, log, engine)
+    code, stop_reason, t0 = _drive_session(engine, cfg, log, sleep, clock, scen)
+    return _report_session(engine, cfg, log, clock, code, stop_reason, t0)
+
+
+def _open_session(cfg, log, engine):
+    """Everything that can fail BEFORE a single packet is touched.
+
+    Returns ``(engine, scenario)``. The order inside is the point of the phase:
+    the admin check, the unbounded-impairment warning and the scenario file are
+    all knowable without the driver, and each of them used to be discovered
+    later - the run opened the divert, said "Start.", impaired live traffic and
+    only then reported that the scenario file was broken.
+    """
     if cfg["simulate"] and cfg["settings"].get("target"):
         log.warn("--target is ignored in --simulate mode.")
         cfg["settings"]["target"] = ""
@@ -731,6 +754,22 @@ def _run_session(args, cfg, log, sleep, clock, engine):
                      "expressed as a driver filter (a wildcard or re: pattern, or "
                      "no destination set). Capturing everything, as usual.")
 
+    return engine, scen
+
+
+def _drive_session(engine, cfg, log, sleep, clock, scen):
+    """Run the session to its end, whatever ends it.
+
+    Returns ``(code, stop_reason, t0)``. ``t0`` is started HERE rather than by
+    the caller and handed back with the result: the clock has to start after the
+    scenario has been armed and before the loop, and moving it either way
+    changes the elapsed time every summary reports.
+
+    Every exit from the loop is a CODED exit (convention 18), including the
+    unforeseen one - that is why the broad handler sits here, where the engine
+    is still alive and its counters still readable, rather than at the top of
+    ``run_cli`` where the run could only hand back a truncated NDJSON file.
+    """
     scenario_failed = None
     cfg["stop_on_scenario"] = False
     if scen is not None:
@@ -781,7 +820,16 @@ def _run_session(args, cfg, log, sleep, clock, engine):
 
     if engine.fault and code == exitcodes.OK:
         code, stop_reason = exitcodes.RUNTIME, "fault"
+    return code, stop_reason, t0
 
+
+def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
+    """Turn a finished session into its artefacts, and into the exit code.
+
+    Returns the final code, which is not the one it was given: an unwritable
+    repro report and a run that captured less than ``--min-packets`` are both
+    failures discovered after the traffic stopped.
+    """
     stats = engine.stats_snapshot()
     elapsed = round(clock() - t0, 1)
     eff = engine.effective_seed()
@@ -935,7 +983,7 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                      "for Administrator rights and the WinDivert driver.")
             return exitcodes.OK
 
-        return _run_session(args, cfg, log, sleep, clock, engine)
+        return _run_session(cfg, log, sleep, clock, engine)
     except CliError as e:
         log.error(f"error: {e.message}")
         return e.code

@@ -569,12 +569,15 @@ MUTATIONS = [
         # function and cannot see the runners-up climbing together underneath it.
         "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        # Re-anchored 2026-08-31: the constant moved 3 -> 5 when the complexity
-        # ceiling came down and the band came down with it. The mutation still
-        # proves the same thing - a count frozen looser than today's measurement
-        # is caught by the equality half of that test, not by the "at most" half.
-        "old": "COMPLEX_NEAR_CEILING = 5    # decide, _run_session, settings_summary,",
-        "new": "COMPLEX_NEAR_CEILING = 7    # decide, _run_session, settings_summary,",
+        # Re-anchored 2026-08-31 (3 -> 5) and again 2026-09-06 (5 -> 4, when
+        # `_run_session` was split into three phases and left the band). The
+        # mutation still proves the same thing - a count frozen looser than
+        # today's measurement is caught by the equality half of that test, not by
+        # the "at most" half. Re-anchoring is the routine cost of a pattern that
+        # pins exact source text; a stale one reports SKIP, which reads like a
+        # result and is not one.
+        "old": "COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,",
+        "new": "COMPLEX_NEAR_CEILING = 7    # decide, settings_summary, _capture_loop,",
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {
@@ -655,13 +658,99 @@ MUTATIONS = [
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
     {
-        # Half the package is only ever named from the suite, so a scan that stops
-        # reading tests/ calls a live helper dead. This is the noisy direction and
-        # the one that gets a guard switched off.
-        "label": "dead code: the usage scan stops reading the test suite",
-        "file": "tests/test_code_hygiene.py",
-        "old": 'USAGE_TREES = ("beantester", "tests", "tools", "lang", "scenarios")',
-        "new": 'USAGE_TREES = ("beantester", "tools", "lang", "scenarios")',
+        # The step the notes' "how to add an impairment" recipe does not mention:
+        # a new core setter needs a forwarder, and forgetting one used to surface
+        # much later as an AttributeError out of apply_settings, in whatever ran
+        # first. Aimed at the ADDITION rather than at a deleted forwarder, because
+        # that is the direction a session actually takes.
+        "label": "engine: a new core setter arrives without its forwarder",
+        "file": "beantester/core.py",
+        "old": "    def set_nat(self, timeout_s):",
+        "new": "    def set_brand_new_thing(self, x):\n"
+               "        return x\n\n"
+               "    def set_nat(self, timeout_s):",
+        "test": "test_every_core_setter_has_a_forwarder_that_matches_it",
+    },
+    {
+        # The other half, and the one no other check in the repository can reach:
+        # a loop built entirely out of lazy imports. It runs, it passes every
+        # direction check, and it becomes an ImportError the day somebody hoists
+        # the import to the top of the file for tidiness. `cli` imports `views`,
+        # so one deferred import pointing back closes the ring.
+        "label": "layering: a new lazy import cycle appears with no reason declared",
+        "file": "beantester/views.py",
+        "old": "def filter_sort_connections(",
+        "new": "def _probe():\n"
+               "    from . import cli\n"
+               "    return cli\n\n\n"
+               "def filter_sort_connections(",
+        "test": "test_every_lazy_import_cycle_is_one_this_file_knows_about",
+    },
+    {
+        # The loop the four DIRECTION checks in that file cannot see. `utils` is
+        # the bottom layer and `core` imports it, so one line pointing back is a
+        # genuine cycle and reaches nothing else: no other test in the repository
+        # asserts anything about what utils.py imports.
+        "label": "layering: an import cycle appears at module load",
+        "file": "beantester/utils.py",
+        "old": "import math\n",
+        "new": "import math\n\nfrom . import core\n",
+        "test": "test_the_package_has_no_import_cycle_at_module_load",
+    },
+    {
+        # The FOURTH axis, added 2026-09-06. Aimed at the class GROWING rather
+        # than at a loosened constant, because that is the direction this axis
+        # exists for: three carves out of `app.py` moved the file ratchet every
+        # time and left `App` at the same 96 methods, so the object a reader has
+        # to hold in their head was never once measured.
+        "label": "ratchet: a class quietly grows another method",
+        "file": "beantester/gui/app.py",
+        "old": "    def _reveal(self):\n",
+        "new": "    def _ratchet_probe(self):\n"
+               "        return None\n\n"
+               "    def _reveal(self):\n",
+        "test": "test_no_class_has_grown_past_the_ratchet",
+    },
+    {
+        # The same axis from the other side: a ceiling parked above the truth.
+        # Kept separate from the entry above because they fail for different
+        # reasons, and an entry that reddens both proves neither.
+        "label": "ratchet: the class attribute ceiling is raised above the truth",
+        "file": "tests/test_code_shape.py",
+        "old": "CLASS_ATTR_CEILING = 80         # gui/app.py::App",
+        "new": "CLASS_ATTR_CEILING = 88         # gui/app.py::App",
+        "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
+    },
+    {
+        # The rule itself: a definition nothing names must be caught.
+        #
+        # 🔴 RE-AIMED 2026-09-06, after this entry SURVIVED on CI. It used to drop
+        # `tests` from `USAGE_TREES`, on the reasoning that half the package is
+        # only ever named from the suite, so a scan that stops reading tests/
+        # would call a live helper dead. That reasoning stopped being true on
+        # 2026-09-02, when a mention from the test tree stopped counting as LIFE
+        # (backlog B-16): the twelve definitions that would go dead are now all in
+        # KNOWN_UNUSED already, so removing the tree changes the `unexpected` list
+        # from empty to empty.
+        #
+        # MEASURED while re-aiming, and it is worth writing down because it is
+        # larger than this one entry: dropping ANY of the five trees - `tests`,
+        # `tools`, `lang` or `scenarios` - leaves the guard green. `USAGE_TREES`
+        # is a knob no mutation can reach any more, and its real job (an allow
+        # list, so that a tree existing only on the maintainer's machine cannot
+        # make a name look alive locally and dead on CI) is a property about
+        # ABSENT directories, which nothing present can demonstrate. Aiming at the
+        # rule is honest; aiming at a knob that no longer moves the answer is the
+        # SKIP-shaped non-result this registry exists to avoid.
+        #
+        # Verified by hand before being written down: an unreferenced helper added
+        # to `summary.py` reddens this test by name.
+        "label": "dead code: a definition nothing names is left in the package",
+        "file": "beantester/summary.py",
+        "old": "def settings_summary(",
+        "new": "def _orphan_helper(value):\n"
+               "    return value\n\n\n"
+               "def settings_summary(",
         "test": "test_no_definition_in_the_package_is_unreferenced",
     },
     {
@@ -1789,8 +1878,8 @@ MUTATIONS = [
         # vanishes cannot fail, which is why the list is recorded twice.
         "label": "types: a module loses its strict typing quietly",
         "file": "pyproject.toml",
-        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope"]',
-        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope"]',
+        "old": 'module = ["beantester.utils", "beantester.gui.rates", "beantester.gui.scope",',
+        "new": 'module = ["beantester.gui.rates", "beantester.gui.scope",',
         "test": "test_the_strictly_typed_modules_only_ever_grow",
     },
     {
@@ -2088,9 +2177,9 @@ MUTATIONS = [
         "label": "reordering: a refused send still moves the mark",
         "file": "beantester/engine.py",
         "old": '                self._bump("drop_send")\n'
-               '                self._charge_flow(key, "dropped")\n',
+               '                self._conns_log.charge(key, "dropped")\n',
         "new": '                self._bump("drop_send")\n'
-               '                self._charge_flow(key, "dropped")\n'
+               '                self._conns_log.charge(key, "dropped")\n'
                "                self._note_order(arrived,\n"
                '                                 bool(getattr(packet, "is_outbound", True)))\n',
         "test": "test_a_packet_the_driver_refused_does_not_make_the_next_one_look_overtaken",
