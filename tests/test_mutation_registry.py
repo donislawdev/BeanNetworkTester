@@ -2088,9 +2088,9 @@ MUTATIONS = [
         "label": "reordering: a refused send still moves the mark",
         "file": "beantester/engine.py",
         "old": '                self._bump("drop_send")\n'
-               '                self._charge_flow(key, "dropped")\n',
+               '                self._conns_log.charge(key, "dropped")\n',
         "new": '                self._bump("drop_send")\n'
-               '                self._charge_flow(key, "dropped")\n'
+               '                self._conns_log.charge(key, "dropped")\n'
                "                self._note_order(arrived,\n"
                '                                 bool(getattr(packet, "is_outbound", True)))\n',
         "test": "test_a_packet_the_driver_refused_does_not_make_the_next_one_look_overtaken",

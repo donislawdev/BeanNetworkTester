@@ -127,6 +127,10 @@ max-complexity = 27
 # nothing about them is cryptographic. `seed` exists to make them repeatable.
 "beantester/engine.py" = ["S311"]
 "beantester/synthetic.py" = ["S311"]
+# The eviction sampler, moved here with the connection log. Its RNG is seeded at
+# 0 on purpose and picks which STALE ROWS to drop - see ConnectionLog.__init__ for
+# why it may not be the engine's seeded RNG.
+"beantester/connlog.py" = ["S311"]
 # Both continue past a widget or an adapter that answered nothing, in a loop whose
 # point is to survive exactly that.
 "beantester/gui/widgets/sortable_tree.py" = ["S112"]

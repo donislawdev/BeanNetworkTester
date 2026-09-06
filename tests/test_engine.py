@@ -11,6 +11,7 @@ import time
 import pytest
 
 from beantester import BeanEngine
+from beantester.connlog import ConnectionLog
 from beantester.core import BeanCore
 from beantester.damage import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
                                impairment_loss_pct)
@@ -329,22 +330,22 @@ def test_scoped_is_a_sticky_session_record():
 
     key = (5000, "1.1.1.1", 443)
     # first packet arrives in scope (targeting matched, an impairment applied)
-    eng._log_conn(key, "1.1.1.1", 443, 5000, True, 100, 1.0, "TCP",
-                  dropped=True, scoped=True)
+    eng._conns_log.log(key, "1.1.1.1", 443, 5000, True, 100, 1.0, "TCP",
+                       dropped=True, scoped=True)
     check("in scope on the first packet", row(5000)["scoped"] is True,
           f"(scoped={row(5000)['scoped']})")
 
     # later packets on the SAME flow arrive OUT of scope (target narrowed away):
     # the record must not flip back to "not impaired"
     for t in (2.0, 3.0):
-        eng._log_conn(key, "1.1.1.1", 443, 5000, True, 100, t, "TCP",
-                      dropped=False, scoped=False)
+        eng._conns_log.log(key, "1.1.1.1", 443, 5000, True, 100, t, "TCP",
+                           dropped=False, scoped=False)
     check("still recorded as impaired after leaving scope", row(5000)["scoped"] is True,
           f"(scoped={row(5000)['scoped']})")
 
     # a flow that is NEVER in scope stays out - stickiness only ever adds "yes"
-    eng._log_conn((5001, "2.2.2.2", 80), "2.2.2.2", 80, 5001, True, 100, 4.0, "TCP",
-                  dropped=False, scoped=False)
+    eng._conns_log.log((5001, "2.2.2.2", 80), "2.2.2.2", 80, 5001, True, 100,
+                       4.0, "TCP", dropped=False, scoped=False)
     check("a never-scoped flow is not marked impaired", row(5001)["scoped"] is False,
           f"(scoped={row(5001)['scoped']})")
 
@@ -725,30 +726,31 @@ def test_evicting_the_connection_log_can_never_empty_it():
     """
     def rows(engine, stamps):
         for i, last in enumerate(stamps):
-            engine._conns[i] = dict(remote_ip="1.1.1.1", remote_port=1, local_port=i,
-                                    proto="TCP", packets=1, bytes=1, bytes_in=0,
-                                    bytes_out=0, sent=0, sent_in=0, sent_out=0,
-                                    dropped=0, first=last, last=last, dir="out",
-                                    scoped=False, proc="", pid=None)
+            engine._conns_log.rows[i] = dict(
+                remote_ip="1.1.1.1", remote_port=1, local_port=i,
+                proto="TCP", packets=1, bytes=1, bytes_in=0,
+                bytes_out=0, sent=0, sent_in=0, sent_out=0,
+                dropped=0, first=last, last=last, dir="out",
+                scoped=False, proc="", pid=None)
 
-    keep = int(1000 * BeanEngine.EVICT_KEEP)
+    keep = int(1000 * ConnectionLog.EVICT_KEEP)
 
     tied = BeanEngine()
-    tied.MAX_CONNS = 1000
+    tied._conns_log.MAX_CONNS = 1000
     rows(tied, [12345.0] * 1200)                      # every row on ONE stamp
-    tied._trim_conns()
+    tied._conns_log.trim()
     check("a tie storm trims to the floor instead of wiping the log",
-          len(tied._conns) == keep, f"({len(tied._conns)} left, expected {keep})")
+          len(tied._conns_log.rows) == keep, f"({len(tied._conns_log.rows)} left, expected {keep})")
 
     spread = BeanEngine()
-    spread.MAX_CONNS = 1000
+    spread._conns_log.MAX_CONNS = 1000
     rows(spread, [12345.0 + i * 1e-6 for i in range(1200)])
-    spread._trim_conns()
+    spread._conns_log.trim()
     check("ordinary rows still trim to about the keep fraction",
-          keep <= len(spread._conns) <= keep + 50,
-          f"({len(spread._conns)} left, expected ~{keep})")
+          keep <= len(spread._conns_log.rows) <= keep + 50,
+          f"({len(spread._conns_log.rows)} left, expected ~{keep})")
     check("...and the SURVIVORS are the newest ones",
-          min(c["last"] for c in spread._conns.values()) > 12345.0,
+          min(c["last"] for c in spread._conns_log.rows.values()) > 12345.0,
           "(an old row survived while a newer one was evicted)")
 
 
@@ -1156,7 +1158,7 @@ def test_an_undisturbed_row_has_delivered_equal_to_captured():
 
 
 def test_only_the_injector_writes_the_delivered_counters():
-    """`_log_delivered` runs without the connection-log lock, and that is only safe
+    """`credit_delivered` runs without the connection-log lock, and that is only safe
     while `sent`/`sent_in`/`sent_out` have exactly ONE writer - the inject thread.
 
     Nothing enforces that but this scan. A future edit that credits delivered bytes
@@ -1164,15 +1166,27 @@ def test_only_the_injector_writes_the_delivered_counters():
     updates against itself, silently and only under load. Source-level, like the
     hot-path purity check in test_code_hygiene.py, because there is no runtime
     symptom to assert on until it is already wrong.
+
+    🔴 Reads BOTH files, and the second half is why: this scan named
+    ``engine.py`` alone until the rows moved to ``connlog.py`` on 2026-09-06, and
+    a scanner that knows one spelling reports ZERO writers as happily as it
+    reports one. The count over both files is the assertion; the per-file check
+    below is what makes an empty scan impossible to pass.
     """
-    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "beantester", "engine.py"), encoding="utf-8").read()
-    writes = re.findall(r'^\s*c\[\"(sent(?:_in|_out)?)\"\]\s*\+?=', src, re.M)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sources = {name: open(os.path.join(root, "beantester", name),
+                          encoding="utf-8").read()
+               for name in ("engine.py", "connlog.py")}
+    writes = [m for src in sources.values()
+              for m in re.findall(r'^\s*c\[\"(sent(?:_in|_out)?)\"\]\s*\+?=',
+                                  src, re.M)]
     check("delivered counters are incremented in exactly one place",
           len(writes) == 3, f"({writes})")
-    body = src.split("def _log_delivered")[1].split("\n    def ")[0]
-    check("and that place is _log_delivered",
+    body = sources["connlog.py"].split("def credit_delivered")[1].split("\n    def ")[0]
+    check("and that place is credit_delivered",
           body.count('c["sent') == 3, f"({body.count(chr(99) + chr(91))})")
+    check("engine.py no longer writes them at all (the rows moved out)",
+          'c["sent' not in sources["engine.py"])
 
 
 class ParamDivert(FakeDivert):
@@ -1378,7 +1392,7 @@ def test_connections_snapshot_limit():
     sh = BeanEngine()
     for i in range(10):
         key = (5000 + i, "1.1.1.1", 80)
-        sh._log_conn(key, "1.1.1.1", 80, 5000 + i, True, 100, now=float(i), proto="TCP")
+        sh._conns_log.log(key, "1.1.1.1", 80, 5000 + i, True, 100, now=float(i), proto="TCP")
     top = sh.connections_snapshot(limit=5)
     check("connections: snapshot limit respected", len(top) == 5, f"(len={len(top)})")
     check("connections: most recent first",
@@ -1514,26 +1528,26 @@ def test_capture_path_never_evicts_and_the_watchdog_does():
     from beantester.engine import BeanEngine
 
     eng = BeanEngine()
-    eng.MAX_CONNS = 500
+    eng._conns_log.MAX_CONNS = 500
 
     # fill well past the cap straight through the capture-path helper
     now = time.monotonic()
     for i in range(900):
-        eng._log_conn((i, "1.2.3.4", 80), "1.2.3.4", 80, 1000 + i,
-                      True, 100, now + i * 0.001)
+        eng._conns_log.log((i, "1.2.3.4", 80), "1.2.3.4", 80, 1000 + i,
+                           True, 100, now + i * 0.001)
 
     check("the capture path does not evict (that is the watchdog's job)",
-          len(eng._conns) == 900, f"({len(eng._conns)})")
+          len(eng._conns_log.rows) == 900, f"({len(eng._conns_log.rows)})")
 
-    eng._trim_conns()
-    kept = len(eng._conns)
+    eng._conns_log.trim()
+    kept = len(eng._conns_log.rows)
     check("the watchdog trims back to roughly EVICT_KEEP of the cap",
           400 <= kept <= 520, f"(kept {kept})")
     check("the flows that survive are the RECENT ones",
-          all(c["last"] >= now + 0.3 for c in eng._conns.values()))
+          all(c["last"] >= now + 0.3 for c in eng._conns_log.rows.values()))
 
-    eng._trim_conns()
-    check("trimming under the cap is a no-op", len(eng._conns) == kept)
+    eng._conns_log.trim()
+    check("trimming under the cap is a no-op", len(eng._conns_log.rows) == kept)
 
 
 def test_snapshot_does_not_sort_the_whole_table_for_the_tables():
@@ -1549,8 +1563,8 @@ def test_snapshot_does_not_sort_the_whole_table_for_the_tables():
     eng = BeanEngine()
     now = time.monotonic()
     for i in range(50):
-        eng._log_conn((i, "1.2.3.4", 80), "1.2.3.4", 80, 1000 + i,
-                      True, 100, now + i)
+        eng._conns_log.log((i, "1.2.3.4", 80), "1.2.3.4", 80, 1000 + i,
+                           True, 100, now + i)
 
     everything = eng.connections_snapshot(limit=None)
     check("limit=None returns every row", len(everything) == 50)
@@ -1568,7 +1582,7 @@ def test_eviction_sampling_never_touches_the_seeded_rng():
     from beantester.engine import BeanEngine
 
     eng = BeanEngine()
-    check("eviction has its own RNG", eng._rng_evict is not eng._rng)
+    check("eviction has its own RNG", eng._conns_log._rng_evict is not eng._rng)
 
 
 def test_a_full_queue_says_so_instead_of_quietly_eating_packets():
