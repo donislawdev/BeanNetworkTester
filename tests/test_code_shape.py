@@ -70,6 +70,19 @@ from fakes import ROOT, check
 # so the moment `_build_ui` loses a single line the band drops under 86 and BOTH
 # of them join the crowd, taking the count from 2 to 4. Carving `_build_ui`
 # therefore has to happen in the same change as carving one of those two.
+#
+# 🔴 MEASURED 2026-09-06, before anyone spends a day on the wrong one of them: the
+# headroom is `123 - max(decide, __init__) / 0.7`, so it is set by the LARGER of
+# the pair and cutting only one buys nothing. Taking `core.decide` from 86 to 50
+# moves the headroom from 0.1 lines to 0.1 lines, because `App.__init__` still
+# stands at 86 - which means a hot-path change to the decision core would be paid
+# for a return of zero.
+#
+# And `App.__init__` cannot be cut on its own terms: 86 logic lines of which only
+# two are a block, the rest being one `self.x = ...` after another. That is not a
+# function that can be split, it is the 80-attribute god object showing through.
+# So this ceiling is unblocked by narrowing `App`'s contract and by nothing else -
+# it is the same work as H2.3, wearing a different hat.
 FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
 # needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
@@ -204,12 +217,24 @@ def _nesting_depth(node):
     return walk(node, 0)
 
 
-def _package_files():
+def _tree_files(tree):
+    """Every ``.py`` under one top-level tree, ``__pycache__`` excluded.
+
+    One walk for both trees rather than two copies of it: the second copy arrived
+    with the suite axes on 2026-09-06 and immediately made the registry entry that
+    empties this list ambiguous - its anchor line existed twice, so the mutation
+    reported "occurs 2 times, not 1" instead of running. A shared helper keeps that
+    anchor unique, and the mutation now proves BOTH walks read something.
+    """
     out = []
-    for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, "beantester")):
+    for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, tree)):
         dirnames[:] = [d for d in dirnames if d != "__pycache__"]
         out += [os.path.join(dirpath, n) for n in filenames if n.endswith(".py")]
     return out
+
+
+def _package_files():
+    return _tree_files("beantester")
 
 
 def _sizes():
@@ -872,3 +897,112 @@ def test_the_class_numbers_are_the_measurement_not_a_number_above_them():
           in_attr_band == CLASSES_NEAR_ATTR_CEILING,
           f"(measured {in_attr_band}, frozen at {CLASSES_NEAR_ATTR_CEILING} "
           f"- lower it)")
+
+
+# --------------------------------------------------------------------------- #
+# THE SUITE ITSELF. Everything above measures `beantester/` and nothing has ever
+# measured `tests/`, which is 23 359 logic lines against the package's 5 290 -
+# **the thing doing the guarding is 4.4x the size of the thing it guards**, and
+# only the complexity axis (which runs ruff over the whole tree) has ever looked
+# at it. Added 2026-09-06.
+#
+# 🔴 THERE IS DELIBERATELY NO FILE CEILING HERE, and that is the whole design
+# decision rather than an omission. A ratchet pins the ceiling to today's maximum,
+# so a file ceiling over `tests/` would be pinned to `test_mutation_registry.py` at
+# 1887 - and that file is 237 registry entries at about eight lines each, i.e.
+# almost entirely DATA. Every new mutation would redden the suite. That is a
+# threshold that punishes adding a proven guard, which is the exact opposite of
+# what this repository is trying to make cheap. A test file growing means more
+# tests; that is the good direction and nothing should tax it.
+#
+# What DOES transfer is the per-function shape. One test at 94 logic lines, or
+# nested seven deep, is not "more tests" - it is one test nobody can follow, and
+# when it fails it will not say what broke. Those two are worth a ceiling for the
+# same reason they are in the package: nobody reads this line by line.
+TEST_FUNCTION_CEILING = 94      # test_concurrency_chaos.py::test_the_model_worker_survives...
+TESTS_NEAR_FUNCTION_CEILING = 3     # the above, test_the_whole_stack_survives..., and
+                                    # test_the_live_map_pushes_into_targeting...
+# Absolute, like DEPTH_BAND above and for the same reason written there: a
+# percentage of a number this small is noise. Two functions reach 7 - both are
+# property-based sweeps with a matcher loop inside a packet loop - and three more
+# sit at 5.
+TEST_DEPTH_CEILING = 7
+TEST_DEPTH_BAND = 5
+TESTS_NEAR_DEPTH_CEILING = 5
+
+
+def _suite_files():
+    return _tree_files("tests")
+
+
+def _suite_functions():
+    """(logic lines, name) and (depth, name) for every function under tests/."""
+    sizes, depths = [], []
+    for path in _suite_files():
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+        tree, live = _logic_lines(open(path, encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            span = sum(1 for n in live if node.lineno <= n <= (node.end_lineno or 0))
+            sizes.append((span, f"{rel}::{node.name}"))
+            depths.append((_nesting_depth(node), f"{rel}::{node.name}"))
+    sizes.sort(reverse=True)
+    depths.sort(reverse=True)
+    return sizes, depths
+
+
+def test_no_test_function_has_grown_past_the_ratchet():
+    """One test at a hundred lines is one test nobody can follow - see above."""
+    sizes, depths = _suite_functions()
+    check("the suite scan actually read tests/ (an empty scan passes everything)",
+          len(sizes) > 500, f"({len(sizes)} functions)")
+
+    worst = sizes[0]
+    check(f"no test function is longer than {TEST_FUNCTION_CEILING} logic lines",
+          worst[0] <= TEST_FUNCTION_CEILING,
+          f"({worst[1]} is {worst[0]} - split the scenario, do not raise the number)")
+    deepest = depths[0]
+    check(f"no test function nests deeper than {TEST_DEPTH_CEILING}",
+          deepest[0] <= TEST_DEPTH_CEILING,
+          f"({deepest[1]} is {deepest[0]} deep)")
+
+
+def test_nothing_else_in_the_suite_is_creeping_up_on_those_ceilings():
+    """The crowd knob, for the reason written above CROWD_BAND."""
+    sizes, depths = _suite_functions()
+    band = TEST_FUNCTION_CEILING * CROWD_BAND
+    crowded = [f"{name} ({n})" for n, name in sizes if n >= band]
+    check(f"at most {TESTS_NEAR_FUNCTION_CEILING} test function(s) within "
+          f"{CROWD_BAND:.0%} of {TEST_FUNCTION_CEILING} ({band:.0f} or more)",
+          len(crowded) <= TESTS_NEAR_FUNCTION_CEILING, f"({crowded})")
+
+    deep = [f"{name} ({n})" for n, name in depths if n >= TEST_DEPTH_BAND]
+    check(f"at most {TESTS_NEAR_DEPTH_CEILING} test function(s) at depth "
+          f"{TEST_DEPTH_BAND} or more",
+          len(deep) <= TESTS_NEAR_DEPTH_CEILING, f"({deep})")
+
+
+def test_the_suite_ceilings_are_the_measurement_not_a_number_above_them():
+    """Pinned, like every other ceiling here - see FILE_CEILING for what drifts.
+
+    Also states the omission out loud: there is no file ceiling over `tests/`, and
+    a future session must not read that as an oversight to correct. The reason is
+    written above TEST_FUNCTION_CEILING.
+    """
+    sizes, depths = _suite_functions()
+    check("the test-function ceiling IS the longest test, not a number above it",
+          sizes[0][0] == TEST_FUNCTION_CEILING,
+          f"({sizes[0][1]} is {sizes[0][0]}, ceiling is {TEST_FUNCTION_CEILING})")
+    check("the test-depth ceiling IS the deepest test",
+          depths[0][0] == TEST_DEPTH_CEILING,
+          f"({depths[0][1]} is {depths[0][0]}, ceiling is {TEST_DEPTH_CEILING})")
+
+    in_size_band = sum(1 for n, _ in sizes if n >= TEST_FUNCTION_CEILING * CROWD_BAND)
+    in_depth_band = sum(1 for n, _ in depths if n >= TEST_DEPTH_BAND)
+    check("the test-size crowd count is today's measurement",
+          in_size_band == TESTS_NEAR_FUNCTION_CEILING,
+          f"(measured {in_size_band}, frozen at {TESTS_NEAR_FUNCTION_CEILING})")
+    check("the test-depth crowd count is today's measurement",
+          in_depth_band == TESTS_NEAR_DEPTH_CEILING,
+          f"(measured {in_depth_band}, frozen at {TESTS_NEAR_DEPTH_CEILING})")
