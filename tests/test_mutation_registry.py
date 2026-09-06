@@ -655,6 +655,32 @@ MUTATIONS = [
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
     {
+        # The other half, and the one no other check in the repository can reach:
+        # a loop built entirely out of lazy imports. It runs, it passes every
+        # direction check, and it becomes an ImportError the day somebody hoists
+        # the import to the top of the file for tidiness. `cli` imports `views`,
+        # so one deferred import pointing back closes the ring.
+        "label": "layering: a new lazy import cycle appears with no reason declared",
+        "file": "beantester/views.py",
+        "old": "def filter_sort_connections(",
+        "new": "def _probe():\n"
+               "    from . import cli\n"
+               "    return cli\n\n\n"
+               "def filter_sort_connections(",
+        "test": "test_every_lazy_import_cycle_is_one_this_file_knows_about",
+    },
+    {
+        # The loop the four DIRECTION checks in that file cannot see. `utils` is
+        # the bottom layer and `core` imports it, so one line pointing back is a
+        # genuine cycle and reaches nothing else: no other test in the repository
+        # asserts anything about what utils.py imports.
+        "label": "layering: an import cycle appears at module load",
+        "file": "beantester/utils.py",
+        "old": "import math\n",
+        "new": "import math\n\nfrom . import core\n",
+        "test": "test_the_package_has_no_import_cycle_at_module_load",
+    },
+    {
         # The FOURTH axis, added 2026-09-06. Aimed at the class GROWING rather
         # than at a loosened constant, because that is the direction this axis
         # exists for: three carves out of `app.py` moved the file ratchet every
