@@ -43,6 +43,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   refused. Every full flag still works, so saved reproduction commands and every example in
   this documentation are unaffected - only hand-typed abbreviations need writing out in full.
 
+### Docs
+
+- **The README now points at the website.** One link under the badges, and a second after the
+  quick start for anyone who wants a walkthrough of a single task instead of the full manual.
+  The guides there cover packet loss, latency, speed limits, aiming at one app and testing with
+  no internet, each with the numbers worth trying and the command that does it.
+
 ## [0.6.0] - 2026-09-04
 
 ### Added
