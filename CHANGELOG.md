@@ -43,6 +43,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   refused. Every full flag still works, so saved reproduction commands and every example in
   this documentation are unaffected - only hand-typed abbreviations need writing out in full.
 
+### Docs
+
+- **The README now points at the website.** One link under the badges, and a second after the
+  quick start for anyone who wants a walkthrough of a single task instead of the full manual.
+  The guides there cover packet loss, latency, speed limits, aiming at one app and testing with
+  no internet, each with the numbers worth trying and the command that does it.
+
+- **The website's front page now shows the command it was talking about.** It said one command is
+  enough to check that a service survives 10 percent packet loss, and then did not print one,
+  which every other page on the site does. It now shows the command, says that the run stops
+  itself when the time is up, and points at the rehearsal switch that changes no real traffic.
+
 ## [0.6.0] - 2026-09-04
 
 ### Added
