@@ -58,7 +58,10 @@
     <li>Pick a ready profile such as "{{app.presets.3g}}", press START, and use your app.</li>
   </ol>
   <p>There is a text mode in the same file, so the whole thing also runs in a pipeline.
-  One command is enough to check that your service survives 10 percent packet loss.</p>
+  One command is enough to check that your service survives 10 percent packet loss:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>It stops on its own when the time is up, so a step that hangs cannot leave a broken network
+  behind it. Add <code>--simulate</code> to rehearse a command without touching real traffic.</p>
 </section>
 
 <section>

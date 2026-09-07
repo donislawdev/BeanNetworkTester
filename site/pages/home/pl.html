@@ -62,7 +62,10 @@
     <li>Wybierz gotowy profil, na przykład "{{app.presets.3g}}", wciśnij START i korzystaj z aplikacji.</li>
   </ol>
   <p>W tym samym pliku jest tryb tekstowy, więc całość działa też w pipeline. Jedna komenda
-  wystarczy, żeby sprawdzić, czy Twoja usługa przetrwa 10 procent utraty pakietów.</p>
+  wystarczy, żeby sprawdzić, czy Twoja usługa przetrwa 10 procent utraty pakietów:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Zatrzyma się sam po zadanym czasie, więc zawieszony krok nie zostawi po sobie zepsutej sieci.
+  Dopisz <code>--simulate</code>, żeby przećwiczyć komendę bez ruszania prawdziwego ruchu.</p>
 </section>
 
 <section>
