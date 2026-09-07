@@ -8,8 +8,6 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
 
-📖 **Guides and examples: [beannetworktester.donislawdev.com](https://beannetworktester.donislawdev.com/)**
-
 **Bean Network Tester** is a tool for testers and developers: check how your application behaves
 on a poor connection. Like Clumsy or NetLimiter, it lets you deliberately degrade the network -
 add ping, drop packets, cap the speed, tear connections down, and more. It works by intercepting
