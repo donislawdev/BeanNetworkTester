@@ -68,13 +68,31 @@ jobs:
           mkdir -p published && cd published
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY"
           ls -l
-          # Four assets ship: the archive, the checksums, the SBOM and the bundle.
-          # A missing one means a phase did not finish, which is precisely the
-          # half-failure nobody would notice by looking at the page.
+          # Four assets always ship: the archive, the checksums, the SBOM and the
+          # bundle. A missing one means a phase did not finish, which is precisely
+          # the half-failure nobody would notice by looking at the page.
           for pattern in '*.zip' 'SHA256SUMS.txt' '*.spdx.json' '*.sigstore.json'; do
             # shellcheck disable=SC2086
             ls $pattern >/dev/null 2>&1 || { echo "MISSING asset: $pattern"; exit 1; }
           done
+          # A fifth ships on a full release only. 🔴 The rule is `-rc` in the tag and
+          # it is the SAME rule as `is_release_candidate` in tools/sign_release.py -
+          # `test_the_candidate_rule_is_the_same_one_in_both_places` keeps the pair
+          # honest, because two different answers here would mean either a release
+          # published without its installer or every candidate failing this job.
+          # Checked in BOTH directions on purpose: a candidate that somehow carried
+          # an MSI would be the bug that strands whoever installed it, since Windows
+          # Installer cannot tell `-rc.1` from the release.
+          case "$TAG" in
+            *-rc*)
+              ! ls ./*.msi >/dev/null 2>&1 || {
+                echo "a release candidate must NOT carry an .msi: $(ls ./*.msi)"; exit 1; }
+              echo "$TAG is a release candidate: no installer expected, and none present"
+              ;;
+            *)
+              ls ./*.msi >/dev/null 2>&1 || { echo "MISSING asset: *.msi"; exit 1; }
+              ;;
+          esac
 
       - name: The checksum users are told to compare
         shell: bash
@@ -143,6 +161,27 @@ jobs:
           "pinned  : $pinned"
           "actual  : $actual"
           if ($actual -ne $pinned) { throw "the shipped file was signed by a DIFFERENT certificate" }
+
+          # The installer is a second signed artefact, and an unsigned one is worse
+          # than no installer: it is the file corporate deployment pushes to machines
+          # nobody will ever log into. It carries the executable checked above, so a
+          # valid signature here is what says the wrapper was not rebuilt around it.
+          $msi = Get-ChildItem -Filter *.msi -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+          if (-not $msi) {
+            "no .msi on this release - a release candidate ships none, on purpose"
+          } else {
+            $msiSig = Get-AuthenticodeSignature -LiteralPath $msi.FullName
+            "installer: $($msi.Name)"
+            "status   : $($msiSig.Status)"
+            if ($msiSig.Status -ne 'Valid') { throw "installer signature status is $($msiSig.Status)" }
+            if (-not $msiSig.TimeStamperCertificate) { throw "the installer signature carries no timestamp" }
+            $msiBytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                          $msiSig.SignerCertificate.RawData)
+            $msiActual = ($msiBytes | ForEach-Object { $_.ToString('x2') }) -join ''
+            "actual   : $msiActual"
+            if ($msiActual -ne $pinned) { throw "the installer was signed by a DIFFERENT certificate" }
+          }
 
       - name: A full release must be the one the website offers
         shell: bash

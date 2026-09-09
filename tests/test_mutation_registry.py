@@ -1737,10 +1737,26 @@ MUTATIONS = [
         # "Signed" going back to being a claim instead of a measurement. A second
         # code-signing certificate on the same machine would then sign a release
         # under this project's name and nothing would say so.
+        # Anchored on the line ABOVE as well, and that is not decoration: the
+        # installer is signed by the same ritual and carries the same check one
+        # indent deeper, so the bare `if actual != ...` line became a SUBSTRING of
+        # its own copy and the count went to two. `certificate_of(exe)` is the half
+        # that stays unique.
         "label": "release: the signing script stops checking WHICH certificate signed",
         "file": "tools/sign_release.py",
-        "old": "        if actual != CODESIGN_SHA256:",
-        "new": "        if actual == CODESIGN_SHA256:",
+        "old": "        actual = certificate_of(exe)\n        if actual != CODESIGN_SHA256:",
+        "new": "        actual = certificate_of(exe)\n        if actual == CODESIGN_SHA256:",
+        "test": "test_the_signing_certificate_is_pinned_by_its_bytes",
+    },
+    {
+        # The installer is the SECOND thing this ritual signs, and it needed its own
+        # entry the moment it existed: the guard above was written when there was one
+        # comparison in the file, and a bare substring search cannot tell which copy
+        # it found. It reported SURVIVED on the day the installer landed.
+        "label": "release: the signing script stops checking who signed the INSTALLER",
+        "file": "tools/sign_release.py",
+        "old": "            actual = certificate_of(msi)\n            if actual != CODESIGN_SHA256:",
+        "new": "            actual = certificate_of(msi)\n            if actual == CODESIGN_SHA256:",
         "test": "test_the_signing_certificate_is_pinned_by_its_bytes",
     },
     {

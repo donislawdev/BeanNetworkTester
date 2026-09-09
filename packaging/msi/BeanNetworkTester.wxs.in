@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rendered by tools/build_packages.py - do not edit the generated copy.
+
+  This is the MSI corporate deployment wants: one file, silent, per-machine, and
+  visible to Group Policy, SCCM and Intune. The zip stays the primary download and
+  the WinGet and Chocolatey packages keep using it; this is an ADDITIONAL asset,
+  not a replacement for either.
+
+  Why an MSI is even possible here, and it was not always:
+  ADR 2026-08-12 moved profiles, window state and CSV exports out of the install
+  directory into %LOCALAPPDATA%. A per-machine install lands in Program Files,
+  which an ordinary user cannot write to - so without that decision this package
+  would install and then fail for every non-administrator who ran it.
+
+  The payload is passed in rather than named here, because the same source has to
+  build the signed release and a throwaway test build:
+
+      wix build BeanNetworkTester.wxs -arch x64 -d PayloadDir=<dir> -o <out>.msi
+
+  where <dir> is the extracted `BeanNetworkTester` folder from the release archive.
+  `$(...)` is the WiX preprocessor, which the placeholder renderer leaves untouched -
+  it only ever substitutes its own doubled-brace markers.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package
+      Name="{{APP_NAME}}"
+      Manufacturer="{{PUBLISHER}}"
+      Version="{{VERSION}}"
+      UpgradeCode="{{UPGRADE_CODE}}"
+      Scope="perMachine"
+      Compressed="yes"
+      InstallerVersion="500">
+
+    <!--
+      🔴 The UpgradeCode above is the identity of the PRODUCT, not of a build, and
+      it must never change. Every installed machine finds its previous version
+      through it; a new one would leave the old install in place forever, on every
+      machine that already has it, with no way to reach it. It lives in
+      tools/build_packages.py and a test pins the value.
+
+      MajorUpgrade is what makes the next release a replacement for the previous one
+      instead of a second copy beside it. Scheduled afterInstallExecute so the new
+      files are laid down before the old ones are removed: the reverse order deletes
+      shared files and reinstalls nothing, which is the classic way an MSI upgrade
+      eats its own payload.
+    -->
+    <!--
+      🔴 AllowSameVersionUpgrades is here because of something this project has
+      actually done, not a hypothetical. Chocolatey's moderation once held a release
+      over a packaging fault and the SAME version number was rebuilt and shipped
+      again - the runbook documents that as the normal answer, since a version in
+      moderation does not get its number bumped.
+
+      An MSI does not treat that as an upgrade by default: measured here, installing
+      a rebuilt package of the same version left TWO entries in Programs and Features,
+      side by side, because MajorUpgrade ignores an equal version unless told not to.
+    -->
+    <MajorUpgrade
+        Schedule="afterInstallExecute"
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of [ProductName] is already installed. Remove it first if you want to go back." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      🔴 Without this, an upgrade FAILS while a session is running. Measured on
+      Windows Server 2025: the same upgrade returns 0 with nothing running and 1601
+      with a session up, and the log says why -
+      "RESTART MANAGER: Failed to shut down all applications in the service's
+      session. Error: 351" after exactly thirty seconds of waiting.
+
+      Restart Manager asks an application to close and waits. This one is a console
+      process running a timed session: it has no window, no message loop and no
+      Restart Manager registration, so there is nothing to ask, and the wait can
+      only end in a timeout. Closing it politely is therefore not an option this
+      package has, and TerminateProcess is not impatience.
+
+      Killing the process is also what releases the driver, which is the part that
+      matters for the file operations that follow: WinDivert marks its own service
+      for deletion when it installs it, so the service goes away once the last
+      handle to it is closed, and terminating the process closes them.
+
+      This is the same job `chocolateybeforemodify.ps1` does for Chocolatey, for the
+      same reason, and it is scheduled by the extension before InstallValidate -
+      that is, before the step where Restart Manager would otherwise start counting
+      to thirty.
+    -->
+    <util:CloseApplication
+        Id="CloseRunningSession"
+        Target="{{EXE_NAME}}"
+        TerminateProcess="1"
+        RebootPrompt="no" />
+
+    <!--
+      🔴 And this property is what gives the action above a chance to run at all.
+
+      WiX schedules CloseApplication `Before="InstallFiles"`, which is AFTER
+      InstallValidate - and InstallValidate is exactly where Restart Manager spends
+      its thirty seconds and then fails the transaction. Read out of the built
+      package rather than assumed:
+      `<Custom Action="Wix4CloseApplications_X64" Before="InstallFiles" />`.
+      So with Restart Manager left on, the upgrade never reaches the action meant to
+      unblock it. Turning it off removes the wait, and the file this package needs
+      to replace is freed a moment later by the action above.
+    -->
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
+
+    <!--
+      🔴 And this one has to run BEFORE InstallValidate, which is the whole reason it
+      exists separately from the action above.
+
+      Measured, in this order:
+        * Restart Manager on, no action    -> 1601 after a 30 s timeout, nothing installed
+        * Restart Manager off, action only -> 3010, installed but asking for a reboot
+      InstallValidate is what decides a reboot is needed, and it runs BEFORE
+      CloseApplication - so by the time the session is closed, the answer has already
+      been given. Closing the session earlier is the only thing that changes it.
+
+      `Return="ignore"` is not laziness: this is a best-effort cleanup that runs before
+      the operation the user actually asked for, and refusing to upgrade because a kill
+      failed would be worse than the leftover. That is the same rule
+      `chocolateybeforemodify.ps1` states for itself.
+    -->
+    <CustomAction Id="StopRunningSession"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="[System64Folder]taskkill.exe /F /IM {{EXE_NAME}}"
+                  Execute="immediate"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="StopRunningSession" Before="InstallValidate" />
+    </InstallExecuteSequence>
+
+    <!-- Programs and Features reads these. A tool that asks for Administrator
+         rights should say who wrote it and where to complain. -->
+    <Property Id="ARPURLINFOABOUT" Value="{{PROJECT_URL}}" />
+    <Property Id="ARPHELPLINK" Value="{{REPO_URL}}/issues" />
+    <Property Id="ARPURLUPDATEINFO" Value="{{RELEASE_NOTES_URL}}" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <Icon Id="AppIcon" SourceFile="$(PayloadDir)\_internal\bean.ico" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="{{APP_NAME}}" />
+    </StandardDirectory>
+
+    <!--
+      One element harvests the whole tree. The exe needs its sibling _internal
+      directory to run at all, so the shape of this folder is load-bearing and not
+      a packaging detail: `**` keeps it exactly as the release archive built it.
+    -->
+    <ComponentGroup Id="ProductFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(PayloadDir)\**" />
+    </ComponentGroup>
+
+    <!--
+      The command line is half of this tool - it reports every outcome as an exit
+      code so it can run from a pipeline - so the exe belongs on PATH. System="yes"
+      because this is a per-machine install; a user-scoped PATH entry would be
+      invisible to the scheduled task or build agent that actually runs it.
+    -->
+    <ComponentGroup Id="PathEntry" Directory="INSTALLFOLDER">
+      <Component Id="AddToPath" Guid="*">
+        <Environment Id="UpdatePath" Name="PATH" Value="[INSTALLFOLDER]"
+                     Part="last" Action="set" System="yes" Permanent="no" />
+        <RegistryValue Root="HKLM" Key="Software\{{PUBLISHER}}\{{TOOL_ID}}"
+                       Name="Path" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="*">
+        <Shortcut Id="AppShortcut"
+                  Name="{{APP_NAME}}"
+                  Description="{{TAGLINE}}"
+                  Target="[INSTALLFOLDER]{{EXE_NAME}}"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon" />
+        <RegistryValue Root="HKLM" Key="Software\{{PUBLISHER}}\{{TOOL_ID}}"
+                       Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="{{APP_NAME}}" Level="1">
+      <ComponentGroupRef Id="ProductFiles" />
+      <ComponentGroupRef Id="PathEntry" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+  </Package>
+</Wix>

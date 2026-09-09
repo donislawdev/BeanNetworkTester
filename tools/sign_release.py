@@ -26,12 +26,19 @@ What it does, in order, and what it refuses
    same machine - a renewal, a test one, one from another project - is exactly the
    accident this catches;
 5. repacks the archive, writes ``SHA256SUMS.txt`` over what it just made;
-6. uploads both to the DRAFT release and asks the workflow to attest the signed
-   bytes, so the ``.sigstore.json`` a user verifies describes the file they hold;
-7. **waits for that attestation and confirms the draft is complete** - four assets,
-   the published checksums naming the digest that was actually signed, and the
-   release still a draft. Until this existed the script ended at "dispatched, go
-   look", and a draft missing one file looks almost exactly like a finished one.
+6. **builds the MSI from the payload it has just signed, and signs that too.** The
+   order is the point: the installer carries the executable, so building it first
+   would ship an unsigned program inside a signed wrapper - worse than either, since
+   the wrapper makes it look checked. This is also why the release workflow cannot
+   build it: the runner has the payload but never the card. A release candidate gets
+   no MSI at all, on purpose - see ``is_release_candidate``;
+7. uploads everything to the DRAFT release and asks the workflow to attest the signed
+   archive, so the ``.sigstore.json`` a user verifies describes the file they hold;
+8. **waits for that attestation and confirms the draft is complete** - every asset
+   this kind of release ships, the published checksums naming the digest that was
+   actually signed, and the release still a draft. Until this existed the script
+   ended at "dispatched, go look", and a draft missing one file looks almost exactly
+   like a finished one.
 
 Nothing here publishes. The release stays a draft until a person looks at it and
 presses the button - and pressing it runs ``verify-release.yml``, which downloads
@@ -143,6 +150,80 @@ def expiry_notice(not_after, now):
 
 
 EXPECTED_ASSETS = (".zip", "SHA256SUMS.txt", ".spdx.json", ".sigstore.json")
+# The MSI is only expected on a final release - see `is_release_candidate`.
+MSI_ASSET = ".msi"
+
+
+def is_release_candidate(tag):
+    """Does this tag name a release candidate rather than a release?
+
+    🔴 A release candidate gets NO MSI, and that is a decision rather than an
+    omission. Windows Installer has nowhere to put the `-rc.1`: ProductVersion is
+    three numeric fields and everything after them is ignored, so `v0.7.0-rc.1` and
+    `v0.7.0` would be the SAME version to it. A machine that took the candidate
+    would then refuse the release as "already installed", and the person who tested
+    the candidate is exactly the person who must not be stranded.
+
+    Publishing no MSI for a candidate keeps that from being possible at all, which
+    is worth more than a numbering scheme nobody would remember.
+    """
+    return "-rc" in tag
+
+
+def find_wix():
+    """The WiX tool, or a refusal that says how to get it.
+
+    WiX is a .NET global tool, so it lands in ~/.dotnet/tools and is on PATH only if
+    that directory is - which it is not in every shell. Looking there directly means
+    the ritual does not fail three steps later with "wix is not recognised".
+    """
+    candidates = [shutil.which("wix")]
+    home = os.path.expanduser("~")
+    candidates.append(os.path.join(home, ".dotnet", "tools", "wix.exe"))
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    raise SystemExit(
+        "sign_release: the WiX tool is not installed, so the MSI cannot be built.\n"
+        "  dotnet tool install --global wix --version 5.0.2\n"
+        "  wix extension add -g WixToolset.Util.wixext/5.0.2\n"
+        "Nothing has been uploaded.")
+
+
+def build_msi(work, unpacked, tag, sums_path):
+    """Build the MSI from the payload that has ALREADY been signed.
+
+    🔴 The order is the point. The MSI carries the executable inside it, so it has to
+    be built after the exe is signed and signed itself afterwards - build it first
+    and it ships an unsigned program inside a signed wrapper, which is worse than
+    either, because the wrapper makes it look checked.
+
+    This is also why the MSI cannot be built by the release workflow: the runner has
+    the payload but never the card, so anything it built would have to be rebuilt
+    here anyway.
+    """
+    # Rendered by running the renderer, not by importing it. It is a command-line
+    # tool with a documented interface, the runbook calls it exactly this way, and
+    # importing it would give the same file two module names - which is an error
+    # mypy reports at whoever changes this file next, for no benefit here.
+    version = tag[1:] if tag.startswith("v") else tag
+    run([sys.executable, os.path.join(ROOT, "tools", "build_packages.py"),
+         "--sums", sums_path, "--version", version])
+    wxs = os.path.join(ROOT, "build", "packaging", "msi", "BeanNetworkTester.wxs")
+    if not os.path.exists(wxs):
+        raise SystemExit("sign_release: %s was not rendered - nothing uploaded" % wxs)
+
+    payload = os.path.join(unpacked, "BeanNetworkTester")
+    if not os.path.isdir(payload):
+        raise SystemExit(
+            "sign_release: the archive has no BeanNetworkTester directory, so the "
+            "MSI would harvest the wrong tree. Nothing has been uploaded.")
+
+    out = os.path.join(work, "BeanNetworkTester-%s-windows-x64.msi" % tag)
+    run([find_wix(), "build", wxs, "-arch", "x64",
+         "-d", "PayloadDir=%s" % payload,
+         "-ext", "WixToolset.Util.wixext", "-o", out])
+    return out
 
 
 def _gh_json(*args):
@@ -156,7 +237,7 @@ def _gh_json(*args):
         return None
 
 
-def confirm_draft(tag, digest, wait_seconds):
+def confirm_draft(tag, digest, wait_seconds, expect_msi=False):
     """Is the draft actually complete and describing the bytes we just signed?
 
     🔴 This step exists because the script used to end at "dispatched, go look". The
@@ -173,12 +254,15 @@ def confirm_draft(tag, digest, wait_seconds):
     Returns (ok, lines_to_print) and never raises, so the caller decides.
     """
     deadline = time.monotonic() + max(0, wait_seconds)
+    # A final release ships the installer as well, and a candidate does not - so what
+    # "complete" means is decided by the caller, not by counting to a fixed number.
+    wanted = EXPECTED_ASSETS + ((MSI_ASSET,) if expect_msi else ())
     lines, assets = [], []
     while True:
         data = _gh_json("release", "view", tag, "--repo", REPO,
                         "--json", "assets,isDraft")
         assets = [a.get("name", "") for a in (data or {}).get("assets", [])]
-        missing = [kind for kind in EXPECTED_ASSETS
+        missing = [kind for kind in wanted
                    if not any(name.endswith(kind) for name in assets)]
         if not missing:
             break
@@ -217,7 +301,7 @@ def confirm_draft(tag, digest, wait_seconds):
             {}).get("isDraft") is False:
         lines.append("  🔴 this release is NOT a draft any more - it is already public")
         return False, lines
-    lines.append("  PASS: four assets, digests agree, still a draft")
+    lines.append("  PASS: %d assets, digests agree, still a draft" % len(wanted))
     return True, lines
 
 
@@ -342,33 +426,68 @@ def main(argv=None):
                 % (CODESIGN_SHA256, actual))
         print("  signed by the pinned certificate, timestamped")
 
-    print("\n[5/7] repacking and checksumming")
+    print("\n[5/8] repacking and checksumming")
+    # Repacking happens on a dry run too. It writes only into the scratch directory,
+    # and it is what lets the installer below actually be built - a dry run that
+    # skipped it could not tell you the package source is broken, which is most of
+    # what a dry run is for.
     signed = os.path.join(work, archives[0])
-    if not args.dry_run:
-        os.remove(archive)
-        with zipfile.ZipFile(signed, "w", zipfile.ZIP_DEFLATED) as zf:
-            for base, _dirs, names in os.walk(unpacked):
-                for name in names:
-                    full = os.path.join(base, name)
-                    zf.write(full, os.path.relpath(full, unpacked))
-        sums = os.path.join(work, "SHA256SUMS.txt")
-        with open(sums, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("%s *%s\n" % (sha256_of(signed), archives[0]))
-        print("  %s" % sha256_of(signed))
+    os.remove(archive)
+    with zipfile.ZipFile(signed, "w", zipfile.ZIP_DEFLATED) as zf:
+        for base, _dirs, names in os.walk(unpacked):
+            for name in names:
+                full = os.path.join(base, name)
+                zf.write(full, os.path.relpath(full, unpacked))
+    sums = os.path.join(work, "SHA256SUMS.txt")
+    sum_lines = ["%s *%s\n" % (sha256_of(signed), archives[0])]
+    with open(sums, "w", encoding="utf-8", newline="\n") as handle:
+        handle.writelines(sum_lines)
+    print("  %s" % sha256_of(signed))
 
-    print("\n[6/7] handing it back to the workflow")
+    print("\n[6/8] building the installer")
+    msi = None
+    if is_release_candidate(args.tag):
+        print("  %s is a release candidate - no MSI, deliberately: Windows Installer "
+              "has nowhere to put the suffix, so a candidate and its release would "
+              "be the same version to it" % args.tag)
+    else:
+        msi = build_msi(work, unpacked, args.tag, sums)
+        command = [signtool, "sign", "/sha1", thumbprint, "/fd", "sha256",
+                   "/tr", TIMESTAMP_URL, "/td", "sha256", "/v", msi]
+        if args.dry_run:
+            print("  DRY RUN, would run: %s" % " ".join(command))
+        else:
+            run(command)
+            run([signtool, "verify", "/pa", "/v", msi])
+            actual = certificate_of(msi)
+            if actual != CODESIGN_SHA256:
+                raise SystemExit(
+                    "sign_release: the installer was signed by a DIFFERENT "
+                    "certificate\n  expected %s\n  got      %s\n"
+                    "Nothing has been uploaded." % (CODESIGN_SHA256, actual))
+            print("  signed by the pinned certificate, timestamped")
+        # The checksum file carries the installer too, so the published release can be
+        # checked in one `sha256sum -c` - which is exactly what verify-release.yml runs.
+        sum_lines.append("%s *%s\n" % (sha256_of(msi), os.path.basename(msi)))
+        with open(sums, "w", encoding="utf-8", newline="\n") as handle:
+            handle.writelines(sum_lines)
+        print("  %s" % os.path.basename(msi))
+
+    print("\n[7/8] handing it back to the workflow")
     if args.dry_run:
-        print("  DRY RUN, would upload the archive and SHA256SUMS.txt to the draft")
+        print("  DRY RUN, would upload the archive, the installer and SHA256SUMS.txt")
         print("  DRY RUN, would dispatch %s with the digest" % ATTEST_WORKFLOW)
         print("\ndry run finished - nothing was signed, uploaded or published")
         return 0
-    run(["gh", "release", "upload", args.tag, signed, sums,
-         "--repo", REPO, "--clobber"])
+    uploads = [signed, sums] + ([msi] if msi else [])
+    run(["gh", "release", "upload", args.tag] + uploads +
+        ["--repo", REPO, "--clobber"])
     run(["gh", "workflow", "run", ATTEST_WORKFLOW, "--repo", REPO,
          "-f", "tag=%s" % args.tag, "-f", "digest=%s" % sha256_of(signed)])
 
-    print("\n[7/7] confirming the draft is complete")
-    ok, lines = confirm_draft(args.tag, sha256_of(signed), args.wait)
+    print("\n[8/8] confirming the draft is complete")
+    ok, lines = confirm_draft(args.tag, sha256_of(signed), args.wait,
+                              expect_msi=msi is not None)
     for line in lines:
         print(line)
     if not ok:

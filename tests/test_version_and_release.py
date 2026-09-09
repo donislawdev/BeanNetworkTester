@@ -621,14 +621,106 @@ def test_the_signing_certificate_is_pinned_by_its_bytes():
     script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
     check("the signing script reads the pin rather than carrying its own copy",
           "from beantester.legal import CODESIGN_SHA256" in script)
-    check("it compares what actually signed the file against the pin",
-          "actual != CODESIGN_SHA256" in script)
+    # 🔴 Anchored per artefact, and that is the whole point. This used to look for a
+    # bare `actual != CODESIGN_SHA256` anywhere in the file, which was a real guard
+    # while the ritual signed one thing. The moment the installer added a SECOND copy
+    # of that comparison, flipping the archive's check to `==` left the installer's
+    # copy behind for the substring to find - and the mutation came back SURVIVED.
+    # Two artefacts are signed, so two checks are named, and either one going soft
+    # has to redden on its own.
+    for what, variable in (("archive", "exe"), ("installer", "msi")):
+        pattern = (r"actual = certificate_of\(%s\)\s*\n\s*if actual != CODESIGN_SHA256:"
+                   % variable)
+        check(f"it compares what actually signed the {what} against the pin",
+              re.search(pattern, script) is not None,
+              f"(certificate_of({variable}) is not followed by the comparison)")
     check("and refuses without uploading anything",
           "Nothing has been uploaded." in script,
           "(a mismatch caught after the upload is not caught)")
     check("it timestamps the signature",
           "/tr" in script and "time.certum.pl" in script,
           "(without a timestamp the signature dies when the certificate expires)")
+
+
+def test_a_release_candidate_gets_no_installer():
+    """Windows Installer has nowhere to put the `-rc.1`, and that is the whole reason.
+
+    ProductVersion is three numeric fields; anything after them is ignored for upgrade
+    detection, so `v0.7.0-rc.1` and `v0.7.0` are the SAME version to it. A machine that
+    installed the candidate would refuse the release as already installed - and the
+    person who tested the candidate is exactly the person who must not be stranded.
+    Shipping no MSI for a candidate makes that impossible rather than unlikely.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "sign_release", os.path.join(ROOT, "tools", "sign_release.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for tag in ("v0.7.0-rc.1", "v1.0.0-rc.12", "v0.6.0-rc.2"):
+        check(f"{tag} is a release candidate", module.is_release_candidate(tag))
+    for tag in ("v0.7.0", "v1.0.0", "v0.6.0"):
+        check(f"{tag} is a release", not module.is_release_candidate(tag))
+
+
+def test_the_candidate_rule_is_the_same_one_in_both_places():
+    """Two places decide "is this a candidate", and they must decide it the same way.
+
+    Phase B decides whether to BUILD an installer; phase D decides whether to demand
+    one. If they ever disagree, the result is either a release published without its
+    installer or every candidate failing verification - and both look like a broken
+    pipeline rather than a rule that drifted.
+    """
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    workflow = _read_text(os.path.join(ROOT, ".github", "workflows",
+                                       "verify-release.yml"))
+    check("phase B decides on '-rc' in the tag",
+          'return "-rc" in tag' in script)
+    check("phase D matches the same string",
+          "*-rc*)" in workflow,
+          "(a different rule here strands a release or every candidate)")
+    check("phase D refuses an installer on a candidate too",
+          "must NOT carry an .msi" in workflow,
+          "(a candidate that carried one would strand whoever installed it)")
+    check("phase D demands one on a full release",
+          "MISSING asset: *.msi" in workflow)
+
+
+def test_the_installer_is_built_from_bytes_that_are_already_signed():
+    """Order, not presence: an MSI built before the exe is signed ships an unsigned
+    program inside a signed wrapper, which is worse than either - the wrapper makes
+    it look checked.
+    """
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    signing = script.index("] signing with the card")
+    building = script.index("] building the installer")
+    check("the installer is built AFTER the executable is signed", signing < building,
+          "(building first would wrap an unsigned program in a signed installer)")
+    check("and the installer is signed as well",
+          "the installer was signed by a DIFFERENT" in script)
+    check("against the same pinned certificate",
+          script.count("!= CODESIGN_SHA256") >= 2,
+          "(the archive and the installer are two separate checks)")
+    check("the installer harvests the payload the archive was made from",
+          "PayloadDir=" in script)
+
+
+def test_the_draft_is_incomplete_without_the_installer_it_should_carry():
+    """The completeness check has to follow the KIND of release, not a fixed count.
+
+    A final release ships the installer and a candidate does not, so a hard-coded
+    "four assets" would either pass a final that is missing its MSI or fail every
+    candidate. Both of those are the failure this step was added to prevent.
+    """
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    check("the expected assets depend on whether an installer was built",
+          "expect_msi" in script)
+    check("and the installer is one of the things that can be missing",
+          "MSI_ASSET" in script)
+    check("the pass line no longer claims a fixed number",
+          "PASS: four assets" not in script,
+          "(it says how many were actually expected)")
 
 
 def _read_text(path):

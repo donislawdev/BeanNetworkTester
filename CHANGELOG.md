@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **An installer (`.msi`), next to the zip.** It installs the program for everyone on the
+  computer, puts `BeanNetworkTester` on `PATH` so it works from any command prompt, and
+  adds a Start Menu entry. It shows up in "Apps and features", and removing it there takes
+  the files, the `PATH` entry and the shortcut with it. Your profiles, window state and CSV
+  exports are never touched. It needs Administrator rights; company IT usually asks for
+  this format. The zip is unchanged and is still the simplest way to run the program
+  without installing anything.
+
 - **Different values for uploads and downloads.** A new "Asymmetry" card. Leave it off and
   one set of numbers applies both ways, as before. Tick it and the fields above it describe
   downloads only, while seven new ones describe uploads: latency, jitter, spike chance and
