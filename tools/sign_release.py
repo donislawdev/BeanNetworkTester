@@ -383,7 +383,7 @@ def main(argv=None):
     os.makedirs(work)
     print("working in %s" % work)
 
-    print("\n[1/7] fetching the build this tag produced")
+    print("\n[1/8] fetching the build this tag produced")
     run(["gh", "run", "download", "--repo", REPO, "--name",
          "unsigned-build-%s" % args.tag, "--dir", work])
     archives = [f for f in os.listdir(work) if f.endswith(".zip")]
@@ -392,10 +392,10 @@ def main(argv=None):
                          % archives)
     archive = os.path.join(work, archives[0])
 
-    print("\n[2/7] verifying what the workflow says it built")
+    print("\n[2/8] verifying what the workflow says it built")
     run(["gh", "attestation", "verify", archive, "--repo", REPO])
 
-    print("\n[3/7] unpacking")
+    print("\n[3/8] unpacking")
     unpacked = os.path.join(work, "unpacked")
     with zipfile.ZipFile(archive) as zf:
         zf.extractall(unpacked)
@@ -408,7 +408,7 @@ def main(argv=None):
     exe = exes[0]
     print("  %s (%d bytes, unsigned)" % (os.path.basename(exe), os.path.getsize(exe)))
 
-    print("\n[4/7] signing with the card")
+    print("\n[4/8] signing with the card")
     thumbprint = signing_thumbprint()
     signtool = find_signtool()
     command = [signtool, "sign", "/sha1", thumbprint, "/fd", "sha256",

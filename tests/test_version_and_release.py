@@ -664,6 +664,29 @@ def test_a_release_candidate_gets_no_installer():
         check(f"{tag} is a release", not module.is_release_candidate(tag))
 
 
+def test_the_signing_steps_are_numbered_consecutively_out_of_the_same_total():
+    """The step markers are read by a person mid-ceremony, so they have to add up.
+
+    Adding a step means editing every marker, and editing only the ones below it is
+    the natural mistake: it happened the day the installer step was inserted, leaving
+    the script printing "[4/7] signing with the card" and then "[5/8] repacking".
+    Nothing failed - it just told the person holding the card a different story each
+    line, at the one moment they are counting.
+    """
+    import re
+
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    markers = [(int(a), int(b)) for a, b in re.findall(r"\[(\d+)/(\d+)\]", script)]
+    check("the script prints numbered steps at all", markers, "(none found)")
+    totals = {total for _, total in markers}
+    check("every marker counts out of the same total", len(totals) == 1, f"({sorted(totals)})")
+    numbers = [number for number, _ in markers]
+    check("the steps run 1..n with none missing or repeated",
+          numbers == list(range(1, len(numbers) + 1)), f"({numbers})")
+    check("and the total is the number of steps there actually are",
+          totals == {len(numbers)}, f"(total {sorted(totals)}, {len(numbers)} steps)")
+
+
 def test_the_candidate_rule_is_the_same_one_in_both_places():
     """Two places decide "is this a candidate", and they must decide it the same way.
 
