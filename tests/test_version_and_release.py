@@ -621,8 +621,19 @@ def test_the_signing_certificate_is_pinned_by_its_bytes():
     script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
     check("the signing script reads the pin rather than carrying its own copy",
           "from beantester.legal import CODESIGN_SHA256" in script)
-    check("it compares what actually signed the file against the pin",
-          "actual != CODESIGN_SHA256" in script)
+    # 🔴 Anchored per artefact, and that is the whole point. This used to look for a
+    # bare `actual != CODESIGN_SHA256` anywhere in the file, which was a real guard
+    # while the ritual signed one thing. The moment the installer added a SECOND copy
+    # of that comparison, flipping the archive's check to `==` left the installer's
+    # copy behind for the substring to find - and the mutation came back SURVIVED.
+    # Two artefacts are signed, so two checks are named, and either one going soft
+    # has to redden on its own.
+    for what, variable in (("archive", "exe"), ("installer", "msi")):
+        pattern = (r"actual = certificate_of\(%s\)\s*\n\s*if actual != CODESIGN_SHA256:"
+                   % variable)
+        check(f"it compares what actually signed the {what} against the pin",
+              re.search(pattern, script) is not None,
+              f"(certificate_of({variable}) is not followed by the comparison)")
     check("and refuses without uploading anything",
           "Nothing has been uploaded." in script,
           "(a mismatch caught after the upload is not caught)")

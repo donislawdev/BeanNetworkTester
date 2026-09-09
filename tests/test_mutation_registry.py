@@ -1749,6 +1749,17 @@ MUTATIONS = [
         "test": "test_the_signing_certificate_is_pinned_by_its_bytes",
     },
     {
+        # The installer is the SECOND thing this ritual signs, and it needed its own
+        # entry the moment it existed: the guard above was written when there was one
+        # comparison in the file, and a bare substring search cannot tell which copy
+        # it found. It reported SURVIVED on the day the installer landed.
+        "label": "release: the signing script stops checking who signed the INSTALLER",
+        "file": "tools/sign_release.py",
+        "old": "            actual = certificate_of(msi)\n            if actual != CODESIGN_SHA256:",
+        "new": "            actual = certificate_of(msi)\n            if actual == CODESIGN_SHA256:",
+        "test": "test_the_signing_certificate_is_pinned_by_its_bytes",
+    },
+    {
         # The tempting shortcut in the attestation half: it was HANDED a digest, so
         # why download the file. Because then it attests something nobody checked -
         # a rumour with a signature on it.
