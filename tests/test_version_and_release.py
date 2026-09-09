@@ -653,6 +653,29 @@ def test_a_release_candidate_gets_no_installer():
         check(f"{tag} is a release", not module.is_release_candidate(tag))
 
 
+def test_the_candidate_rule_is_the_same_one_in_both_places():
+    """Two places decide "is this a candidate", and they must decide it the same way.
+
+    Phase B decides whether to BUILD an installer; phase D decides whether to demand
+    one. If they ever disagree, the result is either a release published without its
+    installer or every candidate failing verification - and both look like a broken
+    pipeline rather than a rule that drifted.
+    """
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    workflow = _read_text(os.path.join(ROOT, ".github", "workflows",
+                                       "verify-release.yml"))
+    check("phase B decides on '-rc' in the tag",
+          'return "-rc" in tag' in script)
+    check("phase D matches the same string",
+          "*-rc*)" in workflow,
+          "(a different rule here strands a release or every candidate)")
+    check("phase D refuses an installer on a candidate too",
+          "must NOT carry an .msi" in workflow,
+          "(a candidate that carried one would strand whoever installed it)")
+    check("phase D demands one on a full release",
+          "MISSING asset: *.msi" in workflow)
+
+
 def test_the_installer_is_built_from_bytes_that_are_already_signed():
     """Order, not presence: an MSI built before the exe is signed ships an unsigned
     program inside a signed wrapper, which is worse than either - the wrapper makes
