@@ -81,7 +81,9 @@ exists.
 
 ## Quick start (3 steps)
 
-1. Download `BeanNetworkTester` (or build it: `pyinstaller --noconfirm BeanNetworkTester.spec`).
+1. Download `BeanNetworkTester`: the **zip** runs without installing anything, the **`.msi`**
+   installs it for everyone on the computer, on `PATH` and in the Start Menu (needs
+   Administrator rights). Or build it: `pyinstaller --noconfirm BeanNetworkTester.spec`.
 2. Run `BeanNetworkTester.exe` - the program **asks for administrator rights by itself**
    (WinDivert needs them). From the repository: `python bean_network_tester.py`.
 3. Pick a preset from the "Profiles" list (e.g. "3G network") and click **START**.
@@ -1296,8 +1298,15 @@ in English.
 
 Releases go out through a second workflow (`.github/workflows/release.yml`) on a `v*` tag. It
 checks the tag against `VERSION.txt`, refuses to publish while the changelogs are still open,
-builds and smoke-tests the exe, then publishes three assets: the zip, the `SHA256SUMS.txt` this
-README tells you to verify, and an SPDX SBOM signed against the archive it describes.
+builds and smoke-tests the exe, and opens a **draft** carrying the SPDX SBOM. It deliberately
+publishes no archive: the signing key lives on a hardware card that no runner can reach, so the
+archive is signed on the maintainer's machine (`tools/sign_release.py`) and uploaded from there,
+and a third workflow then attests the bytes that actually ship.
+
+A published release therefore carries the zip, the `SHA256SUMS.txt` this README tells you to
+verify, the SBOM, and the attestation bundle. A full release carries a fifth file, the `.msi`
+installer. A release candidate does not, because Windows Installer ignores the `-rc.1` and would
+treat a candidate and its release as the same version.
 
 ## Project layout
 

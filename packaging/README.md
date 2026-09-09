@@ -1,4 +1,4 @@
-# Package sources: Chocolatey and WinGet
+# Package sources: Chocolatey, WinGet and the MSI
 
 These are **templates**, not packages. Every `{{PLACEHOLDER}}` is filled by
 `tools/build_packages.py` from the one place that owns the value: the version from
@@ -37,6 +37,12 @@ carries the move, not before it.
 `release.yml`: a bad manifest is public and moderated, and the cost of catching it
 after the fact is somebody else's review time.
 
+**The MSI is the exception, and not because it is special.** It is built and signed by
+`tools/sign_release.py` during the release itself, because it carries the executable:
+building it anywhere else would either wrap an unsigned program in a signed installer,
+or require the signing card to be somewhere it will never be. Nothing is submitted -
+the MSI is simply an asset on the release.
+
 ## What each package has to get right
 
 **Chocolatey.** It downloads the release archive rather than embedding it, so the
@@ -56,6 +62,19 @@ through one - it needs the `_internal` directory beside it. The field puts the
 directory holding the nested file on `PATH` instead, which is what winget's source
 does with it rather than what the field's one-line description implies.
 
+**The MSI.** Three things carry it. `UpgradeCode` is the identity of the product and can
+never be regenerated - Windows Installer finds a machine's previous version through that
+GUID and nothing else, so a new one would strand the old install on every machine that
+already has it, unreachable. `Scope="perMachine"` is what Group Policy, SCCM and Intune
+need, and it is only safe because user files already live in `%LOCALAPPDATA%`: Program
+Files is read-only for ordinary users. And a running session has to be closed **before**
+`InstallValidate`, not before `InstallFiles` where WiX puts `CloseApplication` by default -
+Restart Manager cannot close a console process that has no window to ask, so it waits
+thirty seconds and fails the upgrade, and `InstallValidate` is what decides a reboot is
+needed. Measured: Restart Manager on gives 1601, off gives 3010, off plus an early close
+gives 0.
+
 Neither manifest can keep a file safe on its own: WinGet portables take no scripts at
 all, and that is why the program itself had to stop writing into the directory the
-package manager owns.
+package manager owns. The MSI is the one of the three that behaves like Chocolatey here -
+a file it did not install survives both an upgrade and an uninstall.
