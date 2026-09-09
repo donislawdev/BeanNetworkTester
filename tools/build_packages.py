@@ -56,6 +56,18 @@ WINGET_ID = f"{appinfo.AUTHOR}.{appinfo.TOOL_ID}"
 # `ElevationRequirement`.
 WINGET_SCHEMA = "1.12.0"
 
+# 🔴 The MSI's UpgradeCode: the identity of the PRODUCT, generated once and never
+# again. Windows Installer finds a machine's previous version through this GUID and
+# nothing else. Change it and every machine that already has the package keeps the
+# old install forever, side by side with the new one, with no upgrade path and no
+# way to reach the old one from the new package - and it is not fixable afterwards,
+# because the fix would have to run on machines we cannot reach.
+#
+# This is why it is a constant here and not a value in the template: the renderer is
+# the one place that owns a value, and `test_the_msi_upgrade_code_never_changes`
+# pins this literal so a careless regeneration reddens instead of shipping.
+MSI_UPGRADE_CODE = "4BE626D0-E975-4E56-92B4-146EF6AEDF3C"
+
 
 def _read_json(*parts):
     with open(os.path.join(ROOT, *parts), encoding="utf-8") as f:
@@ -114,6 +126,7 @@ def values(version, digest, asset):
         "CHOCO_ID": CHOCO_ID,
         "WINGET_ID": WINGET_ID,
         "WINGET_SCHEMA": WINGET_SCHEMA,
+        "UPGRADE_CODE": MSI_UPGRADE_CODE,
         "APP_NAME": appinfo.APP_NAME,
         "TOOL_ID": appinfo.TOOL_ID,          # the data folder's name, which has no spaces
         "EXE_NAME": appinfo.EXE_NAME,

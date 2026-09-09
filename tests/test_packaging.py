@@ -1,8 +1,10 @@
-"""The Chocolatey and WinGet package sources, and the renderer that fills them.
+"""The Chocolatey, WinGet and MSI package sources, and the renderer that fills them.
 
-These files are published under our name to two feeds we do not control, so the
-cost of a mistake is somebody else's moderation queue and, for the two lines that
-matter, a user whose install does not work at all.
+These files are published under our name to feeds we do not control, so the cost of
+a mistake is somebody else's moderation queue and, for the two lines that matter, a
+user whose install does not work at all. The MSI raises that cost again: it is what
+corporate deployment pushes to machines nobody will ever log into, and its
+UpgradeCode is the one value here that cannot be corrected after the fact.
 
 What is guarded here is what a reviewer cannot catch for us:
 
@@ -134,6 +136,81 @@ def test_the_chocolatey_icon_is_a_pinned_cdn_url(tmp_path, monkeypatch):
         check(f"the icon is not served from {host}", host not in url, f"({url})")
     check("the icon is pinned to the tag being packaged, not to a branch",
           f"@v{appinfo.__version__}/" in url, f"({url})")
+
+
+# -- the MSI, whose mistakes are the ones that cannot be taken back ------------- #
+def test_the_msi_upgrade_code_never_changes():
+    """The one value in this repository that may never be regenerated.
+
+    Windows Installer finds a machine's previous version through the UpgradeCode and
+    through nothing else. A new one does not "reset" anything: every machine that
+    already has the package keeps the old install, forever, beside the new one - and
+    the correction would have to run on machines we cannot reach. So the literal is
+    pinned here, and a regenerated GUID reddens instead of shipping.
+    """
+    check("the MSI UpgradeCode is the one this product was published with",
+          bp.MSI_UPGRADE_CODE == "4BE626D0-E975-4E56-92B4-146EF6AEDF3C",
+          f"({bp.MSI_UPGRADE_CODE})")
+
+
+def test_the_msi_is_a_per_machine_install(tmp_path, monkeypatch):
+    """Corporate deployment installs once, for everybody, from SYSTEM.
+
+    A per-user MSI cannot be pushed by Group Policy or SCCM, which is the entire
+    reason this package exists. This is also what makes ADR 2026-08-12 load-bearing
+    rather than tidy: Program Files is read-only for ordinary users, so the profiles
+    and exports have to live in %LOCALAPPDATA% or the program breaks for everyone
+    who is not an administrator.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check('the package installs per machine', 'Scope="perMachine"' in wxs)
+
+
+def test_the_msi_replaces_the_previous_version_instead_of_joining_it(tmp_path, monkeypatch):
+    """Without MajorUpgrade an MSI installs a SECOND copy and both stay listed.
+
+    The schedule matters as much as the element. `afterInstallExecute` lays the new
+    files down before the old product is removed; scheduling the removal first
+    deletes files the new version shares and reinstalls none of them, which is the
+    classic way an upgrade eats its own payload.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check("the package upgrades in place", "<MajorUpgrade" in wxs)
+    check("and lays the new files down before removing the old ones",
+          'Schedule="afterInstallExecute"' in wxs)
+
+
+def test_the_msi_keeps_the_exe_with_its_siblings(tmp_path, monkeypatch):
+    """The same requirement `ArchiveBinariesDependOnPath` carries for WinGet.
+
+    The exe cannot run without the `_internal` directory beside it, so the whole
+    tree has to be harvested as it is. A harvest that flattened it, or that picked
+    files one by one, would install something that starts and then cannot find its
+    own language tables.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check("the whole payload tree is harvested",
+          re.search(r"<Files\s+Include=\"\$\(PayloadDir\)\\\*\*\"", wxs) is not None)
+
+
+def test_the_msi_puts_the_command_line_on_the_system_path(tmp_path, monkeypatch):
+    """A user-scoped PATH entry is invisible to the account that actually runs it.
+
+    This tool reports outcomes as exit codes so it can run from a pipeline, and the
+    thing running that pipeline is a service account or a scheduled task, not the
+    person who installed it.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    found = re.search(r"<Environment[^>]*Name=\"PATH\"[^>]*>", wxs, re.S)
+    check("the install directory is added to PATH", found is not None)
+    check("and to the machine's PATH, not one account's",
+          found is not None and 'System="yes"' in found.group(0))
+
+
+def test_the_msi_version_is_the_one_being_released(tmp_path, monkeypatch):
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check("the rendered package carries VERSION.txt's version",
+          f'Version="{appinfo.__version__}"' in wxs)
 
 
 # -- the inputs that would look fine and be wrong ------------------------------- #
