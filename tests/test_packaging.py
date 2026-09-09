@@ -207,6 +207,49 @@ def test_the_msi_puts_the_command_line_on_the_system_path(tmp_path, monkeypatch)
           found is not None and 'System="yes"' in found.group(0))
 
 
+def test_the_msi_closes_a_running_session_before_it_validates(tmp_path, monkeypatch):
+    """An upgrade with a session running fails without this, and the order is the fix.
+
+    Measured on Windows Server 2025, same starting point each time, a session holding
+    the WinDivert driver throughout:
+
+        Restart Manager on                       -> 1601, nothing installed
+        Restart Manager off, close-app action    -> 3010, installed but wants a reboot
+        Restart Manager off, close before validate -> 0
+
+    Restart Manager cannot close this program - it is a console process with no window
+    and no message loop, so there is nothing to ask, and it can only time out (thirty
+    seconds, `Error: 351`). And InstallValidate is what decides a reboot is needed, so
+    an action scheduled after it, which is where WiX puts CloseApplication by default,
+    cannot change that answer. Hence a second action, scheduled Before InstallValidate.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check("Restart Manager is turned off, so InstallValidate does not wait for it",
+          'Id="MSIRESTARTMANAGERCONTROL" Value="Disable"' in wxs)
+    check("a running session is closed",
+          'Id="StopRunningSession"' in wxs)
+    check("and it is closed BEFORE InstallValidate, which is what decides the reboot",
+          re.search(r'<Custom\s+Action="StopRunningSession"\s+Before="InstallValidate"', wxs)
+          is not None)
+    check("closing is best effort and never fails the upgrade",
+          re.search(r'Id="StopRunningSession"[^>]*Return="ignore"', wxs, re.S) is not None)
+
+
+def test_a_reshipped_version_upgrades_instead_of_installing_beside_itself(
+        tmp_path, monkeypatch):
+    """Rebuilding one release under the same number is something this project does.
+
+    A version sitting in moderation is corrected by shipping the same number again -
+    the packaging runbook says so, and Chocolatey held 0.5.0 over exactly that. Each
+    rebuild gets a fresh ProductCode, and MajorUpgrade ignores an equal version unless
+    told otherwise: measured, that left two entries in Programs and Features side by
+    side.
+    """
+    wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
+    check("a rebuild of the same version replaces the installed one",
+          'AllowSameVersionUpgrades="yes"' in wxs)
+
+
 def test_the_msi_version_is_the_one_being_released(tmp_path, monkeypatch):
     wxs = _rendered(tmp_path, monkeypatch)["msi/BeanNetworkTester.wxs"]
     check("the rendered package carries VERSION.txt's version",
