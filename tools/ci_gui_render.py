@@ -34,8 +34,10 @@ os.environ.setdefault("BEAN_NO_ELEVATE", "1")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8",         # type: ignore[union-attr]
+                           errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8",         # type: ignore[union-attr]
+                           errors="replace")
 except (AttributeError, ValueError):
     pass
 
@@ -58,6 +60,7 @@ _ui_state.UiStateStore.__init__.__defaults__ = (os.path.join(_TMP, "ui.json"),)
 _profiles.ProfileStore.__init__.__defaults__ = (os.path.join(_TMP, "profiles.json"),)
 
 import bean_network_tester as n                      # noqa: E402
+from beantester import winenv                        # noqa: E402
 from beantester.gui.windows import WINDOWS           # noqa: E402
 
 GEOMETRY = "1366x768"
@@ -228,6 +231,13 @@ def check_language(code):
     app = n.App(root)
     root.update_idletasks()
     root.update()
+    # The DPI Tk really got, printed beside the language: the awareness call in
+    # main() says what was asked for, this says what the window was measured at.
+    # On the Linux runner it reads 96 and stays 96; on a Windows machine it moves
+    # with the display, so a clipping verdict without it is not comparable.
+    print(f"  [{code}] window {root.winfo_width()}x{root.winfo_height()}, "
+          f"DPI {round(root.winfo_fpixels('1i'))} (tk scaling "
+          f"{float(root.tk.call('tk', 'scaling')):.2f})")
 
     buttons, labels, cut = [], [], []
     styles = _declared_styles()
@@ -299,6 +309,16 @@ def check_language(code):
 
 
 def main(argv):
+    # Before ANY Tk root, in the parent and in every per-language child alike: the
+    # setting is per process, and a process that skips it is told 96 DPI by
+    # Windows whatever the monitor does. Measured 2026-09-08 on a 150% machine:
+    # without it the App came out 760x920, with it 1141x1381 - the owner's own
+    # saved geometry - and text-to-box relations did not scale 1:1 between the two
+    # (fonts follow `tk scaling` continuously, `scaled()` rounds to int), so the
+    # 96 DPI layout is not the layout the user gets. `cli.main` already does this;
+    # the check has to measure the same window. Off Windows it is a no-op, so the
+    # Linux runner's numbers are unchanged.
+    dpi_mode = winenv.set_dpi_awareness()
     if "--lang" in argv:
         i = argv.index("--lang")
         code = argv[i + 1] if i + 1 < len(argv) else "en"
@@ -307,7 +327,8 @@ def main(argv):
     # Discover languages and run each in its own process, so a fragile Tk teardown
     # in one language cannot leak into the next.
     langs = [code for code, _name in n.available_languages()]
-    print(f"GUI render check on real Tk at {GEOMETRY} for: {', '.join(langs)}")
+    print(f"GUI render check on real Tk at {GEOMETRY} for: {', '.join(langs)} "
+          f"(DPI awareness: {dpi_mode or 'not applicable'})")
     # Said once, up front, in the words the reader needs: which of these the run
     # can actually measure. Buried at the bottom it would be read after the green.
     undrawable = [code for code in langs if system_can_draw(code) is False]
