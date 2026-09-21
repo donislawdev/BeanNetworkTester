@@ -63,6 +63,22 @@ EXCEPTIONS = {
     # first version to declare the expression this way.
     "pyinstaller": "build tool, and the shipped bootloader carries the "
                    "PyInstaller bootloader exception (THIRD-PARTY-NOTICES.md)",
+    # GitHub reports `license: null` for ast_serialize, and the package is MIT
+    # in every place a person can look: the LICENSE file at the tag,
+    # `license = "MIT"` in its pyproject.toml and `license_expression: MIT` in
+    # the PyPI metadata. What is missing is the LEGACY `license` field and the
+    # trove classifier, which is all the dependency graph reads (the PEP 639
+    # expression is not picked up), and the LICENSE file opens with a preamble
+    # about the bundled Ruff crates, which stops licensee matching it on the
+    # repository side too. A detection gap, then, not an unknown licence.
+    #
+    # It is also mypy's dependency in requirements-lint.txt: it runs on a
+    # runner, is never imported by the program and never reaches a user.
+    # Recorded on 2026-09-21, when 0.11.1 was the first version of it the gate
+    # ever saw (0.8.0 entered in #134 without appearing in that review at all).
+    "ast_serialize": "MIT at the source (LICENSE, pyproject.toml, PyPI "
+                     "license_expression) that GitHub reads as null, and a "
+                     "lint-only dependency of mypy that never ships",
 }
 
 
