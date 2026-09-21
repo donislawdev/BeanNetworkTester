@@ -305,6 +305,46 @@ def test_every_page_is_registered_and_built():
     """)
 
 
+def test_the_render_check_walks_every_page_and_every_sub_tab():
+    """``tools/ci_gui_render.py`` measures only what is ON SCREEN (``_scan`` skips
+    unmapped widgets, and a hidden notebook tab is unmapped - measured on real Tk,
+    2026-09-21). It used to select the three pages by name and never a sub-tab, so
+    the Session and Events tabs of the Statistics page were never measured: a
+    clipped button there passed every CI run. Reproduced with a 254 px button in
+    a 60 px frame on the Events tab - "OK" before, "CLIPPED BUTTON" after.
+
+    This pins the WIRING - that the walk comes from the registries and puts each
+    sub-tab on screen - on the fake Tk, where the harness can afford it. The
+    measurement itself needs real fonts and stays with the tool under Xvfb.
+    """
+    run_gui("""
+        import os, sys
+        # bnt is the launcher at the repo root, so its folder is the repo
+        sys.path.insert(0, os.path.join(os.path.dirname(bnt.__file__), "tools"))
+        import ci_gui_render as render
+        from beantester.gui.pages import PAGES
+
+        walked = list(render.surfaces(app))
+        expected = []
+        for page_def in PAGES:
+            subs = getattr(app.pages[page_def.id], "SUBPAGES", ())
+            expected += [(page_def.id, sub) for sub, _label in subs] or [(page_def.id, None)]
+        assert walked == expected, (walked, expected)
+        # The two tabs that were never on screen before, named so a registry that
+        # loses them (or a page that stops exposing SUBPAGES) is a red line here.
+        assert ("statistics", "session") in walked and ("statistics", "events") in walked
+        assert ("control", None) in walked and ("connections", None) in walked
+
+        # show() really switches the notebook, or the walk measures the same tab
+        # three times and calls it coverage.
+        for page_id, sub_id in walked:
+            render.show(app, page_id, sub_id)
+            assert app.current_page() is app.pages[page_id], page_id
+            if sub_id is not None:
+                assert app.pages[page_id].current() == sub_id, (page_id, sub_id)
+    """)
+
+
 def test_fields_with_a_help_sheet_get_the_question_mark_button():
     """Filter-expression fields share the syntax cheat sheet, and a field that
     declares ``help_body`` gets its own "?" sheet. The schedule must NOT grow one.

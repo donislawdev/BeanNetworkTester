@@ -4,8 +4,9 @@
 The fake-tk smoke (smoke_gui.py) cannot see truncation or DPI/layout breakage: it
 records geometry calls but never lays anything out with real font metrics. This
 script builds the REAL App at the minimum supported resolution (1366x768) in every
-shipped language, visits every page and opens the About window, and fails if any
-BUTTON is clipped (rendered narrower than it asks for). That is the "Wesprzyj
+shipped language, visits every page AND every sub-tab of a page that has them,
+opens every registered window, and fails if any BUTTON is clipped (rendered
+narrower than it asks for). That is the "Wesprzyj
 projekt" -> "Wesp" class of regression: it only appears with real fonts and the
 longer Polish strings, so example-based tests stay green while the UI is broken.
 
@@ -61,6 +62,7 @@ _profiles.ProfileStore.__init__.__defaults__ = (os.path.join(_TMP, "profiles.jso
 
 import bean_network_tester as n                      # noqa: E402
 from beantester import winenv                        # noqa: E402
+from beantester.gui.pages import PAGES               # noqa: E402
 from beantester.gui.windows import WINDOWS           # noqa: E402
 
 GEOMETRY = "1366x768"
@@ -204,6 +206,41 @@ def _focus_looks_like_hover(style, name):
     return same
 
 
+def surfaces(app):
+    """Every page, and every sub-tab of a page that has them, from the registries.
+
+    Yields ``(page_id, sub_id)``; ``sub_id`` is ``None`` for a page without a
+    sub-notebook. Read from ``PAGES`` and each page's ``SUBPAGES`` rather than
+    from a list kept here, so a new page or a new tab is measured the day it
+    ships instead of the day somebody remembers this file.
+
+    🔴 The sub-tabs are the reason this function exists. ``_scan`` skips
+    unmapped widgets, and the widgets of an unselected ``ttk.Notebook`` tab ARE
+    unmapped - measured on real Tk, 2026-09-21: a label on the hidden tab reads
+    ``winfo_ismapped() == 0`` and flips only after ``select``. This script used
+    to select the three pages by name and never a sub-tab, so the Session and
+    Events tabs of the Statistics page were built, ticked and never measured: a
+    button clipped there passed every run. Reproduced before the fix with a
+    254 px button in a 60 px frame on the Events tab - "OK"; the same button on
+    the Live tab (the one that happens to be selected) - "CLIPPED BUTTON".
+    """
+    for page_def in PAGES:
+        page = app.pages.get(page_def.id)
+        subs = [sub_id for sub_id, _label in (getattr(page, "SUBPAGES", None) or ())]
+        if subs and callable(getattr(page, "select", None)):
+            for sub_id in subs:
+                yield page_def.id, sub_id
+        else:
+            yield page_def.id, None
+
+
+def show(app, page_id, sub_id):
+    """Put one surface from ``surfaces`` on screen."""
+    app.select_page(page_id)
+    if sub_id is not None:
+        app.pages[page_id].select(sub_id)
+
+
 def _cancel_afters(root):
     """Drop pending after() callbacks so teardown does not spew Tcl errors."""
     try:
@@ -248,11 +285,17 @@ def check_language(code):
         labels.extend(l)
         cut.extend(c)
 
-    for page in ("control", "statistics", "connections"):
-        app.select_page(page)
+    walked = []
+    for page_id, sub_id in surfaces(app):
+        show(app, page_id, sub_id)
         root.update_idletasks()
         root.update()
         scan()
+        walked.append(page_id if sub_id is None else f"{page_id}/{sub_id}")
+    # Named in the log on purpose: a guard whose coverage nobody can see is a
+    # guard whose gaps nobody finds (the sub-tabs above went unmeasured for as
+    # long as nothing printed what had been looked at).
+    print(f"  [{code}] walked: {', '.join(walked)}")
     # EVERY registered window, not just About: a window nobody renders here is a
     # window whose clipping nobody finds until a user sends a screenshot.
     for window_id in sorted(WINDOWS):
