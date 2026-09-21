@@ -75,6 +75,16 @@ def test_an_exception_is_a_named_package_with_a_reason_beside_it():
     check("the same licence on any other package still blocks",
           len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
 
+    # The other shape an entry covers: a licence GitHub could not determine at
+    # all. ast_serialize is MIT at its source and `null` in the review data, and
+    # the name must win before the unknown-licence rule gets to look.
+    blocked, passed = dependency_gate.split([_dep(name="ast_serialize", licence=None)])
+    check("the named lint dependency passes with no licence in the data",
+          not blocked and len(passed) == 1, f"(blocked={blocked})")
+    blocked, _passed = dependency_gate.split([_dep(name="something-else", licence=None)])
+    check("and no licence on any other package still blocks",
+          len(blocked) == 1 and blocked[0][0] == "unknown", f"({blocked})")
+
 
 def test_a_compound_expression_is_judged_by_its_worst_half():
     ok, _ = dependency_gate.split([_dep(licence="MIT OR Apache-2.0")])
