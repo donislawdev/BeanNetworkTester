@@ -307,8 +307,26 @@ def _url_scheme(text):
     return head.rsplit(None, 1)[-1].lower()
 
 
+def _folded_string(node):
+    """The string a literal expression spells, or None.
+
+    A constant, or ``+`` over constants: ``"Icmp" + "SendEcho2"`` is the plainest
+    way to keep a name out of a text search, and the interpreter folds it before
+    anything runs, so the scan folds it too. What this does NOT fold, said
+    plainly: a name assembled from a variable, ``"".join(...)``, a format - those
+    are the runtime layer's to catch, and only where a Windows DLL loads.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _folded_string(node.left), _folded_string(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
 def _string_findings(node, docstrings):
-    """What one string constant gives away: an endpoint, or a sending function
+    """What one string expression gives away: an endpoint, or a sending function
     named by its string (``getattr(lib, "IcmpSendEcho2")``, ``lib["..."]`` - the
     string IS the lookup, whatever surrounds it). Docstrings are prose, not code.
 
@@ -316,16 +334,16 @@ def _string_findings(node, docstrings):
     the wire check pushed that function into the crowd band, and the ratchet's
     answer is a smaller function, not a bigger number.
     """
-    if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
-        return []
     if id(node) in docstrings:
         return []
+    text = _folded_string(node)
+    if text is None:
+        return []
     out = []
-    if "://" in node.value and _url_scheme(node.value) in ("http", "https", "ftp",
-                                                            "ws", "wss"):
-        out.append(("url", node.value[:60], node.lineno))
-    if node.value in WIRE_FUNCTIONS:
-        out.append(("wire", node.value, node.lineno))
+    if "://" in text and _url_scheme(text) in ("http", "https", "ftp", "ws", "wss"):
+        out.append(("url", text[:60], node.lineno))
+    if text in WIRE_FUNCTIONS:
+        out.append(("wire", text, node.lineno))
     return out
 
 
@@ -500,7 +518,8 @@ NET = ("socket.", "urllib.", "ftplib.", "smtplib.", "imaplib.", "poplib.",
        "os.spawn", "os.startfile")
 FORBIDDEN = {forbidden!r}
 WIRE = {wire!r}
-seen, libraries, imports, wire = [], set(), set(), set()
+seen, libraries, imports, wire, canary = [], set(), set(), set(), set()
+phase = ["run"]
 
 def hook(event, args):
     if event.startswith(NET):
@@ -511,7 +530,7 @@ def hook(event, args):
         # (library, name) - the name is carried whether the lookup was an
         # attribute, getattr() or lib[...]; MEASURED 2026-09-21 on 3.14.7.
         if str(args[1]) in WIRE:
-            wire.add(str(args[1]))
+            (wire if phase[0] == "run" else canary).add(str(args[1]))
     elif event == "import":
         top = str(args[0]).split(".")[0]
         if top in FORBIDDEN:
@@ -533,10 +552,21 @@ except SystemExit as exc:
 from beantester.utils import host_identity
 host_identity()
 
+# The run is over. Now the hook is shown the thing it exists to see - a LOOKUP
+# of a sending function (never a call: dlsym resolves the symbol and sends
+# nothing) - and it must report it, or every empty "wire" above was an empty
+# hook, not a clean run. Windows only: there is no iphlpapi anywhere else.
+phase[0] = "canary"
+if sys.platform == "win32":
+    import ctypes
+    ctypes.WinDLL("iphlpapi.dll").IcmpSendEcho2
+
 print("BEGIN_JSON" + json.dumps({{"exit": code, "events": seen,
                                  "libraries": sorted(libraries),
                                  "imports": sorted(imports),
-                                 "wire": sorted(wire)}}))
+                                 "wire": sorted(wire),
+                                 "canary": sorted(canary),
+                                 "platform": sys.platform}}))
 """
 
 # What a healthy run is allowed to raise. MEASURED 2026-09-03: the CLI run on its
@@ -593,6 +623,16 @@ def test_a_real_run_raises_no_network_audit_event():
     # that counts there.
     check("no function that sends was looked up at runtime", not result["wire"],
           f"({result['wire']})")
+    # The positive half, so the line above cannot pass on an empty hook: after the
+    # run the script looks `IcmpSendEcho2` up (no call) and the hook must have
+    # seen it. Off Windows there is nothing to look up and the check says so
+    # instead of passing vacuously.
+    if result["platform"] == "win32":
+        check("the dlsym hook reports a sending function when shown one",
+              "IcmpSendEcho2" in result["canary"], f"({result['canary']})")
+    else:
+        check("off Windows the canary has nothing to look up and reports nothing",
+              not result["canary"], f"({result['canary']})")
 
 
 def test_the_only_connection_goes_to_the_documented_route_probe():
@@ -662,6 +702,9 @@ BAD_CODE = (
      "wire"),
     ("an ARP request - not ICMP, same library, same silence",
      "import ctypes\nctypes.windll.iphlpapi.SendARP(1, 0, buf, n)\n", "wire"),
+    ("the name split across two literals, which a text search never joins",
+     "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\n"
+     "getattr(lib, 'Icmp' + 'SendEcho2')(0)\n", "wire"),
 )
 
 

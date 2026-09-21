@@ -44,6 +44,7 @@ except (AttributeError, ValueError):
 
 import subprocess                                    # noqa: E402
 import tempfile                                      # noqa: E402
+from collections.abc import Callable, Iterator       # noqa: E402
 
 from font_coverage import system_can_draw            # noqa: E402
 import tkinter as tk                                 # noqa: E402
@@ -206,7 +207,7 @@ def _focus_looks_like_hover(style, name):
     return same
 
 
-def surfaces(app):
+def surfaces(app: n.App) -> Iterator[tuple[str, str | None]]:
     """Every page, and every sub-tab of a page that has them, from the registries.
 
     Yields ``(page_id, sub_id)``; ``sub_id`` is ``None`` for a page without a
@@ -234,11 +235,28 @@ def surfaces(app):
             yield page_def.id, None
 
 
-def show(app, page_id, sub_id):
+def show(app: n.App, page_id: str, sub_id: str | None) -> None:
     """Put one surface from ``surfaces`` on screen."""
     app.select_page(page_id)
     if sub_id is not None:
         app.pages[page_id].select(sub_id)
+
+
+def walk_surfaces(app: n.App, root: tk.Misc, scan: Callable[[], object]) -> list[str]:
+    """Put every surface on screen in turn, let Tk lay it out, and ``scan`` it.
+
+    Returns the names walked (``page`` or ``page/sub``) for the log. This is the
+    production walk - ``check_language`` calls it and nothing else - so a test
+    that drives it with a recording ``scan`` sees the order the real run uses.
+    """
+    walked = []
+    for page_id, sub_id in surfaces(app):
+        show(app, page_id, sub_id)
+        root.update_idletasks()
+        root.update()
+        scan()
+        walked.append(page_id if sub_id is None else f"{page_id}/{sub_id}")
+    return walked
 
 
 def _cancel_afters(root):
@@ -285,13 +303,7 @@ def check_language(code):
         labels.extend(l)
         cut.extend(c)
 
-    walked = []
-    for page_id, sub_id in surfaces(app):
-        show(app, page_id, sub_id)
-        root.update_idletasks()
-        root.update()
-        scan()
-        walked.append(page_id if sub_id is None else f"{page_id}/{sub_id}")
+    walked = walk_surfaces(app, root, scan)
     # Named in the log on purpose: a guard whose coverage nobody can see is a
     # guard whose gaps nobody finds (the sub-tabs above went unmeasured for as
     # long as nothing printed what had been looked at).
