@@ -146,12 +146,48 @@ ALLOWED_CALLS = {
         "the same support page, from the About window",
 }
 
-# Every library the package loads through ctypes. All ten are local Windows APIs;
-# none of them speaks a network protocol. This is the check that closes the hole
-# a module-name scan cannot see - `windll.wininet` needs no import statement.
+# Every library the package loads through ctypes. All ten are local Windows APIs.
+# This is the check that closes the hole a module-name scan cannot see -
+# `windll.wininet` needs no import statement.
+#
+# 🔴 This used to say "none of them speaks a network protocol", and that was
+# false for `iphlpapi`: the socket-table reader (`portmap.py`) needs it, and the
+# SAME DLL exports `IcmpSendEcho2`, `SendARP` and the DHCP renew calls - functions
+# that put a packet on the wire. Found 2026-09-21 while sizing a "ping" feature:
+# a ping written through iphlpapi would have passed this guard without one red
+# line. A library name is therefore not enough for that one library; the
+# FUNCTIONS are watched too, in WIRE_FUNCTIONS below.
 ALLOWED_LIBRARIES = {
     "advapi32", "dwmapi", "iphlpapi", "kernel32", "ntdll", "shcore", "shell32",
     "user32", "uxtheme", "winmm",
+}
+
+# Exports of an ALLOWED library that send something. Each name with what it puts
+# on the wire, from Microsoft Learn (read 2026-09-21): the ICMP echo family
+# ("IcmpSendEcho function ... sends an IPv4 ICMP echo request"), the ARP pair
+# ("SendARP ... sends an Address Resolution Protocol request", "ResolveIpNetEntry2
+# ... by sending ARP requests ... or neighbor solicitation requests") and the DHCP
+# pair ("IpRenewAddress ... renews a lease ... IpReleaseAddress ... releases").
+# All exported by Iphlpapi.dll (Requirements tables).
+#
+# Matched by NAME wherever it appears - as an attribute (`lib.IcmpSendEcho2`, which
+# is how `portmap._Native` spells its own calls, off a handle a static scan cannot
+# trace) and as a string (`getattr(lib, "IcmpSendEcho2")`, `lib["IcmpSendEcho2"]`).
+# The names are specific enough that a match is a use, not a coincidence; prose in
+# a docstring is exempt the same way a URL in a docstring is.
+#
+# Not claimed complete: iphlpapi has hundreds of exports and this lists the ones
+# the documentation says transmit. Adding one here is a decision, removing one is
+# a hole - and NONE of them is used today, so there is no allowlist beside it.
+WIRE_FUNCTIONS = {
+    "IcmpSendEcho": "an IPv4 ICMP echo request (a ping)",
+    "IcmpSendEcho2": "the same, asynchronous form",
+    "IcmpSendEcho2Ex": "the same, with a chosen source address",
+    "Icmp6SendEcho2": "an IPv6 ICMP echo request",
+    "SendARP": "an ARP request",
+    "ResolveIpNetEntry2": "an ARP request or an IPv6 neighbour solicitation",
+    "IpRenewAddress": "a DHCP renewal",
+    "IpReleaseAddress": "a DHCP release",
 }
 
 # A process is the other way out of a sandbox: `curl`, `powershell -c Invoke-
@@ -271,6 +307,46 @@ def _url_scheme(text):
     return head.rsplit(None, 1)[-1].lower()
 
 
+def _folded_string(node):
+    """The string a literal expression spells, or None.
+
+    A constant, or ``+`` over constants: ``"Icmp" + "SendEcho2"`` is the plainest
+    way to keep a name out of a text search, and the interpreter folds it before
+    anything runs, so the scan folds it too. What this does NOT fold, said
+    plainly: a name assembled from a variable, ``"".join(...)``, a format - those
+    are the runtime layer's to catch, and only where a Windows DLL loads.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _folded_string(node.left), _folded_string(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+def _string_findings(node, docstrings):
+    """What one string expression gives away: an endpoint, or a sending function
+    named by its string (``getattr(lib, "IcmpSendEcho2")``, ``lib["..."]`` - the
+    string IS the lookup, whatever surrounds it). Docstrings are prose, not code.
+
+    Split out of ``findings`` for the complexity ratchet (`tests/test_code_shape.py`):
+    the wire check pushed that function into the crowd band, and the ratchet's
+    answer is a smaller function, not a bigger number.
+    """
+    if id(node) in docstrings:
+        return []
+    text = _folded_string(node)
+    if text is None:
+        return []
+    out = []
+    if "://" in text and _url_scheme(text) in ("http", "https", "ftp", "ws", "wss"):
+        out.append(("url", text[:60], node.lineno))
+    if text in WIRE_FUNCTIONS:
+        out.append(("wire", text, node.lineno))
+    return out
+
+
 def findings(source, rel):
     """Every network finding in one module: a list of ``(kind, detail, line)``.
 
@@ -311,10 +387,12 @@ def findings(source, rel):
                 found.append(("call", (rel, owner, name), node.lineno))
             if owner in ("subprocess", "os") and name in SPAWN_CALLS:
                 found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if id(node) not in docstrings and "://" in node.value:
-                if _url_scheme(node.value) in ("http", "https", "ftp", "ws", "wss"):
-                    found.append(("url", node.value[:60], node.lineno))
+        found.extend(_string_findings(node, docstrings))
+        # A function reached as an attribute, off whatever holds the library - a
+        # loader chain or a handle stored in an instance. Matching the attribute
+        # alone is what covers the handle case, which no static scan can trace.
+        if isinstance(node, ast.Attribute) and node.attr in WIRE_FUNCTIONS:
+            found.append(("wire", node.attr, node.lineno))
         library = _library_name(node)
         if library:
             found.append(("library", library.lower().removesuffix(".dll"),
@@ -385,6 +463,18 @@ def test_ctypes_opens_only_local_windows_libraries():
           f"(a library that can speak a protocol has no business here: {bad})")
 
 
+def test_no_allowed_library_is_used_to_send_a_packet():
+    """The function-level half of the library check, for the one library that
+    can do both. `iphlpapi` reads the socket table for us and would ping for
+    anybody: the name on the allowlist says nothing about which. No use exists
+    today, so this is a floor - the day a sending feature is wanted, it arrives
+    with an allowlist entry and a reason, not by passing this in silence."""
+    bad = ["%s:%d %s (%s)" % (rel, line, detail, WIRE_FUNCTIONS[detail])
+           for rel, detail, line in _scan().get("wire", [])]
+    check("no shipped module reaches for a function that sends", not bad,
+          f"(a function that puts a packet on the wire, through an allowed library: {bad})")
+
+
 def test_the_shipped_package_never_spawns_a_process():
     """No child process, so no shelling out to curl, bitsadmin or PowerShell."""
     bad = ["%s:%d %s" % (rel, line, detail)
@@ -427,13 +517,20 @@ NET = ("socket.", "urllib.", "ftplib.", "smtplib.", "imaplib.", "poplib.",
        "http.", "ssl.", "webbrowser.", "subprocess.", "os.system", "os.exec",
        "os.spawn", "os.startfile")
 FORBIDDEN = {forbidden!r}
-seen, libraries, imports = [], set(), set()
+WIRE = {wire!r}
+seen, libraries, imports, wire, canary = [], set(), set(), set(), set()
+phase = ["run"]
 
 def hook(event, args):
     if event.startswith(NET):
         seen.append([event, repr(args)[:120]])
     elif event == "ctypes.dlopen":
         libraries.add(str(args[0]).lower().removesuffix(".dll"))
+    elif event == "ctypes.dlsym":
+        # (library, name) - the name is carried whether the lookup was an
+        # attribute, getattr() or lib[...]; MEASURED 2026-09-21 on 3.14.7.
+        if str(args[1]) in WIRE:
+            (wire if phase[0] == "run" else canary).add(str(args[1]))
     elif event == "import":
         top = str(args[0]).split(".")[0]
         if top in FORBIDDEN:
@@ -455,9 +552,21 @@ except SystemExit as exc:
 from beantester.utils import host_identity
 host_identity()
 
+# The run is over. Now the hook is shown the thing it exists to see - a LOOKUP
+# of a sending function (never a call: dlsym resolves the symbol and sends
+# nothing) - and it must report it, or every empty "wire" above was an empty
+# hook, not a clean run. Windows only: there is no iphlpapi anywhere else.
+phase[0] = "canary"
+if sys.platform == "win32":
+    import ctypes
+    ctypes.WinDLL("iphlpapi.dll").IcmpSendEcho2
+
 print("BEGIN_JSON" + json.dumps({{"exit": code, "events": seen,
                                  "libraries": sorted(libraries),
-                                 "imports": sorted(imports)}}))
+                                 "imports": sorted(imports),
+                                 "wire": sorted(wire),
+                                 "canary": sorted(canary),
+                                 "platform": sys.platform}}))
 """
 
 # What a healthy run is allowed to raise. MEASURED 2026-09-03: the CLI run on its
@@ -474,7 +583,8 @@ PROBE_ADDRESSES = ("8.8.8.8", "2001:4860:4860::8888")
 
 
 def _audit_run():
-    script = AUDIT_SCRIPT.format(root=ROOT, forbidden=sorted(FORBIDDEN_MODULES))
+    script = AUDIT_SCRIPT.format(root=ROOT, forbidden=sorted(FORBIDDEN_MODULES),
+                                 wire=sorted(WIRE_FUNCTIONS))
     proc = subprocess.run([sys.executable, "-c", script], cwd=ROOT, timeout=180,
                           capture_output=True, text=True, check=False)
     marker = proc.stdout.find("BEGIN_JSON")
@@ -507,6 +617,22 @@ def test_a_real_run_raises_no_network_audit_event():
           f"({result['imports']})")
     bad = sorted(set(result["libraries"]) - ALLOWED_LIBRARIES)
     check("ctypes loaded only local Windows libraries", not bad, f"({bad})")
+    # Same vacuity note as the libraries: `dlsym` fires only where a Windows DLL
+    # is loaded, so on the Linux leg this list is empty for the wrong reason and
+    # the static `test_no_allowed_library_is_used_to_send_a_packet` is the one
+    # that counts there.
+    check("no function that sends was looked up at runtime", not result["wire"],
+          f"({result['wire']})")
+    # The positive half, so the line above cannot pass on an empty hook: after the
+    # run the script looks `IcmpSendEcho2` up (no call) and the hook must have
+    # seen it. Off Windows there is nothing to look up and the check says so
+    # instead of passing vacuously.
+    if result["platform"] == "win32":
+        check("the dlsym hook reports a sending function when shown one",
+              "IcmpSendEcho2" in result["canary"], f"({result['canary']})")
+    else:
+        check("off Windows the canary has nothing to look up and reports nothing",
+              not result["canary"], f"({result['canary']})")
 
 
 def test_the_only_connection_goes_to_the_documented_route_probe():
@@ -562,6 +688,23 @@ BAD_CODE = (
      "import socket\ns = socket.socket()\ns.sendto(b'secret', ('h', 1))\n", "call"),
     ("an unregistered module importing socket at all",
      "import socket as s\n", "watched-import"),
+    # 🔴 The four below go through a library the allowlist PERMITS. Every one of
+    # them passed the guard as it stood on 2026-09-21 - the library check saw
+    # "iphlpapi" and stopped looking.
+    ("a ping through the allowed iphlpapi, off the loader chain",
+     "import ctypes\nctypes.windll.iphlpapi.IcmpSendEcho2(h, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n",
+     "wire"),
+    ("the same one off a handle kept in a variable, the way portmap spells its calls",
+     "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\nlib.Icmp6SendEcho2(0)\n",
+     "wire"),
+    ("the same one looked up by string, which no attribute scan can see",
+     "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\ngetattr(lib, 'IcmpSendEcho2Ex')(0)\n",
+     "wire"),
+    ("an ARP request - not ICMP, same library, same silence",
+     "import ctypes\nctypes.windll.iphlpapi.SendARP(1, 0, buf, n)\n", "wire"),
+    ("the name split across two literals, which a text search never joins",
+     "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\n"
+     "getattr(lib, 'Icmp' + 'SendEcho2')(0)\n", "wire"),
 )
 
 
@@ -595,3 +738,17 @@ def test_the_canary_does_not_pass_by_accident():
              "        return handle.read()\n")
     found = findings(clean, "beantester/fake.py")
     check("ordinary code raises no finding", not found, f"({found})")
+    # The allowed library used the way the package really uses it: a table read
+    # off a stored handle, with the sending function named only in PROSE. The
+    # function check must see a use, not a word - or `portmap.py` and this very
+    # docstring would be the first two false alarms.
+    table = ("import ctypes\n"
+             "class R:\n"
+             '    """Reads the socket table. Never IcmpSendEcho2 - that would ping."""\n'
+             "    def __init__(self):\n"
+             "        self.lib = ctypes.WinDLL('iphlpapi.dll')\n"
+             "    def rows(self, buf, size):\n"
+             "        return self.lib.GetExtendedTcpTable(buf, size, False, 2, 5, 0)\n")
+    kinds = {k for k, _detail, _line in findings(table, "beantester/fake.py")}
+    check("a read through the allowed library is only a library finding",
+          kinds == {"library"}, f"({sorted(kinds)})")

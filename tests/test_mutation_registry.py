@@ -2171,6 +2171,17 @@ MUTATIONS = [
         "test": "test_ctypes_opens_only_local_windows_libraries",
     },
     {
+        # The bypass the entry above cannot see: the library is ALLOWED. iphlpapi
+        # reads the socket table for portmap.py and exports IcmpSendEcho2 for
+        # anybody, and the check by library name passed this line on 2026-09-21
+        # without a word. The function-level half is what reddens it.
+        "label": "telemetry: a ping through the allowed iphlpapi",
+        "file": "beantester/winenv.py",
+        "old": "        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))",
+        "new": "        ctypes.windll.iphlpapi.IcmpSendEcho2(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)",
+        "test": "test_no_allowed_library_is_used_to_send_a_packet",
+    },
+    {
         # The bypass an outside review found, and the measurement confirmed: the
         # scan read `socket.x(...)` and nothing else, so `import socket as s`
         # walked straight through - as did the from-import form. Registering the

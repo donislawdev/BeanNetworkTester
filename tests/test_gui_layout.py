@@ -5,7 +5,11 @@ gave the session panel and the event log no space at all: "Mark bug", "Save repr
 report", "Copy CLI" and the whole event table were simply unreachable. Nothing
 could catch that, because the fake tkinter ignored geometry calls entirely.
 """
-from fakes import check
+import ast
+import glob
+import os
+
+from fakes import ROOT, check
 from gui_harness import run_gui
 
 
@@ -303,6 +307,81 @@ def test_every_page_is_registered_and_built():
         assert set(app.pages) == {p.id for p in PAGES}
         assert len(app.nb.tabs()) == 3
     """)
+
+
+def test_the_render_check_walks_every_page_and_every_sub_tab():
+    """``tools/ci_gui_render.py`` measures only what is ON SCREEN (``_scan`` skips
+    unmapped widgets, and a hidden notebook tab is unmapped - measured on real Tk,
+    2026-09-21). It used to select the three pages by name and never a sub-tab, so
+    the Session and Events tabs of the Statistics page were never measured: a
+    clipped button there passed every CI run. Reproduced with a 254 px button in
+    a 60 px frame on the Events tab - "OK" before, "CLIPPED BUTTON" after.
+
+    This pins the WIRING on the fake Tk, where the harness can afford it: the
+    production walk (``walk_surfaces``, driven with a recording scan) puts every
+    registry surface on screen BEFORE scanning it, in registry order; and
+    ``check_language`` reaches the walk through that function rather than through
+    a list of names of its own - checked on the source, because the real
+    ``check_language`` needs a real display. The measurement itself needs real
+    fonts and stays with the tool under Xvfb.
+    """
+    run_gui("""
+        import os, sys
+        # bnt is the launcher at the repo root, so its folder is the repo
+        sys.path.insert(0, os.path.join(os.path.dirname(bnt.__file__), "tools"))
+        import ci_gui_render as render
+        from beantester.gui.pages import PAGES
+
+        expected = []
+        for page_def in PAGES:
+            subs = getattr(app.pages[page_def.id], "SUBPAGES", ())
+            expected += [(page_def.id, sub) for sub, _label in subs] or [(page_def.id, None)]
+        assert list(render.surfaces(app)) == expected
+
+        # The production walk, with the scan replaced by a recorder that writes
+        # down what is on screen at the moment the scan runs - which is the only
+        # moment that matters, and the one the old loop got wrong for sub-tabs.
+        seen = []
+        def record():
+            page = app.current_page()
+            seen.append((page.ID, page.current() if hasattr(page, "current") else None))
+        walked = render.walk_surfaces(app, root, record)
+        assert seen == expected, (seen, expected)
+        assert walked == [p if s is None else f"{p}/{s}" for p, s in expected]
+        # The two tabs that were never on screen before, named so a registry that
+        # loses them (or a page that stops exposing SUBPAGES) is a red line here.
+        assert ("statistics", "session") in seen and ("statistics", "events") in seen
+        assert ("control", None) in seen and ("connections", None) in seen
+    """)
+    # check_language cannot run here (it builds its own Tk root and reads real
+    # pixel metrics), so the last link is pinned on its source: it calls the walk,
+    # and it names no page itself - a hard-coded list creeping back is exactly
+    # the regression, and it would leave every assertion above green.
+    func = next(n for n in ast.walk(_parsed("tools", "ci_gui_render.py"))
+                if isinstance(n, ast.FunctionDef) and n.name == "check_language")
+    called = {n.func.id for n in ast.walk(func)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("check_language walks the pages through walk_surfaces",
+          "walk_surfaces" in called, f"({sorted(called)})")
+    # The page ids, read off the page classes' `ID = "..."` rather than imported:
+    # importing the page package would pull the real tkinter into this
+    # interpreter, which the GUI harness keeps out on purpose.
+    page_ids = {n.value.value
+                for path in glob.glob(os.path.join(ROOT, "beantester", "gui", "pages", "*.py"))
+                for n in ast.walk(_parsed(path))
+                if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+                and any(isinstance(t, ast.Name) and t.id == "ID" for t in n.targets)}
+    check("the page ids were found", page_ids >= {"control", "statistics", "connections"},
+          f"({sorted(page_ids)})")
+    named = [n.value for n in ast.walk(func)
+             if isinstance(n, ast.Constant) and n.value in page_ids]
+    check("check_language names no page of its own", not named, f"({named})")
+
+
+def _parsed(*parts):
+    path = parts[0] if os.path.isabs(parts[0]) else os.path.join(ROOT, *parts)
+    with open(path, encoding="utf-8") as handle:
+        return ast.parse(handle.read())
 
 
 def test_fields_with_a_help_sheet_get_the_question_mark_button():
