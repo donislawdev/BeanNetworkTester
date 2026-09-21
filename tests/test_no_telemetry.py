@@ -307,6 +307,28 @@ def _url_scheme(text):
     return head.rsplit(None, 1)[-1].lower()
 
 
+def _string_findings(node, docstrings):
+    """What one string constant gives away: an endpoint, or a sending function
+    named by its string (``getattr(lib, "IcmpSendEcho2")``, ``lib["..."]`` - the
+    string IS the lookup, whatever surrounds it). Docstrings are prose, not code.
+
+    Split out of ``findings`` for the complexity ratchet (`tests/test_code_shape.py`):
+    the wire check pushed that function into the crowd band, and the ratchet's
+    answer is a smaller function, not a bigger number.
+    """
+    if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+        return []
+    if id(node) in docstrings:
+        return []
+    out = []
+    if "://" in node.value and _url_scheme(node.value) in ("http", "https", "ftp",
+                                                            "ws", "wss"):
+        out.append(("url", node.value[:60], node.lineno))
+    if node.value in WIRE_FUNCTIONS:
+        out.append(("wire", node.value, node.lineno))
+    return out
+
+
 def findings(source, rel):
     """Every network finding in one module: a list of ``(kind, detail, line)``.
 
@@ -347,14 +369,7 @@ def findings(source, rel):
                 found.append(("call", (rel, owner, name), node.lineno))
             if owner in ("subprocess", "os") and name in SPAWN_CALLS:
                 found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if id(node) not in docstrings and "://" in node.value:
-                if _url_scheme(node.value) in ("http", "https", "ftp", "ws", "wss"):
-                    found.append(("url", node.value[:60], node.lineno))
-            # A function reached by its name as a string: getattr(lib, "...") or
-            # lib["..."]. The string IS the lookup, whatever surrounds it.
-            if id(node) not in docstrings and node.value in WIRE_FUNCTIONS:
-                found.append(("wire", node.value, node.lineno))
+        found.extend(_string_findings(node, docstrings))
         # A function reached as an attribute, off whatever holds the library - a
         # loader chain or a handle stored in an instance. Matching the attribute
         # alone is what covers the handle case, which no static scan can trace.
