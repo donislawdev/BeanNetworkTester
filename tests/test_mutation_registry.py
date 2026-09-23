@@ -11,7 +11,7 @@ rigorous.
 
 So the claims move here, as data, in three lists that say three different things:
 
-* ``MUTATIONS`` - re-runnable today. ``internal_tools/mutate.py`` breaks the named
+* ``MUTATIONS`` - re-runnable today. ``tools/mutate.py`` breaks the named
   behaviour and proves the named test reddens. This is the only list that is proof.
 * ``PROVEN_BY_HAND`` - a mutation WAS performed and dated, by a session, with no
   re-runnable entry. The claim rests on that record, not on anything a machine can
@@ -2599,6 +2599,15 @@ MUTATIONS = [
         "new": '"dialogs.match_help_title",\n                            '
                '"dialogs.match_help",',
         "test": "test_every_question_mark_opens_its_own_sheet",
+    },
+    {
+        # The runner's own refusal gone: a typo'd filter falls through to an empty
+        # run again, which crashed - or, with --changed, reported "nothing touched".
+        "label": "mutate: a label filter that matches nothing is run anyway",
+        "file": "tools/mutate.py",
+        "old": "    if needle and not entries:\n",
+        "new": "    if False:\n",
+        "test": "test_a_label_filter_that_matches_nothing_is_a_usage_error",
     },
 ]
 

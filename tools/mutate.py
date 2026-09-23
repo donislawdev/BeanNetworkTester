@@ -41,6 +41,9 @@ Usage
                                                # against that ref - what a pull
                                                # request runs, usually seconds
 
+A filter that matches no label, a second word or an unknown option is a usage
+error (exit 2) and runs nothing: it is not a result, green or red.
+
 `--changed` exists because the full run is minutes (~13 on the developer machine,
 117 entries) and a pull request touches a handful of files. It compares with
 `git diff --name-only <ref>...HEAD`, the three-dot form, so a change on the base
@@ -132,6 +135,9 @@ def changed_files(ref):
 
 def main(argv):
     argv = list(argv[1:])
+    if any(arg in ("-h", "--help") for arg in argv):
+        print(__doc__[__doc__.index("Usage"):].rstrip())
+        return 0
     ref = None
     if "--changed" in argv:
         position = argv.index("--changed")
@@ -141,9 +147,20 @@ def main(argv):
             print("mutate: --changed needs a ref", file=sys.stderr)
             return 2
         del argv[position:position + 2]
+    # Anything else that is not ONE label filter is a mistake in the command, and
+    # it used to be read as a filter: `--help` crashed on an empty run, and a
+    # second word was dropped without a word, so the run looked narrower than asked.
+    if len(argv) > 1 or any(arg.startswith("-") for arg in argv):
+        print("mutate: expected at most one label filter, got %s" % argv, file=sys.stderr)
+        return 2
     needle = argv[0] if argv else ""
 
     entries = [m for m in MUTATIONS if needle in m["label"]]
+    if needle and not entries:
+        # Not a result, before --changed can call it one: a typo in the filter would
+        # otherwise print "nothing guarded was touched" and exit 0.
+        print("mutate: no registry entry has %r in its label" % needle, file=sys.stderr)
+        return 2
     if ref is not None:
         touched = changed_files(ref)
         entries = [m for m in entries if m["file"].replace("\\", "/") in touched]
