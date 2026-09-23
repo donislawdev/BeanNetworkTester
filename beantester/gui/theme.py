@@ -40,6 +40,9 @@ FG, MUT = "#e4e6eb", "#9aa0aa"
 # to exactly the widget that does nothing.
 DIS_BG, DIS_FG = "#242832", "#616978"
 ACC, OK, WARN = "#4f9dff", "#4caf50", "#ff6b6b"
+# Worth reading, stops nothing - between OK and WARN (which is the error red, its
+# name notwithstanding). The amber the connection table gives an impaired row.
+CAUTION = "#ffb454"
 STOP_C = "#e2574c"        # STOP must not look like START
 DOWN_C, UP_C = "#4f9dff", "#ffb454"
 
@@ -74,7 +77,7 @@ MONO_FONT = "Consolas"
 # screen. Same family and size as the Treeview style above it, so the row height
 # (`rowheight`) still fits and nothing is clipped at 125% scaling.
 CONN_COLORS = {
-    "impaired": {"foreground": "#ffb454", "font": (FONT, 9, "bold")},
+    "impaired": {"foreground": CAUTION, "font": (FONT, 9, "bold")},
 }
 
 GRID_C = "#333845"        # chart grid lines
@@ -125,11 +128,15 @@ SPACE = {
 # (`gui/form.py`, width 2); `value` is one address, port or process name - the
 # width of the destination IP field such a value is tested against (`fields.py`,
 # 26); `pid` shows the largest id a Windows process can have in full (a DWORD,
-# ten digits).
+# ten digits); `state` is the column of a diagnostics row's verdict word, wide
+# enough for the longest of the three words in the three languages (English
+# "Warning", bold) so the check names after it line up. The render check measures
+# it: a word that outgrows it is reported as clipped.
 CHARS = {
     "help_button": 2,
     "value": 26,
     "pid": 10,
+    "state": 8,
 }
 
 
@@ -149,6 +156,8 @@ def _style_surfaces(s):
     s.configure("Good.TLabel", background=BG, foreground=OK, font=(FONT, 10, "bold"))
     s.configure("Bad.TLabel", background=BG2, foreground=WARN, font=(FONT, 9))
     s.configure("Status.Bad.TLabel", background=BG, foreground=WARN, font=(FONT, 10, "bold"))
+    s.configure("Status.Warn.TLabel", background=BG, foreground=CAUTION,
+                font=(FONT, 10, "bold"))
     s.configure("Muted.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
     s.configure("Author.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
     s.configure("Stat.TLabel", background=BG2, foreground=FG, font=(FONT, 11, "bold"))

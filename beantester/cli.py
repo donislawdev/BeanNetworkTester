@@ -18,7 +18,7 @@ import sys
 import time
 
 from . import appinfo, clilog, driver, exitcodes, winenv
-from .appinfo import APP_NAME, command_name, program_name, __version__
+from .appinfo import command_name, program_name, version_line
 from .clilog import CliLog
 from . import crashlog
 from .engine import BeanEngine
@@ -173,8 +173,7 @@ def build_arg_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=_DESCRIPTION,
         epilog=exitcodes.HELP_TABLE)
-    p.add_argument("--version", action="version",
-                   version=f"{APP_NAME} {__version__}")
+    p.add_argument("--version", action="version", version=version_line())
     p.add_argument("--license", action="store_true",
                    help="print the licence and the third-party notices, then exit")
     p.add_argument("--gui", action="store_true",
@@ -532,9 +531,8 @@ def _run_doctor(log):
         log.data(dict(event="doctor", ok=ok, data_dir=where,
                       checks=[dict(check=c, state=st, detail=d) for c, st, d in checks]), "")
     else:
-        for check, state, detail in checks:
-            log.data(dict(), f"{state.upper():<4} {check:<18} {detail}")
-        log.data(dict(), f"user files: {where}")
+        for line in driver.format_doctor(checks, where):
+            log.data(dict(), line)
     return exitcodes.OK if ok else exitcodes.RUNTIME
 
 

@@ -24,6 +24,8 @@ import glob
 import os
 
 from fakes import ROOT, check
+from source_imports import internal_imports as _internal_imports
+from source_imports import package_modules as _package_modules
 
 
 def _module_level(path):
@@ -184,126 +186,14 @@ KNOWN_LAZY_CYCLES = {
         "the reason is written at paths.py's lazy import. crashlog sits in the "
         "same knot because it writes THROUGH paths and stamps records with the "
         "version from appinfo.",
-    frozenset({"", "cli", "gui"}):
-        "the launch path, and deliberate: cli.main starts the GUI through a lazy "
-        "import so that `import beantester` never pulls in tkinter (the test "
-        "above is the other half of that rule), and gui reaches back into the "
-        "package facade for the public names.",
+    frozenset({"gui/pages", "gui/pages/conns", "gui/pages/control"}):
+        "the Ctrl+F dispatcher. `focus_search` lives in the page registry, which "
+        "imports every page to list them, and the two pages with a search box "
+        "bind the shortcut to it while they build. Lazily, because at their import "
+        "the registry is still loading and `focus_search` is not defined yet. One "
+        "dispatcher is what stops the two boxes taking Ctrl+F from each other "
+        "(gui/pages/__init__.py).",
 }
-
-
-def _resolve_dotted(dotted, modules):
-    """Longest prefix of an absolute `beantester.a.b` name that is a real module."""
-    parts = dotted.split(".")
-    if parts and parts[0] == "beantester":
-        parts = parts[1:]
-    candidate = "/".join(parts)
-    while candidate:
-        if candidate in modules:
-            return candidate
-        candidate = candidate.rsplit("/", 1)[0] if "/" in candidate else ""
-    return None
-
-
-def _relative_base(node, current):
-    """Package path a `from .x import y` is relative to, as a module path."""
-    parts = current.split("/")[:-1] if "/" in current else []
-    up = node.level - 1
-    if up:
-        parts = parts[:-up] if up <= len(parts) else []
-    if node.module:
-        parts = parts + [node.module.replace(".", "/")]
-    return "/".join(p for p in parts if p)
-
-
-def _named_modules(base, aliases, current, modules):
-    """The submodules `from <base> import a, b` names, else `base` itself.
-
-    🔴 This is the whole trap. `from . import core` is an edge to the SUBMODULE,
-    not to the package's ``__init__``: resolving it the other way reports one
-    23-module cycle covering half the package - measured while writing this, and
-    convincing, because it looks exactly like the tangle a reader expects to find.
-    """
-    hits = {(base + "/" + alias.name).strip("/") for alias in aliases}
-    hits = {h for h in hits if h in modules and h != current}
-    if hits:
-        return hits
-    return {base} if base in modules and base != current else set()
-
-
-def _import_targets(node, current, modules):
-    """Internal modules one import statement points at (empty for anything else)."""
-    if isinstance(node, ast.Import):
-        found = {_resolve_dotted(a.name, modules) for a in node.names}
-        return {f for f in found if f is not None and f != current}
-    if not isinstance(node, ast.ImportFrom):
-        return set()
-    if node.level:
-        return _named_modules(_relative_base(node, current), node.names,
-                              current, modules)
-    if not (node.module or "").startswith("beantester"):
-        return set()
-    base = _resolve_dotted(node.module, modules)
-    return set() if base is None else _named_modules(base, node.names,
-                                                     current, modules)
-
-
-def _statements(nodes):
-    """Every statement reachable from `nodes` without entering a function body.
-
-    Yields `(statement, is_lazy)`. A function body is descended into with
-    is_lazy=True and never resets: an import three blocks deep inside a method is
-    still deferred until that method runs.
-    """
-    stack = [(node, False) for node in reversed(nodes)]
-    while stack:
-        node, is_lazy = stack.pop()
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            stack += [(child, True) for child in reversed(node.body)]
-            continue
-        yield node, is_lazy
-        children = []
-        for attr in ("body", "orelse", "finalbody"):
-            children += getattr(node, attr, None) or []
-        for handler in getattr(node, "handlers", None) or []:
-            children += handler.body
-        stack += [(child, is_lazy) for child in reversed(children)]
-
-
-def _internal_imports(path):
-    """(eager, lazy-only) internal module names for one file, at FULL granularity.
-
-    Unlike ``_module_level`` above, this keeps ``gui/app`` apart from ``gui``:
-    collapsing a subpackage to its top name would merge every module under
-    ``gui/`` into one node and hide any loop inside it.
-    """
-    modules = _package_modules()
-    current = _module_name(path)
-    eager, lazy = set(), set()
-    tree = ast.parse(open(path, encoding="utf-8").read())
-    for node, is_lazy in _statements(tree.body):
-        targets = _import_targets(node, current, modules)
-        (lazy if is_lazy else eager).update(targets)
-    return eager, lazy - eager
-
-
-def _module_name(path):
-    name = os.path.relpath(path, os.path.join(ROOT, "beantester"))
-    name = name.replace(os.sep, "/")[: -len(".py")]
-    if name.endswith("/__init__"):
-        name = name[: -len("/__init__")]
-    return "" if name == "__init__" else name
-
-
-def _package_modules():
-    out = {}
-    for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, "beantester")):
-        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
-        for name in filenames:
-            if name.endswith(".py"):
-                path = os.path.join(dirpath, name)
-                out[_module_name(path)] = path
-    return out
 
 
 def _cycles(graph):
@@ -396,3 +286,24 @@ def test_every_lazy_import_cycle_is_one_this_file_knows_about():
     gone = sorted(sorted(c) for c in known - loops)
     check("a cycle that was broken is removed from the list as well", not gone,
           f"({gone} - the knot is gone, so its entry is now a stale excuse)")
+
+
+def test_a_package_init_resolves_its_relative_imports_inside_itself():
+    """The canary for the resolver both graphs above stand on.
+
+    An ``__init__`` IS its package, so its `.` is itself (``source_imports``).
+    Resolved one level too high, the page registry pointed at ``gui/toolbox`` - a
+    module it never imports - and the tools registry at nothing at all, and both
+    cycle checks passed on those edges.
+    """
+    gui = os.path.join(ROOT, "beantester", "gui")
+    registry, _ = _internal_imports(os.path.join(gui, "toolbox", "__init__.py"))
+    check("the tools registry's edges are its panels",
+          {"gui/toolbox/diagnostics", "gui/toolbox/exprtest"} <= registry,
+          f"({sorted(registry)})")
+    pages, _ = _internal_imports(os.path.join(gui, "pages", "__init__.py"))
+    check("the page registry points at its own pages, not at a neighbour",
+          "gui/pages/toolbox" in pages and "gui/toolbox" not in pages, f"({sorted(pages)})")
+    page, _ = _internal_imports(os.path.join(gui, "pages", "toolbox.py"))
+    check("an ordinary module's `..` is still its package's parent",
+          "gui/toolbox" in page, f"({sorted(page)})")

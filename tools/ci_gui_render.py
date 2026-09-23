@@ -44,6 +44,7 @@ except (AttributeError, ValueError):
 
 import subprocess                                    # noqa: E402
 import tempfile                                      # noqa: E402
+import time                                          # noqa: E402
 from collections.abc import Callable, Iterator       # noqa: E402
 
 from font_coverage import system_can_draw            # noqa: E402
@@ -254,9 +255,42 @@ def walk_surfaces(app: n.App, root: tk.Misc, scan: Callable[[], object]) -> list
         show(app, page_id, sub_id)
         root.update_idletasks()
         root.update()
+        settled = settle(app, page_id, root)
         scan()
-        walked.append(page_id if sub_id is None else f"{page_id}/{sub_id}")
+        name = page_id if sub_id is None else f"{page_id}/{sub_id}"
+        walked.append(name if settled else f"{name} (still working when measured)")
     return walked
+
+
+# How long a surface that fills itself from a worker may take before it is measured
+# anyway - and named as such in the log. The Tools tab's diagnostics runs the
+# environment checks off the UI thread (163 ms measured on a first run); this is
+# the ceiling for a runner having a bad day, not an expected wait.
+SETTLE_S = 10.0
+
+
+def settle(app: n.App, page_id: str, root: tk.Misc, timeout_s: float = SETTLE_S) -> bool:
+    """Wait until the surface on screen has taken in what its worker computed.
+
+    ``walk_surfaces`` measured straight after ``show``, and a tab whose rows arrive
+    from a thread was measured EMPTY - every label it would draw a moment later
+    outside the check. A page that can be busy says so through ``pending()``,
+    which also collects the answer itself: on the fake Tk of the tests no timer
+    ever fires, so waiting for the panel's own poll would wait for ever there.
+    True once settled; False when the time ran out and it is measured as it is.
+    """
+    pending = getattr(app.pages.get(page_id), "pending", None)
+    if pending is None:
+        return True
+    deadline = time.monotonic() + timeout_s
+    while pending():
+        if time.monotonic() > deadline:
+            return False
+        root.update()
+        time.sleep(0.02)
+    root.update_idletasks()
+    root.update()
+    return True
 
 
 def _cancel_afters(root):

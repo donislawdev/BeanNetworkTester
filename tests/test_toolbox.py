@@ -297,3 +297,251 @@ def test_a_rebuild_puts_the_typing_timer_away_first():
         Debounce(Gone(), lambda: ran.append(1))()
         assert ran == []
     """), allow_faults=("on purpose",))
+
+
+# -- diagnostics ------------------------------------------------------------------- #
+# The checks are stood in for: a real driver.doctor() asks the service manager of
+# whatever machine runs the suite. `gate` holds a check back for the tests that need
+# one still running.
+DIAG = """
+import threading, time
+from beantester.gui import dialogs
+from beantester.i18n import T
+from beantester.nettools import diagnostics as dg
+
+FAKE = dg.Diagnosis(False, (dg.Check("python", "ok", "3.14"),
+                            dg.Check("windivert driver", "warn", "WinDivert=running"),
+                            dg.Check("administrator", "fail", "not elevated"),
+                            dg.Check("future check", "later", "no key for it yet")),
+                    "D:/data")
+gate = threading.Event()
+gate.set()
+calls, cleaned = [], []
+
+def fake_diagnose():
+    calls.append("check")
+    gate.wait(5)
+    return FAKE
+
+dg.diagnose = fake_diagnose
+dg.cleanup_blocker = lambda: ""
+dg.clean_up = lambda seen: (cleaned.append(1), ("WinDivert: stopped and removed",))[1]
+
+def open_diag():
+    app.select_page("tools")
+    app.pages["tools"].select("diagnostics")
+    return app.pages["tools"].panels["diagnostics"]
+
+def settle(panel):
+    deadline = time.monotonic() + 5
+    while panel.pending():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def texts(widget):
+    return [w.kw.get("text") for w in fake_tk.walk(widget) if w.kw.get("text")]
+
+def style_of(widget, text):
+    return next(w.kw.get("style") for w in fake_tk.walk(widget) if w.kw.get("text") == text)
+"""
+
+
+def test_diagnostics_shows_every_check_with_its_verdict_and_checks_once_by_itself():
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        assert calls == ["check"], "the first view checks once, by itself"
+        shown = texts(panel.rows)
+        for name, state, style in (("python", "ok", "Good.TLabel"),
+                                   ("windivert driver", "warn", "Status.Warn.TLabel"),
+                                   ("administrator", "fail", "Status.Bad.TLabel")):
+            assert T(dg.check_key(name)) in shown, (name, shown)
+            assert style_of(panel.rows, T("tools.diagnostics.state." + state)) == style
+        # the program's own words, as --doctor prints them
+        assert "WinDivert=running" in shown and "not elevated" in shown, shown
+        # a check doctor() gives before the language files know it: its own name,
+        # never a raw key; a state it does not know: shown as it is, muted
+        assert "future check" in shown and "LATER" in shown, shown
+        assert not [t for t in shown if t.startswith("tools.")], shown
+        assert T("about.data_dir", path="D:/data") in shown
+        assert panel.verdict.cget("text") == T("tools.diagnostics.verdict_fail")
+        assert panel.verdict.cget("style") == "Status.Bad.TLabel"
+        assert "disabled" not in panel.copy_btn.state()
+
+        # checked again: the rows are rebuilt in a NEW container, so the resize
+        # handlers bound to the old one go with it
+        first = panel.rows
+        panel.check()
+        settle(panel)
+        assert calls == ["check", "check"], calls
+        assert panel.rows is not first and not first.winfo_exists()
+    """))
+
+
+def test_a_check_that_fails_says_why_and_keeps_the_rows_it_had():
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        def refused():
+            raise OSError("the service manager refused on purpose")
+        dg.diagnose = refused
+        panel.check()
+        settle(panel)
+        status = panel.status.label
+        assert "refused on purpose" in status.cget("text"), status.cget("text")
+        assert status.cget("style") == "Status.Bad.TLabel"
+        assert "WinDivert=running" in texts(panel.rows), "the last good rows stay"
+        assert "disabled" not in panel.check_btn.state(), "and it can be asked again"
+    """), allow_faults=("on purpose",))
+
+
+def test_cleaning_up_waits_for_the_session_and_for_a_yes():
+    """The driver is the session's: it stays loaded while one runs, starts or stops
+    (the handle opens before `running` turns True and closes after it turns False),
+    and it is unloaded only after the person has read what that interrupts."""
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        answers = []
+        dialogs.ask_yes_no = lambda *a: answers.pop(0)
+        for running, transition in ((True, None), (False, "starting"), (False, "stopping")):
+            app.running, app._transition = running, transition
+            panel.refresh()
+            assert "disabled" in panel.clean_btn.state(), (running, transition)
+            panel.clean()
+            assert cleaned == [], (running, transition)
+        app.running, app._transition = False, None
+        panel.refresh()
+        assert "disabled" not in panel.clean_btn.state()
+
+        answers.append(False)
+        panel.clean()
+        settle(panel)
+        assert cleaned == [], "no means no"
+
+        def start_meanwhile(*a):
+            app.running = True               # a session began while the question was open
+            return True
+        dialogs.ask_yes_no = start_meanwhile
+        panel.clean()
+        assert cleaned == [], "the session is asked about again after the answer"
+        app.running = False
+
+        dialogs.ask_yes_no = lambda *a: True
+        del calls[:]
+        panel.clean()
+        settle(panel)
+        assert cleaned == [1]
+        assert any(T("log.driver") in line and "stopped and removed" in line
+                   for line in app._log_lines), app._log_lines[-3:]
+        assert "stopped and removed" in panel.clean_note.cget("text")
+        assert calls == ["check"], "the driver row is checked again after a cleanup"
+    """))
+
+
+def test_the_cleanup_is_held_to_what_was_open_at_the_yes():
+    """The work runs later, on a worker, and a START pressed in between must still be
+    caught (``driver.cleanup_driver``) - so the count of opened diverts is read on
+    the UI thread at the yes, not by the worker when it gets round to it."""
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        reads, asked = [], []
+        def opens_so_far():
+            reads.append(threading.current_thread() is threading.main_thread())
+            return 41
+        dg.opens_so_far = opens_so_far
+        dg.clean_up = lambda seen: asked.append(seen) or ("done",)
+        dialogs.ask_yes_no = lambda *a: False
+        panel.clean()
+        assert reads == [], "no yes, nothing read"
+        dialogs.ask_yes_no = lambda *a: True
+        panel.clean()
+        settle(panel)
+        assert reads == [True], "read once, on the UI thread"
+        assert asked == [41], asked
+    """))
+
+
+def test_looking_now_puts_the_armed_timer_away_first():
+    """`pending()` looks now while a timer is armed. A timer only forgotten keeps
+    re-arming beside the new one - a second chain `cancel()` cannot reach, which a
+    rebuild leaves firing into a destroyed widget."""
+    run_gui(textwrap.dedent("""
+        from beantester.gui.toolbox.base import Poller
+        armed, cancelled = [], []
+        class Widget:
+            def after(self, ms, fn):
+                armed.append(len(armed) + 1)
+                return armed[-1]
+            def after_cancel(self, timer):
+                cancelled.append(timer)
+        class Job:
+            def busy(self):
+                return True
+            def collect(self):
+                return None
+        poller = Poller(Widget(), Job(), lambda outcome: None)
+        poller.start()
+        poller.now()
+        poller.now()
+        assert armed == [1, 2, 3], armed
+        assert cancelled == [1, 2], "each look puts the armed timer away first"
+        poller.cancel()
+        assert cancelled == armed, "and the teardown reaches the one left"
+    """))
+
+
+def test_a_cleanup_that_cannot_run_from_here_says_why_before_anyone_presses_it():
+    run_gui(DIAG + textwrap.dedent("""
+        dg.cleanup_blocker = lambda: "tools.diagnostics.clean_needs_admin"
+        panel = open_diag()
+        settle(panel)
+        assert "disabled" in panel.clean_btn.state()
+        assert panel.clean_note.cget("text") == T("tools.diagnostics.clean_needs_admin")
+        dialogs.ask_yes_no = lambda *a: True
+        panel.clean()
+        assert cleaned == []
+    """))
+
+
+def test_a_rebuild_mid_check_hands_the_answer_to_the_new_panel():
+    """A language change while the check runs: the answer must reach the panel
+    that exists when it lands, and nothing is asked twice."""
+    run_gui(DIAG + textwrap.dedent("""
+        gate.clear()
+        panel = open_diag()
+        assert panel.job.busy()
+        app._build_ui()
+        again = open_diag()
+        assert again is not panel
+        assert again.status.label.cget("text") == T("tools.common.working")
+        gate.set()
+        settle(again)
+        assert "WinDivert=running" in texts(again.rows)
+        assert calls == ["check"], calls
+
+        # an answer already known is shown after a rebuild, without asking again
+        app._build_ui()
+        third = open_diag()
+        assert "WinDivert=running" in texts(third.rows) and calls == ["check"], calls
+        assert not third.job.busy()
+    """))
+
+
+def test_the_environment_report_is_copied_whole():
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        panel.copy_report()
+        copied = root.clipboard_get()
+        blank = chr(10) * 2
+        # the crash-log block counts faults as they happen, so the two blocks that
+        # are this machine's report are compared exactly and the third by its shape
+        assert copied.split(blank)[:2] == dg.report(FAKE).split(blank)[:2], copied
+        # read, not just headed: a failed section is "crash log: could not be read"
+        crash = copied.split(blank)[2]
+        assert crash.startswith("crash log: ") and "could not be read" not in crash, copied
+        assert any(T("log.copied") in line and T("tools.diagnostics.report_logged") in line
+                   for line in app._log_lines), app._log_lines[-3:]
+    """))

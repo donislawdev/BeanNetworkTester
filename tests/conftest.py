@@ -14,6 +14,7 @@ if ROOT not in sys.path:
 import pytest  # noqa: E402
 
 from beantester import crashlog, i18n  # noqa: E402
+from fakes import forget_the_driver_state  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -47,9 +48,9 @@ def _release_the_machine_wide_driver_marker():
     r"""No test may leave ``Global\BeanNetworkTester.WinDivertInUse`` held.
 
     ``driver.mark_driver_used()`` takes a REAL, machine-wide named mutex - that is
-    the whole point of it, and two tests call it because the behaviour they cover
-    is about that marker. One of them then monkeypatches ``_drop_use_marker`` so
-    the release path never runs, so the handle survived for the rest of the pytest
+    the whole point of it, and tests call it because the behaviour they cover is
+    about that marker. One of them monkeypatches ``_drop_use_marker`` so the
+    release path never runs, so the handle survived for the rest of the pytest
     process.
 
     The damage was order-dependent and looked like flakiness in unrelated places:
@@ -61,16 +62,15 @@ def _release_the_machine_wide_driver_marker():
     watching the mutex through two suite runs - so it also stood in the way of any
     real session started right after the tests.
 
-    Cleaning up here rather than in the two tests is deliberate: the next test to
-    call ``mark_driver_used`` inherits the guarantee instead of having to know
-    about it.
+    The open count ``_OPENS`` goes back to zero for the same reason. Every
+    ``mark_driver_used`` adds one for the rest of the process - measured at the
+    start of successive tests in two files: 0, 1, 2, 3, 4. Nothing went red,
+    because every reader compared a before and an after; the first test to expect
+    a count of its own would have been green alone and red after a neighbour.
+
+    Cleaning up here rather than in each test is deliberate: the next test to call
+    ``mark_driver_used`` inherits the guarantee instead of having to know about it.
+    The body is ``fakes.forget_the_driver_state``, so a test can prove it.
     """
     yield
-    from beantester import driver
-    marker, driver._USE_MARKER[0] = driver._USE_MARKER[0], None
-    driver._DRIVER_USED[0] = False
-    if marker is not None:
-        try:
-            driver._kernel32().CloseHandle(marker[0])
-        except Exception:
-            pass
+    forget_the_driver_state()

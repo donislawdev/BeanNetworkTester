@@ -2,7 +2,7 @@
 
 A DISPATCHER and nothing more. What a tool shows and does lives in its panel; this
 page builds the tabs, decides which panel exists yet, and hands the page calls on
-(``refresh``, ``teardown``, ``focus_search``, ``on_pref_changed``).
+(``refresh``, ``teardown``, ``focus_search``, ``on_pref_changed``, ``pending``).
 
 Three decisions carry this file, each paid for somewhere else first:
 
@@ -125,6 +125,20 @@ class ToolboxPage:
         panel = self.panels.get(self.current())
         if panel is not None:
             self._each("refresh", panels=(panel,))
+
+    def pending(self):
+        """Is the tool on screen still filling itself in? Collects what has arrived.
+
+        For the GUI render check, which waits for this to say no before measuring
+        a tab (``tools/ci_gui_render.py::settle``): a tool whose rows come from a
+        worker would otherwise be measured empty.
+        """
+        handler = getattr(self.panels.get(self.current()), "pending", None)
+        if handler is None:
+            return False
+        with crashlog.quiet(AREA):
+            return bool(handler())
+        return False
 
     def teardown(self):
         self._each("teardown")

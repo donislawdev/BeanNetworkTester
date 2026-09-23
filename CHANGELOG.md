@@ -13,6 +13,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   that is not an address, a port or a PID is reported as that, not as "does not match".
   "Use in the Control field" puts the expression into that field.
 
+- **Diagnostics, on the Tools tab.** When START will not work, this shows why without a
+  console: the same checks as `--doctor`, each marked OK, Warning or Problem, with a "?"
+  that explains them in plain words. "Clean up the driver" unloads a WinDivert driver that
+  was left loaded. "Copy environment report" copies the version and the checks, ready to
+  paste into the "Environment report" field of a bug report.
+
 - **An installer (`.msi`), next to the zip.** It installs the program for everyone on the
   computer, puts `BeanNetworkTester` on `PATH` so it works from any command prompt, and
   adds a Start Menu entry. It shows up in "Apps and features", and removing it there takes

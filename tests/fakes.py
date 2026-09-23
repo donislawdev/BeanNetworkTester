@@ -53,6 +53,25 @@ def wait_until(predicate, timeout=5.0, interval=0.005):
     return bool(predicate())
 
 
+def forget_the_driver_state():
+    """Put ``driver``'s process-wide state back to "no divert was ever opened".
+
+    The teardown of the autouse fixture in ``conftest.py`` (its docstring says why
+    each piece is there). It lives here and not in the fixture because pytest does
+    not want a conftest imported, and the test that proves the reset works has to
+    call it: ``test_no_test_hands_its_driver_state_to_the_next``.
+    """
+    from beantester import driver
+    marker, driver._USE_MARKER[0] = driver._USE_MARKER[0], None
+    driver._DRIVER_USED[0] = False
+    driver._OPENS[0] = 0
+    if marker is not None:
+        try:
+            driver._kernel32().CloseHandle(marker[0])
+        except Exception:
+            pass
+
+
 class FakeTCP:
     def __init__(self, syn=False, ack=False):
         self.syn = syn

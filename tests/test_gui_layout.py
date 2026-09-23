@@ -341,13 +341,25 @@ def test_the_render_check_walks_every_page_and_every_sub_tab():
         # The production walk, with the scan replaced by a recorder that writes
         # down what is on screen at the moment the scan runs - which is the only
         # moment that matters, and the one the old loop got wrong for sub-tabs.
-        seen = []
+        # A tab that fills itself from a worker must be measured AFTER it has:
+        # the diagnostics check is slowed down here so that, straight after
+        # select, its rows are certainly not there yet - the settle step has to
+        # wait for them, or the scan below records a tab still working.
+        import time as _time
+        from beantester.nettools import diagnostics as _dg
+        _real = _dg.diagnose
+        _dg.diagnose = lambda: (_time.sleep(0.3), _real())[1]
+        seen, working_at_scan = [], []
         def record():
             page = app.current_page()
             seen.append((page.ID, page.current() if hasattr(page, "current") else None))
+            if getattr(page, "pending", None) is not None and page.pending():
+                working_at_scan.append(seen[-1])
         walked = render.walk_surfaces(app, root, record)
         assert seen == expected, (seen, expected)
         assert walked == [p if s is None else f"{p}/{s}" for p, s in expected]
+        assert not working_at_scan, working_at_scan
+        assert app.pages["tools"].panels["diagnostics"].job.value.get("check") is not None
         # The two tabs that were never on screen before, named so a registry that
         # loses them (or a page that stops exposing SUBPAGES) is a red line here.
         assert ("statistics", "session") in seen and ("statistics", "events") in seen

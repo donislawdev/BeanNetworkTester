@@ -4,14 +4,20 @@ Twenty tools must read as siblings, and nobody reads this code line by line to
 notice when the ninth one drifts. So the parts that make a panel LOOK and BEHAVE
 like its neighbours live here once, and the panel files only say what is theirs.
 
-Each piece arrives with the first panel that needs it (the expression tester,
-2026-09-23, needs the two below). Work on a worker thread and the shared "Copy"
-come with the first tool that has something slow to do or something to copy -
-code with no user is code no test can prove, and prose that nobody checks. The
-"?" help button is not here: it is the whole window's (``dialogs.help_button``).
+Each piece arrives with the first panel that needs it - code with no user is code
+no test can prove, and prose that nobody checks. The expression tester
+(2026-09-23) brought the remembered inputs and the typing pause; diagnostics (the
+first tool with something slow to do) brought the worker, its poll and the status
+line. The "?" help button and the shared "Copy" are not here: they belong to the
+whole window (``dialogs.help_button``, ``gui/clipboard.py``).
 """
+import time
 import weakref
+from typing import NamedTuple
 
+from ...i18n import T
+from ..labels import wrapping_label
+from ..model_worker import AsyncModel
 from ... import crashlog
 
 # The pause after the last key before a panel reacts to typing. The same quarter
@@ -77,3 +83,156 @@ class Debounce:
     def _fire(self):
         self._job = None
         self._action()
+
+
+# -- work off the UI thread ------------------------------------------------------ #
+# How often a panel looks for its worker's answer while one is due: the connection
+# table's catch-up poll (`ConnsPage.POLL_MS`), fast enough to feel instant and
+# stopped as soon as nothing is due - so an idle tab costs no timer at all.
+POLL_MS = 40
+
+
+class Outcome(NamedTuple):
+    """What one run of a tool's work came to - an answer, or why there is none."""
+    kind: str           # what was asked ("check", "clean"...): one worker per panel
+    value: object       # the answer; None when the work failed
+    error: str          # "" on success, else the exception - program text
+    elapsed_ms: int
+    finished: float     # time.time() at the end: a result says how old it is
+
+
+def _guarded(payload):
+    """Runs on the WORKER: do the work, and turn ANY failure into an Outcome.
+
+    ``AsyncModel`` answers a raising build by keeping the old model and saying
+    nothing - right for a table mid-session, and for a tool it would mean a status
+    line reading "working" for ever. BaseException for the reason the worker gives
+    (``gui/model_worker.py::_run``): a build that ends any other way is the one
+    that is never heard of again.
+    """
+    kind, work = payload
+    started = time.perf_counter()
+    try:
+        value, error = work(), ""
+    except BaseException as exc:
+        crashlog.note(exc, "gui.toolbox")
+        value, error = None, f"{type(exc).__name__}: {exc}"
+    return Outcome(kind, value, error, round((time.perf_counter() - started) * 1000),
+                   time.time())
+
+
+class ToolJob:
+    """One tool's worker in one window, and what it last answered.
+
+    Kept against the App like ``remembered``, not on the panel: a language change
+    rebuilds the panel while the work is still running, and the answer - a list of
+    what the driver cleanup did, say - must reach the panel that exists when it
+    arrives, not die with the one that asked. ``last`` holds the latest outcome of
+    each kind and ``value`` the latest ANSWER, so a failed re-check does not wipe
+    rows that were true a minute ago.
+
+    The worker is ``gui/model_worker.AsyncModel`` unchanged: coalescing (a request
+    made while one runs waits, the newest wins), stale results dropped, and the
+    BaseException handling paid for there.
+    """
+
+    def __init__(self, name):
+        self._model = AsyncModel(_guarded, name=name)
+        self.last = {}          # kind -> Outcome
+        self.value = {}         # kind -> the latest successful Outcome.value
+
+    def run(self, kind, work):
+        """Start ``work()`` on the worker (UI thread; never blocks)."""
+        self._model.request((kind, work))
+
+    def busy(self):
+        """A run is in flight OR its answer has not been collected yet."""
+        return self._model.busy()
+
+    def collect(self):
+        """UI thread: the Outcome that has arrived since the last call, or None."""
+        outcome = self._model.poll()
+        if outcome is not None:
+            self.last[outcome.kind] = outcome
+            if not outcome.error:
+                self.value[outcome.kind] = outcome.value
+        return outcome
+
+
+_JOBS: "weakref.WeakKeyDictionary[object, dict[str, ToolJob]]" = weakref.WeakKeyDictionary()
+
+
+def job(app, tool_id):
+    """This tool's worker for this window (created on first use, kept across rebuilds)."""
+    jobs = _JOBS.setdefault(app, {})
+    if tool_id not in jobs:
+        jobs[tool_id] = ToolJob("tool-" + tool_id)
+    return jobs[tool_id]
+
+
+class Poller:
+    """Look for a job's answer every ``POLL_MS`` while one is due, and hand it over.
+
+    The shape of the connection table's ``_poll_soon`` as an object, for the same
+    reason ``Debounce`` is one: every tool with a worker needs the same three
+    moves - start looking, look NOW (the render check will not wait for a timer),
+    and put the timer away before a rebuild destroys the widget it is scheduled on.
+    """
+
+    def __init__(self, widget, job, on_outcome):
+        self._widget = widget
+        self._job = job
+        self._on_outcome = on_outcome
+        self._timer = None
+
+    def start(self):
+        """Look again in ``POLL_MS`` if an answer is due; do nothing otherwise."""
+        self.cancel()
+        if not self._job.busy():
+            return
+        with crashlog.quiet("gui.toolbox"):
+            self._timer = self._widget.after(POLL_MS, self.now)
+
+    def now(self):
+        """Take an answer that has arrived, hand it over, and keep looking if one is due."""
+        # Cancelled, not just forgotten: `pending()` calls this while a timer is
+        # armed, and a forgotten one keeps re-arming beside the new one - a second
+        # chain that `cancel()` cannot reach and a rebuild leaves firing into a
+        # destroyed widget. From the timer itself this cancels an id that has
+        # already fired, which Tk ignores.
+        self.cancel()
+        outcome = self._job.collect()
+        if outcome is not None:
+            self._on_outcome(outcome)
+        self.start()
+        return self._job.busy()
+
+    def cancel(self):
+        if self._timer is not None:
+            with crashlog.quiet("gui.toolbox"):
+                self._widget.after_cancel(self._timer)
+            self._timer = None
+
+
+class StatusLine:
+    """The line under a tool's buttons: working, done at what time and how fast, or failed.
+
+    The time of day is on it because a result outlives the moment it was taken - a
+    panel rebuilt after a language change shows the last answer rather than
+    asking again, and "done at 14:02:11" says how old that answer is.
+    """
+
+    def __init__(self, parent):
+        self.label = wrapping_label(parent, "")
+
+    def working(self):
+        self.label.config(text=T("tools.common.working"), style="Muted.TLabel")
+
+    def show(self, outcome):
+        if outcome.error:
+            self.label.config(text=T("tools.common.failed", error=outcome.error),
+                              style="Status.Bad.TLabel")
+            return
+        at = time.strftime("%H:%M:%S", time.localtime(outcome.finished))
+        self.label.config(text=T("tools.common.done", time=at, ms=outcome.elapsed_ms),
+                          style="Muted.TLabel")

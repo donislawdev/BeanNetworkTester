@@ -19,6 +19,7 @@ fitting (around seven) and the page starts rendering a tab per group instead.
 """
 from typing import NamedTuple
 
+from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
 
 
@@ -33,6 +34,7 @@ class Tool(NamedTuple):
 # Each tool takes its final place the day it lands.
 TOOLS = (
     Tool(ExprTestPanel.ID, ExprTestPanel.LABEL, ExprTestPanel),
+    Tool(DiagnosticsPanel.ID, DiagnosticsPanel.LABEL, DiagnosticsPanel),
 )
 
 TOOL_BY_ID = {tool.id: tool for tool in TOOLS}

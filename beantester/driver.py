@@ -36,6 +36,7 @@ service when the app closes releases it, and the folder can be deleted normally.
 import glob
 import os
 import tempfile
+import threading
 
 from . import crashlog
 from .paths import directory_is_writable, executable_dir, is_frozen
@@ -50,9 +51,36 @@ _ADVAPI = [None]
 _STATUS_TYPE = [None]
 
 
+# This process's CLAIM on the driver: the use marker below, and a cleanup that lets
+# it go. The Tools tab cleans up on a worker thread while START opens the driver
+# on another, and the two must not interleave - a cleanup that ran between a
+# start's marker and its handle would stop the driver under the new session and
+# leave that session without a marker (``cleanup_driver``). Re-entrant because the
+# cleanup drops the marker while it holds the claim. Held around the service
+# manager calls of a cleanup and nothing slower, so whoever waits on it would
+# otherwise be waiting on the same service manager.
+_CLAIM = threading.RLock()
+# How many real diverts this process has opened. A cleanup asked for before the
+# latest one is out of date by the time it runs (``cleanup_driver``).
+_OPENS = [0]
+
+
 def mark_driver_used():
-    _DRIVER_USED[0] = True
-    _take_use_marker()
+    """A real divert is about to open: count it and take the use marker.
+
+    Called BEFORE the handle opens (``BeanEngine._start_locked``), so a start that
+    arrives while a cleanup runs waits here, and then opens a driver the cleanup
+    has finished with.
+    """
+    with _CLAIM:
+        _DRIVER_USED[0] = True
+        _OPENS[0] += 1
+        _take_use_marker()
+
+
+def opens():
+    """Real diverts opened so far - what a cleanup asked for now must still find."""
+    return _OPENS[0]
 
 
 def driver_used():
@@ -121,8 +149,13 @@ def _kernel32():
 
 def _take_use_marker():
     """Announce to any other instance that this process is using the driver."""
-    if _USE_MARKER[0] is not None or not is_windows():
-        return
+    with _CLAIM:        # "none yet" and "now ours" must be one step (see _drop_use_marker)
+        if _USE_MARKER[0] is None and is_windows():
+            _USE_MARKER[0] = _create_use_marker()
+
+
+def _create_use_marker():
+    """The named object itself: ``(handle, name)``, or None if every name was refused."""
     with crashlog.quiet("driver.use_marker"):
         api = _kernel32()
         for name in _USE_MARKER_NAMES:
@@ -133,26 +166,31 @@ def _take_use_marker():
             # the global name is refused.
             handle = api.CreateMutexW(None, False, name)
             if handle:
-                _USE_MARKER[0] = (handle, name)
-                return
+                return (handle, name)
+    return None
 
 
 def _drop_use_marker():
     """Release ours and answer: is ANOTHER process still using the driver?"""
-    marker, _USE_MARKER[0] = _USE_MARKER[0], None
-    if not is_windows():
+    # Under the claim because two threads can get here - a window's cleanup and the
+    # exit path - and the swap below is two steps: both could read the same marker
+    # before either wrote None, and the second CloseHandle would close whatever
+    # Windows has handed that handle value to since.
+    with _CLAIM:
+        marker, _USE_MARKER[0] = _USE_MARKER[0], None
+        if not is_windows():
+            return False
+        with crashlog.quiet("driver.use_marker"):
+            api = _kernel32()
+            if marker is not None:
+                api.CloseHandle(marker[0])
+            name = marker[1] if marker is not None else _USE_MARKER_NAMES[0]
+            # Ours is closed, so anything left belongs to somebody else.
+            other = api.OpenMutexW(_SYNCHRONIZE, False, name)
+            if other:
+                api.CloseHandle(other)
+                return True
         return False
-    with crashlog.quiet("driver.use_marker"):
-        api = _kernel32()
-        if marker is not None:
-            api.CloseHandle(marker[0])
-        name = marker[1] if marker is not None else _USE_MARKER_NAMES[0]
-        # Ours is closed, so anything left belongs to somebody else.
-        other = api.OpenMutexW(_SYNCHRONIZE, False, name)
-        if other:
-            api.CloseHandle(other)
-            return True
-    return False
 
 # WinDivert registers itself under a version-dependent service name; pydivert
 # has shipped 1.1 / 1.4 / 2.x over time, so every known name is checked.
@@ -396,17 +434,45 @@ def _another_instance_holds_the_driver():
     return False
 
 
-def cleanup_driver():
-    """Stop and remove every leftover WinDivert service. Returns report lines."""
+def cleanup_driver(release_own=False, opens_seen=None):
+    """Stop and remove every leftover WinDivert service. Returns report lines.
+
+    ``release_own`` is for a caller that may itself hold the use marker: the Tools
+    tab asks from a window that has run a session, and such a process keeps its
+    marker until it exits (see the marker block above). While it does, the
+    "another instance?" question cannot tell our handle from theirs, and the
+    warning below would never be printed - the window would stop the driver under
+    somebody else's session without a word. So ours goes first, the way
+    ``release_on_exit`` does it; the next real open takes it again
+    (``mark_driver_used`` runs at every one). The command line never holds one
+    (``--cleanup-driver`` opens no divert), so it keeps the read-only question.
+
+    ``opens_seen`` is the window's too: ``opens()`` read on the UI thread when the
+    person said yes. The work runs later, on a worker, and a START pressed in
+    between can reach the claim first - its marker taken, its handle about to
+    open. A divert opened since the yes is a session this cleanup would stop, so
+    it stands down and says so. The whole cleanup holds the claim, so a START that
+    comes second waits for it instead (``mark_driver_used``).
+    """
+    with _CLAIM:
+        return _cleanup_claimed(release_own, opens_seen)
+
+
+def _cleanup_claimed(release_own, opens_seen):
     lines = []
     if not is_windows():
         return ["Not Windows - there is no WinDivert driver to clean up."]
     if not is_admin():
         return ["Administrator rights are required to unload the WinDivert driver."]
+    if opens_seen is not None and _OPENS[0] != opens_seen:
+        return ["A session was started after this cleanup was asked for - nothing was "
+                "unloaded. Clean up again when no session is running."]
     drivers = installed_drivers()
     if not drivers:
         return ["No WinDivert driver service is installed - nothing to clean up."]
-    if _another_instance_holds_the_driver():
+    someone_else = (_drop_use_marker() if release_own
+                    else _another_instance_holds_the_driver())
+    if someone_else:
         # Said, not obeyed: this function is also `--cleanup-driver`, which is a
         # rescue command someone typed on purpose. But they deserve to know that
         # the session they are about to stop belongs to a running instance, and
@@ -615,3 +681,17 @@ def doctor():
 
     ok = all(state != "fail" for _, state, _ in checks)
     return ok, checks
+
+
+def format_doctor(checks, data_dir):
+    """The ``--doctor`` report as text lines - the one format, wherever it is shown.
+
+    The bug report template asks for exactly this output, and the Tools tab copies
+    the same report to the clipboard: two renderings of one list would drift, and
+    the person pasting would not know which one the template meant. The data
+    directory closes it as a line of its own - it has no pass or fail, so it is
+    not a check with a made-up state.
+    """
+    lines = [f"{state.upper():<4} {check:<18} {detail}" for check, state, detail in checks]
+    lines.append(f"user files: {data_dir}")
+    return lines
