@@ -419,12 +419,16 @@ def _psutil_socket_rows():
     try:
         import psutil
     except ImportError:
-        raise SocketTableUnavailable("missing") from None
+        raise SocketTableUnavailable(
+            "missing", "there is no socket table to read here: psutil is not installed"
+        ) from None
     try:
         found = [("TCP", conn) for conn in psutil.net_connections(kind="tcp")]
         found += [("UDP", conn) for conn in psutil.net_connections(kind="udp")]
     except psutil.AccessDenied as exc:
-        raise SocketTableUnavailable("denied", str(exc)) from exc
+        raise SocketTableUnavailable(
+            "denied", "the system refused to list its sockets - reading them may need "
+                      f"administrator rights ({exc})") from exc
     return [_psutil_row(proto, conn) for proto, conn in found]
 
 
@@ -448,6 +452,18 @@ def socket_rows():
         if len(failed) < len(_ROW_CONVERTERS):
             return rows, failed
     return _psutil_socket_rows(), []
+
+
+def process_names():
+    """``{pid: name}`` for every process, from ONE snapshot, touching no cache.
+
+    The Tools tab names its rows this way and not through ``PortTable.info``:
+    writing into that cache would change what targeting reads (entries from a
+    snapshot carry no start time, so they are checked by age instead). The
+    snapshot names every process WITHOUT opening it - MEASURED 2026-09-23 without
+    administrator rights: all 38 PIDs owning a socket named, ``System`` included.
+    """
+    return {pid: entry[0] for pid, entry in _process_table().items()}
 
 
 def _psutil_process_table():

@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Sockets, on the Tools tab.** Every TCP and UDP socket on this computer, like
+  `netstat -ano`, with no session needed: what is listening, what is connected, its state
+  and the program that owns it. See which port your application listens on before you
+  impair it, or which program holds a port. Search it the way you search the connection
+  table (`lport:8080`, `state:listen`), and right-click a row to target its program or to
+  limit to or block its remote address. It is the first tab of the Tools page.
+
 - **A Tools tab, with a filter tester.** Pick a field from the Control page, type an
   expression and a value, and see at once whether they match - and which part of the
   expression decided it, for example the `!10.0.5.0/24` that excluded `10.0.5.7`. A value

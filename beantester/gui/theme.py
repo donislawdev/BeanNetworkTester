@@ -132,11 +132,29 @@ SPACE = {
 # enough for the longest of the three words in the three languages (English
 # "Warning", bold) so the check names after it line up. The render check measures
 # it: a word that outgrows it is reported as clipped.
+#
+# The rest are the least a TABLE column may shrink to (``SortableTree(min_chars=)``,
+# which widens for a longer header): `search` is the connection table's search box
+# (24); `address` fits an IPv4 address with room, the connection table's remote-IP
+# column (18) - an IPv6 one scrolls, the table is horizontal; `port`, `proto` and
+# `process` are that table's own minimums (6, 5, 16); `tcp_state` fits the longest
+# state name, SYN_RECEIVED (12).
 CHARS = {
     "help_button": 2,
     "value": 26,
     "pid": 10,
     "state": 8,
+    "search": 24,
+    "address": 18,
+    "port": 6,
+    "proto": 5,
+    "process": 16,
+    "tcp_state": 12,
+}
+
+# How many rows a table shows before it scrolls: the connection table's 18.
+ROWS = {
+    "table": 18,
 }
 
 

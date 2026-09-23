@@ -182,6 +182,14 @@ monitor is gone it returns to the centre of the current screen.
   50 000).
 - **Tools** - small helpers for questions you have before or during a test, one sub-tab each.
   Nothing on this tab sends anything over the network. Today:
+  - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
+    session is needed: what is listening, what is connected, its state (LISTEN,
+    ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
+    application listens on before you impair it, or which program holds a port. The table
+    is read when you open the tab and when you press **Refresh**. Search it the way you
+    search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
+    right-click a row to target its program, leave it alone, or limit to or block its
+    remote address. Program names are shown without administrator rights.
   - **Filter tester** - pick a field from the Control page (target process, destination
     IP or port, blocked IP or port), type an expression and a value, and see at once whether
     they match. It also shows which part of the expression selected the value, which `!` part
@@ -1348,7 +1356,8 @@ beantester/              the implementation package
   fields.py              FIELD REGISTRY - single source of truth: type, label, unit,
                          range, form section, profile scope, CLI flag
   validators.py          number and range validation (shared by GUI, CLI and config file)
-  portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback)
+  portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback),
+                         and every socket with its state for the Tools tab
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)
@@ -1371,10 +1380,10 @@ beantester/              the implementation package
     prefs.py             GUI preferences (language, chart, log) stored in ui.json
     pages/               page registry: control, stats (3 sub-tabs), conns, toolbox (Tools)
     toolbox/             the Tools tab: its registry of tools and one panel per tool
-    field_actions.py     filling a Control-page field from elsewhere (table menu, Tools tab)
+    field_actions.py     filling a Control-page field from elsewhere (table row menus, Tools tab)
     clipboard.py         copying a whole text, confirmed by reading the clipboard back
     panels/              secondary windows: "About", "Settings" and the pop-out event log
-    widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap)
+    widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap, row menu)
     model_worker.py      rebuilds a table's model on a worker thread (UI never blocks)
     windows.py           base class and registry for secondary windows
     dialogs.py           dark, in-app replacements for messagebox/simpledialog

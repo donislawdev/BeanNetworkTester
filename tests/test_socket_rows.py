@@ -262,6 +262,15 @@ def test_a_table_nobody_may_read_is_said_to_be_one(monkeypatch):
     check("nothing to ask", missing.value.reason == "missing", f"({missing.value.reason})")
 
 
+def test_process_names_come_from_one_snapshot_and_touch_no_cache(monkeypatch):
+    monkeypatch.setattr(portmap, "_process_table",
+                        lambda: {4: ("System", 0, None), 1234: ("chrome.exe", 1, None)})
+    table = portmap.default_table()
+    before = dict(table._info)
+    check("pid -> name", portmap.process_names() == {4: "System", 1234: "chrome.exe"})
+    check("the targeting cache was not written", table._info == before)
+
+
 # -- the real machine ------------------------------------------------------------ #
 def test_the_real_socket_table_reads_as_sockets():
     """Whatever this machine holds today, every row must be a sane socket.

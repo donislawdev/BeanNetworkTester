@@ -2888,9 +2888,100 @@ MUTATIONS = [
         # "Nobody may read it" becomes an empty table: a claim about the machine.
         "label": "portmap: a refused socket table reads as an empty one",
         "file": "beantester/portmap.py",
-        "old": "        raise SocketTableUnavailable(\"denied\", str(exc)) from exc",
-        "new": "        return []",
+        "old": "        raise SocketTableUnavailable(\n            \"denied\",",
+        "new": "        return []\n        raise SocketTableUnavailable(\n            \"denied\",",
         "test": "test_a_table_nobody_may_read_is_said_to_be_one",
+    },
+    {
+        # The panel checks each answer against the box; without it a search typed
+        # during a read is never run.
+        "label": "sockets: a search typed during a read is never answered",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": ("        if latest is not None and not self._answers_the_inputs(latest):\n"
+                "            self._asked_again()"),
+        "new": "        if False:\n            self._asked_again()",
+        "test": "test_a_search_typed_during_a_read_is_answered_on_that_read",
+    },
+    {
+        # The first tool is built with the window: a read there runs at every start.
+        "label": "sockets: the table is read when the window opens",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        self.poller = Poller(self.frame, self.job, self._on_outcome)",
+        "new": ("        self.poller = Poller(self.frame, self.job, self._on_outcome)\n"
+                "        self._read_if_never()"),
+        "test": "test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up",
+    },
+    {
+        # A read that failed is asked again on every tick, forever.
+        "label": "sockets: a failed first read is retried on every tick",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        if READ not in self.job.last and not self.job.busy():",
+        "new": "        if not self.job.value and not self.job.busy():",
+        "test": "test_a_first_read_that_fails_is_not_an_empty_machine_and_is_not_retried_by_itself",
+    },
+    {
+        # The PID shows under "process" and the name under "PID".
+        "label": "sockets: a cell sits under another column's header",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "    return (s.proc, \"\" if s.pid is None else s.pid, s.proto,",
+        "new": "    return (\"\" if s.pid is None else s.pid, s.proc, s.proto,",
+        "test": "test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up",
+    },
+    {
+        # fe80::5%12 goes into dst_ip / block_ip: an interface, not an address.
+        "label": "sockets: the IPv6 zone goes into the Control field",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "    return s.remote_ip.split(\"%\")[0]",
+        "new": "    return s.remote_ip",
+        "test": "test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields",
+    },
+    {
+        # "Target this process" offered on a TIME_WAIT row, "Block" on a listener.
+        "label": "sockets: the row menu offers what the row cannot do",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "state=\"normal\" if allowed else \"disabled\")",
+        "new": "state=\"normal\")",
+        "test": "test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields",
+    },
+    {
+        # Two identical sockets, one key: a click on one selects the other.
+        "label": "sockets: two identical sockets share one key",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        yield Socket(f\"{base}|{repeat}\",",
+        "new": "        yield Socket(f\"{base}\",",
+        "test": "test_two_identical_sockets_are_two_rows_with_two_keys",
+    },
+    {
+        # A TIME_WAIT row is named "[System Process]", the snapshot's PID 0.
+        "label": "sockets: a socket no process owns is named after PID 0",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        name = names.get(row.pid, \"\") if row.pid else \"\"",
+        "new": "        name = names.get(row.pid, \"\")",
+        "test": "test_a_read_names_each_row_after_the_table_and_keeps_what_failed",
+    },
+    {
+        # 127.0.0.1 before 93.184.216.34, and IPv6 among IPv4.
+        "label": "sockets: addresses sort as text",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        key = cache[text] = (address.version, int(address))",
+        "new": "        key = cache[text] = (0, text)",
+        "test": "test_a_column_sorts_by_value_with_empty_cells_last_both_ways",
+    },
+    {
+        # An empty cell is sorted as the smallest value instead of no value.
+        "label": "sockets: empty cells sort first",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return [s for _k, s in present] + [s for k, s in keyed if k is None]",
+        "new": "    return [s for k, s in keyed if k is None] + [s for _k, s in present]",
+        "test": "test_a_column_sorts_by_value_with_empty_cells_last_both_ways",
+    },
+    {
+        # proc: on another table stops reading the PID: `proc:1234` finds nothing.
+        "label": "search: another table's proc: judges the name alone",
+        "file": "beantester/views.py",
+        "old": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(*g(c, m)))",
+        "new": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(None, g(c, m)[1]))",
+        "test": "test_the_search_is_the_connection_tables_language_on_these_columns",
     },
 ]
 
