@@ -70,6 +70,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   refused. Every full flag still works, so saved reproduction commands and every example in
   this documentation are unaffected - only hand-typed abbreviations need writing out in full.
 
+- **A middle click on the connection table no longer opens its row menu.** The menu opens
+  on a right click, or from the keyboard with Shift+F10 or the menu key, as before.
+
 ### Docs
 
 - **The README now points at the website.** One link under the badges, and a second after the

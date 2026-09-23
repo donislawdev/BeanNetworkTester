@@ -266,7 +266,14 @@ class SocketsPanel:
         self.table.set_model(view.rows, render=render, key_of=lambda s: s.key)
         self.count.config(text=T("conns.shown_of", shown=len(view.rows),
                                  total=len(snapshot.sockets)))
-        self.note.config(text="\n".join(self._notes(snapshot)))
+        # Asked of the job, not remembered by the panel: a search or a sort after a
+        # failed Refresh shows the same old rows, and they must still say how old.
+        self.note.config(text="\n".join(self._notes(snapshot, stale=self._read_failed())))
+
+    def _read_failed(self):
+        """The newest read failed, so the rows on screen are older than the last try."""
+        read = self.job.last.get(READ)
+        return bool(read is not None and read.error)
 
     def _notes(self, snapshot, stale=False):
         lines = []

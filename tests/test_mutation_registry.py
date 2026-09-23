@@ -2976,6 +2976,47 @@ MUTATIONS = [
         "test": "test_a_column_sorts_by_value_with_empty_cells_last_both_ways",
     },
     {
+        # A search after a failed Refresh shows the old rows as if they were fresh.
+        "label": "sockets: a search after a failed read drops the rows' age",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "stale=self._read_failed()",
+        "new": "stale=False",
+        "test": "test_a_read_that_fails_says_why_and_keeps_the_rows_it_had",
+    },
+    {
+        # The reason is lost on the way: portmap's exception reaches the window as is.
+        "label": "sockets: a refused table reaches the window without its reason",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        raise Unreadable(UNREADABLE_KEYS.get(exc.reason, \"\"), str(exc)) from exc",
+        "new": "        raise",
+        "test": "test_a_table_nobody_may_read_becomes_a_reason_the_window_can_say",
+    },
+    {
+        # A failure the tool can name is shown as an English exception anyway.
+        "label": "toolbox: a known failure is shown as program text",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "            error = T(outcome.error_key) if outcome.error_key else outcome.error",
+        "new": "            error = outcome.error",
+        "test": "test_a_socket_table_the_system_refuses_is_said_in_the_windows_language",
+    },
+    {
+        # The middle button opens the row menu on Windows and X11 again.
+        "label": "tables: the row menu opens on a middle click",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        self.tree.bind(\"<<ContextMenu>>\", self.row_menu_at_pointer)",
+        "new": ("        self.tree.bind(\"<<ContextMenu>>\", self.row_menu_at_pointer)\n"
+                "        self.tree.bind(\"<Button-2>\", self.row_menu_at_pointer)"),
+        "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
+    },
+    {
+        # The right click binds nothing: the handler exists, the table never calls it.
+        "label": "tables: the right click opens no menu",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        self.tree.bind(\"<<ContextMenu>>\", self.row_menu_at_pointer)",
+        "new": "        self.tree.bind(\"<<ContextMenu>>\", lambda _event: \"break\")",
+        "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
+    },
+    {
         # proc: on another table stops reading the PID: `proc:1234` finds nothing.
         "label": "search: another table's proc: judges the name alone",
         "file": "beantester/views.py",

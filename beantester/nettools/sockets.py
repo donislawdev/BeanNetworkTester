@@ -56,14 +56,35 @@ class View(NamedTuple):
     made_at: float              # time.time(): the newest view is the one shown
 
 
+class Unreadable(Exception):
+    """No socket table could be read, for a reason the person can act on.
+
+    ``user_key`` names the reason in the window's language (``gui/toolbox/base.py``
+    shows it); the message stays the program's own words, for the crash log.
+    """
+
+    def __init__(self, user_key, detail):
+        super().__init__(detail)
+        self.user_key = user_key
+
+
+# ``portmap.SocketTableUnavailable.reason`` -> what the person is told.
+UNREADABLE_KEYS = {"denied": "tools.sockets.error_denied",
+                   "missing": "tools.sockets.error_missing"}
+
+
 def read():
     """Read every socket and name its process. Runs on a worker; may raise.
 
-    ``portmap.SocketTableUnavailable`` when no table can be read at all: an empty
-    table would say "no sockets", which nobody here could know.
+    ``Unreadable`` when no table can be read at all: an empty table would say "no
+    sockets", which nobody here could know. Anything else that fails is the
+    program's own fault and travels as it is.
     """
     started = time.perf_counter()
-    rows, failed = portmap.socket_rows()
+    try:
+        rows, failed = portmap.socket_rows()
+    except portmap.SocketTableUnavailable as exc:
+        raise Unreadable(UNREADABLE_KEYS.get(exc.reason, ""), str(exc)) from exc
     # Named AFTER the table is read, so a process that exited in between leaves
     # its rows without a name - which is true - instead of the table outliving the
     # names it was given. A PID reused inside those few milliseconds is the one

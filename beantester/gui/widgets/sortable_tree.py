@@ -583,8 +583,10 @@ class SortableTree:
         keyboard route survives even if the menu key does not.
         """
         self._show_row_menu = show
-        self.tree.bind("<Button-3>", self.row_menu_at_pointer)
-        self.tree.bind("<Button-2>", self.row_menu_at_pointer)      # macOS
+        # The virtual event, not the buttons: Tk maps it per platform - the right
+        # button on Windows and X11, Button-2 on macOS (library/tk.tcl, 8.6 and 9).
+        # Binding <Button-2> by hand opened the menu on a MIDDLE click everywhere else.
+        self.tree.bind("<<ContextMenu>>", self.row_menu_at_pointer)
         menu_key = "<App>" if self._platform == "win32" else "<Menu>"
         for sequence in ("<Shift-F10>", menu_key):
             try:

@@ -7,6 +7,7 @@ returns is ``tests/test_socket_rows.py``'s business.
 import pytest
 
 from beantester import portmap
+from beantester.i18n import T
 from beantester.nettools import sockets as sk
 from beantester.portmap import SocketRow
 from fakes import check
@@ -53,6 +54,21 @@ def test_a_read_names_each_row_after_the_table_and_keeps_what_failed(machine):
           f"({by_pid[0]!r})")
     check("an owner the system would not say has no name", by_pid[None] == "")
     check("and is counted, so the panel can say why", sk.without_owner(snap) == 1)
+
+
+@pytest.mark.parametrize("reason", sorted(sk.UNREADABLE_KEYS))
+def test_a_table_nobody_may_read_becomes_a_reason_the_window_can_say(monkeypatch, reason):
+    def refused():
+        raise portmap.SocketTableUnavailable(reason, "the program's own words")
+
+    monkeypatch.setattr(portmap, "socket_rows", refused)
+    with pytest.raises(sk.Unreadable) as caught:
+        sk.read()
+    key = caught.value.user_key
+    check("a key the window can say", key == sk.UNREADABLE_KEYS[reason], f"({key})")
+    check("and the language files know it", T(key) != key, f"({key})")
+    check("the program's words kept for the crash log",
+          str(caught.value) == "the program's own words", f"({caught.value})")
 
 
 def test_two_identical_sockets_are_two_rows_with_two_keys(machine):

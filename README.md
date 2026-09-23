@@ -237,7 +237,7 @@ effect.
 | `Ctrl+Enter` | Apply changes |
 | `Ctrl+S` / `Ctrl+O` | Save / Load config file |
 | `Ctrl+L` | Clear the log |
-| `Ctrl+F` | Search: the field search on Control, the table search on Connections |
+| `Ctrl+F` | Search: the field search on Control, the table search on Connections, the socket search on Tools > Sockets |
 
 **Finding a setting.** The box at the top of the Control page searches the settings by name -
 type part of a field or section name, or the command-line flag such as `--loss`. Every match is

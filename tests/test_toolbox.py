@@ -691,6 +691,27 @@ def test_a_read_that_fails_says_why_and_keeps_the_rows_it_had():
         assert shown(panel) == [5353, 8080, 13882, 50001], "the last good rows stay"
         at = time.strftime("%H:%M:%S", time.localtime(panel._latest().snapshot.read_at))
         assert T("tools.sockets.note_stale", time=at) in panel.note.cget("text")
+        # a search is a new VIEW of the same old rows: they must still say how old
+        search(panel, "proto:tcp")
+        settle(panel)
+        assert shown(panel) == [8080, 13882, 50001], shown(panel)
+        assert T("tools.sockets.note_stale", time=at) in panel.note.cget("text"), \\
+            panel.note.cget("text")
+    """), allow_faults=("on purpose",))
+
+
+def test_a_socket_table_the_system_refuses_is_said_in_the_windows_language():
+    """A failure the tool can name is not an English exception in a Polish window;
+    the program's own words still go to the crash log."""
+    run_gui(SOCK + textwrap.dedent("""
+        def refused():
+            raise sk.Unreadable("tools.sockets.error_denied", "the system refused on purpose")
+        sk.read = refused
+        panel = open_sockets()
+        settle(panel)
+        text = panel.status.label.cget("text")
+        assert text == T("tools.common.failed", error=T("tools.sockets.error_denied")), text
+        assert "on purpose" not in text, text
     """), allow_faults=("on purpose",))
 
 
