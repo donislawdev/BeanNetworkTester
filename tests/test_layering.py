@@ -137,9 +137,14 @@ def test_nettools_never_reaches_up_into_the_window():
           not offenders, f"({offenders})")
     # The canary: the same check on a file that DOES reach into the window must
     # say so, or an extractor that resolves nothing would pass everything above.
+    # One assertion per half - the page imports tkinter as well, and that alone
+    # kept a single "anything found?" green while the gui/ half saw nothing.
     page = os.path.join(ROOT, "beantester", "gui", "pages", "toolbox.py")
-    check("the check sees an upward import where there is one",
-          _nettools_violations(page), "(the Tools page imports gui/ and tkinter)")
+    seen = _nettools_violations(page)
+    check("the check resolves an upward import of the package",
+          any(v.split("/")[0] == "gui" for v in seen), f"({seen})")
+    check("the check sees a tkinter import",
+          any(v.split(".")[0] == "tkinter" for v in seen), f"({seen})")
 
 
 def test_tkinter_never_imported_at_module_load_outside_gui():

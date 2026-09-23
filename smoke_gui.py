@@ -3,6 +3,7 @@
 # language switch rebuilds the UI while keeping settings AND the session state.
 # The tick loop runs and no raw translation
 # keys leak into widget texts, profiles behave, CSV export rotates a stale header.
+import json
 import os
 import re
 import sys
@@ -42,13 +43,30 @@ def check(name, cond, detail=""):
         fails.append(name)
 
 
-RAW_KEY = re.compile(r"^(app|buttons|chart|conns|dialogs|errors|events|fields|"
-                     r"filters|frames|log|menu|presets|profiles|session|stats|"
-                     r"summary|tips)\.[a-z0-9_]+$")
+# A raw key on screen is what T() gives back for a key that is in NO language
+# file: a typo, or a key built at run time (the Tools tab names its field choices
+# `tools.exprtest.field.<key>` from the field registry). The prefixes come from
+# the English file instead of being written out here: the written-out list had
+# fallen seven prefixes behind and could not see a key with two dots, so
+# `app.tabs.tools` or `tools.exprtest.tab` would have leaked past it.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lang", "en.json"),
+          encoding="utf-8") as _en_file:
+    EN_TEXTS = {k: v for k, v in json.load(_en_file).items() if not k.startswith("_")}
+RAW_KEY = re.compile(r"^(%s)(\.[a-z0-9_]+)+$"
+                     % "|".join(sorted({re.escape(k.split(".")[0]) for k in EN_TEXTS})))
 
 
 def leaked_keys(root):
     return [t for t in fake_tk.texts(root) if RAW_KEY.match(t.strip())]
+
+
+# The pattern proves it can see before anything relies on it seeing nothing.
+check("GUI: the raw-key pattern matches every key in the English file",
+      all(RAW_KEY.match(k) for k in EN_TEXTS),
+      f"({[k for k in EN_TEXTS if not RAW_KEY.match(k)][:5]})")
+check("GUI: the raw-key pattern matches no translated English text",
+      not any(RAW_KEY.match(v.strip()) for v in EN_TEXTS.values()),
+      f"({[v for v in EN_TEXTS.values() if RAW_KEY.match(v.strip())][:5]})")
 
 
 # -- build in Polish ---------------------------------------------------------
@@ -63,6 +81,10 @@ check("GUI: language selector lists discovered languages",
 # -- no raw translation keys in widget texts (regression: missing T()) -------
 check("GUI: widget texts are translated (no raw i18n keys)", not leaked_keys(root),
       f"({sorted(set(leaked_keys(root)))[:8]})")
+_leak = tk.Label(root, text="tools.exprtest.tab")    # a nested key, as T() leaks it
+check("GUI: the translation check sees a raw key in the widget tree",
+      "tools.exprtest.tab" in leaked_keys(root))
+_leak.destroy()
 
 # -- tick loop + widget refreshers -------------------------------------------
 # Every page and every sub-tab, read from the page registry - this loop used to
