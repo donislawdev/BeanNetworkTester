@@ -65,11 +65,24 @@ check("GUI: widget texts are translated (no raw i18n keys)", not leaked_keys(roo
       f"({sorted(set(leaked_keys(root)))[:8]})")
 
 # -- tick loop + widget refreshers -------------------------------------------
+# Every page and every sub-tab, read from the page registry - this loop used to
+# name three pages, so a fourth would have been built and never ticked here. The
+# Tools tab builds a panel when its tab is first shown, so the translation check
+# is repeated after the walk: those panels did not exist at the first one.
+from beantester.gui.pages import PAGES            # noqa: E402
 app._tick()
-for page in ("statistics", "connections", "control"):
-    app.select_page(page)
+for page_def in PAGES:
+    app.select_page(page_def.id)
+    page = app.pages[page_def.id]
+    for sub_id, _label in getattr(page, "SUBPAGES", ()):
+        page.select(sub_id)
+        app._tick()
     app._tick()
-check("GUI: _tick() runs on every page (stats, chart, tables, summary)", True)
+app.select_page(PAGES[0].id)       # where the steps below have always started
+app._tick()
+check("GUI: _tick() runs on every page and sub-tab (stats, chart, tables, tools)", True)
+check("GUI: every page and sub-tab is translated once it has been shown",
+      not leaked_keys(root), f"({sorted(set(leaked_keys(root)))[:8]})")
 
 # -- worker-thread logging goes through the queue, never straight to widgets --
 import threading as _threading                    # noqa: E402

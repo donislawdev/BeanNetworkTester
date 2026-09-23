@@ -180,6 +180,15 @@ monitor is gone it returns to the centre of the current screen.
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
+- **Tools** - small helpers for questions you have before or during a test, one sub-tab each.
+  Nothing on this tab sends anything over the network. Today:
+  - **Filter tester** - pick a field from the Control page (target process, destination
+    IP or port, blocked IP or port), type an expression and a value, and see at once whether
+    they match. It also shows which part of the expression selected the value, which `!` part
+    excluded it, and how the program reads what you typed. A value that is not an address, a
+    port or a PID is reported as that, not as "does not match". **"Use in the Control
+    field"** puts the expression into that field, replacing what is there. What you type
+    stays until you close the program, even if you switch the language.
 - At the bottom: **START/STOP**, **Apply changes** and **Load/Save file**, with the log beneath.
   This bar is anchored to the bottom edge - no tab can cover it.
 
@@ -1340,6 +1349,8 @@ beantester/              the implementation package
   crashlog.py            crash logger: quiet/note/once, quarantine, background report
   appinfo.py             app identity and version reader (one source: VERSION.txt)
   i18n.py  paths.py  utils.py  processes.py  synthetic.py  legal.py  scenario_runner.py
+  nettools/              the logic behind the Tools tab, one module per tool - no tkinter,
+                         so it is tested without a window
   gui/                   the tkinter interface
     app.py               window composition, state, start/stop, dirty-state
     logview.py           the log box: its queue, its line buffer and its widget
@@ -1351,7 +1362,9 @@ beantester/              the implementation package
     accordion.py         collapsible sections
     ui_state.py          window state persistence (bean_network_tester_ui.json)
     prefs.py             GUI preferences (language, chart, log) stored in ui.json
-    pages/               page registry: control, stats (3 sub-tabs), conns
+    pages/               page registry: control, stats (3 sub-tabs), conns, toolbox (Tools)
+    toolbox/             the Tools tab: its registry of tools and one panel per tool
+    field_actions.py     filling a Control-page field from elsewhere (table menu, Tools tab)
     panels/              secondary windows: "About", "Settings" and the pop-out event log
     widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap)
     model_worker.py      rebuilds a table's model on a worker thread (UI never blocks)
@@ -1362,7 +1375,7 @@ beantester/              the implementation package
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
     csv_export.py        the two CSV exports and the column names they write
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
-lang/                    translations (en, pl)
+lang/                    translations (en, pl, zh)
 tests/                   pytest tests
 smoke_gui.py             GUI smoke on a fake tkinter
 BeanNetworkTester.spec   the build recipe (onedir, console, asInvoker)

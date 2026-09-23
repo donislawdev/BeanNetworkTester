@@ -106,6 +106,42 @@ def test_gui_not_imported_at_module_load_outside_gui():
           not offenders, f"({offenders})")
 
 
+# The logic behind the Tools tab. It exists as its own package so that a tool's
+# answer is computed once, below the window, and a command-line form of the same
+# tool (costed, not built) could call it - both break the day a module in here
+# reaches up. LAZY imports count too, unlike the checks above: "not at load" is
+# the rule for the CLI launching the GUI, while this package must not know the
+# window exists at all.
+NETTOOLS_MAY_NOT_REACH = ("gui", "engine", "cli")
+
+
+def _nettools_violations(path):
+    """Upward imports of one file, eager or lazy, plus any tkinter import at all."""
+    eager, lazy = _internal_imports(path)
+    upward = sorted(m for m in eager | lazy
+                    if m.split("/")[0] in NETTOOLS_MAY_NOT_REACH)
+    tree = ast.parse(open(path, encoding="utf-8").read())
+    for node in ast.walk(tree):
+        names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                 else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+        upward += [n for n in names if n.split(".")[0] == "tkinter"]
+    return upward
+
+
+def test_nettools_never_reaches_up_into_the_window():
+    files = sorted(glob.glob(os.path.join(ROOT, "beantester", "nettools", "*.py")))
+    check("the nettools package was found", len(files) >= 2, f"({files})")
+    offenders = {os.path.relpath(p, ROOT): v for p in files
+                 if (v := _nettools_violations(p))}
+    check("nettools imports no gui/engine/cli and no tkinter, even lazily",
+          not offenders, f"({offenders})")
+    # The canary: the same check on a file that DOES reach into the window must
+    # say so, or an extractor that resolves nothing would pass everything above.
+    page = os.path.join(ROOT, "beantester", "gui", "pages", "toolbox.py")
+    check("the check sees an upward import where there is one",
+          _nettools_violations(page), "(the Tools page imports gui/ and tkinter)")
+
+
 def test_tkinter_never_imported_at_module_load_outside_gui():
     offenders = []
     for path in glob.glob(os.path.join(ROOT, "beantester", "**", "*.py"),

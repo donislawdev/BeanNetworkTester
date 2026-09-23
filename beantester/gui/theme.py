@@ -94,6 +94,50 @@ HIT, HIT_TEXT = "#f5c451", "#16181d"
 SCROLL_BG = "#3a4150"     # scrollbar thumb
 SCROLL_TROUGH = "#20232b"
 
+# -- spacing and sizes, named by ROLE ------------------------------------------ #
+# GUI rule 1 of the project: a view names no pixel, no colour and no text of its
+# own - it asks for a ROLE, and the number lives here. The colours above were
+# already tokens; spacing was not, and ~200 `scaled(<number>)` calls in the older
+# pages are the measurement of what that costs: "make the gaps a little wider"
+# is two hundred edits and a guess about which 8 meant what.
+#
+# The values are not invented. They are what the Connections page - the page the
+# Tools tab sits next to and should read as a sibling of - already uses for the
+# same job (`gui/pages/conns.py`, top bar and table): 10 from the window edge,
+# 8 between the bar and what follows, 4 between a label and the control it names,
+# 8 after a control before the next one - plus the 2 the Statistics page leaves
+# between a row of the Session panel and the next (`gui/pages/stats.py`). Design
+# pixels at 100 %; `space()` scales.
+#
+# Enforced, not hoped for: `tests/test_gui_tokens.py` refuses a hex colour, a
+# `scaled(<number>)` and a numeric padding in the files that follow this rule.
+# Today that is the Tools tab; the older pages move over in their own change.
+SPACE = {
+    "page": 10,         # a page's content from the edge of the window
+    "row": 8,           # between one row of controls and the next
+    "inline": 8,        # after a control, before the next one in the same row
+    "tight": 4,         # between a label and the control it names
+    "hair": 2,          # between a line and the line it belongs to
+}
+
+# Entry widths in CHARACTERS (Tk's own unit for them - they follow the font, so
+# they are not scaled). `help_button` is the "?" the expression fields carry
+# (`gui/form.py`, width 2); `value` is one address, port or process name - the
+# width of the destination IP field such a value is tested against (`fields.py`,
+# 26); `pid` shows the largest id a Windows process can have in full (a DWORD,
+# ten digits).
+CHARS = {
+    "help_button": 2,
+    "value": 26,
+    "pid": 10,
+}
+
+
+def space(role):
+    """Pixels for a spacing ROLE at the current DPI (``SPACE`` above)."""
+    return scaled(SPACE[role])
+
+
 def _style_surfaces(s):
     """Frames, labels and label-frames: the flat colours everything else sits on."""
     s.configure("TFrame", background=BG)

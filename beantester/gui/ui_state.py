@@ -11,6 +11,7 @@ DEFAULTS = {
     "geometry": "",           # "WxH+X+Y", validated against the current screen
     "page": "control",
     "stats_page": "live",
+    "tools_page": "",         # tool id; "" (or a tool that is gone) = the first tab
     "language": "",
     "collapsed": [],          # ids of collapsed Control-page sections
     "log_height": 0,          # PanedWindow sash position (px)

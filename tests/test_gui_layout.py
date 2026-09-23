@@ -303,9 +303,9 @@ def test_tick_skips_the_heavy_work_when_minimised():
 def test_every_page_is_registered_and_built():
     run_gui("""
         from beantester.gui.pages import PAGES
-        assert [p.id for p in PAGES] == ["control", "statistics", "connections"]
+        assert [p.id for p in PAGES] == ["control", "statistics", "connections", "tools"]
         assert set(app.pages) == {p.id for p in PAGES}
-        assert len(app.nb.tabs()) == 3
+        assert len(app.nb.tabs()) == 4
     """)
 
 

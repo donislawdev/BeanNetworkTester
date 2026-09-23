@@ -85,6 +85,7 @@ POISONED_UI_STATE = {
     "geometry": {"a": 1},
     "page": [1, 2, 3],
     "stats_page": 42,
+    "tools_page": ["exprtest"],
     "language": [],
     "collapsed": "control",
     "log_height": "big",

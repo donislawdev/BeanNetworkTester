@@ -27,11 +27,11 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
-from ...matchers import add_term
 from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
 from .. import dialogs
+from ..field_actions import append_to_field
 from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
@@ -126,35 +126,11 @@ REBUILD_MS = 1000
 
 
 
-def append_to_field(app, key, term, log_key):
-    """Add one term to an expression field, keeping what is already there.
-
-    The row actions build a field up click by click - block this address, then
-    that one - so they append. Replacing would throw away what the previous click
-    put there, which is the opposite of what the second click means.
-    ``matchers.add_term`` owns the syntax (convention 10): it drops repeats, keeps
-    the comma escape of a regex intact and never leaves an empty term behind.
-
-    Like every other row action this only fills the form (convention 15): the
-    running session hears about it through the same "apply needed" line, and
-    nothing reaches the engine until the user presses Apply.
-
-    It lives on the PAGE rather than on ``App`` for a measured reason: ``app.py``
-    was already the largest module in the package and sits on the size ratchet in
-    ``tests/test_code_shape.py``, which went red when these three helpers were
-    added there. The ratchet's answer is to put code where it belongs rather than
-    to raise the number, and a Connections row action belongs to the Connections
-    page.
-    """
-    updated = add_term(app.vars[key].get(), term)
-    app.vars[key].set(updated)
-    app.form.set_values(app._settings_for_form())
-    app.on_form_changed()
-    app.log(f"{T(log_key)}: {updated}")
-    if app.running:
-        app.log(T("log.apply_needed"))
-
-
+# The row actions below live on the PAGE rather than on ``App`` for a measured
+# reason: ``app.py`` sits on the size ratchet in ``tests/test_code_shape.py``, which
+# went red when they were added there. The road they take into the form is shared
+# with the Tools tab, so it lives in ``gui/field_actions.py``; what each action
+# MEANS (block this address, leave this process alone) stays here.
 def block_ip_address(app, ip):
     """Add an address to the blocking field (decision pipeline step 2c)."""
     if str(ip or "").strip():
