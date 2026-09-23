@@ -11,8 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   expression and a value, and see at once whether they match - and which part of the
   expression decided it, for example the `!10.0.5.0/24` that excluded `10.0.5.7`. A value
   that is not an address, a port or a PID is reported as that, not as "does not match".
-  "Use in the Control field" puts the expression into that field. Nothing on this tab sends
-  anything over the network.
+  "Use in the Control field" puts the expression into that field.
 
 - **An installer (`.msi`), next to the zip.** It installs the program for everyone on the
   computer, puts `BeanNetworkTester` on `PATH` so it works from any command prompt, and

@@ -648,6 +648,93 @@ def test_the_only_connection_goes_to_the_documented_route_probe():
     check("every connection goes to a documented route probe", not stray, f"({stray})")
 
 
+# -- the Tools tab's own promise ------------------------------------------------ #
+# README ("The window", the Tools entry) says in as many words that nothing on that
+# tab sends anything over the network. Every tool it was planned to hold would be
+# easiest to write with a socket - a port check, a ping, a DNS query - and the
+# analysis of the tab split them into a basket that sends and one that does not.
+# The registries above would let such a tool in with ONE entry and a reason, and
+# the README sentence would go on saying the opposite: prose nothing checks.
+#
+# So the sentence stands only while no file of the tab holds a way out, found by
+# the same `findings` the rest of this file uses (one scanner, canary-tested at the
+# bottom). A tool that reaches for a socket either proves it sends nothing and is
+# listed below with how, or the sentence is reworded - and rewording it means
+# editing TOOLS_TAB_PROMISE, because the README must carry this exact sentence:
+# the promise cannot be edited away from its check by a README change alone.
+TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
+                   "beantester/gui/pages/toolbox.py")
+TOOLS_TAB_PROMISE = "Nothing on this tab sends anything over the network."
+
+# Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
+# exactly as ALLOWED_IMPORTS / ALLOWED_CALLS are. Empty today. Exact in both
+# directions: an entry nothing matches any more fails, like the registries above.
+TOOLS_TAB_QUIET_EXCEPTIONS: dict = {}
+
+# The ctypes libraries a Tools-tab file may load while the promise stands: today's
+# ALLOWED_LIBRARIES, written out on purpose instead of referenced. Adding `dnsapi`
+# to the package allowlist for a DNS tool must not quietly extend it to this tab.
+# `iphlpapi` is here because its sending functions are watched one by one
+# (WIRE_FUNCTIONS) - it reads the socket table and the adapters for the tab.
+TOOLS_TAB_QUIET_LIBRARIES = frozenset({
+    "advapi32", "dwmapi", "iphlpapi", "kernel32", "ntdll", "shcore", "shell32",
+    "user32", "uxtheme", "winmm",
+})
+
+
+def tools_tab_reach(source, rel):
+    """What in one Tools-tab file could put something on the network."""
+    out = []
+    for kind, detail, line in findings(source, rel):
+        if kind == "library" and detail in TOOLS_TAB_QUIET_LIBRARIES:
+            continue
+        key = detail if kind in ("watched-import", "call") else (rel, kind, detail)
+        if key not in TOOLS_TAB_QUIET_EXCEPTIONS:
+            out.append((kind, detail, line))
+    return out
+
+
+def test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can():
+    readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    check("README carries the exact promise this test guards",
+          readme.count(TOOLS_TAB_PROMISE) == 1,
+          "(reworded? change TOOLS_TAB_PROMISE with it - and decide what it now promises)")
+    files = [(rel, path) for rel, path in _shipped() if rel.startswith(TOOLS_TAB_FILES)]
+    check("the Tools tab's files were found", len(files) >= 5, f"({[r for r, _ in files]})")
+    reach, seen = {}, set()
+    for rel, path in files:
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        for kind, detail, _line in findings(source, rel):
+            seen.add(detail if kind in ("watched-import", "call") else (rel, kind, detail))
+        found = tools_tab_reach(source, rel)
+        if found:
+            reach[rel] = found
+    check("nothing on the Tools tab can reach the network while README says so",
+          not reach, f"(prove each sends nothing and list it, or reword the promise: {reach})")
+    stale = sorted(str(k) for k in TOOLS_TAB_QUIET_EXCEPTIONS if k not in seen)
+    check("every quiet exception still matches code", not stale, f"({stale})")
+    check("the tab may load only libraries the package may load at all",
+          TOOLS_TAB_QUIET_LIBRARIES <= ALLOWED_LIBRARIES,
+          f"({sorted(TOOLS_TAB_QUIET_LIBRARIES - ALLOWED_LIBRARIES)})")
+
+
+def test_the_tools_tab_check_sees_each_way_out():
+    """The canary for the check above: each shape a network tool would take."""
+    rel = "beantester/nettools/probe.py"
+    ways_out = {
+        "a socket": "import socket\nsocket.create_connection(('192.0.2.1', 80))\n",
+        "a DNS library": "import ctypes\nctypes.WinDLL('dnsapi.dll')\n",
+        "a ping through iphlpapi": "import ctypes\nctypes.WinDLL('iphlpapi.dll').IcmpSendEcho2\n",
+        "a network client": "import urllib.request\n",
+    }
+    blind = [name for name, code in ways_out.items() if not tools_tab_reach(code, rel)]
+    check("each way out is seen", not blind, f"({blind})")
+    quiet = "import ctypes\nctypes.WinDLL('iphlpapi.dll').GetAdaptersAddresses\n"
+    check("reading the adapters is not a way out", tools_tab_reach(quiet, rel) == [],
+          f"({tools_tab_reach(quiet, rel)})")
+
+
 # -- the canary: the guard has to be shown able to fail ---------------------- #
 # 🔴 Every ALIAS shape below was measured walking straight through on
 # 2026-09-03, which is why they are here one by one rather than as a single

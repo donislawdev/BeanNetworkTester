@@ -2536,6 +2536,24 @@ MUTATIONS = [
         "test": "test_nettools_never_reaches_up_into_the_window",
     },
     {
+        # The README promise edited on its own: without the exact-sentence check the
+        # guard below it would go quiet while the reworded promise stood unchecked.
+        "label": "toolbox promise: the README sentence is reworded behind the check",
+        "file": "README.md",
+        "old": "  Nothing on this tab sends anything over the network. Today:",
+        "new": "  Nothing on this tab sends anything anywhere. Today:",
+        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+    },
+    {
+        # One allowlist entry and a reason would let a sending tool past the
+        # package-wide guard; the tab's own promise must still go red.
+        "label": "toolbox promise: a tool reaches for a socket",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "import ipaddress\nimport re\n",
+        "new": "import ipaddress\nimport re\nimport socket  # noqa: F401\n",
+        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+    },
+    {
         # Only exclusions ("!chromedriver") must still match everything else - the
         # rule matches() has always had, and the one the tester explains.
         "label": "matchers: explain forgets that no positive term means everything",
