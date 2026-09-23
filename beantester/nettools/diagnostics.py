@@ -70,14 +70,24 @@ def cleanup_blocker():
     return ""
 
 
-def clean_up():
+def opens_so_far():
+    """What a cleanup asked for NOW must still find when it runs: read at the yes.
+
+    The real diverts this process has opened (``driver.opens``). The cleanup runs
+    later, on a worker, and stands down if a session opened one in between.
+    """
+    return driver.opens()
+
+
+def clean_up(opens_seen):
     """Unload every leftover WinDivert service. Returns the report lines.
 
     ``release_own`` because a window that has run a session keeps its use marker,
     and without letting it go first the warning about ANOTHER instance could never
-    fire (``driver.cleanup_driver``).
+    fire (``driver.cleanup_driver``). ``opens_seen`` is ``opens_so_far()`` from the
+    moment the person said yes - required, so no caller can leave it out.
     """
-    return tuple(driver.cleanup_driver(release_own=True))
+    return tuple(driver.cleanup_driver(release_own=True, opens_seen=opens_seen))
 
 
 # -- the environment report ------------------------------------------------------ #

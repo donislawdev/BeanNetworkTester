@@ -12,6 +12,7 @@ argtypes/restype on every advapi32 function used. These tests check the two
 properties that keep it fixed and keep it safe off Windows.
 """
 import ctypes
+import threading
 
 from beantester import driver
 from fakes import LANGS, check
@@ -441,6 +442,114 @@ def test_the_use_marker_is_a_noop_off_windows(monkeypatch):
     check("and nobody is reported as holding it", driver._drop_use_marker() is False)
     check("...including the read-only question",
           driver._another_instance_holds_the_driver() is False)
+
+
+# --- the claim: a window's cleanup and a START never interleave ----------------- #
+def _claim_is_held():
+    """Can ANOTHER thread take the driver claim right now? Asked from a second thread
+    because an RLock always lets its own holder in - asked from the caller's thread,
+    the answer would be yes whatever the code under test did."""
+    taken = []
+
+    def attempt():
+        got = driver._CLAIM.acquire(blocking=False)
+        if got:
+            driver._CLAIM.release()
+        taken.append(got)
+
+    probe = threading.Thread(target=attempt)
+    probe.start()
+    probe.join()
+    return not taken[0]
+
+
+def _cleanup_stand_ins(monkeypatch, stopped):
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "running"})
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+    monkeypatch.setattr(driver, "stop_and_remove",
+                        lambda name: stopped.append((name, _claim_is_held()))
+                        or f"{name}: stopped and removed")
+
+
+def test_a_window_cleanup_and_a_start_hold_one_claim(monkeypatch):
+    """The Tools tab cleans up on a worker while START opens the driver on another.
+    A cleanup that ran between a start's marker and its handle would stop the
+    driver under the new session and take its marker away - so the cleanup, the
+    start's count-and-marker, and each marker step hold the same claim."""
+    stopped = []
+    _cleanup_stand_ins(monkeypatch, stopped)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
+    driver.cleanup_driver(release_own=True, opens_seen=driver.opens())
+    check("the cleanup holds the claim while it stops the driver",
+          stopped == [("WinDivert", True)], f"({stopped})")
+
+    # a start: counted and marked under the claim, BEFORE its handle opens
+    marked = []
+    monkeypatch.setattr(driver, "_take_use_marker", lambda: marked.append(_claim_is_held()))
+    before = driver.opens()
+    driver.mark_driver_used()
+    check("a start takes its marker under the claim", marked == [True], f"({marked})")
+    check("and is counted", driver.opens() == before + 1, f"({driver.opens()}, {before})")
+
+
+def test_each_marker_step_is_one_step(monkeypatch):
+    """Taking and dropping the marker are each a read and a write. Two threads can
+    drop it - a window's cleanup and the exit path - and if both read the handle
+    before either cleared it, the second CloseHandle would close whatever Windows
+    has handed that number to since."""
+    class Api:
+        def __init__(self):
+            self.held = []
+
+        def CreateMutexW(self, *_args):
+            self.held.append(("create", _claim_is_held()))
+            return 7
+
+        def CloseHandle(self, _handle):
+            self.held.append(("close", _claim_is_held()))
+            return 1
+
+        def OpenMutexW(self, *_args):
+            return 0
+
+    api = Api()
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "_kernel32", lambda: api)
+    monkeypatch.setattr(driver, "_USE_MARKER", [None])
+    driver._take_use_marker()
+    check("taken", driver._USE_MARKER[0] == (7, driver._USE_MARKER_NAMES[0]),
+          f"({driver._USE_MARKER[0]})")
+    check("nobody else is holding it", driver._drop_use_marker() is False)
+    check("both steps ran under the claim",
+          api.held == [("create", True), ("close", True)], f"({api.held})")
+    check("and ours is gone", driver._USE_MARKER[0] is None)
+
+
+def test_a_cleanup_asked_for_before_a_start_stands_down_for_it(monkeypatch):
+    """The yes is on the UI thread, the work runs later on a worker, and a START
+    pressed in between can reach the claim first. The count read at the yes tells:
+    a divert opened since then is a session this cleanup would stop."""
+    stopped, dropped = [], []
+    _cleanup_stand_ins(monkeypatch, stopped)
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: dropped.append(1) or False)
+    monkeypatch.setattr(driver, "_OPENS", [4])
+    lines = driver.cleanup_driver(release_own=True, opens_seen=3)
+    check("nothing is stopped under the new session", stopped == [], f"({stopped})")
+    check("its marker stays where it is", dropped == [], f"({dropped})")
+    check("and the person is told why and what to do",
+          len(lines) == 1 and "nothing was unloaded" in lines[0]
+          and "Clean up again" in lines[0], f"({lines})")
+
+    lines = driver.cleanup_driver(release_own=True, opens_seen=4)
+    check("nothing opened since the yes: the cleanup runs",
+          [name for name, _held in stopped] == ["WinDivert"] and dropped == [1], f"({lines})")
+    # the command line asks nothing of the kind, whatever the count says
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: False)
+    lines = driver.cleanup_driver()
+    check("--cleanup-driver is not held to a count",
+          any("stopped and removed" in line for line in lines), f"({lines})")
 
 
 # --- open_failure_hint: the advice has to fit the failure --------------------- #

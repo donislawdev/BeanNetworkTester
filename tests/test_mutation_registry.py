@@ -1253,8 +1253,8 @@ MUTATIONS = [
     {
         "label": "tables: an impaired row is marked by colour alone again",
         "file": "beantester/gui/theme.py",
-        "old": "    \"impaired\": {\"foreground\": \"#ffb454\", \"font\": (FONT, 9, \"bold\")},",
-        "new": "    \"impaired\": {\"foreground\": \"#ffb454\"},",
+        "old": "    \"impaired\": {\"foreground\": CAUTION, \"font\": (FONT, 9, \"bold\")},",
+        "new": "    \"impaired\": {\"foreground\": CAUTION},",
         "test": "test_an_impaired_row_is_not_marked_by_colour_alone",
     },
     {
@@ -2611,6 +2611,14 @@ MUTATIONS = [
         "new": "    if False:\n",
         "test": "test_a_label_filter_that_matches_nothing_is_a_usage_error",
     },
+    {
+        # Usage printed, exit 0 - and a run behind it: only counting the runs sees it.
+        "label": "mutate: --help prints the usage and runs mutations anyway",
+        "file": "tools/mutate.py",
+        "old": "        print(__doc__[__doc__.index(\"Usage\"):].rstrip())\n        return 0\n",
+        "new": "        print(__doc__[__doc__.index(\"Usage\"):].rstrip())\n        argv = [\"mutate:\"]\n",
+        "test": "test_help_prints_the_usage_instead_of_running",
+    },
     # -- the Tools tab: diagnostics (T-1) -------------------------------------- #
     {
         # The driver unloaded under the window's own session.
@@ -2648,9 +2656,64 @@ MUTATIONS = [
         # The other half of the same promise: the tab asking the read-only way.
         "label": "diagnostics: the tab cleans up without letting its marker go",
         "file": "beantester/nettools/diagnostics.py",
-        "old": "return tuple(driver.cleanup_driver(release_own=True))",
-        "new": "return tuple(driver.cleanup_driver())",
+        "old": "return tuple(driver.cleanup_driver(release_own=True, opens_seen=opens_seen))",
+        "new": "return tuple(driver.cleanup_driver(opens_seen=opens_seen))",
         "test": "test_the_window_cleans_up_with_its_own_marker_let_go_first",
+    },
+    {
+        # A START pressed during the cleanup opens its handle while the driver stops.
+        "label": "driver: a window's cleanup runs outside the claim",
+        "file": "beantester/driver.py",
+        "old": "    with _CLAIM:\n        return _cleanup_claimed(release_own, opens_seen)",
+        "new": "    if True:\n        return _cleanup_claimed(release_own, opens_seen)",
+        "test": "test_a_window_cleanup_and_a_start_hold_one_claim",
+    },
+    {
+        # ...and the other side: a start that does not wait for a cleanup running.
+        "label": "driver: a start marks the driver without waiting for a cleanup",
+        "file": "beantester/driver.py",
+        "old": "    with _CLAIM:\n        _DRIVER_USED[0] = True",
+        "new": "    if True:\n        _DRIVER_USED[0] = True",
+        "test": "test_a_window_cleanup_and_a_start_hold_one_claim",
+    },
+    {
+        "label": "driver: taking the use marker is two steps again",
+        "file": "beantester/driver.py",
+        "old": "    with _CLAIM:        # \"none yet\" and \"now ours\" must be one step",
+        "new": "    if True:        # \"none yet\" and \"now ours\" must be one step",
+        "test": "test_each_marker_step_is_one_step",
+    },
+    {
+        # Two threads read the same handle and both close it.
+        "label": "driver: dropping the use marker is two steps again",
+        "file": "beantester/driver.py",
+        "old": "    with _CLAIM:\n        marker, _USE_MARKER[0] = _USE_MARKER[0], None",
+        "new": "    if True:\n        marker, _USE_MARKER[0] = _USE_MARKER[0], None",
+        "test": "test_each_marker_step_is_one_step",
+    },
+    {
+        # The START won the claim first; the cleanup stops the driver under it.
+        "label": "driver: a cleanup asked for before a start unloads it anyway",
+        "file": "beantester/driver.py",
+        "old": "    if opens_seen is not None and _OPENS[0] != opens_seen:",
+        "new": "    if False:",
+        "test": "test_a_cleanup_asked_for_before_a_start_stands_down_for_it",
+    },
+    {
+        # Read by the worker, the count already includes the START it must catch.
+        "label": "diagnostics: the open count is read by the worker, not at the yes",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        self._run(CLEAN, lambda: diagnostics.clean_up(seen))",
+        "new": "        self._run(CLEAN, lambda: diagnostics.clean_up(diagnostics.opens_so_far()))",
+        "test": "test_the_cleanup_is_held_to_what_was_open_at_the_yes",
+    },
+    {
+        # A report whose crash-log block failed still starts with "crash log: ".
+        "label": "diagnostics: the crash-log block of the report cannot be read",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "    counts = crashlog.summary()",
+        "new": "    counts = crashlog.summary_that_is_not_there()",
+        "test": "test_the_report_is_the_version_line_and_the_doctor_output",
     },
     {
         # doctor() grows or renames a check and the window shows it unnamed.
@@ -2692,6 +2755,14 @@ MUTATIONS = [
         "test": "test_a_rebuild_mid_check_hands_the_answer_to_the_new_panel",
     },
     {
+        # `pending()` looks while a timer is armed: the forgotten one keeps a chain.
+        "label": "toolbox: looking now leaves the armed timer behind",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "        self.cancel()\n        outcome = self._job.collect()",
+        "new": "        self._timer = None\n        outcome = self._job.collect()",
+        "test": "test_looking_now_puts_the_armed_timer_away_first",
+    },
+    {
         # Refilling the old container: its resize handlers pile up per check.
         "label": "diagnostics: re-checking keeps the old rows container alive",
         "file": "beantester/gui/toolbox/diagnostics.py",
@@ -2729,6 +2800,14 @@ MUTATIONS = [
         "old": "        names |= eager | lazy\n",
         "new": "        names |= set()\n",
         "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+    },
+    {
+        # An __init__ read as a module of its parent: its own edges lost or misfiled.
+        "label": "layering: a package's __init__ resolves its imports one level too high",
+        "file": "tests/source_imports.py",
+        "old": "    if not is_package:\n        parts = parts[:-1]\n",
+        "new": "    parts = parts[:-1]\n",
+        "test": "test_a_package_init_resolves_its_relative_imports_inside_itself",
     },
 ]
 

@@ -35,11 +35,13 @@ def test_a_label_filter_that_matches_nothing_is_a_usage_error(capsys, monkeypatc
 
 
 def test_help_prints_the_usage_instead_of_running(capsys, monkeypatch):
-    monkeypatch.setattr(mutate, "apply_one", lambda entry: ("caught", ""))
+    ran = []
+    monkeypatch.setattr(mutate, "apply_one", lambda entry: ran.append(entry) or ("caught", ""))
     for flag in ("--help", "-h"):
         code, out, _err = _main(capsys, flag)
         check(f"{flag} exits 0", code == 0, f"({code})")
         check(f"{flag} prints the usage", "python tools/mutate.py --changed" in out, f"({out})")
+    check("and no mutation ran", not ran, f"({len(ran)} ran)")
 
 
 def test_more_than_one_filter_or_an_unknown_option_is_refused(capsys, monkeypatch):

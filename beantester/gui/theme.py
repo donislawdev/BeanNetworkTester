@@ -77,7 +77,7 @@ MONO_FONT = "Consolas"
 # screen. Same family and size as the Treeview style above it, so the row height
 # (`rowheight`) still fits and nothing is clipped at 125% scaling.
 CONN_COLORS = {
-    "impaired": {"foreground": "#ffb454", "font": (FONT, 9, "bold")},
+    "impaired": {"foreground": CAUTION, "font": (FONT, 9, "bold")},
 }
 
 GRID_C = "#333845"        # chart grid lines

@@ -195,7 +195,12 @@ class Poller:
 
     def now(self):
         """Take an answer that has arrived, hand it over, and keep looking if one is due."""
-        self._timer = None
+        # Cancelled, not just forgotten: `pending()` calls this while a timer is
+        # armed, and a forgotten one keeps re-arming beside the new one - a second
+        # chain that `cancel()` cannot reach and a rebuild leaves firing into a
+        # destroyed widget. From the timer itself this cancels an id that has
+        # already fired, which Tk ignores.
+        self.cancel()
         outcome = self._job.collect()
         if outcome is not None:
             self._on_outcome(outcome)

@@ -78,8 +78,11 @@ def test_the_report_is_the_version_line_and_the_doctor_output(monkeypatch):
     check("then exactly what --doctor prints",
           blocks[1].split("\n") == driver.format_doctor(diagnosis.checks, "D:/data"),
           f"({blocks[1]!r})")
-    check("then the crash log of this run", blocks[2].startswith("crash log: "),
-          f"({blocks[2]!r})")
+    # Read, not just headed: a section that fails still starts "crash log: " -
+    # "crash log: could not be read (...)" - and would pass a check of the prefix.
+    check("then the crash log of this run",
+          blocks[2].startswith("crash log: ") and blocks[2].endswith("in this run")
+          and "could not be read" not in blocks[2], f"({blocks[2]!r})")
 
 
 def test_the_doctor_format_is_the_one_the_command_line_has_always_printed():
@@ -131,6 +134,11 @@ def test_the_window_cleans_up_with_its_own_marker_let_go_first(monkeypatch):
     without letting it go, the warning about ANOTHER instance could never fire."""
     asked = []
     monkeypatch.setattr(driver, "cleanup_driver",
-                        lambda release_own=False: asked.append(release_own) or ["done"])
-    check("the lines come back", diagnostics.clean_up() == ("done",))
-    check("with release_own", asked == [True], f"({asked})")
+                        lambda release_own=False, opens_seen=None:
+                        asked.append((release_own, opens_seen)) or ["done"])
+    check("the lines come back", diagnostics.clean_up(7) == ("done",))
+    check("with release_own, and what was open at the yes", asked == [(True, 7)],
+          f"({asked})")
+    monkeypatch.setattr(driver, "_OPENS", [5])
+    check("the count read at the yes is the driver's own",
+          diagnostics.opens_so_far() == 5, f"({diagnostics.opens_so_far()})")

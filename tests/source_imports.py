@@ -28,9 +28,20 @@ def _resolve_dotted(dotted, modules):
     return None
 
 
-def _relative_base(node, current):
-    """Package path a `from .x import y` is relative to, as a module path."""
-    parts = current.split("/")[:-1] if "/" in current else []
+def _relative_base(node, current, is_package):
+    """Package path a `from .x import y` is relative to, as a module path.
+
+    🔴 A package's ``__init__`` IS its package, so its `.` is itself, not its
+    parent - `from .diagnostics import X` in ``gui/toolbox/__init__.py`` is
+    ``gui/toolbox/diagnostics``. Resolved the other way, five ``__init__`` files
+    lost every edge they have, and three pointed at the wrong module
+    (``gui/pages -> gui/toolbox``): a real lazy cycle went unseen, and a cycle that
+    does not exist was listed in ``test_layering.KNOWN_LAZY_CYCLES`` with a reason
+    read off the wrong edge.
+    """
+    parts = [p for p in current.split("/") if p]
+    if not is_package:
+        parts = parts[:-1]
     up = node.level - 1
     if up:
         parts = parts[:-up] if up <= len(parts) else []
@@ -54,7 +65,7 @@ def _named_modules(base, aliases, current, modules):
     return {base} if base in modules and base != current else set()
 
 
-def _import_targets(node, current, modules):
+def _import_targets(node, current, modules, is_package):
     """Internal modules one import statement points at (empty for anything else)."""
     if isinstance(node, ast.Import):
         found = {_resolve_dotted(a.name, modules) for a in node.names}
@@ -62,7 +73,7 @@ def _import_targets(node, current, modules):
     if not isinstance(node, ast.ImportFrom):
         return set()
     if node.level:
-        return _named_modules(_relative_base(node, current), node.names,
+        return _named_modules(_relative_base(node, current, is_package), node.names,
                               current, modules)
     if not (node.module or "").startswith("beantester"):
         return set()
@@ -102,11 +113,12 @@ def internal_imports(path):
     """
     modules = package_modules()
     current = module_name(path)
+    is_package = os.path.basename(path) == "__init__.py"
     eager, lazy = set(), set()
     with open(path, encoding="utf-8") as handle:
         tree = ast.parse(handle.read())
     for node, is_lazy in _statements(tree.body):
-        targets = _import_targets(node, current, modules)
+        targets = _import_targets(node, current, modules, is_package)
         (lazy if is_lazy else eager).update(targets)
     return eager, lazy - eager
 

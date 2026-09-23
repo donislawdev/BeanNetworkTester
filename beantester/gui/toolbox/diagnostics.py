@@ -134,8 +134,12 @@ class DiagnosticsPanel:
         if not dialogs.ask_yes_no(self.app.root, T("tools.diagnostics.clean_title"),
                                   T("tools.diagnostics.clean_confirm")):
             return
-        if self._may_clean():               # a session may have begun meanwhile
-            self._run(CLEAN, diagnostics.clean_up)
+        if not self._may_clean():           # a session may have begun meanwhile
+            return
+        # Read HERE, on the UI thread at the yes, and not by the worker when it gets
+        # round to it: a START pressed in between is exactly what it must catch.
+        seen = diagnostics.opens_so_far()
+        self._run(CLEAN, lambda: diagnostics.clean_up(seen))
 
     def copy_report(self):
         diagnosis = self.job.value.get(CHECK)

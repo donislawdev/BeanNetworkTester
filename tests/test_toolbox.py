@@ -325,7 +325,7 @@ def fake_diagnose():
 
 dg.diagnose = fake_diagnose
 dg.cleanup_blocker = lambda: ""
-dg.clean_up = lambda: (cleaned.append(1), ("WinDivert: stopped and removed",))[1]
+dg.clean_up = lambda seen: (cleaned.append(1), ("WinDivert: stopped and removed",))[1]
 
 def open_diag():
     app.select_page("tools")
@@ -439,6 +439,59 @@ def test_cleaning_up_waits_for_the_session_and_for_a_yes():
     """))
 
 
+def test_the_cleanup_is_held_to_what_was_open_at_the_yes():
+    """The work runs later, on a worker, and a START pressed in between must still be
+    caught (``driver.cleanup_driver``) - so the count of opened diverts is read on
+    the UI thread at the yes, not by the worker when it gets round to it."""
+    run_gui(DIAG + textwrap.dedent("""
+        panel = open_diag()
+        settle(panel)
+        reads, asked = [], []
+        def opens_so_far():
+            reads.append(threading.current_thread() is threading.main_thread())
+            return 41
+        dg.opens_so_far = opens_so_far
+        dg.clean_up = lambda seen: asked.append(seen) or ("done",)
+        dialogs.ask_yes_no = lambda *a: False
+        panel.clean()
+        assert reads == [], "no yes, nothing read"
+        dialogs.ask_yes_no = lambda *a: True
+        panel.clean()
+        settle(panel)
+        assert reads == [True], "read once, on the UI thread"
+        assert asked == [41], asked
+    """))
+
+
+def test_looking_now_puts_the_armed_timer_away_first():
+    """`pending()` looks now while a timer is armed. A timer only forgotten keeps
+    re-arming beside the new one - a second chain `cancel()` cannot reach, which a
+    rebuild leaves firing into a destroyed widget."""
+    run_gui(textwrap.dedent("""
+        from beantester.gui.toolbox.base import Poller
+        armed, cancelled = [], []
+        class Widget:
+            def after(self, ms, fn):
+                armed.append(len(armed) + 1)
+                return armed[-1]
+            def after_cancel(self, timer):
+                cancelled.append(timer)
+        class Job:
+            def busy(self):
+                return True
+            def collect(self):
+                return None
+        poller = Poller(Widget(), Job(), lambda outcome: None)
+        poller.start()
+        poller.now()
+        poller.now()
+        assert armed == [1, 2, 3], armed
+        assert cancelled == [1, 2], "each look puts the armed timer away first"
+        poller.cancel()
+        assert cancelled == armed, "and the teardown reaches the one left"
+    """))
+
+
 def test_a_cleanup_that_cannot_run_from_here_says_why_before_anyone_presses_it():
     run_gui(DIAG + textwrap.dedent("""
         dg.cleanup_blocker = lambda: "tools.diagnostics.clean_needs_admin"
@@ -486,7 +539,9 @@ def test_the_environment_report_is_copied_whole():
         # the crash-log block counts faults as they happen, so the two blocks that
         # are this machine's report are compared exactly and the third by its shape
         assert copied.split(blank)[:2] == dg.report(FAKE).split(blank)[:2], copied
-        assert copied.split(blank)[2].startswith("crash log: "), copied
+        # read, not just headed: a failed section is "crash log: could not be read"
+        crash = copied.split(blank)[2]
+        assert crash.startswith("crash log: ") and "could not be read" not in crash, copied
         assert any(T("log.copied") in line and T("tools.diagnostics.report_logged") in line
                    for line in app._log_lines), app._log_lines[-3:]
     """))

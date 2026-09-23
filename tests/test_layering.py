@@ -186,11 +186,13 @@ KNOWN_LAZY_CYCLES = {
         "the reason is written at paths.py's lazy import. crashlog sits in the "
         "same knot because it writes THROUGH paths and stamps records with the "
         "version from appinfo.",
-    frozenset({"", "cli", "gui"}):
-        "the launch path, and deliberate: cli.main starts the GUI through a lazy "
-        "import so that `import beantester` never pulls in tkinter (the test "
-        "above is the other half of that rule), and gui reaches back into the "
-        "package facade for the public names.",
+    frozenset({"gui/pages", "gui/pages/conns", "gui/pages/control"}):
+        "the Ctrl+F dispatcher. `focus_search` lives in the page registry, which "
+        "imports every page to list them, and the two pages with a search box "
+        "bind the shortcut to it while they build. Lazily, because at their import "
+        "the registry is still loading and `focus_search` is not defined yet. One "
+        "dispatcher is what stops the two boxes taking Ctrl+F from each other "
+        "(gui/pages/__init__.py).",
 }
 
 
@@ -284,3 +286,24 @@ def test_every_lazy_import_cycle_is_one_this_file_knows_about():
     gone = sorted(sorted(c) for c in known - loops)
     check("a cycle that was broken is removed from the list as well", not gone,
           f"({gone} - the knot is gone, so its entry is now a stale excuse)")
+
+
+def test_a_package_init_resolves_its_relative_imports_inside_itself():
+    """The canary for the resolver both graphs above stand on.
+
+    An ``__init__`` IS its package, so its `.` is itself (``source_imports``).
+    Resolved one level too high, the page registry pointed at ``gui/toolbox`` - a
+    module it never imports - and the tools registry at nothing at all, and both
+    cycle checks passed on those edges.
+    """
+    gui = os.path.join(ROOT, "beantester", "gui")
+    registry, _ = _internal_imports(os.path.join(gui, "toolbox", "__init__.py"))
+    check("the tools registry's edges are its panels",
+          {"gui/toolbox/diagnostics", "gui/toolbox/exprtest"} <= registry,
+          f"({sorted(registry)})")
+    pages, _ = _internal_imports(os.path.join(gui, "pages", "__init__.py"))
+    check("the page registry points at its own pages, not at a neighbour",
+          "gui/pages/toolbox" in pages and "gui/toolbox" not in pages, f"({sorted(pages)})")
+    page, _ = _internal_imports(os.path.join(gui, "pages", "toolbox.py"))
+    check("an ordinary module's `..` is still its package's parent",
+          "gui/toolbox" in page, f"({sorted(page)})")
