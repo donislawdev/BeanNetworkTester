@@ -193,10 +193,9 @@ class ConnsPage:
         # box understands `port:443` and `ip:10.0.0.0/8`, and a cheat sheet you can
         # read is the only way anyone finds that out. A tooltip cannot be it - it
         # runs away from the pointer as soon as you click.
-        help_btn = ttk.Button(top, text=T("fields.match_help"), style="Help.TButton",
-                              width=2, command=self._show_search_help)
-        help_btn.pack(side="left", padx=(0, scaled(8)))
-        add_tooltip(help_btn, "tips.conn_search_help")
+        dialogs.help_button(top, app.root, "dialogs.conn_search_help_title",
+                            "dialogs.conn_search_help", "tips.conn_search_help").pack(
+            side="left", padx=(0, scaled(8)))
 
         self.pause_var = tk.BooleanVar(value=False)
         pause = ttk.Checkbutton(top, text=T("buttons.freeze"), variable=self.pause_var,
@@ -390,11 +389,6 @@ class ConnsPage:
             self._search_entry.focus_set()
             self._search_entry.select_range(0, "end")
         return "break"
-
-    def _show_search_help(self):
-        """The search cheat sheet, opened by the "?" next to the box."""
-        dialogs.show_help(self.app.root, T("dialogs.conn_search_help_title"),
-                          T("dialogs.conn_search_help"))
 
     def _leave_process_alone(self):
         row = self._selected()

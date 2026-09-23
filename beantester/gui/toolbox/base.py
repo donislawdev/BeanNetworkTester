@@ -5,17 +5,13 @@ notice when the ninth one drifts. So the parts that make a panel LOOK and BEHAVE
 like its neighbours live here once, and the panel files only say what is theirs.
 
 Each piece arrives with the first panel that needs it (the expression tester,
-2026-09-23, needs the three below). Work on a worker thread and the shared "Copy"
+2026-09-23, needs the two below). Work on a worker thread and the shared "Copy"
 come with the first tool that has something slow to do or something to copy -
-code with no user is code no test can prove, and prose that nobody checks.
+code with no user is code no test can prove, and prose that nobody checks. The
+"?" help button is not here: it is the whole window's (``dialogs.help_button``).
 """
 import weakref
-from tkinter import ttk
 
-from ...i18n import T
-from .. import dialogs
-from ..theme import CHARS
-from ..tooltip import add_tooltip
 from ... import crashlog
 
 # The pause after the last key before a panel reacts to typing. The same quarter
@@ -81,18 +77,3 @@ class Debounce:
     def _fire(self):
         self._job = None
         self._action()
-
-
-def help_button(parent, app, title_key, body_key, tip_key):
-    """The "?" that opens a tool's help sheet.
-
-    The same button the expression fields and the connection search carry
-    (``Help.TButton``, ``dialogs.show_help``): a cheat sheet in a tooltip runs away
-    from the pointer the moment you click, which is why that pattern exists.
-    """
-    button = ttk.Button(parent, text=T("fields.match_help"), style="Help.TButton",
-                        width=CHARS["help_button"],
-                        command=lambda: dialogs.show_help(app.root, T(title_key),
-                                                          T(body_key)))
-    add_tooltip(button, tip_key)
-    return button

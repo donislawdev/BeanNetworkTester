@@ -2562,6 +2562,44 @@ MUTATIONS = [
         "new": "        matched = bool(selected) and not excluded",
         "test": "test_explain_names_the_terms_that_decided",
     },
+    {
+        # The import extractor resolving nothing: the page's tkinter import alone
+        # used to keep the canary green, so only the gui/ half can prove this.
+        "label": "layering canary: the import extractor resolves nothing",
+        "file": "tests/test_layering.py",
+        "old": "    eager, lazy = _internal_imports(path)\n    upward = sorted(",
+        "new": "    eager, lazy = set(), set()\n    upward = sorted(",
+        "test": "test_nettools_never_reaches_up_into_the_window",
+    },
+    {
+        # The raw-key pattern back to one dot: `tools.exprtest.tab` on screen went
+        # unseen that way, with every translation check green.
+        "label": "smoke: the raw-key pattern stops seeing nested keys",
+        "file": "smoke_gui.py",
+        "old": 'RAW_KEY = re.compile(r"^(%s)(\\.[a-z0-9_]+)+$"',
+        "new": 'RAW_KEY = re.compile(r"^(%s)\\.[a-z0-9_]+$"',
+        "test": "test_gui_smoke_script",
+    },
+    {
+        # The shared "?" with its sheet's two keys swapped: the right window, the
+        # wrong words, on every "?" at once.
+        "label": "help button: the sheet opens with title and body swapped",
+        "file": "beantester/gui/dialogs.py",
+        "old": "command=lambda: show_help(root, T(title_key), T(body_key)))",
+        "new": "command=lambda: show_help(root, T(body_key), T(title_key)))",
+        "test": "test_every_question_mark_opens_its_own_sheet",
+    },
+    {
+        # One caller handing over another place's sheet - the connection search
+        # opening the expression cheat sheet it used to be copied from.
+        "label": "help button: the connection search opens the expression sheet",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '"dialogs.conn_search_help_title",\n                            '
+               '"dialogs.conn_search_help",',
+        "new": '"dialogs.match_help_title",\n                            '
+               '"dialogs.match_help",',
+        "test": "test_every_question_mark_opens_its_own_sheet",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

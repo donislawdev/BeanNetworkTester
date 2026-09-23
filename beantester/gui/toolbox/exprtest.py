@@ -17,11 +17,12 @@ from ...fields import FIELDS, expression_fields
 from ...i18n import T
 from ...matchers import KIND_PROCESS
 from ...nettools import exprtest
+from .. import dialogs
 from ..field_actions import fill_field
 from ..labels import wrapping_label
 from ..theme import CHARS, popdown_height, popdown_width, space, unhighlight_combobox
 from ..tooltip import add_tooltip
-from .base import Debounce, help_button, remembered
+from .base import Debounce, remembered
 
 # The tester's own name for each field it can test. The REGISTRY decides which
 # fields appear (``fields.expression_fields()``); these keys only name them. The
@@ -119,9 +120,9 @@ class ExprTestPanel:
         picker.grid(row=0, column=1, sticky="w", pady=(0, space("tight")))
         picker.bind("<<ComboboxSelected>>", self._on_field, add="+")
         add_tooltip(picker, "tips.tools_exprtest_field")
-        help_button(grid, self.app, "tools.exprtest.help_title", "tools.exprtest.help_body",
-                    "tips.tools_exprtest_help").grid(row=0, column=2, sticky="e",
-                                                     pady=(0, space("tight")))
+        dialogs.help_button(grid, self.app.root, "tools.exprtest.help_title",
+                            "tools.exprtest.help_body", "tips.tools_exprtest_help").grid(
+            row=0, column=2, sticky="e", pady=(0, space("tight")))
 
     @staticmethod
     def _label(grid, key, row):
