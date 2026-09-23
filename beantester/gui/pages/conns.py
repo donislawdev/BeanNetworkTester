@@ -30,7 +30,7 @@ from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
 from .. import dialogs
-from ..field_actions import append_to_field
+from ..field_actions import block_ip_address, leave_process_alone
 from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
@@ -122,33 +122,6 @@ SEARCH_DEBOUNCE_MS = 250
 # but re-sorting 200 000 rows on every 700 ms tick would burn ~15% of a core for
 # nothing. A user-visible action (sorting, searching) always refreshes at once.
 REBUILD_MS = 1000
-
-
-
-# The row actions below live on the PAGE rather than on ``App`` for a measured
-# reason: ``app.py`` sits on the size ratchet in ``tests/test_code_shape.py``, which
-# went red when they were added there. The road they take into the form is shared
-# with the Tools tab, so it lives in ``gui/field_actions.py``; what each action
-# MEANS (block this address, leave this process alone) stays here.
-def block_ip_address(app, ip):
-    """Add an address to the blocking field (decision pipeline step 2c)."""
-    if str(ip or "").strip():
-        append_to_field(app, "block_ip", str(ip).strip(), "log.block_ip_added")
-
-
-def leave_process_alone(app, name):
-    """Exclude a process from impairment by adding ``!name`` to the target.
-
-    With a target already set this narrows it. With the target EMPTY it turns
-    "impair everything" into "impair everything except this one", because a bare
-    negative means exactly that in this expression language - and that is the case
-    the menu entry is really for.
-    """
-    name = str(name or "").strip()
-    if not name or name == "?":
-        app.log(T("log.no_process_for_row"))
-        return
-    append_to_field(app, "target", f"!{name}", "log.process_excluded")
 
 
 class ConnsPage:

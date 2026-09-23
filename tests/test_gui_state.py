@@ -206,7 +206,7 @@ def test_blocking_and_excluding_from_a_row_accumulate():
     except this", which is the case the menu entry exists for.
     """
     run_gui("""
-        from beantester.gui.pages.conns import block_ip_address, leave_process_alone
+        from beantester.gui.field_actions import block_ip_address, leave_process_alone
 
         block_ip_address(app, "8.8.8.8")
         block_ip_address(app, "1.1.1.1")
