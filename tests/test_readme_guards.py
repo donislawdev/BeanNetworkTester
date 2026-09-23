@@ -51,6 +51,33 @@ def test_project_layout_lists_every_module():
               not missing, f"(missing: {missing})")
 
 
+def _subpackages():
+    """Every package directory under ``beantester/``, as ``name/``.
+
+    The module check above globs two directories on purpose - subpackages are
+    shown in the layout by DIRECTORY, not file by file - which made every
+    subpackage invisible to it: ``nettools/`` and ``gui/toolbox/`` could have been
+    missing from the README with that test green.
+    """
+    found = []
+    for base, dirs, files in os.walk(os.path.join(ROOT, "beantester")):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "build", "dist")]
+        if "__init__.py" in files and base != os.path.join(ROOT, "beantester"):
+            found.append(os.path.basename(base) + "/")
+    return sorted(found)
+
+
+def test_project_layout_names_every_subpackage():
+    packages = _subpackages()
+    check("the subpackage scan found the ones that exist",
+          {"gui/", "pages/", "nettools/", "toolbox/"} <= set(packages), f"({packages})")
+    for readme in READMES:
+        text = _section(_read(readme), "Project layout")
+        missing = [p for p in packages if not re.search(r"(?m)^\s+" + re.escape(p), text)]
+        check(f"{readme} 'Project layout' names every subpackage", not missing,
+              f"(missing: {missing})")
+
+
 # Mechanism keywords that appear verbatim in BOTH the core docstring and the
 # README prose, in pipeline order. Latency and bandwidth are paraphrased
 # differently on each side (latency/delay, bandwidth/throughput), so they are not

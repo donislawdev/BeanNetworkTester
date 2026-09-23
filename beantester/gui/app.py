@@ -758,8 +758,8 @@ class App:
         if not dialogs.ask_yes_no(self.root, T("dialogs.reset_layout_title"),
                                   T("dialogs.reset_layout_body")):
             return
-        for key in ("geometry", "page", "stats_page", "collapsed", "log_height",
-                    "conn_sort", "event_sort"):
+        for key in ("geometry", "page", "stats_page", "tools_page", "collapsed",
+                    "log_height", "conn_sort", "event_sort"):
             self.ui.set(key, UI_DEFAULTS[key])
         for wid in list(self.ui.data):
             if wid.startswith("window."):        # secondary-window geometries

@@ -2444,6 +2444,162 @@ MUTATIONS = [
         "new": "    return number_string(value)",
         "test": "test_a_profile_switch_reaches_the_form_as_a_switch_not_as_text",
     },
+    # -- the Tools tab (2026-09-23) -------------------------------------------- #
+    {
+        # A hand-written list here is what hid two Statistics tabs from the render
+        # check for months; derived, a new tool is measured the day it lands.
+        "label": "toolbox: the sub-tab list stops following the registry",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "    SUBPAGES = tuple((tool.id, tool.label) for tool in TOOLS)",
+        "new": "    SUBPAGES = ()",
+        "test": "test_the_tools_page_is_the_renderer_of_its_registry",
+    },
+    {
+        # The render check selects a sub-tab and measures at once; a panel built
+        # only from <<NotebookTabChanged>> would be an empty tab when measured.
+        "label": "toolbox: select no longer builds the panel it shows",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            self.nb.select(index)\n        self._ensure(tool_id)",
+        "new": "            self.nb.select(index)",
+        "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        "label": "toolbox: a tool that is gone from the registry breaks the page",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        if tool_id not in TOOL_BY_ID:\n            tool_id = TOOLS[0].id",
+        "new": "        if False:\n            tool_id = TOOLS[0].id",
+        "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        # App._tick refreshes the page in one try with the summary bar and the
+        # secondary windows: an unguarded panel would stop them every 700 ms.
+        "label": "toolbox: a panel's refresh reaches the tick unguarded",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": '            self._each("refresh", panels=(panel,))',
+        "new": "            panel.refresh()",
+        "test": "test_a_tool_that_fails_does_not_take_the_tab_or_the_tick_down",
+    },
+    {
+        "label": "toolbox: a rebuild no longer tears the panels down",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": '    def teardown(self):\n        self._each("teardown")',
+        "new": "    def teardown(self):\n        pass",
+        "test": "test_a_rebuild_puts_the_typing_timer_away_first",
+    },
+    {
+        # Saved only when the pause runs out, a language change inside it loses
+        # the last word typed.
+        "label": "toolbox: the tester remembers what was typed only after the pause",
+        "file": "beantester/gui/toolbox/exprtest.py",
+        "old": "        self.memory[name] = self.vars[name].get()\n        self.debounce()",
+        "new": "        self.debounce()",
+        "test": "test_the_tester_answers_and_names_the_term_that_decided",
+    },
+    {
+        # Empty in the Process field means ALL traffic once applied.
+        "label": "toolbox: Use sends an empty expression into the Control field",
+        "file": "beantester/gui/toolbox/exprtest.py",
+        "old": '        return verdict.state in USABLE and bool(self.vars["expression"].get().strip())',
+        "new": "        return verdict.state in USABLE",
+        "test": "test_use_replaces_the_field_and_refuses_an_empty_or_unreadable_expression",
+    },
+    {
+        # matches() says False for a value it cannot read; shown to a person that
+        # is a statement about the expression, which is fine.
+        "label": "exprtest: an address that is not one answers 'does not match'",
+        "file": "beantester/nettools/exprtest.py",
+        "old": '        raise _BadValue("tools.exprtest.bad_ip") from None',
+        "new": "        return (text,)",
+        "test": "test_an_unreadable_value_is_reported_as_the_value_not_as_no_match",
+    },
+    {
+        "label": "exprtest: a number is anything isdigit() accepts",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "    if not _DIGITS.fullmatch(text):",
+        "new": "    if not text.isdigit():",
+        "test": "test_only_ascii_digits_are_a_number",
+    },
+    {
+        "label": "exprtest: a pid left in the box is held against an address",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "    if field.expr_kind != KIND_PROCESS:\n        pid = \"\"",
+        "new": "    if False:\n        pid = \"\"",
+        "test": "test_a_pid_left_behind_does_not_touch_a_field_that_has_none",
+    },
+    {
+        # The logic package calls the window: the day a --tool form of it could no
+        # longer exist without a display.
+        "label": "exprtest: the logic imports the window",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "from ..fields import EXPR, FIELDS",
+        "new": "from ..fields import EXPR, FIELDS\nfrom ..gui import theme  # noqa: F401",
+        "test": "test_nettools_never_reaches_up_into_the_window",
+    },
+    {
+        # The README promise edited on its own: without the exact-sentence check the
+        # guard below it would go quiet while the reworded promise stood unchecked.
+        "label": "toolbox promise: the README sentence is reworded behind the check",
+        "file": "README.md",
+        "old": "  Nothing on this tab sends anything over the network. Today:",
+        "new": "  Nothing on this tab sends anything anywhere. Today:",
+        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+    },
+    {
+        # One allowlist entry and a reason would let a sending tool past the
+        # package-wide guard; the tab's own promise must still go red.
+        "label": "toolbox promise: a tool reaches for a socket",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "import ipaddress\nimport re\n",
+        "new": "import ipaddress\nimport re\nimport socket  # noqa: F401\n",
+        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+    },
+    {
+        # Only exclusions ("!chromedriver") must still match everything else - the
+        # rule matches() has always had, and the one the tester explains.
+        "label": "matchers: explain forgets that no positive term means everything",
+        "file": "beantester/matchers.py",
+        "old": "        matched = (not self._positives or bool(selected)) and not excluded",
+        "new": "        matched = bool(selected) and not excluded",
+        "test": "test_explain_names_the_terms_that_decided",
+    },
+    {
+        # The import extractor resolving nothing: the page's tkinter import alone
+        # used to keep the canary green, so only the gui/ half can prove this.
+        "label": "layering canary: the import extractor resolves nothing",
+        "file": "tests/test_layering.py",
+        "old": "    eager, lazy = _internal_imports(path)\n    upward = sorted(",
+        "new": "    eager, lazy = set(), set()\n    upward = sorted(",
+        "test": "test_nettools_never_reaches_up_into_the_window",
+    },
+    {
+        # The raw-key pattern back to one dot: `tools.exprtest.tab` on screen went
+        # unseen that way, with every translation check green.
+        "label": "smoke: the raw-key pattern stops seeing nested keys",
+        "file": "smoke_gui.py",
+        "old": 'RAW_KEY = re.compile(r"^(%s)(\\.[a-z0-9_]+)+$"',
+        "new": 'RAW_KEY = re.compile(r"^(%s)\\.[a-z0-9_]+$"',
+        "test": "test_gui_smoke_script",
+    },
+    {
+        # The shared "?" with its sheet's two keys swapped: the right window, the
+        # wrong words, on every "?" at once.
+        "label": "help button: the sheet opens with title and body swapped",
+        "file": "beantester/gui/dialogs.py",
+        "old": "command=lambda: show_help(root, T(title_key), T(body_key)))",
+        "new": "command=lambda: show_help(root, T(body_key), T(title_key)))",
+        "test": "test_every_question_mark_opens_its_own_sheet",
+    },
+    {
+        # One caller handing over another place's sheet - the connection search
+        # opening the expression cheat sheet it used to be copied from.
+        "label": "help button: the connection search opens the expression sheet",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '"dialogs.conn_search_help_title",\n                            '
+               '"dialogs.conn_search_help",',
+        "new": '"dialogs.match_help_title",\n                            '
+               '"dialogs.match_help",',
+        "test": "test_every_question_mark_opens_its_own_sheet",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

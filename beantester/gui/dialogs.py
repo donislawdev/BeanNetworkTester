@@ -14,7 +14,8 @@ from tkinter import ttk
 
 from ..i18n import T
 from .scaling import scaled
-from .theme import ACC, BG, FONT, WARN, apply_dark_titlebar
+from .theme import ACC, BG, CHARS, FONT, WARN, apply_dark_titlebar
+from .tooltip import add_tooltip
 from .. import crashlog
 
 WRAP = 380
@@ -172,6 +173,22 @@ def show_help(parent, title, text):
     win.bind("<Return>", lambda e: _close(win, True))
     _center(win, parent)
     return _run(win, True)
+
+
+def help_button(parent, root, title_key, body_key, tip_key):
+    """The "?" that opens a help sheet - the one way this window offers one.
+
+    Hover shows the short tip, a click opens the full sheet through ``show_help``.
+    It lives next to the sheet because it was built by hand four times (twice on
+    the Control form, the connection search, the Tools tab), and a copy is how
+    one of them ends up a different width or opening another field's sheet.
+    Placing it stays with the caller: every row packs its "?" its own way.
+    """
+    button = ttk.Button(parent, text=T("fields.match_help"), style="Help.TButton",
+                        width=CHARS["help_button"],
+                        command=lambda: show_help(root, T(title_key), T(body_key)))
+    add_tooltip(button, tip_key)
+    return button
 
 
 def ask_string(parent, title, prompt):

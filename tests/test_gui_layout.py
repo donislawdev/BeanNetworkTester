@@ -303,9 +303,9 @@ def test_tick_skips_the_heavy_work_when_minimised():
 def test_every_page_is_registered_and_built():
     run_gui("""
         from beantester.gui.pages import PAGES
-        assert [p.id for p in PAGES] == ["control", "statistics", "connections"]
+        assert [p.id for p in PAGES] == ["control", "statistics", "connections", "tools"]
         assert set(app.pages) == {p.id for p in PAGES}
-        assert len(app.nb.tabs()) == 3
+        assert len(app.nb.tabs()) == 4
     """)
 
 
@@ -401,6 +401,60 @@ def test_fields_with_a_help_sheet_get_the_question_mark_button():
         assert set(app.form.helps) == expression_help | own_sheet, app.form.helps
         assert "rate_schedule" not in app.form.helps
         assert own_sheet, "no field declares a help sheet any more"
+    """)
+
+
+def test_every_question_mark_opens_its_own_sheet():
+    """Each "?" opens the sheet of the thing it stands next to, under its own tip.
+
+    Four places built this button by hand; they share ``dialogs.help_button`` now,
+    and its three keys are positional - a swapped pair opens the right window with
+    the wrong words in it, and nothing else looks at what a "?" opens. So every
+    "?" in the window is clicked, the Tools tab's included, and a "?" this test
+    cannot place fails it: a new one has to say what it opens. A tool's sheet is
+    derived from the registry (``tools.<id>.help_*``), so a tool adds nothing here.
+    """
+    run_gui("""
+        from beantester.fields import EXPR, FIELDS
+        from beantester.gui import dialogs
+        from beantester.gui.pages import PAGES
+        from beantester.gui.toolbox import TOOLS
+        from beantester.gui.tooltip import tooltip_text
+        from beantester.i18n import T
+        for page_def in PAGES:               # a tool's panel exists once it is shown
+            app.select_page(page_def.id)
+            for sub_id, _label in getattr(app.pages[page_def.id], "SUBPAGES", ()):
+                app.pages[page_def.id].select(sub_id)
+
+        def helps_in(widget):
+            return [w for w in fake_tk.walk(widget) if w.kw.get("style") == "Help.TButton"]
+
+        def expect(button, title, body, tip):
+            opened = []
+            dialogs.show_help = lambda parent, t, b: opened.append((t, b))
+            button.kw["command"]()
+            assert opened == [(T(title), T(body))], (title, opened)
+            assert button._bnt_tooltip.text == tooltip_text(tip), (tip, button._bnt_tooltip.text)
+            placed.append(button)
+
+        placed = []
+        for key, button in app.form.helps.items():
+            field = FIELDS[key]
+            if field.kind == EXPR:
+                expect(button, "dialogs.match_help_title", "dialogs.match_help",
+                       "tips.match_syntax")
+            else:
+                expect(button, field.help_title, field.help_body, field.tip)
+        [search] = helps_in(app.pages["connections"].frame)
+        expect(search, "dialogs.conn_search_help_title", "dialogs.conn_search_help",
+               "tips.conn_search_help")
+        tools = app.pages["tools"]
+        for tool in TOOLS:               # every panel carries one "?" (the skeleton)
+            [button] = helps_in(tools.panels[tool.id].frame)
+            expect(button, f"tools.{tool.id}.help_title", f"tools.{tool.id}.help_body",
+                   f"tips.tools_{tool.id}_help")
+        unplaced = [b for b in helps_in(root) if b not in placed]
+        assert not unplaced, f"{len(unplaced)} '?' button(s) this test cannot place"
     """)
 
 

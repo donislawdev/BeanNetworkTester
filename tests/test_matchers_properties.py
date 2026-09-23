@@ -90,6 +90,58 @@ def test_matches_never_raises_whatever_it_is_asked(text, port, ip, pid, name, wh
         pytest.fail(f"matches() raised {type(exc).__name__} for {text!r}: {exc}")
 
 
+# -- 2b) explain() is matches() written out - never a second opinion ---------- #
+@SLOW
+@given(text=expressions, port=ports, ip=ips, pid=pids, name=names,
+       which=st.integers(0, 2))
+def test_explain_agrees_with_matches_on_every_input(text, port, ip, pid, name, which):
+    """``Matcher.explain`` is what the Tools tab shows a person as THE answer.
+
+    If it ever disagreed with ``matches()`` - the function the packet path calls -
+    the tester would say "matches" about a value a session leaves alone, which
+    is worse than having no tester. So the verdict is held to ``matches()`` on the
+    same unconstrained inputs the totality test above uses, and the terms it
+    names are held to the verdict: something excluded never matches, and with
+    positive terms present nothing matches without one of them selecting it.
+    """
+    kind, bounds = KINDS[which]
+    matcher = _parse(text, kind, bounds)
+    assume(matcher is not None)
+    value = (pid, name) if kind == KIND_PROCESS else (ip,) if kind == KIND_IP else (port,)
+    why = matcher.explain(*value)
+    assert why.matched == matcher.matches(*value), (text, value, why)
+    assert bool(why.excluded_by) == matcher.excluded(*value), (text, value, why)
+    if why.excluded_by:
+        assert not why.matched, (text, value, why)
+    if why.matched and any(not t.negated for t in matcher.terms):
+        assert why.selected_by, (text, value, why)
+    written = {t.text for t in matcher.terms}
+    assert set(why.selected_by) | set(why.excluded_by) <= written, (text, why)
+
+
+def test_explain_names_the_terms_that_decided():
+    """The examples a person actually asks about, with the answer spelled out."""
+    subnet = parse_matcher("10.0.0.0/16, !10.0.5.0/24", KIND_IP, "fields.ip")
+    why = subnet.explain("10.0.5.7")
+    assert (why.matched, why.selected_by, why.excluded_by) == (
+        False, ("10.0.0.0/16",), ("!10.0.5.0/24",)), why
+    why = subnet.explain("10.0.6.1")
+    assert (why.matched, why.selected_by, why.excluded_by) == (
+        True, ("10.0.0.0/16",), ()), why
+
+    ports = parse_matcher("443, 8000-8100", KIND_INT, "fields.port", bounds=PORT_BOUNDS)
+    assert ports.explain(8080) == (True, ("8000-8100",), ())
+    assert ports.explain(80) == (False, (), ())
+
+    # only exclusions: everything else matches, and nothing "selected" it
+    spare = parse_matcher("!chromedriver", KIND_PROCESS, "fields.target_process")
+    assert spare.explain(1, "chrome.exe") == (True, (), ())
+    assert spare.explain(1, "chromedriver.exe") == (False, (), ("!chromedriver",))
+
+    # empty: matches everything, and no term is named
+    assert parse_matcher("", KIND_IP, "fields.ip").explain("::1") == (True, (), ())
+
+
 # -- 3) an empty expression matches everything -------------------------------- #
 @given(text=st.sampled_from(["", "   ", ",", " , , "]), port=ports,
        which=st.integers(0, 2))

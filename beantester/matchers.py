@@ -46,6 +46,7 @@ import ipaddress
 import re
 import time
 import warnings
+from typing import NamedTuple
 
 from .i18n import field_name, translate
 
@@ -150,6 +151,13 @@ class _Term:
 
 
 # -- matchers ----------------------------------------------------------------- #
+class Explanation(NamedTuple):
+    """What ``Matcher.explain`` found: the verdict and the terms behind it."""
+    matched: bool
+    selected_by: tuple      # positive terms the value satisfies, as written
+    excluded_by: tuple      # "!" terms the value satisfies, as written
+
+
 class Matcher:
     """A compiled field expression. Compile once, call ``matches()`` per packet."""
     # Annotated because subclasses fill both in, and an unannotated `None`
@@ -261,6 +269,27 @@ class Matcher:
             return False
         ctx = self._context(*value)
         return any(t.matches(ctx) for t in self._negatives)
+
+    def explain(self, *value):
+        """The verdict ``matches()`` gives, together with the terms that decided it.
+
+        For a person asking "why does ``!10.0.0.0/8`` not do what I think?", the
+        answer is a TERM, not a boolean - so this names the positive terms that
+        selected the value and the ``!`` terms that knocked it out. It runs every
+        term instead of stopping at the first that decides, which is exactly why it
+        is not what the packet path calls: ``matches()`` stays as it is.
+
+        The verdict is computed from the same two lists by the same rule as
+        ``matches()``, and ``tests/test_matchers_properties.py`` holds the two to
+        agreement on the same unconstrained inputs the totality test uses - a
+        second evaluator of this language is what convention 10 forbids, so it may
+        only ever be the first one, written out.
+        """
+        ctx = self._context(*value)
+        selected = tuple(t.text for t in self._positives if t.matches(ctx))
+        excluded = tuple(t.text for t in self._negatives if t.matches(ctx))
+        matched = (not self._positives or bool(selected)) and not excluded
+        return Explanation(matched, selected, excluded)
 
     def describe(self):
         """Canonical text of the expression - and it PARSES BACK to this matcher.

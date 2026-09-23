@@ -9,6 +9,7 @@ from typing import NamedTuple
 from .conns import ConnsPage
 from .control import ControlPage
 from .stats import StatsPage
+from .toolbox import ToolboxPage
 
 
 class Page(NamedTuple):
@@ -21,6 +22,7 @@ PAGES = (
     Page(ControlPage.ID, ControlPage.LABEL, ControlPage),
     Page(StatsPage.ID, StatsPage.LABEL, StatsPage),
     Page(ConnsPage.ID, ConnsPage.LABEL, ConnsPage),
+    Page(ToolboxPage.ID, ToolboxPage.LABEL, ToolboxPage),
 )
 
 SEARCH_FALLBACK = ConnsPage.ID
@@ -112,5 +114,5 @@ def teardown(app):
             handler()
 
 
-__all__ = ["PAGES", "Page", "ControlPage", "StatsPage", "ConnsPage",
+__all__ = ["PAGES", "Page", "ControlPage", "StatsPage", "ConnsPage", "ToolboxPage",
            "focus_search", "pref_changed", "teardown"]

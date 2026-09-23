@@ -285,11 +285,9 @@ class ControlForm:
             # A real BUTTON, not a label that merely looks clickable: hovering it
             # shows the short tip, clicking it opens the full cheat sheet (which
             # is exactly what the pointer-shaped cursor was promising all along).
-            help_btn = ttk.Button(cell, text=T("fields.match_help"),
-                                  style="Help.TButton", width=2,
-                                  command=self._show_match_help)
+            help_btn = dialogs.help_button(cell, self.app.root, "dialogs.match_help_title",
+                                           "dialogs.match_help", "tips.match_syntax")
             help_btn.pack(side="left", padx=(scaled(8), 0))
-            add_tooltip(help_btn, "tips.match_syntax")
             self.helps[field.key] = help_btn
         else:
             self._add_help_button(cell, field)
@@ -341,10 +339,6 @@ class ControlForm:
                 value=rate_with_unit(kbps, unit)))
 
     # -- events -------------------------------------------------------------- #
-    def _show_match_help(self):
-        dialogs.show_help(self.app.root, T("dialogs.match_help_title"),
-                          T("dialogs.match_help"))
-
     def _on_switch(self, field):
         """A checkbox was clicked. Some of them govern other fields.
 
@@ -378,22 +372,16 @@ class ControlForm:
     def _add_help_button(self, parent, field):
         """The "?" for any registry field that declares its own help sheet.
 
-        Hover shows the short tip, a click opens the full explanation through
-        ``dialogs.show_help``. Shared by the checkbox and the entry paths so the
+        Hover shows the short tip, a click opens the full explanation
+        (``dialogs.help_button``). Shared by the checkbox and the entry paths so the
         affordance cannot come out different depending on the widget kind.
         """
         if not field.help_body:
             return
-        help_btn = ttk.Button(parent, text=T("fields.match_help"),
-                              style="Help.TButton", width=2,
-                              command=lambda f=field: self._show_field_help(f))
+        help_btn = dialogs.help_button(parent, self.app.root, field.help_title,
+                                       field.help_body, field.tip)
         help_btn.pack(side="left", padx=(scaled(8), 0))
-        add_tooltip(help_btn, field.tip)
         self.helps[field.key] = help_btn
-
-    def _show_field_help(self, field):
-        """Open the "?" help sheet a field declares (help_title / help_body)."""
-        dialogs.show_help(self.app.root, T(field.help_title), T(field.help_body))
 
     def _on_choice(self, event):
         unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
