@@ -15,7 +15,7 @@ import ctypes
 import threading
 
 from beantester import driver
-from fakes import LANGS, check
+from fakes import LANGS, check, forget_the_driver_state
 
 
 def test_advapi_declares_pointer_sized_prototypes():
@@ -492,6 +492,20 @@ def test_a_window_cleanup_and_a_start_hold_one_claim(monkeypatch):
     driver.mark_driver_used()
     check("a start takes its marker under the claim", marked == [True], f"({marked})")
     check("and is counted", driver.opens() == before + 1, f"({driver.opens()}, {before})")
+
+
+def test_no_test_hands_its_driver_state_to_the_next(monkeypatch):
+    """The test above, and every other one that calls ``mark_driver_used``, adds to
+    a count and raises a flag the whole process shares. Left behind, both reach the
+    next test: one expecting a count of its own is green alone and red after a
+    neighbour. conftest resets them after every test through this call."""
+    monkeypatch.setattr(driver, "_USE_MARKER", [None])
+    monkeypatch.setattr(driver, "_DRIVER_USED", [True])
+    monkeypatch.setattr(driver, "_OPENS", [3])
+    forget_the_driver_state()
+    check("the open count starts from nothing again", driver.opens() == 0,
+          f"({driver.opens()})")
+    check("and no driver is claimed any more", driver.driver_used() is False)
 
 
 def test_each_marker_step_is_one_step(monkeypatch):

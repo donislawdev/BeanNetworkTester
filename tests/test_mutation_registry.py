@@ -2708,6 +2708,22 @@ MUTATIONS = [
         "test": "test_the_cleanup_is_held_to_what_was_open_at_the_yes",
     },
     {
+        # One test's starts reach the next test's count (conftest's teardown).
+        "label": "tests: the open count survives into the next test",
+        "file": "tests/fakes.py",
+        "old": "    driver._OPENS[0] = 0",
+        "new": "    driver._OPENS[0] += 0",
+        "test": "test_no_test_hands_its_driver_state_to_the_next",
+    },
+    {
+        # ...and its flag, so the next test's exit path unloads a driver it never used.
+        "label": "tests: the driver-used flag survives into the next test",
+        "file": "tests/fakes.py",
+        "old": "    driver._DRIVER_USED[0] = False",
+        "new": "    driver._DRIVER_USED[0] = driver._DRIVER_USED[0]",
+        "test": "test_no_test_hands_its_driver_state_to_the_next",
+    },
+    {
         # A report whose crash-log block failed still starts with "crash log: ".
         "label": "diagnostics: the crash-log block of the report cannot be read",
         "file": "beantester/nettools/diagnostics.py",
