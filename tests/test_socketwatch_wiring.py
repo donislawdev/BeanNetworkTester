@@ -213,12 +213,14 @@ def test_a_stop_landing_mid_tick_does_not_fault_the_watchdog():
     sits between the two reads.
     """
     crashlog.reset()
+    before = set(threading.enumerate())
 
     class _ClearsTheWatcher(_FakePorts):
         def __init__(self, ports, engine):
             super().__init__(ports)
             self._engine = engine
             self.fired = False
+            self.detached = None
 
         def collected(self):
             # Exactly where a concurrent stop() would land - but only once the
@@ -228,6 +230,12 @@ def test_a_stop_landing_mid_tick_does_not_fault_the_watchdog():
             # mutant restoring the double read survived.
             if not self.fired and self._engine._socketwatch is not None:
                 self.fired = True
+                # Kept: a real stop() stops the watcher it clears, the staged one
+                # only clears it - so the engine's stop() below finds nothing to
+                # stop, and the watcher parks on its source for the rest of the
+                # process, reddening every later check that counts watcher threads
+                # (test_concurrency_chaos.py, whenever this file runs before it).
+                self.detached = self._engine._socketwatch
                 self._engine._socketwatch = None
             return super().collected()
 
@@ -241,10 +249,17 @@ def test_a_stop_landing_mid_tick_does_not_fault_the_watchdog():
         time.sleep(WATCHDOG_TICK_S * 2)     # let the tick finish and one more run
     finally:
         eng.stop()
+        if ports.detached is not None:
+            ports.detached.stop()           # what the real stop() would have done
 
     torn = [r for r in crashlog.recent(50) if r.get("type") == "AttributeError"]
     check("a stop landing mid-tick leaves no crash record", not torn,
           f"({[r.get('message') for r in torn]})")
+    # Threads, not is_running(): stop() forgets its thread before the join ends.
+    check("and no watcher thread outlives the test",
+          _wait(lambda: not [t for t in threading.enumerate()
+                             if t not in before and "socket-watcher" in t.name],
+                timeout=2.0))
 
 
 class _GatedDivert:

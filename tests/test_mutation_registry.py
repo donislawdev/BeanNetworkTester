@@ -2802,6 +2802,15 @@ MUTATIONS = [
         "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
     },
     {
+        # The staged mid-tick stop detaches a watcher nobody stops: its thread parks
+        # for the rest of the process and reddens later thread counts elsewhere.
+        "label": "tests: the mid-tick stop test leaves its watcher thread running",
+        "file": "tests/test_socketwatch_wiring.py",
+        "old": "        if ports.detached is not None:\n            ports.detached.stop()",
+        "new": "        if False:\n            ports.detached.stop()",
+        "test": "test_a_stop_landing_mid_tick_does_not_fault_the_watchdog",
+    },
+    {
         # An __init__ read as a module of its parent: its own edges lost or misfiled.
         "label": "layering: a package's __init__ resolves its imports one level too high",
         "file": "tests/source_imports.py",
