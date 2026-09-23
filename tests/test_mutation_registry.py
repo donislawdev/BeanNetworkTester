@@ -2834,6 +2834,64 @@ MUTATIONS = [
         "new": "    parts = parts[:-1]\n",
         "test": "test_a_package_init_resolves_its_relative_imports_inside_itself",
     },
+    {
+        # The walk the capture-side port map and the Tools tab share: a table that
+        # outgrew the first buffer is dropped instead of asked again.
+        "label": "portmap: the socket table stops growing its buffer",
+        "file": "beantester/portmap.py",
+        "old": "            if rc != _ERROR_INSUFFICIENT_BUFFER:\n                return None",
+        "new": "            if True:\n                return None",
+        "test": "test_the_walk_grows_its_buffer_and_remembers_the_size",
+    },
+    {
+        # The capture side's map starts installing TIME_WAIT rows as PID 0's ports.
+        "label": "portmap: the port map keeps the socket no process owns",
+        "file": "beantester/portmap.py",
+        "old": "            if port and pid:\n                # LAST ROW WINS",
+        "new": "            if port:\n                # LAST ROW WINS",
+        "test": "test_the_socket_table_keeps_every_row_the_port_map_drops",
+    },
+    {
+        # A listener shows the 1.2.3.4:99 its row happens to hold.
+        "label": "portmap: a listener shows the remote half it does not have",
+        "file": "beantester/portmap.py",
+        "old": "                     \"\" if idle else _ipv4(row.dwRemoteAddr),",
+        "new": "                     _ipv4(row.dwRemoteAddr),",
+        "test": "test_the_socket_table_keeps_every_row_the_port_map_drops",
+    },
+    {
+        # Learn's "network byte order", which the measurement contradicts.
+        "label": "portmap: the IPv6 scope is byte-swapped the way the docs say",
+        "file": "beantester/portmap.py",
+        "old": "    return f\"{text}%{int(scope)}\" if scope else text",
+        "new": ("    return (f\"{text}%{int.from_bytes(int(scope).to_bytes(4, 'little'), 'big')}\"\n"
+                "            if scope else text)"),
+        "test": "test_the_socket_table_keeps_every_row_the_port_map_drops",
+    },
+    {
+        # The two paths stop speaking the same words: state:syn_received misses psutil's.
+        "label": "portmap: psutil's state names are shown as psutil spells them",
+        "file": "beantester/portmap.py",
+        "old": "    state = _PSUTIL_STATES.get(conn.status, conn.status) if proto == \"TCP\" else \"\"",
+        "new": "    state = conn.status if proto == \"TCP\" else \"\"",
+        "test": "test_psutil_rows_speak_the_same_words_as_the_native_ones",
+    },
+    {
+        # One refusing table throws away the three that answered.
+        "label": "portmap: one broken table sends the whole socket table to psutil",
+        "file": "beantester/portmap.py",
+        "old": "        if len(failed) < len(_ROW_CONVERTERS):",
+        "new": "        if not failed:",
+        "test": "test_an_empty_table_is_an_answer_and_an_error_code_is_not",
+    },
+    {
+        # "Nobody may read it" becomes an empty table: a claim about the machine.
+        "label": "portmap: a refused socket table reads as an empty one",
+        "file": "beantester/portmap.py",
+        "old": "        raise SocketTableUnavailable(\"denied\", str(exc)) from exc",
+        "new": "        return []",
+        "test": "test_a_table_nobody_may_read_is_said_to_be_one",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

@@ -24,8 +24,8 @@ has already bitten this project once:
 
 So this file watches the ROUTES instead of an object. ``portmap`` is the only
 module in the package that touches ``psutil`` or ``iphlpapi``, and it does so
-through five entry points; wrapping all five catches any caller, including one
-nobody has written yet. Threads are compared by IDENTITY against the engine's own
+through a handful of entry points (``OS_FUNCTIONS`` and ``NATIVE_METHODS``);
+wrapping every one catches any caller, including one nobody has written yet. Threads are compared by IDENTITY against the engine's own
 handles rather than by name substring, so it does not depend on how CPython
 happens to name a thread.
 
@@ -98,7 +98,14 @@ from fakes import check
 # level functions called through module globals, so replacing the attribute is
 # enough - production picks up the replacement at call time.
 OS_FUNCTIONS = ("_psutil_port_pid_map", "_psutil_process_table",
-                "_psutil_created", "_psutil_process_info", "_native_process_info")
+                "_psutil_created", "_psutil_process_info", "_native_process_info",
+                # The Tools tab's whole socket table (2026-09-23): read on a click by a
+                # worker. Watched like the rest, so the day something on the packet
+                # path reaches for it, this file says so.
+                "_psutil_socket_rows")
+# The two walks over iphlpapi's tables, methods of the native binding: the port map
+# the capture side reads, and the full table of the Tools tab.
+NATIVE_METHODS = ("_table", "socket_rows")
 
 
 @contextlib.contextmanager
@@ -107,7 +114,7 @@ def os_calls_recorded():
     calls = []
     lock = threading.Lock()
     originals = {name: getattr(portmap, name) for name in OS_FUNCTIONS}
-    native_table = portmap._Native._table
+    native = {name: getattr(portmap._Native, name) for name in NATIVE_METHODS}
 
     def wrap(name, original):
         def spy(*a, **kw):
@@ -116,20 +123,17 @@ def os_calls_recorded():
             return original(*a, **kw)
         return spy
 
-    def native_spy(self, *a, **kw):
-        with lock:
-            calls.append(("_Native._table", threading.current_thread()))
-        return native_table(self, *a, **kw)
-
     for name, original in originals.items():
         setattr(portmap, name, wrap(name, original))
-    portmap._Native._table = native_spy
+    for name, original in native.items():
+        setattr(portmap._Native, name, wrap("_Native." + name, original))
     try:
         yield calls
     finally:
         for name, original in originals.items():
             setattr(portmap, name, original)
-        portmap._Native._table = native_table
+        for name, original in native.items():
+            setattr(portmap._Native, name, original)
 
 
 def test_no_packet_thread_ever_reaches_the_operating_system():
