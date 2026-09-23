@@ -404,6 +404,34 @@ def test_cleanup_driver_warns_before_interrupting_another_instance(monkeypatch):
           any("stopped and removed" in line for line in lines), f"({lines})")
 
 
+def test_a_window_lets_its_own_marker_go_before_asking_about_others(monkeypatch):
+    """The Tools tab cleans up from a process that may hold the marker since its
+    last session. `_another_instance_holds_the_driver` answers False for such a
+    process whoever else is there, so the warning above would never fire from a
+    window: `release_own` drops ours and asks the question the way
+    `release_on_exit` does."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "installed_drivers", lambda: {"WinDivert": "running"})
+    monkeypatch.setattr(driver, "stop_and_remove", lambda name: f"{name}: stopped and removed")
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+
+    def read_only_question():
+        raise AssertionError("the read-only question is blind from a process holding a marker")
+
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", read_only_question)
+    dropped = []
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: dropped.append(1) or True)
+    lines = driver.cleanup_driver(release_own=True)
+    check("our marker is let go first", dropped == [1], f"({dropped})")
+    check("and another instance is warned about", "WARNING" in lines[0], f"({lines})")
+
+    monkeypatch.setattr(driver, "_drop_use_marker", lambda: False)
+    lines = driver.cleanup_driver(release_own=True)
+    check("nobody else: no warning", not any("WARNING" in line for line in lines),
+          f"({lines})")
+
+
 def test_the_use_marker_is_a_noop_off_windows(monkeypatch):
     """Linux CI runs every one of these paths; none of them may reach for ctypes."""
     monkeypatch.setattr(driver, "is_windows", lambda: False)

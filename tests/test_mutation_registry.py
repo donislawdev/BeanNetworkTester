@@ -286,9 +286,11 @@ MUTATIONS = [
         "test": "test_the_about_window_says_where_the_users_files_are",
     },
     {
+        # The line moved into driver.format_doctor (2026-09-23), which --doctor and
+        # the Tools tab's report both print through; the CLI test still reads it.
         "label": "doctor: stops printing where the user's files are",
-        "file": "beantester/cli.py",
-        "old": '        log.data(dict(), f"user files: {where}")\n',
+        "file": "beantester/driver.py",
+        "old": '    lines.append(f"user files: {data_dir}")\n',
         "new": "",
         "test": "test_doctor_says_where_the_users_own_files_are",
     },
@@ -2608,6 +2610,125 @@ MUTATIONS = [
         "old": "    if needle and not entries:\n",
         "new": "    if False:\n",
         "test": "test_a_label_filter_that_matches_nothing_is_a_usage_error",
+    },
+    # -- the Tools tab: diagnostics (T-1) -------------------------------------- #
+    {
+        # The driver unloaded under the window's own session.
+        "label": "diagnostics: the cleanup forgets a running session",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "return not self.blocker and not self._session_busy() and not self.job.busy()",
+        "new": "return not self.blocker and not self.job.busy()",
+        "test": "test_cleaning_up_waits_for_the_session_and_for_a_yes",
+    },
+    {
+        # A session starting or stopping holds the handle while `running` says no.
+        "label": "diagnostics: a start or stop in flight is not a session",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": 'return bool(self.app.running) or getattr(self.app, "_transition", None) is not None',
+        "new": "return bool(self.app.running)",
+        "test": "test_cleaning_up_waits_for_the_session_and_for_a_yes",
+    },
+    {
+        # Unloaded before anyone read what it interrupts.
+        "label": "diagnostics: the cleanup runs without a yes",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        if not dialogs.ask_yes_no(self.app.root,",
+        "new": "        if False and dialogs.ask_yes_no(self.app.root,",
+        "test": "test_cleaning_up_waits_for_the_session_and_for_a_yes",
+    },
+    {
+        # The window keeps its marker, so "another instance" can never be seen.
+        "label": "driver: the window's cleanup keeps its own use marker",
+        "file": "beantester/driver.py",
+        "old": "someone_else = (_drop_use_marker() if release_own",
+        "new": "someone_else = (_drop_use_marker() if False",
+        "test": "test_a_window_lets_its_own_marker_go_before_asking_about_others",
+    },
+    {
+        # The other half of the same promise: the tab asking the read-only way.
+        "label": "diagnostics: the tab cleans up without letting its marker go",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "return tuple(driver.cleanup_driver(release_own=True))",
+        "new": "return tuple(driver.cleanup_driver())",
+        "test": "test_the_window_cleans_up_with_its_own_marker_let_go_first",
+    },
+    {
+        # doctor() grows or renames a check and the window shows it unnamed.
+        "label": "diagnostics: a check doctor gives has no name in the language files",
+        "file": "beantester/driver.py",
+        "old": 'checks.append(("driver queue", "ok",',
+        "new": 'checks.append(("driver queues", "ok",',
+        "test": "test_every_check_doctor_can_give_has_a_name_in_every_language",
+    },
+    {
+        "label": "diagnostics: one broken report section takes the report down",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": '        except Exception as exc:\n            crashlog.note(exc, "nettools.diagnostics")',
+        "new": '        except ZeroDivisionError as exc:\n            crashlog.note(exc, "nettools.diagnostics")',
+        "test": "test_a_section_that_fails_costs_its_own_block_and_nothing_else",
+    },
+    {
+        # The template asks for --doctor's output; the copy drifts from it.
+        "label": "diagnostics: the report stops being the --doctor output",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "return driver.format_doctor(diagnosis.checks, diagnosis.data_dir)",
+        "new": "return driver.format_doctor(diagnosis.checks[:1], diagnosis.data_dir)",
+        "test": "test_the_report_is_the_version_line_and_the_doctor_output",
+    },
+    {
+        # A tool whose work raises: the status line would say "working" for ever.
+        "label": "toolbox: a failed run never reaches the status line",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": '    except BaseException as exc:\n        crashlog.note(exc, "gui.toolbox")',
+        "new": '    except ZeroDivisionError as exc:\n        crashlog.note(exc, "gui.toolbox")',
+        "test": "test_a_check_that_fails_says_why_and_keeps_the_rows_it_had",
+    },
+    {
+        # The worker kept on the panel: a language change loses the running answer.
+        "label": "toolbox: a rebuild starts a new worker and loses the running answer",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "    if tool_id not in jobs:",
+        "new": "    if True:",
+        "test": "test_a_rebuild_mid_check_hands_the_answer_to_the_new_panel",
+    },
+    {
+        # Refilling the old container: its resize handlers pile up per check.
+        "label": "diagnostics: re-checking keeps the old rows container alive",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        if self.rows is not None:\n            self.rows.destroy()",
+        "new": "        if self.rows is not None:\n            self.rows.pack_forget()",
+        "test": "test_diagnostics_shows_every_check_with_its_verdict_and_checks_once_by_itself",
+    },
+    {
+        "label": "diagnostics: the first view does not check by itself",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        elif diagnosis is None:\n            self.check()",
+        "new": "        elif False:\n            self.check()",
+        "test": "test_diagnostics_shows_every_check_with_its_verdict_and_checks_once_by_itself",
+    },
+    {
+        # The shared copy, moved out of the Statistics page: a cheerful lie again.
+        "label": "clipboard: a copy is confirmed without reading it back",
+        "file": "beantester/gui/clipboard.py",
+        "old": "        if app.root.clipboard_get() == text:",
+        "new": "        if True:",
+        "test": "test_a_copy_is_confirmed_only_when_the_clipboard_really_has_it",
+    },
+    {
+        # A tab filled by a worker measured empty, every label outside the check.
+        "label": "render check: a surface is measured before its worker answered",
+        "file": "tools/ci_gui_render.py",
+        "old": "    while pending():",
+        "new": "    while False:",
+        "test": "test_the_render_check_walks_every_page_and_every_sub_tab",
+    },
+    {
+        # The promise read off the tab's own files only, blind to driver.py.
+        "label": "toolbox promise: the modules the tab reaches into go unread",
+        "file": "tests/test_no_telemetry.py",
+        "old": "        names |= eager | lazy\n",
+        "new": "        names |= set()\n",
+        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
     },
 ]
 

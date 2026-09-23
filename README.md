@@ -189,6 +189,13 @@ monitor is gone it returns to the centre of the current screen.
     port or a PID is reported as that, not as "does not match". **"Use in the Control
     field"** puts the expression into that field, replacing what is there. What you type
     stays until you close the program, even if you switch the language.
+  - **Diagnostics** - why START will not work, without a console. It runs the same checks
+    as `--doctor` (administrator rights, the WinDivert driver, leftovers in the temp
+    folder...) and marks each one OK, Warning or Problem. **"Clean up the driver"** unloads
+    a WinDivert driver that was left loaded (administrator only, never during a session).
+    **"Copy environment report"** copies the `--version` line and the `--doctor` output,
+    ready to paste into a bug report. The report includes folder paths, and a path can
+    contain your Windows user name.
 - At the bottom: **START/STOP**, **Apply changes** and **Load/Save file**, with the log beneath.
   This bar is anchored to the bottom edge - no tab can cover it.
 
@@ -1365,6 +1372,7 @@ beantester/              the implementation package
     pages/               page registry: control, stats (3 sub-tabs), conns, toolbox (Tools)
     toolbox/             the Tools tab: its registry of tools and one panel per tool
     field_actions.py     filling a Control-page field from elsewhere (table menu, Tools tab)
+    clipboard.py         copying a whole text, confirmed by reading the clipboard back
     panels/              secondary windows: "About", "Settings" and the pop-out event log
     widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap)
     model_worker.py      rebuilds a table's model on a worker thread (UI never blocks)

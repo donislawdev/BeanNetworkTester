@@ -396,8 +396,19 @@ def _another_instance_holds_the_driver():
     return False
 
 
-def cleanup_driver():
-    """Stop and remove every leftover WinDivert service. Returns report lines."""
+def cleanup_driver(release_own=False):
+    """Stop and remove every leftover WinDivert service. Returns report lines.
+
+    ``release_own`` is for a caller that may itself hold the use marker: the Tools
+    tab asks from a window that has run a session, and such a process keeps its
+    marker until it exits (see the marker block above). While it does, the
+    "another instance?" question cannot tell our handle from theirs, and the
+    warning below would never be printed - the window would stop the driver under
+    somebody else's session without a word. So ours goes first, the way
+    ``release_on_exit`` does it; the next real open takes it again
+    (``mark_driver_used`` runs at every one). The command line never holds one
+    (``--cleanup-driver`` opens no divert), so it keeps the read-only question.
+    """
     lines = []
     if not is_windows():
         return ["Not Windows - there is no WinDivert driver to clean up."]
@@ -406,7 +417,9 @@ def cleanup_driver():
     drivers = installed_drivers()
     if not drivers:
         return ["No WinDivert driver service is installed - nothing to clean up."]
-    if _another_instance_holds_the_driver():
+    someone_else = (_drop_use_marker() if release_own
+                    else _another_instance_holds_the_driver())
+    if someone_else:
         # Said, not obeyed: this function is also `--cleanup-driver`, which is a
         # rescue command someone typed on purpose. But they deserve to know that
         # the session they are about to stop belongs to a running instance, and
@@ -615,3 +628,17 @@ def doctor():
 
     ok = all(state != "fail" for _, state, _ in checks)
     return ok, checks
+
+
+def format_doctor(checks, data_dir):
+    """The ``--doctor`` report as text lines - the one format, wherever it is shown.
+
+    The bug report template asks for exactly this output, and the Tools tab copies
+    the same report to the clipboard: two renderings of one list would drift, and
+    the person pasting would not know which one the template meant. The data
+    directory closes it as a line of its own - it has no pass or fail, so it is
+    not a check with a made-up state.
+    """
+    lines = [f"{state.upper():<4} {check:<18} {detail}" for check, state, detail in checks]
+    lines.append(f"user files: {data_dir}")
+    return lines

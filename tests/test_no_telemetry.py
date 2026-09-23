@@ -70,6 +70,7 @@ import subprocess
 import sys
 
 from fakes import ROOT, check
+from source_imports import internal_imports, package_modules
 
 # --------------------------------------------------------------------------- #
 # Scope: convention 36's own scope - everything that goes into the release.
@@ -667,9 +668,14 @@ TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
 TOOLS_TAB_PROMISE = "Nothing on this tab sends anything over the network."
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
-# exactly as ALLOWED_IMPORTS / ALLOWED_CALLS are. Empty today. Exact in both
-# directions: an entry nothing matches any more fails, like the registries above.
-TOOLS_TAB_QUIET_EXCEPTIONS: dict = {}
+# exactly as ALLOWED_IMPORTS / ALLOWED_CALLS are. Exact in both directions: an
+# entry nothing matches any more fails, like the registries above.
+TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
+    ("beantester/appinfo.py", "url", "https://donislawdev.com/support/"):
+        "a constant. The diagnostics import appinfo for the version line of the "
+        "report; the address is the About window's support link, opened in the "
+        "browser on a click there, and nothing on this tab reads it.",
+}
 
 # The ctypes libraries a Tools-tab file may load while the promise stands: today's
 # ALLOWED_LIBRARIES, written out on purpose instead of referenced. Adding `dnsapi`
@@ -694,15 +700,44 @@ def tools_tab_reach(source, rel):
     return out
 
 
+def tools_tab_files():
+    """``(own, reached)``: the tab's files, and the package modules they import directly.
+
+    A tool's work often lives outside the tab - the diagnostics run
+    ``driver.doctor()`` - so a promise that read only the tab's own files would
+    go on holding while that work learned to send. ONE level, measured: the whole
+    import graph of the tab is 25 modules and reaches ``utils`` (the route probe
+    behind the Session panel's addresses), code the tab imports without ever
+    calling - and a guard that is red for code nobody on the tab runs is a guard
+    people learn to list their way past. Derived, so the next tool's module is
+    read the day it is imported.
+    """
+    own = [(rel, path) for rel, path in _shipped() if rel.startswith(TOOLS_TAB_FILES)]
+    modules = package_modules()
+    names = set()
+    for _rel, path in own:
+        eager, lazy = internal_imports(path)
+        names |= eager | lazy
+    own_rels = {rel for rel, _path in own}
+    reached = sorted({(os.path.relpath(modules[name], ROOT).replace("\\", "/"), modules[name])
+                      for name in names if name in modules})
+    return own, [(rel, path) for rel, path in reached if rel not in own_rels]
+
+
 def test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can():
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
     check("README carries the exact promise this test guards",
           readme.count(TOOLS_TAB_PROMISE) == 1,
           "(reworded? change TOOLS_TAB_PROMISE with it - and decide what it now promises)")
-    files = [(rel, path) for rel, path in _shipped() if rel.startswith(TOOLS_TAB_FILES)]
-    check("the Tools tab's files were found", len(files) >= 5, f"({[r for r, _ in files]})")
+    own, reached = tools_tab_files()
+    check("the Tools tab's files were found", len(own) >= 5, f"({[r for r, _ in own]})")
+    # The canary for the second half: the module a tool does its work in must be
+    # among what is read, or a resolver that finds nothing passes everything.
+    check("the modules the tab reaches into were found, the driver among them",
+          "beantester/driver.py" in {rel for rel, _path in reached},
+          f"({[r for r, _ in reached]})")
     reach, seen = {}, set()
-    for rel, path in files:
+    for rel, path in own + reached:
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
         for kind, detail, _line in findings(source, rel):

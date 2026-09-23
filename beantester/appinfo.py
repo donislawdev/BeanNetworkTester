@@ -56,6 +56,15 @@ def command_name():
     return EXE_NAME if is_frozen() else f"python {LAUNCHER}"
 
 
+def version_line():
+    """What ``--version`` prints - and the first line of the Tools tab's report.
+
+    The bug report template asks for this line by name, so the report a person
+    copies from the window has to start with exactly what the command prints.
+    """
+    return f"{APP_NAME} {__version__}"
+
+
 def program_name():
     """``prog`` for argparse (no ``python `` prefix - argparse adds no shell)."""
     from .paths import is_frozen

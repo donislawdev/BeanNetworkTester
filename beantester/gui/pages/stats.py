@@ -17,6 +17,7 @@ from ...damage import impairment_loss_pct
 from ...i18n import T, event_kind_label
 from ...views import sort_events
 from ..chart import draw_throughput_chart
+from ..clipboard import copy_confirmed
 from ..labels import sync_note, wrapping_label
 from ..rates import average_kbps, format_rate, rate_with_unit, RATE_FIELD_KEYS, UNIT_LABEL
 from ..scaling import scaled
@@ -340,19 +341,8 @@ class StatsPage:
         return "\n".join(rows)
 
     def _copy(self, text, logged):
-        """One clipboard path (`App.copy_to_clipboard`), and no cheerful lie.
-
-        That method logs its own failure and returns nothing, so a success line
-        printed blindly next to it would contradict the error the user just read.
-        The clipboard is read back instead: the confirmation appears only when the
-        text is really there.
-        """
-        if not text:
-            return
-        self.app.copy_to_clipboard(text)
-        with crashlog.quiet("gui.pages.stats"):
-            if self.app.root.clipboard_get() == text:
-                self.app.log("%s: %s" % (T("log.copied"), logged))
+        """One clipboard path, and no cheerful lie (``gui/clipboard.py``)."""
+        copy_confirmed(self.app, text, logged, "gui.pages.stats")
 
     def _copy_one(self):
         clicked = getattr(self, "_clicked", None)
