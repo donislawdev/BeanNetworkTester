@@ -245,7 +245,7 @@ def test_the_table_is_reachable_and_readable_without_a_mouse():
         # ...and it refuses when there is no row to act on, exactly as the mouse
         # route refuses on an empty table
         page.table.select_keys([])
-        assert page._popup_from_keyboard() == "break"
+        assert page.table.row_menu_from_keyboard() == "break"
     ''')
 
 

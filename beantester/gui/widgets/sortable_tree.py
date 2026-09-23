@@ -50,7 +50,7 @@ Kept from the original:
   at a glance).
 """
 import sys
-from tkinter import ttk
+from tkinter import TclError, ttk
 
 from ...i18n import T
 from ..scaling import column_width, scaled
@@ -180,6 +180,7 @@ class SortableTree:
         self._slot_keys = []            # slot index -> model key currently shown
         self._selected = []             # selected MODEL KEYS (survive a repaint)
         self._painted = {}              # slot iid -> (values, tags) last written
+        self._show_row_menu = None      # the page's menu, once bind_row_menu is called
         self._height = max(1, int(height))
 
         if horizontal and stretch:
@@ -560,6 +561,70 @@ class SortableTree:
     def selection_values(self):
         rows = self.selected_rows()
         return rows[0] if rows else None
+
+    # -- a menu on a row -------------------------------------------------------- #
+    def bind_row_menu(self, show):
+        """Call ``show(x_root, y_root)`` for a menu on a row: right click or keyboard.
+
+        Every table with row actions needs the same two ways in and the same two
+        refusals, so they live with the table rather than with each page that has
+        a menu. The page keeps what is its own - the entries, and which of them a
+        row may use - in ``show``, which is called only when there IS a row.
+
+        The keyboard way exists because anything doable with the pointer has to be
+        doable from the keyboard (WCAG 2.1.1) - and this is a tool for testers and
+        admins, where services.msc and the console have had Shift+F10 forever.
+
+        The dedicated menu key is spelled DIFFERENTLY per platform - "App" on
+        Windows, "Menu" on X11 - and Tk RAISES on a keysym the platform does not
+        know rather than ignoring it. Binding "App" unconditionally passed every
+        Windows test and killed the Linux render check, so the spelling is chosen
+        here rather than tried blindly. Shift+F10 exists everywhere, so the
+        keyboard route survives even if the menu key does not.
+        """
+        self._show_row_menu = show
+        self.tree.bind("<Button-3>", self.row_menu_at_pointer)
+        self.tree.bind("<Button-2>", self.row_menu_at_pointer)      # macOS
+        menu_key = "<App>" if self._platform == "win32" else "<Menu>"
+        for sequence in ("<Shift-F10>", menu_key):
+            try:
+                self.tree.bind(sequence, self.row_menu_from_keyboard)
+            except TclError as _exc:
+                # insurance, not the expected path: the spelling above is the one
+                # this platform should know, so a failure here is worth recording
+                crashlog.note(_exc, "gui.widgets.sortable_tree")
+
+    def row_menu_at_pointer(self, event):
+        """Right click: select the row under the pointer and open the menu on it.
+
+        It used to pop up anywhere in the table - including an empty one - so an
+        empty view offered "Copy row" with nothing to copy. Selected by MODEL key:
+        the widget's item ids are recycled viewport slots, so they say nothing
+        about which row was clicked.
+        """
+        key = self.key_at(event.y)
+        if key is None:
+            return "break"
+        self.select_keys([key])
+        return self._open_row_menu(event.x_root, event.y_root)
+
+    def row_menu_from_keyboard(self, _event=None):
+        """Shift+F10 / the menu key, on whatever row is already selected.
+
+        Nothing to position against here - there is no pointer - so the menu opens
+        at the table's own corner. It refuses on an empty selection for the same
+        reason the pointer refuses on an empty table: a menu offering "Copy row"
+        with no row is a menu that lies.
+        """
+        if not self.selected_keys():
+            return "break"
+        return self._open_row_menu(self.tree.winfo_rootx() + scaled(40),
+                                   self.tree.winfo_rooty() + scaled(40))
+
+    def _open_row_menu(self, x_root, y_root):
+        if self._show_row_menu is not None:
+            self._show_row_menu(x_root, y_root)
+        return "break"
 
     # -- header tooltips ------------------------------------------------------- #
     def _column_at(self, x):

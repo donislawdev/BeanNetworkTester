@@ -21,7 +21,6 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
-import sys
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -263,56 +262,10 @@ class ConnsPage:
                               command=self._choose_columns)
         self.menu.add_command(label=T("menu.reset_widths"),
                               command=self.table.reset_widths)
-        self.table.tree.bind("<Button-3>", self._popup)
-        self.table.tree.bind("<Button-2>", self._popup)      # macOS
-        # The same menu, reachable without a mouse. WCAG 2.1.1: anything doable
-        # with the pointer has to be doable from the keyboard - and this is a tool
-        # for testers and admins, where services.msc and the console have had
-        # Shift+F10 forever.
-        #
-        # The dedicated menu key is spelled DIFFERENTLY per platform - "App" on
-        # Windows, "Menu" on X11 - and Tk RAISES on a keysym the platform does
-        # not know rather than ignoring it. Binding "App" unconditionally passed
-        # every Windows test and killed the Linux render check, so the spelling
-        # is chosen here rather than tried blindly. Shift+F10 exists everywhere,
-        # so the keyboard route survives even if the menu key does not.
-        menu_key = "<App>" if sys.platform == "win32" else "<Menu>"
-        for sequence in ("<Shift-F10>", menu_key):
-            try:
-                self.table.tree.bind(sequence, self._popup_from_keyboard)
-            except tk.TclError as _exc:
-                # insurance, not the expected path: the spelling above is the one
-                # this platform should know, so a failure here is worth recording
-                crashlog.note(_exc, "gui.pages.conns")
-
-    def _popup(self, event):
-        """Show the menu only when it has a row to act on.
-
-        It used to pop up anywhere in the table - including an empty one - so an
-        empty view offered "Copy row" / "Target this process" with nothing to copy
-        or target.
-        """
-        key = self.table.key_at(event.y)
-        if key is None:
-            return "break"
-        # select by MODEL key: the widget's item ids are recycled viewport slots,
-        # so they say nothing about which connection was clicked
-        self.table.select_keys([key])
-        return self._show_menu(event.x_root, event.y_root)
-
-    def _popup_from_keyboard(self, _event=None):
-        """Shift+F10 / the menu key, on whatever row is already selected.
-
-        Nothing to position against here - there is no pointer - so the menu
-        opens at the table's own corner. It refuses on an empty selection for the
-        same reason ``_popup`` refuses on an empty table: a menu offering "Copy
-        row" with no row is a menu that lies.
-        """
-        if not self.table.selected_keys():
-            return "break"
-        tree = self.table.tree
-        return self._show_menu(tree.winfo_rootx() + scaled(40),
-                               tree.winfo_rooty() + scaled(40))
+        # Right click and Shift+F10 / the menu key, with the refusals on an empty
+        # table and an empty selection: the table's, shared with every table that
+        # has row actions (``SortableTree.bind_row_menu``).
+        self.table.bind_row_menu(self._show_menu)
 
     def _show_menu(self, x_root, y_root):
         # a row whose process could not be resolved (no admin rights) cannot be

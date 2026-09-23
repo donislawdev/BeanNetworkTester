@@ -1191,7 +1191,7 @@ MUTATIONS = [
     },
     {
         "label": "keyboard: the context menu goes back to mouse-only",
-        "file": "beantester/gui/pages/conns.py",
+        "file": "beantester/gui/widgets/sortable_tree.py",
         "old": "        for sequence in (\"<Shift-F10>\", menu_key):",
         "new": "        for sequence in ():",
         "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
