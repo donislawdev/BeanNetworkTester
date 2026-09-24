@@ -79,6 +79,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **A middle click on the connection table no longer opens its row menu.** The menu opens
   on a right click, or from the keyboard with Shift+F10 or the menu key, as before.
 
+- **The start message about the WinDivert queue says what its numbers mean.** They are the
+  most the driver will hold, not a delay added to every packet: while the tool keeps up,
+  packets barely wait there. The message also says when the tool warns about that wait.
+
 ### Docs
 
 - **The README now points at the website.** One link under the badges, and a second after the
