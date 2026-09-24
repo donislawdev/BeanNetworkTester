@@ -1030,6 +1030,35 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
                 check(f"{readme}: the online command asks for the SPDX predicate",
                       "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
 
+    # 🔴 The website hands out the same command to people who never open the README,
+    # and verify-release.yml runs only the README's lines. Until 0.7.0 the download
+    # page said `gh attestation verify .\BeanNetworkTester-*.zip --repo ...`, which
+    # failed twice over: no predicate type (the 404 above), and a `*` that gh does not
+    # expand - in PowerShell it answers "failed to open local artifact" (measured
+    # 2026-09-25). HTML has no Markdown bold, so a `*` here can only be that pattern.
+    pages = os.path.join(ROOT, "site", "pages")
+    on_site = []
+    for page in sorted(os.listdir(pages)):
+        folder = os.path.join(pages, page)
+        if not os.path.isdir(folder):
+            continue
+        for name in sorted(n for n in os.listdir(folder) if n.endswith(".html")):
+            with open(os.path.join(folder, name), encoding="utf-8") as handle:
+                on_site += [(f"site/pages/{page}/{name}", ln)
+                            for ln in handle.read().splitlines()
+                            if "gh attestation verify" in ln]
+    check("the website documents the verify command", bool(on_site))
+    for rel, command in on_site:
+        check(f"{rel}: the command names the repository", "--repo " in command,
+              f"({command[:120]})")
+        check(f"{rel}: the command names a predicate type", "--predicate-type " in command,
+              f"(without it gh asks for SLSA provenance and gets 404: {command[:120]})")
+        if makes_sbom:
+            check(f"{rel}: the command asks for the SPDX predicate",
+                  "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
+        check(f"{rel}: the command names a file, not a pattern gh cannot open",
+              "*" not in command, f"({command[:120]})")
+
 
 def test_the_published_release_is_checked_by_a_workflow_not_by_a_person():
     """Something has to run the README's commands against what people download.
