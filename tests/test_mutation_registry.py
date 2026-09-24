@@ -3213,6 +3213,15 @@ MUTATIONS = [
         "new": "kb=q[\"queue_size\"] // 1024))",
         "test": "test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number",
     },
+    {
+        # Bytes printed as KB: 4194304 KB. The queue LENGTH is 4096 as well, so a
+        # test that only looks for "4096" cannot see this.
+        "label": "engine: the driver queue line prints the size in bytes",
+        "file": "beantester/engine.py",
+        "old": "kb=q[\"queue_size\"] // 1024,",
+        "new": "kb=q[\"queue_size\"],",
+        "test": "test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

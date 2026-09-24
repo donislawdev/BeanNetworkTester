@@ -1242,6 +1242,9 @@ def test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number()
     check("driver queue line: said exactly once, at START", len(said) == 1, f"({said})")
     line = said[0] if said else ""
     check("driver queue line: no placeholder left unfilled", "{" not in line, f"({line})")
+    # The length is 4096 too, so "4096" alone cannot tell the size from it.
+    check("driver queue line: the size is in KB, not in bytes",
+          f"{ParamDivert.QUEUE[2] // 1024} KB" in line, f"({line})")
     check("driver queue line: quotes the threshold the warning really uses",
           f"{BeanEngine.DRIVER_WAIT_WARN_MS:g} ms" in line, f"({line})")
 
