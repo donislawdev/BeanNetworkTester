@@ -863,3 +863,206 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
         assert panel.table.row_menu_at_pointer(Ev()) == "break"
         assert menu.posted == 0, "a menu with no row under the pointer"
     """))
+
+
+# -- the port check ------------------------------------------------------------------ #
+# The machine is stood in for: a bind that refuses TCP 9010 the way a Windows
+# reservation does (WSAEACCES), and a socket table with one server on 8080. The
+# logic runs for real on top of them. `gate` holds a check back for the tests that
+# need one still running.
+PORTS = """
+import threading, time
+from beantester.i18n import T
+from beantester.nettools import portcheck as pc
+from beantester.nettools import sockets as sk
+from beantester.gui.toolbox.portcheck import render
+
+pc.WINDOWS = True
+HOLDER = sk.Socket("k", "TCP", 4, "0.0.0.0", 8080, "", None, "LISTEN", 1234, "node.exe")
+gate = threading.Event()
+gate.set()
+checks = []
+real_check = pc.check
+
+def reserved_9010(proto, family, port):
+    return 10013 if (proto, port) == ("TCP", 9010) else 0
+
+def fake_check(matcher, protocols, families):
+    checks.append((str(matcher), protocols, families))
+    gate.wait(5)
+    return real_check(matcher, protocols, families, bind=reserved_9010,
+                      read=lambda: sk.Snapshot((HOLDER,), (), time.time(), 1))
+
+pc.check = fake_check
+
+def open_ports():
+    app.select_page("tools")
+    page = app.pages["tools"]
+    page.select("portcheck")
+    page._on_subpage()          # what the tab change runs on real Tk
+    return page.panels["portcheck"]
+
+def settle(panel):
+    deadline = time.monotonic() + 5
+    while panel.pending():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def type_ports(panel, text):
+    panel.ports.set(text)
+    panel._typed()
+
+def untick(panel, boxes, value, name):
+    boxes[value].set(False)
+    panel._ticked(name, boxes[value])
+
+def row(panel, port, proto="TCP", family=4):
+    return next(r for r in panel.table.items
+                if (r.port, r.proto, r.family) == (port, proto, family))
+"""
+
+
+def test_the_port_check_waits_to_be_asked_and_answers_per_protocol_and_ip_version():
+    run_gui(PORTS + START_UP + textwrap.dedent("""
+        app.ui.set("tools_page", "portcheck")
+        app._build_ui()
+        opened_on_start_up()
+        panel = open_ports()
+        settle(panel)
+        assert checks == [], "nothing is checked before a port is typed"
+        assert "disabled" in panel.check_btn.state(), "and there is nothing to check"
+
+        type_ports(panel, "8080, 9010")
+        assert "disabled" not in panel.check_btn.state()
+        panel.check()
+        settle(panel)
+        assert checks == [("8080, 9010", ("TCP", "UDP"), (4, 6))], checks
+        assert len(panel.table.items) == 8, len(panel.table.items)
+        first = panel.table.items[0]
+        assert (first.port, first.proto, first.family, first.verdict) == \\
+            (8080, "TCP", 4, pc.IN_USE), "what stops a program comes first"
+        cells = render(row(panel, 8080))
+        assert cells == (8080, "TCP", T("tools.portcheck.ipv4"),
+                         T("tools.portcheck.verdict.in_use"),
+                         T("tools.portcheck.holder", name="node.exe", pid=1234)), cells
+        assert row(panel, 9010).verdict == row(panel, 9010, family=6).verdict == pc.RESERVED
+        assert row(panel, 9010, "UDP").verdict == pc.FREE, "a reservation is per protocol"
+        assert panel.count.cget("text") == T("tools.portcheck.count", taken=3, total=8)
+        tags = {r.verdict: panel.table._tag_of(r) for r in panel.table.items}
+        assert tags == {pc.IN_USE: "blocked", pc.RESERVED: "blocked", pc.FREE: ""}, tags
+        assert T("tools.portcheck.note_checked", ports="8080, 9010",
+                 what="TCP, UDP, IPv4, IPv6") in panel.note.cget("text")
+        assert panel.status.label.cget("style") == "Muted.TLabel"
+
+        for callback in panel.entry.bindings["<Return>"]:
+            callback(None)
+        settle(panel)
+        assert len(checks) == 2, "Enter checks too"
+    """))
+
+
+def test_ports_the_parser_refuses_never_reach_the_worker():
+    """The port language's own sentence, in the window's language, at once - not an
+    English exception from a worker."""
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "9100-9000")
+        panel.check()
+        assert checks == [] and not panel.job.busy(), checks
+        text = panel.status.label.cget("text")
+        assert "9100-9000" in text and "Error" not in text, text
+        assert panel.status.label.cget("style") == "Status.Bad.TLabel"
+    """))
+
+
+def test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language():
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "1-1001")
+        panel.check()
+        settle(panel)
+        text = panel.status.label.cget("text")
+        want = T("tools.common.failed", error=T("tools.portcheck.error_too_many",
+                                                count=1001, limit=pc.MAX_PORTS))
+        assert text == want and "1001" in text, text
+        assert panel.table.items == [], "nothing was checked"
+    """))       # and nothing for the crash log: the harness fails on any recorded fault
+
+
+def test_the_boxes_choose_what_is_checked_and_are_kept_across_a_rebuild():
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "8080")
+        untick(panel, panel.protocols, "UDP", "proto_UDP")
+        untick(panel, panel.families, 6, "family_6")
+        panel.check()
+        settle(panel)
+        assert checks[-1][1:] == (("TCP",), (4,)), checks
+        assert [(r.proto, r.family) for r in panel.table.items] == [("TCP", 4)]
+
+        untick(panel, panel.protocols, "TCP", "proto_TCP")
+        assert "disabled" in panel.check_btn.state(), "no protocol, nothing to check"
+        panel.check()
+        assert len(checks) == 1, checks
+
+        app._build_ui()
+        again = open_ports()
+        assert again.ports.get() == "8080"
+        assert [v.get() for v in again.protocols.values()] == [False, False]
+        assert [v.get() for v in again.families.values()] == [True, False]
+        assert len(again.table.items) == 1, "the answer outlives the rebuild"
+    """))
+
+
+def test_one_check_at_a_time_and_a_rebuild_mid_check_gets_the_answer():
+    run_gui(PORTS + textwrap.dedent("""
+        gate.clear()
+        panel = open_ports()
+        type_ports(panel, "8080")
+        panel.check()
+        assert panel.job.busy() and "disabled" in panel.check_btn.state()
+        panel.check()
+        assert len(checks) == 1, "nothing is queued behind a running check"
+        app._build_ui()
+        again = open_ports()
+        assert again.status.label.cget("text") == T("tools.common.working")
+        gate.set()
+        settle(again)
+        assert len(again.table.items) == 4 and len(checks) == 1, checks
+        assert "disabled" not in again.check_btn.state()
+    """))
+
+
+def test_the_port_check_row_menu_acts_on_the_program_that_holds_the_port():
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "8080")
+        panel.check()
+        settle(panel)
+        menu = panel.menu
+        for proto, named in (("TCP", True), ("UDP", False)):
+            panel.table.select_keys([row(panel, 8080, proto).key])
+            panel._show_menu(0, 0)
+            for index in (2, 3):
+                want = "normal" if named else "disabled"
+                assert menu.entry_states[index]["state"] == want, (proto, index)
+        panel.table.select_keys([row(panel, 8080).key])
+        panel._target()
+        assert app.vars["target"].get() == "node.exe", app.vars["target"].get()
+    """))
+
+
+def test_a_header_click_sorts_the_port_check_without_checking_again():
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "9010, 8080, 7000")
+        panel.check()
+        settle(panel)
+        panel.table._clicked("port")
+        ports = [r.port for r in panel.table.items]
+        assert ports == sorted(ports), ports
+        panel.table._clicked("port")
+        ports = [r.port for r in panel.table.items]
+        assert ports == sorted(ports, reverse=True), ports
+        assert len(checks) == 1, checks
+    """))

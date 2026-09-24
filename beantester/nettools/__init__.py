@@ -20,3 +20,19 @@ The contract every module here keeps
 * A platform API sits behind an object the tests can replace, like
   ``portmap._Native``.
 """
+
+
+class Refused(Exception):
+    """What was asked cannot be run as asked: an answer for the person, not a fault.
+
+    ``user_key`` and ``user_args`` say why in the window's language
+    (``gui/toolbox/base.py`` shows them). Raised on the worker when only the worker
+    can tell - listing the ports an expression names takes up to 100 ms, too long
+    for the UI thread. Kept out of the crash log: that file is for the program's
+    faults, and "1001 ports, 1000 at most" is not one.
+    """
+
+    def __init__(self, user_key, **user_args):
+        super().__init__(user_key)
+        self.user_key = user_key
+        self.user_args = user_args

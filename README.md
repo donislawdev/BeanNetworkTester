@@ -190,6 +190,16 @@ monitor is gone it returns to the centre of the current screen.
     search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
     right-click a row to target its program, leave it alone, or limit to or block its
     remote address. Program names are shown without administrator rights.
+  - **Port check** - can your program use a port? Type one port, a list or a range, the
+    way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`, up to 1000 at a
+    time), and press **Check** (or Enter). Each port is checked for TCP and UDP, on IPv4 and
+    IPv6, and marked **Free**, **In use** (with the program that holds it and its PID) or
+    **Reserved by Windows** - a range Windows set aside, the usual reason a server will not
+    start on a port nothing seems to use. The ranges are per protocol, so a port can be
+    free for UDP and not for TCP. For each port the tool asks the system on this
+    computer's own loopback address and gives the port back at once. Who holds a port
+    comes from the same table as **Sockets**. Right-click a row to target the program that
+    holds the port or leave it alone.
   - **Filter tester** - pick a field from the Control page (target process, destination
     IP or port, blocked IP or port), type an expression and a value, and see at once whether
     they match. It also shows which part of the expression selected the value, which `!` part

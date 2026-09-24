@@ -21,6 +21,7 @@ from typing import NamedTuple
 
 from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
+from .portcheck import PortCheckPanel
 from .sockets import SocketsPanel
 
 
@@ -35,6 +36,7 @@ class Tool(NamedTuple):
 # Each tool takes its final place the day it lands.
 TOOLS = (
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel),
+    Tool(PortCheckPanel.ID, PortCheckPanel.LABEL, PortCheckPanel),
     Tool(ExprTestPanel.ID, ExprTestPanel.LABEL, ExprTestPanel),
     Tool(DiagnosticsPanel.ID, DiagnosticsPanel.LABEL, DiagnosticsPanel),
 )

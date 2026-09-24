@@ -14,6 +14,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   table (`lport:8080`, `state:listen`), and right-click a row to target its program or to
   limit to or block its remote address. It is the first tab of the Tools page.
 
+- **Port check, on the Tools tab.** Type a port, a list or a range (`8080`, `80, 443`,
+  `9000-9100`) and see, for TCP and UDP on IPv4 and IPv6, whether a program can use each
+  one: free, in use by which program, or reserved by Windows. A server that will not start
+  on a port nothing seems to use is often in a range Windows set aside, and this shows it
+  at once. Nothing is sent over the network. It is the second tab of the Tools page.
+
 - **A Tools tab, with a filter tester.** Pick a field from the Control page, type an
   expression and a value, and see at once whether they match - and which part of the
   expression decided it, for example the `!10.0.5.0/24` that excluded `10.0.5.7`. A value
