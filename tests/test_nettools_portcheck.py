@@ -224,8 +224,10 @@ events = []
 sys.addaudithook(lambda event, args: events.append([event, repr(args[1:])[:120]])
                  if event.startswith("socket.") else None)
 from beantester.nettools import portcheck as pc
+checked, unavailable = [], []
 try:
-    pc.check(pc.parse("47001, 47002"), pc.PROTOCOLS, pc.FAMILIES)
+    result = pc.check(pc.parse("47001, 47002"), pc.PROTOCOLS, pc.FAMILIES)
+    checked, unavailable = list(result.families), list(result.unavailable)
 except Exception as exc:
     print("CHECK_FAILED " + repr(exc))
 run = list(events)
@@ -233,7 +235,8 @@ run = list(events)
 # nothing - it only records a default peer.
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as way_out:
     way_out.connect(("127.0.0.1", 9))
-print("BEGIN_JSON" + json.dumps({{"run": run, "all": events}}))
+print("BEGIN_JSON" + json.dumps({{"run": run, "all": events, "checked": checked,
+                                 "unavailable": unavailable}}))
 """
 
 
@@ -252,7 +255,16 @@ def test_a_port_check_only_creates_and_binds_sockets_on_loopback():
     check("the check raised only socket creation and bind",
           kinds == ["socket.__new__", "socket.bind"], f"({kinds})")
     binds = [args for event, args in seen["run"] if event == "socket.bind"]
-    check("one bind per port, protocol and version", len(binds) == 2 * 4, f"({len(binds)})")
+    checked, missing = len(seen["checked"]), len(seen["unavailable"])
+    check("an IP version was checked at all, or this proves nothing", checked > 0,
+          f"({seen['unavailable']} unavailable)")
+    # A version this machine has no loopback for (an IPv6-less container) ends at its
+    # first attempt, which may or may not reach bind. Counted, not skipped: the IPv4
+    # half still has to prove itself there.
+    per_version = 2 * len(pc.PROTOCOLS)             # two ports, TCP and UDP
+    check("one bind per port, protocol and checked version",
+          per_version * checked <= len(binds) <= per_version * checked + missing,
+          f"({len(binds)} binds, {checked} checked, {missing} unavailable)")
     check("every bind on a loopback address",
           all("'127.0.0.1'" in args or "'::1'" in args for args in binds), f"({binds})")
     check("the hook reports a way out when shown one",
