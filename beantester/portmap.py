@@ -22,10 +22,18 @@ hundred ``psutil.process_iter()`` would walk on every refresh.
 
 Nothing here raises: a lookup that cannot be answered returns ``None`` /
 ``""``, because the callers sit in the capture loop.
+
+The one exception is :func:`socket_rows`, the WHOLE socket table for the Tools
+tab: every row, listeners and closing sockets included, read on a click by a
+worker thread and never by the packet path. It raises
+:class:`SocketTableUnavailable` when nothing can be read at all, because the
+person looking at an empty table must be told it is not an empty machine.
 """
+import ipaddress
 import sys
 import threading
 import time
+from typing import NamedTuple
 
 from . import crashlog
 
@@ -65,16 +73,112 @@ def _swap16(value):
     return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
 
 
+# -- the whole socket table (the Tools tab) ------------------------------------ #
+class SocketRow(NamedTuple):
+    """One socket, as the Tools tab shows it. Built on a worker, never on the packet path."""
+    proto: str                  # "TCP" / "UDP"
+    family: int                 # 4 / 6
+    local_ip: str
+    local_port: int
+    remote_ip: str              # "" for UDP and for a listener (see _tcp4_row)
+    remote_port: int | None
+    state: str                  # a TCP_STATES name; "" for UDP
+    pid: int | None             # 0: owned by no process (TIME_WAIT); None: the OS would not say
+
+
+class SocketTableUnavailable(Exception):
+    """No socket table could be read at all. ``reason``: "denied" or "missing"."""
+
+    def __init__(self, reason, detail=""):
+        super().__init__(detail or reason)
+        self.reason = reason
+
+
+# MIB_TCP_STATE (tcpmib.h), numbered as Microsoft Learn documents it for
+# MIB_TCPROW_OWNER_PID and MIB_TCP6ROW_OWNER_PID, named the way RFC 793 and
+# Windows' own netstat spell them. psutil spells four of them its own way
+# (_PSUTIL_STATES), so both paths end in the same words and one search finds both.
+TCP_STATES = {1: "CLOSED", 2: "LISTEN", 3: "SYN_SENT", 4: "SYN_RECEIVED",
+              5: "ESTABLISHED", 6: "FIN_WAIT_1", 7: "FIN_WAIT_2", 8: "CLOSE_WAIT",
+              9: "CLOSING", 10: "LAST_ACK", 11: "TIME_WAIT", 12: "DELETE_TCB"}
+_PSUTIL_STATES = {"SYN_RECV": "SYN_RECEIVED", "FIN_WAIT1": "FIN_WAIT_1",
+                  "FIN_WAIT2": "FIN_WAIT_2", "CLOSE": "CLOSED"}
+
+
+def _tcp_state(number):
+    """A state's name; a number Learn does not list is shown as the number itself."""
+    number = int(number)
+    return TCP_STATES.get(number, str(number))
+
+
+def _ipv4(value):
+    """A DWORD holding an ``in_addr``: the first octet is the LOW byte."""
+    return f"{value & 0xFF}.{(value >> 8) & 0xFF}.{(value >> 16) & 0xFF}.{(value >> 24) & 0xFF}"
+
+
+def _ipv6(raw, scope):
+    """16 bytes in network order, plus the scope for a link-local address.
+
+    The scope id is taken AS IT IS. Learn says it is in network byte order; it is
+    not - MEASURED 2026-09-23 (Win11): a UDP socket bound to fe80::...%12 has
+    12 in its row, and the byte-swapped value would be 201326592.
+    """
+    text = str(ipaddress.IPv6Address(bytes(raw)))
+    return f"{text}%{int(scope)}" if scope else text
+
+
+def _tcp4_row(row):
+    # A listener's remote half "has no meaning" (Learn, MIB_TCPROW_OWNER_PID), so
+    # it is left empty rather than shown as the 0.0.0.0:0 the row happens to hold.
+    state = _tcp_state(row.dwState)
+    idle = state == "LISTEN"
+    return SocketRow("TCP", 4, _ipv4(row.dwLocalAddr), _swap16(row.dwLocalPort & 0xFFFF),
+                     "" if idle else _ipv4(row.dwRemoteAddr),
+                     None if idle else _swap16(row.dwRemotePort & 0xFFFF),
+                     state, int(row.dwOwningPid))
+
+
+def _tcp6_row(row):
+    state = _tcp_state(row.dwState)
+    idle = state == "LISTEN"
+    return SocketRow("TCP", 6, _ipv6(row.ucLocalAddr, row.dwLocalScopeId),
+                     _swap16(row.dwLocalPort & 0xFFFF),
+                     "" if idle else _ipv6(row.ucRemoteAddr, row.dwRemoteScopeId),
+                     None if idle else _swap16(row.dwRemotePort & 0xFFFF),
+                     state, int(row.dwOwningPid))
+
+
+def _udp4_row(row):
+    return SocketRow("UDP", 4, _ipv4(row.dwLocalAddr), _swap16(row.dwLocalPort & 0xFFFF),
+                     "", None, "", int(row.dwOwningPid))
+
+
+def _udp6_row(row):
+    return SocketRow("UDP", 6, _ipv6(row.ucLocalAddr, row.dwLocalScopeId),
+                     _swap16(row.dwLocalPort & 0xFFFF), "", None, "",
+                     int(row.dwOwningPid))
+
+
+_ROW_CONVERTERS = {("tcp", _AF_INET): _tcp4_row, ("tcp", _AF_INET6): _tcp6_row,
+                   ("udp", _AF_INET): _udp4_row, ("udp", _AF_INET6): _udp6_row}
+
+
 # -- native (Windows) --------------------------------------------------------- #
 class _Native:
-    """ctypes bindings for the two extended socket tables. Windows only."""
+    """ctypes bindings for the two extended socket tables. Windows only.
 
-    def __init__(self):
+    ``iphlpapi`` is injectable so the buffer walk can be tested on any platform:
+    ``ctypes.wintypes`` imports on Linux too (MEASURED on CPython 3.14, where its
+    DWORD is 8 bytes), and a fake that writes the table with these same structures
+    reads back consistently. The layout itself is what Windows proves.
+    """
+
+    def __init__(self, iphlpapi=None):
         import ctypes
         from ctypes import wintypes
 
         self.ctypes = ctypes
-        self.iphlpapi = ctypes.WinDLL("iphlpapi.dll")
+        self.iphlpapi = iphlpapi if iphlpapi is not None else ctypes.WinDLL("iphlpapi.dll")
 
         class MIB_TCPROW_OWNER_PID(ctypes.Structure):
             _fields_ = [("dwState", wintypes.DWORD),
@@ -119,6 +223,33 @@ class _Native:
         ``owners`` (optional) collects ``port -> {pid, ...}`` for the ports where
         more than one row claims the same number, which ``out`` cannot represent.
         """
+        fetched = self._fetch(proto, family)
+        if fetched is None:
+            return False
+        _buffer, rows = fetched             # held while the rows are read (see _fetch)
+        for row in rows:
+            port = _swap16(row.dwLocalPort & 0xFFFF)
+            pid = int(row.dwOwningPid)
+            if port and pid:
+                # LAST ROW WINS, and that is unchanged - see port_pid_map for what
+                # it costs and _put for how the discarded owner is remembered.
+                _put(out, owners, port, pid)
+        return True
+
+    def _fetch(self, proto, family):
+        """One table as ``(buffer, rows)``, or ``None`` when it would not answer.
+
+        Shared by the capture-side map (``_table``) and the Tools tab's full table
+        (``socket_rows``): one buffer walk, so a fix to it reaches both.
+
+        🔴 The BUFFER comes back with the rows, and a caller keeps it referenced for
+        as long as it reads them. ``rows`` is a ctypes VIEW over the buffer's
+        memory; while this code lived inside one function the buffer was a local
+        beside it and the question never came up. Handed out alone, the view would
+        keep its memory alive only through ctypes' internal ``_objects`` chain -
+        and a view over freed memory is a crash in the module the packet path
+        leans on. An explicit reference costs nothing and depends on nothing.
+        """
         import ctypes
         from ctypes import wintypes
 
@@ -146,26 +277,40 @@ class _Native:
                 self._sizes[(proto, family)] = size.value
                 break
             if rc != _ERROR_INSUFFICIENT_BUFFER:
-                return False
+                return None
         else:
-            return False
+            return None
 
         count = ctypes.cast(buffer, ctypes.POINTER(wintypes.DWORD))[0]
         if not count:
-            return True
+            return buffer, ()
         rows = ctypes.cast(
             ctypes.byref(buffer, ctypes.sizeof(wintypes.DWORD)),
             ctypes.POINTER(row_type * count)).contents
-        for row in rows:
-            port = _swap16(row.dwLocalPort & 0xFFFF)
-            pid = int(row.dwOwningPid)
-            if port and pid:
-                # LAST ROW WINS, and that is unchanged - see port_pid_map for what
-                # it costs and _put for how the discarded owner is remembered.
-                _put(out, owners, port, pid)
-        return True
+        return buffer, rows
 
     FAMILY_NAMES = {_AF_INET: "v4", _AF_INET6: "v6"}
+
+    def socket_rows(self):
+        """Every row of the four tables as ``SocketRow``, and the tables that failed.
+
+        Unlike ``port_pid_map`` nothing is dropped: the row with PID 0 is a socket
+        in TIME_WAIT, which no process owns any more (measured on a loopback
+        connection closed a moment earlier), and a port several processes hold is
+        several rows. The capture side skips those because it needs one owner per
+        port; a person asking "who holds 8080?" needs all of them.
+        """
+        rows, failed = [], []
+        for proto in ("tcp", "udp"):
+            for family in (_AF_INET, _AF_INET6):
+                fetched = self._fetch(proto, family)
+                if fetched is None:
+                    failed.append(f"{proto}/{self.FAMILY_NAMES[family]}")
+                    continue
+                _buffer, table = fetched        # held while the rows are read
+                convert = _ROW_CONVERTERS[(proto, family)]
+                rows.extend(convert(row) for row in table)
+        return rows, failed
 
     def port_pid_map(self, owners=None):
         """``{local port: pid}`` from all four socket tables, or ``None``.
@@ -250,6 +395,75 @@ def _psutil_port_pid_map(owners=None):
         # refresh path, not the packet path (convention 30).
         crashlog.note(_exc, "portmap.psutil.ports")
         return None
+
+
+def _psutil_row(proto, conn):
+    """One psutil connection as a ``SocketRow``, in the native path's words."""
+    laddr = conn.laddr or ("", 0)
+    raddr = conn.raddr or ()
+    state = _PSUTIL_STATES.get(conn.status, conn.status) if proto == "TCP" else ""
+    blank = state == "LISTEN" or not raddr
+    local_ip = str(laddr[0])
+    return SocketRow(proto, 6 if ":" in local_ip else 4, local_ip, int(laddr[1]),
+                     "" if blank else str(raddr[0]), None if blank else int(raddr[1]),
+                     state, None if conn.pid is None else int(conn.pid))
+
+
+def _psutil_socket_rows():
+    """Every TCP and UDP socket through psutil (off Windows, or the native path failed).
+
+    Raises instead of answering empty: see :func:`socket_rows`. Another account's
+    socket may carry no PID - psutil leaves ``pid`` as None when the OS will not
+    say, which on Linux is any socket that is not ours unless we run as root.
+    """
+    try:
+        import psutil
+    except ImportError:
+        raise SocketTableUnavailable(
+            "missing", "there is no socket table to read here: psutil is not installed"
+        ) from None
+    try:
+        found = [("TCP", conn) for conn in psutil.net_connections(kind="tcp")]
+        found += [("UDP", conn) for conn in psutil.net_connections(kind="udp")]
+    except psutil.AccessDenied as exc:
+        raise SocketTableUnavailable(
+            "denied", "the system refused to list its sockets - reading them may need "
+                      f"administrator rights ({exc})") from exc
+    return [_psutil_row(proto, conn) for proto, conn in found]
+
+
+def socket_rows():
+    """``(rows, failed)``: every TCP and UDP socket on this machine, one row each.
+
+    For the Tools tab, read on a click by a worker; the packet path never comes
+    here (``tests/test_hot_path.py`` watches both routes). A NEW ``_Native`` per
+    call, never ``default_table()``'s: nothing is shared with the capture side -
+    not the size hints, and not the switch that retires a broken native path for
+    the rest of a session.
+
+    ``failed`` names the tables that would not answer when the others did; the
+    rows are still the rows. When none answers, psutil is asked; when that cannot
+    answer either, :class:`SocketTableUnavailable` - an empty list would read as
+    "no sockets", which is a claim about the machine this code cannot make.
+    """
+    native = _make_native()
+    if native is not None:
+        rows, failed = native.socket_rows()
+        if len(failed) < len(_ROW_CONVERTERS):
+            return rows, failed
+    return _psutil_socket_rows(), []
+
+
+def process_names():
+    """``{pid: name}`` for every process, from ONE snapshot, touching no cache.
+
+    The Tools tab names its rows this way and not through ``PortTable.info``:
+    writing into that cache would change what targeting reads (entries from a
+    snapshot carry no start time, so they are checked by age instead). The
+    snapshot names every process WITHOUT opening it - MEASURED 2026-09-23 without
+    administrator rights: all 38 PIDs owning a socket named, ``System`` included.
+    """
+    return {pid: entry[0] for pid, entry in _process_table().items()}
 
 
 def _psutil_process_table():

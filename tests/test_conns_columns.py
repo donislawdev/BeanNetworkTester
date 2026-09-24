@@ -245,7 +245,28 @@ def test_the_table_is_reachable_and_readable_without_a_mouse():
         # ...and it refuses when there is no row to act on, exactly as the mouse
         # route refuses on an empty table
         page.table.select_keys([])
-        assert page._popup_from_keyboard() == "break"
+        assert page.table.row_menu_from_keyboard() == "break"
+
+        # What is BOUND, not only which handler exists: every route is fired
+        # through the callback the widget holds, on a real row, and must post the
+        # menu. Calling the handlers by name proved nothing about the bindings.
+        values = ["-"] * len(page.table.columns)
+        values[0] = "chrome.exe"
+        page.table.sync([("r1", values)])
+
+        class Ev:
+            x_root = y_root = y = 10
+
+        tree = page.table.tree
+        for seq in ("<<ContextMenu>>", "<Shift-F10>", menu_key):
+            page.menu.posted = 0
+            tree.row_at = page.table._slots[0]
+            page.table.select_keys(["r1"])
+            for callback in tree.bindings[seq]:
+                callback(Ev())
+            assert page.menu.posted == 1, "%s did not open the menu" % seq
+        # the middle button is not a context menu (Tk maps <<ContextMenu>> per platform)
+        assert "<Button-2>" not in tree_binds, sorted(tree_binds)
     ''')
 
 

@@ -99,6 +99,10 @@ class Outcome(NamedTuple):
     error: str          # "" on success, else the exception - program text
     elapsed_ms: int
     finished: float     # time.time() at the end: a result says how old it is
+    # An i18n key for a failure the tool KNOWS and can put in words - the exception
+    # carries it as `user_key` (e.g. nettools.sockets.Unreadable). "" for any other
+    # failure, which the status line then shows as program text.
+    error_key: str = ""
 
 
 def _guarded(payload):
@@ -112,13 +116,17 @@ def _guarded(payload):
     """
     kind, work = payload
     started = time.perf_counter()
+    error_key = ""
     try:
         value, error = work(), ""
     except BaseException as exc:
         crashlog.note(exc, "gui.toolbox")
         value, error = None, f"{type(exc).__name__}: {exc}"
+        # Said in the window's language when the tool can name it; the crash log
+        # above keeps the whole exception either way.
+        error_key = str(getattr(exc, "user_key", "") or "")
     return Outcome(kind, value, error, round((time.perf_counter() - started) * 1000),
-                   time.time())
+                   time.time(), error_key)
 
 
 class ToolJob:
@@ -230,7 +238,10 @@ class StatusLine:
 
     def show(self, outcome):
         if outcome.error:
-            self.label.config(text=T("tools.common.failed", error=outcome.error),
+            # A failure the tool can name is said in the window's language; any
+            # other is shown as the program's own words, the way --doctor prints them.
+            error = T(outcome.error_key) if outcome.error_key else outcome.error
+            self.label.config(text=T("tools.common.failed", error=error),
                               style="Status.Bad.TLabel")
             return
         at = time.strftime("%H:%M:%S", time.localtime(outcome.finished))

@@ -126,8 +126,16 @@ def _connection_blob(c, proc_map=None):
             f"{c.get('local_port') or ''}").lower()
 
 
-def compile_query(query):
+def compile_query(query, fields=None, blob=None, bools=None):
     """Turn a search string into a list of predicates, ONCE per query.
+
+    The connection table's by default. ``fields``, ``blob`` and ``bools`` make it
+    any table's: the socket table on the Tools tab (``nettools/sockets.py``) passes
+    its own columns and gets the same language, the same parser and the same
+    tolerance of half-typed terms - one search syntax in the window, not two
+    (convention 10). ``fields`` maps a qualifier to ``(kind, getter)``, where the
+    getter of ``proc`` returns ``(pid, name)``, which the process kind judges
+    together; ``None`` there is the connection table's own reading of a row.
 
     Compiling per row would put the expression parser on the path of every one of
     a hundred thousand rows on every search, so parse here and return closures.
@@ -152,15 +160,18 @@ def compile_query(query):
     nothing until it becomes valid, and a term naming an unknown field falls back
     to plain text - `http://x` is a URL someone pasted, not a field called `http`.
     """
+    fields = SEARCH_FIELDS if fields is None else fields
+    blob = _connection_blob if blob is None else blob
+    bools = BOOL_FIELDS if bools is None else bools
     tests = []
     for raw in str(query or "").split():
         field, sep, value = raw.partition(":")
         field = field.lower()
-        if not sep or (field not in SEARCH_FIELDS and field not in BOOL_FIELDS):
+        if not sep or (field not in fields and field not in bools):
             text = raw.lower()
-            tests.append(lambda c, m, t=text: t in _connection_blob(c, m))
+            tests.append(lambda c, m, t=text, b=blob: t in b(c, m))
             continue
-        if field in BOOL_FIELDS:
+        if field in bools:
             want = value.strip().lower()
             if want in TRUE_WORDS:
                 tests.append(lambda c, m, k=field: bool(c.get(k)))
@@ -169,7 +180,7 @@ def compile_query(query):
             else:                                   # half-typed: match nothing yet
                 tests.append(lambda c, m: False)
             continue
-        kind, getter = SEARCH_FIELDS[field]
+        kind, getter = fields[field]
         try:
             matcher = parse_matcher(value, kind, f"fields.{field}",
                                     bounds=_BOUNDS.get(field))
@@ -178,7 +189,9 @@ def compile_query(query):
             continue
         if not matcher:                             # `port:` with nothing after it
             continue
-        if field == "proc":
+        if field == "proc" and getter is not None:
+            tests.append(lambda c, m, x=matcher, g=getter: x.matches(*g(c, m)))
+        elif field == "proc":
             # The process kind judges (pid, name) together, exactly as the target
             # field does - so `proc:1234` and `proc:chrome` both work here for the
             # same reason they both work there.

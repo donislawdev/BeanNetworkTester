@@ -21,6 +21,7 @@ from typing import NamedTuple
 
 from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
+from .sockets import SocketsPanel
 
 
 class Tool(NamedTuple):
@@ -33,6 +34,7 @@ class Tool(NamedTuple):
 # first: sockets, is-this-port-free, expression tester, adapters, diagnostics.
 # Each tool takes its final place the day it lands.
 TOOLS = (
+    Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel),
     Tool(ExprTestPanel.ID, ExprTestPanel.LABEL, ExprTestPanel),
     Tool(DiagnosticsPanel.ID, DiagnosticsPanel.LABEL, DiagnosticsPanel),
 )

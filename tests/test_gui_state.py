@@ -206,7 +206,7 @@ def test_blocking_and_excluding_from_a_row_accumulate():
     except this", which is the case the menu entry exists for.
     """
     run_gui("""
-        from beantester.gui.pages.conns import block_ip_address, leave_process_alone
+        from beantester.gui.field_actions import block_ip_address, leave_process_alone
 
         block_ip_address(app, "8.8.8.8")
         block_ip_address(app, "1.1.1.1")
@@ -274,7 +274,7 @@ def test_connection_menu_needs_a_row_to_act_on():
             y = 10
 
         tree.row_at = None                      # empty table / clicked below the rows
-        assert page._popup(Ev()) == "break"
+        assert page.table.row_menu_at_pointer(Ev()) == "break"
         assert page.menu.posted == 0, "menu shown with nothing to act on"
 
         # a real row. The table is virtualised, so identify_row() gives back a
@@ -291,7 +291,7 @@ def test_connection_menu_needs_a_row_to_act_on():
 
         page.table.sync([("r1", row("chrome.exe"))])
         tree.row_at = page.table._slots[0]
-        page._popup(Ev())
+        page.table.row_menu_at_pointer(Ev())
         assert page.table.selected_keys() == ["r1"]
         assert page.menu.posted == 1
         assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "normal"
@@ -299,13 +299,13 @@ def test_connection_menu_needs_a_row_to_act_on():
         # a row whose process could not be resolved cannot be targeted
         page.table.sync([("r2", row("?"))])
         tree.row_at = page.table._slots[0]
-        page._popup(Ev())
+        page.table.row_menu_at_pointer(Ev())
         assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "disabled"
 
         # clicking a slot BELOW the last row acts on nothing
         tree.row_at = page.table._slots[-1]
         page.menu.posted = 0
-        assert page._popup(Ev()) == "break"
+        assert page.table.row_menu_at_pointer(Ev()) == "break"
         assert page.menu.posted == 0, "menu shown for an empty viewport slot"
     """)
 

@@ -21,7 +21,6 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
-import sys
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -31,7 +30,7 @@ from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
 from .. import dialogs
-from ..field_actions import append_to_field
+from ..field_actions import block_ip_address, leave_process_alone
 from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
@@ -123,33 +122,6 @@ SEARCH_DEBOUNCE_MS = 250
 # but re-sorting 200 000 rows on every 700 ms tick would burn ~15% of a core for
 # nothing. A user-visible action (sorting, searching) always refreshes at once.
 REBUILD_MS = 1000
-
-
-
-# The row actions below live on the PAGE rather than on ``App`` for a measured
-# reason: ``app.py`` sits on the size ratchet in ``tests/test_code_shape.py``, which
-# went red when they were added there. The road they take into the form is shared
-# with the Tools tab, so it lives in ``gui/field_actions.py``; what each action
-# MEANS (block this address, leave this process alone) stays here.
-def block_ip_address(app, ip):
-    """Add an address to the blocking field (decision pipeline step 2c)."""
-    if str(ip or "").strip():
-        append_to_field(app, "block_ip", str(ip).strip(), "log.block_ip_added")
-
-
-def leave_process_alone(app, name):
-    """Exclude a process from impairment by adding ``!name`` to the target.
-
-    With a target already set this narrows it. With the target EMPTY it turns
-    "impair everything" into "impair everything except this one", because a bare
-    negative means exactly that in this expression language - and that is the case
-    the menu entry is really for.
-    """
-    name = str(name or "").strip()
-    if not name or name == "?":
-        app.log(T("log.no_process_for_row"))
-        return
-    append_to_field(app, "target", f"!{name}", "log.process_excluded")
 
 
 class ConnsPage:
@@ -263,56 +235,10 @@ class ConnsPage:
                               command=self._choose_columns)
         self.menu.add_command(label=T("menu.reset_widths"),
                               command=self.table.reset_widths)
-        self.table.tree.bind("<Button-3>", self._popup)
-        self.table.tree.bind("<Button-2>", self._popup)      # macOS
-        # The same menu, reachable without a mouse. WCAG 2.1.1: anything doable
-        # with the pointer has to be doable from the keyboard - and this is a tool
-        # for testers and admins, where services.msc and the console have had
-        # Shift+F10 forever.
-        #
-        # The dedicated menu key is spelled DIFFERENTLY per platform - "App" on
-        # Windows, "Menu" on X11 - and Tk RAISES on a keysym the platform does
-        # not know rather than ignoring it. Binding "App" unconditionally passed
-        # every Windows test and killed the Linux render check, so the spelling
-        # is chosen here rather than tried blindly. Shift+F10 exists everywhere,
-        # so the keyboard route survives even if the menu key does not.
-        menu_key = "<App>" if sys.platform == "win32" else "<Menu>"
-        for sequence in ("<Shift-F10>", menu_key):
-            try:
-                self.table.tree.bind(sequence, self._popup_from_keyboard)
-            except tk.TclError as _exc:
-                # insurance, not the expected path: the spelling above is the one
-                # this platform should know, so a failure here is worth recording
-                crashlog.note(_exc, "gui.pages.conns")
-
-    def _popup(self, event):
-        """Show the menu only when it has a row to act on.
-
-        It used to pop up anywhere in the table - including an empty one - so an
-        empty view offered "Copy row" / "Target this process" with nothing to copy
-        or target.
-        """
-        key = self.table.key_at(event.y)
-        if key is None:
-            return "break"
-        # select by MODEL key: the widget's item ids are recycled viewport slots,
-        # so they say nothing about which connection was clicked
-        self.table.select_keys([key])
-        return self._show_menu(event.x_root, event.y_root)
-
-    def _popup_from_keyboard(self, _event=None):
-        """Shift+F10 / the menu key, on whatever row is already selected.
-
-        Nothing to position against here - there is no pointer - so the menu
-        opens at the table's own corner. It refuses on an empty selection for the
-        same reason ``_popup`` refuses on an empty table: a menu offering "Copy
-        row" with no row is a menu that lies.
-        """
-        if not self.table.selected_keys():
-            return "break"
-        tree = self.table.tree
-        return self._show_menu(tree.winfo_rootx() + scaled(40),
-                               tree.winfo_rooty() + scaled(40))
+        # Right click and Shift+F10 / the menu key, with the refusals on an empty
+        # table and an empty selection: the table's, shared with every table that
+        # has row actions (``SortableTree.bind_row_menu``).
+        self.table.bind_row_menu(self._show_menu)
 
     def _show_menu(self, x_root, y_root):
         # a row whose process could not be resolved (no admin rights) cannot be

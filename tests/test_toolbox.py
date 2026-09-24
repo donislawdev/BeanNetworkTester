@@ -145,12 +145,20 @@ def test_a_tool_that_fails_does_not_take_the_tab_or_the_tick_down():
     """), allow_faults=("on purpose",))
 
 
-def test_ctrl_f_on_the_tools_tab_goes_to_the_connection_search():
-    """No tool has a search box yet, so Ctrl+F keeps doing what it did from any
-    page without one: bring the connection table forward."""
+def test_ctrl_f_on_the_tools_tab_finds_the_box_of_the_tool_on_screen():
+    """The socket table has a search box of its own, and Ctrl+F on it goes there. A
+    tool without one sends the shortcut on to the connection table - what Ctrl+F did
+    from this tab before any tool had a box."""
     run_gui("""
         from beantester.gui.pages import focus_search
         app.select_page("tools")
+        page = app.pages["tools"]
+        page.select("sockets")
+        focus_search(app)
+        assert app.current_page() is page, app.current_page()
+        assert root.focus_get() is page.panels["sockets"].entry, root.focus_get()
+
+        page.select("exprtest")
         focus_search(app)
         assert app.current_page() is app.pages["connections"], app.current_page()
     """)
@@ -544,4 +552,244 @@ def test_the_environment_report_is_copied_whole():
         assert crash.startswith("crash log: ") and "could not be read" not in crash, copied
         assert any(T("log.copied") in line and T("tools.diagnostics.report_logged") in line
                    for line in app._log_lines), app._log_lines[-3:]
+    """))
+
+
+# -- sockets ------------------------------------------------------------------------ #
+# The machine is stood in for at the logic's `read`: the real one asks the system,
+# whose sockets differ on every runner. `gate` holds a read back for the tests that
+# need one still running.
+SOCK = """
+import threading, time
+from beantester.i18n import T
+from beantester.nettools import sockets as sk
+from beantester.portmap import SocketRow
+
+ROWS = [SocketRow("TCP", 4, "0.0.0.0", 8080, "", None, "LISTEN", 1234),
+        SocketRow("TCP", 6, "fe80::1%12", 50001, "fe80::5%12", 443, "ESTABLISHED", 1234),
+        SocketRow("TCP", 4, "127.0.0.1", 13882, "127.0.0.1", 5000, "TIME_WAIT", 0),
+        SocketRow("UDP", 4, "0.0.0.0", 5353, "", None, "", 100)]
+NAMES = {1234: "chrome.exe", 100: "mdns.exe"}
+gate = threading.Event()
+gate.set()
+reads, failed_tables = [], []
+
+def fake_read():
+    reads.append(1)
+    gate.wait(5)
+    return sk.Snapshot(tuple(sk._sockets(ROWS, NAMES)), tuple(failed_tables), time.time(), 3)
+
+sk.read = fake_read
+
+def open_sockets():
+    app.select_page("tools")
+    page = app.pages["tools"]
+    page.select("sockets")
+    return page.panels["sockets"]
+
+def settle(panel):
+    deadline = time.monotonic() + 5
+    while panel.pending():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def shown(panel):
+    return [s.local_port for s in panel.table.items]
+
+def search(panel, text):
+    panel.query.set(text)
+    panel._typed()
+    panel.debounce.now()
+
+def select_port(panel, port):
+    key = next(s.key for s in panel.table.items if s.local_port == port)
+    panel.table.select_keys([key])
+"""
+
+
+def test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up():
+    """Every page is built when the window opens, and the Tools page builds its first
+    tool with it - so a read in the constructor would ask the system at every start
+    of the program, for a tab nobody may open."""
+    run_gui(SOCK + textwrap.dedent("""
+        assert "sockets" in app.pages["tools"].panels, "the first tool is built at start"
+        app._tick()
+        assert reads == [], "and reads nothing until it is on screen"
+
+        panel = open_sockets()
+        settle(panel)
+        assert reads == [1], reads
+        assert shown(panel) == [5353, 8080, 13882, 50001], shown(panel)
+        assert panel.count.cget("text") == T("conns.shown_of", shown=4, total=4)
+        assert panel.status.label.cget("style") == "Muted.TLabel"
+        # each cell under its own header - strict: one value per column, no fewer
+        from beantester.gui.toolbox.sockets import COLUMNS, render
+        cells = dict(zip(COLUMNS, render(panel.table.items[1]), strict=True))
+        assert cells == {"proc": "chrome.exe", "pid": 1234, "proto": "TCP",
+                         "local_ip": "0.0.0.0", "local_port": 8080, "state": "LISTEN",
+                         "remote_ip": "", "remote_port": ""}, cells
+        app._tick()
+        panel.refresh()
+        settle(panel)
+        assert reads == [1], "after that, only Refresh reads"
+        panel.read()
+        settle(panel)
+        assert reads == [1, 1], reads
+    """))
+
+
+def test_a_search_typed_during_a_read_is_answered_on_that_read():
+    """The worker keeps only the last request that waits, so a search queued behind a
+    read would be computed on the table it was queued against. Nothing is queued: the
+    search waits in the box, and the answer that lands is checked against it."""
+    run_gui(SOCK + textwrap.dedent("""
+        gate.clear()
+        panel = open_sockets()
+        panel.pending()
+        assert "disabled" in panel.refresh_btn.state(), "no second read while one runs"
+        search(panel, "proto:udp")
+        gate.set()
+        settle(panel)
+        assert shown(panel) == [5353], shown(panel)
+        assert reads == [1], "answered on the read it waited for, not by reading again"
+        assert "disabled" not in panel.refresh_btn.state()
+    """))
+
+
+def test_the_query_and_the_order_outlive_a_rebuild_of_the_window():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        panel.table._clicked("local_port")            # ascending -> descending
+        settle(panel)
+        assert shown(panel) == [50001, 13882, 8080, 5353], shown(panel)
+        search(panel, "proto:tcp")
+        settle(panel)
+        app._build_ui()
+        again = open_sockets()
+        settle(again)
+        assert again is not panel
+        assert again.query.get() == "proto:tcp"
+        assert again.table.sort == {"col": "local_port", "reverse": True}, again.table.sort
+        assert shown(again) == [50001, 13882, 8080], shown(again)
+        assert reads == [1], "a rebuild shows what the window read, it does not read again"
+    """))
+
+
+def test_a_read_that_fails_says_why_and_keeps_the_rows_it_had():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        def refused():
+            raise OSError("the socket table refused on purpose")
+        sk.read = refused
+        panel.read()
+        settle(panel)
+        status = panel.status.label
+        assert "refused on purpose" in status.cget("text"), status.cget("text")
+        assert status.cget("style") == "Status.Bad.TLabel"
+        assert shown(panel) == [5353, 8080, 13882, 50001], "the last good rows stay"
+        at = time.strftime("%H:%M:%S", time.localtime(panel._latest().snapshot.read_at))
+        assert T("tools.sockets.note_stale", time=at) in panel.note.cget("text")
+        # a search is a new VIEW of the same old rows: they must still say how old
+        search(panel, "proto:tcp")
+        settle(panel)
+        assert shown(panel) == [8080, 13882, 50001], shown(panel)
+        assert T("tools.sockets.note_stale", time=at) in panel.note.cget("text"), \\
+            panel.note.cget("text")
+    """), allow_faults=("on purpose",))
+
+
+def test_a_socket_table_the_system_refuses_is_said_in_the_windows_language():
+    """A failure the tool can name is not an English exception in a Polish window;
+    the program's own words still go to the crash log."""
+    run_gui(SOCK + textwrap.dedent("""
+        def refused():
+            raise sk.Unreadable("tools.sockets.error_denied", "the system refused on purpose")
+        sk.read = refused
+        panel = open_sockets()
+        settle(panel)
+        text = panel.status.label.cget("text")
+        assert text == T("tools.common.failed", error=T("tools.sockets.error_denied")), text
+        assert "on purpose" not in text, text
+    """), allow_faults=("on purpose",))
+
+
+def test_a_first_read_that_fails_is_not_an_empty_machine_and_is_not_retried_by_itself():
+    run_gui(SOCK + textwrap.dedent("""
+        calls = []
+        def refused():
+            calls.append(1)
+            raise OSError("nothing to read on purpose")
+        sk.read = refused
+        panel = open_sockets()
+        settle(panel)
+        assert panel.table.items == []
+        assert panel.table._empty_text == "tools.sockets.empty_failed", panel.table._empty_text
+        for _ in range(3):
+            app._tick()
+            panel.refresh()
+        settle(panel)
+        assert calls == [1], "a failed read waits for Refresh, not for the next tick"
+    """), allow_faults=("on purpose",))
+
+
+def test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing():
+    run_gui(SOCK + textwrap.dedent("""
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 9000, "", None, "LISTEN", None))
+        failed_tables.append("udp/v6")
+        panel = open_sockets()
+        settle(panel)
+        note = panel.note.cget("text")
+        assert T("tools.sockets.note_failed", tables="udp/v6") in note, note
+        assert T("tools.sockets.note_no_pid", count=1) in note, note
+        search(panel, "state:closing")
+        settle(panel)
+        assert panel.table._empty_text == "tools.sockets.empty_match"
+
+        ROWS.clear()
+        failed_tables.clear()
+        panel.read()
+        settle(panel)
+        assert panel.table._empty_text == "tools.sockets.empty", panel.table._empty_text
+    """))
+
+
+def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
+    """A row with no process (TIME_WAIT) cannot be targeted, a listener has no remote
+    address to limit to or block. The address goes into the field without its IPv6
+    zone - the Control fields take an address, not an interface."""
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        menu = panel.menu
+        for port, named, remote in ((13882, False, True), (8080, True, False),
+                                    (50001, True, True)):
+            select_port(panel, port)
+            panel._show_menu(0, 0)
+            for index in (2, 3):
+                want = "normal" if named else "disabled"
+                assert menu.entry_states[index]["state"] == want, (port, index)
+            for index in (4, 5):
+                want = "normal" if remote else "disabled"
+                assert menu.entry_states[index]["state"] == want, (port, index)
+
+        select_port(panel, 50001)
+        panel._limit()
+        limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
+        assert limited == ("fe80::5", "443"), limited
+        panel._block()
+        assert app.vars["block_ip"].get() == "fe80::5", app.vars["block_ip"].get()
+        panel._target()
+        assert app.vars["target"].get() == "chrome.exe", app.vars["target"].get()
+        panel._leave_alone()
+        assert app.vars["target"].get() == "chrome.exe,!chrome.exe", app.vars["target"].get()
+
+        # the right click itself goes through the table's shared route
+        class Ev:
+            x_root = y_root = y = 10
+        panel.table.tree.row_at = None
+        menu.posted = 0
+        assert panel.table.row_menu_at_pointer(Ev()) == "break"
+        assert menu.posted == 0, "a menu with no row under the pointer"
     """))
