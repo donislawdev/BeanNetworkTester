@@ -411,6 +411,31 @@ def glob_pages(code):
     return glob.glob(os.path.join(SITE, "pages", "*", "%s.html" % code))
 
 
+def test_the_pages_never_call_a_signed_program_unsigned():
+    """Every release since 0.5.0 is signed, and the site went on saying it was not.
+
+    The download page said "not signed with a paid certificate" and the questions page
+    "new and unsigned", in both languages, for weeks after the first signed release -
+    while the README told the right story. Prose that nothing reads is prose that
+    rots. The fact lives in ``legal.CODESIGN_SHA256``: while it pins a certificate, no
+    page may say the program is unsigned. Emptying that constant is the day this test
+    and the pages change together, which is why it fails instead of skipping.
+    """
+    from beantester import legal
+    check("a signing certificate is pinned", bool(legal.CODESIGN_SHA256),
+          "(if signing stopped, rewrite this test together with the pages)")
+    denial = re.compile(r"\bunsigned\b|\bnot signed\b|niepodpisan|nie jest podpisan", re.I)
+    registry = build_site.load_registry(ROOT)
+    seen = 0
+    for code in build_site.language_codes(registry):
+        for path in sorted(glob_pages(code)):
+            seen += 1
+            found = denial.findall(_read(path))
+            check(f"{os.path.basename(os.path.dirname(path))} [{code}]: "
+                  f"does not call the program unsigned", not found, f"({found})")
+    check("there are pages to read", seen > 20, f"({seen})")
+
+
 def test_the_program_strings_really_reach_the_built_pages(tmp_path):
     """The other half: every ``{{app.*}}`` a page uses resolves to the program's text.
 

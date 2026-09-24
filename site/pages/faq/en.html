@@ -34,10 +34,11 @@
 
 <section>
   <h2>Windows warned me about the download. Why?</h2>
-  <p>Because the executable is new and unsigned, and SmartScreen flags anything it has not seen
-  before. A code-signing certificate is a yearly cost, not a statement about the file. Every release
-  publishes a SHA-256 checksum, a list of components, and a signature tying the two to the build that
-  produced them, so you can verify what you downloaded instead of trusting a green tick.</p>
+  <p>The program is signed, so the warning names who signed it instead of saying "Unknown
+  publisher". SmartScreen can still warn for a while, because the certificate is new and it has not
+  seen it often yet. Some antivirus tools may also react to a program that asks for administrator
+  rights and loads a network driver. Every release publishes a SHA-256 checksum and a signed list of
+  its components, so you can verify what you downloaded instead of trusting a green tick.</p>
 </section>
 
 <section>

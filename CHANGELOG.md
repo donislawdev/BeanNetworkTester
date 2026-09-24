@@ -109,6 +109,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   download failed for everyone. It is now the same command as in the README, which is run
   against every published release.
 
+- **The website no longer says the program is unsigned.** It has been signed since 0.5.0. The
+  download and questions pages now say so, and explain that Windows can still warn for a while
+  because the certificate is new.
+
 ## [0.6.0] - 2026-09-04
 
 ### Added
