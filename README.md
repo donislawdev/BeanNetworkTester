@@ -702,8 +702,8 @@ Designed so that after a bug you can recreate exactly the same conditions:
   when this tool received it. It is measured, not estimated: the driver stamps every packet with a
   capture time, and the tool samples that 20 times a second. On an idle machine it is a fraction of
   a millisecond (measured here: 0.05-0.16 ms). If it grows, the tool is adding delay that shows up
-  in no other counter, because it happens in the driver's queue ahead of its own - and above 50 ms
-  it says so in the log and the event list. Blank on `--simulate`, which has no driver.
+  in no other counter, because it happens in the driver's queue ahead of its own - and once it
+  reaches 50 ms it says so in the log and the event list. Blank on `--simulate`, which has no driver.
 - **It measures this machine, not the internet.** The tool sees packets crossing this computer's
   network stack, so a packet lost out on the network - the reply that never came back - never
   arrives here and nothing here can count it. A clean 30-packet ping that loses one reply shows
@@ -720,10 +720,13 @@ Designed so that after a bug you can recreate exactly the same conditions:
 - **Save reproduction report** - a single JSON file with the lot: seed, all settings, counters,
   metrics, event log, connections and a **ready CLI command** that recreates the conditions.
   It also records **the WinDivert queue the session ran behind** (`session.driver_queue`: length,
-  time and size). That is the driver's own buffer, ahead of this tool's: with the default 2000 ms
-  queue time a packet can wait in it, and that wait lands on your latency without appearing in any
-  counter here. A report from a machine you do not have in front of you now says which queue
-  produced its numbers. The same three values go into the log at START.
+  time and size). That is the driver's own buffer, ahead of this tool's, and the three values are
+  ceilings, not a fixed delay: while the tool keeps up, packets barely wait in it (see **Driver
+  queue wait (peak)** above). It fills only when the tool falls behind. Then packets wait longer,
+  and once it is full the driver drops them before this tool sees them. A smaller queue would not
+  remove that wait, it would turn it into lost packets that no counter can show, so the tool
+  leaves the driver's own settings alone. A report from a machine you do not have in front of you
+  says which queue produced its numbers. The same three values go into the log at START.
 - **Copy CLI command** - straight to the clipboard: `BeanNetworkTester.exe --seed ... --loss ...
   --duration ...` (the command adapts to the build: from the repository you get
   `python bean_network_tester.py ...`).

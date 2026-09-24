@@ -958,11 +958,12 @@ class BeanEngine:
             # spawn itself fails: START, then the fault, then STOP.
             self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
             if self._driver_queue:
-                # Said once, at START, because it frames every number that follows: a
-                # queue this deep is latency the tool can add without owning up to it.
+                # Said once, at START, because it frames every number that follows. The
+                # three values are CEILINGS, not a delay the tool always adds - the text
+                # says so, and takes the warning threshold from the constant it quotes.
                 q = self._driver_queue
                 self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
-                           kb=q["queue_size"] // 1024))
+                           kb=q["queue_size"] // 1024, warn=f"{self.DRIVER_WAIT_WARN_MS:g}"))
             self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
                                     + (f", duration={self._duration:g}s" if self._duration else ""))
             self._t_cap.start()
