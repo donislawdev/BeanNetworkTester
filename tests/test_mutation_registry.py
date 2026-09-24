@@ -2992,6 +2992,14 @@ MUTATIONS = [
         "test": "test_a_table_nobody_may_read_becomes_a_reason_the_window_can_say",
     },
     {
+        # The reason stays, the way out goes: "install it" with no command to type.
+        "label": "sockets: a missing psutil no longer says how to get it",
+        "file": "lang/en.json",
+        "old": "Install it with pip install psutil, then start the program again.",
+        "new": "Install it, then start the program again.",
+        "test": "test_a_missing_psutil_says_how_to_get_it_in_every_language",
+    },
+    {
         # A failure the tool can name is shown as an English exception anyway.
         "label": "toolbox: a known failure is shown as program text",
         "file": "beantester/gui/toolbox/base.py",

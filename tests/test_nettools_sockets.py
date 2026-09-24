@@ -4,13 +4,16 @@ No window and no system: ``portmap.socket_rows`` and ``portmap.process_names`` a
 stood in for, so the rows are the same on every machine. What the system really
 returns is ``tests/test_socket_rows.py``'s business.
 """
+import json
+import os
+
 import pytest
 
 from beantester import portmap
 from beantester.i18n import T
 from beantester.nettools import sockets as sk
 from beantester.portmap import SocketRow
-from fakes import check
+from fakes import LANG_DIR, LANGS, check
 
 ROWS = [
     SocketRow("TCP", 4, "0.0.0.0", 445, "", None, "LISTEN", 4),
@@ -69,6 +72,18 @@ def test_a_table_nobody_may_read_becomes_a_reason_the_window_can_say(monkeypatch
     check("and the language files know it", T(key) != key, f"({key})")
     check("the program's words kept for the crash log",
           str(caught.value) == "the program's own words", f"({caught.value})")
+
+
+def test_a_missing_psutil_says_how_to_get_it_in_every_language():
+    """Only a run from source can lack psutil (the exe carries it), and whoever runs
+    it needs the command, not just the reason. The command reads the same in every
+    language, so every language file is held to it."""
+    key = sk.UNREADABLE_KEYS["missing"]
+    for code in LANGS:
+        with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+            text = json.load(f).get(key, "")
+        check(f"lang/{code}.json names the command", "pip install psutil" in text,
+              f"({text})")
 
 
 def test_two_identical_sockets_are_two_rows_with_two_keys(machine):

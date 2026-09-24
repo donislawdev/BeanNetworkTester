@@ -696,7 +696,7 @@
   "tools.sockets.empty_failed": "无法读取套接字表。上面一行说明了原因。按“刷新”重试。",
   "tools.sockets.empty_match": "没有与搜索内容匹配的套接字。搜索功能正常，只是这里没有符合条件的项。",
   "tools.sockets.error_denied": "系统拒绝列出其套接字。请以管理员身份启动本程序，然后按“刷新”。",
-  "tools.sockets.error_missing": "此系统上没有可读取的套接字表，因为未安装 psutil 包。",
+  "tools.sockets.error_missing": "此系统上没有可读取的套接字表，因为未安装 psutil 包。请用 pip install psutil 安装，然后重新启动本程序。",
   "tools.sockets.help_body": "本机上的每个 TCP 和 UDP 套接字：哪些在监听、哪些已连接，以及它们属于哪个程序。不需要正在运行的会话，因此可以在开始干扰之前先查看你的应用使用哪个端口。\n\n打开此选项卡时以及按下“刷新”时会读取此表。状态行会显示读取时间。\n\n列：\n    本地 IP 和本地端口 - 本机上的地址和端口。0.0.0.0 或 :: 表示所有地址。\n    远程 IP 和远程端口 - 另一端。正在监听的程序和 UDP 为空。\n    状态 - TCP 连接所处的阶段：\n        LISTEN - 等待连接。\n        ESTABLISHED - 已连接。\n        TIME_WAIT - 刚刚关闭。它已不属于任何程序，因此 PID 为 0。\n        CLOSE_WAIT - 对方已关闭，程序尚未关闭自己这一端。\n        SYN_SENT - 正在连接，尚无应答。\n    PID 和进程 - 拥有该套接字的程序。\n\n搜索：\n    普通文本会搜索所有列。\n    proc:chrome、pid:1234 - 按程序。\n    lport:8080、lip:127.0.0.1 - 按本机的端口或地址。\n    port:443、ip:10.0.0.0/8 - 按另一端的端口或地址。\n    state:listen、proto:udp - 按状态或协议。\n    值的写法与“控制”页的字段相同：80,443 或 8000-8100，! 表示排除，* 表示任意文本。\n\n右键单击某一行，可以将其程序设为目标、排除它，或仅限、阻断其远程地址。这只会填写“控制”页的字段：在按下“开始”或“应用更改”之前，不会有任何变化。",
   "tools.sockets.help_title": "套接字",
   "tools.sockets.note_failed": "部分表无法读取，因此缺少其中的套接字：{tables}。",
