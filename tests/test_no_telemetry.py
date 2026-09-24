@@ -107,6 +107,8 @@ ALLOWED_IMPORTS = {
         "the route probe and the machine's own name",
     ("beantester/settings.py", "socket"):
         "the machine's own services file, for port labels",
+    ("beantester/nettools/portcheck.py", "socket"):
+        "the port check: bind on a loopback address and close, nothing sent",
     ("beantester/gui/app.py", "webbrowser"):
         "the support page, opened on a click",
     ("beantester/gui/panels/about.py", "webbrowser"):
@@ -141,6 +143,11 @@ ALLOWED_CALLS = {
         "whether this one does",
     ("beantester/settings.py", "socket", "getservbyport"):
         "reads the machine's own services file to label a well-known port",
+    ("beantester/nettools/portcheck.py", "socket", "socket"):
+        "the port check's probe: a socket bound to 127.0.0.1 or ::1 and closed at once, "
+        "to see whether the system hands the port out. No listen, no connect, no send - "
+        "test_nettools_portcheck.py::test_a_port_check_only_creates_and_binds_sockets_"
+        "on_loopback runs it under an audit hook",
     ("beantester/gui/app.py", "webbrowser", "open_new_tab"):
         "opens the support page in the user's browser, only when they click it",
     ("beantester/gui/panels/about.py", "webbrowser", "open_new_tab"):
@@ -675,6 +682,20 @@ TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
         "a constant. The diagnostics import appinfo for the version line of the "
         "report; the address is the About window's support link, opened in the "
         "browser on a click there, and nothing on this tab reads it.",
+    # The port check. How it was checked that it sends nothing, three ways: the
+    # probe is bind + close on a LOOPBACK address (`nettools/portcheck.py::probe`,
+    # read in full); an audit hook in a subprocess sees only
+    # `socket.__new__` and `socket.bind`, every bind on 127.0.0.1 or ::1, with a
+    # canary proving the same hook reports a connect
+    # (`test_nettools_portcheck.py::test_a_port_check_only_creates_and_binds_sockets_
+    # on_loopback`); and MEASURED 2026-09-24 on a Windows Server 2025 VM with firewall
+    # prompts and WFP auditing on: a loopback bind raised only event 5158 (bind
+    # permitted) and created no firewall rule, where a listen on 0.0.0.0 raised 5031
+    # and made Windows add two inbound block rules for the program.
+    ("beantester/nettools/portcheck.py", "socket"):
+        "import for the loopback probe below",
+    ("beantester/nettools/portcheck.py", "socket", "socket"):
+        "bind on 127.0.0.1 or ::1 and close - checked three ways, see the comment above",
 }
 
 # The ctypes libraries a Tools-tab file may load while the promise stands: today's

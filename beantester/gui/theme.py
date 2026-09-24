@@ -80,6 +80,17 @@ CONN_COLORS = {
     "impaired": {"foreground": CAUTION, "font": (FONT, 9, "bold")},
 }
 
+# Port-check row colour, by what a program asking for that port would meet: a
+# fault's red where it cannot have the port (held, set aside, refused), amber where
+# the answer is "not now" or "not known" (closing, not checked). A free row keeps
+# the table's own colour - on a thousand-port range that is most rows, and the few
+# that are not free are what the person scans for. The result column carries the
+# same meaning in words, so colour is never the only signal (WCAG 1.4.1).
+PORT_COLORS = {
+    "blocked": {"foreground": WARN},
+    "unsure": {"foreground": CAUTION},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators
@@ -131,25 +142,33 @@ SPACE = {
 # ten digits); `state` is the column of a diagnostics row's verdict word, wide
 # enough for the longest of the three words in the three languages (English
 # "Warning", bold) so the check names after it line up. The render check measures
-# it: a word that outgrows it is reported as clipped.
+# it: a word that outgrows it is reported as clipped. `ports` is the port check's
+# box, an expression in the Control page's port language - but a LIST of ports is
+# what that box is for, so it has the connection search's width (24) rather than
+# the Control port fields' (`fields.py`, 18).
 #
 # The rest are the least a TABLE column may shrink to (``SortableTree(min_chars=)``,
 # which widens for a longer header): `search` is the connection table's search box
 # (24); `address` fits an IPv4 address with room, the connection table's remote-IP
 # column (18) - an IPv6 one scrolls, the table is horizontal; `port`, `proto` and
 # `process` are that table's own minimums (6, 5, 16); `tcp_state` fits the longest
-# state name, SYN_RECEIVED (12).
+# state name, SYN_RECEIVED (12); `verdict` fits the port check's longest result in
+# the three languages, MEASURED on real Tk: Polish "Zarezerwowany przez Windows" is
+# 164 px in the table's Segoe UI 9, and 23 gives 183 (``scaling.column_width``
+# counts 7 px a character plus 22). 28 at first, and PID went past the right edge.
 CHARS = {
     "help_button": 2,
     "value": 26,
     "pid": 10,
     "state": 8,
+    "ports": 24,
     "search": 24,
     "address": 18,
     "port": 6,
     "proto": 5,
     "process": 16,
     "tcp_state": 12,
+    "verdict": 23,
 }
 
 # How many rows a table shows before it scrolls: the connection table's 18.

@@ -2758,8 +2758,8 @@ MUTATIONS = [
         # A tool whose work raises: the status line would say "working" for ever.
         "label": "toolbox: a failed run never reaches the status line",
         "file": "beantester/gui/toolbox/base.py",
-        "old": '    except BaseException as exc:\n        crashlog.note(exc, "gui.toolbox")',
-        "new": '    except ZeroDivisionError as exc:\n        crashlog.note(exc, "gui.toolbox")',
+        "old": "    except BaseException as exc:",
+        "new": "    except ZeroDivisionError as exc:",
         "test": "test_a_check_that_fails_says_why_and_keeps_the_rows_it_had",
     },
     {
@@ -3031,7 +3031,8 @@ MUTATIONS = [
         # A failure the tool can name is shown as an English exception anyway.
         "label": "toolbox: a known failure is shown as program text",
         "file": "beantester/gui/toolbox/base.py",
-        "old": "            error = T(outcome.error_key) if outcome.error_key else outcome.error",
+        "old": ("            error = (T(outcome.error_key, **dict(outcome.error_args)) if outcome.error_key\n"
+                "                     else outcome.error)"),
         "new": "            error = outcome.error",
         "test": "test_a_socket_table_the_system_refuses_is_said_in_the_windows_language",
     },
@@ -3059,6 +3060,150 @@ MUTATIONS = [
         "old": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(*g(c, m)))",
         "new": "            tests.append(lambda c, m, x=matcher, g=getter: x.matches(None, g(c, m)[1]))",
         "test": "test_the_search_is_the_connection_tables_language_on_these_columns",
+    },
+    {
+        # A dual-stack server on [::]: every bind succeeds beside it (measured), so a
+        # verdict that asks the bind first calls a held port free.
+        "label": "portcheck: a holder only a table can see counts for nothing",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    if owners:\n        return IN_USE",
+        "new": "    if owners and code:\n        return IN_USE",
+        "test": "test_a_holder_no_bind_can_see_still_holds_the_port",
+    },
+    {
+        "label": "portcheck: TIME_WAIT is counted as a holder",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        if s.state == \"TIME_WAIT\":",
+        "new": "        if False:",
+        "test": "test_time_wait_holds_nothing_and_a_refusal_beside_it_is_closing",
+    },
+    {
+        # Off Windows, EACCES is a port the account may not use, not a reservation.
+        "label": "portcheck: access denied reads as a reservation everywhere",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        return RESERVED if WINDOWS else DENIED",
+        "new": "        return RESERVED",
+        "test": "test_access_denied_is_a_reservation_on_windows_only",
+    },
+    {
+        "label": "portcheck: any number of ports is checked",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    if len(wanted) > MAX_PORTS:",
+        "new": "    if False:",
+        "test": "test_the_ports_an_expression_names",
+    },
+    {
+        # bind(0) is "any free port" - checking it answers a question nobody asked.
+        "label": "portcheck: port 0 is checked like a port",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    wanted = tuple(port for port in range(1, 65536) if matcher.matches(port))",
+        "new": "    wanted = tuple(port for port in range(0, 65536) if matcher.matches(port))",
+        "test": "test_the_ports_an_expression_names",
+    },
+    {
+        # The wildcard address: still silent without a listen, but it is not what
+        # the Tools tab's quiet exception says the probe does.
+        "label": "portcheck: the probe binds every address instead of loopback",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "_LOOPBACK = {4: (socket.AF_INET, \"127.0.0.1\"), 6: (socket.AF_INET6, \"::1\")}",
+        "new": "_LOOPBACK = {4: (socket.AF_INET, \"0.0.0.0\"), 6: (socket.AF_INET6, \"::\")}",
+        "test": "test_a_port_check_only_creates_and_binds_sockets_on_loopback",
+    },
+    {
+        "label": "portcheck: a missing IP version is asked about port by port",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "            if code in NO_FAMILY_CODES:\n                return None",
+        "new": "            if code in NO_FAMILY_CODES:\n                continue",
+        "test": "test_a_machine_without_an_ip_version_is_said_once_not_per_port",
+    },
+    {
+        # The table read BEFORE the binds: a holder starting in between is missed
+        # and its port called free.
+        "label": "portcheck: the table is read before the system is asked",
+        "file": "beantester/nettools/portcheck.py",
+        "old": ("    codes, unavailable = {}, []\n"
+                "    for family in families:\n"
+                "        answers = _ask_family(bind, family, protocols, wanted)\n"
+                "        if answers is None:\n"
+                "            unavailable.append(family)\n"
+                "        else:\n"
+                "            codes.update(answers)\n"
+                "    live, closing = _holders(read())\n"),
+        "new": ("    live, closing = _holders(read())\n"
+                "    codes, unavailable = {}, []\n"
+                "    for family in families:\n"
+                "        answers = _ask_family(bind, family, protocols, wanted)\n"
+                "        if answers is None:\n"
+                "            unavailable.append(family)\n"
+                "        else:\n"
+                "            codes.update(answers)\n"),
+        "test": "test_the_system_is_asked_first_and_the_table_read_after",
+    },
+    {
+        "label": "portcheck: the probe leaves its socket open",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    with sock:\n        try:",
+        "new": "    if sock:\n        try:",
+        "test": "test_the_probe_closes_every_socket_it_makes",
+    },
+    {
+        # "1001 ports, 1000 at most" written into the crash log as a fault.
+        "label": "toolbox: a refusal of the input is recorded as a fault",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "        if not isinstance(exc, Refused):",
+        "new": "        if True:",
+        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+    },
+    {
+        "label": "toolbox: a known failure loses its numbers on the worker",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "        error_args = tuple(sorted((getattr(exc, \"user_args\", None) or {}).items()))",
+        "new": "        error_args = ()",
+        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+    },
+    {
+        "label": "toolbox: a known failure is said without its numbers",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "            error = (T(outcome.error_key, **dict(outcome.error_args)) if outcome.error_key",
+        "new": "            error = (T(outcome.error_key) if outcome.error_key",
+        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+    },
+    {
+        # A second check queued behind a running one would land on stale inputs.
+        "label": "portcheck panel: Check stays on while a check runs",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "        return (not self.job.busy() and bool(self.ports.get().strip())",
+        "new": "        return (bool(self.ports.get().strip())",
+        "test": "test_one_check_at_a_time_and_a_rebuild_mid_check_gets_the_answer",
+    },
+    {
+        "label": "portcheck panel: the parser's sentence is not shown",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "            self.status.refused(str(exc))",
+        "new": "            self.status.refused(\"\")",
+        "test": "test_ports_the_parser_refuses_never_reach_the_worker",
+    },
+    {
+        "label": "portcheck panel: a held port is not coloured",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "ROW_TAGS = {portcheck.IN_USE: \"blocked\",",
+        "new": "ROW_TAGS = {portcheck.IN_USE: \"\",",
+        "test": "test_the_port_check_waits_to_be_asked_and_answers_per_protocol_and_ip_version",
+    },
+    {
+        "label": "portcheck panel: the IP-version boxes are ignored",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "        families = tuple(f for f, var in self.families.items() if var.get())",
+        "new": "        families = tuple(self.families)",
+        "test": "test_the_boxes_choose_what_is_checked_and_are_kept_across_a_rebuild",
+    },
+    {
+        # Name and PID apart again: two holders of one port lose which PID is whose.
+        "label": "portcheck panel: the holder loses its PID",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "        return T(\"tools.portcheck.holder\", name=name, pid=pid)",
+        "new": "        return name",
+        "test": "test_the_port_check_waits_to_be_asked_and_answers_per_protocol_and_ip_version",
     },
 ]
 

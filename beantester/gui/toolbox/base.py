@@ -16,6 +16,7 @@ import weakref
 from typing import NamedTuple
 
 from ...i18n import T
+from ...nettools import Refused
 from ..labels import wrapping_label
 from ..model_worker import AsyncModel
 from ... import crashlog
@@ -103,6 +104,9 @@ class Outcome(NamedTuple):
     # carries it as `user_key` (e.g. nettools.sockets.Unreadable). "" for any other
     # failure, which the status line then shows as program text.
     error_key: str = ""
+    # What that sentence says in numbers ("1001 ports, 1000 at most"), from the
+    # exception's `user_args`, as sorted pairs so an Outcome stays immutable.
+    error_args: tuple = ()
 
 
 def _guarded(payload):
@@ -116,17 +120,21 @@ def _guarded(payload):
     """
     kind, work = payload
     started = time.perf_counter()
-    error_key = ""
+    error_key, error_args = "", ()
     try:
         value, error = work(), ""
     except BaseException as exc:
-        crashlog.note(exc, "gui.toolbox")
+        # A refusal of what was asked is an answer for the person, not a fault of
+        # the program (``nettools.Refused``). Anything else is recorded whole.
+        if not isinstance(exc, Refused):
+            crashlog.note(exc, "gui.toolbox")
         value, error = None, f"{type(exc).__name__}: {exc}"
         # Said in the window's language when the tool can name it; the crash log
         # above keeps the whole exception either way.
         error_key = str(getattr(exc, "user_key", "") or "")
+        error_args = tuple(sorted((getattr(exc, "user_args", None) or {}).items()))
     return Outcome(kind, value, error, round((time.perf_counter() - started) * 1000),
-                   time.time(), error_key)
+                   time.time(), error_key, error_args)
 
 
 class ToolJob:
@@ -236,11 +244,17 @@ class StatusLine:
     def working(self):
         self.label.config(text=T("tools.common.working"), style="Muted.TLabel")
 
+    def refused(self, text):
+        """An input the tool will not run with, in a sentence already made for the
+        person (the port language's parser writes it in the window's language)."""
+        self.label.config(text=text, style="Status.Bad.TLabel")
+
     def show(self, outcome):
         if outcome.error:
             # A failure the tool can name is said in the window's language; any
             # other is shown as the program's own words, the way --doctor prints them.
-            error = T(outcome.error_key) if outcome.error_key else outcome.error
+            error = (T(outcome.error_key, **dict(outcome.error_args)) if outcome.error_key
+                     else outcome.error)
             self.label.config(text=T("tools.common.failed", error=error),
                               style="Status.Bad.TLabel")
             return
