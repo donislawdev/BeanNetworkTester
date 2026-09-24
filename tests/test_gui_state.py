@@ -266,6 +266,7 @@ def test_importing_a_config_overwrites_every_field():
 def test_connection_menu_needs_a_row_to_act_on():
     """The context menu popped up on an empty table, offering "Copy row" with no row."""
     run_gui("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
         page = app.pages["connections"]
         tree = page.table.tree
 
@@ -294,13 +295,13 @@ def test_connection_menu_needs_a_row_to_act_on():
         page.table.row_menu_at_pointer(Ev())
         assert page.table.selected_keys() == ["r1"]
         assert page.menu.posted == 1
-        assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "normal"
+        assert page.menu.entry_states[page.TARGET_INDEX] == MENU_ENTRY_LIVE
 
         # a row whose process could not be resolved cannot be targeted
         page.table.sync([("r2", row("?"))])
         tree.row_at = page.table._slots[0]
         page.table.row_menu_at_pointer(Ev())
-        assert page.menu.entry_states[page.TARGET_INDEX]["state"] == "disabled"
+        assert page.menu.entry_states[page.TARGET_INDEX] == MENU_ENTRY_INERT
 
         # clicking a slot BELOW the last row acts on nothing
         tree.row_at = page.table._slots[-1]

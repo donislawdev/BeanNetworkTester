@@ -19,7 +19,7 @@ from ...nettools import portcheck
 from .. import dialogs
 from ..field_actions import leave_process_alone
 from ..labels import wrapping_label
-from ..theme import CHARS, PORT_COLORS, ROWS, space, style_menu
+from ..theme import CHARS, PORT_COLORS, ROWS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Poller, StatusLine, job, remembered
@@ -291,7 +291,7 @@ class PortCheckPanel:
         named = bool(holder(self._selected()))
         for index in NEEDS_NAME:
             with crashlog.quiet(AREA):
-                self.menu.entryconfigure(index, state="normal" if named else "disabled")
+                set_menu_entry_available(self.menu, index, named)
         try:
             self.menu.tk_popup(x_root, y_root)
         finally:

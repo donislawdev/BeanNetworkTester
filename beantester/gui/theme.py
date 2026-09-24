@@ -636,7 +636,32 @@ def style_menu(menu):
     return menu
 
 
-POPDOWN_ROWS = 20                 # ttk's own default popdown height, in rows
+# A context-menu entry the selected row cannot use. It is NOT Tk's
+# state="disabled", on purpose: on Windows Tk draws a disabled label twice - first
+# in the system's 3-D highlight colour, one pixel down and right, then in
+# -disabledforeground (win/tkWinMenu.c, DrawMenuEntryLabel) - and no option turns
+# the first pass off. On this dark menu that white copy wins, so an entry nobody
+# could use read BLURRED and brighter than a live one (seen on a running build,
+# 2026-09-24). The entry stays "normal" and is only coloured inert; every command
+# behind such an entry checks the row itself, so a click on it does nothing.
+MENU_ENTRY_INERT = {"foreground": DIS_FG, "activeforeground": DIS_FG,
+                    "activebackground": LINE_C}
+# "" hands each option back to the menu's own value, the one style_menu set
+MENU_ENTRY_LIVE = {option: "" for option in MENU_ENTRY_INERT}
+
+
+def set_menu_entry_available(menu, index, available):
+    """Show context-menu entry ``index`` as usable for the selected row, or not.
+
+    The one way a row menu greys an entry out (see ``MENU_ENTRY_INERT`` for why
+    it is not Tk's own disabled state). The command behind the entry must still
+    refuse a row it cannot act on - this changes how the entry looks, not what a
+    click on it does.
+    """
+    menu.entryconfigure(index, **(MENU_ENTRY_LIVE if available else MENU_ENTRY_INERT))
+
+
+POPDOWN_ROWS = 20                # ttk's own default popdown height, in rows
 
 
 def popdown_height(values):

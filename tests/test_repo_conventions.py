@@ -731,3 +731,32 @@ def test_every_context_menu_is_handed_to_the_dark_theme():
     check("every tk.Menu is built inside theme.style_menu(...) "
           "(ttk styles do not reach it - a bare menu renders WHITE)",
           not offenders, f"({offenders})")
+
+
+def test_no_menu_entry_is_greyed_out_with_tk_disabled_state():
+    """A menu entry a row cannot use goes through ``theme.set_menu_entry_available``.
+
+    Never ``state="disabled"``: on Windows Tk draws a disabled label twice, first
+    in the system's white 3-D highlight one pixel down and right, and no option
+    turns that off - on the dark menu the entry read BLURRED and brighter than a
+    live one. Three tables greyed entries out that way (the connection table, then
+    Sockets and Port check copied it), which is why this is a rule and not a test
+    of those three: a fourth table would copy the pattern it finds.
+    """
+    import ast
+    import pathlib
+
+    offenders = []
+    for path in sorted(_gui_files()):
+        tree = ast.parse(pathlib.Path(path).read_text(encoding="utf-8"), filename=path)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            if node.func.attr not in ("entryconfigure", "entryconfig", "add_command"):
+                continue
+            if any(keyword.arg == "state" for keyword in node.keywords):
+                offenders.append("%s:%d" % (os.path.basename(path), node.lineno))
+
+    check("no menu entry is greyed out with Tk's state= (it renders blurred on "
+          "Windows) - use theme.set_menu_entry_available",
+          not offenders, f"({offenders})")
