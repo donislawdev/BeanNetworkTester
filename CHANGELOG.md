@@ -5,7 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-25
+
 ### Added
+
+- **A Tools tab, with a filter tester.** Pick a field from the Control page, type an
+  expression and a value, and see at once whether they match - and which part of the
+  expression decided it, for example the `!10.0.5.0/24` that excluded `10.0.5.7`. A value
+  that is not an address, a port or a PID is reported as that, not as "does not match".
+  "Use in the Control field" puts the expression into that field.
 
 - **Sockets, on the Tools tab.** Every TCP and UDP socket on this computer, like
   `netstat -ano`, with no session needed: what is listening, what is connected, its state
@@ -19,12 +27,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   one: free, in use by which program, or reserved by Windows. A server that will not start
   on a port nothing seems to use is often in a range Windows set aside, and this shows it
   at once. Nothing is sent over the network. It is the second tab of the Tools page.
-
-- **A Tools tab, with a filter tester.** Pick a field from the Control page, type an
-  expression and a value, and see at once whether they match - and which part of the
-  expression decided it, for example the `!10.0.5.0/24` that excluded `10.0.5.7`. A value
-  that is not an address, a port or a PID is reported as that, not as "does not match".
-  "Use in the Control field" puts the expression into that field.
 
 - **Diagnostics, on the Tools tab.** When START will not work, this shows why without a
   console: the same checks as `--doctor`, each marked OK, Warning or Problem, with a "?"
@@ -70,7 +72,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   The run now says it once, and still runs, because impairing one direction on purpose is a
   perfectly good thing to ask for.
 
-- **Some command-line shortcuts stopped working, and the full flags did not.** Adding the
+- **Some shortened command-line options no longer work. The full ones still do.** Adding the
   upload flags means `--latency` is no longer the only option starting with "latency", so
   short forms like `--lat`, `--jit`, `--j`, `--cor` and `--spike-p` are now ambiguous and are
   refused. Every full flag still works, so saved reproduction commands and every example in
@@ -92,15 +94,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Docs
 
-- **The README now points at the website.** One link under the badges, and a second after the
-  quick start for anyone who wants a walkthrough of a single task instead of the full manual.
-  The guides there cover packet loss, latency, speed limits, aiming at one app and testing with
-  no internet, each with the numbers worth trying and the command that does it.
+- **The README now points at the website.** A link after the quick start leads to the guides,
+  for anyone who wants a walkthrough of a single task instead of the full manual. They cover
+  packet loss, latency, speed limits, aiming at a single app and testing with no internet, each
+  with the numbers worth trying and the command that does it.
 
 - **The website's front page now shows the command it was talking about.** It said one command is
   enough to check that a service survives 10 percent packet loss, and then did not print one,
   which every other page on the site does. It now shows the command, says that the run stops
   itself when the time is up, and points at the rehearsal switch that changes no real traffic.
+
+- **The website's download page describes the release as it is.** It mentions the installer
+  next to the zip and lists every file a release carries. The command it gave for checking a
+  download failed for everyone. It is now the same command as in the README, which is run
+  against every published release.
 
 ## [0.6.0] - 2026-09-04
 
