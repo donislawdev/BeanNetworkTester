@@ -492,3 +492,30 @@ def test_the_statistics_copy_menu_is_dark_like_every_other_context_menu():
         # right-click cannot get an unstyled one
         assert page._copy_menu() is menu
     """)
+
+
+def test_an_entry_a_row_cannot_use_is_coloured_inert_not_disabled():
+    """Entries a row cannot use read BLURRED on Windows - seen on a running build,
+    2026-09-24, in the Sockets and Port check menus.
+
+    Tk draws a disabled menu label first in the system's white 3-D highlight, one
+    pixel down and right, and no option turns that off. So the entry stays
+    "normal" and only its colours say it is inert - and going back to usable has
+    to hand EVERY one of those colours back to the menu, or an entry greyed out
+    once stays grey on the next row that can use it. What this cannot see is the
+    drawing itself (the fake tkinter never renders); that was checked with a probe
+    on real Tk 9.0 and 8.6.
+    """
+    run_gui("""
+        from beantester.gui.theme import (DIS_FG, MENU_ENTRY_INERT,
+                                          set_menu_entry_available)
+        menu = app.pages["connections"].menu
+        set_menu_entry_available(menu, 4, False)
+        inert = menu.entry_states[4]
+        assert "state" not in inert, inert
+        assert inert["foreground"] == DIS_FG, inert
+        assert inert["activeforeground"] == DIS_FG, inert
+        set_menu_entry_available(menu, 4, True)
+        live = menu.entry_states[4]
+        assert live == dict.fromkeys(MENU_ENTRY_INERT, ""), live
+    """)

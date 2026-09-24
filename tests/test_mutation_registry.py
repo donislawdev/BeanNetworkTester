@@ -2967,9 +2967,41 @@ MUTATIONS = [
         # "Target this process" offered on a TIME_WAIT row, "Block" on a listener.
         "label": "sockets: the row menu offers what the row cannot do",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "state=\"normal\" if allowed else \"disabled\")",
-        "new": "state=\"normal\")",
+        "old": "set_menu_entry_available(self.menu, index, allowed)",
+        "new": "set_menu_entry_available(self.menu, index, True)",
         "test": "test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields",
+    },
+    {
+        # A free port has no program: "Target this process" offered for nobody.
+        "label": "portcheck: the row menu offers a process for a free port",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "set_menu_entry_available(self.menu, index, named)",
+        "new": "set_menu_entry_available(self.menu, index, True)",
+        "test": "test_the_port_check_row_menu_acts_on_the_program_that_holds_the_port",
+    },
+    {
+        "label": "conns: the row menu offers to target a process it could not name",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "self.TARGET_INDEX, bool(name and name != \"?\"))",
+        "new": "self.TARGET_INDEX, True)",
+        "test": "test_connection_menu_needs_a_row_to_act_on",
+    },
+    {
+        # Back to Tk's own disabled state: blurred on Windows, and invisible to
+        # the fake tkinter, which records options and never draws them.
+        "label": "theme: an unavailable menu entry goes back to Tk's disabled state",
+        "file": "beantester/gui/theme.py",
+        "old": "menu.entryconfigure(index, **(MENU_ENTRY_LIVE if available else MENU_ENTRY_INERT))",
+        "new": "menu.entryconfigure(index, state=\"normal\" if available else \"disabled\")",
+        "test": "test_an_entry_a_row_cannot_use_is_coloured_inert_not_disabled",
+    },
+    {
+        # The fourth table copies the pattern it finds: a call site greys out on its own.
+        "label": "sockets: a row menu greys an entry out with Tk's state again",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "set_menu_entry_available(self.menu, index, allowed)",
+        "new": "self.menu.entryconfigure(index, state=\"normal\" if allowed else \"disabled\")",
+        "test": "test_no_menu_entry_is_greyed_out_with_tk_disabled_state",
     },
     {
         # Two identical sockets, one key: a click on one selects the other.

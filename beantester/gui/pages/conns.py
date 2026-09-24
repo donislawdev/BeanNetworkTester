@@ -35,7 +35,7 @@ from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
-from ..theme import CONN_COLORS, style_menu
+from ..theme import CONN_COLORS, set_menu_entry_available, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
@@ -246,9 +246,7 @@ class ConnsPage:
         selected = self._selected() or {}
         name = str(selected.get("proc") or "").strip()
         try:
-            self.menu.entryconfigure(
-                self.TARGET_INDEX,
-                state="normal" if name and name != "?" else "disabled")
+            set_menu_entry_available(self.menu, self.TARGET_INDEX, bool(name and name != "?"))
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
         try:

@@ -25,7 +25,7 @@ from ...nettools import sockets
 from .. import dialogs
 from ..field_actions import block_ip_address, leave_process_alone
 from ..labels import wrapping_label
-from ..theme import CHARS, ROWS, space, style_menu
+from ..theme import CHARS, ROWS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Debounce, Poller, StatusLine, job, remembered
@@ -311,7 +311,7 @@ class SocketsPanel:
         for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote)):
             for index in indexes:
                 with crashlog.quiet(AREA):
-                    self.menu.entryconfigure(index, state="normal" if allowed else "disabled")
+                    set_menu_entry_available(self.menu, index, allowed)
         try:
             self.menu.tk_popup(x_root, y_root)
         finally:

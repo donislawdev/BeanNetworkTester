@@ -83,6 +83,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   most the driver will hold, not a delay added to every packet: while the tool keeps up,
   packets barely wait there. The message also says when the tool warns about that wait.
 
+### Fixed
+
+- **Right-click menus no longer show blurred entries.** An entry that does not apply to
+  the row you clicked, like "Target this process" on a port nobody holds, is now plain
+  grey instead of blurred. This affects the connection table and the Sockets and Port
+  check tables.
+
 ### Docs
 
 - **The README now points at the website.** One link under the badges, and a second after the

@@ -830,6 +830,7 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
     address to limit to or block. The address goes into the field without its IPv6
     zone - the Control fields take an address, not an interface."""
     run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
         panel = open_sockets()
         settle(panel)
         menu = panel.menu
@@ -838,11 +839,11 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
             select_port(panel, port)
             panel._show_menu(0, 0)
             for index in (2, 3):
-                want = "normal" if named else "disabled"
-                assert menu.entry_states[index]["state"] == want, (port, index)
+                want = MENU_ENTRY_LIVE if named else MENU_ENTRY_INERT
+                assert menu.entry_states[index] == want, (port, index)
             for index in (4, 5):
-                want = "normal" if remote else "disabled"
-                assert menu.entry_states[index]["state"] == want, (port, index)
+                want = MENU_ENTRY_LIVE if remote else MENU_ENTRY_INERT
+                assert menu.entry_states[index] == want, (port, index)
 
         select_port(panel, 50001)
         panel._limit()
@@ -1035,6 +1036,7 @@ def test_one_check_at_a_time_and_a_rebuild_mid_check_gets_the_answer():
 
 def test_the_port_check_row_menu_acts_on_the_program_that_holds_the_port():
     run_gui(PORTS + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
         panel = open_ports()
         type_ports(panel, "8080")
         panel.check()
@@ -1044,8 +1046,8 @@ def test_the_port_check_row_menu_acts_on_the_program_that_holds_the_port():
             panel.table.select_keys([row(panel, 8080, proto).key])
             panel._show_menu(0, 0)
             for index in (2, 3):
-                want = "normal" if named else "disabled"
-                assert menu.entry_states[index]["state"] == want, (proto, index)
+                want = MENU_ENTRY_LIVE if named else MENU_ENTRY_INERT
+                assert menu.entry_states[index] == want, (proto, index)
         panel.table.select_keys([row(panel, 8080).key])
         panel._target()
         assert app.vars["target"].get() == "node.exe", app.vars["target"].get()
