@@ -2789,9 +2789,37 @@ MUTATIONS = [
     {
         "label": "diagnostics: the first view does not check by itself",
         "file": "beantester/gui/toolbox/diagnostics.py",
-        "old": "        elif diagnosis is None:\n            self.check()",
-        "new": "        elif False:\n            self.check()",
+        "old": ("        if CHECK not in self.job.last and not self.job.busy():\n"
+                "            self.check()"),
+        "new": "        if False:\n            self.check()",
         "test": "test_diagnostics_shows_every_check_with_its_verdict_and_checks_once_by_itself",
+    },
+    {
+        # The tool the window reopens on is built with it: a check there runs at
+        # every start of the program (B-21).
+        "label": "diagnostics: the check runs when the window opens",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        self.poller = Poller(self.frame, self.job, self._on_outcome)",
+        "new": ("        self.poller = Poller(self.frame, self.job, self._on_outcome)\n"
+                "        self._check_if_never()"),
+        "test": "test_diagnostics_checks_when_first_looked_at_and_not_at_start_up",
+    },
+    {
+        # A check that failed is asked again on every tick, forever.
+        "label": "diagnostics: a failed first check is retried on every tick",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        if CHECK not in self.job.last and not self.job.busy():",
+        "new": "        if not self.job.value and not self.job.busy():",
+        "test": "test_a_first_check_that_fails_says_so_and_is_not_retried_by_itself",
+    },
+    {
+        # Real Tk runs the constructor's own tab change once the window is built,
+        # with another page in front: the tool on that tab goes to work at start-up.
+        "label": "toolbox: a tab change off screen puts the tool to work",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        if self.app.current_page() is self:\n            self.refresh()",
+        "new": "        if True:\n            self.refresh()",
+        "test": "test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up",
     },
     {
         # The shared copy, moved out of the Statistics page: a cheerful lie again.

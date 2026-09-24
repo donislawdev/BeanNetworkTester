@@ -88,7 +88,13 @@ class ToolboxPage:
         tool_id = self.current()
         self._ensure(tool_id)
         self.app.ui.set("tools_page", tool_id)
-        self.refresh()
+        # Only while this page is on screen. Real Tk QUEUES the event of the
+        # constructor's own `select` and runs it once the window is built - with any
+        # page in front - and a refresh is the first look that puts a tool to work.
+        # Measured 2026-09-24 on Tk 8.6.15 and 9.0.4: the socket table was read at
+        # every start of the program, for a tab nobody had opened.
+        if self.app.current_page() is self:
+            self.refresh()
 
     def _ensure(self, tool_id):
         panel = self.panels.get(tool_id)

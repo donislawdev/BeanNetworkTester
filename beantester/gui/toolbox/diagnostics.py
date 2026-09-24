@@ -85,8 +85,10 @@ class DiagnosticsPanel:
         self.rows = None
 
         self.poller = Poller(self.frame, self.job, self._on_outcome)
-        # What this window already knows is shown as it is; only a window that has
-        # never checked asks now. A rebuild mid-run picks the answer up when it lands.
+        # What this window already knows is shown as it is. The FIRST check waits for
+        # the tab to be on screen (refresh / pending): the tool the window reopens on
+        # is built with the window, and a check here asked the service manager at
+        # every start of the program. A rebuild mid-run picks the answer up when it lands.
         diagnosis = self.job.value.get(CHECK)
         if diagnosis is not None:
             self._show_rows(diagnosis)
@@ -95,8 +97,6 @@ class DiagnosticsPanel:
         if self.job.busy():
             self.status.working()
             self.poller.start()
-        elif diagnosis is None:
-            self.check()
         self._sync_buttons()
 
     # -- building ------------------------------------------------------------ #
@@ -109,15 +109,19 @@ class DiagnosticsPanel:
 
     # -- the page calls ------------------------------------------------------ #
     def refresh(self):
-        """The tick: a session starting or stopping changes what may be pressed."""
+        """The tick, while this tab is on screen: the first look checks, and a
+        session starting or stopping changes what may be pressed."""
+        self._check_if_never()
         self._sync_buttons()
 
     def pending(self):
         """Take an answer that has arrived now, and say whether one is still due.
 
         The GUI render check calls this until it says no, so it measures the rows
-        and not the empty tab a worker has yet to fill.
+        and not the empty tab a worker has yet to fill - which is also a look at
+        the tab, so it starts the first check the way a tick would.
         """
+        self._check_if_never()
         return self.poller.now()
 
     def teardown(self):
@@ -126,6 +130,12 @@ class DiagnosticsPanel:
     # -- acting -------------------------------------------------------------- #
     def check(self):
         self._run(CHECK, diagnostics.diagnose)
+
+    def _check_if_never(self):
+        # Not after a check that failed: that says so, and waits for "Check again"
+        # rather than asking the system again on every tick.
+        if CHECK not in self.job.last and not self.job.busy():
+            self.check()
 
     def clean(self):
         """Unload the driver - after the person has read what that interrupts."""

@@ -43,6 +43,19 @@ def use_toys(*classes):
     page_mod.TOOL_BY_ID = {tool.id: tool for tool in page_mod.TOOLS}
 """
 
+# What the window does once it is built, and the fake Tk does not: real Tk QUEUES
+# the <<NotebookTabChanged>> of the Tools page's own `select` and runs it after the
+# constructor, whichever page is on screen (measured 2026-09-24 on Tk 8.6.15 and
+# 9.0.4) - then the tick. A tool that goes to work on either works at every start.
+START_UP = """
+def opened_on_start_up():
+    page = app.pages["tools"]
+    assert app.current_page() is not page, "the window opens on another page"
+    for callback in page.nb.bindings["<<NotebookTabChanged>>"]:
+        callback(None)
+    app._tick()
+"""
+
 
 def test_the_tools_page_is_the_renderer_of_its_registry():
     """Every registry entry is a tab, in order, and builds into its own panel class."""
@@ -75,8 +88,17 @@ def test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered():
 
         page.select("a")                             # built SYNCHRONOUSLY in select
         assert built == ["b", "a"], built
-        page._on_subpage()                           # what <<NotebookTabChanged>> runs
+        # what <<NotebookTabChanged>> runs - and real Tk runs it late, once the window
+        # is built, for the constructor's own select: with another page on screen it
+        # remembers the tab and puts nothing to work
+        assert app.current_page() is not page
+        page._on_subpage()
         assert app.ui.get("tools_page") == "a", app.ui.get("tools_page")
+        assert page.panels["a"].refreshed == 0, "a page off screen is not looked at"
+        app.pages["tools"] = page
+        app.select_page("tools")
+        page._on_subpage()                           # a tab changed on screen: a look
+        assert page.panels["a"].refreshed == 1
         page.select("a")
         assert built == ["b", "a"], "a panel is built once, not on every look"
 
@@ -337,8 +359,10 @@ dg.clean_up = lambda seen: (cleaned.append(1), ("WinDivert: stopped and removed"
 
 def open_diag():
     app.select_page("tools")
-    app.pages["tools"].select("diagnostics")
-    return app.pages["tools"].panels["diagnostics"]
+    page = app.pages["tools"]
+    page.select("diagnostics")
+    page._on_subpage()          # what the tab change runs on real Tk: the first look
+    return page.panels["diagnostics"]
 
 def settle(panel):
     deadline = time.monotonic() + 5
@@ -384,6 +408,52 @@ def test_diagnostics_shows_every_check_with_its_verdict_and_checks_once_by_itsel
         assert calls == ["check", "check"], calls
         assert panel.rows is not first and not first.winfo_exists()
     """))
+
+
+def test_diagnostics_checks_when_first_looked_at_and_not_at_start_up():
+    """The tool the window reopens on is built with the window, so a check in its
+    constructor asked the service manager at every start of the program, for a tab
+    nobody might open (B-21)."""
+    run_gui(DIAG + START_UP + textwrap.dedent("""
+        app.ui.set("tools_page", "diagnostics")
+        app._build_ui()                  # the window, opening on a remembered tool
+        assert "diagnostics" in app.pages["tools"].panels, "the remembered tool is built"
+        opened_on_start_up()
+        assert calls == [], "and checks nothing until it is on screen"
+
+        panel = open_diag()
+        settle(panel)
+        assert calls == ["check"], calls
+        app._tick()
+        panel.refresh()
+        settle(panel)
+        assert calls == ["check"], "after that, only Check again checks"
+    """))
+
+
+def test_a_first_check_that_fails_says_so_and_is_not_retried_by_itself():
+    """A failure waits for "Check again". Asked again on every tick, a service
+    manager that refuses would be asked for as long as the tab stays open."""
+    run_gui(DIAG + textwrap.dedent("""
+        def refused():
+            calls.append("check")
+            raise OSError("the service manager refused on purpose")
+        dg.diagnose = refused
+        panel = open_diag()
+        settle(panel)
+        assert calls == ["check"], calls
+        assert "refused on purpose" in panel.status.label.cget("text")
+        assert "disabled" in panel.copy_btn.state(), "no rows, no report to copy"
+        assert "disabled" not in panel.check_btn.state(), "and it can be asked again"
+        for _ in range(3):
+            app._tick()
+            panel.refresh()
+            settle(panel)
+        assert calls == ["check"], calls
+        panel.check()
+        settle(panel)
+        assert calls == ["check", "check"], calls
+    """), allow_faults=("on purpose",))
 
 
 def test_a_check_that_fails_says_why_and_keeps_the_rows_it_had():
@@ -611,9 +681,9 @@ def test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up():
     """Every page is built when the window opens, and the Tools page builds its first
     tool with it - so a read in the constructor would ask the system at every start
     of the program, for a tab nobody may open."""
-    run_gui(SOCK + textwrap.dedent("""
+    run_gui(SOCK + START_UP + textwrap.dedent("""
         assert "sockets" in app.pages["tools"].panels, "the first tool is built at start"
-        app._tick()
+        opened_on_start_up()
         assert reads == [], "and reads nothing until it is on screen"
 
         panel = open_sockets()
