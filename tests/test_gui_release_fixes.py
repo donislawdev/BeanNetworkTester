@@ -219,25 +219,73 @@ def test_the_window_is_capped_and_cannot_be_maximised():
 def test_a_target_that_matches_nothing_says_so_on_the_page():
     """A run in which nothing broke looks exactly like a run in which it held up.
 
-    ``_refresh_target`` runs on the refresher THREAD, so it only records the
-    verdict; the banner itself is put on screen by the main thread (``_tick`` ->
-    ``_drain_target_warning``). The end result the user sees is unchanged.
+    ``_refresh_target_verdict`` only records the verdict on the APPLIED target;
+    the banner itself is put on screen by the main thread (``_tick`` ->
+    ``_drain_target_warning``).
     """
     run_gui("""
-        app.vars["target"].set("definitely-no-such-process")
-        app._snapshot_target()
-        app._refresh_target(force=True)
+        from beantester.settings import apply_targeting
+
+        apply_targeting(app.engine, "definitely-no-such-process", announce=False)
+        app._applied_target = "definitely-no-such-process"
+        app._refresh_target_verdict()
         app._drain_target_warning()          # what _tick() does on the main thread
         assert app.target_warning.kw.get("text") == bnt.T("fields.target_no_match")
         assert app.target_warning.winfo_ismapped()
 
-        app.vars["target"].set("")
-        app._snapshot_target()
-        app._refresh_target(force=True)
+        apply_targeting(app.engine, "", announce=False)
+        app._applied_target = ""
+        app._refresh_target_verdict()
         app._drain_target_warning()
         assert app.target_warning.kw.get("text") == ""
         assert not app.target_warning.winfo_ismapped()
     """)
+
+
+def test_a_target_that_cannot_be_used_says_everything_is_impaired():
+    """The banner used to say the OPPOSITE of the truth here.
+
+    A target that was applied but could not be used - no psutil, an expression
+    that narrows nothing, a regex refused at apply time - leaves the engine with
+    no targeting at all, so EVERY connection in the filter is impaired. The banner
+    said "traffic is NOT being impaired". Both ways in (START and "Apply
+    changes") are covered, and the banner goes away with the session.
+    """
+    run_gui("""
+        from beantester.synthetic import SyntheticDivert
+
+        def no_psutil(matcher):
+            raise ImportError("psutil is not installed")
+
+        app.engine.target_for = no_psutil
+        real_start = app.engine.start
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
+                            real_start(filt, divert=SyntheticDivert(seed=3),
+                                       duration=duration))
+        everything = bnt.T("fields.target_all_traffic")
+
+        app.vars["target"].set("chrome.exe")
+        app._start(); app._settle_transition()
+        assert app.running and app.engine.targeting() is None
+        app._tick(); app._tick()     # verdict, then render
+        assert app._pending_target_warning == everything, app._pending_target_warning
+        assert app.target_warning.kw.get("text") == everything
+
+        app.vars["target"].set("")                  # applied: nothing was aimed at
+        app.apply_if_running()
+        app._tick(); app._tick()     # verdict, then render
+        assert app._pending_target_warning == "", app._pending_target_warning
+
+        app.vars["target"].set("firefox.exe")       # applied again, same failure
+        app.apply_if_running()
+        app._tick(); app._tick()     # verdict, then render
+        assert app._pending_target_warning == everything, app._pending_target_warning
+
+        app._stop(); app._settle_transition()
+        app._tick(); app._tick()     # verdict, then render
+        assert app._pending_target_warning == "", "the banner outlived the session"
+        assert not app.target_warning.winfo_ismapped()
+    """, allow_faults=("psutil is not installed",))
 
 
 def test_start_only_fields_are_locked_while_a_session_runs():

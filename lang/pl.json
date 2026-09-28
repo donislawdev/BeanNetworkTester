@@ -235,6 +235,7 @@
   "fields.spike_prob": "Szansa skoku:",
   "fields.spike_prob_up": "Szansa skoku w górę:",
   "fields.syn_drop": "Gubione TCP SYN:",
+  "fields.target_all_traffic": "Celowanie w proces nie działa - modyfikowane jest każde połączenie objęte filtrem ruchu.",
   "fields.target_dest": "Celuj w cel",
   "fields.target_example": "np. chrome.exe, 12345, re:^fire",
   "fields.target_no_match": "Żaden działający proces nie pasuje do tego celu - ruch NIE jest modyfikowany.",

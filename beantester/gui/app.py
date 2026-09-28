@@ -42,9 +42,9 @@ from ..presets import (PRESETS, preset_to_settings, resolve_preset,
 from ..processes import port_process_map
 from ..repro import save_repro_report, settings_to_cli_string
 from ..scenario import load_scenario_file
-from ..settings import (DEFAULT_SETTINGS, apply_settings, apply_targeting,
-                        load_config_file, non_profile_active, save_config_file,
-                        settings_from_raw, warn_if_unbounded)
+from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
+                        non_profile_active, save_config_file, settings_from_raw,
+                        warn_if_unbounded)
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
@@ -131,7 +131,9 @@ class App:
         self._ui_errors_shown = set()
         self.engine = BeanEngine(self.log)
         self.running = False
-        self._applied_target = None     # last expression pushed to the engine
+        # The target the user last APPLIED (START / "Apply changes"), not what the
+        # field holds now. Only the banner reads it - see _refresh_target_verdict.
+        self._applied_target = ""
         # Start/stop run their blocking parts (WinDivert driver load ~0.5-1 s, and
         # the worker-thread joins on stop) OFF the UI thread, so the window never
         # freezes. The worker leaves its result in _ui_queue and the main thread
@@ -142,11 +144,6 @@ class App:
         self._transition_thread = None
         self._pending_start_settings = None
         self._closing = False
-        # Main-thread snapshot of the targeting fields. The refresher thread used
-        # to call tk Variable.get() directly - a Tcl call from a worker thread,
-        # which is exactly the kind of thing that makes Tk hang or crash at
-        # random (and then the process lingers, holding the WinDivert driver).
-        self._target_expr = ""
         # The refresher thread's verdict on the target ("matches nothing", or ""),
         # handed to the main thread the same way log lines are: the thread writes a
         # plain string, _tick() puts it on the widget. It used to call
@@ -1194,6 +1191,7 @@ class App:
             self.log(f"{T('log.error')}: {e}")
             return
         apply_settings(self.engine, s, self.log)
+        self._applied_target = str(s.get("target", "")).strip()
         # A session can BECOME unbounded: clear the target, press "Apply changes",
         # and from that moment everything on the machine is in scope. Warning only
         # at START would mean the one path that reaches this state in silence is
@@ -1211,18 +1209,6 @@ class App:
             return
         self.engine.reset_now(3.0)
         self.log(T("log.resetting"))
-
-    def _snapshot_target(self):
-        """Read the target field ON THE MAIN THREAD (tkinter is not thread-safe).
-
-        The refresher thread only ever sees this plain string.
-        """
-        try:
-            expression = str(self.vars["target"].get()).strip()
-        except Exception:
-            expression = ""
-        self._target_expr = expression
-        return self._target_expr
 
     def set_target_warning(self, text):
         """Show (or clear) the "targeting is doing nothing" banner.
@@ -1282,41 +1268,35 @@ class App:
         self._shown_target_warning = text
         self.set_target_warning(text)
 
-    def _refresh_target(self, force=False):
-        """Keep the engine's target in step with the field, and report what it caught.
+    def _refresh_target_verdict(self):
+        """Say what the APPLIED target catches. It reads; it never applies anything.
 
-        This used to run on a 2 s background loop (``_target_refresher``, removed).
-        Every pass called ``apply_targeting``, which resolved the port set
-        SYNCHRONOUSLY - four syscalls and a psutil walk - on a thread nobody
-        watched. Worse, the loop was never joined while ``_finish_start`` spawned a
-        new one on every start, so a STOP followed by a START inside its sleep left
-        the old one running as well: one extra permanent scanner per fast restart.
+        The target reaches the engine the way every other field does: START and
+        "Apply changes", through ``apply_settings`` - validated, announced, and
+        followed by the unbounded-impairment warning (convention 15, "nothing
+        applies itself"). Until 2026-09-28 this ran from every tick and pushed the
+        RAW field to the engine whenever it changed. Clearing the field to type a
+        new name, or a half-typed ``re:^fire(``, switched targeting off - every
+        connection in the filter impaired - while the banner said the opposite.
 
-        Keeping the port set fresh is ``target_resolver``'s job now. What is left
-        here is cheap and runs on the main thread from ``_tick``: apply the
-        expression when the USER changed it, then read the verdict.
+        The verdict follows the ENGINE, not the field: a scenario step may change
+        the target too, and what is typed but not applied changes nothing yet (the
+        Apply button says so). Keeping the port set fresh is ``target_resolver``'s
+        job.
 
-        NO WIDGET IS TOUCHED HERE - the verdict goes into a plain field and
-        ``_drain_target_warning`` renders it. Deliberately kept that way: it is the
-        shape that stops a Tcl call ever leaving the main thread, whoever calls this
-        next (convention 26).
+        NO WIDGET IS TOUCHED HERE and no tk variable is read - the verdict goes into
+        a plain field and ``_drain_target_warning`` renders it. It is the shape that
+        stops a Tcl call ever leaving the main thread, whoever calls this next
+        (convention 26).
         """
-        expression = self._target_expr
-        if force or expression != self._applied_target:
-            self._applied_target = expression
-            if not expression:
-                self.engine.set_target(False)
-            else:
-                # One shared implementation (settings.apply_targeting) compiles the
-                # expression and points the engine at it, so the GUI and
-                # apply_settings can never drift apart.
-                apply_targeting(self.engine, expression, self.log, announce=force)
-        if not expression:
-            self._pending_target_warning = ""
-            return
         targeting = self.engine.targeting()
         if targeting is None:
-            self._pending_target_warning = T("fields.target_no_match")
+            # Nothing narrows the session. That is only news when a target WAS
+            # applied - an expression that narrows nothing, no psutil, or a regex
+            # refused at apply time - and then EVERY connection is impaired. The
+            # banner used to say "traffic is NOT being impaired" here.
+            self._pending_target_warning = (
+                T("fields.target_all_traffic") if self._applied_target else "")
             return
         if targeting.refreshes == 0:
             if self.engine.is_running():
@@ -1404,13 +1384,12 @@ class App:
         if self._scenario is not None:
             self._scenario.loop = self.loop_var.get()
             self.engine.start_scenario(self._scenario, s, log=self.log)
-        self._snapshot_target()
         note = scope.capture_scope_note(s, self.engine.capture_narrowed())
         if note:
             self.log(T(note))
-        # No refresher thread any more: _tick applies a changed expression and the
-        # engine's resolver keeps the port set fresh (see _refresh_target).
-        self._applied_target = None     # re-apply once, now that the engine is up
+        # What START applied (the worker ran apply_settings with `s`), not what
+        # the field holds now - an edit made while the driver loaded is unapplied.
+        self._applied_target = str(s.get("target", "")).strip()
         self._sync_running_ui()
 
     def _stop(self):
@@ -1793,11 +1772,12 @@ class App:
             self._drain_target_warning()   # render the target verdict (main thread)
             self._drain_engine_warning()   # "the tool itself is dropping packets"
             self._sample()
-            self._snapshot_target()     # main-thread read of the target field
             if self.running:
-                # Cheap now: applies only when the expression changed, and the
-                # resolving happens on the engine's resolver thread.
-                self._refresh_target()
+                # Reads the verdict on what START / "Apply changes" applied and
+                # never applies anything itself (convention 15, see the method).
+                self._refresh_target_verdict()
+            else:
+                self._pending_target_warning = ""   # nothing is impaired when stopped
             if self._transition is None and self.running and not self.engine.is_running():
                 self._on_engine_stopped()      # deadline reached / worker fault
             if self._visible():

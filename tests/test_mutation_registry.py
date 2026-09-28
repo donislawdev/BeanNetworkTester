@@ -365,6 +365,54 @@ MUTATIONS = [
         "test": "test_one_window_per_fault_not_one_per_occurrence",
     },
     {
+        # The shipped P0: every tick pushed the RAW target field to the engine, so
+        # an emptied or half-typed field switched targeting off without Apply.
+        "label": "gui: the tick pushes the target field to the engine again",
+        "file": "beantester/gui/app.py",
+        "old": "                self._refresh_target_verdict()\n            else:",
+        "new": "                self._refresh_target_verdict()\n"
+               "                __import__(\"beantester.settings\", fromlist=[\"x\"])"
+               ".apply_targeting(self.engine, "
+               "str(self.vars[\"target\"].get()).strip(), announce=False)\n"
+               "            else:",
+        "test": "test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine",
+    },
+    {
+        # Back to the banner that said the opposite of the truth: a target that
+        # could not be used leaves EVERY connection impaired, not none.
+        "label": "gui: an unusable target is reported as impairing nothing",
+        "file": "beantester/gui/app.py",
+        "old": 'T("fields.target_all_traffic") if self._applied_target else "")',
+        "new": 'T("fields.target_no_match") if self._applied_target else "")',
+        "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
+    },
+    {
+        "label": "gui: START forgets which target it applied",
+        "file": "beantester/gui/app.py",
+        "old": "        self._applied_target = str(s.get(\"target\", \"\")).strip()\n"
+               "        self._sync_running_ui()",
+        "new": "        self._applied_target = \"\"\n"
+               "        self._sync_running_ui()",
+        "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
+    },
+    {
+        "label": "gui: Apply changes forgets which target it applied",
+        "file": "beantester/gui/app.py",
+        "old": "        apply_settings(self.engine, s, self.log)\n"
+               "        self._applied_target = str(s.get(\"target\", \"\")).strip()",
+        "new": "        apply_settings(self.engine, s, self.log)",
+        "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
+    },
+    {
+        # "Every connection is being impaired" must not outlive the session.
+        "label": "gui: the target banner stays up after STOP",
+        "file": "beantester/gui/app.py",
+        "old": "                self._pending_target_warning = \"\"   "
+               "# nothing is impaired when stopped",
+        "new": "                pass",
+        "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
+    },
+    {
         # The exact shape before 2026-09-02: the put outside the try, and a catch
         # narrow enough for anything else to escape past it - which leaves
         # `_transition` set forever and START/STOP dead for the life of the window.
@@ -719,7 +767,7 @@ MUTATIONS = [
         # reasons, and an entry that reddens both proves neither.
         "label": "ratchet: the class attribute ceiling is raised above the truth",
         "file": "tests/test_code_shape.py",
-        "old": "CLASS_ATTR_CEILING = 80         # gui/app.py::App",
+        "old": "CLASS_ATTR_CEILING = 79         # gui/app.py::App",
         "new": "CLASS_ATTR_CEILING = 88         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },

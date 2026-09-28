@@ -235,6 +235,7 @@
   "fields.spike_prob": "Spike chance:",
   "fields.spike_prob_up": "Spike chance up:",
   "fields.syn_drop": "Dropped TCP SYN:",
+  "fields.target_all_traffic": "Process targeting is not active - every connection in the traffic filter is being impaired.",
   "fields.target_dest": "Target dest",
   "fields.target_example": "e.g. chrome.exe, 12345, re:^fire",
   "fields.target_no_match": "No running process matches this target - traffic is NOT being impaired.",
