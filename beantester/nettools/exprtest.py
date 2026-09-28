@@ -30,11 +30,12 @@ BAD_VALUE = "bad_value"
 BAD_EXPRESSION = "bad_expression"
 
 # The longest test value taken. The expression parser vets a regular expression by
-# timing it on probes of up to 45 characters (`matchers._REGEX_PROBE_LENGTHS`), and
-# runs on the UI thread, as the Control page's live validation does - so a value far
-# longer than anything the vetting saw is refused rather than run through a
-# pattern nobody has timed on it. 256 is far past any process name this tool has
-# met; an address or a port never gets near it.
+# timing it on probes of up to 45 characters (`matchers._REGEX_PROBE_LENGTHS`), each
+# also followed by a character it cannot consume, and this runs on the UI thread.
+# Not cut down to 45: MEASURED 2026-09-28, the shapes that still pass that vetting
+# cost at most ~1 ms per search at 256 characters (`(\w|\d)+z`), while 45 would
+# refuse long process names the tester exists to try. 256 is far past any process
+# name this tool has met; an address or a port never gets near it.
 MAX_VALUE_CHARS = 256
 
 # ASCII digits, not ``str.isdigit()``: MEASURED 2026-09-23, for "443" written in

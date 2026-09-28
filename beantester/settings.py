@@ -440,6 +440,8 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
 
     Returns the live :class:`~beantester.targeting.ProcessTargeting` (iterable,
     ``len()``-able), or ``None`` when targeting is off / could not be resolved.
+    An expression that cannot be read changes nothing: the engine keeps the target
+    it had, and that is what is returned.
     The object keeps re-resolving itself while the session runs, so a connection
     the target opens a second from now is impaired too - the old code handed the
     engine a frozen set of ports and everything opened afterwards escaped it.
@@ -453,9 +455,11 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
         try:
             matcher = parse_matcher(expr, KIND_PROCESS, TARGET_FIELD)
         except ValueError as e:
+            # Left as it was, like the destination in apply_settings: switching
+            # targeting off here means impairing every connection in the filter,
+            # which is the widest answer to an expression that could not be read.
             log(f"{T('log.targeting_error')}: {e}")
-            engine.set_target(False)
-            return None
+            return engine.targeting()
     if matcher.is_empty:
         engine.set_target(False)
         return None
@@ -608,11 +612,14 @@ def apply_settings(engine, s, log=lambda *_: None):
         try:
             dest = (bool(dst_ip or dst_port), *compile_endpoint(dst_ip, dst_port))
         except ValueError as e:
-            # Tolerant like the schedule below: a bad expression disables destination
-            # targeting instead of killing a scenario thread. The GUI and the CLI
-            # validate up front (validate_settings), so a user never reaches this.
+            # Tolerant like the schedule below - a scenario thread must not die of it
+            # - but NEVER by switching the destination off: off means "impair
+            # everything", so a field that could not be read widened the session to
+            # the whole machine (external review, P3-13). It is left as it was. The
+            # GUI and the CLI validate up front, and an accepted regex stays accepted
+            # (matchers._accepted_regex), so a user does not reach this.
             log(f"{T('log.filter_skipped')}: {e}")
-            dest = (False, *compile_endpoint(None, None))
+            dest = None
     # The same shape as the pair below, and said for the same reason: two "only"
     # switches that exclude each other leave nothing to aim at, the symptom is a
     # session that changes nothing, and that looks like a broken tool rather than
@@ -636,15 +643,14 @@ def apply_settings(engine, s, log=lambda *_: None):
         log(T("log.asym_one_way_filter"))
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
+    block = None                                # None = leave the block alone
     try:
         block = (bool(block_ip or block_port), *compile_endpoint(block_ip, block_port),
                  bool(g("block_reject")))
     except ValueError as e:
-        # Tolerant like destination above: a bad expression disables blocking
-        # instead of killing a scenario thread. GUI and CLI validate up front.
-        # The mode goes with it: with no block there is nothing to refuse.
+        # Tolerant like destination above, and by the same rule: a field that could
+        # not be read is left as it was, mode included, rather than guessed at.
         log(f"{T('log.filter_skipped')}: {e}")
-        block = (False, *compile_endpoint(None, None), False)
     try:
         schedule = parse_schedule(g("rate_schedule"))
     except ValueError as e:
@@ -668,7 +674,8 @@ def apply_settings(engine, s, log=lambda *_: None):
         engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
         engine.set_lan(bool(g("lan_mode")))
         engine.set_internet_only(bool(g("internet_only")))
-        engine.set_block(*block)
+        if block is not None:
+            engine.set_block(*block)
         engine.set_advanced(g("syn_drop"), g("max_size"))
         engine.set_spike(g("spike_prob"), g("spike_ms"))
         engine.set_nat(g("nat_timeout"))

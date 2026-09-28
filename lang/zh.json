@@ -296,7 +296,7 @@
   "log.duration_reached": "已达到时间限制（{v} 秒），会话已停止。",
   "log.engine_fault": "引擎故障：{e}。会话已停止，网络已恢复正常。",
   "log.error": "错误",
-  "log.filter_skipped": "无法解析此表达式，本次会话已将其关闭",
+  "log.filter_skipped": "无法解析此表达式，因此该字段保持不变",
   "log.ipv4_and_ipv6_only": "同时启用了“仅 IPv4 地址”和“仅 IPv6 地址”。没有数据包同时属于两者，因此不会有任何改动。",
   "log.lan_and_internet_only": "“局域网模式”和“仅互联网”同时启用，因此除环回流量外，其他流量都无法通过。",
   "log.layout_reset": "窗口布局已重置。",

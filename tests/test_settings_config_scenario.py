@@ -462,24 +462,52 @@ def test_apply_settings_with_expressions():
     check("apply: port exclusion matches", not c.dst_port_matcher.matches(53))
 
 
-def test_apply_settings_bad_expression_disables_dest_targeting():
+def test_a_bad_destination_at_apply_leaves_the_previous_one_in_place():
+    """Rewritten on purpose (external review, P3-13).
+
+    This test used to be "a bad expression DISABLES destination targeting" - and a
+    destination switched off means impairing every connection, so a field that
+    could not be read widened the session to the whole machine. It asserted that on
+    a fresh engine only, where "off" and "left as it was" look the same.
+    """
     from beantester import BeanEngine, apply_settings
+    from beantester.i18n import T
     sh = BeanEngine()
     lines = []
     apply_settings(sh, dict(dst_ip="999.1.1.1"), lines.append)
-    check("apply: a bad expression disables destination targeting",
+    check("apply: on a fresh engine a bad expression leaves it off",
           sh.core.dst_active is False)
     check("apply: the problem is logged, not silently ignored", lines, f"({lines})")
 
+    apply_settings(sh, dict(dst_ip="10.0.0.1"))
+    lines.clear()
+    apply_settings(sh, dict(dst_ip="999.1.1.1"), lines.append)
+    check("apply: a bad expression does not widen the session to everything",
+          sh.core.dst_active is True)
+    check("apply: the destination it had is still the one in force",
+          sh.core.dst_ip_matcher.matches("10.0.0.1")
+          and not sh.core.dst_ip_matcher.matches("10.0.0.2"))
+    check("apply: and the log says so", any(T("log.filter_skipped") in line
+                                              for line in lines), f"({lines})")
 
-def test_apply_settings_bad_expression_disables_blocking():
+
+def test_a_bad_block_at_apply_leaves_the_previous_one_in_place():
+    """Same rule as the destination above: what could not be read is left as it
+    was, mode included, instead of being switched off or guessed at."""
     from beantester import BeanEngine, apply_settings
     sh = BeanEngine()
     lines = []
     apply_settings(sh, dict(block_ip="999.1.1.1"), lines.append)
-    check("apply: a bad block expression disables blocking, not a crash",
+    check("apply: on a fresh engine a bad block leaves blocking off, not a crash",
           sh.core.block_active is False)
     check("apply: the block problem is logged", lines, f"({lines})")
+
+    apply_settings(sh, dict(block_ip="203.0.113.0/24", block_reject=True))
+    apply_settings(sh, dict(block_ip="999.1.1.1", block_reject=False))
+    check("apply: a bad block keeps the block it had",
+          sh.core.block_active is True
+          and sh.core.block_ip_matcher.matches("203.0.113.9"))
+    check("apply: and its mode", sh.core.block_reject is True)
 
 
 def test_apply_settings_with_block_expressions():

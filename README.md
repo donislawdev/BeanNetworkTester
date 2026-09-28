@@ -649,6 +649,9 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
 * **`2000-1000` is an error** (reversed range), not an empty set.
 * **A wildcard is not a regex.** In `chrome*` the star means "any run". In `re:chrome*` it means
   "the letter `e` repeated 0+ times". If you write `re:`, you write a regex.
+* **A repeat inside a repeat is refused as too slow**, for example `re:^(\w+)+$` or
+  `re:^([0-9:]+)+$`. Such a pattern can take seconds on a single name or address that almost
+  matches, and an address is checked on every packet. Write the repeat once: `re:^\w+$`.
 
 Every syntax error is reported **immediately**: in the GUI the field turns red with the reason
 beneath it (in the UI language), and the CLI ends with a readable `error: ...` - never a silent

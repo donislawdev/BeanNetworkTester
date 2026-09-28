@@ -296,7 +296,7 @@
   "log.duration_reached": "Time limit reached ({v} s) - session stopped.",
   "log.engine_fault": "Engine fault: {e} - the session was stopped, your network is back to normal.",
   "log.error": "Error",
-  "log.filter_skipped": "This expression could not be read, so it was switched off for this session",
+  "log.filter_skipped": "This expression could not be read, so this field was left as it was",
   "log.ipv4_and_ipv6_only": "IPv4 addresses only and IPv6 addresses only are both on. No packet is both, so nothing will be impaired.",
   "log.lan_and_internet_only": "LAN mode and Internet only are both on - nothing but loopback gets through.",
   "log.layout_reset": "Window layout reset.",
