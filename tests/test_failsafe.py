@@ -9,10 +9,13 @@ These tests pin down the three guarantees:
   * a session stops itself at its ``duration`` deadline,
   * a dead worker thread makes the engine stop (= release the divert) and say so,
   * the GUI survives a broken tick, never calls Tcl from a worker thread, and
-    always releases the engine when the window closes.
+    always releases the engine when the window closes,
+  * no stop waits for the log, which is the caller's code and can block or raise.
 """
 import threading
 import time
+
+import pytest
 
 from beantester.engine import _LIVE_ENGINES, BeanEngine, deadline_reached
 from beantester.i18n import T
@@ -1315,6 +1318,176 @@ def test_the_stall_check_answers_no_for_every_state_that_is_not_one():
     eng._t_cap.join()
     check("dead capture thread: left to the liveness check",
           eng._capture_has_stalled() is False)
+
+
+# --- the log is the caller's code: it can block, and it can raise ------------- #
+#
+# On the CLI the log is a plain write to stderr. A console whose text is being
+# selected with the mouse holds that write until the selection ends, and so does a
+# pipe nobody reads any more. Every stop path used to SAY why before it stopped, so
+# the divert stayed open for exactly as long as the log was held - measured
+# 2026-09-28 on all six paths below, and on a session past its --duration.
+
+
+class _FrozenLog:
+    """A log that stops returning at the first line containing ``needle``."""
+
+    def __init__(self):
+        self.needle = None
+        self.lines = []
+        self.frozen = threading.Event()
+        self.thaw = threading.Event()
+        self.raised = None              # the error a start() on another thread got
+
+    def __call__(self, line):
+        line = str(line)
+        self.lines.append(line)
+        if self.needle and self.needle in line and not self.thaw.is_set():
+            self.frozen.set()
+            self.thaw.wait(10)
+
+
+def _frozen_at_the_deadline(eng, log, monkeypatch):
+    log.needle = T("log.duration_reached", v="0.2")
+    divert = QuietDivert()
+    eng.start("test", divert=divert, duration=0.2)
+    return divert
+
+
+def _frozen_at_a_recv_error(eng, log, monkeypatch):
+    log.needle = "driver went away"
+    divert = ExplodingDivert(packets=0)
+    eng.start("test", divert=divert)
+    return divert
+
+
+def _frozen_at_a_dead_worker(eng, log, monkeypatch):
+    log.needle = "died unexpectedly"
+    monkeypatch.setattr(eng, "_capture_loop", lambda: None)    # ends at once
+    divert = QuietDivert()
+    eng.start("test", divert=divert)
+    return divert
+
+
+def _frozen_at_a_stall(eng, log, monkeypatch):
+    log.needle = "stopped making progress"
+    eng.CAPTURE_STALL_S = 0.3
+    divert = _StallingDivert()
+    eng.start("test", divert=divert)
+    return divert
+
+
+def _frozen_at_a_foreign_worker(eng, log, monkeypatch):
+    log.needle = "the timeline broke"
+    divert = QuietDivert()
+    eng.start("test", divert=divert)
+    threading.Thread(target=eng.worker_failed,
+                     args=(RuntimeError("the timeline broke"),), daemon=True).start()
+    return divert
+
+
+def _frozen_at_a_failed_start(eng, log, monkeypatch):
+    log.needle = "would not start"
+
+    def refuse():
+        raise RuntimeError("the resolver would not start")
+
+    monkeypatch.setattr(eng._resolver, "start", refuse)
+    divert = QuietDivert()
+
+    def start():
+        # start() blocks in the log it says on its way out, so it runs here
+        try:
+            eng.start("test", divert=divert)
+        except RuntimeError as exc:
+            log.raised = str(exc)
+
+    threading.Thread(target=start, daemon=True).start()
+    return divert
+
+
+@pytest.mark.parametrize("path", [
+    _frozen_at_the_deadline, _frozen_at_a_recv_error, _frozen_at_a_dead_worker,
+    _frozen_at_a_stall, _frozen_at_a_foreign_worker, _frozen_at_a_failed_start,
+], ids=lambda path: path.__name__.removeprefix("_frozen_at_"))
+def test_a_stop_closes_the_divert_while_the_log_is_still_blocked(path, monkeypatch):
+    """Close first, SAY why afterwards - and still in the order a tester reads.
+
+    The divert has to close while the log is still held: that is the whole fix.
+    Then, once the log moves again, the reason has to come before "Stop.", the
+    order the lines had before (convention: a log that reads backwards cannot tell
+    a tester what happened when).
+    """
+    log = _FrozenLog()
+    eng = BeanEngine(log_fn=log)
+    divert = path(eng, log, monkeypatch)
+    try:
+        check("the stop path reached the log and the log is held",
+              log.frozen.wait(5), f"({log.lines})")
+        check("the divert is closed while the log is still held (network restored)",
+              _wait_until(lambda: divert.closed, 3.0),
+              f"(running={eng.is_running()}, lines={log.lines})")
+        check("and the session is no longer running", eng.is_running() is False)
+    finally:
+        log.thaw.set()
+        if hasattr(divert, "release"):
+            divert.release()
+    eng.stop()      # waits for the stop that was held, so the log is complete
+
+    reason = next((i for i, line in enumerate(log.lines) if log.needle in line), None)
+    stop = [i for i, line in enumerate(log.lines) if line == T("log.stop")]
+    check("the reason is said once the log moves again", reason is not None,
+          f"({log.lines})")
+    check("and before the one 'Stop.' line", len(stop) == 1 and reason < stop[0],
+          f"({log.lines})")
+    if path is _frozen_at_a_failed_start:
+        check("the caller still gets the start's own error",
+              _wait_until(lambda: log.raised is not None)
+              and log.raised == "the resolver would not start", f"({log.raised!r})")
+
+
+def test_a_log_that_raises_cannot_cancel_a_stop(monkeypatch):
+    """A log that RAISES took the stop down with it.
+
+    MEASURED 2026-09-28: a log raising on the deadline line killed the watchdog -
+    the session never stopped, and nothing was left to notice anything else. At
+    START it was worse: the announcement raised into the failure handler, whose own
+    fault line raised again before it could stop, so the divert stayed open and the
+    caller got the log's error instead of the real one.
+    """
+    def broken(line):
+        raise RuntimeError("the log is gone")
+
+    eng = BeanEngine(log_fn=broken)
+    divert = QuietDivert()
+    eng.start("test", divert=divert, duration=0.2)
+    check("deadline: a session with a broken log still starts", eng.is_running() is True)
+
+    def stopped_completely():
+        kinds = [(e[2], e[3]) for e in eng.events_snapshot()]
+        return (not eng.is_running() and divert.closed
+                and ("STOP", "events.duration_reached") in kinds)
+
+    check("deadline: and still stops at its deadline, teardown and all",
+          _wait_until(stopped_completely, 3.0),
+          f"(running={eng.is_running()}, closed={divert.closed})")
+
+    def refuse():
+        raise RuntimeError("the resolver would not start")
+
+    eng = BeanEngine(log_fn=broken)
+    monkeypatch.setattr(eng._resolver, "start", refuse)
+    divert = QuietDivert()
+    raised = None
+    try:
+        eng.start("test", divert=divert)
+    except RuntimeError as exc:
+        raised = str(exc)
+    check("failed start: the caller gets the start's error, not the log's",
+          raised == "the resolver would not start", f"({raised!r})")
+    check("failed start: the divert is closed", divert.closed is True)
+    check("failed start: nothing is left running or tracked",
+          eng.is_running() is False and eng not in set(_LIVE_ENGINES))
 
 
 # --- START and STOP must survive the worker ending badly ---------------------- #

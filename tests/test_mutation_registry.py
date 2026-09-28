@@ -124,6 +124,17 @@ MUTATIONS = [
         "test": "test_a_timeline_that_breaks_takes_the_session_down_with_it",
     },
     {
+        # Back to saying it first: a held console keeps the session impairing
+        # traffic for as long as it is held.
+        "label": "scenario: a broken timeline says so before the engine is told",
+        "file": "beantester/scenario_runner.py",
+        "old": "                self.engine.worker_failed(exc)\n"
+               "                log(T(\"log.scenario_failed\", e=f\"{type(exc).__name__}: {exc}\"))",
+        "new": "                log(T(\"log.scenario_failed\", e=f\"{type(exc).__name__}: {exc}\"))\n"
+               "                self.engine.worker_failed(exc)",
+        "test": "test_a_broken_timeline_stops_the_session_before_it_says_so",
+    },
+    {
         # The shipped stop(): a flag and a return. The thread is still between two
         # steps and applies one more set of settings after the caller moved on.
         "label": "scenario: stop() goes back to setting a flag and returning",
@@ -443,6 +454,73 @@ MUTATIONS = [
         "old": "            if self._capture_has_stalled():",
         "new": "            if False:",
         "test": "test_a_capture_thread_that_is_alive_but_no_longer_moving_fails_open",
+    },
+    {
+        # The shipped order before 2026-09-28: say it, then stop. A console held by
+        # a text selection kept the session running past its --duration.
+        "label": "engine: the deadline is said before the session is stopped",
+        "file": "beantester/engine.py",
+        "old": "                self._worker_stop(\n"
+               "                    \"duration\", (T(\"log.duration_reached\", "
+               "v=f\"{self._duration:g}\"),))",
+        "new": "                self.log(T(\"log.duration_reached\", v=f\"{self._duration:g}\"))\n"
+               "                self._worker_stop(\"duration\")",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
+        # The fault line said by the worker before it asks for the stop: every
+        # watchdog fault and the foreign-worker door hold the divert open again.
+        "label": "engine: a fault is said before the session is stopped",
+        "file": "beantester/engine.py",
+        "old": "        say = (*lead, T(\"log.engine_fault\", e=str(error)))",
+        "new": "        self._say((*lead, T(\"log.engine_fault\", e=str(error))))\n"
+               "        say = ()",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
+        # The stop itself says why before it closes - the callers hand the lines
+        # over correctly and it still waits for the log.
+        "label": "engine: a stop says why before it closes the divert",
+        "file": "beantester/engine.py",
+        "old": "        if self._divert is not None:\n"
+               "            try:\n"
+               "                self._divert.close()",
+        "new": "        self._say(say)\n"
+               "        say = ()\n"
+               "        if self._divert is not None:\n"
+               "            try:\n"
+               "                self._divert.close()",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
+        # START's failure handler said its fault first, then stopped.
+        "label": "engine: a failed start says its fault before stopping",
+        "file": "beantester/engine.py",
+        "old": "            self._stop_locked(\"fault\", say=(T(\"log.engine_fault\", e=str(exc)),))",
+        "new": "            self.log(T(\"log.engine_fault\", e=str(exc)))\n"
+               "            self._stop_locked(\"fault\")",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
+        # The capture thread said the recv error itself before asking for the stop.
+        "label": "engine: a recv error is said before the stop",
+        "file": "beantester/engine.py",
+        "old": "                    self._fail_stop(e, lead=(f\"{T('log.recv_error')}: {e}\",))",
+        "new": "                    self.log(f\"{T('log.recv_error')}: {e}\")\n"
+               "                    self._fail_stop(e)",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
+        # The sink's exception reaches the watchdog again: it dies on the deadline
+        # line and the session never stops.
+        "label": "engine: a log that raises escapes into the caller again",
+        "file": "beantester/engine.py",
+        "old": "        try:\n"
+               "            self._log_fn(msg)\n"
+               "        except Exception as _exc:\n"
+               "            crashlog.note(_exc, \"engine.log\")",
+        "new": "        self._log_fn(msg)",
+        "test": "test_a_log_that_raises_cannot_cancel_a_stop",
     },
     {
         # The other direction, and the more expensive one to get wrong: without the

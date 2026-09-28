@@ -116,8 +116,11 @@ class ScenarioRunner:
         except Exception as exc:                      # noqa: BLE001 - the net itself
             try:
                 crashlog.record(exc, "scenario_runner")
-                log(T("log.scenario_failed", e=f"{type(exc).__name__}: {exc}"))
+                # Stop FIRST, then say why: `log` is the caller's and can block (a
+                # paused console), and said first it kept the session impairing
+                # traffic for as long as it blocked (measured 2026-09-28).
                 self.engine.worker_failed(exc)
+                log(T("log.scenario_failed", e=f"{type(exc).__name__}: {exc}"))
             except Exception as _exc:
                 # A safety net that can itself fall through is not one.
                 crashlog.note(_exc, "scenario_runner")

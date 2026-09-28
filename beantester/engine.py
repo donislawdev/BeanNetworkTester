@@ -21,6 +21,12 @@ closes the divert = fail-open) as soon as a worker thread dies, and an
 ``atexit`` hook guarantees the handle is released even on an abrupt shutdown.
 The same watchdog enforces the session deadline (``duration``).
 
+The log is the caller's code, so it can block (a console paused by a text
+selection, a pipe nobody reads) or raise. Nothing that reaches it may stand
+between noticing a stop condition and closing the divert: every stop path
+closes first and SAYS why afterwards (``_stop_locked``'s ``say``), and
+``log`` never lets the sink's exception out.
+
 What this actually sustains (the one place that number lives)
 -------------------------------------------------------------
 "150 000 packets a second" appears in several cost arguments around this
@@ -131,7 +137,7 @@ atexit.register(_stop_live_engines)
 
 class BeanEngine:
     def __init__(self, log_fn=lambda *_: None):
-        self.log = log_fn
+        self._log_fn = log_fn
         self.core = BeanCore()
         self._divert = None
         self._running = False
@@ -211,6 +217,25 @@ class BeanEngine:
 
     def effective_seed(self):
         return self._effective_seed
+
+    def log(self, msg):
+        """Hand one line to the log the owner passed in - which may raise.
+
+        The sink is foreign code and it is called from the worker threads and
+        from every stop. MEASURED 2026-09-28: a sink that raised on the deadline
+        line killed the watchdog, and the session then never stopped at all, with
+        nothing left watching it. Whatever the sink raises is recorded and ends
+        here. A sink that BLOCKS cannot be fixed from this side, which is why the
+        stop paths close the divert before they say anything (``_stop_locked``).
+        """
+        try:
+            self._log_fn(msg)
+        except Exception as _exc:
+            crashlog.note(_exc, "engine.log")
+
+    def _say(self, lines):
+        for line in lines:
+            self.log(line)
 
     def log_event(self, kind, text):
         now = time.monotonic()
@@ -975,8 +1000,10 @@ class BeanEngine:
             # stop() closes the divert, stops/joins whatever DID start, and clears
             # _running. Then re-raise so the caller (GUI _finish_start, CLI) reports the
             # failure instead of believing the session is live. Convention 20.
-            self.log(T("log.engine_fault", e=str(exc)))
-            self.stop(reason="fault")
+            # The fault is said BY the stop, after the divert is closed: said first, a
+            # log that blocks held the divert open for as long as it blocked. Called
+            # directly because start() already holds _stop_lock.
+            self._stop_locked("fault", say=(T("log.engine_fault", e=str(exc)),))
             raise
 
     # Two extra tries, ~0.45 s in total, and ONLY for "the device does not exist".
@@ -1092,7 +1119,7 @@ class BeanEngine:
         with self._stop_lock:
             self._stop_locked(reason)
 
-    def _worker_stop(self, reason):
+    def _worker_stop(self, reason, say=()):
         """Stop initiated BY one of the engine's own worker threads.
 
         It must not BLOCK on ``_stop_lock``. A concurrent external ``stop()`` holds
@@ -1105,18 +1132,30 @@ class BeanEngine:
         and do the stop ourselves (the uncontended deadline / fault case); if another
         stop already holds it, return AT ONCE so its join of this thread completes and
         this thread dies.
+
+        ``say`` is said either way: by ``_stop_locked`` once the divert is closed, or
+        here when bowing out, where the stop holding the lock does the closing.
         """
         if not self._stop_lock.acquire(blocking=False):
+            self._say(say)
             return
         try:
-            self._stop_locked(reason)
+            self._stop_locked(reason, say)
         finally:
             self._stop_lock.release()
 
-    def _stop_locked(self, reason):
+    def _stop_locked(self, reason, say=()):
         """The stop body. The caller MUST hold ``_stop_lock`` - ``stop()`` blocks to
-        take it, ``_worker_stop`` takes it without blocking."""
+        take it, ``_worker_stop`` takes it without blocking.
+
+        ``say`` - the lines explaining WHY (a fault, the deadline). They are said
+        here, after every handle the session holds is released, and never by the
+        caller before the call: the log is the caller's code and can block, and
+        MEASURED 2026-09-28 on every stop path, a log said first held the divert
+        open for exactly as long as the log blocked. Said even when there is
+        nothing left to stop, so a caller that lost the race still reports."""
         if not self._running:
+            self._say(say)
             return
         self._running = False
         # Cleared EARLY (it used to be set near the end): once the deadline is gone,
@@ -1158,6 +1197,8 @@ class BeanEngine:
         if self._socketwatch is not None:
             self._socketwatch.stop()
             self._socketwatch = None
+        # Only now, with nothing of the session left open: see the docstring.
+        self._say(say)
         self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
         with self._cv:
             self._cv.notify_all()
@@ -1217,7 +1258,7 @@ class BeanEngine:
     # long enough not to spin. See _fault_stop_blocking.
     FAULT_LOCK_POLL_S = 0.05
 
-    def _fail_stop(self, error, blocking=True):
+    def _fail_stop(self, error, blocking=True, lead=()):
         """A worker died: stop the session so the network is never left impaired.
 
         ``blocking`` picks HOW the stop is taken, and the two callers genuinely differ:
@@ -1244,8 +1285,13 @@ class BeanEngine:
         2 s join timeout. Never a deadlock - but "cannot" was too strong, and a
         sentence like that is what stops the next session from looking. NOT
         reproduced: found by reading, and the window is a few instructions wide.
+
+        ``lead`` - lines the caller has to say ahead of the fault line (the recv
+        error). Handed over instead of said, and the fault line with them: the stop
+        says them once the divert is closed (``_stop_locked``).
         """
         if not self._running:
+            self._say(lead)
             return
         # First fault wins. The watchdog's "worker thread died unexpectedly" is a
         # SYMPTOM of the real error - if the capture thread recorded the cause a
@@ -1253,13 +1299,13 @@ class BeanEngine:
         # of the report. Both are still LOGGED: two failures are two events.
         if not self.fault:
             self.fault = str(error)
-        self.log(T("log.engine_fault", e=str(error)))
+        say = (*lead, T("log.engine_fault", e=str(error)))
         if blocking:
-            self._fault_stop_blocking()
+            self._fault_stop_blocking(say)
         else:
-            self._worker_stop(reason="fault")
+            self._worker_stop("fault", say)
 
-    def _fault_stop_blocking(self):
+    def _fault_stop_blocking(self, say=()):
         """Take ``_stop_lock`` for a capture-thread fault: wait for a start, never
         for another stop.
 
@@ -1269,13 +1315,14 @@ class BeanEngine:
         the case the blocking path exists for), and no longer running means a stop
         already owns the teardown, is closing the divert, and is joining THIS thread
         with a 2.0 s timeout. Waiting on that one buys nothing and costs the user a
-        two-second STOP.
+        two-second STOP. ``say`` as in ``_worker_stop``.
         """
         while not self._stop_lock.acquire(timeout=self.FAULT_LOCK_POLL_S):
             if not self._running:
+                self._say(say)
                 return
         try:
-            self._stop_locked("fault")
+            self._stop_locked("fault", say)
         finally:
             self._stop_lock.release()
 
@@ -1338,13 +1385,15 @@ class BeanEngine:
             except Exception as _exc:
                 crashlog.note(_exc, "engine")
             if deadline_reached(self._deadline, time.monotonic()):
-                self.log(T("log.duration_reached", v=f"{self._duration:g}"))
                 # _worker_stop, not stop(): this runs on the watchdog thread, and a
                 # user pressing STOP at the same instant holds _stop_lock while joining
                 # this very thread. Blocking on the lock here would hang STOP for its
                 # 2 s join timeout (measured 2.09 s); the user's stop already closes
                 # the divert, so we can just bow out.
-                self._worker_stop(reason="duration")
+                # The line goes WITH the stop, not before it: a console paused by a
+                # text selection kept the session going past its --duration.
+                self._worker_stop(
+                    "duration", (T("log.duration_reached", v=f"{self._duration:g}"),))
                 return
             for t in (self._t_cap, self._t_inj):
                 if t is not None and not t.is_alive():
@@ -1420,8 +1469,8 @@ class BeanEngine:
                     # The divert is still open but nothing drains it any more:
                     # WinDivert would keep queueing (and then dropping) the user's
                     # packets. Fail OPEN - stop the session and release the driver.
-                    self.log(f"{T('log.recv_error')}: {e}")
-                    self._fail_stop(e)
+                    # The line is handed to the stop, which says it after closing.
+                    self._fail_stop(e, lead=(f"{T('log.recv_error')}: {e}",))
                 break
             now = time.monotonic()
             # BEAT FIRST, then clear the flag, and the order is the whole safety of
