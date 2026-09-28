@@ -19,6 +19,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   switched off meant all traffic was impaired. The field now keeps its previous value,
   and the log says so.
 
+- **A command-line run stops on time even while its console window is paused.**
+  Selecting text in the console window pauses the program's output until the selection
+  ends. A run that reached its `--duration`, or hit a failure, used to wait for that
+  output before stopping, so traffic stayed impaired for as long as the console was
+  paused. The run now stops first and prints the reason afterwards. When a scenario
+  fails, its "Scenario stopped" line now comes after "Stop.".
+
 - **Editing "Target process" during a session changes nothing until you click "Apply
   changes".** The field used to reach the running session on its own. Clearing it to type
   a new name, or stopping halfway through an expression such as `re:^fire(`, switched
