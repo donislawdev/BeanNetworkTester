@@ -2398,6 +2398,16 @@ MUTATIONS = [
         "test": "test_total_loss_loses_every_packet_whatever_the_run_length",
     },
     {
+        # The shipped scenario walked step by step on one engine: the steps around
+        # its outage must deliver their own loss, so a chain derived wrongly shows
+        # up there even though the outage itself still drops everything.
+        "label": "burst loss: the steps around a scenario's outage deliver the wrong loss",
+        "file": "beantester/core.py",
+        "old": "    p = loss * r / room",
+        "new": "    p = r",
+        "test": "test_the_shipped_lte_to_3g_outage_loses_everything",
+    },
+    {
         # The upload walks its own chain from its own loss, so it clamps on its
         # own - and until P3-4 the apply log never asked about it.
         "label": "burst loss: the upload's clamp and gap go unsaid",

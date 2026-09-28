@@ -491,14 +491,33 @@ def test_total_loss_makes_one_draw_per_packet_like_the_chain_did():
           rng.getstate() == expected.getstate(), "(the draw count moved)")
 
 
+def _paced_drops(core, rng, start, packets=20000):
+    """Both directions in turn, 0.1 s apart; returns (dropped, clock after).
+
+    Slow on purpose: the scenario below also caps the speed (32 KB/s up at its
+    slowest), and 1200 bytes every 0.2 s per direction stays under every cap it
+    sets - so each drop counted here is a LOSS drop, not the rate limiter's.
+    """
+    dropped = 0
+    for i in range(packets):
+        now = start + i * 0.1
+        dropped += core.decide(1200, bool(i % 2), 5000, now, rng, remote_ip="1.2.3.4",
+                               remote_port=443, is_tcp=True).drop
+    return dropped, start + packets * 0.1
+
+
 def test_the_shipped_lte_to_3g_outage_loses_everything():
     """The case the review found in a file this project ships.
 
     ``mobile-lte-to-3g.json`` cuts the link at 60 s with ``"loss": 100`` and
     inherits a run length of 8 from the step before, so its full outage let about
     one packet in nine through - enough for a connection to live through it.
-    Driven the way a session drives it: scenario step, ``apply_settings``, engine,
-    core.
+
+    Driven the way a session drives it: every step applied in turn to ONE engine
+    through ``apply_settings``, the outage entered and left twice, because the
+    chain state carried from step to step is exactly what a single step on a fresh
+    core cannot show. Before the outage and after it the loss must be the step's
+    own number again, arriving in runs.
     """
     from beantester.engine import BeanEngine
     from beantester.scenario import load_scenario_file
@@ -506,16 +525,29 @@ def test_the_shipped_lte_to_3g_outage_loses_everything():
 
     scenario = load_scenario_file(os.path.join(ROOT, "scenarios",
                                                "mobile-lte-to-3g.json"))
-    settings = scenario.settings_at(60.05, DEFAULT_SETTINGS)
+    outage = scenario.settings_at(60.05, DEFAULT_SETTINGS)
     check("the step is still total loss with an inherited run length",
-          settings["loss"] == 100 and settings["loss_burst"] > 1,
-          f"(loss={settings['loss']}, run={settings['loss_burst']})")
+          outage["loss"] == 100 and outage["loss_burst"] > 1,
+          f"(loss={outage['loss']}, run={outage['loss_burst']})")
     engine = BeanEngine()
-    apply_settings(engine, settings)
     engine.core.reset_buckets(0.0)
-    dropped, _ = _drops(engine.core, packets=20000, alternate=True)
-    check("the outage drops every packet", dropped == 20000,
-          f"(dropped {dropped} of 20000)")
+    rng = random.Random(21)
+    clock = 0.0
+    for at in (45.05, 60.05, 68.05, 60.05, 68.05):
+        settings = scenario.settings_at(at, DEFAULT_SETTINGS)
+        apply_settings(engine, settings)
+        runs_before = engine.core.loss_bursts
+        dropped, clock = _paced_drops(engine.core, rng, clock)
+        share = 100.0 * dropped / 20000
+        if settings["loss"] >= 100:
+            check(f"at {at} s the outage drops every packet", dropped == 20000,
+                  f"(dropped {dropped} of 20000)")
+            continue
+        check(f"at {at} s the loss is the step's own {settings['loss']}% again",
+              abs(share - settings["loss"]) <= 2.0, f"(delivered {share:.2f}%)")
+        check(f"at {at} s it arrives in runs again",
+              engine.core.loss_bursts > runs_before,
+              f"({engine.core.loss_bursts - runs_before} runs started)")
 
 
 def _burst_lines(monkeypatch, **fields):
