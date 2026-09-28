@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **The program no longer freezes while it records an internal error.** Writing a crash
+  report used to read the Control page form. If a field held a value the program cannot
+  accept, such as a letter typed into Loss, or if a background task hit an error at the
+  wrong moment, the window stopped responding and STOP did nothing. Crash reports still
+  carry the settings. When a field is invalid, the report now says so instead.
+
 ## [0.7.0] - 2026-09-25
 
 ### Added

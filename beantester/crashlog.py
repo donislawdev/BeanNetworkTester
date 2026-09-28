@@ -54,6 +54,13 @@ The two things that would break it at scale
   whatever broke last.
 * **Unbounded disk.** The log rotates and is capped, so a program left running for
   a fortnight with a repeating fault cannot fill the volume it is diagnosing.
+* **A logger that wedges the program.** Every thread reports here, the capture
+  thread and the watchdog included, so the one lock this module owns is never held
+  while code from OUTSIDE it runs. The context provider is the App's code, and it
+  used to run under that lock: a provider that recorded a fault of its own
+  deadlocked its thread on it, and one that waited for the Tk main loop deadlocked
+  against a main thread waiting for it. Every later report from every thread then
+  queued behind them - the GUI froze and the watchdog stopped watching.
 """
 import faulthandler
 import hashlib
@@ -90,6 +97,9 @@ _lock = threading.Lock()
 # makes room by dropping the fault nobody has seen for longest. See _record.
 _seen: OrderedDict[str, dict] = OrderedDict()   # fingerprint -> record (+ a count)
 _context_provider = None            # set by the App/CLI: returns a dict of state
+# Per thread: is this thread inside the context provider right now? A fault the
+# provider itself records must not ask the provider again (see _collect_context).
+_local = threading.local()
 _installed = False
 _enabled = True
 
@@ -113,9 +123,15 @@ def _ensure_dir():
 def set_context_provider(fn):
     """Register a callable returning a dict of app state to attach to every crash.
 
-    The App passes the seed, the settings, the counters and the open page; the CLI
-    passes the parsed configuration. Whatever it returns is best-effort: a context
-    provider that itself raises must not turn a crash into two.
+    The App passes the seed, the settings, the counters and the open page. Whatever
+    it returns is best-effort: a context provider that itself raises must not turn a
+    crash into two.
+
+    It runs on WHICHEVER thread recorded the fault - the capture thread, the
+    watchdog, a worker - so it must read plain data only: no GUI toolkit call (Tk
+    waits for its own main loop, which may be the thread waiting on us), and no lock
+    a recording thread may already hold. A fault it records itself is recorded
+    without asking it again.
     """
     global _context_provider
     _context_provider = fn
@@ -132,13 +148,23 @@ def _collect_context():
         "pydivert": _module_version("pydivert"),
         "threads": [t.name for t in threading.enumerate()],
     }
-    if _context_provider is not None:
-        try:
-            extra = _context_provider() or {}
-            if isinstance(extra, dict):
-                base.update(extra)
-        except Exception as exc:            # a broken provider must not mask the crash
-            base["context_provider_failed"] = f"{type(exc).__name__}: {exc}"
+    if _context_provider is None:
+        return base
+    if getattr(_local, "in_provider", False):
+        # The provider recorded a fault of its own. Asking it again would run the
+        # same failing code again, record again, ask again - recursion, and before
+        # the context moved out of the lock, a thread deadlocked on itself.
+        base["context_provider_skipped"] = "re-entered"
+        return base
+    _local.in_provider = True
+    try:
+        extra = _context_provider() or {}
+        if isinstance(extra, dict):
+            base.update(extra)
+    except Exception as exc:            # a broken provider must not mask the crash
+        base["context_provider_failed"] = f"{type(exc).__name__}: {exc}"
+    finally:
+        _local.in_provider = False
     return base
 
 
@@ -215,39 +241,48 @@ def _record(exc, source, subsystem, severity, note):
     with _lock:
         existing = _seen.get(fingerprint)
         if existing is not None:
-            existing["count"] += 1
-            existing["last_seen"] = _now_iso()
-            # Freshest last. The eviction below drops the OTHER end of the table,
-            # and a fault firing right now is the last thing it may drop.
-            _seen.move_to_end(fingerprint)
             # A repeating fault (a crash inside the tick loop fires 1.4x a second)
             # costs one integer from here on - not another disk write.
-            return existing
+            return _count_again(existing, fingerprint)
 
-        entry = {
-            "fingerprint": fingerprint,
-            "first_seen": _now_iso(),
-            "last_seen": _now_iso(),
-            "count": 1,
-            "severity": severity,
-            "source": source,
-            "subsystem": subsystem or _subsystem_of(frames),
-            "type": getattr(exc_type, "__name__", str(exc_type)),
-            "message": str(exc)[:500],
-            "note": note,
-            "traceback": "".join(
-                traceback.format_exception(exc_type, exc, tb))[:8000],
-            "context": _collect_context(),
-        }
+    # Built OUTSIDE the lock, and that is a deadlock fix, not tidiness (reproduced
+    # 2026-09-28, both ways). The context comes from the App's provider: the GUI's
+    # read a Tk variable and, on an invalid form field, recorded that ValueError -
+    # from inside the lock, into the lock, on the same thread. And a Tk call from a
+    # worker waits for the main loop, which could itself be waiting right here.
+    # Either way the lock stayed held, and every later report from every thread -
+    # the watchdog's too - queued behind it for good.
+    entry = {
+        "fingerprint": fingerprint,
+        "first_seen": _now_iso(),
+        "last_seen": _now_iso(),
+        "count": 1,
+        "severity": severity,
+        "source": source,
+        "subsystem": subsystem or _subsystem_of(frames),
+        "type": getattr(exc_type, "__name__", str(exc_type)),
+        "message": str(exc)[:500],
+        "note": note,
+        "traceback": "".join(
+            traceback.format_exception(exc_type, exc, tb))[:8000],
+        "context": _collect_context(),
+    }
+    with _lock:
+        existing = _seen.get(fingerprint)
+        if existing is not None:
+            # Another thread recorded this same NEW fault while this one was
+            # building its context: one record, one more occurrence, no second
+            # disk write. The context built here is simply dropped.
+            return _count_again(existing, fingerprint)
         # The table used to REFUSE a new fingerprint once it was full, and that
         # turned the ceiling into a cliff: a fault arriving late never got a slot,
         # so every one of its occurrences looked new, built a full context and
         # wrote to disk again. MEASURED on this machine (2026-09-03), the same
         # repeating fault: 137 us and zero writes with a slot, 1926 us and a write
-        # PER OCCURRENCE without one - 14x, with the expensive half built inside
-        # the lock every other caller of this module waits on. In other words the
-        # de-duplication this module is built around stopped working exactly when
-        # the program was failing most.
+        # PER OCCURRENCE without one - 14x, and back then the expensive half was
+        # built inside the lock every other caller of this module waits on. In
+        # other words the de-duplication this module is built around stopped
+        # working exactly when the program was failing most.
         #
         # So the table makes room instead of refusing: in a shipped build it is a
         # dedup CACHE and nothing else, since neither read-back helper at the
@@ -264,6 +299,16 @@ def _record(exc, source, subsystem, severity, note):
 
     _write(entry)
     return entry
+
+
+def _count_again(existing, fingerprint):
+    """One more occurrence of a fault already in the table. Caller holds ``_lock``."""
+    existing["count"] += 1
+    existing["last_seen"] = _now_iso()
+    # Freshest last. The eviction in _record drops the OTHER end of the table,
+    # and a fault firing right now is the last thing it may drop.
+    _seen.move_to_end(fingerprint)
+    return existing
 
 
 def _now_iso():
