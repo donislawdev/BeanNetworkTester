@@ -1149,7 +1149,7 @@ class BeanEngine:
         take it, ``_worker_stop`` takes it without blocking.
 
         ``say`` - the lines explaining WHY (a fault, the deadline). They are said
-        here, after every handle the session holds is released, and never by the
+        here, at the very end of the teardown just before "Stop.", and never by the
         caller before the call: the log is the caller's code and can block, and
         MEASURED 2026-09-28 on every stop path, a log said first held the divert
         open for exactly as long as the log blocked. Said even when there is
@@ -1197,8 +1197,6 @@ class BeanEngine:
         if self._socketwatch is not None:
             self._socketwatch.stop()
             self._socketwatch = None
-        # Only now, with nothing of the session left open: see the docstring.
-        self._say(say)
         self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
         with self._cv:
             self._cv.notify_all()
@@ -1251,6 +1249,11 @@ class BeanEngine:
             # balance - they were dropped BY the shutdown, not lost in transit.
             self._bump("drop_shutdown", discarded)
         _LIVE_ENGINES.discard(self)
+        # Only now, with nothing of the session left: see the docstring. Said at the
+        # divert close, a held log kept the rest of the teardown waiting behind it -
+        # the system-wide timer request, the switch interval, the queued packets and
+        # the atexit registration all stayed until the log moved (measured).
+        self._say(say)
         self.log(T("log.stop"))
 
     # How long the capture thread waits on _stop_lock before re-checking WHO holds

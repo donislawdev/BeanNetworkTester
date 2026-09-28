@@ -493,6 +493,20 @@ MUTATIONS = [
         "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
     },
     {
+        # The first version of this fix: said at the divert close, before the rest
+        # of the teardown - a held log kept the timer request, the switch interval
+        # and the atexit entry until it moved.
+        "label": "engine: a stop says why before the rest of its teardown",
+        "file": "beantester/engine.py",
+        "old": "        self.log_event(\"STOP\", self.EVENT_BY_REASON.get(reason, "
+               "\"events.stopped\"))",
+        "new": "        self._say(say)\n"
+               "        say = ()\n"
+               "        self.log_event(\"STOP\", self.EVENT_BY_REASON.get(reason, "
+               "\"events.stopped\"))",
+        "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
+    },
+    {
         # START's failure handler said its fault first, then stopped.
         "label": "engine: a failed start says its fault before stopping",
         "file": "beantester/engine.py",

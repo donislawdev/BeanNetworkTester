@@ -1414,6 +1414,7 @@ def test_a_stop_closes_the_divert_while_the_log_is_still_blocked(path, monkeypat
     """Close first, SAY why afterwards - and still in the order a tester reads.
 
     The divert has to close while the log is still held: that is the whole fix.
+    The rest of the teardown too, so a held log keeps nothing of the session.
     Then, once the log moves again, the reason has to come before "Stop.", the
     order the lines had before (convention: a log that reads backwards cannot tell
     a tester what happened when).
@@ -1428,6 +1429,13 @@ def test_a_stop_closes_the_divert_while_the_log_is_still_blocked(path, monkeypat
               _wait_until(lambda: divert.closed, 3.0),
               f"(running={eng.is_running()}, lines={log.lines})")
         check("and the session is no longer running", eng.is_running() is False)
+        # The rest of the teardown does not wait for the log either: the
+        # system-wide timer request, the switch interval and the atexit entry.
+        check("and nothing of the session is still held while the log is",
+              eng not in set(_LIVE_ENGINES) and not eng._fine_timers
+              and not eng._fast_switch,
+              f"(tracked={eng in set(_LIVE_ENGINES)}, timers={eng._fine_timers}, "
+              f"switch={eng._fast_switch})")
     finally:
         log.thaw.set()
         if hasattr(divert, "release"):
