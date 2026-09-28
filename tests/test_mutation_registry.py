@@ -3381,6 +3381,99 @@ MUTATIONS = [
         "test": "test_the_table_is_reachable_and_readable_without_a_mouse",
     },
     {
+        # External review P1-4: the window holds a partial row and a buffer below
+        # the rows on screen, so a bottom measured in slots hid the last rows.
+        "label": "tables: the bottom is measured in slots again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        return max(0, len(self.items) - self._fits)",
+        "new": "        return max(0, len(self.items) - self.window())",
+        "test": "test_scrolling_moves_the_window_and_stays_in_range",
+    },
+    {
+        "label": "tables: the scrollbar thumb is measured in slots again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        last = min(1.0, (self.offset + self._fits) / total)",
+        "new": "        last = min(1.0, (self.offset + self.window()) / total)",
+        "test": "test_scrolling_moves_the_window_and_stays_in_range",
+    },
+    {
+        # The thumb dragged to the end asks for 1 - fits/total, a float a hair
+        # under the last offset: truncating it stops one row short.
+        "label": "tables: dragging the thumb to the end stops a row short",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self.set_offset(round(float(value) * total))",
+        "new": "            self.set_offset(int(float(value) * total))",
+        "test": "test_scrolling_moves_the_window_and_stays_in_range",
+    },
+    {
+        # P2-18: Tk answers every selection the table writes with a QUEUED
+        # <<TreeviewSelect>>, and rebuilding from it kept only the rows on screen.
+        "label": "tables: the echo of our own selection wipes it again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        if chosen == self._written:",
+        "new": "        if False:",
+        "test": "test_selection_is_by_model_key_and_survives_sorting",
+    },
+    {
+        # Without "break" ttk's class binding runs after ours and `see`s a slot,
+        # which scrolls the widget's own view under the window.
+        "label": "tables: a key lets ttk's own handler run after it",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self._choose(max(0, min(count - 1, target)), extend=extend)\n"
+               "        return \"break\"",
+        "new": "            self._choose(max(0, min(count - 1, target)), extend=extend)\n"
+               "        return None",
+        "test": "test_the_keyboard_moves_a_cursor_through_the_model",
+    },
+    {
+        "label": "tables: PageDown skips the rows past the ones in full",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "                                 \"page_down\": self._fits}[step]",
+        "new": "                                 \"page_down\": self.window()}[step]",
+        "test": "test_the_keyboard_moves_a_cursor_through_the_model",
+    },
+    {
+        "label": "tables: Shift ranges forget their anchor",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        anchor = self._position_of(self._anchor) if self._multi and extend else None",
+        "new": "        anchor = None",
+        "test": "test_shift_selects_a_range_across_pages_and_scrolling_keeps_it",
+    },
+    {
+        "label": "tables: a chosen row is left where it is, half cut off",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        self._cursor = key\n        self._reveal(position)",
+        "new": "        self._cursor = key",
+        "test": "test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view",
+    },
+    {
+        "label": "tables: a click lets ttk's own press run after it",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self._restore_selection()\n        return \"break\"\n\n"
+               "    def _on_extend_press",
+        "new": "            self._restore_selection()\n        return None\n\n"
+               "    def _on_extend_press",
+        "test": "test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view",
+    },
+    {
+        "label": "tables: the rows in full are taken to be every slot",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "    return max(1, round(span * slots))",
+        "new": "    return slots",
+        "test": "test_the_rows_in_full_are_read_off_tks_own_yview",
+    },
+    {
+        # The pixel half of the table tests lives in the render check under Xvfb;
+        # dropping its pass from main would leave every fake-Tk test green.
+        "label": "render: CI stops measuring the table viewport",
+        "file": "tools/ci_gui_render.py",
+        "old": "    rc = subprocess.run(\n"
+               "        [sys.executable, os.path.abspath(__file__), \"--tables\"]).returncode\n"
+               "    ok = (rc == 0) and ok\n",
+        "new": "",
+        "test": "test_the_render_check_measures_the_table_viewport_on_real_tk",
+    },
+    {
         # proc: on another table stops reading the PID: `proc:1234` finds nothing.
         "label": "search: another table's proc: judges the name alone",
         "file": "beantester/views.py",

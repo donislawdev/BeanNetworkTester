@@ -18,9 +18,30 @@ that true - and that a well-meaning "simplification" would quietly undo:
 3. selection, the context menu and Ctrl+C work off MODEL KEYS, because the
    widget's item ids are recycled slots and mean nothing.
 """
-from beantester.gui.widgets.sortable_tree import MAX_WIDTH_FACTOR, fitted_widths
-from fakes import check
+import ast
+import os
+
+from beantester.gui.widgets.sortable_tree import (MAX_WIDTH_FACTOR, fitted_widths,
+                                                  rows_shown_in_full)
+from fakes import ROOT, check
 from gui_harness import run_gui
+
+# The fake Tk has no geometry, so Tk's answer to "how many rows fit" is injected
+# the way a real table receives it: through yview, read at <Configure>. Five slots
+# short of the window is what a real table has - a partial row and the buffer.
+INJECT_FITS = """
+        slots = table.window()
+        fits = slots - 5
+        table.tree._yview = (0.0, fits / slots)
+        table._on_configure()
+        assert table._fits == fits, (table._fits, fits)
+
+        def key(sequence):
+            # The fake records bindings and never fires them, so they are run here.
+            # Every one has to answer "break", or ttk's class binding runs after it.
+            results = [handler(None) for handler in table.tree.bindings[sequence]]
+            assert "break" in results, (sequence, results)
+"""
 
 
 # -- hiding columns must not leave the table half empty ---------------------- #
@@ -187,12 +208,40 @@ def test_a_refresh_renders_only_the_visible_rows():
     """)
 
 
+def test_the_rows_in_full_are_read_off_tks_own_yview():
+    """Tk's fraction of the slots on screen IS the count (external review, P1-4).
+
+    The height divided by the row height counted the header and the border as
+    rows. yview is what ``see`` itself goes by, so it cannot disagree with ttk.
+    """
+    check("17 of 22 slots on screen", rows_shown_in_full((0.0, 17 / 22), 22) == 17,
+          f"({rows_shown_in_full((0.0, 17 / 22), 22)})")
+    check("Tk's own float, as it prints it", rows_shown_in_full(
+        (0.0, 0.7727272727272727), 22) == 17, "")
+    check("the span counts, not where it starts",
+          rows_shown_in_full((1 / 22, 18 / 22), 22) == 17, "")
+    check("every slot fits: all of them are shown in full",
+          rows_shown_in_full((0.0, 1.0), 14) == 14, "")
+    check("a widget shorter than a row still shows one",
+          rows_shown_in_full((0.0, 0.01), 22) == 1, "")
+    check("no slots: nothing to read", rows_shown_in_full((0.0, 0.5), 0) is None, "")
+    check("a dying widget's empty answer: nothing to read",
+          rows_shown_in_full("", 22) is None, "")
+
+
 def test_scrolling_moves_the_window_and_stays_in_range():
+    """The bottom is measured in rows Tk shows IN FULL, not in slots.
+
+    Until 2026-09-29 this test PINNED ``max_offset() == len - window()``. The window
+    holds a partial row and a buffer below the rows on screen, so at the bottom the
+    last rows sat in slots nobody could see: on real Tk the last five of every
+    table, and a table of 20 rows could not scroll at all (external review, P1-4).
+    """
     run_gui("""
         table = app.pages["connections"].table
         table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
                     for i in range(1000)])
-
+    """ + INJECT_FITS + """
         assert table.offset == 0
         table.scroll_by(50)
         assert table.offset == 50
@@ -200,8 +249,32 @@ def test_scrolling_moves_the_window_and_stays_in_range():
         assert table.offset == 0, "must not scroll above the first row"
         table.set_offset(10 ** 9)
         assert table.offset == table.max_offset(), "must not scroll past the last row"
-        assert table.max_offset() == 1000 - table.window()
+        assert table.max_offset() == 1000 - fits, (table.max_offset(), fits)
 
+        # the scrollbar: the thumb spans the rows in full and ends at the end
+        spans = []
+        table.vsb.set = lambda first, last: spans.append((first, last))
+        table.repaint()
+        assert spans[-1] == ((1000 - fits) / 1000, 1.0), spans[-1]
+        table._on_scrollbar("moveto", "0.0")
+        assert spans[-1] == (0.0, fits / 1000), spans[-1]
+        table._on_scrollbar("scroll", "1", "pages")
+        assert table.offset == fits, "a page is the rows shown in full"
+        # The thumb at the end stands on (total - fits) / total, and for about one
+        # model size in a hundred that float lands a hair under the last offset.
+        # A size where it does is picked, so truncating would stop one row short.
+        total = next(t for t in range(fits + 1, 5000)
+                     if int(((t - fits) / t) * t) != t - fits)
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(total)])
+        table._on_scrollbar("moveto", repr((total - fits) / total))
+        assert table.offset == total - fits, ("the end of the thumb is the end",
+                                              total, table.offset)
+
+        # a model a few rows longer than the view scrolls exactly that far
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", "")) for i in range(20)])
+        table.set_offset(10 ** 9)
+        assert table.offset == 20 - fits, (table.offset, fits)
         # a model that fits entirely in the viewport cannot scroll at all
         table.sync([("only", ("1", "", "", "", "", "", "", "", ""))])
         assert table.max_offset() == 0
@@ -210,7 +283,14 @@ def test_scrolling_moves_the_window_and_stays_in_range():
 
 
 def test_selection_is_by_model_key_and_survives_sorting():
-    """Item ids are recycled slots: a selection stored as an item id is a bug."""
+    """Item ids are recycled slots: a selection stored as an item id is a bug.
+
+    Until 2026-09-29 the scroll step below was green only because the fake never
+    fires <<TreeviewSelect>>. Real Tk answers every selection the table writes with
+    a QUEUED one, and the table rebuilt its selection from it - from the rows on
+    screen, which after the scroll were none (external review, P2-18). The echo is
+    now delivered by hand, as Tk delivers it.
+    """
     run_gui("""
         table = app.pages["connections"].table
         rows = [(f"k{i}", (f"p{i}", "TCP", "1.2.3.4", "443",
@@ -228,14 +308,140 @@ def test_selection_is_by_model_key_and_survives_sorting():
         assert table.selected_keys() == ["k7"], "selection lost when the order changed"
         assert table.selection_values()[0] == "p7"
 
-        # scrolling the selected row out of view does not deselect it
+        # scrolling the selected row out of view does not deselect it - not even
+        # once Tk's queued echo of that write arrives, naming no row at all
         table.set_offset(400)
-        assert table.selected_keys() == ["k7"]
+        table._on_select()
+        assert table.selected_keys() == ["k7"], table.selected_keys()
+        assert table.copy_text(), "Ctrl+C still has the row to copy"
 
         # a row that leaves the model does leave the selection
         table.sync(rows[:5])
         assert table.selected_keys() == []
     """)
+
+
+def test_the_keyboard_moves_a_cursor_through_the_model():
+    """Up/Down, PageUp/PageDown and Home/End choose rows by MODEL position.
+
+    ttk's own handlers chose a SLOT and ``see``-d it, which scrolled the widget's
+    own view under the window: after 40 presses of Down, rows 0-4 could not be
+    scrolled back to (external review, P2-18). Home and End did nothing at all.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(100)])
+    """ + INJECT_FITS + """
+        key("<Down>")                   # nothing chosen yet: the top row on screen
+        assert table.selected_keys() == ["k0"], table.selected_keys()
+        for _ in range(fits):
+            key("<Down>")
+        assert table.selected_keys() == [f"k{fits}"], table.selected_keys()
+        assert table.offset == 1, ("one row past the bottom moves the window one", table.offset)
+        key("<Next>")
+        assert table.selected_keys() == [f"k{2 * fits}"], "a page is the rows in full"
+        key("<End>")
+        assert table.selected_keys() == ["k99"] and table.offset == 100 - fits
+        key("<Home>")
+        assert table.selected_keys() == ["k0"] and table.offset == 0
+        key("<Up>")
+        assert table.selected_keys() == ["k0"], "Up on the first row stays on it"
+        key("<Left>")                   # swallowed: ttk's Right re-selects its slot
+        key("<Right>")
+        assert table.selected_keys() == ["k0"]
+    """)
+
+
+def test_shift_selects_a_range_across_pages_and_scrolling_keeps_it():
+    """A range is built from model positions, so it can run past a page.
+
+    Shift+click used to measure from ttk's focus item, which is a slot: after a
+    scroll the range started at whatever row that slot held by then.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(100)])
+    """ + INJECT_FITS + """
+        key("<Home>")
+        for _ in range(30):
+            key("<Shift-Down>")
+        assert table.selected_keys() == [f"k{i}" for i in range(31)], table.selected_keys()
+        table.set_offset(60)            # the whole range leaves the window
+        table._on_select()              # and Tk's queued echo of that write arrives
+        assert len(table.selected_keys()) == 31, len(table.selected_keys())
+        assert len(table.copy_text().splitlines()) == 31, "Ctrl+C copies all of it"
+        key("<Shift-Up>")
+        assert table.selected_keys() == [f"k{i}" for i in range(30)]
+        assert table.offset <= 29 < table.offset + fits, "the cursor is brought back"
+    """)
+
+
+def test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view():
+    """The row half cut off at the bottom is the one ttk's press used to ``see``.
+
+    That scrolled ttk's own view by a row (measured on Tk 9.0.4: yview 0 -> 0.045).
+    Now the click is answered by model position and the WINDOW scrolls, so the row
+    ends up in full; a heading or a separator is still ttk's, for sorting and
+    resizing.
+    """
+    run_gui("""
+        import types
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(100)])
+    """ + INJECT_FITS + """
+        table.tree.identify_region = lambda x, y: "cell"
+
+        def click(slot, sequence="<Button-1>"):
+            table.tree.row_at = table._slots[slot]
+            event = types.SimpleNamespace(x=10, y=5)
+            return [handler(event) for handler in table.tree.bindings[sequence]]
+
+        assert "break" in click(fits), "ttk's own press must not run after it"
+        assert table.selected_keys() == [f"k{fits}"], table.selected_keys()
+        assert table.offset == 1, ("the half row is scrolled into full view", table.offset)
+        click(0, "<Shift-Button-1>")    # slot 0 holds k1 now
+        assert table.selected_keys() == [f"k{i}" for i in range(1, fits + 1)]
+        click(2, "<Control-Button-1>")  # k3 out of the range, the rest kept
+        assert "k3" not in table.selected_keys()
+        assert len(table.selected_keys()) == fits - 1, table.selected_keys()
+
+        table.tree.identify_region = lambda x, y: "heading"
+        assert "break" not in click(0), "a heading click is ttk's: it sorts"
+
+        table.tree.identify_region = lambda x, y: "cell"
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", "")) for i in range(3)])
+        click(5)                        # a blank slot below the three rows
+        assert table.selected_keys() == [], table.selected_keys()
+    """)
+
+
+def test_the_render_check_measures_the_table_viewport_on_real_tk():
+    """The pixel half of the tests above runs in CI, not here.
+
+    Which rows Tk draws in full and whether ttk's own view moved are pixel facts
+    the fake cannot show, so ``tools/ci_gui_render.py --tables`` measures them on
+    real Tk under Xvfb. This pins that CI still runs it: ``main`` sends
+    ``--tables`` to ``check_table_viewport`` and runs that pass on its own. Losing
+    the step would leave every test here green.
+    """
+    path = os.path.join(ROOT, "tools", "ci_gui_render.py")
+    with open(path, encoding="utf-8") as handle:
+        module = ast.parse(handle.read())
+    main = next(node for node in ast.walk(module)
+                if isinstance(node, ast.FunctionDef) and node.name == "main")
+    calls = [node for node in ast.walk(main) if isinstance(node, ast.Call)]
+    named = {call.func.id for call in calls if isinstance(call.func, ast.Name)}
+    check("--tables reaches check_table_viewport", "check_table_viewport" in named,
+          f"({sorted(named)})")
+    runs = [call for call in calls
+            if isinstance(call.func, ast.Attribute) and call.func.attr == "run"
+            and any(isinstance(leaf, ast.Constant) and leaf.value == "--tables"
+                    for arg in call.args for leaf in ast.walk(arg))]
+    check("main runs the table pass as a process of its own", len(runs) == 1,
+          f"({len(runs)} subprocess run(s) with --tables)")
 
 
 def test_clicking_a_blank_slot_selects_nothing():

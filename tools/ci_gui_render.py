@@ -19,9 +19,14 @@ and a box has a width that sails through any clipping test. Linux runners carry
 no CJK font unless one is installed, so a Chinese pass here would otherwise be a
 green nobody earned.
 
+It also measures the virtual table on its own (``--tables``): every row reachable,
+the widget's own view never moved, a selection kept across a scroll - pixel facts
+the fake Tk of the test suite cannot show.
+
 Usage:
-    python tools/ci_gui_render.py            # all discovered languages
+    python tools/ci_gui_render.py            # all discovered languages, then tables
     python tools/ci_gui_render.py --lang pl  # one language
+    python tools/ci_gui_render.py --tables   # the table viewport only
 
 Needs a display. In CI:
     xvfb-run -a --server-args="-screen 0 1366x768x24" python tools/ci_gui_render.py
@@ -64,7 +69,9 @@ _profiles.ProfileStore.__init__.__defaults__ = (os.path.join(_TMP, "profiles.jso
 
 import bean_network_tester as n                      # noqa: E402
 from beantester import winenv                        # noqa: E402
+from beantester.gui import scaling, theme            # noqa: E402
 from beantester.gui.pages import PAGES               # noqa: E402
+from beantester.gui.widgets.sortable_tree import SortableTree  # noqa: E402
 from beantester.gui.windows import WINDOWS           # noqa: E402
 
 GEOMETRY = "1366x768"
@@ -397,6 +404,178 @@ def check_language(code):
     return ok
 
 
+# -- the virtual table, on real Tk --------------------------------------------- #
+# What a table promises is a pixel fact - which rows Tk draws IN FULL, and whether
+# the widget's own view moved under the window - and the fake Tk the suite runs on
+# has no pixels. So it is measured here, on a bare SortableTree in the real theme.
+# The suite pins the arithmetic and the wiring; this pins that the number the
+# table works with is the one Tk draws (external review, P1-4 and P2-18).
+# Run against the bug before it was trusted (2026-09-29): with `max_offset` put
+# back on `len - window()` it reports the last rows out of sight, and with the
+# echo guard in `_on_select` removed it reports the selection lost.
+
+def _boxes(table):
+    """``(key, box)`` for every slot Tk draws at all, and the rows' bottom edge.
+
+    The edge is read off whichever slot has a box: when ttk's own view has moved
+    - the very fault measured here - the first slot has none.
+    """
+    tree = table.tree
+    tree.update()
+    boxes = [(key, tree.bbox(iid)) for iid, key in zip(table._slots, table._slot_keys)]
+    boxes = [(key, box) for key, box in boxes if box]
+    if not boxes:
+        return [], 0
+    # the bottom border is as wide as the side one, where the first column starts
+    return boxes, tree.winfo_height() - boxes[0][1][0]
+
+
+def _drawn_in_full(table):
+    """Model keys of the rows Tk draws IN FULL, top to bottom."""
+    boxes, bottom = _boxes(table)
+    return [key for key, box in boxes if key is not None and box[1] + box[3] <= bottom]
+
+
+def _half_row(table):
+    """``(key, y)`` of a row Tk shows only in part at the bottom, or None."""
+    boxes, bottom = _boxes(table)
+    for key, box in boxes:
+        if key is not None and box[1] + 3 < bottom < box[1] + box[3]:
+            return key, box[1] + 2
+    return None
+
+
+def _press(table, sequence, times=1):
+    """Generated keys go to the window that HAS the keyboard focus, or nowhere.
+
+    Measured 2026-09-29 on a desktop: a window that lost the focus mid-check
+    dropped every key after it and the check blamed the table ("Down to row 63
+    hides it"). So focus is asked for again when it is gone, and a focus that
+    cannot be had is reported as what it is - the keys were not measured.
+    """
+    tree = table.tree
+    for _ in range(times):
+        if tree.focus_get() is not tree:
+            tree.focus_force()
+            tree.update()
+            if tree.focus_get() is not tree:
+                raise RuntimeError(f"the table lost the keyboard focus to "
+                                   f"{tree.focus_get()}, so {sequence} was not measured")
+        tree.event_generate(sequence)
+    tree.update()
+
+
+def _own_view_moved(table):
+    return table.tree.yview()[0] > 0
+
+
+def _table_problems(table, rows):
+    """What is wrong with a table of ``rows`` rows at its current size."""
+    tree = table.tree
+    keys = [f"k{i}" for i in range(rows)]
+    table.sync([(key, (key, str(i))) for i, key in enumerate(keys)])
+    table.set_offset(0)
+    tree.update()
+    where = f"{rows} rows, {table._fits} in full"
+    problems = []
+    table._on_scrollbar("moveto", "1.0")
+    if keys[-1] not in _drawn_in_full(table):
+        problems.append(f"{where}: the scrollbar's end leaves the last row out of sight")
+    _press(table, "<Home>")
+    _press(table, "<End>")
+    if keys[-1] not in _drawn_in_full(table) or table.selected_keys() != keys[-1:]:
+        problems.append(f"{where}: End does not show and select the last row")
+    _press(table, "<Home>")
+    for i in range(1, rows):
+        _press(table, "<Down>")
+        if keys[i] not in _drawn_in_full(table) or _own_view_moved(table):
+            problems.append(f"{where}: Down to row {i} hides it or moves ttk's own view")
+            break
+    _press(table, "<Home>")
+    seen = set(_drawn_in_full(table))
+    for _ in range(rows):
+        if table._cursor == keys[-1]:
+            break
+        _press(table, "<Next>")
+        seen.update(_drawn_in_full(table))
+    if seen != set(keys):
+        problems.append(f"{where}: PageDown never shows {len(set(keys) - seen)} row(s)")
+    table.set_offset(0)
+    tree.update()
+    half = _half_row(table)
+    if half is not None:
+        tree.event_generate("<Button-1>", x=10, y=half[1])
+        tree.event_generate("<ButtonRelease-1>", x=10, y=half[1])
+        tree.update()
+        if (table.selected_keys() != [half[0]] or half[0] not in _drawn_in_full(table)
+                or _own_view_moved(table)):
+            problems.append(f"{where}: a click on the half row does not select it in "
+                            f"full, or moves ttk's own view")
+    table.select_keys(keys[:1])
+    table._on_scrollbar("moveto", "1.0")
+    tree.update()                             # the queued <<TreeviewSelect>> lands here
+    table._on_scrollbar("moveto", "0.0")
+    tree.update()
+    if table.selected_keys() != keys[:1] or not table.copy_text():
+        problems.append(f"{where}: a selected row scrolled away and back is not selected")
+    span = min(rows - 1, table._fits + 3)
+    _press(table, "<Home>")
+    _press(table, "<Shift-Down>", span)
+    if table.selected_keys() != keys[:span + 1]:
+        problems.append(f"{where}: Shift+Down across a page selected "
+                        f"{len(table.selected_keys())} of {span + 1} rows")
+    return problems
+
+
+def check_table_viewport():
+    """Every row of a table reachable, and the selection kept, on real Tk."""
+    root = tk.Tk()
+    scaling.init_scaling(root)
+    theme.init_style(root)
+    root.geometry("700x700")
+    frame = ttk.Frame(root, width=600, height=400)
+    frame.pack_propagate(False)
+    frame.pack(anchor="nw")
+    table = SortableTree(frame, {"a": "conns.remote_ip", "b": "conns.proto"})
+    table.sync([(f"k{i}", (str(i), "")) for i in range(300)])
+    root.update()
+    table.tree.focus_force()
+    root.update()
+    problems = []
+    head = table.tree.bbox(table._slots[0])
+    if root.focus_get() is not table.tree:
+        problems.append("the table never got the keyboard focus, so no key was measured")
+    elif not head:
+        problems.append("Tk gave the first row no box, so nothing here was measured")
+    else:
+        # Three sizes: a half row showing at the bottom (the row a click used to
+        # scroll ttk's own view by), and one where the rows fit exactly.
+        for in_full, extra in ((4, head[3] // 2), (10, 0), (17, head[3] // 2)):
+            frame.configure(height=head[1] + head[0] + in_full * head[3] + extra)
+            table.sync([(f"k{i}", (str(i), "")) for i in range(300)])
+            table.set_offset(0)
+            root.update()
+            drawn = len(_drawn_in_full(table))
+            if table._fits != drawn:
+                problems.append(f"the table counts {table._fits} rows in full where "
+                                f"Tk draws {drawn}")
+            for rows in sorted({3, table._fits, table._fits + 1, 20, 200}):
+                try:
+                    problems += _table_problems(table, rows)
+                except Exception as exc:         # noqa: BLE001 - a crash is a finding
+                    problems.append(f"{rows} rows: the check itself failed on what "
+                                    f"it found: {type(exc).__name__}: {exc}")
+    for problem in problems:
+        print(f"  [tables] {problem}")
+    print(f"  [tables] {'OK' if not problems else f'{len(problems)} problem(s)'}")
+    _cancel_afters(root)
+    try:
+        root.destroy()
+    except tk.TclError:
+        pass
+    return not problems
+
+
 def main(argv):
     # Before ANY Tk root, in the parent and in every per-language child alike: the
     # setting is per process, and a process that skips it is told 96 DPI by
@@ -408,6 +587,8 @@ def main(argv):
     # the check has to measure the same window. Off Windows it is a no-op, so the
     # Linux runner's numbers are unchanged.
     dpi_mode = winenv.set_dpi_awareness()
+    if "--tables" in argv:
+        return 0 if check_table_viewport() else 1
     if "--lang" in argv:
         i = argv.index("--lang")
         code = argv[i + 1] if i + 1 < len(argv) else "en"
@@ -430,6 +611,11 @@ def main(argv):
             [sys.executable, os.path.abspath(__file__), "--lang", code]
         ).returncode
         ok = (rc == 0) and ok
+    # The table viewport once, in a process of its own: it is not a language
+    # question, and a table left broken here must not hide behind a green text pass.
+    rc = subprocess.run(
+        [sys.executable, os.path.abspath(__file__), "--tables"]).returncode
+    ok = (rc == 0) and ok
     print(f"GUI render: {'OK' if ok else 'FAIL'}")
     return 0 if ok else 1
 
