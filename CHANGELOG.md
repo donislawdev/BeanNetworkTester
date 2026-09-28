@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **100% loss with "Losses in a row" set now loses every packet.** A run length used to
+  let 11 to 33% of packets through, including during the full outage in the
+  `mobile-lte-to-3g` scenario, and the log and the summary described runs of loss that
+  did not exist. A saved "Reproduce:" command with this combination now repeats a run
+  that loses every packet.
+
+- **With Asymmetry on, the upload's runs of loss are described too.** The log now says
+  when the upload loss cannot reach the number you set in runs that short, and how far
+  apart its runs will be, and the summary shows the upload's run length. Before, only
+  the download was described.
+
 - **Patterns with a repeat inside a repeat are refused as too slow.** Patterns such as
   `re:^(\w+)+$` used to pass the speed check, then took seconds on a single name or
   address and could stall the network. They are now refused when you type them. A

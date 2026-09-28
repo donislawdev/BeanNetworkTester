@@ -5,6 +5,30 @@ from .settings import DEFAULT_SETTINGS, parse_schedule, setting_expression
 from .utils import number_string, to_number
 
 
+def _plain_parts(g, tr, num, pairs):
+    """One phrase per ``(key, phrase)`` pair whose value is not zero."""
+    return [tr(phrase, v=num(key)) for key, phrase in pairs if to_number(g(key))]
+
+
+def _loss_parts(g, tr, num, key):
+    """The upload's loss, with its run length right after it.
+
+    The same question ``settings_summary`` asks inline for the download (it says
+    there why it is not shared): the run length is one field, but whether it
+    SHAPES a direction depends on that direction's loss. It is asked of the
+    function that decides it rather than compared against a threshold here, so
+    the strip cannot claim runs the engine is not producing - at 100% loss, for
+    one, there are none.
+    """
+    if not to_number(g(key)):
+        return []
+    parts = [tr("summary.loss", v=num(key))]
+    if burst_loss_params(to_number(g(key)) / 100.0,
+                         to_number(g("loss_burst"))) is not None:
+        parts.append(tr("summary.loss_burst", v=num("loss_burst")))
+    return parts
+
+
 def _upload_parts(g, tr, num):
     """The upload half of the description, or nothing when the link is symmetric.
 
@@ -15,17 +39,18 @@ def _upload_parts(g, tr, num):
     An asymmetric run with every upload value at zero still says so. Silence
     there would be the misleading answer: the reader would take the numbers above
     to apply in both directions, which is exactly what they no longer do.
+
+    In the download half's order, run length included: until the external review
+    (P3-4) the upload loss was said without it, so an upload losing in runs read
+    exactly like one losing evenly.
     """
     if not g("asym"):
         return []
-    inner = []
-    for key, phrase in (("latency_up", "summary.latency"),
-                        ("jitter_up", "summary.jitter"),
-                        ("loss_up", "summary.loss"),
-                        ("corrupt_up", "summary.corrupt"),
-                        ("dup_up", "summary.dup")):
-        if to_number(g(key)):
-            inner.append(tr(phrase, v=num(key)))
+    inner = (_plain_parts(g, tr, num, (("latency_up", "summary.latency"),
+                                       ("jitter_up", "summary.jitter")))
+             + _loss_parts(g, tr, num, "loss_up")
+             + _plain_parts(g, tr, num, (("corrupt_up", "summary.corrupt"),
+                                         ("dup_up", "summary.dup"))))
     if to_number(g("spike_prob_up")) and to_number(g("spike_ms_up")):
         inner.append(tr("summary.spikes", ms=num("spike_ms_up"),
                         p=num("spike_prob_up")))
@@ -57,6 +82,11 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         # Same loss figure, very different link: the run length is asked of the
         # function that DECIDES it rather than compared against a threshold here,
         # so the strip cannot claim runs the engine is not producing.
+        # 🔴 Inline, not _loss_parts, and that is about the complexity ratchet, not
+        # taste: this function IS `max-complexity` in pyproject.toml. Moving these
+        # two branches out lowers the ceiling onto `decide` - which leaves the
+        # "add an impairment" recipe no room - and doubles COMPLEX_NEAR_CEILING
+        # (measured 2026-09-29: 4 -> 8). Both are the owner's call, not a tidy-up's.
         if burst_loss_params(to_number(g("loss")) / 100.0,
                              to_number(g("loss_burst"))) is not None:
             parts.append(tr("summary.loss_burst", v=num("loss_burst")))

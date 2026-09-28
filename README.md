@@ -384,7 +384,8 @@ Two limits worth knowing, and the log states both when you apply the settings. A
 cannot arrive in very short runs, because runs that short leave too little room between them, so
 the run says what it will really deliver. And a long run length puts the runs far apart, so a short
 session may not see one at all. Each direction gets its own runs, so a run of twenty means twenty
-in a row in that direction.
+in a row in that direction, and with Asymmetry on the log states both limits for the upload too.
+At 100% loss every packet is lost, so the run length changes nothing.
 
 **Link flapping** - cyclic total loss of traffic: every *Period* seconds the link is dead for the
 given percentage of the time. Simulates a flickering connection. This is **not** the same as losses
@@ -1029,7 +1030,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `packets_seen` | packets captured |
 | `packets_in_scope` | of those, the ones targeting selected for impairment |
 | `dropped_loss` | dropped by the Loss setting |
-| `loss_runs` | how many RUNS that loss arrived in (see "Losses in a row"). 0 with a run length set means the session was too short to see one |
+| `loss_runs` | how many RUNS that loss arrived in (see "Losses in a row"). 0 with a run length set means the session was too short to see one, or the loss is 100% and there are no separate runs |
 | `dropped_overflow` | dropped because the tool's own queue was full (see the note on it below) |
 | `corrupted` | packets whose payload was flipped |
 | `duplicated` | extra copies queued |
