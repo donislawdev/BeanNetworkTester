@@ -1914,9 +1914,48 @@ MUTATIONS = [
         # out to make room for faults seen once each.
         "label": "crashlog: the crash table evicts by arrival instead of by recency",
         "file": "beantester/crashlog.py",
-        "old": "            _seen.move_to_end(fingerprint)",
-        "new": "            pass",
+        "old": "    _seen.move_to_end(fingerprint)",
+        "new": "    pass",
         "test": "test_the_table_makes_room_by_dropping_the_coldest_fault_not_the_busiest",
+    },
+    {
+        # The provider recorded its own fault and was asked again from inside
+        # itself: the same failing code, another record, another ask.
+        "label": "crashlog: a provider's own fault asks the provider again",
+        "file": "beantester/crashlog.py",
+        "old": '    if getattr(_local, "in_provider", False):',
+        "new": "    if False:",
+        "test": "test_a_provider_that_records_a_fault_of_its_own_does_not_wedge_the_logger",
+    },
+    {
+        # The shipped deadlock: the App's provider runs while the logger's only
+        # lock is held, so a slow or re-entering provider wedges every thread.
+        "label": "crashlog: the context provider runs under the lock again",
+        "file": "beantester/crashlog.py",
+        "old": "        extra = _context_provider() or {}",
+        "new": "        with _lock:\n"
+               "            extra = _context_provider() or {}",
+        "test": "test_two_threads_can_build_their_context_at_the_same_time",
+    },
+    {
+        # Two threads built a context for the same NEW fault; without the second
+        # look the loser overwrites the record and writes it to disk again.
+        "label": "crashlog: a fault recorded twice at once is written twice",
+        "file": "beantester/crashlog.py",
+        "old": "disk write. The context built here is simply dropped.\n"
+               "            return _count_again(existing, fingerprint)",
+        "new": "disk write. The context built here is simply dropped.\n"
+               "            pass",
+        "test": "test_the_same_new_fault_from_two_threads_at_once_is_one_record",
+    },
+    {
+        # Back to reading the Tk variables on whichever thread failed: a Tcl call
+        # from a worker waits for a main loop that may be waiting on the logger.
+        "label": "crash: the GUI's crash report reads the form through Tk again",
+        "file": "beantester/gui/crash.py",
+        "old": "    raw = _FORMS.get(app)",
+        "new": "    raw = app._raw_settings()",
+        "test": "test_a_gui_crash_report_never_reads_tk_off_the_main_thread",
     },
     {
         # One byte of the recorded driver hash. The version resource still reads

@@ -128,6 +128,142 @@ def test_a_context_provider_that_raises_cannot_turn_one_crash_into_two(isolated)
     assert entry is not None, "a broken context provider must not lose the crash"
 
 
+# -- 3b) the lock is never held while the App's code runs -------------------- #
+# The context provider is the App's code, and it used to run INSIDE the logger's
+# only lock. Two deadlocks followed from that, both reproduced on 2026-09-28: the
+# GUI's provider recorded an invalid form field into the lock its caller held, and
+# its Tk read from a worker waited for a main loop that was waiting on the lock.
+# Every test here swaps in a private lock first, so a regression wedges that lock
+# and fails the test instead of hanging every test after it.
+def _fault(kind, message):
+    """A real exception of ``kind``; the type alone gives it its own fingerprint."""
+    try:
+        raise kind(message)
+    except kind as exc:
+        return exc
+
+
+def _record_on_a_thread(exc, box, key):
+    thread = threading.Thread(
+        target=lambda: box.update({key: crashlog.record(exc, source="test")}),
+        daemon=True)
+    thread.start()
+    return thread
+
+
+def test_a_provider_that_records_a_fault_of_its_own_does_not_wedge_the_logger(
+        isolated, monkeypatch):
+    """What the GUI's provider did on an invalid field: ValueError -> note()."""
+    monkeypatch.setattr(crashlog, "_lock", threading.Lock())
+
+    def provider():
+        crashlog.note(_fault(ValueError, "the provider's own fault"), "provider")
+        return {"seed": 7}
+
+    crashlog.set_context_provider(provider)
+    box = {}
+    worker = _record_on_a_thread(_fault(KeyError, "the real crash"), box, "entry")
+    worker.join(5.0)
+    assert not worker.is_alive(), "recording a fault deadlocked on the logger's own lock"
+    assert box["entry"]["context"]["seed"] == 7, "the real crash lost its context"
+    # The provider's own fault is recorded too - once, and WITHOUT asking the
+    # provider again: that would run the same failing code, record, ask again.
+    inner = [e for e in _entries(isolated) if e["message"] == "the provider's own fault"]
+    assert len(inner) == 1, inner
+    assert inner[0]["context"].get("context_provider_skipped") == "re-entered", inner[0]
+    assert inner[0]["count"] == 1, "the provider was asked again from inside itself"
+
+
+def test_two_threads_can_build_their_context_at_the_same_time(isolated, monkeypatch):
+    """The context is built OUTSIDE the lock, so a slow provider stalls only its caller.
+
+    Both threads must be inside the provider at once to pass the barrier. With the
+    context built under the lock the second thread waits for the first, the
+    barrier times out, and the provider reports it.
+    """
+    monkeypatch.setattr(crashlog, "_lock", threading.Lock())
+    barrier = threading.Barrier(2, timeout=5.0)
+    met = []
+
+    def provider():
+        try:
+            barrier.wait()
+            met.append(True)
+        except threading.BrokenBarrierError:
+            met.append(False)
+        return {}
+
+    crashlog.set_context_provider(provider)
+    box = {}
+    threads = [_record_on_a_thread(_fault(KeyError, "one"), box, "one"),
+               _record_on_a_thread(_fault(IndexError, "two"), box, "two")]
+    for thread in threads:
+        thread.join(10.0)
+    assert not any(t.is_alive() for t in threads), "a thread never got out of the logger"
+    assert met == [True, True], "one thread built its context while holding the lock"
+
+
+def test_the_same_new_fault_from_two_threads_at_once_is_one_record(isolated, monkeypatch):
+    """Both threads saw the fault as NEW, both built a context - the second merges."""
+    monkeypatch.setattr(crashlog, "_lock", threading.Lock())
+    barrier = threading.Barrier(2, timeout=5.0)
+    crashlog.set_context_provider(lambda: barrier.wait() and {})
+    box = {}
+    threads = [_record_on_a_thread(_fault(KeyError, "same"), box, key)
+               for key in ("a", "b")]
+    for thread in threads:
+        thread.join(10.0)
+    assert not any(t.is_alive() for t in threads)
+    written = _entries(isolated)
+    assert len(written) == 1, f"{len(written)} disk records for one fault"
+    assert box["a"] is box["b"] and box["a"]["count"] == 2, box
+
+
+def test_a_gui_crash_report_never_reads_tk_off_the_main_thread(isolated):
+    """The wiring: a worker's report on the real App, with an invalid field.
+
+    The main thread copies the form on its tick; a report written on a worker reads
+    that copy. Before, the worker read the Tk variables itself - and with an invalid
+    field it then deadlocked on the logger (the report's P0-1, reproduced).
+    """
+    from gui_harness import run_gui
+
+    out = run_gui("""
+        import threading
+        from beantester import crashlog
+
+        app.vars["loss"].set("abc")          # what a user mid-typing leaves in the box
+        on_main = []
+        real = app._raw_settings
+
+        def spy(*args, **kwargs):
+            on_main.append(threading.current_thread() is threading.main_thread())
+            return real(*args, **kwargs)
+
+        app._raw_settings = spy
+        app._tick()                          # the main thread copies the form
+        box = {}
+
+        def work():
+            try:
+                raise RuntimeError("probe fault from a worker")
+            except RuntimeError as exc:
+                box["entry"] = crashlog.record(exc, source="probe")
+
+        worker = threading.Thread(target=work, daemon=True)
+        worker.start()
+        worker.join(10.0)
+        assert not worker.is_alive(), "a worker's crash report deadlocked"
+        context = box["entry"]["context"]
+        assert on_main and all(on_main), f"the form was read off the main thread: {on_main}"
+        assert "Loss" in context["settings_error"], context
+        assert context["form"]["loss"] == "abc", context
+        assert "repro_command" not in context, context
+        print("CONTEXT_OK")
+    """, lang="en", allow_faults=("probe fault from a worker",))
+    assert "CONTEXT_OK" in out, out
+
+
 # -- 4) it catches what nothing else does ------------------------------------ #
 def test_a_worker_thread_exception_is_recorded(isolated):
     """Previously recorded NOWHERE: threads print to a stderr a windowed build
