@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Patterns with a repeat inside a repeat are refused as too slow.** Patterns such as
+  `re:^(\w+)+$` used to pass the speed check, then took seconds on a single name or
+  address and could stall the network. They are now refused when you type them. A
+  pattern that cannot be built at all, such as `re:a{99999999999}`, is reported as an
+  invalid expression, and the command line exits with the configuration error code.
+
+- **An expression that cannot be read no longer switches its field off during a
+  session.** When a destination, block or target expression could not be read as
+  settings were applied, the field was switched off, and a destination or target
+  switched off meant all traffic was impaired. The field now keeps its previous value,
+  and the log says so.
+
 - **Editing "Target process" during a session changes nothing until you click "Apply
   changes".** The field used to reach the running session on its own. Clearing it to type
   a new name, or stopping halfway through an expression such as `re:^fire(`, switched

@@ -435,13 +435,13 @@ def test_add_term_keeps_the_comma_escape_of_a_regex():
 
 
 def test_a_pattern_that_cannot_finish_is_refused_at_parse_time():
-    """The two shapes that really explode in CPython, on the kinds that can see them.
+    """The two shapes that explode even on the runs the ladder feeds them.
 
-    🔴 NOT `^(a+)+$`. The textbook ReDoS example is 0.001 ms at every input length
-    here, because CPython optimises it away, so a guard written with it would pass
-    while proving nothing. Measured 2026-09-02, milliseconds at 8 / 12 / 16 / 20 /
-    24 characters: `^([1:]+)+x$` is 0.016 / 0.132 / 2.076 / 37.4 / 684, and
-    `^((a*)*)*b$` is 7.6 / 1254.
+    Measured 2026-09-02, milliseconds at 8 / 12 / 16 / 20 / 24 characters:
+    `^([1:]+)+x$` is 0.016 / 0.132 / 2.076 / 37.4 / 684, and `^((a*)*)*b$` is
+    7.6 / 1254. This docstring used to add "NOT `^(a+)+$`, CPython optimises it
+    away" - true only on a run it matches. With a character after the run it
+    explodes too; see the next test.
     """
     for text, kind, field in ((r"re:^([1:]+)+x$", KIND_IP, "fields.ip"),
                               (r"re:^((a*)*)*b$", KIND_PROCESS, "fields.target")):
@@ -449,8 +449,8 @@ def test_a_pattern_that_cannot_finish_is_refused_at_parse_time():
             parse_matcher(text, kind, field)
         # A ValueError like every other parse error, because every caller already
         # handles that one: the CLI turns it into exit code CONFIG, the form marks
-        # the field red, `apply_settings` logs it and disables the target rather
-        # than killing a scenario thread.
+        # the field red, `apply_settings` logs it and leaves the field as it was
+        # rather than killing a scenario thread.
         check(f"{text}: says it is too SLOW, not that it is malformed",
               "too slow" in str(caught.value).lower()
               or "za wolne" in str(caught.value).lower(),
@@ -462,10 +462,17 @@ def test_the_patterns_a_person_would_actually_write_are_still_accepted():
 
     Every one of these is heavier than average and none of them backtracks.
     Measured 2026-09-02, worst SINGLE search over the whole probe ladder: 0.0046 ms
-    for the alternation, 0.0036 ms for the character class, 0.0049 ms for the
-    nested groups. The budget is 5 ms, so the gap between "fine" and "not fine" is
-    three orders of magnitude - which is why a wall clock is a fair judge here and
-    why this does not flake on a loaded runner.
+    for the alternation, 0.0036 ms for the character class. The budget is 5 ms, so
+    the gap between "fine" and "not fine" is three orders of magnitude - which is
+    why a wall clock is a fair judge here and why this does not flake on a loaded
+    runner. Re-measured 2026-09-28 with the probe tail: the WHOLE ladder costs
+    these 0.021-0.044 ms.
+
+    🔴 `^((a|b|c)+(d|e)*)+$` stood on this list as "nested groups, fine" and was
+    the proof of the ladder's blind spot, not of its accuracy: a repeat inside a
+    repeat over the same letters, harmless only on runs it matches. It is refused
+    now and listed with the others in the next test; the unambiguous form
+    `^((a|b|c)(d|e)*)+$` takes its place here.
     """
     # The repeat counts carry `\,`, which is the mini-language's escape and what a
     # user has to type: an unescaped comma is a TERM SEPARATOR, so `{1,40}` splits
@@ -477,9 +484,12 @@ def test_the_patterns_a_person_would_actually_write_are_still_accepted():
         (r"re:" + "|".join(f"proc{n}" for n in range(50)), KIND_PROCESS),
         (r"re:^[a-zA-Z0-9._\-]{1\,40}\.(exe|dll|sys)$", KIND_PROCESS),
         (r"re:^(?=.*chrome)(?!.*helper).*$", KIND_PROCESS),
-        (r"re:^((a|b|c)+(d|e)*)+$", KIND_PROCESS),
+        (r"re:^((a|b|c)(d|e)*)+$", KIND_PROCESS),
+        (r"re:.*chrome.*helper.*", KIND_PROCESS),
+        (r"re:^(svchost|chrome|msedge)\.exe$", KIND_PROCESS),
         (r"re:^10\.0\.\d+", KIND_IP),
         (r"re:^([0-9a-f]{1\,4}:){7}[0-9a-f]{1\,4}$", KIND_IP),
+        (r"re:^(fe80|fd[0-9a-f]{2}):", KIND_IP),
         (r"re:.*", KIND_PROCESS),
         (r"re:^8(0|443)$", KIND_INT),
     ]
@@ -490,6 +500,84 @@ def test_the_patterns_a_person_would_actually_write_are_still_accepted():
             check(f"{text[:40]}: accepted", False, f"({exc})")
         else:
             check(f"{text[:40]}: accepted", True)
+
+
+def test_a_pattern_that_fails_only_at_its_end_is_refused_too():
+    """The blind spot of a ladder made only of runs the pattern MATCHES.
+
+    A repeat inside a repeat blows up when a long run it can consume is followed by
+    something that makes the whole match fail. The ladder fed bare runs, which
+    these patterns match at once, so every one of them passed. MEASURED 2026-09-28:
+    `^(\\w+\\s?)+$` spent 558 ms on StartMenuExperienceHost.exe, and
+    `^([\\d:]+)+$` in the destination field 2.7 s per packet on a real IPv6
+    address - on the capture thread, inside `core._lock`.
+    """
+    for text, kind in ((r"re:^(\w+\s?)+$", KIND_PROCESS),
+                       (r"re:(a+)+$", KIND_PROCESS),
+                       (r"re:^([\d:]+)+$", KIND_IP),
+                       (r"re:^(\d+)+$", KIND_INT),
+                       (r"re:^((a|b|c)+(d|e)*)+$", KIND_PROCESS)):
+        with pytest.raises(ValueError) as caught:
+            parse_matcher(text, kind, "fields.target")
+        check(f"{text}: refused as too slow",
+              "too slow" in str(caught.value).lower()
+              or "za wolne" in str(caught.value).lower(),
+              f"({str(caught.value)[:90]!r})")
+
+
+def test_a_pattern_the_parser_cannot_build_is_a_value_error_on_every_kind():
+    """`re` raises more than ``re.error``, and every caller catches only ValueError.
+
+    MEASURED 2026-09-28 before the fix: `a{99999999999}` raised OverflowError and a
+    few thousand nested groups RecursionError, straight out of `parse_matcher` -
+    `--dry-run` exited 1 instead of CONFIG, the expression tester raised although
+    it promises never to, and the Control page raised on every keystroke.
+    """
+    from beantester import matchers
+    deep = "re:" + "(" * 2000 + "a" + ")" * 2000
+    for text in ("re:a{99999999999}", deep):
+        for kind in (KIND_INT, KIND_IP, KIND_PROCESS):
+            with pytest.raises(ValueError) as caught:
+                parse_matcher(text, kind, "fields.target")
+            said = matchers._err("errors.bad_filter_regex", "fields.target", text)
+            check(f"{text[:20]} ({kind}): the ordinary 'not a valid regular "
+                  "expression' error", str(caught.value) == str(said),
+                  f"({str(caught.value)[:90]!r})")
+
+
+def test_an_accepted_pattern_is_not_judged_again(monkeypatch):
+    """Validated by the form, refused by "Apply" a moment later (report P3-13).
+
+    The judgement is a wall clock, so one text could get two answers - MEASURED:
+    a pattern near the budget was refused 20 times in 40. Apply compiled it again,
+    and a refusal there used to switch the field off. Now an accepted pattern stays
+    accepted for the life of the process, while a refusal is not remembered, so one
+    unlucky run cannot stick either.
+    """
+    from beantester import matchers
+    getattr(matchers._accepted_regex, "cache_clear", lambda: None)()
+    judged = []
+    real = matchers._blows_the_budget
+    monkeypatch.setattr(matchers, "_blows_the_budget",
+                        lambda rx: judged.append(rx.pattern) or real(rx))
+    good = r"re:^r4-accepted-once\d+$"
+    _proc(good)
+    _proc(good)
+    check("an accepted pattern is timed once, then remembered",
+          judged == [r"^r4-accepted-once\d+$"], f"({judged})")
+
+    # From here the judge refuses EVERYTHING.
+    judged.clear()
+    monkeypatch.setattr(matchers, "_blows_the_budget",
+                        lambda rx: judged.append(rx.pattern) or True)
+    _proc(good)
+    check("what was accepted is still accepted, without a second trial", judged == [],
+          f"({judged})")
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            _proc(r"re:^r4-refused\d+$")
+    check("a refusal is judged afresh each time (two runs per trial, two trials)",
+          judged.count(r"^r4-refused\d+$") == 4, f"({judged})")
 
 
 def test_refusing_a_slow_pattern_changes_nothing_about_a_good_one():

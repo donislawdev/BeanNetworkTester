@@ -87,6 +87,9 @@ def test_exit_code_config_for_bad_input():
     cases = {
         "unknown preset": ["--preset", "nope", "--simulate"],
         "bad expression": ["--dst-port", "80,abc", "--simulate"],
+        # OverflowError out of `re` used to escape as exit 1 with a traceback
+        "regex re cannot build": ["--dst-ip", "re:a{99999999999}", "--simulate"],
+        "regex too slow per packet": ["--dst-ip", r"re:^([\d:]+)+$", "--simulate"],
         "bad schedule": ["--rate-schedule", "1:x:2", "--simulate"],
         "out of range": ["--loss", "250", "--simulate"],
         "negative duration": ["--duration", "-5", "--simulate"],

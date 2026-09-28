@@ -93,6 +93,15 @@ def test_an_expression_that_cannot_be_read_carries_the_parsers_own_sentence():
     assert verdict.canonical == "" and not verdict.selected_by
 
 
+def test_a_regex_re_cannot_build_is_a_verdict_not_an_exception():
+    """The docstring of ``evaluate`` promises it never raises for what a person
+    types. `re:a{99999999999}` made it raise OverflowError (measured 2026-09-28):
+    `re` raises more than ``re.error``, and only ValueError was caught."""
+    for field_key in ("dst_ip", "dst_port", "target"):
+        verdict = evaluate(field_key, "re:a{99999999999}", "1")
+        assert verdict.state == BAD_EXPRESSION, (field_key, verdict)
+
+
 def test_nothing_typed_is_its_own_state():
     for field, expression in (("dst_ip", "10.0.0.0/8"), ("dst_port", "443"),
                               ("target", "chrome")):

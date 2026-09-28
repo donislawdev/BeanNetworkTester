@@ -296,7 +296,7 @@
   "log.duration_reached": "Osiągnięto limit czasu ({v} s) - sesja zatrzymana.",
   "log.engine_fault": "Awaria silnika: {e} - sesja została zatrzymana, sieć działa normalnie.",
   "log.error": "Błąd",
-  "log.filter_skipped": "Nie udało się odczytać tego wyrażenia, więc zostało wyłączone na tę sesję",
+  "log.filter_skipped": "Nie udało się odczytać tego wyrażenia, więc to pole zostało bez zmian",
   "log.ipv4_and_ipv6_only": "Włączone są naraz Tylko adresy IPv4 i Tylko adresy IPv6. Żaden pakiet nie jest jednym i drugim, więc nic nie zostanie zmienione.",
   "log.lan_and_internet_only": "Tryb LAN i Tylko internet są włączone naraz - poza loopbackiem nic nie przejdzie.",
   "log.layout_reset": "Układ okna zresetowany.",

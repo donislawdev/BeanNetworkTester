@@ -199,13 +199,29 @@ def test_apply_targeting_disables_on_empty_expression(fake_psutil):
           engine.core.target_active is False)
 
 
-def test_apply_targeting_logs_and_disables_on_a_bad_expression(fake_psutil):
+def test_apply_targeting_logs_and_keeps_the_target_on_a_bad_expression(fake_psutil):
+    """Rewritten on purpose (external review, P3-13).
+
+    It used to be "a bad expression DISABLES targeting", and targeting off means
+    every connection in the filter is impaired: the widest possible answer to an
+    expression that could not be read. The engine now keeps the target it had.
+    """
     engine = BeanEngine()
     lines = []
     apply_targeting(engine, ">chrome", lines.append)
-    check("a bad expression disables targeting rather than crashing a thread",
+    check("on a fresh engine a bad expression leaves targeting off, not a crash",
           engine.core.target_active is False)
     check("a bad expression is reported in the log", lines, f"({lines})")
+
+    apply_targeting(engine, "chrome, !chromedriver", lambda *_: None)
+    lines.clear()
+    kept = apply_targeting(engine, ">chrome", lines.append)
+    check("a bad expression does not switch targeting off",
+          engine.core.target_active is True
+          and engine.core.target_ports == {5001, 5002}, f"({engine.core.target_ports})")
+    check("what is returned is the target still in force",
+          kept is engine.targeting(), f"({kept!r})")
+    check("and the problem is still logged", lines, f"({lines})")
 
 
 # -- make_targeting: the LIVE targeting object used by the engine ------------ #

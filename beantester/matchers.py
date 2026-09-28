@@ -42,6 +42,7 @@ Parsing raises a translated ``ValueError`` (``errors.bad_filter_*`` keys) so
 the GUI can show it and the CLI can turn it into a clean error message.
 """
 import fnmatch
+import functools
 import ipaddress
 import re
 import time
@@ -521,9 +522,13 @@ def _compare_predicate(op, number):
 # The margin between "fine" and "not fine" is four orders of magnitude, which is
 # why a clock is a fair judge here and why this does not flake on a slow runner.
 #
-# 🔴 The textbook example does NOT work: `^(a+)+$` is 0.001 ms at every length,
-# because CPython optimises it away. A guard tested with it would prove nothing
-# and look thorough. The two patterns above are the ones that actually blow up.
+# 🔴 The textbook example is a trap in BOTH directions. `^(a+)+$` is 0.001 ms at
+# every length on a run of `a` it MATCHES - the first way through succeeds - and
+# this comment once concluded from that that it was harmless. It is not: it blows
+# up when the run is followed by something the pattern refuses (refused at 20
+# characters once `_REGEX_PROBE_TAILS` adds that, measured 2026-09-28). The ladder
+# of matching runs let through every pattern of that shape, `^(\w+\s?)+$` among
+# them, which spent 558 ms on ONE real process name.
 # The budget covers the WHOLE trial, not each search in it, which is what keeps
 # the cost of a refusal small: the ladder stops at the first length that has spent
 # it, so a pattern is refused after roughly one growth step rather than after
@@ -542,11 +547,23 @@ REGEX_BUDGET_S = 0.005
 # IPv4 (digits), process names (letters), IPv6 text (hex and colons, the shape the
 # reproduction used), dotted names.
 _REGEX_PROBE_UNITS = ("1", "a", "1:", "a.")
+# Every run is tried as it is AND followed by a character none of the alphabets
+# above contains. A repeat inside a repeat explodes when a long run it can consume
+# is followed by something that makes the whole match fail, and a bare run always
+# matches - so the ladder walked straight past `(a+)+$`, `^(\w+\s?)+$` and
+# `^([\d:]+)+$`, the last one on the packet path at 2.7 s per packet on a real
+# IPv6 address. MEASURED 2026-09-28 with the tail: all three refused by 20
+# characters; the whole ladder for eleven ordinary patterns went from
+# 0.013-0.025 ms to 0.021-0.044 ms; and a pattern near the budget that was refused
+# 20 times in 40 is now refused 40 in 40.
+# Known limit, said rather than hidden: a repeat that explodes only on ONE letter
+# no unit contains (`(x+x+)+y`) still passes. That is not written by accident.
+_REGEX_PROBE_TAILS = ("", "!")
 # Up to 45, the longest IPv6 address in text form, which is the longest value an
-# IP matcher is ever handed. A process name can be longer, and that is said out
-# loud rather than covered badly: a pattern that is still fast at 45 characters
-# and slow at 300 exists, and the capture-thread heartbeat in `engine.py` is what
-# catches it.
+# IP matcher is ever handed - and addresses and ports are the only values matched
+# per packet. A process pattern runs on process NAMES (the resolver, the UI
+# thread), and a name can be longer: the shapes that still pass the tail probe
+# were measured at no more than ~1 ms per search at 256 characters (2026-09-28).
 #
 # Close steps at the bottom on purpose. The cost of a refusal is whatever the
 # first over-budget length cost, so the rungs have to be near each other exactly
@@ -554,39 +571,77 @@ _REGEX_PROBE_UNITS = ("1", "a", "1:", "a.")
 # at 12, and a ladder that stepped straight from 8 to 12 would pay the second
 # number to learn what the first already showed.
 _REGEX_PROBE_LENGTHS = (6, 8, 10, 12, 14, 16, 20, 24, 32, 45)
+# The ladder itself, built once. Lengths outer, alphabets inner, tails innermost:
+# the ladder climbs for every alphabet at once, so a pattern that explodes on
+# letters but not on digits is caught at the shortest length that shows it rather
+# than after a full pass over the other.
+_REGEX_PROBES = tuple((unit * length)[:length] + tail
+                      for length in _REGEX_PROBE_LENGTHS
+                      for unit in _REGEX_PROBE_UNITS
+                      for tail in _REGEX_PROBE_TAILS)
 
 
 def _blows_the_budget(rx):
-    """True when climbing the ladder spends more than the budget.
-
-    Lengths outer, alphabets inner: the ladder climbs for every alphabet at once,
-    so a pattern that explodes on letters but not on digits is caught at the
-    shortest length that shows it rather than after a full pass over the other.
-    """
+    """True when climbing the ladder spends more than the budget."""
     deadline = time.perf_counter() + REGEX_BUDGET_S
-    for length in _REGEX_PROBE_LENGTHS:
-        for unit in _REGEX_PROBE_UNITS:
-            rx.search((unit * length)[:length])
-            if time.perf_counter() > deadline:
-                return True
+    for probe in _REGEX_PROBES:
+        rx.search(probe)
+        if time.perf_counter() > deadline:
+            return True
     return False
 
 
-def _refuse_if_too_slow(rx, field, term):
-    """Raise when a compiled pattern is too slow to sit on the packet path.
+class _Refused(Exception):
+    """A pattern that will not be used, and the ``errors.*`` key that says why."""
 
-    TWICE, and the second run is the one that decides, because a wall clock cannot
-    tell "this pattern burned five milliseconds" from "this thread lost the CPU for
-    five milliseconds". The obvious answer to that is a CPU clock, and it does not
-    work here: `time.get_clock_info("thread_time")` REPORTS a resolution of 1e-07
-    on this platform and MEASURES 15.625 ms (200 000 reads returned six distinct
-    values, 2026-09-02), which cannot see a 5 ms budget at all. A second run can:
-    a scheduling hiccup does not repeat in the same place, and backtracking does,
-    every time, deterministically. A good pattern never pays for this - it takes
-    the first run only, at 0.04 ms.
+    def __init__(self, key):
+        super().__init__(key)
+        self.key = key
+
+
+@functools.lru_cache(maxsize=256)
+def _accepted_regex(pattern):
+    """The compiled pattern, once it has been judged fit to run per packet.
+
+    CACHED, and only what is accepted: ``lru_cache`` keeps nothing for a call that
+    raises. The judgement is a wall clock, so the same text could pass when the
+    form validated it and fail a moment later when "Apply" compiled it again - a
+    field that validated and then did not apply (external review, P3-13). Once
+    accepted, a pattern stays accepted for the life of the process, which also
+    spares the probe to every later apply, scenario step and keystroke; a refused
+    one is judged afresh each time, so one unlucky run does not stick.
+
+    The probe runs TWICE before refusing, and the second run decides, because a
+    wall clock cannot tell "this pattern burned five milliseconds" from "this
+    thread lost the CPU for five milliseconds". The obvious answer to that is a CPU
+    clock, and it does not work here: `time.get_clock_info("thread_time")` REPORTS
+    a resolution of 1e-07 on this platform and MEASURES 15.625 ms (200 000 reads
+    returned six distinct values, 2026-09-02), which cannot see a 5 ms budget at
+    all. A second run can: a scheduling hiccup does not repeat in the same place,
+    and backtracking does, every time, deterministically. A good pattern never
+    pays for this - it takes the first run only, at 0.04 ms.
     """
+    try:
+        # A user pattern like "[a-z[0-9]]" makes `re` emit a FutureWarning ("possible
+        # nested set"). It is not an error and the pattern still compiles - but the
+        # warning goes to stderr, which in a windowed build DOES NOT EXIST, and in the
+        # CLI lands in the middle of the log channel. Either way it is noise the user
+        # can do nothing about, so it is swallowed here; a pattern that is genuinely
+        # broken still raises below.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            warnings.simplefilter("ignore", DeprecationWarning)
+            rx = re.compile(pattern, re.IGNORECASE)
+    # Not only re.error: `a{99999999999}` raises OverflowError and a few thousand
+    # nested groups RecursionError, and neither is a ValueError - the one thing every
+    # caller catches. MEASURED 2026-09-28: `--dry-run` exited 1 instead of CONFIG, the
+    # expression tester raised although it promises it never does, and the Control
+    # page raised on every keystroke. This is the single place all of them pass.
+    except (re.error, OverflowError, RecursionError) as exc:
+        raise _Refused("errors.bad_filter_regex") from exc
     if _blows_the_budget(rx) and _blows_the_budget(rx):
-        raise _err("errors.filter_regex_too_slow", field, term)
+        raise _Refused("errors.filter_regex_too_slow")
+    return rx
 
 
 def _compile_regex(pattern, field, term):
@@ -594,20 +649,9 @@ def _compile_regex(pattern, field, term):
     if not pattern:
         raise _err("errors.bad_filter_regex", field, term)
     try:
-        # A user pattern like "[a-z[0-9]]" makes `re` emit a FutureWarning ("possible
-        # nested set"). It is not an error and the pattern still compiles - but the
-        # warning goes to stderr, which in a windowed build DOES NOT EXIST, and in the
-        # CLI lands in the middle of the log channel. Either way it is noise the user
-        # can do nothing about, so it is swallowed here; a pattern that is genuinely
-        # broken still raises re.error below.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            warnings.simplefilter("ignore", DeprecationWarning)
-            rx = re.compile(pattern, re.IGNORECASE)
-    except re.error as exc:
-        raise _err("errors.bad_filter_regex", field, term) from exc
-    _refuse_if_too_slow(rx, field, term)
-    return rx
+        return _accepted_regex(pattern)
+    except _Refused as refused:
+        raise _err(refused.key, field, term) from refused
 
 
 def _is_glob(body):

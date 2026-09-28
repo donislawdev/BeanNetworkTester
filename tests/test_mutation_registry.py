@@ -478,6 +478,61 @@ MUTATIONS = [
                  "_answering_normally"),
     },
     {
+        # Back to a ladder of bare runs, which the pattern matches: every repeat
+        # inside a repeat that fails only at its end walks through again.
+        "label": "matchers: the probe forgets the character after the run",
+        "file": "beantester/matchers.py",
+        "old": "_REGEX_PROBE_TAILS = (\"\", \"!\")",
+        "new": "_REGEX_PROBE_TAILS = (\"\",)",
+        "test": "test_a_pattern_that_fails_only_at_its_end_is_refused_too",
+    },
+    {
+        # OverflowError and RecursionError escape `parse_matcher` again.
+        "label": "matchers: only re.error becomes a ValueError again",
+        "file": "beantester/matchers.py",
+        "old": "    except (re.error, OverflowError, RecursionError) as exc:",
+        "new": "    except re.error as exc:",
+        "test": "test_a_pattern_the_parser_cannot_build_is_a_value_error_on_every_kind",
+    },
+    {
+        # Every compile judges again: the form's "yes" and Apply's answer can differ.
+        "label": "matchers: an accepted pattern is judged again at every compile",
+        "file": "beantester/matchers.py",
+        "old": "@functools.lru_cache(maxsize=256)\ndef _accepted_regex(pattern):",
+        "new": "def _accepted_regex(pattern):",
+        "test": "test_an_accepted_pattern_is_not_judged_again",
+    },
+    {
+        # The shipped tolerance: a destination that could not be read is switched
+        # OFF, which impairs everything.
+        "label": "settings: a bad destination at apply switches it off again",
+        "file": "beantester/settings.py",
+        "old": "            log(f\"{T('log.filter_skipped')}: {e}\")\n"
+               "            dest = None",
+        "new": "            log(f\"{T('log.filter_skipped')}: {e}\")\n"
+               "            dest = (False, *compile_endpoint(None, None))",
+        "test": "test_a_bad_destination_at_apply_leaves_the_previous_one_in_place",
+    },
+    {
+        "label": "settings: a bad block at apply switches blocking off again",
+        "file": "beantester/settings.py",
+        "old": "        if block is not None:\n"
+               "            engine.set_block(*block)",
+        "new": "        engine.set_block(*(block or (False, *compile_endpoint(None, None),"
+               " False)))",
+        "test": "test_a_bad_block_at_apply_leaves_the_previous_one_in_place",
+    },
+    {
+        # Targeting switched off by an expression that could not be read: every
+        # connection in the filter impaired.
+        "label": "settings: a bad target at apply switches targeting off again",
+        "file": "beantester/settings.py",
+        "old": "            return engine.targeting()",
+        "new": "            engine.set_target(False)\n"
+               "            return None",
+        "test": "test_apply_targeting_logs_and_keeps_the_target_on_a_bad_expression",
+    },
+    {
         # Back to the check as it stood before 2026-09-02, which is the exact
         # shape that let NaN through: `float('nan') <= 0` is False.
         "label": "cli: the report interval is only checked for being above zero",
