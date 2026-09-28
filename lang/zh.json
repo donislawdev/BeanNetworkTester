@@ -235,6 +235,7 @@
   "fields.spike_prob": "尖峰概率:",
   "fields.spike_prob_up": "上传尖峰概率:",
   "fields.syn_drop": "丢弃 TCP SYN:",
+  "fields.target_all_traffic": "进程定位未生效。流量过滤器中的所有连接都在受到弱网影响。",
   "fields.target_dest": "目标地址",
   "fields.target_example": "例如 chrome.exe、12345、re:^fire",
   "fields.target_no_match": "没有正在运行的进程符合此目标。流量当前不会受到弱网影响。",

@@ -100,7 +100,10 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # ceiling exactly, so the two CSV exports moved to `gui/csv_export.py` instead of the
 # number moving up. The crowd band below was re-measured after the drop (`engine.py`
 # is 779, still clear of it) - lowering a ceiling tightens that band too.
-FILE_CEILING = 1166             # beantester/gui/app.py
+# Lowered 2026-09-28 from 1166: the target field stopped being applied from the
+# tick (convention 15), which took `_snapshot_target` and half of the old
+# `_refresh_target` out of `app.py`.
+FILE_CEILING = 1150             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -790,11 +793,11 @@ def test_the_strictly_typed_modules_only_ever_grow():
 # in this file: down is routine, up is the owner's decision, and the numbers must
 # BE the measurement rather than sit above it (two tests below enforce that, the
 # same pair that guards the ceilings).
-CLASS_METHOD_CEILING = 96       # gui/app.py::App
-CLASS_ATTR_CEILING = 80         # gui/app.py::App
-# The crowd counts, on the same 70% band as the sizes. Methods: App (96) and
-# BeanEngine (69) against a band of 67.2. Attributes: App (80) and BeanCore (57)
-# against a band of 56.0 - and BeanCore is the interesting one, because it is a
+CLASS_METHOD_CEILING = 95       # gui/app.py::App (96 until 2026-09-28: _snapshot_target)
+CLASS_ATTR_CEILING = 79         # gui/app.py::App (80 until 2026-09-28: _target_expr)
+# The crowd counts, on the same 70% band as the sizes. Methods: App (95) and
+# BeanEngine (69) against a band of 66.5. Attributes: App (79) and BeanCore (57)
+# against a band of 55.3 - and BeanCore is the interesting one, because it is a
 # 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
 # attributes is what a decision core with twelve pipeline steps accumulates.
 CLASSES_NEAR_METHOD_CEILING = 2     # App, BeanEngine

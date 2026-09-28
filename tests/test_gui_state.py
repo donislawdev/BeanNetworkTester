@@ -171,6 +171,10 @@ def test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine():
     So this asserts BOTH directions - untouched engine before Apply, changed
     engine after it - because only the pair distinguishes "did not apply" from
     "did not work at all".
+
+    🔴 It TICKS. Until 2026-09-28 it did not, and the tick was exactly where the
+    target field went to the engine without Apply - so this test stayed green
+    while the rule it names was broken on every tick of every session.
     """
     run_gui("""
         app.running = True
@@ -180,12 +184,14 @@ def test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine():
 
         app.set_target_expression("chrome.exe")
         app.set_destination("10.0.0.7", "443")
+        assert app._form_changed, "the Apply button must light up instead"
+        for _ in range(3):
+            app._tick()                     # the loop that used to apply the field
 
         assert not core.target_active, "targeting reached the engine without Apply"
         assert not core.dst_active, "destination reached the engine without Apply"
         s = app._settings_from_widgets()
         assert s["target"] == "chrome.exe" and s["dst_ip"] == "10.0.0.7"
-        assert app._form_changed, "the Apply button must light up instead"
 
         app.apply_if_running(announce=False)
         assert core.target_active and core.dst_active, "Apply did not push them"
@@ -336,9 +342,9 @@ def test_dialogs_are_in_app_and_translated():
 
 
 def test_target_verdict_is_recorded_not_rendered_off_the_main_thread():
-    """``_refresh_target`` must leave its verdict in a field, never draw it itself.
+    """``_refresh_target_verdict`` leaves its verdict in a field, never draws it.
 
-    ``_refresh_target`` used to call ``set_target_warning`` directly, so
+    The method used to call ``set_target_warning`` directly, so
     ``.config()`` / ``.winfo_ismapped()`` / ``.pack()`` ran on a worker thread.
     On Windows that either hangs Tk - and a hung GUI keeps the WinDivert handle
     open, which is the one thing FAIL-OPEN exists to prevent - or raises
@@ -367,12 +373,14 @@ def test_target_verdict_is_recorded_not_rendered_off_the_main_thread():
 
             setattr(banner, name, spy)
 
-        # an expression that resolves to no process at all: the branch that raises
-        # the "your target catches nothing" banner
-        app.vars["target"].set("no_such_process_anywhere_xyz")
-        app._snapshot_target()
+        # an APPLIED expression that resolves to no process at all: the branch that
+        # raises the "your target catches nothing" banner
+        from beantester.settings import apply_targeting
+        apply_targeting(app.engine, "no_such_process_anywhere_xyz", announce=False)
+        app._applied_target = "no_such_process_anywhere_xyz"
 
-        worker = threading.Thread(target=app._refresh_target, name="target-refresher")
+        worker = threading.Thread(target=app._refresh_target_verdict,
+                                  name="target-refresher")
         worker.start()
         worker.join(timeout=30)
         assert not worker.is_alive(), "the refresher thread hung"
@@ -395,25 +403,10 @@ def test_target_verdict_is_recorded_not_rendered_off_the_main_thread():
     """)
 
 
-def test_a_gui_session_keeps_the_target_banner_honest():
-    """The tick loop end to end: apply on change, and report what was matched.
-
-    The GUI no longer runs a refresher thread - `_tick` applies a changed target
-    expression and the engine's resolver keeps the port set fresh. That rewiring
-    was verified against a real session (real engine, real resolver, synthetic
-    traffic) and this pins the behaviour it must keep:
-
-      * a target that matches nothing raises the banner - a run in which nothing
-        broke looks exactly like a run in which everything held up;
-      * a target that DOES match takes it back down;
-      * clearing the field drops targeting altogether;
-      * none of it stalls the capture.
-
-    The socket table is faked so the test is deterministic and fast. Against the
-    real one the first resolve costs about 1.7 s on a normal desktop, which is a
-    measurement worth knowing but not worth spending in every suite run.
-    """
-    run_gui("""
+# A GUI session over a FAKE socket table (one process, `realapp.exe`, owning port
+# 5001) and synthetic traffic, plus `settle()`, which ticks for a while. Shared by
+# the two target-session tests below, which used to carry a copy each.
+_TARGET_SESSION = """
         import time
         from beantester import portmap
         from beantester.synthetic import SyntheticDivert
@@ -449,7 +442,30 @@ def test_a_gui_session_keeps_the_target_banner_honest():
             while time.monotonic() < end:
                 app._tick()
                 time.sleep(0.02)
+"""
 
+
+def test_a_gui_session_keeps_the_target_banner_honest():
+    """A session end to end: the target changes on Apply, the tick only reports.
+
+    The engine's resolver keeps the port set fresh and `_tick` reads the verdict.
+    This pins the behaviour a session must keep:
+
+      * a target that matches nothing raises the banner - a run in which nothing
+        broke looks exactly like a run in which everything held up;
+      * a target that DOES match takes it back down;
+      * 🔴 an emptied or half-typed field changes NOTHING until "Apply changes".
+        Until 2026-09-28 the tick pushed the raw field to the engine: clearing it
+        to type a new name, or typing `re:^fire(`, switched targeting off - every
+        connection impaired - and the banner said traffic was NOT impaired;
+      * applying an empty field drops targeting altogether;
+      * none of it stalls the capture.
+
+    The socket table is faked so the test is deterministic and fast. Against the
+    real one the first resolve costs about 1.7 s on a normal desktop, which is a
+    measurement worth knowing but not worth spending in every suite run.
+    """
+    run_gui(_TARGET_SESSION + """
         app._start(); app._settle_transition()
         assert app.running is True, "the GUI did not start"
         settle(0.3)
@@ -460,6 +476,7 @@ def test_a_gui_session_keeps_the_target_banner_honest():
 
         # a target nothing matches: the banner must shout
         app.vars["target"].set("no_such_process_xyz")
+        app.apply_if_running()
         settle(1.0)
         tg = app.engine.targeting()
         assert app._applied_target == "no_such_process_xyz", app._applied_target
@@ -470,6 +487,7 @@ def test_a_gui_session_keeps_the_target_banner_honest():
 
         # a target that DOES own a socket: the banner must come back down
         app.vars["target"].set("realapp")
+        app.apply_if_running()
         settle(1.0)
         tg = app.engine.targeting()
         assert tg.expression == "realapp", tg.expression
@@ -478,10 +496,26 @@ def test_a_gui_session_keeps_the_target_banner_honest():
             "a matching target must clear the banner: %r" % app._pending_target_warning
         assert app._shown_target_warning == "", "the banner was not taken down"
 
-        # clearing the field drops targeting entirely
+        # the user empties the field to type another name, then gets half-way
+        # through a regex. NEITHER is applied: the engine keeps the target it had.
+        refused = bnt.T("log.targeting_error")
+        for typed in ("", "re:^fire("):
+            app.vars["target"].set(typed)
+            settle(0.4)
+            assert app.engine.core.target_active, \\
+                "the field %r reached the engine without Apply" % typed
+            assert app.engine.targeting().expression == "realapp", \\
+                app.engine.targeting().expression
+            assert app._pending_target_warning == "", app._pending_target_warning
+            assert not any(refused in line for line in app._log_lines), \\
+                "a half-typed field was compiled: %r" % app._log_lines[-3:]
+            assert app._is_dirty(), "the Apply button must say the form differs"
+
+        # applying the empty field drops targeting entirely
         app.vars["target"].set("")
+        app.apply_if_running()
         settle(0.4)
-        assert app.engine.targeting() is None, "clearing must drop targeting"
+        assert app.engine.targeting() is None, "applying an empty field must drop targeting"
         assert app._pending_target_warning == "", "no target, no banner"
 
         assert app.engine.stats_snapshot()["seen"] > seen1, "traffic stalled"
@@ -503,8 +537,8 @@ def test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped(
     tester moves the other end - the field is left alone and the targeted program
     exits, or the harness restarts it and Windows hands it a new pid. Nothing
     covered that, and a handoff note had already concluded from reading the code
-    that the verdict was only taken at session start. It is not: ``_refresh_target``
-    re-reads it on every tick. This pins that, because prose is what the project
+    that the verdict was only taken at session start. It is not:
+    ``_refresh_target_verdict`` re-reads it on every tick. This pins that, because prose is what the project
     keeps getting wrong here, and prose is what nothing tests.
 
     The recovery half mirrors what was MEASURED against a real capture
@@ -513,41 +547,10 @@ def test_a_target_that_dies_mid_session_raises_the_banner_without_being_retyped(
     come back DOWN on its own too - a warning that stays up after the program is
     back is the same lie in the other direction.
     """
-    run_gui("""
-        import time
-        from beantester import portmap
-        from beantester.synthetic import SyntheticDivert
-
-        class FakeTable:
-            def __init__(self):
-                self.ports = {5001: 200}
-                self.info = {200: ("realapp.exe", 1)}
-            def refresh(self, now=None, force=False): return True
-            def snapshot(self): return dict(self.ports)
-            def name_of(self, pid, cheap=False): return self.info.get(pid, ("", None))[0]
-            def ancestors(self, pid, depth=8): return []
-            def warm_names(self): return None
-            def refresh_if_stale(self, now=None, miss=False): return True
-            def process_for_port(self, port, now=None, allow_refresh=True): return ""
-            def pid_for(self, port): return self.ports.get(port)
-
-        table = FakeTable()
-        portmap.default_table = lambda: table
-        app.engine._ports = table
-
-        real_start = app.engine.start
-        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
-                            real_start(filt, divert=SyntheticDivert(seed=21),
-                                       duration=duration))
-
-        def settle(seconds=1.0):
-            end = time.monotonic() + seconds
-            while time.monotonic() < end:
-                app._tick()
-                time.sleep(0.02)
-
+    run_gui(_TARGET_SESSION + """
         app._start(); app._settle_transition()
         app.vars["target"].set("realapp")
+        app.apply_if_running()
         settle(1.0)
         assert app.engine.targeting().matched is True, "the target never matched"
         assert app._pending_target_warning == "", app._pending_target_warning

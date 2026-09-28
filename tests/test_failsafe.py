@@ -951,32 +951,28 @@ def test_the_ui_notices_when_the_engine_stops_itself():
     """)
 
 
-def test_target_syncing_reads_only_the_main_thread_snapshot():
-    """``_refresh_target`` works off ``_target_expr``, never off the tk variable.
+def test_the_target_verdict_never_reads_the_tk_variable():
+    """``_refresh_target_verdict`` works off the engine and the applied target.
 
-    The background refresher that used to call this is gone (resolving moved to
-    ``target_resolver``), but the separation it forced is worth keeping: the
-    snapshot is taken on the main thread, and everything downstream consumes the
-    plain string. That is what makes it safe to call this from anywhere later.
+    It never touches the tk variable: that is what makes it safe to call from
+    anywhere, and since 2026-09-28 it is also the rule - the field reaches the
+    engine only through "Apply changes", so the verdict has no business reading it.
     """
     run_gui("""
-        app.vars["target"].set("chrome.exe")
-        assert app._snapshot_target() == "chrome.exe"
+        from beantester.settings import apply_targeting
 
-        # an empty field means "no targeting" - there is no checkbox to tick
-        app.vars["target"].set("   ")
-        assert app._snapshot_target() == ""
+        apply_targeting(app.engine, "chrome.exe", announce=False)
+        app._applied_target = "chrome.exe"
 
-        # from now on the tk variable explodes if anything downstream reads it
+        # from now on the tk variable explodes if anything reads or writes it
         class Exploding:
             def get(self):
-                raise AssertionError("_refresh_target read the tk variable")
+                raise AssertionError("the verdict read the tk variable")
             def set(self, *a):
-                raise AssertionError("_refresh_target wrote the tk variable")
+                raise AssertionError("the verdict wrote the tk variable")
 
         app.vars["target"] = Exploding()
-        app._target_expr = "chrome.exe"
-        app._refresh_target()          # consumes the snapshot only
+        app._refresh_target_verdict()
     """)
 
 

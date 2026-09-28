@@ -397,7 +397,7 @@ def test_the_known_unused_list_only_ever_shrinks():
 # ratchet rather than a list of the usual suspects: a NEW file full of silent
 # handlers cannot slip in by simply not being mentioned.
 SILENT_BROAD_HANDLERS = {
-    "gui/app.py": 13,
+    "gui/app.py": 12,
     # 12 on 2026-09-06, then seven were dealt with in the same change - the file
     # this inventory was built to look at first, because it is on the targeting
     # path. The five left are per-PID lookups (`_make_native`, the two halves of

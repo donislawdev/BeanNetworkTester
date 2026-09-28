@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Editing "Target process" during a session changes nothing until you click "Apply
+  changes".** The field used to reach the running session on its own. Clearing it to type
+  a new name, or stopping halfway through an expression such as `re:^fire(`, switched
+  process targeting off, so every connection on the computer was impaired, while the
+  note under the field said traffic was not being impaired. The field now works like
+  every other field: "Apply changes" lights up, and the session keeps its target until
+  you click it.
+
+- **The note under "Target process" tells the truth when targeting cannot be used.**
+  When an applied target cannot narrow the session, for example because psutil is not
+  installed, every connection in the traffic filter is impaired, and the note now says
+  so. It used to say that no traffic was being impaired. The note also goes away when
+  the session stops.
+
 - **The program no longer freezes while it records an internal error.** Writing a crash
   report used to read the Control page form. If a field held a value the program cannot
   accept, such as a letter typed into Loss, or if a background task hit an error at the
