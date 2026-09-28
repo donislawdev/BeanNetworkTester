@@ -334,3 +334,31 @@ def test_a_timeline_that_breaks_takes_the_session_down_with_it(monkeypatch):
           any("TypeError" in str(line) for line in logged), f"({logged!r})")
     check("a broken timeline is still not a FINISHED one", not runner.finished,
           "'finished' means the timeline ran out - see its own docstring")
+
+
+def test_a_broken_timeline_stops_the_session_before_it_says_so(monkeypatch):
+    """The engine is told FIRST; the line for the user comes after.
+
+    ``log`` is the caller's and can block: on the CLI it is a write to a console
+    that a text selection holds until it ends. Said first, it kept the session
+    impairing traffic for as long as the console was held (measured 2026-09-28).
+    Recorded here as "how many failures had the engine been told about when the
+    line was said".
+    """
+    def explode(*_a, **_kw):
+        raise TypeError("a value the engine cannot use")
+
+    monkeypatch.setattr(scenario_runner, "apply_settings", explode)
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+
+    engine = FakeEngine()
+    said = []
+    runner = ScenarioRunner(engine)
+    runner.start(FakeScenario(loop=False, duration=5.0), base_settings={},
+                 log=lambda line: said.append((len(engine.failures), str(line))))
+    _join(runner)
+
+    told_at = [told for told, line in said if "TypeError" in line]
+    check("the failure is said", told_at, f"({said!r})")
+    check("and only once the engine has been told to stop", told_at == [1],
+          f"({said!r})")
