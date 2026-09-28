@@ -43,7 +43,8 @@ def burst_loss_params(loss, mean_burst):
     Returns ``(p, r, achievable)`` - the good-to-bad and bad-to-good transition
     probabilities, plus the loss fraction that pair actually delivers - or
     ``None`` when the loss should stay INDEPENDENT, which is the behaviour that
-    predates this function and the one every default still takes.
+    predates this function and the one every default still takes. Total loss is
+    one of those: every packet goes, so there is no run length to deliver.
 
     The model is Gilbert's two-state burst-noise channel (Gilbert 1960, extended
     by Elliott 1963), the same one ``tc netem`` offers as ``loss gemodel``. It is
@@ -100,10 +101,14 @@ def burst_loss_params(loss, mean_burst):
     r = 1.0 / mean_burst
     room = 1.0 - loss
     if room <= 0.0:
-        # Total loss. Every packet goes whatever the chain says, so the chain may
-        # as well stay bad - and this branch is what keeps the division below
-        # from raising on exactly this input.
-        return (1.0, r, 1.0)
+        # Total loss has no runs to shape: there is no gap for one to end in. The
+        # chain cannot say that - with r > 0 it leaves the bad state, and the packet
+        # it leaves on goes THROUGH. Measured before this was fixed: 100% asked for
+        # in runs of 2, 4, 6 and 8 delivered 66.6, 79.9, 85.6 and 88.9% (external
+        # review, P1-1). The independent draw at 1.0 drops every packet with the
+        # same ONE draw per packet the chain makes, so a seed replays the same
+        # way. This branch is also what keeps the division below from raising.
+        return None
     p = loss * r / room
     if p >= 1.0:
         # More loss than runs this short can carry. The good state then lasts a

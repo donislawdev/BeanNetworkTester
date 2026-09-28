@@ -2387,6 +2387,67 @@ MUTATIONS = [
         "test": "test_the_run_counter_answers_did_this_fire_at_all",
     },
     {
+        # The shape the external review found (P1-1): a chain told to "stay bad"
+        # at 100% still leaves the bad state at r and lets that packet through.
+        "label": "burst loss: total loss walks the chain and lets packets through",
+        "file": "beantester/core.py",
+        "old": "        # way. This branch is also what keeps the division below from raising.\n"
+               "        return None",
+        "new": "        # way. This branch is also what keeps the division below from raising.\n"
+               "        return (1.0, r, 1.0)",
+        "test": "test_total_loss_loses_every_packet_whatever_the_run_length",
+    },
+    {
+        # The upload walks its own chain from its own loss, so it clamps on its
+        # own - and until P3-4 the apply log never asked about it.
+        "label": "burst loss: the upload's clamp and gap go unsaid",
+        "file": "beantester/settings.py",
+        "old": "    if g(\"asym\"):\n"
+               "        _say_burst_loss_for(g(\"loss_up\"), g(\"loss_burst\"), _BURST_LINES_UP, log)",
+        "new": "    pass",
+        "test": "test_an_upload_the_runs_cannot_carry_is_said_out_loud",
+    },
+    {
+        # The other half of the same helper: with the switch off the upload values
+        # are not read, so a line about them describes a link nobody is producing.
+        "label": "burst loss: leftover upload values are said with asymmetry off",
+        "file": "beantester/settings.py",
+        "old": "    if g(\"asym\"):\n"
+               "        _say_burst_loss_for(g(\"loss_up\")",
+        "new": "    if True:\n"
+               "        _say_burst_loss_for(g(\"loss_up\")",
+        "test": "test_upload_values_the_session_does_not_read_are_not_said",
+    },
+    {
+        # The upload half of the strip said its loss without its run length, so an
+        # upload losing in runs read exactly like one losing evenly (P3-4).
+        "label": "summary: the upload loss is described without its run length",
+        "file": "beantester/summary.py",
+        "old": "             + _loss_parts(g, tr, num, \"loss_up\")",
+        "new": "             + _plain_parts(g, tr, num, ((\"loss_up\", \"summary.loss\"),))",
+        "test": "test_the_summary_strip_names_the_runs_each_direction_really_gets",
+    },
+    {
+        # A threshold instead of asking the function that DECIDES: the strip then
+        # claims runs the engine is not producing - at 100% loss, for one.
+        "label": "summary: the upload's run length is compared instead of asked",
+        "file": "beantester/summary.py",
+        "old": "    if burst_loss_params(to_number(g(key)) / 100.0,\n"
+               "                         to_number(g(\"loss_burst\"))) is not None:",
+        "new": "    if to_number(g(\"loss_burst\")) > 1.0:",
+        "test": "test_the_summary_strip_names_the_runs_each_direction_really_gets",
+    },
+    {
+        # The same shortcut in the download half, which asks inline (it says there
+        # why): at 100% loss the strip would promise runs the engine never makes.
+        "label": "summary: the download's run length is compared instead of asked",
+        "file": "beantester/summary.py",
+        "old": "        if burst_loss_params(to_number(g(\"loss\")) / 100.0,\n"
+               "                             to_number(g(\"loss_burst\"))) is not None:",
+        "new": "        if to_number(g(\"loss_burst\")) > 1.0:",
+        "test": "test_the_summary_strip_names_the_runs_each_direction_really_gets",
+    },
+    {
         # The plainest way to break convention 36, and the one a session in a
         # hurry would reach for: an update check, a crash reporter, a "quick
         # ping home". The static layer answers this one.

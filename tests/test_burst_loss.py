@@ -20,12 +20,16 @@ What these tests are here to hold down, in the order it would hurt to lose it:
   deliver half.
 * **the impossible corner is loud, not quiet.** Some loss/length pairs cannot
   exist. They are clamped, and ``achievable`` reports what the pair really does.
+* **total loss is total.** 100% loses every packet whatever the run length says,
+  in both directions - and the log and the summary strip, which ask the same
+  function, stop describing runs that do not exist.
 * **the chain is re-derived from BOTH of its inputs.** ``p`` depends on the loss
   as well as the run length, so changing only the loss has to move it.
 """
+import os
 import random
 
-from fakes import check
+from fakes import ROOT, check
 
 from beantester.core import BeanCore, burst_loss_params
 
@@ -114,12 +118,25 @@ def test_a_pair_that_cannot_exist_is_clamped_and_says_so():
           f"(achievable={achievable})")
 
 
-def test_total_loss_does_not_divide_by_zero():
-    """``1 - loss`` is the denominator, so 100% is the input that would raise."""
-    p, r, achievable = burst_loss_params(1.0, 5.0)
-    check("total loss keeps the chain in the bad state", p == 1.0, f"(p={p})")
-    check("and reports total loss", achievable == 1.0, f"(achievable={achievable})")
-    check("r is still the run length", abs(r - 0.2) < 1e-12, f"(r={r})")
+def test_total_loss_is_left_to_the_independent_draw():
+    """Total loss has no runs to shape, so it takes the plain draw.
+
+    This test used to assert the opposite - ``(1.0, r, 1.0)``, a chain meant to
+    "stay bad" - and so pinned the bug the external review found (P1-1): with
+    ``r > 0`` the chain LEAVES the bad state, and the packet it leaves on goes
+    through. 100% asked for in runs of 2, 4, 6 and 8 delivered 66.6, 79.9, 85.6
+    and 88.9%, while ``achievable`` said 100. ``1 - loss`` is still the
+    denominator, so this is also still the input that would raise.
+    """
+    for burst in (1.5, 2.0, 5.0, 1000.0):
+        check(f"total loss in runs of {burst} is the independent draw",
+              burst_loss_params(1.0, burst) is None,
+              f"(got {burst_loss_params(1.0, burst)})")
+    check("and so is anything past total", burst_loss_params(1.5, 5.0) is None,
+          f"(got {burst_loss_params(1.5, 5.0)})")
+    check("while just under total is still a chain, clamped out loud",
+          burst_loss_params(0.9999, 5.0) == (1.0, 0.2, 1.0 / 1.2),
+          f"(got {burst_loss_params(0.9999, 5.0)})")
 
 
 # --------------------------------------------------------------------------- #
@@ -414,3 +431,176 @@ def test_raising_the_upload_loss_does_not_cut_a_download_run_in_flight():
     check("while the download keeps its own",
           abs(_chain(core, False).burst_p - burst_loss_params(0.5, 50.0)[0]) < 1e-12,
           f"(p={_chain(core, False).burst_p})")
+
+
+# --------------------------------------------------------------------------- #
+# Total loss, and the surfaces that ASK the arithmetic about it. The answer is
+# per direction and three places read it - the packet path, the apply-time log
+# and the summary strip - so each one is driven in both directions: a value that
+# depends on its context and has several readers is guarded at the readers, not
+# at one of them in one variant.
+# --------------------------------------------------------------------------- #
+def _upload_core(loss_up, burst):
+    """A core that loses only on the way UP, through the asymmetry switch."""
+    core = BeanCore()
+    core.set_params(0, 0, 0, 0, 0, 0, 0)
+    core.set_loss_burst(burst)
+    core.set_asymmetry(True, loss_up, 0, 0, 0, 0, 0, 0)
+    core.reset_buckets(0.0)
+    return core
+
+
+def test_total_loss_loses_every_packet_whatever_the_run_length():
+    """Every packet, both ways, and the upload through its own chain.
+
+    Before the fix a run length let 11 to 33% of a "100%" through (external
+    review, P1-1), and the run counter counted thousands of runs in a session
+    that has none.
+    """
+    for burst in (2, 6, 8, 1000):
+        core = _core(loss=100, burst=burst)
+        dropped, _ = _drops(core, packets=20000, alternate=True)
+        check(f"100% in runs of {burst} drops every packet in both directions",
+              dropped == 20000, f"(dropped {dropped} of 20000)")
+        check(f"100% in runs of {burst} starts no runs, because there are none",
+              core.loss_bursts == 0, f"({core.loss_bursts})")
+    dropped, _ = _drops(_upload_core(100, 6), packets=20000)
+    check("100% UPLOAD loss in runs of 6 drops every upload packet",
+          dropped == 20000, f"(dropped {dropped} of 20000)")
+
+
+def test_total_loss_makes_one_draw_per_packet_like_the_chain_did():
+    """The seed discipline the chain was built around, kept at 100%.
+
+    Step 8 makes ONE draw per packet, independent or in runs, and a stored
+    ``Reproduce:`` command depends on that count. At 100% nothing after step 8 is
+    reached, so the generator has to stand exactly where N plain draws leave it.
+    A shortcut that skipped the draw because "every packet goes anyway" would
+    shift every draw after it - a scenario stepping back down from 100% would
+    then replay into a different session.
+    """
+    core = _core(loss=100, burst=6)
+    rng = random.Random(9)
+    for i in range(2000):
+        core.decide(1200, bool(i % 2), 5000, i * 0.001, rng,
+                    remote_ip="1.2.3.4", remote_port=443, is_tcp=True)
+    expected = random.Random(9)
+    for _ in range(2000):
+        expected.random()
+    check("2000 packets at 100% in runs of 6 made exactly 2000 draws",
+          rng.getstate() == expected.getstate(), "(the draw count moved)")
+
+
+def test_the_shipped_lte_to_3g_outage_loses_everything():
+    """The case the review found in a file this project ships.
+
+    ``mobile-lte-to-3g.json`` cuts the link at 60 s with ``"loss": 100`` and
+    inherits a run length of 8 from the step before, so its full outage let about
+    one packet in nine through - enough for a connection to live through it.
+    Driven the way a session drives it: scenario step, ``apply_settings``, engine,
+    core.
+    """
+    from beantester.engine import BeanEngine
+    from beantester.scenario import load_scenario_file
+    from beantester.settings import DEFAULT_SETTINGS, apply_settings
+
+    scenario = load_scenario_file(os.path.join(ROOT, "scenarios",
+                                               "mobile-lte-to-3g.json"))
+    settings = scenario.settings_at(60.05, DEFAULT_SETTINGS)
+    check("the step is still total loss with an inherited run length",
+          settings["loss"] == 100 and settings["loss_burst"] > 1,
+          f"(loss={settings['loss']}, run={settings['loss_burst']})")
+    engine = BeanEngine()
+    apply_settings(engine, settings)
+    engine.core.reset_buckets(0.0)
+    dropped, _ = _drops(engine.core, packets=20000, alternate=True)
+    check("the outage drops every packet", dropped == 20000,
+          f"(dropped {dropped} of 20000)")
+
+
+def _burst_lines(monkeypatch, **fields):
+    """What an apply says about runs of loss, as ``(key, values)`` pairs.
+
+    ``T`` is swapped for a recorder, so the assertions name the MESSAGE and its
+    numbers rather than one translation of them - the language the suite happens
+    to run in is not the question here.
+    """
+    import beantester.settings as settings_mod
+    from beantester.engine import BeanEngine
+    monkeypatch.setattr(settings_mod, "T", lambda key, **values: (key, values))
+    said = []
+    settings_mod.apply_settings(BeanEngine(),
+                                dict(settings_mod.DEFAULT_SETTINGS, **fields),
+                                log=said.append)
+    return [line for line in said
+            if isinstance(line, tuple) and line[0].startswith("log.loss_burst")]
+
+
+def test_total_loss_says_nothing_about_runs(monkeypatch):
+    """At 100% the log used to promise "runs of about 6, one run every 6 packets".
+
+    A run length at total loss is as inert as one at no loss, and gets the same
+    silence, in either direction.
+    """
+    down = _burst_lines(monkeypatch, loss=100, loss_burst=6)
+    check("download loss of 100% in runs of 6 says nothing about runs",
+          down == [], f"({down})")
+    up = _burst_lines(monkeypatch, asym=True, loss=0, loss_up=100, loss_burst=6)
+    check("and neither does an upload loss of 100%", up == [], f"({up})")
+
+
+def test_an_upload_the_runs_cannot_carry_is_said_out_loud(monkeypatch):
+    """The upload walks its own chain from its own loss, so it clamps on its own.
+
+    Until the external review (P3-4) only the download was asked, and 95% upload
+    loss in runs of 5 delivered 83% in silence.
+    """
+    lines = _burst_lines(monkeypatch, asym=True, loss=5, loss_up=95, loss_burst=5)
+    check("the download says its gap, then the upload its clamp and its gap",
+          [key for key, _ in lines] == ["log.loss_burst_gap",
+                                        "log.loss_burst_clamped_up",
+                                        "log.loss_burst_gap_up"], f"({lines})")
+    said = dict(lines)
+    clamp = said.get("log.loss_burst_clamped_up", {})
+    check("the clamp names what was asked and what the upload will really lose",
+          clamp.get("asked") == "95" and clamp.get("delivered") == "83.33",
+          f"({clamp})")
+    check("the upload's gap follows from what it really loses",
+          said.get("log.loss_burst_gap_up", {}).get("gap") == "6", f"({said})")
+    check("while the download keeps its own gap",
+          said.get("log.loss_burst_gap", {}).get("gap") == "100", f"({said})")
+
+
+def test_upload_values_the_session_does_not_read_are_not_said(monkeypatch):
+    """With asymmetry off the upload fields are not read at all.
+
+    A value left there from an earlier try is the ordinary path, not a corner
+    case, and a line about it would describe a link this session never produces.
+    The download, which then means both directions, is still said.
+    """
+    lines = _burst_lines(monkeypatch, asym=False, loss=90, loss_up=95, loss_burst=5)
+    check("only the download lines, with the upload left over and switched off",
+          [key for key, _ in lines] == ["log.loss_burst_clamped", "log.loss_burst_gap"],
+          f"({lines})")
+
+
+def test_the_summary_strip_names_the_runs_each_direction_really_gets():
+    """The strip asks the same function, per direction, so it cannot claim runs
+    the engine is not producing - and does not hide the ones it is."""
+    from beantester.summary import settings_summary
+    total = settings_summary(dict(loss=100, loss_burst=6), "en")
+    check("100% loss claims no runs",
+          "100% loss" in total and "in runs of" not in total, f"({total!r})")
+    down = settings_summary(dict(loss=5, loss_burst=20), "en")
+    check("a download loss in runs says so right after it",
+          "5% loss, in runs of 20 packets" in down, f"({down!r})")
+    up = settings_summary(dict(asym=True, loss_up=5, loss_burst=20, corrupt_up=1), "en")
+    check("an upload loss in runs says so too, in the same place",
+          "upload: 5% loss, in runs of 20 packets, 1% corruption" in up, f"({up!r})")
+    up_total = settings_summary(dict(asym=True, loss_up=100, loss_burst=6), "en")
+    check("100% upload loss claims no runs either",
+          "upload: 100% loss" in up_total and "in runs of" not in up_total,
+          f"({up_total!r})")
+    off = settings_summary(dict(asym=False, loss_up=5, loss_burst=20), "en")
+    check("with asymmetry off a leftover upload loss is not described",
+          "upload" not in off, f"({off!r})")

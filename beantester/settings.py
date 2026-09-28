@@ -525,7 +525,13 @@ def _destination_is_frozen(engine, dst_ip, dst_port):
             or str(getattr(core, "dst_port", "")) != str(dst_port))
 
 
-def _say_what_the_burst_loss_will_do(loss_pct, mean_burst, log):
+# The clamp line and the gap line, once per direction that has a loss of its own:
+# the download (both ways with asymmetry off), then the upload.
+_BURST_LINES_DOWN = ("log.loss_burst_clamped", "log.loss_burst_gap")
+_BURST_LINES_UP = ("log.loss_burst_clamped_up", "log.loss_burst_gap_up")
+
+
+def _say_what_the_burst_loss_will_do(g, log):
     """Two things a person cannot read off the two fields in front of them.
 
     Said at APPLY time, before the run, because both of them are the difference
@@ -543,20 +549,40 @@ def _say_what_the_burst_loss_will_do(loss_pct, mean_burst, log):
       look reasonable and nothing happens, which reads exactly like a broken
       tool. So the run length AND the expected distance between runs are said out
       loud, in packets, which is the unit the field is in.
+
+    Total loss says neither: every packet goes, so there are no runs to describe
+    (``burst_loss_params`` answers None), the same silence as a run length with no
+    loss at all.
+
+    Per DIRECTION, which is the half that was missing (external review, P3-4).
+    The run length is one field (ADR 2026-09-01), but each direction walks its own
+    chain derived from its own loss, so an upload loss the runs cannot carry is
+    clamped exactly like a download one - and was, in silence. The upload is said
+    only with asymmetry on: off, its values are not read at all, and a line about
+    them would describe a link this session is not producing. A function of its
+    own so ``apply_settings`` gains no branch.
     """
+    _say_burst_loss_for(g("loss"), g("loss_burst"), _BURST_LINES_DOWN, log)
+    if g("asym"):
+        _say_burst_loss_for(g("loss_up"), g("loss_burst"), _BURST_LINES_UP, log)
+
+
+def _say_burst_loss_for(loss_pct, mean_burst, keys, log):
+    """One direction's two lines; ``keys`` names its clamp line and its gap line."""
     loss = to_number(loss_pct) / 100.0
     params = burst_loss_params(loss, to_number(mean_burst))
     if params is None:
         return
+    clamped_key, gap_key = keys
     _p, _r, achievable = params
     if achievable < loss:
-        log(T("log.loss_burst_clamped", burst=number_string(mean_burst),
+        log(T(clamped_key, burst=number_string(mean_burst),
               asked=number_string(loss_pct),
               delivered=number_string(round(achievable * 100.0, 2))))
     # Packets per cycle: one run of `mean_burst` for every `mean_burst/achievable`
     # packets that go past. Rounded to whole packets - the field is in packets and
     # a fractional one would read as precision this cannot have.
-    log(T("log.loss_burst_gap", burst=number_string(mean_burst),
+    log(T(gap_key, burst=number_string(mean_burst),
           gap=number_string(round(to_number(mean_burst) / achievable))))
 
 
@@ -595,7 +621,7 @@ def apply_settings(engine, s, log=lambda *_: None):
     # assignments and nothing else. The log lines come out in the order they
     # always did - only their interleaving with the setters is gone, and setters
     # do not log.
-    _say_what_the_burst_loss_will_do(g("loss"), g("loss_burst"), log)
+    _say_what_the_burst_loss_will_do(g, log)
     dst_ip = setting_expression("dst_ip", g("dst_ip"))
     dst_port = setting_expression("dst_port", g("dst_port"))
     # With the driver filter narrowed, the destination fields are START-ONLY, and
