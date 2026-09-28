@@ -11,7 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   let 11 to 33% of packets through, including during the full outage in the
   `mobile-lte-to-3g` scenario, and the log and the summary described runs of loss that
   did not exist. A saved "Reproduce:" command with this combination now repeats a run
-  that loses every packet.
+  that loses every packet. The tooltip of the "Loss runs" counter says that a zero can
+  also mean 100% loss.
 
 - **With Asymmetry on, the upload's runs of loss are described too.** The log now says
   when the upload loss cannot reach the number you set in runs that short, and how far
