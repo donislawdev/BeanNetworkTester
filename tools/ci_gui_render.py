@@ -422,7 +422,8 @@ def _boxes(table):
     """
     tree = table.tree
     tree.update()
-    boxes = [(key, tree.bbox(iid)) for iid, key in zip(table._slots, table._slot_keys)]
+    boxes = [(key, tree.bbox(iid))
+             for iid, key in zip(table._slots, table._slot_keys, strict=True)]
     boxes = [(key, box) for key, box in boxes if box]
     if not boxes:
         return [], 0

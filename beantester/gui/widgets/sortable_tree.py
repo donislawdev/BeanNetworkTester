@@ -715,15 +715,14 @@ class SortableTree:
 
     def _row_under(self, event):
         """``(True, position)`` over a row slot, with None for a blank one;
-        ``(False, None)`` over a heading, a separator or empty space."""
-        try:
-            if self.tree.identify_region(event.x, event.y) not in ("cell", "tree"):
-                return False, None
-            slot = self._slot_of(self.tree.identify_row(event.y))
-        except Exception:
+        ``(False, None)`` over a heading, a separator or empty space.
+
+        Built on ``_region`` and ``key_at``, which already answer a dying widget
+        with None - so no new place swallows an exception on its own.
+        """
+        if self._region(event) not in ("cell", "tree"):
             return False, None
-        key = self._slot_keys[slot] if slot >= 0 else None
-        return True, (None if key is None else self.offset + slot)
+        return True, self._position_of(self.key_at(event.y))
 
     def _on_press(self, event, extend=False, toggle=False):
         """A click on a row, chosen by model position - including the half row.
