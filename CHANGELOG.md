@@ -16,6 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Nothing goes missing from the command line's output on Windows.** With the output sent to
+  a file, a line holding a character the system's code page cannot show - a Chinese process
+  name, a Cyrillic folder - was left out without a word, and with `--format json` the whole
+  record was lost while the run still ended with code 0. Such a character is now written as a
+  `\u` escape. In `--format json` every record is plain ASCII and reads back the same.
+
 - **A number typed with a comma now counts everywhere.** A loss of "2,5" reached the engine as
   2.5%, but the line describing the settings said "no impairments". Blocking an address from a
   table, switching the language or "Reset window layout" turned the field into "0", so the

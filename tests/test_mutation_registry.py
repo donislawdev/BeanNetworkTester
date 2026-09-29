@@ -4059,6 +4059,25 @@ MUTATIONS = [
         "new": "    return number",
         "test": "test_number_or_zero_reads_what_parse_number_reads_and_zero_where_it_refuses",
     },
+    {
+        # External review P1-6: `--format json` on a redirected Windows stdout
+        # lost the whole record (0 bytes, exit 0) over one non-ASCII character.
+        "label": "clilog: a JSON record carries non-ASCII text as it is",
+        "file": "beantester/clilog.py",
+        "old": "        _write(self._out, json.dumps(record, ensure_ascii=True)",
+        "new": "        _write(self._out, json.dumps(record, ensure_ascii=False)",
+        "test": "test_a_json_record_is_ascii_so_no_code_page_can_drop_it",
+    },
+    {
+        # ...and a text line vanished the same way: with the branch that never
+        # matches, the encoding error falls to the ValueError of a closed stream
+        # and is swallowed - the old code exactly.
+        "label": "clilog: a line the code page cannot hold is swallowed again",
+        "file": "beantester/clilog.py",
+        "old": "    except UnicodeEncodeError:",
+        "new": "    except ZeroDivisionError:",
+        "test": "test_a_line_the_code_page_cannot_hold_arrives_escaped_not_lost",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
