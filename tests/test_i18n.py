@@ -19,6 +19,18 @@ _FORMATTER = string.Formatter()
 # copy of it into the file next door.
 SEMICOLONS = (";", chr(0xFF1B))
 
+# The first part of every key, written here and not read from the language files.
+# Read from them, a namespace deleted from all three would drop out of the key
+# scan too, and code still naming its keys would pass (measured: removing the two
+# `scope.*` keys from en.json left the scan green). The scan checks this list
+# against en.json, so a namespace added or removed there has to be added or
+# removed here as well.
+KEY_NAMESPACES = frozenset({
+    "about", "app", "buttons", "chart", "conns", "dialogs", "errors", "events",
+    "fields", "filters", "frames", "log", "menu", "prefs", "presets", "scope",
+    "session", "stats", "summary", "tables", "tips", "tools", "warn", "windows",
+})
+
 
 def _placeholders(value):
     return {name for _, name, _, _ in _FORMATTER.parse(value)
@@ -198,8 +210,8 @@ def test_every_key_the_code_names_is_in_the_language_files():
     key removed from all three files, every test in this module still passed.
     The parity check above cannot see it either - the three files agree.
 
-    A string constant counts as a key when the WHOLE of it is one: a top-level
-    name the English file uses, a dot, then key characters. So a key quoted in a
+    A string constant counts as a key when the WHOLE of it is one: one of
+    ``KEY_NAMESPACES``, a dot, then key characters. So a key quoted in a
     sentence or in a docstring is not read as one, and needs no exception. One
     ending in ``.`` or ``_`` is a prefix the code completes at run time
     (``f"tips.{name}"``, ``"events.kind_" + kind``): it must lead to at least one
@@ -213,8 +225,7 @@ def test_every_key_the_code_names_is_in_the_language_files():
     with open(os.path.join(LANG_DIR, "en.json"), encoding="utf-8") as f:
         english = _json.load(f)
     english.pop("_meta", None)
-    tops = sorted({key.split(".", 1)[0] for key in english})
-    looks_like_a_key = re.compile(r"(?:%s)\.[A-Za-z0-9_.]*" % "|".join(tops))
+    looks_like_a_key = re.compile(r"(?:%s)\.[A-Za-z0-9_.]*" % "|".join(sorted(KEY_NAMESPACES)))
     seen, missing = 0, []
     for path in sorted(package_modules().values()):
         with open(path, encoding="utf-8") as f:
@@ -237,6 +248,12 @@ def test_every_key_the_code_names_is_in_the_language_files():
     # land here too: rename it, or build it so the whole of it is not one string.
     check("every key named in the code is in lang/en.json", not missing,
           f"({missing[:5]})")
+    # After the scan on purpose: a namespace deleted while the code still uses
+    # it fails above, naming the code; one the code no longer uses fails here.
+    in_file = {key.split(".", 1)[0] for key in english}
+    check("KEY_NAMESPACES are the namespaces lang/en.json uses", in_file == KEY_NAMESPACES,
+          f"(only in the file: {sorted(in_file - KEY_NAMESPACES)}, "
+          f"only in the list: {sorted(KEY_NAMESPACES - in_file)})")
 
 
 def test_the_language_files_stay_sorted():
