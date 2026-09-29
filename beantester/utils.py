@@ -24,8 +24,16 @@ def to_number(value: Any) -> float:
 
 
 def number_string(value: Any) -> str:
-    """Compact string for a number: ``5.0`` -> ``'5'``, ``2.5`` -> ``'2.5'``."""
+    """Compact string for a number: ``5.0`` -> ``'5'``, ``2.5`` -> ``'2.5'``.
+
+    Infinity and NaN come back as ``'inf'`` / ``'nan'`` rather than raising. This
+    only DISPLAYS a number, and ``int()`` of either raised out of the preview
+    strip and out of a table's row action halfway through (external review
+    NOWE-3-3) - a display helper is the wrong place for input to be refused.
+    """
     f = to_number(value)
+    if not math.isfinite(f):
+        return str(f)
     return str(int(f)) if f == int(f) else str(f)
 
 

@@ -2442,9 +2442,9 @@ MUTATIONS = [
         # claims runs the engine is not producing - at 100% loss, for one.
         "label": "summary: the upload's run length is compared instead of asked",
         "file": "beantester/summary.py",
-        "old": "    if burst_loss_params(to_number(g(key)) / 100.0,\n"
-               "                         to_number(g(\"loss_burst\"))) is not None:",
-        "new": "    if to_number(g(\"loss_burst\")) > 1.0:",
+        "old": "    if burst_loss_params(number_or_zero(g(key)) / 100.0,\n"
+               "                         number_or_zero(g(\"loss_burst\"))) is not None:",
+        "new": "    if number_or_zero(g(\"loss_burst\")) > 1.0:",
         "test": "test_the_summary_strip_names_the_runs_each_direction_really_gets",
     },
     {
@@ -2452,9 +2452,9 @@ MUTATIONS = [
         # why): at 100% loss the strip would promise runs the engine never makes.
         "label": "summary: the download's run length is compared instead of asked",
         "file": "beantester/summary.py",
-        "old": "        if burst_loss_params(to_number(g(\"loss\")) / 100.0,\n"
-               "                             to_number(g(\"loss_burst\"))) is not None:",
-        "new": "        if to_number(g(\"loss_burst\")) > 1.0:",
+        "old": "        if burst_loss_params(number_or_zero(g(\"loss\")) / 100.0,\n"
+               "                             number_or_zero(g(\"loss_burst\"))) is not None:",
+        "new": "        if number_or_zero(g(\"loss_burst\")) > 1.0:",
         "test": "test_the_summary_strip_names_the_runs_each_direction_really_gets",
     },
     {
@@ -4067,6 +4067,62 @@ MUTATIONS = [
         "new": "        return value.keys() == default.keys() and all(\n"
                "            isinstance(value[k], type(v)) for k, v in default.items())",
         "test": "test_a_sort_order_must_be_whole_and_the_extra_keys_stay",
+    },
+    {
+        # External review P1-7: the strip read the form through float(), so a
+        # "2,5" the engine takes as 2.5% was described as a perfect link.
+        "label": "summary: the strip reads typed numbers through float() again",
+        "file": "beantester/summary.py",
+        "old": "from .validators import number_or_zero",
+        "new": "from .utils import to_number as number_or_zero",
+        "test": "test_the_summary_reads_a_typed_number_the_way_the_engine_does",
+    },
+    {
+        # The half a fix of the tests alone leaves behind: "2,5" is described,
+        # as "0% loss".
+        "label": "summary: the described value is read apart from the test for it",
+        "file": "beantester/summary.py",
+        "old": "    num = lambda k: number_string(number_or_zero(g(k)))",
+        "new": "    num = lambda k: number_string(g(k))",
+        "test": "test_the_summary_reads_a_typed_number_the_way_the_engine_does",
+    },
+    {
+        "label": "form: text handed back to the form is formatted as a number again",
+        "file": "beantester/gui/form.py",
+        "old": "                var.set(value if isinstance(value, str) else number_string(value))",
+        "new": "                var.set(number_string(value))",
+        "test": "test_a_row_action_and_a_rebuild_keep_a_number_as_it_was_typed",
+    },
+    {
+        # The other direction: a number from a file is still shown as a number,
+        # "100" and not "100.0".
+        "label": "form: a number from a file is shown as Python prints it",
+        "file": "beantester/gui/form.py",
+        "old": "                var.set(value if isinstance(value, str) else number_string(value))",
+        "new": "                var.set(str(value))",
+        "test": "test_a_row_action_and_a_rebuild_keep_a_number_as_it_was_typed",
+    },
+    {
+        "label": "utils: number_string raises on infinity and NaN again",
+        "file": "beantester/utils.py",
+        "old": "    if not math.isfinite(f):\n        return str(f)\n",
+        "new": "",
+        "test": "test_a_number_that_cannot_be_written_as_digits_is_displayed_not_raised",
+    },
+    {
+        # Owner decision D-3: the comma is a decimal separator, in ONE place.
+        "label": "validators: the decimal comma is no longer read",
+        "file": "beantester/validators.py",
+        "old": "    text = str(\"\" if value is None else value).strip().replace(\",\", \".\")",
+        "new": "    text = str(\"\" if value is None else value).strip()",
+        "test": "test_number_or_zero_reads_what_parse_number_reads_and_zero_where_it_refuses",
+    },
+    {
+        "label": "validators: infinity and NaN pass as numbers",
+        "file": "beantester/validators.py",
+        "old": "    return number if math.isfinite(number) else None",
+        "new": "    return number",
+        "test": "test_number_or_zero_reads_what_parse_number_reads_and_zero_where_it_refuses",
     },
 ]
 
