@@ -13,7 +13,7 @@ from .i18n import translate
 from .jsonfile import load_json
 from .paths import shipped_scenario
 from .settings import DEFAULT_SETTINGS, validated_patch
-from .validators import parse_number
+from .validators import parse_bool, parse_number
 
 # The actions a step may carry. ``scenario_runner`` reads THIS tuple rather than
 # listing them again - it used to carry its own copy, which would have accepted a
@@ -175,7 +175,13 @@ def parse_scenario(data):
         if stray:
             raise _err("errors.scenario_unknown_file_key",
                        field=", ".join(sorted(stray)))
-        raw, loop = data.get("steps"), bool(data.get("loop", False))
+        raw = data.get("steps")
+        try:
+            # The same switch rule as every settings switch: "loop": "false" used
+            # to LOOP, and without --duration a CI run never ended (P1-2, D-21).
+            loop = parse_bool(data.get("loop", False))
+        except ValueError as exc:
+            raise _err("errors.scenario_bad_loop", value=repr(data.get("loop"))) from exc
     else:
         raise _err("errors.scenario_not_a_scenario")
     if not isinstance(raw, list):

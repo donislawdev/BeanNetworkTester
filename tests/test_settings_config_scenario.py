@@ -667,6 +667,146 @@ def test_a_config_value_says_what_the_setting_takes(tmp_path):
           "abc" in message, f"({message})")
 
 
+def _config(tmp_path, text):
+    """Load a config file whose CONTENT is ``text`` (raw, so 1e400 can be written)."""
+    from beantester.settings import load_config_file
+    path = tmp_path / "config.json"
+    path.write_text(text if isinstance(text, str) else json.dumps(text), encoding="utf-8")
+    return load_config_file(str(path))
+
+
+def _refused(load, *args):
+    """The message ``load(*args)`` refuses with (the test fails if it loads)."""
+    import pytest
+    with pytest.raises(ValueError) as refused:
+        load(*args)
+    return str(refused.value)
+
+
+def _step(patch):
+    from beantester.scenario import parse_scenario
+    return parse_scenario([{"at": 0, "settings": patch}])
+
+
+def test_a_switch_in_a_file_is_true_or_false_and_nothing_else(tmp_path):
+    """"false" in a config file turned the switch ON (external review P1-2).
+
+    ``bool("false")`` is True, so ``{"lan_mode": "false"}`` enabled the mode that
+    cuts all public traffic while --dry-run called the file valid; a scenario step
+    and a scenario's "loop" did the same. Owner decision D-21: true / false, or the
+    numbers 0 and 1. Any string is refused, naming the setting and the rule.
+    """
+    from beantester.scenario import parse_scenario
+
+    for given, meant in ((True, True), (False, False), (1, True), (0, False), (1.0, True)):
+        got = _config(tmp_path, {"lan_mode": given})["lan_mode"]
+        check(f"config: lan_mode {given!r} means {meant}", got is meant, f"({got!r})")
+    for bad in ("false", "true", "0", "no", "", None, 2, []):
+        message = _refused(_config, tmp_path, {"lan_mode": bad})
+        check(f"config: lan_mode {bad!r} is refused, named, with the rule",
+              "lan_mode" in message and "true" in message and repr(bad) in message,
+              f"({message})")
+    for bad in ("0", "no", "false"):
+        message = _refused(_step, {"internet_only": bad})
+        check(f"step: internet_only {bad!r} is refused at load, naming the step",
+              "1" in message and "true" in message, f"({message})")
+    check("step: a real switch still loads",
+          _step({"internet_only": True}).steps[0]["settings"] == {"internet_only": True})
+    steps = [{"at": 0, "action": "reset_tcp"}]
+    for bad in ("false", 2):
+        message = _refused(parse_scenario, {"loop": bad, "steps": steps})
+        check(f"scenario: loop {bad!r} is refused", "loop" in message
+              and repr(bad) in message, f"({message})")
+    check("scenario: loop 0 does not loop", parse_scenario({"loop": 0, "steps": steps}).loop
+          is False)
+
+
+def test_the_filter_in_a_file_is_one_the_program_knows(tmp_path):
+    """Any text was a traffic filter (external review P2-4).
+
+    ``"tcpp"`` passed --dry-run and failed at the driver, ``null`` became the text
+    "None", and ``"outbound"`` went to WinDivert as a raw filter nobody documented.
+    Now it is one of the --filter choices, or an error that lists them.
+    """
+    for given, meant in (("udp", "udp"), (" tcp ", "tcp"), ("loopback", "loopback")):
+        got = _config(tmp_path, {"filter": given})["filter"]
+        check(f"config: filter {given!r} loads as {meant!r}", got == meant, f"({got!r})")
+    for bad in ("tcpp", "outbound", "TCP", "", None, 5):
+        message = _refused(_config, tmp_path, {"filter": bad})
+        check(f"config: filter {bad!r} is refused, listing the choices",
+              "filter" in message and "both" in message and "loopback" in message,
+              f"({message})")
+    message = _refused(_step, {"filter": "bogus"})
+    check("step: an unknown filter is refused at load", "1" in message and "both" in message,
+          f"({message})")
+
+
+def test_a_seed_in_a_file_is_a_whole_number(tmp_path):
+    """A seed of 42 came back as 42.0, and 1.9 became 1 in silence (external review P2-5).
+
+    The float blocked START in the window (the seed field refuses "42.0"), and a
+    fraction or a float past 2**53 cannot repeat the run it names. Owner decision
+    D-22: a whole number, also when written 42.0; null and -1 mean random.
+    """
+    for given, meant in ((42, 42), (42.0, 42), (-1.0, -1), (None, -1), ("42", 42),
+                         (2 ** 70, 2 ** 70)):
+        got = _config(tmp_path, {"seed": given})["seed"]
+        check(f"config: seed {given!r} loads as the whole number {meant}",
+              got == meant and type(got) is int, f"({got!r})")
+    for bad in (1.9, True, 1e300, "abc", "42.5", []):
+        message = _refused(_config, tmp_path, {"seed": bad})
+        check(f"config: seed {bad!r} is refused", "seed" in message and "-1" in message,
+              f"({message})")
+
+
+def test_a_seed_the_tool_saved_loads_back_as_the_same_number(tmp_path):
+    """--save-config wrote whatever it had loaded, so 42 became 42.0 on disk
+    (external review NOWE-3-2). What is loaded is typed now, so what is saved is
+    too - and a file that already says 42.0 still loads, as 42."""
+    from beantester.settings import save_config_file
+    loaded = _config(tmp_path, {"seed": 42.0, "filter": " udp ", "lan_mode": 1})
+    target = tmp_path / "saved.json"
+    save_config_file(str(target), loaded)
+    written = json.loads(target.read_text(encoding="utf-8"))
+    check("save: the seed is written as a whole number",
+          written["seed"] == 42 and type(written["seed"]) is int, f"({written['seed']!r})")
+    check("save: the filter and the switch are written in their own type",
+          written["filter"] == "udp" and written["lan_mode"] is True,
+          f"({written['filter']!r}, {written['lan_mode']!r})")
+
+
+def test_a_number_too_large_for_a_float_is_refused_not_a_crash(tmp_path):
+    """A 400-digit number crashed the config loader (OverflowError, exit 1), and
+    JSON's 1e400 read as infinity went everywhere a number could: a target named
+    "inf", a switch turned on, a seed that crashed the start (external review P3-11,
+    NOWE-3-1). Each is a refusal naming the setting now, in a file and in a step."""
+    message = _refused(_config, tmp_path, json.dumps({"loss": 10 ** 400}))
+    check("config: a 400-digit loss is refused, named", "loss" in message, f"({message})")
+    for key in ("target", "dst_port", "lan_mode", "seed"):
+        message = _refused(_config, tmp_path, '{"%s": 1e400}' % key)
+        check(f"config: {key} = 1e400 is refused, named", key in message, f"({message})")
+    for key in ("target", "block_ip", "internet_only"):
+        message = _refused(_step, {key: float("inf")})
+        check(f"step: {key} = inf is refused at load", "1" in message, f"({message})")
+
+
+def test_a_schedule_step_is_a_real_time_and_real_speeds():
+    """``float()`` was the whole check (external review P2-2, owner decision D-23).
+
+    NaN and infinity passed --dry-run and then crashed the run or the scenario
+    thread; a negative speed became 0 - NO limit - in silence; a time of 0 or less
+    became a 10 ms step. A step lasts more than 0 and at most a day, and its speeds
+    are what --down / --up take, 0 meaning no limit.
+    """
+    from beantester import parse_schedule
+    for good in ("2:100:0, 2:500:0", "0.5:0:0", "86400:10000000:10000000"):
+        check(f"schedule: {good!r} is a schedule", len(parse_schedule(good)) >= 1)
+    for bad in ("1:nan:0", "1:1e999:0", "10:-100:0", "1:0:-5", "-5:100:100", "0:100:100",
+                "nan:1:1", "inf:1:1", "1:99999999999:0", "86401:1:1"):
+        message = _refused(parse_schedule, f"2:100:0, {bad}")
+        check(f"schedule: {bad!r} is refused, quoted", bad in message, f"({message})")
+
+
 def test_both_lan_switches_at_once_are_allowed_and_said_out_loud():
     """LAN mode plus "Internet only" is the union of two impairments, so it is a
     legal request - and it cuts everything except loopback, which looks far more

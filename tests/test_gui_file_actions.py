@@ -125,6 +125,43 @@ def test_loading_a_file_that_is_not_a_config_is_refused_readably():
     """)
 
 
+def test_a_file_seed_written_42_0_no_longer_blocks_start():
+    """The window's own saved seed came back as "42.0" and blocked START (review P2-5).
+
+    ``"seed": 42`` loaded as 42.0, the form showed "42.0", and the seed field
+    refuses that - so a file the program wrote made the program refuse to start
+    until the field was edited by hand. Files that already say 42.0 load too.
+    A switch written as the text "false", which used to turn it ON, is now a
+    readable refusal that leaves the form as it was (review P1-2).
+    """
+    run_gui("""
+        import json, os, tempfile
+        from tkinter import filedialog
+        import beantester.gui.dialogs as dialogs
+
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append(message)
+        folder = tempfile.mkdtemp()
+
+        def load(content):
+            path = os.path.join(folder, "cfg.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(content, f)
+            filedialog.askopenfilename = lambda **k: path
+            app.load_config_file()
+
+        load({"seed": 42.0})
+        assert app.vars["seed"].get() == "42", app.vars["seed"].get()
+        assert app._settings_from_widgets()["seed"] == 42, "START would be blocked"
+        assert not shown, shown
+
+        app.vars["lan_mode"].set(False)
+        load({"lan_mode": "false"})
+        assert shown and "lan_mode" in shown[-1], shown
+        assert app.vars["lan_mode"].get() is False, "the refused file must not switch it on"
+    """)
+
+
 def test_a_config_of_the_wrong_shape_is_refused_too():
     """Valid JSON, wrong type. A settings file that is an ARRAY is what anything
     writing one entry per line produces, so it is not an exotic input."""

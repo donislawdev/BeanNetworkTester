@@ -5,7 +5,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### BREAKING
+
+- **A config or scenario file with a value of the wrong kind is now an error.** A switch took
+  any text, so `"lan_mode": "false"` turned LAN mode on and `"loop": "false"` looped. A switch
+  now takes `true` or `false` (or `1` and `0`), `filter` one of the `--filter` choices, `seed` a
+  whole number, and a `--rate-schedule` step a time above 0 with speeds from 0 to 10000000
+  KB/s. A wrong value stops the run with code `3` (`4` in a scenario), naming the setting.
+  Files this tool saved keep loading, a seed saved as `42.0` included.
+
 ### Fixed
+
+- **A config file's seed no longer blocks START.** A seed loaded from a file showed as "42.0",
+  which the Seed field refuses, so START stayed blocked until the field was edited by hand.
+
+- **A failure before the session starts is no longer called the end of the run.** The command
+  line said "while finishing the run" about a run that never began. It now says "outside the
+  session".
 
 - **Enter in a question window presses the button you are on.** With the
   keyboard moved to "No", Enter still answered "Yes" - for example when closing

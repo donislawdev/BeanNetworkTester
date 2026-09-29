@@ -5,6 +5,7 @@ The shape of a setting (type, label, bounds, section, profile scope) lives in
 settings dict and applies it to an engine.
 """
 import difflib
+import math
 import socket
 from contextlib import nullcontext
 
@@ -14,12 +15,13 @@ from . import portmap
 from .core import burst_loss_params, compile_endpoint
 from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
-from .i18n import T, translate
+from .filters import CLI_FILTERS
+from .i18n import T, field_name, translate
 from .matchers import KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
 from .targeting import ports_shared_with_others
 from .utils import number_string, to_number
-from .validators import parse_number, parse_seed
+from .validators import parse_bool, parse_choice, parse_number, parse_seed
 
 DEFAULT_SETTINGS = dict(
     loss=0, corrupt=0, dup=0, latency=0, jitter=0, down=0, up=0,
@@ -67,6 +69,17 @@ def parse_schedule(text):
         except ValueError as exc:
             raise ValueError(translate("errors.bad_schedule_step", None,
                                        part=part)) from exc
+        # A number is not yet a step (external review P2-2, owner decision D-23):
+        # NaN and inf crashed the run or the scenario thread, a negative speed
+        # became 0 - NO limit - in silence, a time of 0 or less a 10 ms step. The
+        # ranges are the registry's: a step lasts at most what a session may, and
+        # its speeds are what --down / --up take (0 = no limit). NaN fails every
+        # comparison, so it cannot slip through one.
+        if not (0 < dur <= F.SECONDS[1]
+                and all(F.RATE[0] <= rate <= F.RATE[1] for rate in (dn, up))):
+            raise ValueError(translate("errors.schedule_step_value", None, part=part,
+                                       max_s=number_string(F.SECONDS[1]),
+                                       max_rate=number_string(F.RATE[1])))
         steps.append((dur, dn, up))
     return steps
 
@@ -279,23 +292,47 @@ def settings_from_raw(raw, lang=None):
     """
     s = dict(DEFAULT_SETTINGS)
     for f in FIELD_DEFS:
-        if f.key not in raw:
-            continue
-        value = raw[f.key]
-        if f.kind == F.NUMBER:
-            s[f.key] = parse_number(value, f.label, f.bounds, lang)
-        elif f.kind == F.BOOL:
-            s[f.key] = bool(value)
-        elif f.kind == F.SEED:
-            s[f.key] = parse_seed(value, lang)
-        elif f.kind == F.SCHEDULE:
-            s[f.key] = str(value or "").strip()
-        elif f.kind == F.EXPR:
-            s[f.key] = setting_expression(f.key, value)
-        else:
-            s[f.key] = str(value or "").strip()
+        if f.key in raw:
+            s[f.key] = coerce_field(f, raw[f.key], lang, bounded=True)
     validate_settings(s, lang)
     return s
+
+
+# The closed vocabularies of the CHOICE fields. A new CHOICE field without an entry
+# here fails on its first value (KeyError) instead of taking any text.
+CHOICES = {"filter": tuple(CLI_FILTERS)}
+
+
+def coerce_field(field, value, lang=None, bounded=False):
+    """One value of one setting, as its field's TYPE - the one conversion every door uses.
+
+    The form and a scenario step (``settings_from_raw``) and a config file
+    (``_coerce_setting``) used to convert the same value three ways, and they
+    disagreed: ``bool("false")`` switched a mode ON, a seed of ``42`` came back as
+    ``42.0``, a filter took any text (external review P1-2, P2-4, P2-5). Raises the
+    field's own translated ``ValueError``.
+
+    ``bounded`` also checks the field's range - the form's way, first error wins. A
+    config file leaves ranges to :func:`range_errors`, which reports all of them.
+    """
+    kind = field.kind
+    if kind == F.NUMBER:
+        return parse_number(value, field.label, field.bounds if bounded else None, lang)
+    if kind == F.BOOL:
+        return parse_bool(value, field.label, lang)
+    if kind == F.SEED:
+        return parse_seed(value, lang)
+    if kind == F.CHOICE:
+        return parse_choice(value, CHOICES[field.key], field.label, lang)
+    if kind == F.EXPR:
+        if isinstance(value, float) and not math.isfinite(value):
+            # 1e400 is valid JSON and reads as infinity; as text it became the
+            # process NAME "inf" (external review NOWE-3-1). The other kinds
+            # already refuse it: it is not 0/1, not whole, not a finite number.
+            raise ValueError(translate("errors.field_text_number", lang,
+                                       name=field_name(field.label, lang), value=value))
+        return setting_expression(field.key, value)
+    return str(value or "").strip()          # the schedule: parse_schedule checks it
 
 
 def validated_patch(raw, lang=None):
@@ -732,6 +769,15 @@ def _expected_shape(key, lang=None):
     ``test_every_error_reads_like_a_sentence`` run without an exception list.
     """
     field = FIELDS.get(key)
+    kind = field.kind if field is not None else F.NUMBER
+    if kind == F.BOOL:
+        return translate("fields.expects_bool", lang)
+    if kind == F.SEED:
+        return translate("fields.expects_seed", lang)
+    if kind == F.CHOICE:
+        return translate("fields.expects_choice", lang, choices=", ".join(CHOICES[key]))
+    if kind == F.EXPR:
+        return translate("fields.expects_text", lang)
     bounds = field.bounds if field is not None else None
     if not bounds:
         return translate("fields.expects_number", lang)
@@ -740,34 +786,25 @@ def _expected_shape(key, lang=None):
 
 
 def _coerce_setting(key, value):
-    """Coerce a config-file value to the type of its default.
+    """A config-file value as its field's type (:func:`coerce_field`), or an error
+    saying what the setting takes.
 
     A config file is user input: a string where a number is expected must
     produce a clear, translated error instead of a TypeError deep inside
-    ``apply_settings`` (which crashed the CLI with a raw traceback).
-
-    Filter-expression fields are text by design and accept a bare number too
-    (older config files stored ``dst_port`` as an int).
+    ``apply_settings`` (which crashed the CLI with a raw traceback). Expression
+    fields are text by design and take a bare number too (older config files
+    stored ``dst_port`` as an int); ranges are left to ``range_errors``.
     """
-    default = DEFAULT_SETTINGS[key]
-    if key in {k for k, _, _, _ in MATCH_FIELDS}:
-        return setting_expression(key, value)
-    if isinstance(default, bool):
-        return bool(value)
-    if isinstance(default, (int, float)):
-        try:
-            if isinstance(value, bool):
-                raise ValueError
-            return float(value)
-        except (TypeError, ValueError) as exc:
-            # Say what the setting DOES take, not just that this is not it. The
-            # registry already knows - the form has been telling people "must be
-            # between 0 and 100" for as long as it has existed, while the config
-            # loader said only "invalid" for the very same value.
-            raise ValueError(translate("errors.bad_config_value", None,
-                                       field=key, value=repr(value),
-                                       expected=_expected_shape(key))) from exc
-    return str(value)
+    try:
+        return coerce_field(FIELDS[key], value)
+    except ValueError as exc:
+        # Say what the setting DOES take, not just that this is not it. The
+        # registry already knows - the form has been telling people "must be
+        # between 0 and 100" for as long as it has existed, while the config
+        # loader said only "invalid" for the very same value.
+        raise ValueError(translate("errors.bad_config_value", None,
+                                   field=key, value=repr(value),
+                                   expected=_expected_shape(key))) from exc
 
 
 def load_config_file(path):
