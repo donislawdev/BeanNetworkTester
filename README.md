@@ -249,6 +249,7 @@ effect.
 | `Ctrl+L` | Clear the log |
 | `Ctrl+F` | Search: the field search on Control, the table search on Connections, the socket search on Tools > Sockets |
 | `Up` / `Down`, `Page Up` / `Page Down`, `Home` / `End` | In a table: move the selection. With `Shift`, select a range, which can run past one screen. `Ctrl+C` copies the selected rows and `Shift+F10` opens the right-click menu |
+| `Enter` / `Tab` / `Escape` | In a question or message window: `Enter` presses the highlighted button (the default one when the window opens), `Tab` moves to the next button, `Escape` closes it, answering "No" or "Cancel" where it asks |
 
 **Finding a setting.** The box at the top of the Control page searches the settings by name -
 type part of a field or section name, or the command-line flag such as `--loss`. Every match is

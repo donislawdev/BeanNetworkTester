@@ -314,6 +314,13 @@ class W:
     def focus_get(self):
         return FOCUS[0]
 
+    def invoke(self):
+        """A button's ``invoke``: its command runs, unless the button is disabled."""
+        if "disabled" in self.states or self.kw.get("state") == "disabled":
+            return None
+        command = self.kw.get("command")
+        return command() if command else None
+
     def state(self, spec=None):
         """ttk state flags: ``state(["!active"])`` clears one, ``["active"]`` sets it.
 

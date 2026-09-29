@@ -3943,6 +3943,58 @@ MUTATIONS = [
         "new": "        log.error(f\"unexpected failure while finishing the run: \"",
         "test": "test_a_failure_before_the_session_is_not_called_finishing_the_run",
     },
+    {
+        # External review P2-19: Tab to "No", Enter answered "Yes" - on closing
+        # the window during a session and on unloading the driver.
+        "label": "dialogs: Enter presses the default whatever has the focus",
+        "file": "beantester/gui/dialogs.py",
+        "old": "        (focused if focused in buttons else default).invoke()",
+        "new": "        default.invoke()",
+        "test": "test_enter_presses_the_button_the_keyboard_is_on",
+    },
+    {
+        "label": "dialogs: the keypad Enter does nothing",
+        "file": "beantester/gui/dialogs.py",
+        "old": 'ENTER_KEYS = ("<Return>", "<KP_Enter>")',
+        "new": 'ENTER_KEYS = ("<Return>",)',
+        "test": "test_enter_presses_the_button_the_keyboard_is_on",
+    },
+    {
+        "label": "dialogs: Enter on Cancel saves the typed name",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    _enter_presses(win, [cancel, ok], ok)",
+        "new": "    _enter_presses(win, [ok], ok)",
+        "test": "test_enter_presses_the_button_the_keyboard_is_on",
+    },
+    {
+        # Owner decision D-2: the keyboard starts on the default button.
+        "label": "dialogs: a yes/no opens with the keyboard on no button",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    _center(win, parent, focus=first)",
+        "new": "    _center(win, parent)",
+        "test": "test_a_dialog_opens_with_the_keyboard_on_its_default_button",
+    },
+    {
+        "label": "dialogs: the help sheet opens with the keyboard on no button",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    _center(win, parent, focus=ok)",
+        "new": "    _center(win, parent)",
+        "test": "test_a_dialog_opens_with_the_keyboard_on_its_default_button",
+    },
+    {
+        "label": "dialogs: the warning paints a raw colour again",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    return _message(parent, title, message, CAUTION,",
+        "new": "    return _message(parent, title, message, \"#ffb454\",",
+        "test": "test_no_gui_module_but_the_theme_names_a_colour",
+    },
+    {
+        "label": "render check: main no longer runs the dialogs' keyboard pass",
+        "file": "tools/ci_gui_render.py",
+        "old": "        [sys.executable, os.path.abspath(__file__), \"--dialogs\"]).returncode",
+        "new": "        [sys.executable, os.path.abspath(__file__), \"--lang\"]).returncode",
+        "test": "test_the_render_check_presses_the_dialogs_keys_on_real_tk",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
