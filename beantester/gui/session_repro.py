@@ -24,6 +24,7 @@ from .. import paths
 from ..i18n import T
 from ..repro import save_repro_report, session_command, settings_to_cli_string
 from ..scenario import load_scenario_file
+from ..settings import apply_settings
 from . import dialogs
 
 # App -> the settings its current (or last) session runs with. Written on the main
@@ -37,18 +38,22 @@ def started(app, settings):
     _SESSIONS[app] = dict(settings)
 
 
-def applied(app, settings):
-    """A live "Apply changes" reached the engine with ``settings``.
+def apply(app, settings):
+    """A live "Apply changes": ``settings`` to the engine, and into the record.
 
-    Not while a scenario still runs: its next step puts the scenario's base back
-    (engine.scenario_running), so the session keeps being the one it started as,
-    and the command - the start settings plus ``--scenario`` - repeats that.
-    Nor once STOP has begun: the window stays "running" until the stop finishes
+    While a scenario plays, its runner applies them and lays every later step
+    over them (``BeanEngine.rebase_scenario``, owner decision D-6) - applied
+    here instead, the next step put the START settings back. So the record takes
+    them in either case (owner decision D-28): the command, these settings plus
+    ``--scenario``, repeats the session as it runs from this Apply on.
+    Not once STOP has begun: the window stays "running" until the stop finishes
     on its worker thread, but the engine has already ended the session, so an
     Apply in that gap describes a session that never ran.
     """
     engine = app.engine
-    if engine.is_running() and not engine.scenario_running():
+    if not engine.rebase_scenario(settings, app.log):
+        apply_settings(engine, settings, app.log)
+    if engine.is_running():
         _SESSIONS[app] = dict(settings)
 
 

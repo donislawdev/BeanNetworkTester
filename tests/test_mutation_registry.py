@@ -409,9 +409,9 @@ MUTATIONS = [
     {
         "label": "gui: Apply changes forgets which target it applied",
         "file": "beantester/gui/app.py",
-        "old": "        session_repro.applied(self, s)\n"
+        "old": "        session_repro.apply(self, s)\n"
                "        self._applied_target = str(s.get(\"target\", \"\")).strip()",
-        "new": "        session_repro.applied(self, s)",
+        "new": "        session_repro.apply(self, s)",
         "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
     },
     {
@@ -3795,22 +3795,26 @@ MUTATIONS = [
         "test": "test_the_repro_describes_the_session_the_engine_ran_not_the_form",
     },
     {
-        # The next scenario step puts the base back; an Apply in between does
-        # not describe the session.
-        "label": "gui: an Apply during a running scenario rewrites the session",
+        # Owner decision D-28: an Apply during a scenario is its new base, so it
+        # is what repeats the session. Recorded only without a scenario - the
+        # behaviour before the runner took a new base - it is dropped again.
+        "label": "gui: an Apply during a running scenario is not recorded",
         "file": "beantester/gui/session_repro.py",
-        "old": ("    if engine.is_running() and not engine.scenario_running():\n"
+        "old": ("        apply_settings(engine, settings, app.log)\n"
+                "    if engine.is_running():\n"
                 "        _SESSIONS[app] = dict(settings)"),
-        "new": "    if engine.is_running():\n        _SESSIONS[app] = dict(settings)",
-        "test": "test_apply_during_a_running_scenario_keeps_the_session_it_started_as",
+        "new": ("        apply_settings(engine, settings, app.log)\n"
+                "        if engine.is_running():\n"
+                "            _SESSIONS[app] = dict(settings)"),
+        "test": "test_apply_during_a_running_scenario_is_what_repeats_the_session",
     },
     {
         # The window says "running" until the stop worker finishes; the engine
         # has ended the session before that.
         "label": "gui: an Apply while STOP is under way rewrites the session",
         "file": "beantester/gui/session_repro.py",
-        "old": "    if engine.is_running() and not engine.scenario_running():",
-        "new": "    if not engine.scenario_running():",
+        "old": "    if engine.is_running():\n        _SESSIONS[app] = dict(settings)",
+        "new": "    if True:\n        _SESSIONS[app] = dict(settings)",
         "test": "test_an_apply_while_stop_is_under_way_does_not_rewrite_the_session",
     },
     {
@@ -3850,7 +3854,7 @@ MUTATIONS = [
         "file": "beantester/gui/session_repro.py",
         "old": "        return os.path.relpath(here, home)",
         "new": "        return path",
-        "test": "test_apply_during_a_running_scenario_keeps_the_session_it_started_as",
+        "test": "test_apply_during_a_running_scenario_is_what_repeats_the_session",
     },
     {
         "label": "crash: the report's command is the form's again",
@@ -4146,7 +4150,7 @@ MUTATIONS = [
         # last step's settings and action were due, so they never ran.
         "label": "scenario runner: a loop wraps without playing its last step",
         "file": "beantester/scenario_runner.py",
-        "old": "                self._play(scenario, base, prev_t, scenario.duration, last, log)\n",
+        "old": "                self._play(scenario, prev_t, scenario.duration, last, log)\n",
         "new": "",
         "test": "test_a_loop_plays_its_last_step_before_it_starts_over",
     },
@@ -4206,10 +4210,12 @@ MUTATIONS = [
         "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
     },
     {
+        # Owner decision D-30: the seed is START-only in the registry, which is
+        # also what puts it among the keys a step cannot change.
         "label": "settings: the seed is taken for a setting a step can change",
-        "file": "beantester/settings.py",
-        "old": " + (\"seed\",)",
-        "new": "",
+        "file": "beantester/fields.py",
+        "old": "hint=\"fields.seed_hint\", cli=\"seed\", start_only=True),",
+        "new": "hint=\"fields.seed_hint\", cli=\"seed\"),",
         "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
     },
     {
@@ -4234,6 +4240,52 @@ MUTATIONS = [
         "old": "\"settings\": { \"dst_port\": \"53\",",
         "new": "\"settings\": { \"filter\": \"udp\", \"dst_port\": \"53\",",
         "test": "test_every_shipped_scenario_parses",
+    },
+    {
+        # External review P2-17 / owner decision D-6: the step after an Apply put
+        # the START settings back, and an unchanged step was re-applied over it.
+        "label": "scenario runner: an Apply is undone at the next tick",
+        "file": "beantester/scenario_runner.py",
+        "old": "                if last is not None and not moved:",
+        "new": "                if False:",
+        "test": "test_an_apply_stands_until_the_timeline_moves_and_the_next_step_builds_on_it",
+    },
+    {
+        "label": "scenario runner: the step after an Apply puts the START base back",
+        "file": "beantester/scenario_runner.py",
+        "old": "            self._base = dict(base)\n            return True",
+        "new": "            return True",
+        "test": "test_an_apply_stands_until_the_timeline_moves_and_the_next_step_builds_on_it",
+    },
+    {
+        "label": "scenario runner: an Apply in the tick a step begins swallows the step",
+        "file": "beantester/scenario_runner.py",
+        "old": "                moved = scenario.settings_at(t, self._rebased_from) != last",
+        "new": "                moved = False",
+        "test": "test_an_apply_in_the_tick_a_step_begins_does_not_swallow_the_step",
+    },
+    {
+        # A fresh lock each time excludes nobody: the step and the Apply race.
+        "label": "scenario runner: a step is applied outside the lock an Apply takes",
+        "file": "beantester/scenario_runner.py",
+        "old": "        with self._lock:\n            s = scenario.settings_at(t, self._base)",
+        "new": "        with threading.Lock():\n            s = scenario.settings_at(t, self._base)",
+        "test": "test_an_apply_waits_for_a_step_being_applied",
+    },
+    {
+        "label": "gui: Apply during a scenario goes around the runner",
+        "file": "beantester/gui/session_repro.py",
+        "old": "    if not engine.rebase_scenario(settings, app.log):",
+        "new": "    if True:",
+        "test": "test_the_step_after_an_apply_builds_on_what_apply_set",
+    },
+    {
+        # Owner decisions D-6 and D-29: Load, Clear and Loop act at START only.
+        "label": "gui: the scenario controls stay live during a session",
+        "file": "beantester/gui/pages/control.py",
+        "old": "        return loop, clear, load\n",
+        "new": "",
+        "test": "test_the_scenario_controls_lock_while_a_session_runs",
     },
 ]
 

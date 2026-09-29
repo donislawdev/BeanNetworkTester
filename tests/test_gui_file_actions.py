@@ -309,12 +309,12 @@ def test_the_repro_describes_the_session_the_engine_ran_not_the_form():
     """)
 
 
-def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
-    """While a scenario runs, its next step puts its own base back - so an Apply
-    in between does not change what repeats the session: the start settings plus
-    the scenario. A scenario that ships with the program is named from the
-    program's folder, not by the absolute path the dialog returns (owner decision
-    2026-09-29): it carries no account name and runs on any install."""
+def test_apply_during_a_running_scenario_is_what_repeats_the_session():
+    """An Apply during a scenario becomes the scenario's base (owner decision D-6),
+    so the command repeats the scenario over it (owner decision D-28): the Apply
+    settings plus ``--scenario``. A scenario that ships with the program is named
+    from the program's folder, not by the absolute path the dialog returns (owner
+    decision 2026-09-29): it carries no account name and runs on any install."""
     run_gui("""
         import os, tempfile
         from beantester.gui import session_repro
@@ -329,13 +329,13 @@ def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
         app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
         try:
             app._finish_start(None)                     # starts the scenario as well
-            assert app.engine.scenario_running()
+            assert app.engine._scenario_runner.running()
             app.vars["loss"].set("20")
             app.apply_if_running()
             app.copy_repro_cli()
             app._logview.drain()
             line = [l for l in app._log_lines if "--scenario" in l][-1]
-            assert "--loss 20" not in line, line
+            assert "--loss 20" in line, line
             # the ARGUMENT, not a substring: the absolute path ends the same way
             shipped = os.path.join("scenarios", "cafe-wifi.json")
             assert "--scenario " + shipped + " --loop" in line, line
@@ -344,6 +344,43 @@ def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
 
         elsewhere = os.path.join(tempfile.mkdtemp(), "mine.json")
         assert session_repro.command_path(elsewhere) == elsewhere
+    """)
+
+
+def test_the_step_after_an_apply_builds_on_what_apply_set():
+    """External review P2-17: the next step put the START settings back.
+
+    Every step is laid over the scenario's base, and the base was frozen at
+    START - so the step after an Apply undid it, target and destination
+    included. Through the real "Apply changes": jitter, which no step sets,
+    must still be in the settings the second step applies.
+    """
+    run_gui("""
+        import json, os, tempfile, time
+        from beantester.gui import session_repro
+        from beantester.synthetic import SyntheticDivert
+
+        path = os.path.join(tempfile.mkdtemp(), "two_steps.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"steps": [{"at": 0, "settings": {"latency": 40}},
+                                 {"at": 0.6, "settings": {"latency": 80}}]}, f)
+        app._scenario = session_repro.read_scenario(path, app.log)
+        app._pending_start_settings = app._settings_from_widgets()
+        app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
+        try:
+            app._finish_start(None)                     # starts the scenario as well
+            app.vars["jitter"].set("7")
+            app.apply_if_running()
+            steps = []
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and len(steps) < 2:
+                time.sleep(0.05)
+                steps = [text for _, _, kind, text in app.engine.events_snapshot()
+                         if kind == "SCENARIO"]
+            assert len(steps) >= 2, steps
+            assert "+80 ms" in steps[-1] and "jitter +/-7 ms" in steps[-1], steps
+        finally:
+            app.engine.stop()
     """)
 
 

@@ -109,7 +109,8 @@ class ControlForm:
         self.notes = {}             # section id -> override note label
         self.helps = {}             # settings key -> its "?" cheat-sheet button
         self.rate_hints = {}        # rate field key -> its converted-value label
-        self._invalid = set()       # section ids whose fields currently fail validation
+        self.run_locked = {}        # section id -> controls its extra locks mid-session
+        self._invalid = set()      # section ids whose fields currently fail validation
         self.columns = 1
         self.column_frames = []
         self._relayout_job = None
@@ -124,7 +125,7 @@ class ControlForm:
         app = self.app
         self.sections, self.entries, self.labels = {}, {}, {}
         self.errors, self.notes, self.helps = {}, {}, {}
-        self.rate_hints = {}
+        self.rate_hints, self.run_locked = {}, {}
 
         # Real column FRAMES, not grid columns: in a grid the row height is
         # shared across columns, so one tall section on the left blew a hole
@@ -171,28 +172,30 @@ class ControlForm:
             # below the extra in every section that has one.
             builder = self.extras.get(sec.extra) if sec.extra else None
             if builder:
-                builder(body)
+                # An extra may hand back controls that only matter at START (the
+                # scenario's Load, Clear and Loop): they lock with the START-only
+                # fields, in apply_overrides, under the same note.
+                self.run_locked[sec.id] = tuple(builder(body) or ())
 
-            if sec.fields:
-                if any(FIELDS[k].overridden_by or FIELDS[k].start_only
-                       for k in sec.fields):
-                    # wrapping, not a fixed 560 px: a long note (or a longer
-                    # translation) was simply CUT at the panel edge. Shows either
-                    # the override reason (schedule) or the "locked mid-session"
-                    # reason for start-only fields - which a disabled widget cannot
-                    # explain itself, because ttk sends it no hover event.
-                    note = wrapping_label(body, "", style="Hint.TLabel")
-                    # Packed ONCE, up front, and kept mapped for the section's life:
-                    # an empty ttk.Label reserves the same one-line height as a full
-                    # one, so toggling only its TEXT (below) never changes the section
-                    # height. Packing/forgetting it on every START/STOP instead made
-                    # the whole scrolled form reflow and visibly jump (the note line
-                    # appears when a start-only field locks mid-session).
-                    note.pack(fill="x", pady=(scaled(5), 0))
-                    self.notes[sec.id] = note
-                if any(FIELDS[k].kind in VALIDATED_KINDS for k in sec.fields):
-                    err = wrapping_label(body, "", style="Bad.TLabel")
-                    self.errors[sec.id] = err          # packed only when non-empty
+            if self.run_locked.get(sec.id) or any(
+                    FIELDS[k].overridden_by or FIELDS[k].start_only for k in sec.fields):
+                # wrapping, not a fixed 560 px: a long note (or a longer
+                # translation) was simply CUT at the panel edge. Shows either
+                # the override reason (schedule) or the "locked mid-session"
+                # reason for start-only fields - which a disabled widget cannot
+                # explain itself, because ttk sends it no hover event.
+                note = wrapping_label(body, "", style="Hint.TLabel")
+                # Packed ONCE, up front, and kept mapped for the section's life:
+                # an empty ttk.Label reserves the same one-line height as a full
+                # one, so toggling only its TEXT (below) never changes the section
+                # height. Packing/forgetting it on every START/STOP instead made
+                # the whole scrolled form reflow and visibly jump (the note line
+                # appears when a start-only field locks mid-session).
+                note.pack(fill="x", pady=(scaled(5), 0))
+                self.notes[sec.id] = note
+            if any(FIELDS[k].kind in VALIDATED_KINDS for k in sec.fields):
+                err = wrapping_label(body, "", style="Bad.TLabel")
+                self.errors[sec.id] = err          # packed only when non-empty
 
         for sec in self._sections:
             if sec.toggle:
@@ -565,6 +568,8 @@ class ControlForm:
                         label.config(style="CardOff.TLabel" if dead else "Card.TLabel")
                     except tk.TclError as _exc:
                         crashlog.note(_exc, "gui.form")
+            if self._lock_extras(sec.id):
+                note_keys.append("fields.locked_running")
             note = self.notes.get(sec.id)
             if note is None:
                 continue
@@ -577,6 +582,23 @@ class ControlForm:
 
     # kept as the name the App calls after every start/stop
     refresh_field_states = apply_overrides
+
+    def _lock_extras(self, section_id):
+        """Disable a section's START-time controls (``run_locked``) while a session
+        runs, and enable them otherwise. True when they are locked right now.
+
+        The scenario's Load and Clear changed the label and the log while the
+        timeline started at START went on unchanged, and Loop is read at START
+        only (external review P2-17, owner decisions D-6 and D-29).
+        """
+        widgets = self.run_locked.get(section_id, ())
+        locked = bool(widgets) and bool(getattr(self.app, "running", False))
+        for widget in widgets:
+            try:
+                widget.config(state="disabled" if locked else "normal")
+            except tk.TclError as _exc:
+                crashlog.note(_exc, "gui.form")
+        return locked
 
     def section_enabled(self, section_id):
         sec = SECTION_BY_ID.get(section_id)
