@@ -462,9 +462,9 @@ MUTATIONS = [
         "file": "beantester/engine.py",
         "old": "                self._worker_stop(\n"
                "                    \"duration\", (T(\"log.duration_reached\", "
-               "v=f\"{self._duration:g}\"),))",
+               "v=f\"{self._duration:g}\"),), session)",
         "new": "                self.log(T(\"log.duration_reached\", v=f\"{self._duration:g}\"))\n"
-               "                self._worker_stop(\"duration\")",
+               "                self._worker_stop(\"duration\", session=session)",
         "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
     },
     {
@@ -519,9 +519,10 @@ MUTATIONS = [
         # The capture thread said the recv error itself before asking for the stop.
         "label": "engine: a recv error is said before the stop",
         "file": "beantester/engine.py",
-        "old": "                    self._fail_stop(e, lead=(f\"{T('log.recv_error')}: {e}\",))",
+        "old": "                    self._fail_stop(e, lead=(f\"{T('log.recv_error')}: {e}\",), "
+               "session=session)",
         "new": "                    self.log(f\"{T('log.recv_error')}: {e}\")\n"
-               "                    self._fail_stop(e)",
+               "                    self._fail_stop(e, session=session)",
         "test": "test_a_stop_closes_the_divert_while_the_log_is_still_blocked",
     },
     {
@@ -4382,6 +4383,138 @@ MUTATIONS = [
                 "dict(UI_DEFAULTS[\"event_sort\"])\n"),
         "new": "",
         "test": "test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter",
+    },
+    {
+        # External review P2-12: the capture thread reads the engine's flag and
+        # handle live again, so one that outlived its join is revived by the next
+        # START and reads the new session's traffic.
+        "label": "engine: the capture thread reads the engine's live state again",
+        "file": "beantester/engine.py",
+        "old": ("        divert = session.divert         # this session's handle, never the next one's\n"
+                "        while session.live:\n"
+                "            # Three stores per packet and not one allocation: `True`/`False` are\n"
+                "            # singletons and `now` below is a float this loop already reads. That\n"
+                "            # matters because this is the hot path - see the module's \"What this\n"
+                "            # actually sustains\" section.\n"
+                "            self._cap_waiting = True\n"
+                "            try:\n"
+                "                packet = divert.recv()"),
+        "new": ("        while self._running:\n"
+                "            self._cap_waiting = True\n"
+                "            try:\n"
+                "                packet = self._divert.recv()"),
+        "test": "test_a_capture_thread_that_outlives_its_session_never_reads_the_next_one",
+    },
+    {
+        # P2-12: the same for the injector - one hung in send() past its join
+        # comes back into the next session's queue.
+        "label": "engine: the inject thread loops on the engine's flag again",
+        "file": "beantester/engine.py",
+        "old": ("        while session.live:\n"
+                "            with self._cv:\n"
+                "                while session.live and not self._heap:\n"
+                "                    self._cv.wait()\n"
+                "                if not session.live:\n"
+                "                    break"),
+        "new": ("        while self._running:\n"
+                "            with self._cv:\n"
+                "                while self._running and not self._heap:\n"
+                "                    self._cv.wait()\n"
+                "                if not self._running:\n"
+                "                    break"),
+        "test": "test_an_inject_thread_that_outlives_its_session_ends_with_it",
+    },
+    {
+        # P2-12: a finished session's watchdog records its fault on the next one.
+        "label": "engine: a fault from a finished session is recorded again",
+        "file": "beantester/engine.py",
+        "old": ("        if session is not None and session is not self._session:\n"
+                "            return\n"
+                "        if not self._running:\n"
+                "            self._say(lead)"),
+        "new": ("        if not self._running:\n"
+                "            self._say(lead)"),
+        "test": "test_a_watchdog_that_outlives_its_session_never_faults_the_next_one",
+    },
+    {
+        # P2-12: a finished session's worker, bowing out of a stop it finds taken,
+        # says its lines into the running session's log.
+        "label": "engine: a finished session's worker speaks when it bows out",
+        "file": "beantester/engine.py",
+        "old": ("        if session is not None and session is not self._session:\n"
+                "            return                      # a worker of a session that is over: _Session\n"),
+        "new": "",
+        "test": "test_a_stop_or_a_fault_from_a_finished_session_leaves_the_running_one_alone",
+    },
+    {
+        # P2-12: the check under the lock - a worker that waited for it across a
+        # STOP and a START stops the new session.
+        "label": "engine: a finished session's worker can stop the running one",
+        "file": "beantester/engine.py",
+        "old": ("        if session is not None and session is not self._session:\n"
+                "            return\n"
+                "        if not self._running:\n"
+                "            self._say(say)"),
+        "new": ("        if not self._running:\n"
+                "            self._say(say)"),
+        "test": "test_a_stop_or_a_fault_from_a_finished_session_leaves_the_running_one_alone",
+    },
+    {
+        # P2-12: the resolver's shared stop signal, which start() cleared - any
+        # thread keeps looping while the resolver owns SOME thread.
+        "label": "target_resolver: a thread that outlived its stop is revived by start()",
+        "file": "beantester/target_resolver.py",
+        "old": "        while self._thread is me:",
+        "new": "        while self._thread is not None:",
+        "test": "test_a_thread_that_outlived_its_stop_is_not_revived_by_the_next_start",
+    },
+    {
+        # P2-12: the runner's flag alone, which start() clears for the new thread.
+        "label": "scenario_runner: the live timeline is the flag, not the thread",
+        "file": "beantester/scenario_runner.py",
+        "old": "        return not self._stop and self._thread is threading.current_thread()",
+        "new": "        return not self._stop",
+        "test": "test_a_thread_still_in_a_step_when_started_again_is_not_the_timeline_any_more",
+    },
+    {
+        # P2-12: a step that fails after STOP is reported as a dead worker of
+        # whatever session runs now.
+        "label": "scenario_runner: a stopped timeline's failure stops the session again",
+        "file": "beantester/scenario_runner.py",
+        "old": ("                if not self._owns():\n"
+                "                    # A step that failed after STOP: whatever session is running\n"
+                "                    # now is not this timeline's, and must not be stopped for it.\n"
+                "                    return\n"),
+        "new": "",
+        "test": "test_a_thread_still_in_a_step_when_started_again_is_not_the_timeline_any_more",
+    },
+    {
+        # P2-12: a step that outlasted STOP logs its SCENARIO event in the next
+        # session.
+        "label": "scenario_runner: a step applied after STOP is still recorded",
+        "file": "beantester/scenario_runner.py",
+        "old": ("                if not self._owns():\n"
+                "                    return last         # stopped while it applied: nothing more of it\n"),
+        "new": "",
+        "test": "test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session",
+    },
+    {
+        # P2-12: the step no longer tells apply_settings when it stopped being
+        # the timeline, so the old target lands in the next session.
+        "label": "scenario_runner: a step's target is installed after STOP again",
+        "file": "beantester/scenario_runner.py",
+        "old": "                apply_settings(eng, s, log, live=self._owns)",
+        "new": "                apply_settings(eng, s, log)",
+        "test": "test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session",
+    },
+    {
+        # P2-12: the question is asked but nothing waits for the answer.
+        "label": "settings: a target resolved after its session ended is installed",
+        "file": "beantester/settings.py",
+        "old": ("    if live is not None and not live():\n"
+                "        return None\n"),
+        "new": "",
+        "test": "test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session",
     },
 ]
 

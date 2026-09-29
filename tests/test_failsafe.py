@@ -1320,6 +1320,178 @@ def test_the_stall_check_answers_no_for_every_state_that_is_not_one():
           eng._capture_has_stalled() is False)
 
 
+# --- a worker that outlives its session (external review P2-12) ----------------- #
+#
+# STOP joins each worker for 2 s and then gives up, so a worker stuck in our own
+# code - the very thing the stall check above stops a session for - is still
+# running after STOP. It used to read `_running` and `_divert` live, so the next
+# START revived it. Both cases below were reproduced before the fix.
+
+
+class _ReadersDivert(QuietDivert):
+    """A quiet handle that remembers which threads called ``recv()`` on it."""
+
+    def __init__(self):
+        super().__init__()
+        self.readers = set()
+
+    def recv(self):
+        self.readers.add(threading.current_thread())
+        return super().recv()
+
+
+def test_a_capture_thread_that_outlives_its_session_never_reads_the_next_one():
+    """It read the NEXT session's handle with the old session's random generator,
+    next to the new capture thread and watched by nobody: 957 packets in the
+    second after it was released, in the reproduction."""
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.3
+    first = _StallingDivert()
+    eng.start("test", divert=first)
+    stuck = eng._t_cap
+    try:
+        check("the stall stopped the first session",
+              _wait_until(lambda: not eng.is_running() and first.closed))
+        second = _ReadersDivert()
+        eng.start("test", divert=second)            # waits out the 2 s join
+        check("the stuck thread outlived its session's STOP", stuck.is_alive())
+        first.release()                             # it gets its packet back
+        stuck.join(5)
+        check("P2-12: it ended with its session", not stuck.is_alive())
+        check("P2-12: without reading the next session's handle",
+              stuck not in second.readers)
+        check("the next session is running and healthy",
+              eng.is_running() and eng.fault is None, f"({eng.fault})")
+    finally:
+        first.release()
+        eng.stop()
+
+
+def test_a_watchdog_that_outlives_its_session_never_faults_the_next_one():
+    """An old watchdog, held past its join by a slow tick, woke up inside the next
+    START - after the new workers were created, before they were started - judged
+    them dead and recorded "worker thread ... died unexpectedly" against a session
+    that was perfectly healthy. The fault stayed on it and went into its report."""
+    lines, gate = [], threading.Event()
+    state = {"held": False, "second": False}
+
+    def log(text):
+        lines.append(text)
+        if state["second"] and "seed=" in text and not gate.is_set():
+            # The next START's banner: its workers exist but are not started yet,
+            # which is where the reproduction found them.
+            gate.set()
+            old_watchdog.join(5)
+
+    eng = BeanEngine(log_fn=log)
+    real_trim = eng._conns_log.trim
+
+    def slow_trim():
+        if not state["held"]:
+            state["held"] = True
+            gate.wait(10)                   # a maintenance tick that outlasts the join
+        return real_trim()
+
+    eng._conns_log.trim = slow_trim
+    eng.start("test", divert=QuietDivert())
+    old_watchdog = eng._t_wd
+    try:
+        check("the watchdog is inside its slow tick", _wait_until(lambda: state["held"]))
+        eng.stop()
+        check("and outlived the STOP", old_watchdog.is_alive())
+        state["second"] = True
+        first_line = len(lines)
+        eng.start("test", divert=QuietDivert())
+        check("the old watchdog has finished its tick", not old_watchdog.is_alive())
+        check("P2-12: the next session is not marked as failed",
+              eng.is_running() and eng.fault is None, f"({eng.fault})")
+        said = [line for line in lines[first_line:] if "died unexpectedly" in line]
+        check("P2-12: and nothing in its log says it failed", not said, f"({said})")
+    finally:
+        gate.set()
+        eng.stop()
+
+
+class _HungSendDivert(QuietDivert):
+    """One packet in; the first ``send()`` hangs until released - a driver that
+    stopped answering."""
+
+    def __init__(self):
+        super().__init__()
+        self.sending, self.released = threading.Event(), threading.Event()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return FakePacket(size=100, port=7001)
+        return super().recv()
+
+    def send(self, packet, recalculate_checksum=True):
+        self.sending.set()
+        self.released.wait(10)
+
+
+def test_an_inject_thread_that_outlives_its_session_ends_with_it():
+    """The injector read ``_running`` live as well: one hung in ``send()`` past the
+    join came back into the next session's queue, a second injector nobody
+    watched."""
+    eng = BeanEngine()
+    first = _HungSendDivert()
+    eng.start("test", divert=first)
+    hung = eng._t_inj
+    try:
+        check("the injector is hung in send()", first.sending.wait(5))
+        eng.stop()                                  # gives up on it after 2 s
+        check("and outlived the STOP", hung.is_alive())
+        eng.start("test", divert=QuietDivert())
+        first.released.set()
+        hung.join(5)
+        check("P2-12: it ended with its session", not hung.is_alive())
+    finally:
+        first.released.set()
+        eng.stop()
+
+
+def test_a_stop_or_a_fault_from_a_finished_session_leaves_the_running_one_alone():
+    """Each door a worker can knock on, asked directly with the session it belongs
+    to after that session has ended - including the bow-out of a stop that finds
+    the lock taken, which the scenarios above never reach."""
+    lines = []
+    eng = BeanEngine(log_fn=lines.append)
+    eng.start("test", divert=QuietDivert())
+    finished = eng._session
+    eng.stop()
+    eng.start("test", divert=QuietDivert())
+    try:
+        said = len(lines)
+        eng._fail_stop(RuntimeError("stale fault"), blocking=False, session=finished)
+        eng._fail_stop(RuntimeError("stale fault"), blocking=True, session=finished)
+        with eng._stop_lock:
+            eng._stop_locked("fault", ("stale line",), session=finished)
+        taken, done = threading.Event(), threading.Event()
+
+        def hold_the_lock():
+            with eng._stop_lock:
+                taken.set()
+                done.wait(5)
+
+        holder = threading.Thread(target=hold_the_lock, daemon=True)
+        holder.start()
+        taken.wait(5)
+        try:
+            eng._worker_stop("duration", ("stale line",), session=finished)
+        finally:
+            done.set()
+            holder.join(5)
+        check("the running session is still running", eng.is_running())
+        check("and carries no fault", eng.fault is None, f"({eng.fault})")
+        stale = [line for line in lines[said:] if "stale" in line]
+        check("and nothing of the finished session was said", not stale, f"({stale})")
+    finally:
+        eng.stop()
+
+
 # --- the log is the caller's code: it can block, and it can raise ------------- #
 #
 # On the CLI the log is a plain write to stderr. A console whose text is being
@@ -1363,7 +1535,7 @@ def _frozen_at_a_recv_error(eng, log, monkeypatch):
 
 def _frozen_at_a_dead_worker(eng, log, monkeypatch):
     log.needle = "died unexpectedly"
-    monkeypatch.setattr(eng, "_capture_loop", lambda: None)    # ends at once
+    monkeypatch.setattr(eng, "_capture_loop", lambda session: None)    # ends at once
     divert = QuietDivert()
     eng.start("test", divert=divert)
     return divert

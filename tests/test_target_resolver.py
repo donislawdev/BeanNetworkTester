@@ -126,9 +126,11 @@ def test_stop_never_waits_for_a_scan_in_flight():
     while that scan was in flight blocked for 1.6 s - on the button the user
     reaches for precisely because they have just broken their own network.
 
-    Not joining that is safe: ``stop()`` has already cleared the target and set the
-    stop flag, so a straggler finishes at most one more scan into an object nobody
-    reads any more, then exits. It is a daemon either way.
+    Not joining that is safe: ``stop()`` has already cleared the target and let go
+    of the thread, so a straggler finishes at most one more scan into an object
+    nobody reads any more, then exits - even when the resolver is started again
+    meanwhile (``test_a_thread_that_outlived_its_stop_is_not_revived_by_the_next_start``).
+    It is a daemon either way.
     """
     class _SlowTable:
         def __init__(self, delay):
@@ -165,6 +167,66 @@ def test_stop_never_waits_for_a_scan_in_flight():
     finally:
         resolver.stop()
         time.sleep(3.1)                  # let the straggler retire before we leave
+
+
+class _HeldTable:
+    """A socket table whose FIRST scan waits for ``release`` - a cold resolve."""
+
+    def __init__(self):
+        self.inside, self.release = threading.Event(), threading.Event()
+
+    def refresh(self, now=None, force=False):
+        if not self.inside.is_set():
+            self.inside.set()
+            self.release.wait(10)
+        return True
+
+    def snapshot(self):
+        return {}
+
+    def name_of(self, pid, cheap=False):
+        return ""
+
+    def ancestors(self, pid, depth=8):
+        return []
+
+
+def _resolver_threads():
+    return [t for t in threading.enumerate() if t.name == "bean-target-resolver"]
+
+
+def test_a_thread_that_outlived_its_stop_is_not_revived_by_the_next_start():
+    """External review P2-12, the resolver half, reproduced before the fix.
+
+    The stop signal was one shared Event and ``start()`` cleared it, so a thread
+    still inside a scan when ``stop()`` gave up on it never saw the signal: after a
+    quick STOP and START, two threads scanned the socket table for the whole of the
+    next session. The flaky ``test_repeated_start_stop_cycles_do_not_stack_resolver_threads``
+    below was this, caught under load.
+    """
+    table = _HeldTable()
+    targeting = ProcessTargeting(bnt.parse_target("app"), table=table)
+    resolver = TargetResolver(interval=0.02, min_interval=0.0)
+    before = set(_resolver_threads())
+    resolver.retarget(targeting)
+    resolver.start()
+    try:
+        check("the resolver is inside a scan", table.inside.wait(5))
+        straggler = resolver._thread
+        resolver.stop()
+        check("stop() did not wait for it", straggler.is_alive())
+
+        resolver.retarget(targeting)
+        resolver.start()                # the next session, at once
+        table.release.set()
+        straggler.join(5)
+        check("P2-12: the old thread ended after its scan", not straggler.is_alive())
+        alive = set(_resolver_threads()) - before
+        check("P2-12: one resolver thread in the new session", len(alive) == 1,
+              f"({len(alive)})")
+    finally:
+        table.release.set()
+        resolver.stop()
 
 
 def test_stop_does_join_an_idle_resolver():
@@ -545,8 +607,17 @@ def test_repeated_start_stop_cycles_do_not_stack_resolver_threads():
     The GUI used to spawn a refresher thread on every start and never join it, so a
     STOP followed by a START inside its 2 s sleep left the OLD thread looping as
     well - one extra permanent scanner per fast restart cycle.
+
+    Waits for the threads to END rather than giving them a fixed 0.2 s: a thread
+    that missed a join under load is allowed to finish its pass, and what this
+    guards is that it then ends. It was flaky with the fixed grace, and the red
+    runs were a resolver thread revived by the next start - external review
+    P2-12, now pinned exactly by
+    ``test_a_thread_that_outlived_its_stop_is_not_revived_by_the_next_start``.
+    Threads are compared as objects, not by name: the resolver's name is the same
+    for every thread, so another test's leftover could hide a leak here.
     """
-    before = {t.name for t in threading.enumerate()}
+    before = set(threading.enumerate())
     targeting, _ = _targeting()
     engine = BeanEngine()
     engine.set_target(True, targeting)
@@ -556,9 +627,11 @@ def test_repeated_start_stop_cycles_do_not_stack_resolver_threads():
         time.sleep(0.02)
         engine.stop()
 
-    time.sleep(0.2)
-    leaked = {t.name for t in threading.enumerate()} - before
-    check("five start/stop cycles leave no thread behind", not leaked, f"({leaked})")
+    def leaked():
+        return [t.name for t in set(threading.enumerate()) - before]
+
+    check("five start/stop cycles leave no thread behind",
+          _wait(lambda: not leaked()), f"({leaked()})")
 
 
 def test_start_binds_the_targeting_under_the_lock_that_protects_it():

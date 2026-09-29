@@ -74,7 +74,6 @@ class ScenarioRunner:
         """
         self.stop()
         self._wake.clear()
-        self._stop = False
         self.finished = False
         # Set here, before the thread exists, so an Apply that arrives before the
         # thread's first step is not overwritten by the START settings.
@@ -83,6 +82,10 @@ class ScenarioRunner:
             self._rebased_from = None
         self._thread = threading.Thread(
             target=self._loop, args=(scenario, log), daemon=True)
+        # Only now, with the new thread already the one this runner owns: cleared
+        # any earlier, it would let a thread that outlived stop()'s join above see
+        # itself as the live timeline again (see _owns).
+        self._stop = False
         self._thread.start()
 
     def stop(self, timeout=JOIN_S):
@@ -119,6 +122,20 @@ class ScenarioRunner:
         """True while the thread is still applying the timeline (any ending: False)."""
         thread = self._thread
         return thread is not None and thread.is_alive()
+
+    def _owns(self):
+        """Is the CALLING thread this runner's live timeline?
+
+        False once ``stop()`` was called, and for a thread a later ``start()``
+        replaced. Asked by the runner thread itself, and not only between steps:
+        ``stop()`` joins for ``JOIN_S`` and a step can take longer - resolving a
+        target walks the socket table, measured at 1.7 s cold - so a step can
+        still be in flight after STOP returned. It then went on to install the old
+        target into the NEXT session and log a SCENARIO event there (external
+        review P2-12, reproduced); ``apply_settings`` asks this before it installs
+        a target, and ``_play`` before it records anything.
+        """
+        return not self._stop and self._thread is threading.current_thread()
 
     def rebase(self, base, log=lambda *_: None):
         """"Apply changes" while the timeline runs: apply ``base`` and lay every
@@ -163,6 +180,10 @@ class ScenarioRunner:
         except Exception as exc:                      # noqa: BLE001 - the net itself
             try:
                 crashlog.record(exc, "scenario_runner")
+                if not self._owns():
+                    # A step that failed after STOP: whatever session is running
+                    # now is not this timeline's, and must not be stopped for it.
+                    return
                 # Stop FIRST, then say why: `log` is the caller's and can block (a
                 # paused console), and said first it kept the session impairing
                 # traffic for as long as it blocked (measured 2026-09-28).
@@ -177,7 +198,7 @@ class ScenarioRunner:
         prev_t, last = -1.0, None
         log(f"{T('log.scenario_start')} ({len(scenario.steps)} {T('log.steps')}, "
             f"{T('log.loop') if scenario.loop else T('log.once')}).")
-        while self.engine.is_running() and not self._stop:
+        while self.engine.is_running() and self._owns():
             t = self._clock() - start
             if scenario.loop and scenario.duration > 0 and t > scenario.duration:
                 # The LAST step first - its settings and its action (owner
@@ -217,7 +238,9 @@ class ScenarioRunner:
                 if last is not None and not moved:
                     last = s
             if s != last:
-                apply_settings(eng, s, log)
+                apply_settings(eng, s, log, live=self._owns)
+                if not self._owns():
+                    return last         # stopped while it applied: nothing more of it
                 last = s
                 eng.log_event("SCENARIO", settings_summary(s, "en"))
         for at, ev in scenario.events_between(prev_t, t):
