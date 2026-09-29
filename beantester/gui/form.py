@@ -675,7 +675,13 @@ class ControlForm:
             elif field.kind == F.SEED:
                 var.set("" if value in (None, -1, "", "-1") else str(value))
             elif field.kind == F.NUMBER:
-                var.set(number_string(value))
+                # Text is the form's own, handed back by every caller that
+                # re-reads it (a row action, a rebuild), so it stays exactly as
+                # typed: formatting it turned "2,5" - a value the engine accepts
+                # - into "0", and made "inf" raise halfway through a row action
+                # (external review P1-7, NOWE-3-3). Only real numbers - a file,
+                # a profile, a preset - are formatted.
+                var.set(value if isinstance(value, str) else number_string(value))
             else:
                 var.set("" if value is None else str(value))
         for sec in self._sections:

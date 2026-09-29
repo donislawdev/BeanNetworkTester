@@ -34,6 +34,40 @@ def test_settings_summary_en():
     check("summary EN: no impairments", "no impairments" in empty, f"({empty})")
 
 
+def test_the_summary_reads_a_typed_number_the_way_the_engine_does():
+    """A decimal comma is a number, not "no impairment" (external review P1-7).
+
+    The strip describes the form's TEXT, and read it through ``float()``, which
+    raises on "2,5" - so a 2.5% loss the engine was applying was described as a
+    perfect link. The value, not only the test for it: fixing the ``if`` alone
+    still printed "0% loss". And "inf", which the field refuses, raised out of
+    the strip entirely (NOWE-3-3); a refused value is simply not described.
+    """
+    from beantester import settings_summary
+    typed = settings_summary({"loss": "2,5", "latency": "150,5", "loss_burst": "4,0"}, "en")
+    stored = settings_summary({"loss": 2.5, "latency": 150.5, "loss_burst": 4}, "en")
+    assert typed == stored, (typed, stored)
+    assert "+150.5 ms ping" in typed and "2.5% loss" in typed and "runs of 4" in typed, typed
+    up = settings_summary({"asym": True, "loss_up": "2,5", "spike_prob_up": "1,5",
+                           "spike_ms_up": "300"}, "en")
+    assert "2.5% loss" in up and "300 ms" in up, up
+    for refused in ("inf", "-inf", "nan", "1e400", "abc"):
+        s = settings_summary({"loss": refused, "latency": "5"}, "en")
+        assert s == "Active: +5 ms ping.", (refused, s)
+
+
+def test_a_number_that_cannot_be_written_as_digits_is_displayed_not_raised():
+    """``number_string`` only displays; ``int(inf)`` used to raise out of it.
+
+    That made "inf" in a field crash the preview strip and stop a table's row
+    action halfway, after the target was written (external review NOWE-3-3).
+    """
+    from beantester.utils import number_string
+    assert [number_string(v) for v in (5.0, 2.5, "7", None)] == ["5", "2.5", "7", "0"]
+    assert [number_string(v) for v in (float("inf"), float("-inf"), float("nan"), "inf")] \
+        == ["inf", "-inf", "nan", "inf"]
+
+
 def test_settings_summary_lan():
     from beantester import settings_summary
     pl = settings_summary({"lan_mode": True}, "pl")
