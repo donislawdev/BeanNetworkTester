@@ -107,7 +107,10 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # `gui/session_repro.py` with the record of the session's settings they are now
 # built from (external review, P2-15). The band falls to 791; `engine.py` is 768
 # after gaining the session facts the repro command needs - 23 lines clear.
-FILE_CEILING = 1130             # beantester/gui/app.py
+# Lowered 2026-09-29 from 1130: "Apply changes" hands the settings to
+# `session_repro.apply`, which also rebases a running scenario (external review
+# P2-17), so two lines in `app.py` became one.
+FILE_CEILING = 1129             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

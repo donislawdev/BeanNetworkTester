@@ -338,6 +338,40 @@ def test_start_only_fields_are_locked_while_a_session_runs():
     """)
 
 
+def test_the_scenario_controls_lock_while_a_session_runs():
+    """External review P2-17, owner decisions D-6 and D-29.
+
+    Load and Clear changed the label and the log mid-session while the timeline
+    started at START went on unchanged, and Loop is read at START only. They lock
+    with the START-only fields, and the section's note says why - a disabled
+    button cannot explain itself.
+    """
+    run_gui("""
+        from beantester.i18n import T
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        texts = {T("buttons.load_scenario"), T("buttons.clear"), T("fields.loop")}
+        body = app.form.sections["repro"].body
+        controls = [w for w in descendants(body) if w.kw.get("text") in texts]
+        assert len(controls) == 3, [w.kw.get("text") for w in descendants(body)]
+        note = app.form.notes["repro"]
+
+        app.running = True
+        app._sync_running_ui()
+        assert [w.kw.get("state") for w in controls] == ["disabled"] * 3, controls
+        assert note.kw.get("text") == T("fields.locked_running"), note.kw
+
+        app.running = False
+        app._sync_running_ui()
+        assert [w.kw.get("state") for w in controls] == ["normal"] * 3, controls
+        assert not note.kw.get("text"), note.kw
+    """)
+
+
 def test_long_notes_wrap_instead_of_being_cut():
     """The "all captured connections" note was clipped at the frame edge."""
     run_gui("""

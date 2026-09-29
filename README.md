@@ -423,10 +423,12 @@ middle of otherwise normal traffic.
 
 **Repeatability and scenario:**
 - *Seed* - set any number so every run randomises the same way (a bug becomes reproducible). Empty =
-  different every time.
+  different every time. Taken **only at START**, so it is locked while a session runs.
 - *Scenario* - a JSON file that changes settings in real time (e.g. after 10 s add ping, after 20 s
   tear down). "Loop" replays it endlessly. Examples in `scenarios/` (cafe Wi-Fi, mobile LTE->3G,
   congested VPN, failing DNS, overloaded game server, upload dropped midway, blocked backend/API).
+  "Load scenario...", "Clear" and "Loop" act at START, so they are locked while a session runs.
+  "Apply changes" during a scenario works: see [Scenario file format](#scenario-file-format).
 
 **Profiles** - ready presets **sorted from best (top) to worst (bottom)**: Perfect network, Good
 Wi-Fi, 5G network, Home DSL (VDSL), LTE/4G, Satellite (low orbit), Distant server (another
@@ -740,8 +742,8 @@ Designed so that after a bug you can recreate exactly the same conditions:
 - **What the report and the command describe** - the last session, not the form: the settings
   START gave it, updated by every "Apply changes", with its seed and its scenario
   (`--scenario`, plus `--loop` if it looped). A change you typed but did not apply is left out,
-  and so is a profile loaded after STOP. While a scenario runs, "Apply changes" lasts only until
-  its next step, so the command keeps the settings the session started with. A scenario that
+  and so is a profile loaded after STOP. During a scenario, "Apply changes" becomes the base its
+  later steps build on, so the command takes those settings too. A scenario that
   ships with the program is named from the program's folder (`scenarios\...` from the sources,
   `_internal\scenarios\...` next to the `.exe`), and the command finds it from any folder you
   run it in. Any other file is named by the path you picked.
@@ -1120,6 +1122,11 @@ moment. The file is JSON, either an object or a bare list of steps:
 |---|---|
 | `steps` | required - the list of steps. A bare `[ ... ]` at the top level works too, and means `loop: false`. |
 | `loop` | optional, default `false`. Replays the timeline endlessly, restarting after the LAST step's `at`. The last step's settings and action are applied just before each restart, so in a loop it lasts only a moment - to hold a final phase, add a later step. |
+
+**"Apply changes" while a scenario runs** - it is applied at once, and every later step builds on
+it instead of on the settings START gave the session. A setting no step touches (the target
+process, the destination targeting) keeps its new value to the end. A setting the steps set keeps
+the new value only until the next step, which puts the scenario's value back.
 
 **Step level** - a step needs `settings`, `action`, or both. One that has neither is an error, not a
 pause.

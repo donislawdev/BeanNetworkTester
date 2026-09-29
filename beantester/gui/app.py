@@ -1170,8 +1170,7 @@ class App:
         except ValueError as e:
             self.log(f"{T('log.error')}: {e}")
             return
-        apply_settings(self.engine, s, self.log)
-        session_repro.applied(self, s)
+        session_repro.apply(self, s)
         self._applied_target = str(s.get("target", "")).strip()
         # A session can BECOME unbounded: clear the target, press "Apply changes",
         # and from that moment everything on the machine is in scope. Warning only
@@ -1558,7 +1557,7 @@ class App:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.app")
         if self.form is not None:
-            # every other START-only field (today: "Run time") locks with it
+            # every other START-only field locks with it, the scenario's controls too
             self.form.refresh_field_states()
         # ...and so do the ones rendered by a WINDOW. The Settings window has its
         # own ControlForm carrying "narrow_filter", so refreshing only self.form

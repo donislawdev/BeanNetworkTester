@@ -575,16 +575,17 @@ class BeanEngine:
         runner = self._scenario_runner
         return bool(runner is not None and runner.finished)
 
-    def scenario_running(self):
-        """True while a scenario still applies its steps to this session.
+    def rebase_scenario(self, base, log=lambda *_: None):
+        """"Apply changes" while a scenario plays: the runner applies ``base`` and
+        lays every later step over it (``ScenarioRunner.rebase``, owner decision
+        D-6). False when no scenario is playing - then nothing was applied here,
+        and the caller applies ``base`` itself.
 
-        While it does, a live "Apply changes" lasts only until the next step: every
-        step is the scenario's BASE plus the steps so far, never what was applied
-        in between. So the settings that describe such a session stay the ones it
-        started with (gui/session_repro.py).
+        The runner does the applying, not the caller, because only the runner can
+        keep a step from landing between the two: see ``ScenarioRunner.__init__``.
         """
         runner = self._scenario_runner
-        return bool(runner is not None and runner.running())
+        return bool(runner is not None and runner.rebase(base, log))
 
     # -- statistics / connection log ----------------------------------------- #
     def reset_stats(self):

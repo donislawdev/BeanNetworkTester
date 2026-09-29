@@ -414,8 +414,11 @@ FIELD_DEFS = (
           cli="narrow-filter", start_only=True),
 
     # -- reproduction ------------------------------------------------------ #
+    # start_only: the GUI and the CLI seed the engine once, just before
+    # BeanEngine.start(), and "Apply changes" never does - so a seed typed
+    # mid-session changed nothing while it looked applied (owner decision D-30).
     Field("seed", SEED, "fields.seed", "repro", width=12, tip="tips.seed",
-          hint="fields.seed_hint", cli="seed"),
+          hint="fields.seed_hint", cli="seed", start_only=True),
 )
 
 FIELDS = {f.key: f for f in FIELD_DEFS}

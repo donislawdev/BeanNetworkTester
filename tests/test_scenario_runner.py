@@ -418,7 +418,8 @@ def _loop_virtually(monkeypatch, ticks):
     runner = ScenarioRunner(engine, clock=clock)
     runner._wake = _Ticks(clock, engine, ticks)
     runner._stop = False
-    runner._timeline(scenario, dict(DEFAULT_SETTINGS), lambda *_: None)
+    runner._base = dict(DEFAULT_SETTINGS)
+    runner._timeline(scenario, lambda *_: None)
     return applied, resets
 
 
@@ -452,3 +453,123 @@ def test_a_loop_does_not_drift(monkeypatch):
             if not 0.0 <= t - 10.0 * k < 0.3 + 1e-6]
     check("50 cycle starts, each within one tick of k x 10 s",
           len(starts) == 50 and not late, f"(late: {late[:5]}, count {len(starts)})")
+
+
+# --- "Apply changes" while the timeline runs (owner decision D-6) ------------ #
+class _TicksWith(_Ticks):
+    """``_Ticks`` that runs ``on_tick[n]`` after its n-th wait: on the runner's
+    own thread and outside its lock, where an Apply lands between two ticks."""
+
+    def __init__(self, clock, engine, ticks, on_tick):
+        super().__init__(clock, engine, ticks)
+        self.on_tick, self.n = on_tick, 0
+
+    def wait(self, timeout):
+        super().wait(timeout)
+        self.n += 1
+        if self.n in self.on_tick:
+            self.on_tick[self.n]()
+
+
+_START = {"loss": 0, "target": "a.exe"}
+_APPLY = {"loss": 20, "target": "b.exe"}
+
+
+def _steps(*losses):
+    """A timeline setting ``loss`` at 0 s, 10 s, 20 s... - and nothing else."""
+    from beantester.scenario import parse_scenario
+    return parse_scenario({"steps": [{"at": 10 * i, "settings": {"loss": loss}}
+                                     for i, loss in enumerate(losses)]})
+
+
+def _spy_rebase_run(monkeypatch, apply_after_tick, apply=None):
+    """Play loss 1 at 0 s and loss 5 at 10 s in the runner's thread on 0.3 s
+    virtual ticks, with an Apply after tick ``apply_after_tick``; return every
+    apply as (time, loss, target)."""
+    from beantester.settings import DEFAULT_SETTINGS
+    clock, engine = _Clock(), FakeEngine()
+    applied = []
+    monkeypatch.setattr(scenario_runner, "apply_settings", lambda eng, s, log=None: applied.append(
+        (round(clock.t - 1000.0, 1), s["loss"], s["target"])))
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+    runner = ScenarioRunner(engine, clock=clock)
+    base = dict(DEFAULT_SETTINGS, **_START)
+    runner._wake = _TicksWith(clock, engine, 60, {
+        apply_after_tick: lambda: runner.rebase(dict(base, **_APPLY))})
+    runner.start(_steps(1, 5), base)
+    _join(runner, 5.0)
+    return applied
+
+
+def test_an_apply_stands_until_the_timeline_moves_and_the_next_step_builds_on_it(monkeypatch):
+    """External review P2-17: the base was frozen at START.
+
+    The step after an Apply put back everything it had changed - the target
+    included - and a step whose settings had not changed was re-applied over it
+    at the next tick. Now Apply is applied at once, nothing touches it while the
+    step stays the same, and the next step is laid over the Apply's settings.
+    """
+    applied = _spy_rebase_run(monkeypatch, apply_after_tick=10)       # at 3 s
+    check("start, the Apply, then the next step over the Apply's target",
+          applied == [(0.0, 1, "a.exe"), (3.0, 20, "b.exe"), (10.2, 5, "b.exe")],
+          f"({applied})")
+
+
+def test_an_apply_in_the_tick_a_step_begins_does_not_swallow_the_step(monkeypatch):
+    """The timeline moved on the same tick: the new step still goes on, over
+    the Apply. Treating it as "nothing moved since the Apply" skipped it."""
+    applied = _spy_rebase_run(monkeypatch, apply_after_tick=34)       # at 10.2 s
+    check("the Apply, then the step that began in the same tick, over it",
+          applied == [(0.0, 1, "a.exe"), (10.2, 20, "b.exe"), (10.2, 5, "b.exe")],
+          f"({applied})")
+
+
+def test_an_apply_waits_for_a_step_being_applied(monkeypatch):
+    """A step half-applied when an Apply arrives must finish FIRST.
+
+    Otherwise the step, computed on the old base, lands after the Apply and puts
+    the old target back - and the timeline, already on the new base, sees no
+    reason to correct it until the next step. The runner applies both under one
+    lock: here the step is held inside ``apply_settings`` while an Apply comes in
+    from another thread, the way the window's "Apply changes" does.
+    """
+    import threading
+    from beantester.settings import DEFAULT_SETTINGS
+    clock, engine = _Clock(), FakeEngine()
+    applied, entered, release = [], threading.Event(), threading.Event()
+    runner = ScenarioRunner(engine, clock=clock)
+
+    def spy(eng, s, log=None):
+        applied.append((s["loss"], s["target"]))
+        if s["loss"] == 5 and threading.current_thread() is runner._thread:
+            entered.set()
+            release.wait(5)
+
+    monkeypatch.setattr(scenario_runner, "apply_settings", spy)
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+    base = dict(DEFAULT_SETTINGS, **_START)
+    runner._wake = _Ticks(clock, engine, 100)
+    runner.start(_steps(1, 5, 9), base)
+    try:
+        assert entered.wait(5), "the step at 10 s was never applied"
+        apply = threading.Thread(target=runner.rebase, args=(dict(base, **_APPLY),))
+        apply.start()
+        apply.join(0.3)
+        waited = apply.is_alive()
+    finally:
+        release.set()
+    apply.join(5)
+    _join(runner, 5.0)
+    check("the Apply waited for the step being applied", waited, f"({applied})")
+    check("so the step came first and the Apply's target is what stayed",
+          applied.index((5, "a.exe")) < applied.index((20, "b.exe"))
+          and applied[-1][1] == "b.exe", f"({applied})")
+
+
+def test_an_apply_after_the_timeline_ended_is_left_to_the_caller(spy_apply):
+    """A finished (or stopped) timeline applies nothing: the window applies
+    the settings itself, so they are not applied twice or dropped."""
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    check("no timeline, nothing applied", runner.rebase({"loss": 3}) is False
+          and spy_apply == [], f"({spy_apply})")
