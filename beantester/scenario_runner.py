@@ -45,6 +45,20 @@ class ScenarioRunner:
         # "the runner is no longer running": ``stop()`` and a dead engine also
         # end the loop, and neither of those is a scenario that completed.
         self.finished = False
+        # What every step is laid over. START sets it, and "Apply changes" during
+        # the timeline replaces it (``rebase``, owner decision D-6): a base frozen
+        # at START made the next step put back everything Apply had changed, the
+        # target and the destination included (external review P2-17).
+        # ``_rebased_from`` is the base the last applied step was computed with,
+        # kept until the timeline next looks (see ``_play``).
+        # Both change only under ``_lock``, which is also held while a step is
+        # applied - so a step can land neither between an Apply and its new base
+        # (it would put the old base back) nor on top of it unseen. ``stop()``
+        # never takes it, so STOP cannot be kept waiting by an Apply, and the
+        # log the runner is given here is the window's queue, not a widget.
+        self._lock = threading.Lock()
+        self._base = {}
+        self._rebased_from = None
 
     def start(self, scenario, base_settings, log=lambda *_: None):
         """Start the timeline, after stopping any thread this runner still owns.
@@ -62,9 +76,13 @@ class ScenarioRunner:
         self._wake.clear()
         self._stop = False
         self.finished = False
+        # Set here, before the thread exists, so an Apply that arrives before the
+        # thread's first step is not overwritten by the START settings.
+        with self._lock:
+            self._base = dict(base_settings)
+            self._rebased_from = None
         self._thread = threading.Thread(
-            target=self._loop, args=(scenario, dict(base_settings), log),
-            daemon=True)
+            target=self._loop, args=(scenario, log), daemon=True)
         self._thread.start()
 
     def stop(self, timeout=JOIN_S):
@@ -102,7 +120,28 @@ class ScenarioRunner:
         thread = self._thread
         return thread is not None and thread.is_alive()
 
-    def _loop(self, scenario, base, log):
+    def rebase(self, base, log=lambda *_: None):
+        """"Apply changes" while the timeline runs: apply ``base`` and lay every
+        later step over it. False when the timeline is not running - nothing was
+        applied, and the caller applies on its own.
+
+        What Apply changed stays until the timeline next changes: keys no step
+        sets (the target, the destination) for the rest of the session, keys the
+        steps set until the next step sets them again. Applying here, under the
+        lock a step is applied with, is what makes that exact - see ``__init__``.
+        """
+        with self._lock:
+            if not self.running():
+                return False
+            apply_settings(self.engine, base, log)
+            # The base the last step came from, not the one before it: two
+            # Applies inside one tick still compare against the step on the wire.
+            if self._rebased_from is None:
+                self._rebased_from = self._base
+            self._base = dict(base)
+            return True
+
+    def _loop(self, scenario, log):
         """The thread body: run the timeline, and never die in silence.
 
         Before this wrapper, an exception in the loop killed the daemon thread and
@@ -120,7 +159,7 @@ class ScenarioRunner:
         the impairment stays.
         """
         try:
-            self._timeline(scenario, base, log)
+            self._timeline(scenario, log)
         except Exception as exc:                      # noqa: BLE001 - the net itself
             try:
                 crashlog.record(exc, "scenario_runner")
@@ -133,7 +172,7 @@ class ScenarioRunner:
                 # A safety net that can itself fall through is not one.
                 crashlog.note(_exc, "scenario_runner")
 
-    def _timeline(self, scenario, base, log):
+    def _timeline(self, scenario, log):
         start = self._clock()
         prev_t, last = -1.0, None
         log(f"{T('log.scenario_start')} ({len(scenario.steps)} {T('log.steps')}, "
@@ -145,14 +184,14 @@ class ScenarioRunner:
                 # decision D-5). Wrapping the moment the clock passed it skipped
                 # both, unless a tick happened to land exactly on its `at`
                 # (external review P2-3).
-                self._play(scenario, base, prev_t, scenario.duration, last, log)
+                self._play(scenario, prev_t, scenario.duration, last, log)
                 # Whole cycles on from the old start, not "now": the overshoot
                 # belongs to the next cycle. Restarting from now made every cycle
                 # up to a tick longer than the file says, and the error added up.
                 start += (t // scenario.duration) * scenario.duration
                 prev_t, last = -1.0, None
                 continue
-            last = self._play(scenario, base, prev_t, t, last, log)
+            last = self._play(scenario, prev_t, t, last, log)
             prev_t = t
             if not scenario.loop and t > scenario.duration + 0.1:
                 self.finished = True
@@ -163,15 +202,24 @@ class ScenarioRunner:
             # called it to wait out the rest of a tick. See ScenarioRunner.stop.
             self._wake.wait(0.1)
 
-    def _play(self, scenario, base, prev_t, t, last, log):
+    def _play(self, scenario, prev_t, t, last, log):
         """The timeline at ``t``: its settings if they changed, and the actions in
         ``(prev_t, t]``. Returns the settings now applied."""
         eng = self.engine
-        s = scenario.settings_at(t, base)
-        if s != last:
-            apply_settings(eng, s, log)
-            last = s
-            eng.log_event("SCENARIO", settings_summary(s, "en"))
+        with self._lock:
+            s = scenario.settings_at(t, self._base)
+            if self._rebased_from is not None:
+                # An Apply since the last tick. If the TIMELINE has not moved
+                # (the same step, on the base it was applied with), what Apply
+                # set stands; if a step began this very tick, it goes on.
+                moved = scenario.settings_at(t, self._rebased_from) != last
+                self._rebased_from = None
+                if last is not None and not moved:
+                    last = s
+            if s != last:
+                apply_settings(eng, s, log)
+                last = s
+                eng.log_event("SCENARIO", settings_summary(s, "en"))
         for at, ev in scenario.events_between(prev_t, t):
             # From scenario.ACTIONS, not a second list of the same names: a
             # copy here would keep honouring an action the validator has

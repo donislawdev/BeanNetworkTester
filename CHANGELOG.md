@@ -20,6 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **"Apply changes" during a scenario is no longer undone by its next step.** Each step put
+  back the settings START gave the session, the target process and destination targeting
+  included. Now the later steps build on what you applied, and "Copy CLI command" and the
+  repro report take it too. "Load scenario...", "Clear", "Loop" and "Seed" only act at START,
+  so they are locked while a session runs. Before, they changed the label or the field while
+  the session went on as it started.
+
 - **A looping scenario now plays its last step.** The loop started over before the last
   step's settings and action were applied, and each round ran a little longer than the file
   said. The last step now runs just before each restart, and the rounds keep time.

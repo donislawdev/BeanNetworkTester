@@ -483,6 +483,9 @@ class ControlPage:
         load.pack(side="right")
         for w in (loop, clear, load):
             add_tooltip(w, "tips.scenario")
+        # All three act at START only, so the form locks them while a session runs
+        # (ControlForm.run_locked).
+        return loop, clear, load
 
     def _build_profiles(self, body):
         app = self.app
