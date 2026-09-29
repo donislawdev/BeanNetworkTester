@@ -30,7 +30,7 @@ from ..fields import BOOL as F_BOOL
 from ..fields import CHOICE as F_CHOICE
 from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
-from ..fields import FIELD_DEFS, SECTIONS, UI_ONLY_KEYS, off_value, widget_value
+from ..fields import FIELD_DEFS, SECTIONS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import crashlog, winenv
 from . import csv_export
@@ -46,13 +46,13 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import dialogs, session_repro
+from . import applied, dialogs, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
 from .pages import PAGES, teardown as teardown_pages
 from .profiles import ProfileStore
-from .rates import PeakWindow
+from .rates import SessionPeaks
 from . import scope
 from .scaling import (geometry_fits, init_scaling, initial_geometry,
                       max_window_size, min_window_size, scaled)
@@ -158,11 +158,9 @@ class App:
         n = self.chart_samples()          # history length is a saved preference
         self.down_hist = deque([0] * n, maxlen=n)
         self.up_hist = deque([0] * n, maxlen=n)
-        self._rate_window = PeakWindow()   # 1 s average behind "peak download / upload"
+        self.peaks = SessionPeaks()        # "peak download / upload", one per view
         self.last_snapshot = None
         self.last_rates = (0.0, 0.0)
-        self.peak_down = 0.0
-        self.peak_up = 0.0
         self.proc_map = {}
         self._proc_refresh_t = 0.0
         self._last_t = time.monotonic()
@@ -753,6 +751,10 @@ class App:
         if not dialogs.ask_yes_no(self.root, T("dialogs.reset_layout_title"),
                                   T("dialogs.reset_layout_body")):
             return
+        # FIRST: closing a window saves its geometry, so closed after the reset it
+        # wrote back the one just forgotten - and the Settings window, where this
+        # button lives, is always open (external review P3-32).
+        self.windows.close_all()
         for key in ("geometry", "page", "stats_page", "tools_page", "collapsed",
                     "log_height", "conn_sort", "event_sort"):
             self.ui.set(key, UI_DEFAULTS[key])
@@ -760,8 +762,9 @@ class App:
             if wid.startswith("window."):        # secondary-window geometries
                 self.ui.set(wid, "")
         self.collapsed_sections = []
+        # The live sorts too: the tables are rebuilt from these, not from ui.json.
+        self.conn_sort, self.event_sort = dict(UI_DEFAULTS["conn_sort"]), dict(UI_DEFAULTS["event_sort"])
         self.ui.persist()
-        self.windows.close_all()
         self._restore_geometry()      # empty geometry -> recompute a centred one
         self._build_ui()
         self.log(T("log.layout_reset"))
@@ -811,16 +814,7 @@ class App:
         self.ui.set("collapsed", self.collapsed_sections)
 
     # -- summary / dirty state ------------------------------------------------- #
-    @staticmethod
-    def _signature(raw):
-        """Fingerprint of the settings THE ENGINE would receive.
-
-        ui_only fields (row_limit) are excluded on purpose: nothing sends them to
-        the engine and the tables re-read them on every refresh, so including them
-        made "Apply changes" light up for a change that was already live.
-        """
-        return tuple(sorted((k, str(v)) for k, v in raw.items()
-                            if k not in UI_ONLY_KEYS))
+    _signature = staticmethod(applied.signature)     # the rule lives in gui/applied.py
 
     def _is_dirty(self):
         if not self.running or self._applied_sig is None:
@@ -1179,7 +1173,7 @@ class App:
         warn_if_unbounded(s, self.log)
         self.engine.log_event("CHANGE", settings_summary(s, "en"))
         self.log(f"{T('log.applied_changes')}: {settings_summary(s, self._lang)}")
-        self._applied_sig = self._signature(self._raw_settings())
+        self._applied_sig = applied.after_apply(self._applied_sig, self._raw_settings())
         self._form_changed = True
         self._refresh_dirty()
 
@@ -1310,6 +1304,9 @@ class App:
             return
         self.engine.set_seed(s.get("seed", -1))
         self._pending_start_settings = s
+        # What the engine gets, read NOW: read when the start finished (0.5-2 s
+        # later), it marked an edit typed meanwhile as applied (review P3-24).
+        self._applied_sig = self._signature(self._raw_settings())
         filt = windivert_for(s["filter"])
         duration = s.get("duration", 0)
         # Same sentence the CLI prints, from the same condition and the same
@@ -1359,9 +1356,7 @@ class App:
         s = self._pending_start_settings
         session_repro.started(self, s)
         self.running = True
-        self._applied_sig = self._signature(self._raw_settings())
-        self.peak_down = self.peak_up = 0.0
-        self._rate_window.reset()
+        self.peaks.reset()
         if self._scenario is not None:
             self._scenario.loop = self.loop_var.get()
             self.engine.start_scenario(self._scenario, s, log=self.log)
@@ -1659,17 +1654,6 @@ class App:
         except Exception:
             return True
 
-    def _peak_rates(self, now, snap):
-        """Throughput averaged over ~1 s - the figure the "peak" line reports.
-
-        The arithmetic lives in ``gui/rates.py`` (pure, unit-tested): it used to
-        live here, untested, with an eviction rule that threw away the very sample
-        that made the window wide enough, so the session's peak read 0 / 0 KB/s for
-        the entire life of the tool.
-        """
-        return self._rate_window.add(now, self.scoped_stat(snap, "bytes_in"),
-                                     self.scoped_stat(snap, "bytes_out"))
-
     # Counters that have a "targeted traffic only" twin. Everything else is shown
     # unchanged - and three of those are load-bearing omissions rather than gaps:
     # drop_overflow / drop_shutdown / drop_send count packets THIS TOOL lost,
@@ -1732,10 +1716,9 @@ class App:
             self.down_hist.append(down)
             self.up_hist.append(up)
             self.last_rates = (down, up)
-            averaged = self._peak_rates(now, snap)
-            if self.running and averaged is not None:
-                self.peak_down = max(self.peak_down, averaged[0])
-                self.peak_up = max(self.peak_up, averaged[1])
+            if self.running:     # both views, whichever is shown (gui/rates.py)
+                self.peaks.add(now, (snap.get("bytes_in", 0), snap.get("bytes_out", 0)),
+                               (snap.get("bytes_in_scoped", 0), snap.get("bytes_out_scoped", 0)))
         self.last_snapshot, self._last_t = snap, now
 
     def _tick(self):

@@ -1438,11 +1438,12 @@ beantester/              the implementation package
     model_worker.py      rebuilds a table's model on a worker thread (UI never blocks)
     windows.py           base class and registry for secondary windows
     dialogs.py           dark, in-app replacements for messagebox/simpledialog
-    rates.py             throughput averaging (a pure, testable helper)
+    rates.py             throughput averaging and the peak of each view (pure, testable)
     scope.py             what the numbers on screen cover (one pure verdict)
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
     csv_export.py        the two CSV exports and the column names they write
     session_repro.py     what the session ran with: the repro report and "Copy CLI command"
+    applied.py           what "Apply changes" compares the form with (a pure helper)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl, zh)
 tests/                   pytest tests

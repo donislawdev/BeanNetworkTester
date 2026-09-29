@@ -450,6 +450,14 @@ class ControlPage:
         """
         self._marks = []
         self._opened = set()
+        # The widgets the App keeps in step are new too: the same three calls a
+        # full rebuild (App._build_ui) ends with. Without them the rebuilt filter
+        # stayed editable mid-session, the scenario label said "no scenario" and
+        # "Delete" came back for a built-in preset (external review P2-16b, d).
+        app = self.app
+        app._sync_profile_widgets()
+        app._update_scenario_label()
+        app._sync_running_ui()
         if _LAST_QUERY[0]:
             self._apply()
 

@@ -348,6 +348,39 @@ def test_reset_ui_layout_forgets_window_state():
     """)
 
 
+def test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter():
+    """External review P3-32, NOWE-1-1, P2-16a.
+
+    The button lives in the Settings window, so a window is always open when it
+    is pressed - and closing it saved its geometry right after the reset had
+    cleared it. The tables are rebuilt from the App's live sorts, which the reset
+    left alone. And the rebuild put back the filter from before the user's pick.
+    """
+    run_gui("""
+        from types import SimpleNamespace
+        from beantester.filters import i18n_key_for
+        from beantester.gui import dialogs
+        from beantester.gui.ui_state import DEFAULTS
+        from beantester.i18n import T
+        dialogs.ask_yes_no = lambda *a, **k: True
+
+        app.vars["filter"].set(T(i18n_key_for("out")))
+        app.form._on_choice(SimpleNamespace(widget=app.filter_cb))
+        app.conn_sort = {"column": "remote_ip", "reverse": True}
+        app.event_sort = {"column": "kind", "reverse": True}
+        app.open_window("settings")
+        app.windows._open["settings"].close()        # remembers where it was
+        assert app.ui.get("window.settings"), "the probe needs a saved geometry"
+        app.open_window("settings")
+
+        app.reset_ui_layout()
+        assert not app.ui.get("window.settings"), app.ui.get("window.settings")
+        assert app.conn_sort == DEFAULTS["conn_sort"], app.conn_sort
+        assert app.event_sort == DEFAULTS["event_sort"], app.event_sort
+        assert app._filter_cli_key() == "out", app._filter_cli_key()
+    """)
+
+
 def test_the_control_search_bar_can_be_switched_off_and_back_on():
     """The box goes away, and comes back BETWEEN the scrollbar and the page body.
 
