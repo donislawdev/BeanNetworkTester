@@ -362,3 +362,93 @@ def test_a_broken_timeline_stops_the_session_before_it_says_so(monkeypatch):
     check("the failure is said", told_at, f"({said!r})")
     check("and only once the engine has been told to stop", told_at == [1],
           f"({said!r})")
+
+
+# --- a loop, played on virtual time ------------------------------------------ #
+class _Clock:
+    """Virtual monotonic time (``ScenarioRunner(clock=...)``)."""
+
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+class _Ticks:
+    """The runner's doorbell, where every wait is one tick of virtual time.
+
+    0.3 s and not the real 0.1: a tick that never lands on the last step's `at`
+    is exactly the case that skipped it (external review P2-3), so the test must
+    not be lucky. The engine goes down after ``ticks`` waits.
+    """
+
+    def __init__(self, clock, engine, ticks, step=0.3):
+        self.clock, self.engine, self.left, self.step = clock, engine, ticks, step
+
+    def wait(self, timeout):
+        self.clock.t += self.step
+        self.left -= 1
+        if self.left <= 0:
+            self.engine.running = False
+
+    def set(self):
+        pass
+
+    def clear(self):
+        pass
+
+
+def _loop_virtually(monkeypatch, ticks):
+    """Play a 10 s loop - loss 1 from 0 s, loss 5 plus a reset at 10 s - on virtual
+    time; return the (time, loss) of every apply and the (time, duration) of every
+    reset, times counted from the start."""
+    from beantester.scenario import parse_scenario
+    from beantester.settings import DEFAULT_SETTINGS
+    clock, engine = _Clock(), FakeEngine()
+    applied = []
+    monkeypatch.setattr(scenario_runner, "apply_settings",
+                        lambda eng, s, log=None: applied.append((clock.t - 1000.0, s["loss"])))
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+    resets = []
+    engine.reset_now = lambda duration: resets.append((clock.t - 1000.0, duration))
+    scenario = parse_scenario({"loop": True, "steps": [
+        {"at": 0, "settings": {"loss": 1}},
+        {"at": 10, "settings": {"loss": 5}, "action": "reset_tcp", "duration": 2}]})
+    runner = ScenarioRunner(engine, clock=clock)
+    runner._wake = _Ticks(clock, engine, ticks)
+    runner._stop = False
+    runner._timeline(scenario, dict(DEFAULT_SETTINGS), lambda *_: None)
+    return applied, resets
+
+
+def test_a_loop_plays_its_last_step_before_it_starts_over(monkeypatch):
+    """Owner decision D-5: the last step's settings AND its action, every cycle.
+
+    The runner wrapped the moment the clock passed the last `at`, before asking
+    the timeline what was due there. Unless a tick landed exactly on it, the last
+    step never ran - in `congested-vpn` and `overloaded-game-server` it is the
+    recovery phase (external review P2-3).
+    """
+    applied, resets = _loop_virtually(monkeypatch, ticks=1700)      # ~510 s
+    last_steps = [t for t, loss in applied if loss == 5]
+    check("50 cycles, the last step applied in every one", len(last_steps) >= 50,
+          f"({len(last_steps)} of ~51)")
+    check("and its reset fired every time, with its own duration",
+          len(resets) == len(last_steps) and {d for _, d in resets} == {2.0},
+          f"({len(resets)} resets, {len(last_steps)} applies)")
+
+
+def test_a_loop_does_not_drift(monkeypatch):
+    """Cycle k begins at k x 10 s, whatever the ticks do.
+
+    Each wrap used to restart the cycle from "now", throwing away however far the
+    tick had overshot the end - up to a tick per cycle, adding up. Here a cycle
+    starts where the loss goes back to 1.
+    """
+    applied, _ = _loop_virtually(monkeypatch, ticks=1700)
+    starts = [t for t, loss in applied if loss == 1][1:51]         # cycles 1..50
+    late = [(k, round(t - 10.0 * k, 3)) for k, t in enumerate(starts, 1)
+            if not 0.0 <= t - 10.0 * k < 0.3 + 1e-6]
+    check("50 cycle starts, each within one tick of k x 10 s",
+          len(starts) == 50 and not late, f"(late: {late[:5]}, count {len(starts)})")

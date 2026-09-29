@@ -68,6 +68,22 @@ def _fail(code, message):
     raise CliError(code, message)
 
 
+def _read_scenario(path, log):
+    """The scenario file, or SCENARIO(4); what loads but will not act is said.
+
+    One reader for the run and for ``--dry-run``, which carried two copies of
+    it - and the warnings (a step setting what a session takes only at START,
+    external review P3-12) would otherwise have been said by one of them.
+    """
+    try:
+        scen = load_scenario_file(path)
+    except Exception as e:
+        _fail(exitcodes.SCENARIO, f"scenario error in {path!r}: {e}")
+    for warning in scen.warnings:
+        log.warn(warning)
+    return scen
+
+
 # Examples BEFORE the flag list, because that is the order a reader needs them in
 # (clig.dev). The usage block alone runs to 24 lines of about fifty flags, and the
 # first thing anyone wants from a tool that size is one line they can copy. Four,
@@ -712,12 +728,7 @@ def _open_session(cfg, log, engine):
     # old order proved it: the run opened the divert, printed "Start.", impaired
     # traffic and only then said the file was broken. Failures from RUNNING the
     # scenario still land below, where the session can report them properly.
-    scen = None
-    if cfg["scenario"]:
-        try:
-            scen = load_scenario_file(cfg["scenario"])
-        except Exception as e:
-            _fail(exitcodes.SCENARIO, f"scenario error in {cfg['scenario']!r}: {e}")
+    scen = _read_scenario(cfg["scenario"], log) if cfg["scenario"] else None
 
     try:
         log.debug("opening the divert...")
@@ -962,11 +973,7 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             # non-object scenario passed the check with exit OK and then failed
             # the real run with SCENARIO(4).
             if cfg["scenario"]:
-                try:
-                    scen = load_scenario_file(cfg["scenario"])
-                except Exception as e:
-                    _fail(exitcodes.SCENARIO,
-                          f"scenario error in {cfg['scenario']!r}: {e}")
+                scen = _read_scenario(cfg["scenario"], log)
                 log.debug(f"scenario: {len(scen.steps)} steps, "
                           f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
             _log_effective_settings(log, cfg)

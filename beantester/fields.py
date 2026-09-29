@@ -34,6 +34,7 @@ PCT = (0.0, 100.0)
 MS = (0.0, 600000.0)
 RATE = (0.0, 10000000.0)          # KB/s, 0 = unlimited
 SECONDS = (0.0, 86400.0)
+RESET_S = (0.0, 3600.0)           # how long a reset lasts: RST cooldown, a scenario action
 
 # -- blast radius ---------------------------------------------------------- #
 # What a field does to traffic, so that "is this run about to damage everything
@@ -357,7 +358,7 @@ FIELD_DEFS = (
     Field("rst_prob", NUMBER, "fields.rst", "advanced", unit="%",
           bounds=PCT, width=6, tip="tips.rst", cli="rst-prob", impairs=IMPAIRS_ALL),
     Field("rst_cooldown", NUMBER, "fields.rst_cooldown", "advanced", unit="s",
-          bounds=(0.0, 3600.0), width=6, tip="tips.rst_cooldown", cli="rst-cooldown",
+          bounds=RESET_S, width=6, tip="tips.rst_cooldown", cli="rst-cooldown",
           parameter_of="rst_prob"),
 
     # -- schedule ---------------------------------------------------------- #

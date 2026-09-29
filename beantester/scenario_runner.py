@@ -26,8 +26,11 @@ class ScenarioRunner:
     # tool may never make slow.
     JOIN_S = 0.25
 
-    def __init__(self, engine):
+    def __init__(self, engine, clock=time.monotonic):
         self.engine = engine
+        # Injectable so a test can play hundreds of cycles of a timeline in
+        # microseconds and see where each one begins (external review P2-3).
+        self._clock = clock
         self._stop = True
         self._thread = None
         # The doorbell that makes the join in stop() cheap. The loop used to sleep
@@ -131,30 +134,25 @@ class ScenarioRunner:
                 crashlog.note(_exc, "scenario_runner")
 
     def _timeline(self, scenario, base, log):
-        eng = self.engine
-        start = time.monotonic()
+        start = self._clock()
         prev_t, last = -1.0, None
         log(f"{T('log.scenario_start')} ({len(scenario.steps)} {T('log.steps')}, "
             f"{T('log.loop') if scenario.loop else T('log.once')}).")
-        while eng.is_running() and not self._stop:
-            t = time.monotonic() - start
+        while self.engine.is_running() and not self._stop:
+            t = self._clock() - start
             if scenario.loop and scenario.duration > 0 and t > scenario.duration:
-                start = time.monotonic()
+                # The LAST step first - its settings and its action (owner
+                # decision D-5). Wrapping the moment the clock passed it skipped
+                # both, unless a tick happened to land exactly on its `at`
+                # (external review P2-3).
+                self._play(scenario, base, prev_t, scenario.duration, last, log)
+                # Whole cycles on from the old start, not "now": the overshoot
+                # belongs to the next cycle. Restarting from now made every cycle
+                # up to a tick longer than the file says, and the error added up.
+                start += (t // scenario.duration) * scenario.duration
                 prev_t, last = -1.0, None
                 continue
-            s = scenario.settings_at(t, base)
-            if s != last:
-                apply_settings(eng, s, log)
-                last = s
-                eng.log_event("SCENARIO", settings_summary(s, "en"))
-            for at, ev in scenario.events_between(prev_t, t):
-                # From scenario.ACTIONS, not a second list of the same names: a
-                # copy here would keep honouring an action the validator has
-                # stopped accepting, which is how "reset_now" outlived its own
-                # removal for exactly as long as nobody looked.
-                if str(ev.get("action")) in ACTIONS:
-                    eng.reset_now(float(ev.get("duration", 3.0)))
-                    log(f"{T('log.scenario')} [{at:.0f}s]: {T('log.scenario_reset')}.")
+            last = self._play(scenario, base, prev_t, t, last, log)
             prev_t = t
             if not scenario.loop and t > scenario.duration + 0.1:
                 self.finished = True
@@ -164,3 +162,22 @@ class ScenarioRunner:
             # stop() can now end this wait at once instead of leaving whoever
             # called it to wait out the rest of a tick. See ScenarioRunner.stop.
             self._wake.wait(0.1)
+
+    def _play(self, scenario, base, prev_t, t, last, log):
+        """The timeline at ``t``: its settings if they changed, and the actions in
+        ``(prev_t, t]``. Returns the settings now applied."""
+        eng = self.engine
+        s = scenario.settings_at(t, base)
+        if s != last:
+            apply_settings(eng, s, log)
+            last = s
+            eng.log_event("SCENARIO", settings_summary(s, "en"))
+        for at, ev in scenario.events_between(prev_t, t):
+            # From scenario.ACTIONS, not a second list of the same names: a
+            # copy here would keep honouring an action the validator has
+            # stopped accepting, which is how "reset_now" outlived its own
+            # removal for exactly as long as nobody looked.
+            if str(ev.get("action")) in ACTIONS:
+                eng.reset_now(float(ev.get("duration", 3.0)))
+                log(f"{T('log.scenario')} [{at:.0f}s]: {T('log.scenario_reset')}.")
+        return last

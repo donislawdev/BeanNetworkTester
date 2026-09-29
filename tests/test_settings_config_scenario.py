@@ -312,6 +312,52 @@ def test_a_scenario_step_rejects_a_bad_duration():
     check("scenario: a valid duration still passes", ok.steps[0]["duration"] == 8)
 
 
+def test_a_reset_that_lasts_no_time_or_an_hour_and_more_is_refused():
+    """Owner decision D-26: more than 0 s and at most 3600 s.
+
+    ``0`` passed and reset nothing, while the file said it did (external review
+    NOWE-2-3). No upper bound meant a reset that outlived its session and cut the
+    next one's connections too (P3-3). 3600 is the RST cooldown field's bound -
+    the other number that says how long a reset lasts - so the two agree.
+    """
+    import pytest
+    from beantester.scenario import MAX_ACTION_S, parse_scenario
+    from beantester.fields import FIELDS
+    check("the cap is the RST cooldown field's", MAX_ACTION_S == FIELDS["rst_cooldown"].bounds[1],
+          f"({MAX_ACTION_S})")
+    for bad in (0, 0.0, "0", 3600.5, 7200):
+        with pytest.raises(ValueError) as exc:
+            parse_scenario([{"at": 1, "action": "reset_tcp", "duration": bad}])
+        check(f"duration={bad!r}: the message gives the range", "3600" in str(exc.value),
+              f"({exc.value})")
+    for good in (0.5, 3600):
+        sc = parse_scenario([{"at": 1, "action": "reset_tcp", "duration": good}])
+        check(f"duration={good!r} still loads", sc.steps[0]["duration"] == good)
+
+
+def test_a_step_setting_what_a_step_cannot_change_loads_and_says_so():
+    """External review P3-12: silently ignored, and the README invited it.
+
+    ``apply_settings`` does not apply ``filter``, ``duration``, ``narrow_filter``,
+    ``row_limit`` or ``seed`` - a session takes them at START, and ``row_limit``
+    only the window's tables read - so a step carrying one changed nothing. Refusing would break users' files (owner decision D-27),
+    so the file loads and the warning names the step and the keys.
+    """
+    from beantester.scenario import parse_scenario
+    from beantester.settings import NOT_APPLIED_LIVE
+    check("the five, read from the registry",
+          sorted(NOT_APPLIED_LIVE) == ["duration", "filter", "narrow_filter", "row_limit", "seed"],
+          f"({NOT_APPLIED_LIVE})")
+    sc = parse_scenario([{"at": 0, "settings": {"loss": 1}},
+                         {"at": 5, "settings": {"filter": "udp", "seed": 7, "loss": 2}}])
+    check("one warning, for the one step", len(sc.warnings) == 1, f"({sc.warnings})")
+    check("it names the step and both keys",
+          "2" in sc.warnings[0] and "filter, seed" in sc.warnings[0], f"({sc.warnings})")
+    check("the step itself still loads, whole", sc.steps[1]["settings"]["loss"] == 2)
+    clean = parse_scenario([{"at": 0, "settings": {"loss": 1, "rate_schedule": "1:100:0"}}])
+    check("a step of live settings says nothing", clean.warnings == [], f"({clean.warnings})")
+
+
 def test_a_scenario_step_rejects_a_duration_with_nothing_to_apply_to():
     import pytest
     from beantester.scenario import parse_scenario

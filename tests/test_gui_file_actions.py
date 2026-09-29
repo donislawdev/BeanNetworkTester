@@ -322,7 +322,7 @@ def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
         from beantester.synthetic import SyntheticDivert
 
         app._scenario = session_repro.read_scenario(
-            os.path.join(scenarios_dir(), "cafe-wifi.json"))
+            os.path.join(scenarios_dir(), "cafe-wifi.json"), app.log)
         app.loop_var.set(True)
         app.vars["loss"].set("5")
         app._pending_start_settings = app._settings_from_widgets()

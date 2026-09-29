@@ -157,8 +157,10 @@ DEPTH_BAND = 4                  # absolute: see above
 # Lowered 2026-09-06 from 12, the routine direction: `core.decide` gave the
 # token bucket its own function, which took `core.py::decide` out of the band
 # without anyone aiming at this axis. Lowering a crowd count is free; the test
-# below is what forces it, and that is the whole point of pinning it.
-DEPTHS_NEAR_CEILING = 11        # make_gear_icon at 5, ten more at 4
+# below is what forces it, and that is the whole point of pinning it. 11 -> 10 on
+# 2026-09-29 the same way: the scenario reader nested inside the --dry-run branch
+# of `cli.py` became one function for both doors (R-13a).
+DEPTHS_NEAR_CEILING = 10        # make_gear_icon at 5, nine more at 4
 
 
 def _logic_lines(source):

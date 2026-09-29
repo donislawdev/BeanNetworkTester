@@ -1114,7 +1114,7 @@ class App:
         if not path:
             return
         try:
-            self._scenario = session_repro.read_scenario(path)
+            self._scenario = session_repro.read_scenario(path, self.log)
             self.loop_var.set(self._scenario.loop or self.loop_var.get())
             self._scenario_name = (f"{T('log.scenario')}: {os.path.basename(path)} "
                                    f"({len(self._scenario.steps)} {T('log.steps')}, "

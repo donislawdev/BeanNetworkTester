@@ -636,6 +636,14 @@ def _batch(engine):
     return batch() if callable(batch) else nullcontext()
 
 
+# What ``apply_settings`` below does NOT apply: the keys a session takes at START
+# (the seed with them - the CLI and the GUI seed the engine once, at START) and the
+# ones that never reach the engine at all. Read from the registry, so a new start-only field joins
+# by being declared. A scenario step carrying one is warned about when the file
+# loads (external review P3-12).
+NOT_APPLIED_LIVE = tuple(f.key for f in FIELD_DEFS if f.start_only or f.ui_only) + ("seed",)
+
+
 def apply_settings(engine, s, log=lambda *_: None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
 

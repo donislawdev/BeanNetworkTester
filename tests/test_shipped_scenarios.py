@@ -34,6 +34,11 @@ def test_every_shipped_scenario_parses():
         check(f"{name} has steps", len(scenario.steps) >= 1)
         check(f"{name} has a positive duration", scenario.duration > 0,
               f"({scenario.duration}s)")
+        # Our own files must not need the warning a user's file gets:
+        # failing-dns.json set "filter" in a step, which does nothing there
+        # (external review P3-12).
+        check(f"{name} loads without a warning", scenario.warnings == [],
+              f"({scenario.warnings})")
 
 
 def _loss_of_first_step(scenario):

@@ -430,8 +430,12 @@ def test_overflow_counts_packets_lost_not_queue_entries():
     deadline = time.time() + 15
     while time.time() < deadline and sh.stats_snapshot()["seen"] < n:
         time.sleep(0.02)
-    s = sh.stats_snapshot()
+    # Read AFTER stop, which joins the capture thread. `seen` is bumped before
+    # `_enqueue` counts the overflow, so a snapshot taken the moment `seen`
+    # reaches n can still miss the last packet's drop: CI read 194 for 195.
+    # STOP leaves `drop_overflow`, `duplicated` and `seen` as they were.
     sh.stop()
+    s = sh.stats_snapshot()
 
     # `duplicated` counts copies the queue ACCEPTED, so with ten slots and two
     # entries per packet it is five - not 200. It used to read 200 here, because

@@ -14,7 +14,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   KB/s. A wrong value stops the run with code `3` (`4` in a scenario), naming the setting.
   Files this tool saved keep loading, a seed saved as `42.0` included.
 
+- **A scenario reset must last more than 0 and at most 3600 seconds.** A `reset_tcp` step
+  with `"duration": 0` reset nothing, and a longer one could run on into the next session. A
+  scenario file with such a step now stops with code `4`, naming the step.
+
 ### Fixed
+
+- **A looping scenario now plays its last step.** The loop started over before the last
+  step's settings and action were applied, and each round ran a little longer than the file
+  said. The last step now runs just before each restart, and the rounds keep time.
+
+- **"Apply changes" no longer restarts the speed schedule.** Every Apply, and every scenario
+  step, sent the schedule back to its first step, so it could stay there for good. Only a
+  changed schedule starts over now.
+
+- **A connection reset no longer carries into the next session.** A reset still running when
+  a session stopped cut the next session's connections too.
+
+- **A scenario step that sets something a step cannot change now says so.** `filter`,
+  `duration`, `narrow_filter`, `row_limit` and `seed` in a step changed nothing, silently. The
+  file still loads, and the log names the step. `failing-dns.json` set the traffic filter this
+  way, so its description now says "port 53" rather than "UDP port 53".
 
 - **Nothing goes missing from the command line's output on Windows.** With the output sent to
   a file, a line holding a character the system's code page cannot show - a Chinese process

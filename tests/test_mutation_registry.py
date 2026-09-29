@@ -850,7 +850,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 11        # make_gear_icon at 5, ten more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 10        # make_gear_icon at 5, nine more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -1171,10 +1171,8 @@ MUTATIONS = [
     {
         "label": "scenario: the file is read only after the capture is open again",
         "file": "beantester/cli.py",
-        "old": "    scen = None\n    if cfg[\"scenario\"]:\n        try:\n"
-               "            scen = load_scenario_file(cfg[\"scenario\"])",
-        "new": "    scen = None\n    if False:\n        try:\n"
-               "            scen = load_scenario_file(cfg[\"scenario\"])",
+        "old": "    scen = _read_scenario(cfg[\"scenario\"], log) if cfg[\"scenario\"] else None",
+        "new": "    scen = None",
         "test": "test_a_broken_scenario_never_opens_the_capture",
     },
     {
@@ -4142,6 +4140,100 @@ MUTATIONS = [
         "old": "    except UnicodeEncodeError:",
         "new": "    except ZeroDivisionError:",
         "test": "test_a_line_the_code_page_cannot_hold_arrives_escaped_not_lost",
+    },
+    {
+        # External review P2-3 / owner decision D-5: the loop wrapped before the
+        # last step's settings and action were due, so they never ran.
+        "label": "scenario runner: a loop wraps without playing its last step",
+        "file": "beantester/scenario_runner.py",
+        "old": "                self._play(scenario, base, prev_t, scenario.duration, last, log)\n",
+        "new": "",
+        "test": "test_a_loop_plays_its_last_step_before_it_starts_over",
+    },
+    {
+        "label": "scenario runner: each cycle restarts from now and drifts",
+        "file": "beantester/scenario_runner.py",
+        "old": "                start += (t // scenario.duration) * scenario.duration",
+        "new": "                start = self._clock()",
+        "test": "test_a_loop_does_not_drift",
+    },
+    {
+        # External review P2-1: every Apply and every scenario step restarted the
+        # schedule's cycle.
+        "label": "core: the same schedule applied again restarts its cycle",
+        "file": "beantester/core.py",
+        "old": "            if schedule != self.schedule:",
+        "new": "            if True:",
+        "test": "test_the_same_schedule_applied_again_keeps_its_cycle",
+    },
+    {
+        # The other half: a changed schedule restarts the clock AND replaces the
+        # steps. With the first one kept, only the step lengths tell them apart.
+        "label": "core: a changed schedule restarts its cycle but keeps the old steps",
+        "file": "beantester/core.py",
+        "old": "                self.schedule = schedule\n",
+        "new": "                self.schedule = self.schedule or schedule\n",
+        "test": "test_the_same_schedule_applied_again_keeps_its_cycle",
+    },
+    {
+        "label": "core: a reset still running carries into the next session",
+        "file": "beantester/core.py",
+        "old": "            self._reset_now_deadline = 0.0\n",
+        "new": "",
+        "test": "test_a_reset_still_running_does_not_carry_into_the_next_session",
+    },
+    {
+        # External review NOWE-2-3 / owner decision D-26.
+        "label": "scenario: a reset that lasts no time loads",
+        "file": "beantester/scenario.py",
+        "old": "        if duration <= 0:",
+        "new": "        if duration < 0:",
+        "test": "test_a_reset_that_lasts_no_time_or_an_hour_and_more_is_refused",
+    },
+    {
+        "label": "scenario: a reset has no upper bound again",
+        "file": "beantester/scenario.py",
+        "old": "        duration = parse_number(value, bounds=(0, MAX_ACTION_S))",
+        "new": "        duration = parse_number(value, bounds=(0, None))",
+        "test": "test_a_reset_that_lasts_no_time_or_an_hour_and_more_is_refused",
+    },
+    {
+        # External review P3-12: a step setting a START-only key loaded in silence.
+        "label": "scenario: the keys a step cannot change are not looked for",
+        "file": "beantester/scenario.py",
+        "old": "        ignored = [k for k in settings if k in NOT_APPLIED_LIVE]",
+        "new": "        ignored = []",
+        "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
+    },
+    {
+        "label": "settings: the seed is taken for a setting a step can change",
+        "file": "beantester/settings.py",
+        "old": " + (\"seed\",)",
+        "new": "",
+        "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
+    },
+    {
+        "label": "cli: the scenario's load warnings are not said",
+        "file": "beantester/cli.py",
+        "old": "    for warning in scen.warnings:\n        log.warn(warning)\n",
+        "new": "",
+        "test": "test_a_scenario_step_setting_what_it_cannot_change_is_said_by_the_dry_run_and_the_run",
+    },
+    {
+        "label": "gui: the scenario's load warnings are not said",
+        "file": "beantester/gui/session_repro.py",
+        "old": "    for warning in scenario.warnings:\n        log(warning)\n",
+        "new": "",
+        "test": "test_loading_a_scenario_says_what_its_steps_cannot_change",
+    },
+    {
+        # D-27: our own DNS scenario set the traffic filter in a step, where it
+        # does nothing.
+        "label": "shipped scenario: failing-dns sets the filter in a step again",
+        "file": "scenarios/failing-dns.json",
+        "old": "\"settings\": { \"dst_port\": \"53\",",
+        "new": "\"settings\": { \"filter\": \"udp\", \"dst_port\": \"53\",",
+        "test": "test_every_shipped_scenario_parses",
     },
 ]
 
