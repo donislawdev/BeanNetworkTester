@@ -1043,6 +1043,126 @@ def test_closing_the_window_always_releases_the_engine():
     """)
 
 
+def test_closing_the_window_while_start_resolves_opens_no_driver_afterwards():
+    """The window closed while START was still resolving its target (external
+    review P2-14). on_close stopped an engine that was not running yet and
+    released a driver nothing had loaded, and the start then opened one that
+    nothing unloaded - reproduced in exactly that order on the old code."""
+    run_gui("""
+        import threading
+        import beantester.gui.app as appmod
+        import beantester.driver as drv
+        resolving, resolved = threading.Event(), threading.Event()
+        real_apply = appmod.apply_settings
+
+        def slow_apply(*a, **k):
+            resolving.set()
+            resolved.wait(10)                   # the synchronous target resolution
+            return real_apply(*a, **k)
+
+        appmod.apply_settings = slow_apply
+        started = []
+        app.engine.start = lambda *a, **k: started.append(1)
+        drv.release_on_exit = lambda log=None: []
+        app._start()
+        worker = app._transition_thread
+        assert resolving.wait(5)
+        threading.Timer(0.3, resolved.set).start()   # done while the window closes
+        app.on_close()
+        worker.join(5)
+        assert not worker.is_alive()
+        assert not started, "the driver was opened after the window had closed"
+    """)
+
+
+def test_closing_the_window_waits_for_a_start_already_opening_the_driver():
+    """The other half of P2-14: past the target and inside engine.start, the stop
+    and the driver release have to come AFTER it - before it, the release finds
+    nothing loaded and the stop nothing running."""
+    run_gui("""
+        import threading
+        import beantester.driver as drv
+        opening, opened = threading.Event(), threading.Event()
+        order = []
+
+        def slow_start(*a, **k):
+            opening.set()
+            opened.wait(10)                     # the driver load
+            order.append("started")
+
+        app.engine.start = slow_start
+        app.engine.stop = lambda *a, **k: order.append("stopped")
+        drv.release_on_exit = lambda log=None: order.append("released") or []
+        app._start()
+        assert opening.wait(5)
+        threading.Timer(0.3, opened.set).start()
+        app.on_close()
+        assert order == ["started", "stopped", "released"], order
+    """)
+
+
+def test_a_scenario_that_cannot_start_ends_the_session():
+    """P3-30: ``start_scenario`` raising out of ``_finish_start`` skipped the UI
+    sync, so a running session sat behind a START button - and clicking it
+    stopped the session. A timeline that cannot start now fails the session, as
+    it does on the command line, and the UI follows on the next tick."""
+    run_gui("""
+        from beantester.synthetic import SyntheticDivert
+        real_start = app.engine.start
+        app.engine.start = lambda filt, **k: real_start(
+            filt, divert=SyntheticDivert(seed=1), **k)
+
+        def refuse(*a, **k):
+            raise RuntimeError("can't start new thread")
+
+        app.engine.start_scenario = refuse
+
+        class _Scenario:
+            loop = False
+
+        app._scenario = _Scenario()
+        app._start()
+        app._settle_transition()                # this raised out of _finish_start
+        assert not app.engine.is_running(), "the session runs without its scenario"
+        assert "can't start new thread" in str(app.engine.fault), app.engine.fault
+        from beantester import crashlog
+        assert any("can't start new thread" in (e.get("message") or "")
+                   for e in crashlog.recent(10)), "not recorded"
+        app._tick()
+        assert app.running is False
+        assert app.btn_start.kw["text"] == bnt.T("buttons.start")
+    """, allow_faults=("can't start new thread",))
+
+
+def test_a_start_that_fails_shows_the_dialog_that_fits_the_failure():
+    """Two cases through one door (``dialogs.show_start_failure``): a missing
+    pydivert is an install, anything else is the error with the advice that fits
+    it. Neither had a test while the choice lived in the window."""
+    run_gui("""
+        import threading
+        import beantester.gui.dialogs as dialogs
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append((title, message))
+        for err in (ImportError("No module named 'pydivert'"),
+                    OSError("[WinError 87] The parameter is incorrect")):
+            held = threading.Event()
+
+            def fail(*a, err=err, held=held, **k):
+                held.wait(5)                    # still loading when _start returns
+                raise err
+
+            app.engine.start = fail
+            app._start()
+            held.set()
+            app._settle_transition()
+        assert shown[0] == (bnt.T("dialogs.missing_library"),
+                            bnt.T("dialogs.install_pydivert")), shown
+        assert shown[1][0] == bnt.T("dialogs.start_failed"), shown
+        assert "The parameter is incorrect" in shown[1][1], shown
+        assert app.running is False
+    """)
+
+
 # -- pure winenv helpers: no UAC, no ctypes, no excuse for being untested ----- #
 
 

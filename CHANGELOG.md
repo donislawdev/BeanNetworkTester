@@ -27,6 +27,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   could also read the next session's traffic, or mark a healthy session as failed. At
   most one packet the previous session was holding can still pass through the next one.
 
+- **Closing the window while START is still getting ready no longer leaves the WinDivert
+  driver loaded.** A START that was still looking up the target process when the window
+  closed went on to open the driver after the window was gone. Nothing unloaded it, so
+  the program's folder could not be deleted until a restart. Closing now waits a moment
+  for that START: if it has not opened the driver yet, it never does; if it has, the
+  session is stopped and the driver unloaded as usual.
+
+- **A scenario that cannot start now ends the session.** The session used to keep
+  running without its scenario while the button said START, and clicking it stopped the
+  session. The session now stops, as it does on the command line, and the log says why.
+
 - **Resizing the window no longer changes what START does.** When the Control page
   switched between one and two columns, the Filter went back to the previous choice, it
   became editable during a session, the scenario label said "Scenario: (none)", and "Delete" came

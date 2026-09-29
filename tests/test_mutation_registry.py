@@ -3789,10 +3789,9 @@ MUTATIONS = [
     {
         "label": "gui: a START that failed is recorded as the session",
         "file": "beantester/gui/app.py",
-        "old": "        if err is not None:\n            if isinstance(err, ImportError):",
-        "new": ("        if err is not None:\n"
-                "            session_repro.started(self, self._pending_start_settings)\n"
-                "            if isinstance(err, ImportError):"),
+        "old": "            dialogs.show_start_failure(self.root, err, self._is_admin)\n",
+        "new": ("            session_repro.started(self, self._pending_start_settings)\n"
+                "            dialogs.show_start_failure(self.root, err, self._is_admin)\n"),
         "test": "test_the_repro_describes_the_session_the_engine_ran_not_the_form",
     },
     {
@@ -4383,6 +4382,48 @@ MUTATIONS = [
                 "dict(UI_DEFAULTS[\"event_sort\"])\n"),
         "new": "",
         "test": "test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter",
+    },
+    {
+        # External review P2-14: a START still resolving its target when the
+        # window closes goes on to open the driver after the window is gone.
+        "label": "gui: a start still resolving when the window closes opens the driver",
+        "file": "beantester/gui/app.py",
+        "old": ("            if not self._closing:\n"
+                "                self.engine.start(filt, duration=duration,\n"
+                "                                  narrow=bool(s.get(\"narrow_filter\")))"),
+        "new": ("            self.engine.start(filt, duration=duration,\n"
+                "                              narrow=bool(s.get(\"narrow_filter\")))"),
+        "test": "test_closing_the_window_while_start_resolves_opens_no_driver_afterwards",
+    },
+    {
+        # External review P2-14: the stop and the driver release run before a
+        # start that is already opening the driver, so both find nothing.
+        "label": "gui: closing the window does not wait for a start in flight",
+        "file": "beantester/gui/app.py",
+        "old": ("            if self._transition_thread is not None:\n"
+                "                self._transition_thread.join(timeout=3.0)\n"),
+        "new": "",
+        "test": "test_closing_the_window_waits_for_a_start_already_opening_the_driver",
+    },
+    {
+        # External review P3-30: the scenario's failure escapes _finish_start and
+        # leaves a running session behind a START button.
+        "label": "gui: a scenario that cannot start leaves the session running",
+        "file": "beantester/gui/app.py",
+        "old": "            self.engine.worker_failed(e)\n",
+        "new": "            raise\n",
+        "test": "test_a_scenario_that_cannot_start_ends_the_session",
+    },
+    {
+        # The start-failed dialog moved to dialogs: a missing pydivert is an
+        # install, and gets its own dialog.
+        "label": "dialogs: a missing pydivert gets the generic start-failed dialog",
+        "file": "beantester/gui/dialogs.py",
+        "old": ("    if isinstance(err, ImportError):\n"
+                "        return show_error(parent, T(\"dialogs.missing_library\"), "
+                "T(\"dialogs.install_pydivert\"))\n"),
+        "new": "",
+        "test": "test_a_start_that_fails_shows_the_dialog_that_fits_the_failure",
     },
     {
         # External review P2-12: the capture thread reads the engine's flag and

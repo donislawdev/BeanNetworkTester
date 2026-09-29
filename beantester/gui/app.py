@@ -32,7 +32,7 @@ from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
-from .. import crashlog, winenv
+from .. import crashlog, driver, winenv
 from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     field_name, set_language)
@@ -1325,28 +1325,26 @@ class App:
             # duration is a START-time setting (like the traffic filter): the
             # engine owns the deadline and stops itself when it is reached.
             apply_settings(self.engine, s, self.log)
-            # Start-only, like `filter` and `duration`: it decides what the DRIVER
-            # hands over, and a handle's filter is fixed when it opens.
-            self.engine.start(filt, duration=duration,
-                              narrow=bool(s.get("narrow_filter")))
+            # Not if the window closed meanwhile (external review P2-14): the
+            # target resolution above can take seconds, and on_close has stopped
+            # an engine that was not running yet and released a driver nobody had
+            # loaded - a start from here would open one that nothing unloads.
+            # `narrow` is start-only, like `filter` and `duration`: it decides what
+            # the DRIVER hands over, and a handle's filter is fixed when it opens.
+            if not self._closing:
+                self.engine.start(filt, duration=duration,
+                                  narrow=bool(s.get("narrow_filter")))
 
         self._begin_transition("starting", work)
 
     def _finish_start(self, err):
         """Apply the result of an async start. Main thread only (from _tick)."""
         if err is not None:
-            if isinstance(err, ImportError):
-                dialogs.show_error(self.root, T("dialogs.missing_library"),
-                                   T("dialogs.install_pydivert"))
-            else:
-                # The advice has to FIT the failure, and the sentence that decides
-                # which one it is lives with the dialogs (and is shared with the
-                # CLI through driver.open_failure_hint). `_is_admin` is the same
-                # flag that drives the banner above - the one thing this object
-                # knows that the message needs.
-                dialogs.show_error(
-                    self.root, T("dialogs.start_failed"),
-                    dialogs.start_failure_message(err, self._is_admin))
+            # Which dialog, and what advice, is the dialogs' call (shared with the
+            # CLI through driver.open_failure_hint). `_is_admin` is the same flag
+            # that drives the banner above - the one thing this object knows that
+            # the message needs.
+            dialogs.show_start_failure(self.root, err, self._is_admin)
             self._sync_running_ui()     # button back to START
             return
         if self._closing:
@@ -1357,9 +1355,21 @@ class App:
         session_repro.started(self, s)
         self.running = True
         self.peaks.reset()
-        if self._scenario is not None:
-            self._scenario.loop = self.loop_var.get()
-            self.engine.start_scenario(self._scenario, s, log=self.log)
+        try:
+            if self._scenario is not None:
+                self._scenario.loop = self.loop_var.get()
+                self.engine.start_scenario(self._scenario, s, log=self.log)
+        except Exception as e:
+            # A timeline that cannot start is a failed session, as it is on the
+            # command line (external review P3-30). Raised out of here, it skipped
+            # the UI sync below and left a running session behind a START button
+            # that stopped it. worker_failed stops it right here without a new
+            # thread, which matters: the likely reason a runner cannot start is
+            # that no new thread could be had. The tick then turns the UI round the
+            # way it does for any other fault. Recorded as well: out of threads is
+            # not an ordinary event.
+            crashlog.note(e, "gui.app")
+            self.engine.worker_failed(e)
         note = scope.capture_scope_note(s, self.engine.capture_narrowed())
         if note:
             self.log(T(note))
@@ -1571,10 +1581,20 @@ class App:
                                       T("dialogs.confirm_close_running")):
                 return
         # From here the window IS closing: a start still in flight must not
-        # resurrect the UI when its worker finishes (engine.stop below waits on the
-        # engine's own _stop_lock, so it cannot leak a divert - fail-open).
+        # resurrect the UI when its worker finishes, and must not open the driver
+        # at all if it has not yet (see _start).
         self._closing = True
         try:
+            # ...and one that is already opening it is waited for, so the stop and
+            # the driver release below come AFTER it (external review P2-14). They
+            # used to run first - a no-op stop, a release with nothing loaded - and
+            # the start then loaded a driver nothing unloaded. Bounded: an
+            # in-flight START is a cold target resolution (~1.7 s measured) plus
+            # the driver open; past that, a start still resolving sees _closing
+            # and opens nothing, and one inside engine.start holds the engine's
+            # _stop_lock, which the stop below waits for.
+            if self._transition_thread is not None:
+                self._transition_thread.join(timeout=3.0)
             # secondary windows persist their geometry on the way out, so they
             # come back where the user left them
             self.windows.close_all()
@@ -1592,8 +1612,7 @@ class App:
             # must stay instant), but once, here: while it is loaded the kernel
             # holds WinDivert64.sys next to the exe, and the app's own folder
             # cannot be deleted - even after its contents are gone.
-            from ..driver import release_on_exit
-            release_on_exit(lambda line: self.log(f"{T('log.driver')}: {line}"))
+            driver.release_on_exit(lambda line: self.log(f"{T('log.driver')}: {line}"))
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         try:
