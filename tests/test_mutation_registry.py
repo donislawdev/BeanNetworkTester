@@ -3466,11 +3466,67 @@ MUTATIONS = [
         "test": "test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view",
     },
     {
-        "label": "tables: the rows in full are taken to be every slot",
+        # The count starts from the height as if nothing sat under the rows; the
+        # border is found by asking Tk. Without the step back it is a row too many.
+        "label": "tables: the border under the rows is counted as a row",
         "file": "beantester/gui/widgets/sortable_tree.py",
-        "old": "    return max(1, round(span * slots))",
-        "new": "    return slots",
-        "test": "test_the_rows_in_full_are_read_off_tks_own_yview",
+        "old": ("    while rows > 1 and region_at(x, top + rows * row_height - 1) not in (\"cell\", \"tree\"):\n"
+                "        rows -= 1\n"),
+        "new": "",
+        "test": "test_the_rows_in_full_are_asked_of_tks_own_layout",
+    },
+    {
+        # Scrolled sideways, the first row's box starts left of the widget: asked
+        # at its left edge, Tk finds no row anywhere and the count collapses to one.
+        "label": "tables: the rows are asked about left of the widget",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "    x = (max(left, 0) + min(left + span, int(width))) // 2",
+        "new": "    x = left + 1",
+        "test": "test_the_rows_in_full_are_asked_of_tks_own_layout",
+    },
+    {
+        # Columns narrower than the widget leave blank space right of them, and
+        # the middle of the widget is then no row at all.
+        "label": "tables: the rows are asked about right of the columns",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "    x = (max(left, 0) + min(left + span, int(width))) // 2",
+        "new": "    x = int(width) // 2",
+        "test": "test_the_rows_in_full_are_asked_of_tks_own_layout",
+    },
+    {
+        # Tk 8.6.14 lays a treeview out when idle: without yview first, bbox and
+        # identify inside <Configure> read the layout of the size before.
+        "label": "tables: a resize is measured on the layout before it",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self.tree.yview()\n",
+        "new": "",
+        "test": "test_a_resize_is_measured_on_the_new_layout_not_the_old_one",
+    },
+    {
+        # A set rebuilt from the selection on every repaint: a scroll paid for
+        # every selected row (200 000 selected: 0.07 -> 9.9 ms per row scrolled).
+        "label": "tables: every repaint copies the whole selection",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        selected = self._selected\n",
+        "new": "        selected = set(self._selected)\n",
+        "test": "test_a_huge_selection_does_not_make_every_scroll_pay_for_it",
+    },
+    {
+        # An emptied selection kept its anchor, and Shift ranged from a row that
+        # had been cleared away.
+        "label": "tables: select_keys([]) keeps the old anchor",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        self._cursor = self._anchor = next(iter(self._selected), None)",
+        "new": ("        if self._selected:\n"
+                "            self._cursor = self._anchor = next(iter(self._selected))"),
+        "test": "test_a_cleared_selection_leaves_no_anchor_behind",
+    },
+    {
+        "label": "tables: a click on a blank slot keeps the old anchor",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self._selected = {}\n            self._cursor = self._anchor = None\n",
+        "new": "            self._selected = {}\n",
+        "test": "test_a_cleared_selection_leaves_no_anchor_behind",
     },
     {
         # The pixel half of the table tests lives in the render check under Xvfb;

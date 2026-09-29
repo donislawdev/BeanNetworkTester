@@ -27,12 +27,19 @@ from fakes import ROOT, check
 from gui_harness import run_gui
 
 # The fake Tk has no geometry, so Tk's answer to "how many rows fit" is injected
-# the way a real table receives it: through yview, read at <Configure>. Five slots
-# short of the window is what a real table has - a partial row and the buffer.
+# the way a real table receives it: the first row's box and identify_region, read
+# at <Configure>. Five slots short of the window is what a real table has - a
+# partial row and the buffer. The row height leaves the division two rows too
+# many, so the count has to be found by asking, as on real Tk.
 INJECT_FITS = """
         slots = table.window()
         fits = slots - 5
-        table.tree._yview = (0.0, fits / slots)
+        top = 25
+        row_h = (table.tree.winfo_height() - top) // (fits + 2)
+        bottom = top + fits * row_h + row_h // 2        # half a row cut off below
+        table.tree.bbox = lambda item, column=None: (2, top, 600, row_h)
+        table.tree.identify_region = (
+            lambda x, y: "cell" if 2 <= x < 602 and top <= y < bottom else "nothing")
         table._on_configure()
         assert table._fits == fits, (table._fits, fits)
 
@@ -208,25 +215,86 @@ def test_a_refresh_renders_only_the_visible_rows():
     """)
 
 
-def test_the_rows_in_full_are_read_off_tks_own_yview():
-    """Tk's fraction of the slots on screen IS the count (external review, P1-4).
+def _tk_layout(left=2, top=25, columns=408, width=408, height=136, below=2):
+    """``rows_shown_in_full``'s arguments for a table, answered the way Tk answers.
 
-    The height divided by the row height counted the header and the border as
-    rows. yview is what ``see`` itself goes by, so it cannot disagree with ttk.
+    ``identify_region`` names a row only inside the row area: under the header,
+    above the ``below`` pixels of border, over the columns and inside the side
+    borders. The row height is 22. Returns the arguments and the questions asked.
     """
-    check("17 of 22 slots on screen", rows_shown_in_full((0.0, 17 / 22), 22) == 17,
-          f"({rows_shown_in_full((0.0, 17 / 22), 22)})")
-    check("Tk's own float, as it prints it", rows_shown_in_full(
-        (0.0, 0.7727272727272727), 22) == 17, "")
-    check("the span counts, not where it starts",
-          rows_shown_in_full((1 / 22, 18 / 22), 22) == 17, "")
-    check("every slot fits: all of them are shown in full",
-          rows_shown_in_full((0.0, 1.0), 14) == 14, "")
-    check("a widget shorter than a row still shows one",
-          rows_shown_in_full((0.0, 0.01), 22) == 1, "")
-    check("no slots: nothing to read", rows_shown_in_full((0.0, 0.5), 0) is None, "")
-    check("a dying widget's empty answer: nothing to read",
-          rows_shown_in_full("", 22) is None, "")
+    asked = []
+
+    def region_at(x, y):
+        asked.append((x, y))
+        over_rows = max(left, 2) <= x < min(left + columns, width - 2)
+        return "cell" if over_rows and top <= y < height - below else "nothing"
+
+    return ((left, top, columns, 22), width, height, region_at), asked
+
+
+def test_the_rows_in_full_are_asked_of_tks_own_layout():
+    """The border under the rows is FOUND by asking Tk, never assumed.
+
+    ``height // rowheight`` counted the header and the border as rows (external
+    review, P1-4). ``yview`` then held on Tk 9 only: Tk 8.6 counts the row cut off
+    at the bottom as shown, and the render check caught the count one too high on
+    the Linux runner. A bottom border taken to be as wide as the side one counts
+    rows that are not there once a table is scrolled sideways, because the first
+    row's box then starts left of the widget. The stand-in answers like Tk, so each
+    of those shortcuts fails one of the cases below.
+    """
+    cases = (
+        ("a half row at the bottom is not counted", {}, 4),
+        ("rows that fit exactly are all counted", {"height": 25 + 10 * 22 + 2}, 10),
+        ("a border thicker than a row is found too",
+         {"height": 25 + 5 * 22 + 30, "below": 30}, 5),
+        ("a table scrolled sideways is asked where it is on screen",
+         {"left": -406, "columns": 816}, 4),
+        ("columns narrower than the widget are asked over a column",
+         {"columns": 150}, 4),
+        ("a widget shorter than a row still shows one", {"height": 30}, 1),
+    )
+    for name, layout, expected in cases:
+        args, asked = _tk_layout(**layout)
+        found = rows_shown_in_full(*args)
+        check(name, found == expected, f"({found}, expected {expected}; asked {asked})")
+    args, asked = _tk_layout()
+    rows_shown_in_full(*args)
+    check("a border thinner than a row takes two questions at most", len(asked) <= 2,
+          f"({asked})")
+    _, width, height, region_at = args
+    for box in ("", None, (2, 25, 408, 0)):
+        check(f"no row to measure ({box!r}): nothing to read",
+              rows_shown_in_full(box, width, height, region_at) is None, "")
+
+
+def test_a_resize_is_measured_on_the_new_layout_not_the_old_one():
+    """A treeview is laid out when Tk is next idle, after <Configure> has run.
+
+    On Tk 8.6.14, the Linux runner's, bbox and identify_region read the layout as
+    it was - the OLD size - and a table grown from 4 rows to 10 went on counting 4.
+    ``yview`` lays a pending layout out first, so the table calls it before it
+    measures. The stand-in answers like 8.6.14: from the old layout until yview.
+    """
+    run_gui("""
+        table = app.pages["connections"].table
+        tree = table.tree
+        top, row_h = 25, 20
+        height = [top + 10 * row_h + 2]
+        laid_out = [top + 4 * row_h + 2]                # the size before the resize
+
+        def yview(*args):
+            laid_out[0] = height[0]
+            return (0.0, 1.0)
+
+        tree.yview = yview
+        tree.winfo_height = lambda: height[0]
+        tree.bbox = lambda item, column=None: (2, top, 600, row_h)
+        tree.identify_region = (
+            lambda x, y: "cell" if top <= y < laid_out[0] - 2 else "nothing")
+        table._on_configure()
+        assert table._fits == 10, ("measured on the layout before the resize", table._fits)
+    """)
 
 
 def test_scrolling_moves_the_window_and_stays_in_range():
@@ -415,6 +483,72 @@ def test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view():
         table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", "")) for i in range(3)])
         click(5)                        # a blank slot below the three rows
         assert table.selected_keys() == [], table.selected_keys()
+    """)
+
+
+def test_a_cleared_selection_leaves_no_anchor_behind():
+    """After the selection is cleared, Shift starts afresh from the top row on screen.
+
+    ``select_keys([])`` and a click on a blank slot emptied the selection but kept
+    the cursor and the anchor, so the next Shift+Down selected a range from a row
+    that had been cleared away - rows nobody chose, and nothing on screen said
+    where the range came from.
+    """
+    run_gui("""
+        import types
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(100)])
+    """ + INJECT_FITS + """
+        key("<Home>")
+        for _ in range(3):
+            key("<Shift-Down>")
+        assert len(table.selected_keys()) == 4, table.selected_keys()
+        table.select_keys([])
+        key("<Shift-Down>")
+        assert table.selected_keys() == ["k0"], ("select_keys([])", table.selected_keys())
+
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", "")) for i in range(3)])
+        key("<Home>")
+        key("<Shift-Down>")
+        key("<Shift-Down>")
+        assert len(table.selected_keys()) == 3, table.selected_keys()
+        table.tree.identify_region = lambda x, y: "cell"
+        table.tree.row_at = table._slots[5]         # a blank slot below the rows
+        for handler in table.tree.bindings["<Button-1>"]:
+            handler(types.SimpleNamespace(x=10, y=5))
+        assert table.selected_keys() == []
+        key("<Shift-Down>")
+        assert table.selected_keys() == ["k0"], ("blank click", table.selected_keys())
+    """)
+
+
+def test_a_huge_selection_does_not_make_every_scroll_pay_for_it():
+    """A scroll costs the rows on screen, however many rows are selected.
+
+    A Shift range can hold every row of the model, and each repaint rebuilt a set
+    of the selected keys: with 200 000 rows selected a one-row scroll went from
+    0.07 to 9.9 ms (measured 2026-09-29 on Tk 9.0.4), and every live refresh paid
+    the same. Time is a noisy witness on a shared runner; memory is not - a set of
+    100 000 keys is megabytes, the rows on screen are kilobytes.
+    """
+    run_gui("""
+        import tracemalloc
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(100_000)])
+    """ + INJECT_FITS + """
+        key("<Home>")
+        key("<Shift-End>")
+        assert len(table.selected_keys()) == 100_000, len(table.selected_keys())
+        table.set_offset(0)                         # End left it at the bottom
+        tracemalloc.start()
+        for _ in range(3):
+            table.scroll_by(1)
+        peak = tracemalloc.get_traced_memory()[1]
+        tracemalloc.stop()
+        assert table.offset == 3, table.offset
+        assert peak < 512 * 1024, f"three one-row scrolls allocated {peak} bytes"
     """)
 
 

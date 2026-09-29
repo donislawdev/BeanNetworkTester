@@ -129,40 +129,49 @@ def fitted_widths(order, visible, natural, current, tree_width,
     return {c: w for c, w in out.items() if w != now[c]}
 
 
-def rows_shown_in_full(yview, slots):
-    """How many slots Tk draws IN FULL, read off its own ``yview`` - or None.
+def rows_shown_in_full(first_box, width, height, region_at):
+    """How many rows Tk draws IN FULL, asked of Tk's own layout - or None.
 
     Pure, and tested without Tk, like ``fitted_widths``: the arithmetic is here,
-    the widget only answers the question it is asked.
+    the widget only answers the questions it is asked. ``first_box`` is the first
+    slot's ``bbox`` (where the rows start, how tall one is), ``width`` and
+    ``height`` the widget's, and ``region_at`` is its ``identify_region``.
 
-    **Why Tk is asked instead of the height being divided.** Everything a table
-    promises - that the last row can be scrolled into view, how far a page goes,
-    how big the scrollbar thumb is - hangs on this one number, and the division
-    got it wrong: ``height // rowheight`` counts the header and the border as rows
-    (external review, P1-4). Measured 2026-09-29 on Tk 9.0.4 in a 400 px tree: 17
-    rows fit, the division said 18, and with the buffer on top the last FIVE rows
-    of every table could never be shown. What Tk really fits is
-    ``(height - header - border) // rowheight`` - it held at all 440 heights tried
-    and at two row heights - but the header and the border belong to the theme
-    and the DPI, and ``yview`` already reports the result: the fraction of the
-    slots on screen. It is also the very count ``see`` uses to decide whether to
-    scroll, so a table sized by it cannot disagree with ttk about what is visible.
+    Everything a table promises - that the last row can be scrolled into view, how
+    far a page goes, how big the scrollbar thumb is - hangs on this one number.
+    The count starts from the height as if nothing sat below the rows, which is
+    never too few, and steps back while the bottom pixel of the last row it counts
+    is not a row to Tk: the border under the rows is FOUND, never assumed. With a
+    border thinner than a row that is one or two questions.
 
-    The fraction only carries a count while there are MORE slots than fit, which
-    is what the buffer guarantees. When every slot fits, all of them are shown in
-    full and that is the answer. None when there is nothing to read - the caller
-    keeps what it had.
+    **Why not the three ways that came before** (measured 2026-09-29 over 470
+    heights and 1340 resizes, on Tk 8.6.14 and 9.0.4):
+
+    * ``height // rowheight`` counts the header and the border as rows (external
+      review, P1-4): the last five rows of every table could never be shown.
+    * ``yview``, which this read at first, holds only on Tk 9. Tk 8.6 counts the
+      row cut off at the bottom as shown, and the count ran one too high at 66
+      heights of 470 - the render check caught it on the Linux runner.
+    * the height less the header less a bottom border as wide as the side one
+      holds until the table is scrolled sideways: the first slot's box then starts
+      left of the widget (x = -406 measured) and rows that are not there count.
+
+    That last box is also why Tk is asked at an x in the middle of the part of it
+    that is on screen, never at its left edge. None when there is no box yet (or
+    a dying widget's empty one) - the caller keeps what it had. At least one row
+    otherwise, so a page always moves.
     """
     try:
-        first, last = (float(value) for value in yview)
+        left, top, span, row_height = (int(value) for value in first_box)
     except (TypeError, ValueError):
         return None
-    if slots <= 0:
+    if row_height <= 0:
         return None
-    span = last - first
-    if span >= 1.0:
-        return slots
-    return max(1, round(span * slots))
+    x = (max(left, 0) + min(left + span, int(width))) // 2
+    rows = (int(height) - top) // row_height
+    while rows > 1 and region_at(x, top + rows * row_height - 1) not in ("cell", "tree"):
+        rows -= 1
+    return max(1, rows)
 
 
 BUFFER_ROWS = 4                 # slots past the viewport: a partial row + resize slack
@@ -221,7 +230,8 @@ class SortableTree:
         self.offset = 0                 # model row rendered in slot 0
         self._slots = []                # widget item ids, recycled forever
         self._slot_keys = []            # slot index -> model key currently shown
-        self._selected = []             # selected MODEL KEYS (survive a repaint)
+        self._selected = {}             # selected MODEL KEYS in order (a dict: see
+                                        # _restore_selection)
         self._written = ()              # slot iids _restore_selection last wrote
         self._cursor = None             # model key the keyboard stands on
         self._anchor = None             # model key a Shift range is measured from
@@ -375,8 +385,9 @@ class SortableTree:
         It counts the header and the border as rows, so it is never the number on
         screen (that is ``_fits``, see ``rows_shown_in_full``). It only sizes the
         slots, and there it errs the right way: slots must outnumber the rows Tk
-        can show in full, or ``yview`` has nothing to report. Read from the height
-        Tk has already given the widget, so it is current inside ``<Configure>``.
+        can show in full, or there is no row at the bottom of the row area for
+        ``identify_region`` to find. Read from the height Tk has already given the
+        widget, so it is current inside ``<Configure>``.
         """
         try:
             height = int(self.tree.winfo_height() or 0)
@@ -393,10 +404,20 @@ class SortableTree:
         if resized:
             self._ensure_slots(needed)
         # Asked on EVERY resize, not only when the slot count moves: the rows that
-        # fit can change while height // rowheight does not. Measured 2026-09-29
-        # over 82 resizes: yview is already current inside this handler.
+        # fit can change while height // rowheight does not. A treeview is laid out
+        # when Tk is next idle, and on Tk 8.6.14 (the Linux runner's) bbox and
+        # identify_region read the layout as it WAS - here, the old size: a table
+        # grown from 4 rows to 10 went on counting 4. yview first brings a pending
+        # layout up to date (ttkScroll.c, TtkUpdateScrollInfo); newer Tk does that
+        # inside bbox and identify too. With it, the count was right after every
+        # one of 1340 resizes on 8.6.14 and 9.0.4, in steps and in jumps, for a
+        # table as it is and for one scrolled sideways.
         try:
-            fits = rows_shown_in_full(self.tree.yview(), self.window())
+            self.tree.yview()
+            fits = rows_shown_in_full(self.tree.bbox(self._slots[0]),
+                                      self.tree.winfo_width(),
+                                      self.tree.winfo_height(),
+                                      self.tree.identify_region)
         except Exception as _exc:          # a dying widget answers nothing
             crashlog.note(_exc, "gui.widgets.sortable_tree")
             fits = None
@@ -563,7 +584,6 @@ class SortableTree:
         blank = ("",) * len(self.columns)
         window = self.window()
         visible = self.items[self.offset:self.offset + window]
-        selected = set(self._selected)
         for i, iid in enumerate(self._slots):
             if i < len(visible):
                 item = visible[i]
@@ -578,7 +598,7 @@ class SortableTree:
             if self._painted.get(iid) != (values, tags):
                 self.tree.item(iid, values=values, tags=tags)
                 self._painted[iid] = (values, tags)
-        self._restore_selection(selected)
+        self._restore_selection()
         self._sync_scrollbar()
 
     # -- selection (by model key: item ids are recycled) ------------------------ #
@@ -611,7 +631,7 @@ class SortableTree:
             if key is not None:                 # a blank slot maps to no model row
                 keys.append(key)
                 wanted.append(iid)
-        self._selected = keys
+        self._selected = dict.fromkeys(keys)
         # A click can land on a blank slot below the last real row: ttk highlights
         # it, but it selects nothing. Drop those from the widget selection so an
         # empty row cannot sit there looking selected. Re-setting the selection
@@ -626,8 +646,11 @@ class SortableTree:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
 
-    def _restore_selection(self, selected=None):
-        selected = set(self._selected) if selected is None else selected
+    def _restore_selection(self):
+        # A dict, asked as it is and never copied: a range may hold every row of the
+        # model, and a set rebuilt on each repaint made a one-row scroll 140 times
+        # dearer with 200 000 rows selected (measured 2026-09-29: 0.07 -> 9.9 ms).
+        selected = self._selected
         wanted = tuple(self._slots[i] for i, key in enumerate(self._slot_keys)
                        if key is not None and key in selected)
         try:
@@ -644,9 +667,11 @@ class SortableTree:
 
     def select_keys(self, keys):
         index = self._ensure_index()
-        self._selected = [str(k) for k in keys if str(k) in index]
-        if self._selected:                      # the keyboard continues from here
-            self._cursor = self._anchor = self._selected[0]
+        self._selected = dict.fromkeys(str(k) for k in keys if str(k) in index)
+        # The keyboard continues from the first row, and an empty selection leaves
+        # no cursor and no anchor: a Shift range from a row cleared away would pick
+        # rows nobody chose. The keys then start from the top row on screen.
+        self._cursor = self._anchor = next(iter(self._selected), None)
         self._restore_selection()
 
     # -- choosing rows: keyboard and pointer, both in model positions ---------- #
@@ -678,14 +703,16 @@ class SortableTree:
         anchor = self._position_of(self._anchor) if self._multi and extend else None
         if anchor is not None:
             low, high = sorted((anchor, position))
-            self._selected = [str(self._key_of(item))
-                              for item in self.items[low:high + 1]]
+            self._selected = dict.fromkeys(str(self._key_of(item))
+                                           for item in self.items[low:high + 1])
         elif self._multi and toggle:
-            self._selected = ([k for k in self._selected if k != key]
-                              if key in self._selected else self._selected + [key])
+            if key in self._selected:
+                del self._selected[key]
+            else:
+                self._selected[key] = None
             self._anchor = key
         else:
-            self._selected = [key]
+            self._selected = {key: None}
             self._anchor = key
         self._cursor = key
         self._reveal(position)
@@ -744,7 +771,11 @@ class SortableTree:
         if position is not None:
             self._choose(position, extend=extend, toggle=toggle)
         elif not (extend or toggle):
-            self._selected = []             # a blank slot below the rows selects nothing
+            # A blank slot below the rows selects nothing and, like select_keys(()),
+            # leaves no cursor or anchor behind - written out, because select_keys
+            # builds the key index and a click should not cost O(rows).
+            self._selected = {}
+            self._cursor = self._anchor = None
             self._restore_selection()
         return "break"
 

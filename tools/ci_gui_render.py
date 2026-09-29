@@ -412,13 +412,19 @@ def check_language(code):
 # table works with is the one Tk draws (external review, P1-4 and P2-18).
 # Run against the bug before it was trusted (2026-09-29): with `max_offset` put
 # back on `len - window()` it reports the last rows out of sight, and with the
-# echo guard in `_on_select` removed it reports the selection lost.
+# echo guard in `_on_select` removed it reports the selection lost. Its first run
+# on the Linux runner found a real one: Tk 8.6's yview counts the half row as
+# shown, so the table counted 5 rows in full where Tk drew 4.
+# The rows in full are judged here by geometry - the bottom border as wide as the
+# side one - and the table asks identify_region: two ways, so one cannot hide a
+# fault of the other.
 
-def _boxes(table):
+def _boxes(table, side=None):
     """``(key, box)`` for every slot Tk draws at all, and the rows' bottom edge.
 
     The edge is read off whichever slot has a box: when ttk's own view has moved
-    - the very fault measured here - the first slot has none.
+    - the very fault measured here - the first slot has none. ``side`` is the side
+    border, for a table scrolled sideways: its boxes start left of the widget.
     """
     tree = table.tree
     tree.update()
@@ -428,13 +434,53 @@ def _boxes(table):
     if not boxes:
         return [], 0
     # the bottom border is as wide as the side one, where the first column starts
-    return boxes, tree.winfo_height() - boxes[0][1][0]
+    return boxes, tree.winfo_height() - (boxes[0][1][0] if side is None else side)
 
 
-def _drawn_in_full(table):
+def _drawn_in_full(table, side=None):
     """Model keys of the rows Tk draws IN FULL, top to bottom."""
-    boxes, bottom = _boxes(table)
+    boxes, bottom = _boxes(table, side)
     return [key for key, box in boxes if key is not None and box[1] + box[3] <= bottom]
+
+
+def _sideways_problems(root, before):
+    """A table scrolled sideways counts the rows it shows at every height.
+
+    Its first row's box then starts left of the widget (x = -406 measured), so a
+    count asked at that box's left edge finds no row anywhere and collapses to
+    one. Every height across one row is tried, so a half row is on screen in most.
+    ``before`` is the first table's frame, taken away first: at 150% the two do
+    not fit in the window together, and a squeezed table shows no row at all.
+    """
+    before.pack_forget()
+    frame = ttk.Frame(root, width=400, height=300)
+    frame.pack_propagate(False)
+    frame.pack(anchor="nw")
+    columns = {f"c{i}": "conns.remote_ip" for i in range(8)}
+    table = SortableTree(frame, columns, horizontal=True)
+    table.sync([(f"k{i}", tuple(str(i) for _ in columns)) for i in range(300)])
+    root.update()
+    head = table.tree.bbox(table._slots[0])
+    table.tree.xview_moveto(0.5)
+    root.update()
+    scrolled = table.tree.bbox(table._slots[0])
+    problems = []
+    if not head or not scrolled or scrolled[0] >= 0:
+        problems.append("the wide table did not scroll sideways, so nothing was measured")
+    else:
+        for extra in range(head[3]):
+            frame.configure(height=200 + extra)
+            root.update()
+            drawn = len(_drawn_in_full(table, side=head[0]))
+            if not drawn:
+                problems.append(f"the wide table shows no row in full at "
+                                f"{table.tree.winfo_height()} px, so nothing was measured")
+                break
+            if table._fits != drawn:
+                problems.append(f"scrolled sideways, the table counts {table._fits} "
+                                f"rows in full where Tk draws {drawn}")
+    frame.destroy()
+    return problems
 
 
 def _half_row(table):
@@ -566,6 +612,7 @@ def check_table_viewport():
                 except Exception as exc:         # noqa: BLE001 - a crash is a finding
                     problems.append(f"{rows} rows: the check itself failed on what "
                                     f"it found: {type(exc).__name__}: {exc}")
+        problems += _sideways_problems(root, frame)
     for problem in problems:
         print(f"  [tables] {problem}")
     print(f"  [tables] {'OK' if not problems else f'{len(problems)} problem(s)'}")
