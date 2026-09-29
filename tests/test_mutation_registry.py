@@ -4287,6 +4287,28 @@ MUTATIONS = [
         "new": "",
         "test": "test_the_scenario_controls_lock_while_a_session_runs",
     },
+    {
+        # A key renamed in the code and not in lang/: every other i18n test stays
+        # green, and the user reads the key instead of the sentence.
+        "label": "i18n: a key the code names is missing from the language files",
+        "file": "beantester/gui/app.py",
+        "old": '        self.log(T("log.scenario_cleared"))',
+        "new": '        self.log(T("log.scenario_was_cleared"))',
+        "test": "test_every_key_the_code_names_is_in_the_language_files",
+    },
+    {
+        # A whole namespace gone from the English file while the window titles
+        # still name it. With the namespaces read from that same file, the scan
+        # stopped looking for them and passed. The comma goes too, so the file
+        # stays valid JSON and the scan is what fails.
+        "label": "i18n: a namespace the code uses is gone from the language files",
+        "file": "lang/en.json",
+        "old": (',\n  "windows.about": "About Bean Network Tester",\n'
+                '  "windows.event_log": "Event log",\n'
+                '  "windows.settings": "Settings"\n'),
+        "new": "\n",
+        "test": "test_every_key_the_code_names_is_in_the_language_files",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

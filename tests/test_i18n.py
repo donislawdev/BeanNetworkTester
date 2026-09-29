@@ -19,6 +19,18 @@ _FORMATTER = string.Formatter()
 # copy of it into the file next door.
 SEMICOLONS = (";", chr(0xFF1B))
 
+# The first part of every key, written here and not read from the language files.
+# Read from them, a namespace deleted from all three would drop out of the key
+# scan too, and code still naming its keys would pass (measured: removing the two
+# `scope.*` keys from en.json left the scan green). The scan checks this list
+# against en.json, so a namespace added or removed there has to be added or
+# removed here as well.
+KEY_NAMESPACES = frozenset({
+    "about", "app", "buttons", "chart", "conns", "dialogs", "errors", "events",
+    "fields", "filters", "frames", "log", "menu", "prefs", "presets", "scope",
+    "session", "stats", "summary", "tables", "tips", "tools", "warn", "windows",
+})
+
 
 def _placeholders(value):
     return {name for _, name, _, _ in _FORMATTER.parse(value)
@@ -188,6 +200,60 @@ def test_i18n_coverage():
     unresolved = [k for k in used if n.T(k) == k]
     n.set_language(n_orig)
     check("i18n: sampled UI keys resolve to text", not unresolved, f"({unresolved})")
+
+
+def test_every_key_the_code_names_is_in_the_language_files():
+    """A key renamed in the code but not in ``lang/`` shows the key to the user.
+
+    ``translate`` falls back to the key itself, so nothing raises, and the sample
+    above resolves fifteen keys out of hundreds. Measured 2026-09-29: with one
+    key removed from all three files, every test in this module still passed.
+    The parity check above cannot see it either - the three files agree.
+
+    A string constant counts as a key when the WHOLE of it is one: one of
+    ``KEY_NAMESPACES``, a dot, then key characters. So a key quoted in a
+    sentence or in a docstring is not read as one, and needs no exception. One
+    ending in ``.`` or ``_`` is a prefix the code completes at run time
+    (``f"tips.{name}"``, ``"events.kind_" + kind``): it must lead to at least one
+    key. What this cannot see: a typo in the first part (``"tipz.filter"`` does
+    not look like a key at all).
+    """
+    import ast
+    import json as _json
+    import re
+    from source_imports import package_modules
+    with open(os.path.join(LANG_DIR, "en.json"), encoding="utf-8") as f:
+        english = _json.load(f)
+    english.pop("_meta", None)
+    looks_like_a_key = re.compile(r"(?:%s)\.[A-Za-z0-9_.]*" % "|".join(sorted(KEY_NAMESPACES)))
+    seen, missing = 0, []
+    for path in sorted(package_modules().values()):
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            text = node.value if isinstance(node, ast.Constant) else None
+            if not (isinstance(text, str) and looks_like_a_key.fullmatch(text)):
+                continue
+            seen += 1
+            if text.endswith((".", "_")):
+                found = any(key.startswith(text) for key in english)
+            else:
+                found = text in english
+            if not found:
+                rel = os.path.relpath(path, os.path.dirname(LANG_DIR)).replace(os.sep, "/")
+                missing.append(f"{text} ({rel}:{node.lineno})")
+    # A scan that reads nothing passes every time, so it has to have read something.
+    check("the scan found the keys the package uses", seen >= 500, f"({seen} keys)")
+    # A string that only LOOKS like a key (a file name such as "stats.csv") would
+    # land here too: rename it, or build it so the whole of it is not one string.
+    check("every key named in the code is in lang/en.json", not missing,
+          f"({missing[:5]})")
+    # After the scan on purpose: a namespace deleted while the code still uses
+    # it fails above, naming the code; one the code no longer uses fails here.
+    in_file = {key.split(".", 1)[0] for key in english}
+    check("KEY_NAMESPACES are the namespaces lang/en.json uses", in_file == KEY_NAMESPACES,
+          f"(only in the file: {sorted(in_file - KEY_NAMESPACES)}, "
+          f"only in the list: {sorted(KEY_NAMESPACES - in_file)})")
 
 
 def test_the_language_files_stay_sorted():
