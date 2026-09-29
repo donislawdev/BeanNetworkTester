@@ -162,12 +162,12 @@ def test_a_line_the_code_page_cannot_hold_arrives_escaped_not_lost():
     raw, out = _strict_cp1252()
     _, err = _strict_cp1252()
     log = CliLog(fmt=TEXT, out=out, err=err)
-    log.data({}, "user files: C:/Users/\u0414\u043c\u0438\u0442\u0440\u0438\u0439/data")
+    log.data({}, "user files: D:/\u0414\u043c\u0438\u0442\u0440\u0438\u0439/data")
     log.data({}, "next line")
     out.flush()
     lines = raw.getvalue().decode("cp1252").splitlines()
     check("the line is there, the character escaped",
-          lines == ["user files: C:/Users/\\u0414\\u043c\\u0438\\u0442\\u0440\\u0438\\u0439/data",
+          lines == ["user files: D:/\\u0414\\u043c\\u0438\\u0442\\u0440\\u0438\\u0439/data",
                     "next line"], f"({lines!r})")
 
 
