@@ -135,12 +135,36 @@ def _stop_live_engines():
 atexit.register(_stop_live_engines)
 
 
+class _Session:
+    """One START..STOP: the flag its workers loop on and the handle they read.
+
+    Handed to each worker as an ARGUMENT, never read back from the engine. A join
+    that times out - a worker stuck in our own code, a driver that stopped
+    answering - leaves that thread running after STOP, and the workers used to
+    read ``self._running`` and ``self._divert`` live. After the next START an old
+    capture thread read the NEW session's handle with the old session's random
+    generator, unwatched, and an old watchdog judged the new session's
+    not-yet-started threads dead and recorded a fault against a healthy session
+    (external review P2-12, both reproduced). ``live`` goes down once and never up
+    again, so a worker that outlives its session can only end; and a stop or a
+    fault it reports is ignored unless its session is the current one (see
+    ``_stop_locked``). The one thing it can still do is finish the packet it was
+    holding, which then lands in the next session: an extra check per packet on
+    the capture thread was judged too high a price for that one packet.
+    """
+    __slots__ = ("live", "divert")
+
+    def __init__(self, divert):
+        self.live, self.divert = True, divert
+
+
 class BeanEngine:
     def __init__(self, log_fn=lambda *_: None):
         self._log_fn = log_fn
         self.core = BeanCore()
         self._divert = None
         self._running = False
+        self._session = None        # the running (or last) session's _Session
         self._heap = []
         self._cv = threading.Condition()
         self.max_queue = 20000
@@ -875,6 +899,7 @@ class BeanEngine:
                 self._divert = None
                 raise
         self._running = True
+        session = self._session = _Session(divert)
         # Only once the handle is open: a start that failed leaves the facts of the
         # session before it, which is the one its seed and counters still describe.
         self._simulated = not real_windivert
@@ -996,9 +1021,9 @@ class BeanEngine:
             # targeting exists to prevent. With no target it blocks on its event and
             # costs nothing.
             self._resolver.start()
-            self._t_cap = threading.Thread(target=self._capture_loop, daemon=True)
-            self._t_inj = threading.Thread(target=self._inject_loop, daemon=True)
-            self._t_wd = threading.Thread(target=self._watchdog_loop, daemon=True)
+            self._t_cap = threading.Thread(target=self._capture_loop, args=(session,), daemon=True)
+            self._t_inj = threading.Thread(target=self._inject_loop, args=(session,), daemon=True)
+            self._t_wd = threading.Thread(target=self._watchdog_loop, args=(session,), daemon=True)
             # ANNOUNCED BEFORE THE WORKERS EXIST, not after. These lines used to sit
             # below the except block, so a session that faulted early printed its log
             # BACKWARDS - measured with a filter the driver rejects:
@@ -1151,7 +1176,7 @@ class BeanEngine:
         with self._stop_lock:
             self._stop_locked(reason)
 
-    def _worker_stop(self, reason, say=()):
+    def _worker_stop(self, reason, say=(), session=None):
         """Stop initiated BY one of the engine's own worker threads.
 
         It must not BLOCK on ``_stop_lock``. A concurrent external ``stop()`` holds
@@ -1167,16 +1192,19 @@ class BeanEngine:
 
         ``say`` is said either way: by ``_stop_locked`` once the divert is closed, or
         here when bowing out, where the stop holding the lock does the closing.
+        ``session`` - the worker's own, as in ``_stop_locked``.
         """
+        if session is not None and session is not self._session:
+            return                      # a worker of a session that is over: _Session
         if not self._stop_lock.acquire(blocking=False):
             self._say(say)
             return
         try:
-            self._stop_locked(reason, say)
+            self._stop_locked(reason, say, session)
         finally:
             self._stop_lock.release()
 
-    def _stop_locked(self, reason, say=()):
+    def _stop_locked(self, reason, say=(), session=None):
         """The stop body. The caller MUST hold ``_stop_lock`` - ``stop()`` blocks to
         take it, ``_worker_stop`` takes it without blocking.
 
@@ -1185,11 +1213,22 @@ class BeanEngine:
         caller before the call: the log is the caller's code and can block, and
         MEASURED 2026-09-28 on every stop path, a log said first held the divert
         open for exactly as long as the log blocked. Said even when there is
-        nothing left to stop, so a caller that lost the race still reports."""
+        nothing left to stop, so a caller that lost the race still reports.
+
+        ``session`` - passed by a WORKER, which may only stop the session it
+        belongs to. One that outlived its session (see ``_Session``) is ignored,
+        silently: its lines would describe a session that is already over, in the
+        log of one that is running. Checked here, under the lock START takes too,
+        because a worker can wait for this lock across a whole STOP and START.
+        ``None`` - an external stop (the user, atexit, a failed start) - stops
+        whatever is running."""
+        if session is not None and session is not self._session:
+            return
         if not self._running:
             self._say(say)
             return
         self._running = False
+        self._session.live = False
         # Cleared EARLY (it used to be set near the end): once the deadline is gone,
         # a watchdog that is just finishing a slow maintenance op sees nothing to fire
         # and exits its loop instead of calling a second, racing stop.
@@ -1201,8 +1240,8 @@ class BeanEngine:
         # capture thread stuck in recv() AND releases the WinDivert driver
         # (which otherwise keeps its .sys file locked - see driver.py).
         #
-        # The order matters because ``_capture_loop`` runs ``while self._running``:
-        # the line above has already ended it, so from this point NOTHING is
+        # The order matters because ``_capture_loop`` runs ``while session.live``:
+        # the lines above have already ended it, so from this point NOTHING is
         # draining the divert while WinDivert keeps diverting into it. Every step
         # that used to sit in between can block - ``_resolver.stop()`` joins with
         # a 0.25 s timeout and a resolve in flight really does use it (measured:
@@ -1212,8 +1251,8 @@ class BeanEngine:
         # invisible on a synthetic divert, whose recv() blocks, and shows up on the
         # real one, whose recv() returns immediately under traffic.
         #
-        # It must NOT move above ``self._running = False``: recv() would then raise
-        # while the session still looked live, so ``_capture_loop`` would take the
+        # It must NOT move above ``live = False``: recv() would then raise while
+        # the session still looked live, so ``_capture_loop`` would take the
         # ``_fail_stop`` path and report a fault for an ordinary stop.
         if self._divert is not None:
             try:
@@ -1232,10 +1271,12 @@ class BeanEngine:
         self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
         with self._cv:
             self._cv.notify_all()
-        # join the worker threads before releasing self._divert: they read the
-        # attribute live, so a quick stop->start would otherwise leave an old
-        # capture thread consuming packets from the NEW session's divert. The
-        # watchdog can be among them, and it is joined here too - safe now only
+        # Join the worker threads, so an ordinary STOP returns with them gone. One
+        # that outlives the timeout is stuck somewhere, and it can no longer reach
+        # the next session: it holds this session's _Session, whose flag is down
+        # for good. (Before that, this join was the only thing keeping an old
+        # capture thread off the NEW session's divert - and it gives up.) The
+        # watchdog can be among them, and it is joined here too - safe only
         # because a watchdog-initiated stop goes through _worker_stop and never
         # blocks on _stop_lock, so joining it cannot deadlock against this stop.
         for t in (self._t_cap, self._t_inj, self._t_wd):
@@ -1293,7 +1334,7 @@ class BeanEngine:
     # long enough not to spin. See _fault_stop_blocking.
     FAULT_LOCK_POLL_S = 0.05
 
-    def _fail_stop(self, error, blocking=True, lead=()):
+    def _fail_stop(self, error, blocking=True, lead=(), session=None):
         """A worker died: stop the session so the network is never left impaired.
 
         ``blocking`` picks HOW the stop is taken, and the two callers genuinely differ:
@@ -1324,7 +1365,13 @@ class BeanEngine:
         ``lead`` - lines the caller has to say ahead of the fault line (the recv
         error). Handed over instead of said, and the fault line with them: the stop
         says them once the divert is closed (``_stop_locked``).
+
+        ``session`` - the reporting worker's own. A worker whose session is over
+        records nothing: its fault would land on the NEXT session, which is how an
+        old watchdog marked a healthy session as failed (``_Session``).
         """
+        if session is not None and session is not self._session:
+            return
         if not self._running:
             self._say(lead)
             return
@@ -1336,38 +1383,40 @@ class BeanEngine:
             self.fault = str(error)
         say = (*lead, T("log.engine_fault", e=str(error)))
         if blocking:
-            self._fault_stop_blocking(say)
+            self._fault_stop_blocking(say, session)
         else:
-            self._worker_stop("fault", say)
+            self._worker_stop("fault", say, session)
 
-    def _fault_stop_blocking(self, say=()):
+    def _fault_stop_blocking(self, say=(), session=None):
         """Take ``_stop_lock`` for a capture-thread fault: wait for a start, never
         for another stop.
 
         The difference is visible without any extra state. ``_stop_locked`` clears
-        ``_running`` as its second statement, so while the lock is held: still
+        ``_running`` before anything that can block, so while the lock is held: still
         running means ``start()`` owns it and is about to release it (wait - that is
         the case the blocking path exists for), and no longer running means a stop
         already owns the teardown, is closing the divert, and is joining THIS thread
         with a 2.0 s timeout. Waiting on that one buys nothing and costs the user a
-        two-second STOP. ``say`` as in ``_worker_stop``.
+        two-second STOP. ``say`` and ``session`` as in ``_worker_stop``.
         """
         while not self._stop_lock.acquire(timeout=self.FAULT_LOCK_POLL_S):
             if not self._running:
                 self._say(say)
                 return
         try:
-            self._stop_locked("fault", say)
+            self._stop_locked("fault", say, session)
         finally:
             self._stop_lock.release()
 
     # -- watchdog -------------------------------------------------------------- #
-    def _watchdog_loop(self):
+    def _watchdog_loop(self, session):
         """Enforce the deadline, keep the connection log bounded, and make a dead
-        worker thread fail *open*."""
-        while self._running:
+        worker thread fail *open*. Every stop it asks for names ``session``: a
+        watchdog kept past its session by a slow tick must not act on the next one
+        (``_Session``)."""
+        while session.live:
             time.sleep(WATCHDOG_TICK_S)
-            if not self._running:
+            if not session.live:
                 return
             # bounded memory is this thread's job now, so the capture thread never
             # pays for it (see _trim_conns)
@@ -1428,22 +1477,22 @@ class BeanEngine:
                 # The line goes WITH the stop, not before it: a console paused by a
                 # text selection kept the session going past its --duration.
                 self._worker_stop(
-                    "duration", (T("log.duration_reached", v=f"{self._duration:g}"),))
+                    "duration", (T("log.duration_reached", v=f"{self._duration:g}"),), session)
                 return
             for t in (self._t_cap, self._t_inj):
                 if t is not None and not t.is_alive():
                     # blocking=False: this is the watchdog thread, and an external
                     # stop() joining it must never wait on a lock we are blocked on (F2).
-                    self._fail_stop(RuntimeError(
-                        f"worker thread {t.name} died unexpectedly"), blocking=False)
+                    self._fail_stop(RuntimeError(f"worker thread {t.name} died unexpectedly"),
+                                    blocking=False, session=session)
                     return
             if self._capture_has_stalled():
                 # The other half of fail-open. The check above sees a thread that
                 # DIED. This one sees a thread that is perfectly alive and no
                 # longer doing anything, which produces the identical outcome for
                 # the user and used to produce no reaction at all.
-                self._fail_stop(RuntimeError(
-                    "capture thread stopped making progress"), blocking=False)
+                self._fail_stop(RuntimeError("capture thread stopped making progress"),
+                                blocking=False, session=session)
                 return
 
     # How long the capture thread may spend between two `recv()` calls before the
@@ -1489,23 +1538,24 @@ class BeanEngine:
         return (time.monotonic() - self._cap_beat_at) > self.CAPTURE_STALL_S
 
     # -- worker threads -------------------------------------------------------- #
-    def _capture_loop(self):
+    def _capture_loop(self, session):
         rng = self._rng
-        while self._running:
+        divert = session.divert         # this session's handle, never the next one's
+        while session.live:
             # Three stores per packet and not one allocation: `True`/`False` are
             # singletons and `now` below is a float this loop already reads. That
             # matters because this is the hot path - see the module's "What this
             # actually sustains" section.
             self._cap_waiting = True
             try:
-                packet = self._divert.recv()
+                packet = divert.recv()
             except Exception as e:
-                if self._running:
+                if session.live:
                     # The divert is still open but nothing drains it any more:
                     # WinDivert would keep queueing (and then dropping) the user's
                     # packets. Fail OPEN - stop the session and release the driver.
                     # The line is handed to the stop, which says it after closing.
-                    self._fail_stop(e, lead=(f"{T('log.recv_error')}: {e}",))
+                    self._fail_stop(e, lead=(f"{T('log.recv_error')}: {e}",), session=session)
                 break
             now = time.monotonic()
             # BEAT FIRST, then clear the flag, and the order is the whole safety of
@@ -1969,12 +2019,13 @@ class BeanEngine:
         else:
             self._last_sent[is_out] = arrived
 
-    def _inject_loop(self):
-        while self._running:
+    def _inject_loop(self, session):
+        divert = session.divert         # this session's handle, never the next one's
+        while session.live:
             with self._cv:
-                while self._running and not self._heap:
+                while session.live and not self._heap:
                     self._cv.wait()
-                if not self._running:
+                if not session.live:
                     break
                 release, arrived, packet, _, key, modified = self._heap[0]
                 now = time.monotonic()
@@ -1983,12 +2034,13 @@ class BeanEngine:
                     continue
                 heapq.heappop(self._heap)
             try:
-                if self._divert is None:
-                    # STOP cleared the handle between the pop above and here. The
-                    # packet is already OFF the heap, so stop()'s stranded sweep
-                    # will never see it either - without this it just left the
-                    # seen/delivered/dropped balance, silently, which is the one
-                    # thing keeping these numbers honest. Found while measuring the
+                if not session.live:
+                    # STOP ended the session between the pop above and here, and it
+                    # closes the handle first. The packet is already OFF the heap,
+                    # so stop()'s stranded sweep will never see it either - without
+                    # this it just left the seen/delivered/dropped balance,
+                    # silently, which is the one thing keeping these numbers
+                    # honest. Found while measuring the
                     # batched injector (built, measured and rejected): the hole
                     # was one packet wide already, and batching would have made it
                     # a whole batch wide.
@@ -2015,7 +2067,7 @@ class BeanEngine:
                     # Worth a median 1.122x end to end (8 of 8 paired windows
                     # inside one session), because the work removed was competing
                     # with the CAPTURE thread, which is what sets the rate.
-                    self._divert.send(packet, recalculate_checksum=modified)
+                    divert.send(packet, recalculate_checksum=modified)
                     size = len(packet.raw)
                     is_out = getattr(packet, "is_outbound", True)
                     self._bump("bytes_out" if is_out else "bytes_in", size)
@@ -2035,5 +2087,5 @@ class BeanEngine:
                 # counter; this one only had a log line.
                 self._bump("drop_send")
                 self._conns_log.charge(key, "dropped")
-                if self._running:
+                if session.live:
                     self._warn_send_failed(e)

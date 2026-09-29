@@ -10,6 +10,7 @@ The runner is orchestration, so its collaborators are spied on rather than run:
 real engine over real wall-clock time would make these flaky. A fake engine and a
 fake scenario let each assertion be exact.
 """
+import threading
 import time
 
 import pytest
@@ -63,7 +64,7 @@ def spy_apply(monkeypatch):
     """Capture what the runner applies, without running the real settings layer."""
     applied = []
     monkeypatch.setattr(scenario_runner, "apply_settings",
-                        lambda eng, s, log=lambda *_: None: applied.append(dict(s)))
+                        lambda eng, s, log=lambda *_: None, live=None: applied.append(dict(s)))
     monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
     return applied
 
@@ -206,6 +207,46 @@ def test_starting_again_leaves_no_orphan_applying_the_old_timeline(spy_apply):
     check("and the runner really did hand out a second one",
           runner._thread is not first and runner._thread.is_alive())
     runner.stop()
+
+
+def test_a_thread_still_in_a_step_when_started_again_is_not_the_timeline_any_more(
+        monkeypatch):
+    """External review P2-12, the runner half: the test above, with a step that
+    outlasts ``stop()``'s join - a target resolve, 1.7 s cold.
+
+    ``start()`` clears ``_stop`` for the new thread, so a flag alone told the old
+    thread, back from its step, that it was still the live timeline: it went on
+    playing the OLD timeline, and a step of it that failed stopped the new session
+    as a dead worker. Whose timeline it is, is the thread's identity.
+    """
+    engine = FakeEngine()
+    runner = ScenarioRunner(engine)
+    inside, release = threading.Event(), threading.Event()
+    state = {"first": None}
+
+    def apply(eng, s, log=None, live=None):
+        if threading.current_thread() is state["first"]:
+            inside.set()
+            release.wait(5)
+            raise TypeError("the old step fails on its way out")
+
+    monkeypatch.setattr(scenario_runner, "apply_settings", apply)
+    monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
+    runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
+    state["first"] = first = runner._thread
+    try:
+        check("the first thread is inside a step", inside.wait(5))
+        runner.start(FakeScenario(loop=True, duration=5.0), base_settings={})
+        check("stop() inside start() gave up on it", first.is_alive())
+        release.set()
+        first.join(5)
+        check("the old thread has ended", not first.is_alive())
+        check("P2-12: its failure did not stop the session it no longer belongs to",
+              not engine.failures, f"({engine.failures})")
+        check("and the new timeline is still playing", runner.running())
+    finally:
+        release.set()
+        runner.stop()
 
 
 def test_stopping_from_inside_the_runner_thread_does_not_raise(spy_apply,
@@ -408,7 +449,8 @@ def _loop_virtually(monkeypatch, ticks):
     clock, engine = _Clock(), FakeEngine()
     applied = []
     monkeypatch.setattr(scenario_runner, "apply_settings",
-                        lambda eng, s, log=None: applied.append((clock.t - 1000.0, s["loss"])))
+                        lambda eng, s, log=None, live=None:
+                        applied.append((clock.t - 1000.0, s["loss"])))
     monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
     resets = []
     engine.reset_now = lambda duration: resets.append((clock.t - 1000.0, duration))
@@ -418,6 +460,7 @@ def _loop_virtually(monkeypatch, ticks):
     runner = ScenarioRunner(engine, clock=clock)
     runner._wake = _Ticks(clock, engine, ticks)
     runner._stop = False
+    runner._thread = threading.current_thread()     # played on this thread
     runner._base = dict(DEFAULT_SETTINGS)
     runner._timeline(scenario, lambda *_: None)
     return applied, resets
@@ -489,7 +532,7 @@ def _spy_rebase_run(monkeypatch, apply_after_tick, apply=None):
     from beantester.settings import DEFAULT_SETTINGS
     clock, engine = _Clock(), FakeEngine()
     applied = []
-    monkeypatch.setattr(scenario_runner, "apply_settings", lambda eng, s, log=None: applied.append(
+    monkeypatch.setattr(scenario_runner, "apply_settings", lambda eng, s, log=None, live=None: applied.append(
         (round(clock.t - 1000.0, 1), s["loss"], s["target"])))
     monkeypatch.setattr(scenario_runner, "settings_summary", lambda s, lang: "summary")
     runner = ScenarioRunner(engine, clock=clock)
@@ -533,13 +576,12 @@ def test_an_apply_waits_for_a_step_being_applied(monkeypatch):
     lock: here the step is held inside ``apply_settings`` while an Apply comes in
     from another thread, the way the window's "Apply changes" does.
     """
-    import threading
     from beantester.settings import DEFAULT_SETTINGS
     clock, engine = _Clock(), FakeEngine()
     applied, entered, release = [], threading.Event(), threading.Event()
     runner = ScenarioRunner(engine, clock=clock)
 
-    def spy(eng, s, log=None):
+    def spy(eng, s, log=None, live=None):
         applied.append((s["loss"], s["target"]))
         if s["loss"] == 5 and threading.current_thread() is runner._thread:
             entered.set()

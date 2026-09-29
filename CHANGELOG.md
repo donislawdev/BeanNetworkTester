@@ -20,6 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A quick STOP and START no longer lets the previous session act on the next one.**
+  A scenario step that was still running when you pressed STOP could set its target
+  process or its values in the next session, which then impaired something you did not
+  ask for and logged a scenario step it never had. A stuck part of the previous session
+  could also read the next session's traffic, or mark a healthy session as failed. At
+  most one packet the previous session was holding can still pass through the next one.
+
 - **Resizing the window no longer changes what START does.** When the Control page
   switched between one and two columns, the Filter went back to the previous choice, it
   became editable during a session, the scenario label said "Scenario: (none)", and "Delete" came

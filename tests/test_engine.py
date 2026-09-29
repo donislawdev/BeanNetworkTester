@@ -1103,6 +1103,58 @@ def test_a_second_scenario_stops_the_first_instead_of_orphaning_it():
         sh.stop()
 
 
+def test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session(
+        monkeypatch):
+    """External review P2-12, the runner half, reproduced before the fix.
+
+    STOP waits for the runner only ``ScenarioRunner.JOIN_S`` (0.25 s), and a step
+    that sets a target resolves it synchronously - measured at 1.7 s cold. So the
+    step was still in flight when STOP returned, and when it finished it installed
+    the OLD target into the next session, which had asked for none, and logged a
+    SCENARIO event there: a session impairing one process while the window said
+    it impaired everything. The resolve is held on an event here instead of timed.
+    """
+    import threading
+    from beantester.scenario import Scenario
+    from beantester.targeting import ProcessTargeting
+
+    inside, release = threading.Event(), threading.Event()
+    real_refresh = ProcessTargeting.refresh
+    sh = BeanEngine()
+
+    def held(self, *args, **kwargs):
+        runner = sh._scenario_runner
+        if runner is not None and threading.current_thread() is runner._thread:
+            inside.set()
+            release.wait(10)
+        return real_refresh(self, *args, **kwargs)
+
+    monkeypatch.setattr(ProcessTargeting, "refresh", held)
+    apply_settings(sh, dict(DEFAULT_SETTINGS))
+    sh.start("test", divert=FakeDivert([]))
+    try:
+        sh.start_scenario(Scenario(steps=[{"at": 0.0, "settings": {"target": "oldapp"}}]),
+                          dict(DEFAULT_SETTINGS))
+        check("the step is resolving its target", inside.wait(5))
+        stepping = sh._scenario_runner._thread
+        sh.stop()
+        check("STOP did not wait for it", stepping.is_alive())
+
+        apply_settings(sh, dict(DEFAULT_SETTINGS))      # the next START: no target
+        sh.start("test", divert=FakeDivert([]))
+        release.set()
+        stepping.join(5)
+        check("the old step has finished", not stepping.is_alive())
+        check("P2-12: the next session got no target from it", sh.targeting() is None,
+              f"({getattr(sh.targeting(), 'expression', None)})")
+        scenario_events = [e for e in sh.events_snapshot() if e[2] == "SCENARIO"]
+        check("P2-12: and no SCENARIO event in its log", not scenario_events,
+              f"({scenario_events})")
+    finally:
+        release.set()
+        sh.stop()
+
+
 def test_a_connection_row_records_the_drops_the_queue_made():
     """`dropped` used to be recorded one step too early.
 

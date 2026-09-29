@@ -469,11 +469,18 @@ def _warn_about_shared_ports(targeting, log):
             log(T("log.shared_port_footer"))
 
 
-def apply_targeting(engine, target, log=lambda *_: None, announce=True):
+def apply_targeting(engine, target, log=lambda *_: None, announce=True, live=None):
     """Resolve the target-process expression and point the engine at its ports.
 
     Shared by ``apply_settings`` and the GUI's target refresher so the lookup,
     its logging and its error handling live in exactly one place.
+
+    ``live`` - asked before anything here touches the engine, and again after the
+    synchronous resolve, which can take seconds; when it answers False, nothing
+    is installed and nothing is said. The scenario runner passes it: its step can
+    outlast STOP, and without this the step installed the previous session's
+    target into the next one (see ``ScenarioRunner._owns``) - or, with no target
+    in the step, switched the next session's target off.
 
     Returns the live :class:`~beantester.targeting.ProcessTargeting` (iterable,
     ``len()``-able), or ``None`` when targeting is off / could not be resolved.
@@ -483,6 +490,8 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
     the target opens a second from now is impaired too - the old code handed the
     engine a frozen set of ports and everything opened afterwards escaped it.
     """
+    if live is not None and not live():
+        return None
     matcher = target if hasattr(target, "matches") else None
     if matcher is None:
         expr = str(target or "").strip()
@@ -524,6 +533,8 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True):
         # resolver corrects it within a tick.
         with crashlog.quiet("settings.targeting"):
             targeting.refresh()
+    if live is not None and not live():
+        return None
     engine.set_target(True, targeting)
     if announce:
         if targeting.matched:
@@ -643,8 +654,11 @@ def _batch(engine):
 NOT_APPLIED_LIVE = tuple(f.key for f in FIELD_DEFS if f.start_only or f.ui_only)
 
 
-def apply_settings(engine, s, log=lambda *_: None):
+def apply_settings(engine, s, log=lambda *_: None, live=None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
+
+    ``live`` - asked once more right before the batch, and handed to
+    :func:`apply_targeting`; see there.
 
     Applied as ONE batch, under a single hold of the core's lock: the setters used
     to take and release it one at a time, so a packet decided in the middle was
@@ -728,6 +742,10 @@ def apply_settings(engine, s, log=lambda *_: None):
         schedule = []
 
     # -- apply: one lock hold, so no packet sees half of this ----------------- #
+    # A scenario step that stopped being the timeline while it prepared (see
+    # ``live``) must not put its values into whatever session runs now.
+    if live is not None and not live():
+        return
     with _batch(engine):
         engine.set_params(g("loss"), g("corrupt"), g("dup"),
                           g("latency"), g("jitter"), g("down"), g("up"))
@@ -761,7 +779,7 @@ def apply_settings(engine, s, log=lambda *_: None):
     # legally carry `target`, so that window is real rather than theoretical -
     # closing it would mean holding the packet path across an OS walk, which is
     # the trade this refuses to make. See BeanCore.batch.
-    apply_targeting(engine, str(g("target")).strip(), log)
+    apply_targeting(engine, str(g("target")).strip(), log, live=live)
 
 
 def _expected_shape(key, lang=None):

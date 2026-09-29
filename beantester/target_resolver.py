@@ -27,11 +27,14 @@ Shape
 Deliberately the same shape as :mod:`beantester.scenario_runner`: a small class
 that owns one background thread, with its lifecycle driven explicitly by
 ``BeanEngine`` (``start`` / ``stop``), rather than a leaf object that
-self-starts a hidden daemon. Two differences, both on purpose:
+self-starts a hidden daemon. Three properties, all on purpose:
 
-* **``stop()`` joins.** The resolver holds OS handles; it must stop touching them
-  the moment the session ends, not "eventually". (``ScenarioRunner.stop()`` only
-  sets a flag.)
+* **``stop()`` joins, briefly.** The resolver holds OS handles; it must stop
+  touching them the moment the session ends, not "eventually" - but never waits
+  for a scan in flight (``JOIN_S``).
+* **A thread runs only while it is the one this object owns.** ``stop()`` lets go
+  of it and ``start()`` hands out a new one, so a thread that outlived its join
+  can never be revived by the next start. The scenario runner works the same way.
 * **It waits on an ``Event``, not a ``sleep``.** A packet for an unknown port
   wakes it immediately, so a brand-new connection starts being impaired within
   tens of milliseconds instead of at the next tick.
@@ -58,9 +61,10 @@ class TargetResolver:
         self.min_interval = float(min_interval)
         self._last_rebuild = 0.0
         self._targeting = None
+        # The thread this object currently OWNS, and the loop runs only while it is
+        # that thread (see _loop). stop() lets go of it, start() hands out a new one.
         self._thread = None
         self._wake = threading.Event()
-        self._stopping = threading.Event()
         self._lock = threading.Lock()
         self._rebuilds = 0
 
@@ -70,7 +74,6 @@ class TargetResolver:
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return
-            self._stopping.clear()
             self._thread = threading.Thread(target=self._loop, name="bean-target-resolver",
                                             daemon=True)
             self._thread.start()
@@ -83,23 +86,26 @@ class TargetResolver:
     # meant a 1.6 s STOP, and STOP is the control this tool may never make slow: it
     # is how the user undoes the damage they just did to their own network.
     #
-    # Not joining is safe. stop() has already cleared _targeting and set _stopping,
-    # so a straggler finishes at most one more scan - into an object nobody reads
-    # any more - and then exits at its next loop check. It is a daemon either way.
+    # Not joining is safe. stop() has already cleared _targeting and let go of the
+    # thread, so a straggler finishes at most one more scan and then exits at its
+    # next loop check - and nothing a later start() does can bring it back, because
+    # it is no longer the thread this object owns. That last part is what the
+    # sentence above used to leave out: the stop signal was ONE shared Event, which
+    # start() cleared, so a straggler that missed its join kept scanning next to
+    # the new thread for the whole of the next session (two resolver threads after
+    # one quick STOP and START; external review P2-12, reproduced). It is a daemon
+    # either way.
     JOIN_S = 0.25
 
     def stop(self, timeout=JOIN_S):
         """Stop the thread, waiting only briefly - never for a scan in flight."""
         with self._lock:
+            # Let go of the thread INSIDE the lock, together with the target: that
+            # is the whole stop signal (see _loop). A concurrent start() then either
+            # finds nothing to own and starts a fresh thread, or ran first and is
+            # stopped with it - never a new thread killed by an old stop.
             thread, self._thread = self._thread, None
             previous, self._targeting = self._targeting, None
-            # Signalled INSIDE the lock, together with taking the thread. Setting
-            # it afterwards left a window where a concurrent start() could clear
-            # _stopping, spawn a fresh thread, and then have this set() kill it on
-            # its first loop check. BeanEngine serialises start/stop under its own
-            # lock so it cannot happen there today, but a threading primitive
-            # should not depend on its caller to be safe.
-            self._stopping.set()
             self._wake.set()                # unblock an idle wait()
         if previous is not None:
             # Detach, so a packet arriving late cannot poke the event of a resolver
@@ -134,7 +140,11 @@ class TargetResolver:
 
     # -- the worker ------------------------------------------------------------- #
     def _loop(self):
-        while not self._stopping.is_set():
+        # Runs while this thread is the one the resolver owns. stop() lets go of it
+        # and start() hands out a new one, so a thread that outlived its join can
+        # never be revived by the next start - see JOIN_S.
+        me = threading.current_thread()
+        while self._thread is me:
             targeting = self._targeting
             if targeting is None:
                 self._wake.wait()           # nothing to resolve: sleep for free
@@ -179,9 +189,10 @@ class TargetResolver:
                 # holds - no full rebuild happens before it expires - but a pid the
                 # live map has just seen gets its cheap adoption at the top of the
                 # loop instead of queueing behind a limit meant for packet misses.
-                # Sleeping on `_stopping` here made a brand-new process wait the
-                # whole floor, which is the 50 ms this was supposed to remove.
-                # stop() sets both, so shutdown is just as prompt as before.
+                # Sleeping on a separate stop event here made a brand-new process
+                # wait the whole floor, which is the 50 ms this was supposed to
+                # remove. stop() rings this doorbell too, so shutdown is just as
+                # prompt as before.
                 self._wake.wait(timeout=self.min_interval - since)
                 self._wake.clear()
                 continue

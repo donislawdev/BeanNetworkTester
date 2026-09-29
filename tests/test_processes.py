@@ -199,6 +199,42 @@ def test_apply_targeting_disables_on_empty_expression(fake_psutil):
           engine.core.target_active is False)
 
 
+def test_an_apply_that_is_no_longer_live_changes_nothing(fake_psutil):
+    """External review P2-12, after review of the fix: a scenario step can lose its
+    session at ANY point of an apply, not only inside the slow resolve.
+
+    ``live`` was asked only after the resolve, and by then the step had already
+    put its impairment values in, published its target through ``target_for``,
+    or - with no target in the step - switched the target off. Each of those
+    landed in whatever session ran by then. Asked here with a step that is stale
+    from the start, one door at a time.
+    """
+    from beantester.settings import DEFAULT_SETTINGS, apply_settings
+
+    def stale():
+        return False
+
+    said = []                           # what the stale step says: nothing
+    engine = BeanEngine()
+    apply_settings(engine, dict(DEFAULT_SETTINGS, loss=50, target="chrome"), said.append,
+                   live=stale)
+    check("no impairment value from a stale step", engine.core.loss == 0,
+          f"({engine.core.loss})")
+    check("no target from a stale step", engine.targeting() is None,
+          f"({engine.targeting()})")
+
+    apply_targeting(engine, "chrome", said.append, live=stale)
+    check("apply_targeting publishes nothing for a stale step",
+          engine.targeting() is None and engine.core.target_active is False,
+          f"({engine.targeting()})")
+
+    running = apply_targeting(engine, "chrome", lambda *_: None)
+    apply_targeting(engine, "", said.append, live=stale)
+    check("nor switches the running session's target off",
+          engine.targeting() is running and engine.core.target_active is True)
+    check("and says nothing", not said, f"({said})")
+
+
 def test_apply_targeting_logs_and_keeps_the_target_on_a_bad_expression(fake_psutil):
     """Rewritten on purpose (external review, P3-13).
 
