@@ -7,9 +7,11 @@ scenario with **zero steps**, which then ran a session that did nothing while
 the UI happily reported "scenario loaded".
 """
 import difflib
+import os
 
 from .i18n import translate
 from .jsonfile import load_json
+from .paths import shipped_scenario
 from .settings import DEFAULT_SETTINGS, validated_patch
 from .validators import parse_number
 
@@ -190,8 +192,12 @@ def load_scenario_file(path):
     # and the non-JSON constants (NaN / Infinity) with the same ValueError this
     # already turns into a translated message. OSError still travels untouched -
     # "cannot read the file" is a different sentence from "this is not a scenario".
+    # A shipped scenario named the way a repro command names it opens from any
+    # folder (paths.shipped_scenario), but only when the working folder has no such
+    # file: that one is what a relative path means. ``source`` stays as given.
+    found = path if os.path.exists(path) else (shipped_scenario(path) or path)
     try:
-        data = load_json(path)
+        data = load_json(found)
     except ValueError as e:
         raise _err("errors.scenario_bad_json", error=e) from e
     scenario = parse_scenario(data)

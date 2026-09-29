@@ -275,6 +275,35 @@ def scenarios_dir():
     return os.path.join(PROJECT_ROOT, "scenarios")
 
 
+# The two names a repro command gives a shipped scenario (gui/session_repro.
+# command_path), both from the program's folder: ``scenarios\x.json`` from the
+# sources, ``_internal\scenarios\x.json`` next to the frozen exe (PyInstaller's
+# onedir contents folder - the spec keeps its default name).
+_SHIPPED_SCENARIO_FOLDERS = (("scenarios",), ("_internal", "scenarios"))
+
+
+def shipped_scenario(path):
+    """The shipped scenario file a relative ``path`` names, or None.
+
+    A repro command names a shipped scenario from the program's folder, but every
+    install (WinGet, Chocolatey, the MSI) puts the exe on PATH, so the command is
+    pasted in some other folder, where that name finds nothing. Only the two
+    shapes the command writes are answered, from either build (a report travels
+    between installs), and only when the file is really there - any other path
+    stays the caller's, and so does the choice to look in the working folder first.
+    """
+    if os.path.isabs(path):
+        return None
+    # normpath takes "./"; both separators, because "/" is what a README example
+    # types and "\" what the Windows command writes.
+    parts = os.path.normpath(os.fspath(path)).replace("\\", "/").split("/")
+    folders = tuple(os.path.normcase(part) for part in parts[:-1])
+    if folders not in _SHIPPED_SCENARIO_FOLDERS:
+        return None
+    candidate = os.path.join(scenarios_dir(), parts[-1])
+    return candidate if os.path.isfile(candidate) else None
+
+
 PROFILE_FILE = os.path.join(user_data_dir(), PROFILE_NAME)
 CSV_FILE = os.path.join(user_data_dir(), STATS_CSV_NAME)
 # Snapshot of the connection table (overwritten each export, unlike the appended

@@ -310,6 +310,34 @@ def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
     """)
 
 
+def test_an_apply_while_stop_is_under_way_does_not_rewrite_the_session():
+    """STOP runs on a worker thread and the window says "running" until it ends.
+
+    The engine has already ended the session by then, so an Apply that lands in
+    that gap changes nothing that ran - and it used to become the session's
+    record: the copied command said ``--loss 20`` for a session that ran at 5.
+    """
+    run_gui("""
+        from beantester.gui import session_repro
+        from beantester.synthetic import SyntheticDivert
+
+        app.vars["loss"].set("5")
+        app._pending_start_settings = app._settings_from_widgets()
+        app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
+        app._finish_start(None)
+        app.engine.stop()                   # the transition worker's half of STOP
+        assert app.running and not app.engine.is_running()
+        app.vars["loss"].set("20")
+        app.apply_if_running()              # lands before _finish_stop
+        assert session_repro.settings_of(app)["loss"] == 5, session_repro.settings_of(app)
+        app._finish_stop(None)
+        app.copy_repro_cli()
+        app._logview.drain()
+        line = [l for l in app._log_lines if "--seed" in l][-1]
+        assert "--loss 5 " in line and "--loss 20" not in line, line
+    """)
+
+
 def test_saving_a_profile_with_a_bad_value_names_the_field():
     """The precise message existed and was thrown away.
 

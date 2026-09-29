@@ -741,7 +741,8 @@ Designed so that after a bug you can recreate exactly the same conditions:
   and so is a profile loaded after STOP. While a scenario runs, "Apply changes" lasts only until
   its next step, so the command keeps the settings the session started with. A scenario that
   ships with the program is named from the program's folder (`scenarios\...` from the sources,
-  `_internal\scenarios\...` next to the `.exe`). Any other file is named by the path you picked.
+  `_internal\scenarios\...` next to the `.exe`), and the command finds it from any folder you
+  run it in. Any other file is named by the path you picked.
   Before the first session, **Copy CLI command** copies the settings in the form.
 
 ## Configuration file
@@ -947,6 +948,9 @@ BeanNetworkTester.exe --simulate --down 500 --loss 10 --duration 4 --interval 1
 BeanNetworkTester.exe --simulate --seed 42 --loss 20 --duration 10
 BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 ```
+
+`scenarios/<name>.json` (or `_internal\scenarios\<name>.json`) opens a scenario that ships with
+the program from any folder. If the current folder has a file under that path, that file is used.
 
 The seed guarantees identical **per-packet decisions** for the same packet sequence. Scenario steps
 are cumulative (each patches the state), and `action: reset_tcp` tears down TCP connections at that

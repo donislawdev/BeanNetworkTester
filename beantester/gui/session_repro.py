@@ -43,8 +43,12 @@ def applied(app, settings):
     Not while a scenario still runs: its next step puts the scenario's base back
     (engine.scenario_running), so the session keeps being the one it started as,
     and the command - the start settings plus ``--scenario`` - repeats that.
+    Nor once STOP has begun: the window stays "running" until the stop finishes
+    on its worker thread, but the engine has already ended the session, so an
+    Apply in that gap describes a session that never ran.
     """
-    if not app.engine.scenario_running():
+    engine = app.engine
+    if engine.is_running() and not engine.scenario_running():
         _SESSIONS[app] = dict(settings)
 
 
@@ -105,11 +109,12 @@ def command_path(path):
 
     The file dialog hands back an absolute path, which carries the Windows account
     name into every report somebody shares. A scenario that ships with the program
-    is named from the program's folder instead - where the command itself runs
-    from (``appinfo.command_name`` assumes the same) - so it is short, carries no
-    account name, and runs on any install: ``scenarios\\x.json`` from the sources,
-    ``_internal\\scenarios\\x.json`` next to the frozen executable. Any other file
-    is named as it was chosen.
+    is named from the program's folder instead, so it is short, carries no account
+    name, and runs on any install: ``scenarios\\x.json`` from the sources,
+    ``_internal\\scenarios\\x.json`` next to the frozen executable. The exe is on
+    PATH after every install, so the command is run from other folders too;
+    ``paths.shipped_scenario`` finds the file there. Any other file is named as it
+    was chosen.
     """
     home = paths.executable_dir() if paths.is_frozen() else paths.PROJECT_ROOT
     here = os.path.abspath(path)

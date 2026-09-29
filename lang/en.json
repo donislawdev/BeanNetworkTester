@@ -514,7 +514,7 @@
   "tips.conn_search_help": "How to search this table",
   "tips.conn_table": "Who (process) talks to whom (IP:port). 'time[s]' is the connection duration, 'idle[s]' is seconds since the last packet. Click a header to sort. The list scrolls vertically and horizontally.",
   "tips.control_search": "Finds a field or a section by name, or by its CLI flag such as --loss. Enter goes to the next match, Escape clears the box.",
-  "tips.copy_cli": "Copies to the clipboard a command that repeats the last session: the settings START and \"Apply changes\" gave it, its seed and its scenario. Before the first session, the settings in the form (a frozen .exe uses its own name).",
+  "tips.copy_cli": "Copies to the clipboard a command that reproduces the last session: the settings START and \"Apply changes\" gave it, its seed and its scenario. Before the first session, it copies the settings in the form. In the .exe version, the command starts with the name of the .exe file.",
   "tips.copy_counters": "Copies every counter on this tab to the clipboard, with its caption and unit, exactly as it reads here.",
   "tips.copy_session": "Copies every line of this panel to the clipboard, exactly as it reads here - including the computer name and its addresses.",
   "tips.corrupt": "Percent of packets with one flipped data bit - tests resilience to corrupted data.",

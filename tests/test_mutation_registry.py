@@ -3801,9 +3801,49 @@ MUTATIONS = [
         # not describe the session.
         "label": "gui: an Apply during a running scenario rewrites the session",
         "file": "beantester/gui/session_repro.py",
-        "old": "    if not app.engine.scenario_running():\n        _SESSIONS[app] = dict(settings)",
-        "new": "    if True:\n        _SESSIONS[app] = dict(settings)",
+        "old": ("    if engine.is_running() and not engine.scenario_running():\n"
+                "        _SESSIONS[app] = dict(settings)"),
+        "new": "    if engine.is_running():\n        _SESSIONS[app] = dict(settings)",
         "test": "test_apply_during_a_running_scenario_keeps_the_session_it_started_as",
+    },
+    {
+        # The window says "running" until the stop worker finishes; the engine
+        # has ended the session before that.
+        "label": "gui: an Apply while STOP is under way rewrites the session",
+        "file": "beantester/gui/session_repro.py",
+        "old": "    if engine.is_running() and not engine.scenario_running():",
+        "new": "    if not engine.scenario_running():",
+        "test": "test_an_apply_while_stop_is_under_way_does_not_rewrite_the_session",
+    },
+    {
+        # Every install puts the exe on PATH: the copied command runs from any
+        # folder, where the program-relative name found nothing (exit 4).
+        "label": "scenario: a shipped name opens only from the program's folder",
+        "file": "beantester/scenario.py",
+        "old": "    found = path if os.path.exists(path) else (shipped_scenario(path) or path)",
+        "new": "    found = path",
+        "test": "test_the_names_a_repro_command_writes_open_from_any_folder",
+    },
+    {
+        "label": "scenario: a shipped file wins over the working folder's",
+        "file": "beantester/scenario.py",
+        "old": "    found = path if os.path.exists(path) else (shipped_scenario(path) or path)",
+        "new": "    found = shipped_scenario(path) or path",
+        "test": "test_a_file_in_the_working_folder_still_wins",
+    },
+    {
+        "label": "paths: any missing relative path opens a shipped scenario",
+        "file": "beantester/paths.py",
+        "old": "    if folders not in _SHIPPED_SCENARIO_FOLDERS:\n        return None",
+        "new": "    if False:\n        return None",
+        "test": "test_only_the_names_the_command_writes_fall_back",
+    },
+    {
+        "label": "paths: the exe's _internal name is not read back",
+        "file": "beantester/paths.py",
+        "old": '_SHIPPED_SCENARIO_FOLDERS = (("scenarios",), ("_internal", "scenarios"))',
+        "new": '_SHIPPED_SCENARIO_FOLDERS = (("scenarios",),)',
+        "test": "test_the_command_path_and_its_reading_are_one_round_trip",
     },
     {
         # The dialog's absolute path carries the Windows account name into every

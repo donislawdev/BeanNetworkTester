@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   such as `re:^edge` is quoted, so `cmd.exe` no longer drops the `^`, and a fractional
   "Max size" no longer makes the command fail.
 
+- **A scenario that ships with the program opens from any folder.** `--scenario
+  scenarios\cafe-wifi.json`, and the `_internal\scenarios\...` name the window copies,
+  used to work only in the program's folder. A file with that path in the current
+  folder still comes first.
+
 - **Every row of a table can be scrolled into view, and tables work from the
   keyboard.** The last rows of every table (Connections, the event log, Port check,
   Sockets) could not be reached, a short table could not scroll at all, and Page Down

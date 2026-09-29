@@ -514,7 +514,7 @@
   "tips.conn_search_help": "Jak szukac w tej tabeli",
   "tips.conn_table": "Kto (proces) z kim (IP:port) gada. 'czas[s]' to czas trwania połączenia, 'nieakt.[s]' to ile sekund minęło od ostatniego pakietu. Klik w nagłówek sortuje. Lista przewija się pionowo i poziomo.",
   "tips.control_search": "Znajduje pole albo sekcję po nazwie, albo po fladze CLI takiej jak --loss. Enter przechodzi do następnego trafienia, Escape czyści pole.",
-  "tips.copy_cli": "Kopiuje do schowka komendę, która powtarza ostatnią sesję: ustawienia nadane przez START i \"Zastosuj zmiany\", jej seed i scenariusz. Przed pierwszą sesją - ustawienia z formularza (w zbudowanym .exe użyje jego nazwy).",
+  "tips.copy_cli": "Kopiuje do schowka komendę, która odtwarza ostatnią sesję: ustawienia nadane przez START i \"Zastosuj zmiany\", jej seed i scenariusz. Przed pierwszą sesją kopiuje ustawienia z formularza. W wersji .exe komenda zaczyna się od nazwy pliku .exe.",
   "tips.copy_counters": "Kopiuje do schowka wszystkie liczniki z tej zakładki, z podpisem i jednostką, dokładnie tak, jak tu wyglądają.",
   "tips.copy_session": "Kopiuje do schowka każdy wiersz tego panelu, dokładnie tak, jak tu wygląda - razem z nazwą komputera i jego adresami.",
   "tips.corrupt": "Procent pakietów z przekłamanym jednym bitem danych - test odporności na uszkodzone dane.",

@@ -603,6 +603,28 @@ def test_the_repro_command_repeats_the_scenario_and_the_simulation(tmp_path):
     check("repro: and it stays a simulation", args.simulate, f"({command})")
 
 
+def test_a_shipped_scenario_named_the_way_the_command_names_it_runs_anywhere(
+        tmp_path, monkeypatch):
+    """Every install puts the exe on PATH, so a copied command is run from any folder.
+
+    The window names a shipped scenario from the program's folder
+    (``scenarios\\x.json``; ``_internal\\scenarios\\x.json`` next to the exe), and
+    from any other folder that name ended the run with the scenario error (exit 4).
+    """
+    monkeypatch.chdir(tmp_path)
+    name = os.path.join("scenarios", "cafe-wifi.json")
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--simulate", "--scenario", name, "--duration", "0.3",
+                    "--interval", "1", "--format", "json"],
+                   sleep=_budgeted_sleep(), out=out, err=err)
+    check("shipped scenario: the run from another folder ends OK",
+          code == exitcodes.OK, f"(code={code}, stderr={err.getvalue()!r})")
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    command = records[-1]["repro_command"] if records else ""
+    check("shipped scenario: its command still names it as it was typed",
+          f"--scenario {name} " in command + " ", f"({command})")
+
+
 def test_a_scenario_with_no_timeline_does_not_cut_the_run_short(tmp_path):
     """A one-step scenario is settings, not a timeline - it must not end the run.
 
