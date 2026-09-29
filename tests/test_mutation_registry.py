@@ -4003,6 +4003,71 @@ MUTATIONS = [
         "new": 'DIALOG_OPTIONAL_KEYS = ("<KP_Enter>", "<Tab>", "<Return>")',
         "test": "test_the_render_check_presses_the_dialogs_keys_on_real_tk",
     },
+    {
+        # External review P2-6: a BOM (Notepad) or UTF-16 (PowerShell 5.1 `>`)
+        # file was refused, and profiles.json quarantined with every profile.
+        "label": "jsonfile: user files are read as UTF-8 text again",
+        "file": "beantester/jsonfile.py",
+        "old": '    with open(path, "rb") as f:',
+        "new": '    with open(path, encoding="utf-8") as f:',
+        "test": "test_a_file_saved_by_notepad_or_powershell_loads_through_every_door",
+    },
+    {
+        # External review P3-16: the first save after a failed quarantine wrote
+        # over the file the quarantine was protecting.
+        "label": "jsonfile: a save writes over a file it could not move aside",
+        "file": "beantester/jsonfile.py",
+        "old": "    if unread and os.path.isfile(path) and quarantine(path) is None:\n"
+               "        return \"the file could not be read or moved aside, so it was not overwritten\"\n",
+        "new": "",
+        "test": "test_a_broken_file_that_cannot_be_moved_aside_is_never_saved_over",
+    },
+    {
+        "label": "jsonfile: a file left in place is reported like a quarantined one",
+        "file": "beantester/jsonfile.py",
+        "old": "    if os.path.isfile(path):\n"
+               "        return f\"{detail} (could not be moved aside, so it is left as it is)\"\n",
+        "new": "",
+        "test": "test_a_broken_file_that_cannot_be_moved_aside_is_never_saved_over",
+    },
+    {
+        "label": "profiles: the store forgets its file could not be moved aside",
+        "file": "beantester/gui/profiles.py",
+        "old": "        error = write_json(self.path, self.profiles, unread=self._unread)",
+        "new": "        error = write_json(self.path, self.profiles)",
+        "test": "test_a_broken_file_that_cannot_be_moved_aside_is_never_saved_over",
+    },
+    {
+        "label": "ui state: the store forgets its file could not be moved aside",
+        "file": "beantester/gui/ui_state.py",
+        "old": "        error = write_json(self.path, self.data, unread=self._unread)",
+        "new": "        error = write_json(self.path, self.data)",
+        "test": "test_a_broken_file_that_cannot_be_moved_aside_is_never_saved_over",
+    },
+    {
+        # External review P3-28: `{"col": "kb"}` is a dict, and the app did not start.
+        "label": "ui state: a dict value is checked as a dict and no further",
+        "file": "beantester/gui/ui_state.py",
+        "old": "        return all(k in value and isinstance(value[k], type(v)) for k, v in default.items())",
+        "new": "        return True",
+        "test": "test_a_sort_order_must_be_whole_and_the_extra_keys_stay",
+    },
+    {
+        "label": "ui state: a dict value needs its keys but not their types",
+        "file": "beantester/gui/ui_state.py",
+        "old": "        return all(k in value and isinstance(value[k], type(v)) for k, v in default.items())",
+        "new": "        return all(k in value for k in default)",
+        "test": "test_a_sort_order_must_be_whole_and_the_extra_keys_stay",
+    },
+    {
+        # The floor under the strictness: keys a newer version adds cost nothing.
+        "label": "ui state: a sort order with an extra key is thrown away",
+        "file": "beantester/gui/ui_state.py",
+        "old": "        return all(k in value and isinstance(value[k], type(v)) for k, v in default.items())",
+        "new": "        return value.keys() == default.keys() and all(\n"
+               "            isinstance(value[k], type(v)) for k, v in default.items())",
+        "test": "test_a_sort_order_must_be_whole_and_the_extra_keys_stay",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

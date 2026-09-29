@@ -16,6 +16,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Files saved by Notepad or PowerShell now load.** A config, scenario, profile or window
+  state file saved as "UTF-8 with BOM" (Notepad, PowerShell's `-Encoding UTF8`) or as UTF-16
+  (`>` in Windows PowerShell 5.1) was refused, and a profiles file like that was set aside as
+  broken, so every profile disappeared from the program. They all load now.
+
+- **Profiles are no longer lost when their file is locked.** If a broken profiles file could
+  not be moved aside (for example while an antivirus was scanning it), the next save wrote
+  over it. Now nothing is saved until the file has been moved aside.
+
+- **A damaged table sort in the window state file no longer stops the program from
+  starting.** The sort goes back to the default instead.
+
 - **A config file's seed no longer blocks START.** A seed loaded from a file showed as "42.0",
   which the Seed field refuses, so START stayed blocked until the field was edited by hand.
 
