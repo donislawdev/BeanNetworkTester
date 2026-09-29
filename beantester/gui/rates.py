@@ -147,3 +147,38 @@ class PeakWindow:
         down = max(0.0, (bytes_in - in0) / 1024.0 / span)
         up = max(0.0, (bytes_out - out0) / 1024.0 / span)
         return down, up
+
+
+class SessionPeaks:
+    """The session's peak throughput for each view: all traffic, and the
+    targeted traffic only ("Show only targeted traffic").
+
+    One window used to take whichever counters the view showed at the moment.
+    Switched mid-session, it held samples of the targeted bytes and of all
+    bytes side by side and read the difference as traffic: a peak of
+    348 000 KB/s that stayed until the next START (external review P3-26).
+    Each view has its own window here, and both are fed on every tick, so a
+    switch changes which peak is shown and nothing else.
+    """
+
+    def __init__(self, window_s: float = WINDOW_S, warmup_s: float = WARMUP_S) -> None:
+        self._windows = {view: PeakWindow(window_s, warmup_s) for view in (False, True)}
+        self._peaks = {view: (0.0, 0.0) for view in (False, True)}
+
+    def reset(self) -> None:
+        for window in self._windows.values():
+            window.reset()
+        self._peaks = {view: (0.0, 0.0) for view in (False, True)}
+
+    def add(self, now: float, total: tuple[int, int], targeted: tuple[int, int]) -> None:
+        """Record one snapshot: ``(bytes_in, bytes_out)`` of all traffic and of
+        the targeted traffic."""
+        for view, (bytes_in, bytes_out) in ((False, total), (True, targeted)):
+            rates = self._windows[view].add(now, bytes_in, bytes_out)
+            if rates is not None:            # too young is not zero: see PeakWindow
+                down, up = self._peaks[view]
+                self._peaks[view] = (max(down, rates[0]), max(up, rates[1]))
+
+    def peak(self, targeted: bool) -> tuple[float, float]:
+        """``(down, up)`` KB/s: the peak of the targeted traffic or of all of it."""
+        return self._peaks[bool(targeted)]

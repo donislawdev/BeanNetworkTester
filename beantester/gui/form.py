@@ -388,6 +388,10 @@ class ControlForm:
 
     def _on_choice(self, event):
         unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
+        # The filter the user picked is the one every rebuild restores (a column
+        # switch, "Reset layout"): left behind, they put the previous one back and
+        # START captured the direction the form no longer showed (review P2-16a).
+        self.app.set_filter_cli_key(self.app._filter_cli_key())
         self.app.on_form_changed()
 
     def _on_edit(self, section_id):

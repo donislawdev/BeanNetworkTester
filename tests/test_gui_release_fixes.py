@@ -372,6 +372,44 @@ def test_the_scenario_controls_lock_while_a_session_runs():
     """)
 
 
+def test_a_column_switch_keeps_the_filter_the_lock_and_the_labels():
+    """External review P2-16a, b, d.
+
+    Crossing the one/two-column width rebuilds the form, and the widgets the App
+    keeps in step came back as new: the filter the user had picked reverted to
+    the previous one (and START captured that), the filter was editable
+    mid-session, the scenario label said "no scenario" with one loaded, and
+    "Delete" came back live for a built-in preset.
+    """
+    run_gui("""
+        from types import SimpleNamespace
+        from beantester.filters import i18n_key_for
+        from beantester.i18n import T
+
+        def switch_columns():
+            app.form.set_columns(3 - app.form.columns)
+
+        app.vars["filter"].set(T(i18n_key_for("out")))
+        app.form._on_choice(SimpleNamespace(widget=app.filter_cb))
+        switch_columns()
+        assert app._filter_cli_key() == "out", app._filter_cli_key()
+
+        app._scenario_name = "Scenario: mine.json"
+        app._update_scenario_label()
+        assert app.btn_delete_profile.kw.get("state") == "disabled", "a preset to start with"
+        switch_columns()
+        assert app.scenario_lbl.kw.get("text") == "Scenario: mine.json", app.scenario_lbl.kw
+        assert app.btn_delete_profile.kw.get("state") == "disabled", app.btn_delete_profile.kw
+
+        app.running = True
+        app._sync_running_ui()
+        switch_columns()
+        assert app.filter_cb.kw.get("state") == "disabled", app.filter_cb.kw
+        app.running = False
+        app._sync_running_ui()
+    """)
+
+
 def test_long_notes_wrap_instead_of_being_cut():
     """The "all captured connections" note was clipped at the frame edge."""
     run_gui("""

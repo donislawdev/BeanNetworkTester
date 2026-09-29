@@ -110,7 +110,11 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-29 from 1130: "Apply changes" hands the settings to
 # `session_repro.apply`, which also rebases a running scenario (external review
 # P2-17), so two lines in `app.py` became one.
-FILE_CEILING = 1129             # beantester/gui/app.py
+# Lowered 2026-09-29 from 1129: the peak throughput moved to `gui/rates.py`
+# (`SessionPeaks`, one peak per view - external review P3-26) and the "applied"
+# fingerprint to `gui/applied.py` (P2-16c, P3-24), which paid for the two lines
+# "Reset layout" needed to reset the live table sorts (NOWE-1-1).
+FILE_CEILING = 1120             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -802,11 +806,11 @@ def test_the_strictly_typed_modules_only_ever_grow():
 # in this file: down is routine, up is the owner's decision, and the numbers must
 # BE the measurement rather than sit above it (two tests below enforce that, the
 # same pair that guards the ceilings).
-CLASS_METHOD_CEILING = 95       # gui/app.py::App (96 until 2026-09-28: _snapshot_target)
-CLASS_ATTR_CEILING = 79         # gui/app.py::App (80 until 2026-09-28: _target_expr)
-# The crowd counts, on the same 70% band as the sizes. Methods: App (95) and
-# BeanEngine (69) against a band of 66.5. Attributes: App (79) and BeanCore (57)
-# against a band of 55.3 - and BeanCore is the interesting one, because it is a
+CLASS_METHOD_CEILING = 93       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
+CLASS_ATTR_CEILING = 77         # gui/app.py::App (79 until 2026-09-29: peak_down, peak_up)
+# The crowd counts, on the same 70% band as the sizes. Methods: App (93) and
+# BeanEngine (69) against a band of 65.1. Attributes: App (77) and BeanCore (57)
+# against a band of 53.9 - and BeanCore is the interesting one, because it is a
 # 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
 # attributes is what a decision core with twelve pipeline steps accumulates.
 CLASSES_NEAR_METHOD_CEILING = 2     # App, BeanEngine

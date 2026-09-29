@@ -143,6 +143,52 @@ def test_apply_clears_the_dirty_flag():
     """)
 
 
+def test_an_edit_made_while_start_is_under_way_is_not_marked_applied():
+    """External review P3-24: the "applied" fingerprint was read when the start
+    FINISHED (0.5-2 s after the click), so a value typed meanwhile counted as
+    applied although the engine had started without it."""
+    run_gui("""
+        import threading
+        loading = threading.Event()              # the driver load, held open
+        app.engine.start = lambda filt, divert=None, duration=0, **kw: loading.wait(5)
+        app._start()
+        assert app._transition is not None, "the start must still be under way"
+        app.loss_var.set("33")                   # typed while the driver loads
+        loading.set()
+        app._settle_transition()
+        assert app.running is True
+        assert app._is_dirty() is True, "the edit never reached the engine"
+    """)
+
+
+def test_apply_leaves_the_start_only_keys_as_start_gave_them():
+    """External review P2-16c, owner decision D-7.
+
+    Apply does not send the keys a session takes at START, and taking them from
+    the form marked as applied a filter the engine never used. A config loaded
+    mid-session can change them in the form: the form then stays "dirty" until
+    the next START, which is the truth.
+    """
+    run_gui("""
+        app.engine.start = lambda filt, divert=None, duration=0, **kw: None
+        app._start(); app._settle_transition()
+        start_filter = app._filter_cli_key()
+
+        app.set_filter_cli_key("udp")            # what a "Load config" does to it
+        app.loss_var.set("5")
+        app.on_form_changed()
+        app.apply_if_running()
+        applied = dict(app._applied_sig)
+        assert applied["filter"] == start_filter, applied["filter"]
+        assert applied["loss"] == "5", applied["loss"]
+        assert app._is_dirty() is True, "the form holds a filter the session is not using"
+
+        app.set_filter_cli_key(start_filter)
+        app.on_form_changed()
+        assert app._is_dirty() is False, "the rest was applied"
+    """)
+
+
 def test_summary_prefix_tells_the_truth_about_the_session():
     """The strip used to say "Active:" even while the app was stopped."""
     run_gui("""

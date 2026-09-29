@@ -558,9 +558,9 @@ class StatsPage:
         waited = snap.get("driver_wait_peak_ms", 0.0)
         self.sess_labels["driver_wait"].config(
             text=f"{waited:.2f} ms" if waited else "-")
+        peak_down, peak_up = app.peaks.peak(app.scoped_view())
         self.sess_labels["peak_rate"].config(
-            text="%s / %s" % (format_rate(app.peak_down, unit),
-                             rate_with_unit(app.peak_up, unit)))
+            text="%s / %s" % (format_rate(peak_down, unit), rate_with_unit(peak_up, unit)))
         down_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_in"))
         up_mb = bytes_to_mb(app.scoped_stat(snap, "bytes_out"))
         total_mb = round(down_mb + up_mb, 2)

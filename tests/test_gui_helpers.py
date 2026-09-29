@@ -278,6 +278,51 @@ def test_peak_window_resets_between_sessions():
     check("peak: START clears the window", window.add(99.0, 999_999, 0) is None)
 
 
+def test_each_view_keeps_its_own_peak_and_they_never_mix():
+    """External review P3-26: 348 000 KB/s after "Show only targeted traffic".
+
+    One window took whichever counters the view showed, so a switch left it
+    holding the targeted bytes and all bytes side by side, and it read their
+    difference as traffic. All traffic here runs at 1000 KB/s down and the
+    targeted part at 10 KB/s, and both views are fed on every tick: a window
+    shared by the two - the old mistake - reads neither rate.
+    """
+    from beantester.gui.rates import SessionPeaks
+    peaks = SessionPeaks()
+    total = targeted = 0
+    for i in range(12):                          # ~8 s at App.TICK_MS
+        total += int(1000 * 1024 * 0.7)
+        targeted += int(10 * 1024 * 0.7)
+        peaks.add(i * 0.7, (total, total // 10), (targeted, targeted // 10))
+    down_all, up_all = peaks.peak(False)
+    down_targeted, up_targeted = peaks.peak(True)
+    check("peaks: all traffic reads its own rate", abs(down_all - 1000.0) < 1.0
+          and abs(up_all - 100.0) < 1.0, f"({down_all:.1f} / {up_all:.1f})")
+    check("peaks: the targeted part reads its own rate", abs(down_targeted - 10.0) < 0.5
+          and abs(up_targeted - 1.0) < 0.5, f"({down_targeted:.1f} / {up_targeted:.1f})")
+    peaks.reset()
+    check("peaks: START clears both views", peaks.peak(False) == peaks.peak(True) == (0.0, 0.0))
+
+
+# -- the "applied" fingerprint behind "Apply changes" (gui/applied.py) -------- #
+def test_after_apply_keeps_the_start_only_keys_start_gave():
+    """Owner decision D-7: Apply does not send what a session takes at START, so
+    the fingerprint keeps those values from the one before it."""
+    from beantester.gui.applied import START_ONLY_KEYS, after_apply, signature
+    check("applied: the start-only keys are the registry's",
+          START_ONLY_KEYS == {"filter", "duration", "narrow_filter", "seed"},
+          f"({sorted(START_ONLY_KEYS)})")
+    at_start = signature({"filter": "both", "duration": "0", "loss": "1", "row_limit": "9"})
+    form = {"filter": "udp", "duration": "30", "loss": "5", "row_limit": "7"}
+    after = after_apply(at_start, form)
+    check("applied: Apply takes the live keys from the form, the rest from START",
+          after == signature({"filter": "both", "duration": "0", "loss": "5"}), f"({after})")
+    check("applied: so a form that differs in a start-only key is still dirty",
+          signature(form) != after)
+    check("applied: with no fingerprint yet, the form is all there is",
+          after_apply(None, form) == signature(form))
+
+
 # -- session average throughput (was inline + untested in the Session page) -- #
 def test_average_kbps_is_total_bytes_over_elapsed():
     """The Session "avg" figure: lifetime bytes / elapsed, in 1024-based KB/s."""

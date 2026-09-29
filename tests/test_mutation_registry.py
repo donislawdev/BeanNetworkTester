@@ -914,8 +914,8 @@ MUTATIONS = [
         # reasons, and an entry that reddens both proves neither.
         "label": "ratchet: the class attribute ceiling is raised above the truth",
         "file": "tests/test_code_shape.py",
-        "old": "CLASS_ATTR_CEILING = 79         # gui/app.py::App",
-        "new": "CLASS_ATTR_CEILING = 88         # gui/app.py::App",
+        "old": "CLASS_ATTR_CEILING = 77         # gui/app.py::App",
+        "new": "CLASS_ATTR_CEILING = 86         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
     {
@@ -4308,6 +4308,80 @@ MUTATIONS = [
                 '  "windows.settings": "Settings"\n'),
         "new": "\n",
         "test": "test_every_key_the_code_names_is_in_the_language_files",
+    },
+    {
+        # External review P3-26: one window for both views mixed the targeted
+        # bytes with all bytes after a switch (348 000 KB/s).
+        "label": "rates: the two views share one peak window",
+        "file": "beantester/gui/rates.py",
+        "old": "        self._windows = {view: PeakWindow(window_s, warmup_s) for view in (False, True)}",
+        "new": "        self._windows = dict.fromkeys((False, True), PeakWindow(window_s, warmup_s))",
+        "test": "test_each_view_keeps_its_own_peak_and_they_never_mix",
+    },
+    {
+        # Owner decision D-7: Apply does not send what a session takes at START.
+        "label": "applied: Apply marks the form's start-only keys as applied",
+        "file": "beantester/gui/applied.py",
+        "old": "    kept = {k: v for k, v in (applied or ()) if k in START_ONLY_KEYS}",
+        "new": "    kept = {}",
+        "test": "test_after_apply_keeps_the_start_only_keys_start_gave",
+    },
+    {
+        # External review P3-24: the fingerprint read when the start FINISHED.
+        "label": "gui: the applied fingerprint is read when the start finishes",
+        "file": "beantester/gui/app.py",
+        "old": "        self.peaks.reset()\n",
+        "new": ("        self._applied_sig = self._signature(self._raw_settings())\n"
+                "        self.peaks.reset()\n"),
+        "test": "test_an_edit_made_while_start_is_under_way_is_not_marked_applied",
+    },
+    {
+        # External review P2-16a: the pick was never the filter a rebuild restored.
+        "label": "form: picking a filter leaves the remembered one behind",
+        "file": "beantester/gui/form.py",
+        "old": "        self.app.set_filter_cli_key(self.app._filter_cli_key())\n",
+        "new": "",
+        "test": "test_a_column_switch_keeps_the_filter_the_lock_and_the_labels",
+    },
+    {
+        # External review P2-16b, d: the column switch rebuilt the App's widgets
+        # and left them as new - unlocked, "no scenario", Delete live.
+        "label": "control page: a column switch leaves the App's widgets as new",
+        "file": "beantester/gui/pages/control.py",
+        "old": ("        app = self.app\n        app._sync_profile_widgets()\n"
+                "        app._update_scenario_label()\n        app._sync_running_ui()\n"),
+        "new": "",
+        "test": "test_a_column_switch_keeps_the_filter_the_lock_and_the_labels",
+    },
+    {
+        # External review P3-32: closed AFTER the reset, the open windows wrote
+        # back the geometry it had just cleared.
+        "label": "gui: Reset layout closes the windows after forgetting them",
+        "file": "beantester/gui/app.py",
+        "old": ("        self.windows.close_all()\n"
+                "        for key in (\"geometry\", \"page\", \"stats_page\", \"tools_page\", \"collapsed\",\n"
+                "                    \"log_height\", \"conn_sort\", \"event_sort\"):\n"
+                "            self.ui.set(key, UI_DEFAULTS[key])\n"
+                "        for wid in list(self.ui.data):\n"
+                "            if wid.startswith(\"window.\"):        # secondary-window geometries\n"
+                "                self.ui.set(wid, \"\")\n"),
+        "new": ("        for key in (\"geometry\", \"page\", \"stats_page\", \"tools_page\", \"collapsed\",\n"
+                "                    \"log_height\", \"conn_sort\", \"event_sort\"):\n"
+                "            self.ui.set(key, UI_DEFAULTS[key])\n"
+                "        for wid in list(self.ui.data):\n"
+                "            if wid.startswith(\"window.\"):        # secondary-window geometries\n"
+                "                self.ui.set(wid, \"\")\n"
+                "        self.windows.close_all()\n"),
+        "test": "test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter",
+    },
+    {
+        # External review NOWE-1-1: the tables are rebuilt from the live sorts.
+        "label": "gui: Reset layout keeps the live table sorts",
+        "file": "beantester/gui/app.py",
+        "old": ("        self.conn_sort, self.event_sort = dict(UI_DEFAULTS[\"conn_sort\"]), "
+                "dict(UI_DEFAULTS[\"event_sort\"])\n"),
+        "new": "",
+        "test": "test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter",
     },
 ]
 

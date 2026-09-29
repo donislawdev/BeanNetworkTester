@@ -20,6 +20,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Resizing the window no longer changes what START does.** When the Control page
+  switched between one and two columns, the Filter went back to the previous choice, it
+  became editable during a session, the scenario label said "Scenario: (none)", and "Delete" came
+  back for a built-in profile. "Reset window layout" put the previous Filter back too, and
+  it now also resets the open windows' positions and the table sorting.
+
+- **"Peak down/up" stays right when you switch "Show only the targeted traffic".** It could
+  show a huge number until the next START. Each view now keeps its own peak.
+
+- **"Apply changes" no longer treats as applied what the session did not get.** A value
+  typed while the session was starting counted as applied, and so did a Filter set by a
+  config loaded during the session. Now the button stays lit: "Apply changes" sends the
+  value, and the Filter waits for the next START.
+
 - **"Apply changes" during a scenario is no longer undone by its next step.** Each step put
   back the settings START gave the session, the target process and destination targeting
   included. Now the later steps build on what you applied, and "Copy CLI command" and the
