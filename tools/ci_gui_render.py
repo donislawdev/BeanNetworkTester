@@ -21,12 +21,15 @@ green nobody earned.
 
 It also measures the virtual table on its own (``--tables``): every row reachable,
 the widget's own view never moved, a selection kept across a scroll - pixel facts
-the fake Tk of the test suite cannot show.
+the fake Tk of the test suite cannot show. And the small dialogs' keyboard
+(``--dialogs``): where the focus lands when one opens, and that Enter presses the
+button the keyboard is on - focus and key delivery, which the fake Tk has neither of.
 
 Usage:
-    python tools/ci_gui_render.py            # all discovered languages, then tables
+    python tools/ci_gui_render.py            # all discovered languages, tables, dialogs
     python tools/ci_gui_render.py --lang pl  # one language
     python tools/ci_gui_render.py --tables   # the table viewport only
+    python tools/ci_gui_render.py --dialogs  # the dialogs' keyboard only
 
 Needs a display. In CI:
     xvfb-run -a --server-args="-screen 0 1366x768x24" python tools/ci_gui_render.py
@@ -624,6 +627,169 @@ def check_table_viewport():
     return not problems
 
 
+# What the keyboard does in the small modal dialogs (``gui/dialogs.py``). The fake Tk
+# of the test suite has no focus and delivers no key, so where the keyboard lands
+# when a dialog opens and which button Enter presses are measured here. Each case:
+# the dialog, the keys pressed once it shows ("type:" types into the focused
+# field), the answer it must give, and where the keyboard must be when it opens
+# (an i18n key names a button by its text; "TEntry" is the text field).
+_NOT_ANSWERED = object()
+DIALOG_CASES = (
+    ("yes/no: Enter at once", "ask_yes_no", ("<Return>",), True, "buttons.yes"),
+    ("yes/no: Tab to No, then Enter", "ask_yes_no", ("<Tab>", "<Return>"), False, None),
+    ("yes/no: Tab, Tab back to Yes, then Enter", "ask_yes_no",
+     ("<Tab>", "<Tab>", "<Return>"), True, None),
+    ("yes/no: the keypad Enter at once", "ask_yes_no", ("<KP_Enter>",), True, None),
+    ("yes/no: Tab to No, then the keypad Enter", "ask_yes_no",
+     ("<Tab>", "<KP_Enter>"), False, None),
+    ("yes/no: Tab to No, then Space", "ask_yes_no", ("<Tab>", "<space>"), False, None),
+    ("yes/no: Escape", "ask_yes_no", ("<Escape>",), False, None),
+    ("warning: Enter", "show_warning", ("<Return>",), True, "buttons.ok"),
+    ("text: typed, then Enter", "ask_string", ("type:abc", "<Return>"), "abc", "TEntry"),
+    ("text: typed, Tab to Cancel, then Enter", "ask_string",
+     ("type:abc", "<Tab>", "<Return>"), None, None),
+    ("help sheet: Enter", "show_help", ("<Return>",), True, "buttons.ok"),
+)
+DIALOG_STEP_MS = 60
+DIALOG_TIMEOUT_MS = 5000
+
+
+def _where(widget):
+    """The focused widget as the cases name it: a button by its text, else its class."""
+    if widget is None:
+        return None
+    if widget.winfo_class() == "TButton":
+        return f"TButton {widget.cget('text')!r}"
+    return widget.winfo_class()
+
+
+def _dialog_case(root, opener, keys):
+    """Open one dialog, press ``keys`` in it; return (answer, where the focus was
+    when it opened, a problem that kept it from being measured).
+
+    The keys go to whatever holds the focus, exactly as a keyboard's would - which
+    is the point: Enter used to answer for the default button wherever the focus
+    was. A dialog that never had the keyboard is reported as not measured, not as
+    an answer (the lesson of ``_press``).
+    """
+    from beantester.gui import dialogs
+    seen = {"focus": None, "problem": None, "timed_out": False}
+
+    def dialog():
+        return next((w for w in root.winfo_children()
+                     if isinstance(w, tk.Toplevel) and w.winfo_exists()), None)
+
+    def step(i=0):
+        win = dialog()
+        if win is None:
+            return
+        focus = root.focus_get()
+        if i == 0:
+            seen["focus"] = _where(focus)   # described now: the dialog is gone later
+        if focus is None:
+            seen["problem"] = "the dialog never had the keyboard focus, so it was not measured"
+            dialogs._close(win, _NOT_ANSWERED)
+            return
+        if i < len(keys):
+            if keys[i].startswith("type:"):
+                focus.insert("end", keys[i][len("type:"):])
+            else:
+                focus.event_generate(keys[i])
+            root.after(DIALOG_STEP_MS, lambda: step(i + 1))
+
+    def give_up():
+        # Recorded HERE, not read from the answer: ask_yes_no returns bool(...),
+        # so a dialog closed by this timer came back True - "Yes" - and a key
+        # that did nothing looked like one that pressed the default (measured).
+        win = dialog()
+        if win is not None:
+            seen["timed_out"] = True
+            dialogs._close(win, _NOT_ANSWERED)
+
+    root.after(DIALOG_STEP_MS * 3, step)
+    timer = root.after(DIALOG_TIMEOUT_MS, give_up)
+    if opener == "ask_string":
+        answer = dialogs.ask_string(root, "check", "name?")
+    elif opener == "show_help":
+        answer = dialogs.show_help(root, "check", "a, b, !c")
+    else:
+        answer = getattr(dialogs, opener)(root, "check", "proceed?")
+    root.after_cancel(timer)
+    if seen["timed_out"]:
+        answer = _NOT_ANSWERED
+    return answer, seen["focus"], seen["problem"]
+
+
+def _delivers(root, sequence):
+    """Whether this Tk delivers a GENERATED ``sequence`` to a binding for it at all.
+
+    Measured 2026-09-29 on Windows (Tk 9.0.4): a generated ``<KP_Enter>`` arrives
+    with keysym "??" and reaches no binding, so a keypad case there would measure
+    nothing - it is reported as not measured instead. X11 has a keycode for it.
+    """
+    probe = ttk.Frame(root)
+    probe.pack()
+    hits = []
+    probe.bind(sequence, lambda _e: hits.append(sequence))
+    root.update()
+    probe.focus_force()         # Tk hands a key event to the focus window
+    root.update()
+    probe.event_generate(sequence)
+    root.update()
+    probe.destroy()
+    return bool(hits)
+
+
+def check_dialogs():
+    """Enter presses the button the keyboard is on, on real Tk (external review P2-19)."""
+    from beantester.i18n import T
+    n.set_language("en")
+    root = tk.Tk()
+    scaling.init_scaling(root)
+    theme.init_style(root)
+    root.geometry("600x400")
+    root.update()
+    problems = []
+    undelivered = {key for _l, _o, keys, _e, _f in DIALOG_CASES for key in keys
+                   if not key.startswith("type:") and not _delivers(root, key)}
+    measured = 0
+    for label, opener, keys, expected, first in DIALOG_CASES:
+        missing = undelivered.intersection(keys)
+        if missing:
+            print(f"  [dialogs] NOT MEASURED here: {label} (a generated "
+                  f"{', '.join(sorted(missing))} reaches no binding on this Tk)")
+            continue
+        measured += 1
+        try:
+            answer, focus, problem = _dialog_case(root, opener, keys)
+        except Exception as exc:                 # noqa: BLE001 - a crash is a finding
+            problems.append(f"{label}: the dialog failed: {type(exc).__name__}: {exc}")
+            continue
+        if problem:
+            problems.append(f"{label}: {problem}")
+            continue
+        if answer is _NOT_ANSWERED:
+            problems.append(f"{label}: still open after {' '.join(keys)}")
+        elif answer != expected:
+            problems.append(f"{label}: answered {answer!r}, expected {expected!r}")
+        want = (first if first in (None, "TEntry")
+                else f"TButton {T(first)!r}")
+        if want is not None and focus != want:
+            problems.append(f"{label}: opened with the keyboard on {focus}, "
+                            f"expected {want}")
+    if not measured:
+        problems.append("no case could be measured: this Tk delivers none of the keys")
+    for problem in problems:
+        print(f"  [dialogs] {problem}")
+    print(f"  [dialogs] {'OK' if not problems else f'{len(problems)} problem(s)'}")
+    _cancel_afters(root)
+    try:
+        root.destroy()
+    except tk.TclError:
+        pass
+    return not problems
+
+
 def main(argv):
     # Before ANY Tk root, in the parent and in every per-language child alike: the
     # setting is per process, and a process that skips it is told 96 DPI by
@@ -637,6 +803,8 @@ def main(argv):
     dpi_mode = winenv.set_dpi_awareness()
     if "--tables" in argv:
         return 0 if check_table_viewport() else 1
+    if "--dialogs" in argv:
+        return 0 if check_dialogs() else 1
     if "--lang" in argv:
         i = argv.index("--lang")
         code = argv[i + 1] if i + 1 < len(argv) else "en"
@@ -663,6 +831,11 @@ def main(argv):
     # question, and a table left broken here must not hide behind a green text pass.
     rc = subprocess.run(
         [sys.executable, os.path.abspath(__file__), "--tables"]).returncode
+    ok = (rc == 0) and ok
+    # The dialogs' keyboard likewise: which button Enter presses is a fact about
+    # focus and key delivery, which only a real Tk has.
+    rc = subprocess.run(
+        [sys.executable, os.path.abspath(__file__), "--dialogs"]).returncode
     ok = (rc == 0) and ok
     print(f"GUI render: {'OK' if ok else 'FAIL'}")
     return 0 if ok else 1

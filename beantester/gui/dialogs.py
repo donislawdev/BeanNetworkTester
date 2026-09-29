@@ -14,12 +14,15 @@ from tkinter import ttk
 
 from ..i18n import T
 from .scaling import scaled
-from .theme import ACC, BG, CHARS, FONT, WARN, apply_dark_titlebar
+from .theme import ACC, BG, CAUTION, CHARS, FONT, WARN, apply_dark_titlebar
 from .tooltip import add_tooltip
 from .. import crashlog
 
 WRAP = 380
 _result: dict = {}    # per-dialog result, keyed by the toplevel
+# Both Enter keys: Tk names the keypad one KP_Enter, and its own entry and text
+# bindings list it apart from Return.
+ENTER_KEYS = ("<Return>", "<KP_Enter>")
 
 
 def _center(win, parent, focus=None):
@@ -64,6 +67,24 @@ def _close(win, value):
         crashlog.note(_exc, "gui.dialogs")
 
 
+def _enter_presses(win, buttons, default):
+    """Enter presses the button the keyboard is on, and ``default`` from anywhere else.
+
+    It used to press the first button whatever held the focus (external review,
+    P2-19): Tab to "No" and Enter answered "Yes" - on closing the window during a
+    session, on unloading the driver. Space already pressed the focused button
+    (ttk's own binding), so the two keys disagreed about the same highlighted
+    button. From a text field, or with the focus nowhere, Enter still means the
+    default: that is what typing a name and pressing Enter is for.
+    """
+    def press(_event=None):
+        focused = win.focus_get()
+        (focused if focused in buttons else default).invoke()
+
+    for key in ENTER_KEYS:
+        win.bind(key, press)
+
+
 def _shell(parent, title):
     win = tk.Toplevel(parent)
     try:
@@ -106,14 +127,19 @@ def _message(parent, title, message, accent, buttons, default=None):
 
     bar = ttk.Frame(body)
     bar.pack(fill="x", pady=(scaled(18), 0))
+    made = []
     for key, value, style in reversed(buttons):
         button = ttk.Button(bar, text=T(key), style=style,
                             command=lambda v=value: _close(win, v))
         button.pack(side="right", padx=(scaled(8), 0))
+        made.append(button)
+    first = made[-1]            # buttons[0]: built last, the row packs from the right
     win.protocol("WM_DELETE_WINDOW", lambda: _close(win, default))
     win.bind("<Escape>", lambda e: _close(win, default))
-    win.bind("<Return>", lambda e: _close(win, buttons[0][1]))
-    _center(win, parent)
+    _enter_presses(win, made, first)
+    # The keyboard starts on the default button, so its ring shows what Enter
+    # will press before anyone presses it (owner decision D-2, 2026-09-29).
+    _center(win, parent, focus=first)
     return _run(win, default)
 
 
@@ -123,7 +149,7 @@ def show_info(parent, title, message):
 
 
 def show_warning(parent, title, message):
-    return _message(parent, title, message, "#ffb454",
+    return _message(parent, title, message, CAUTION,
                     [("buttons.ok", True, "Accent.TButton")], default=True)
 
 
@@ -166,12 +192,13 @@ def show_help(parent, title, text):
         anchor="w")
     bar = ttk.Frame(body)
     bar.pack(fill="x", pady=(scaled(18), 0))
-    ttk.Button(bar, text=T("buttons.ok"), style="Accent.TButton",
-               command=lambda: _close(win, True)).pack(side="right")
+    ok = ttk.Button(bar, text=T("buttons.ok"), style="Accent.TButton",
+                    command=lambda: _close(win, True))
+    ok.pack(side="right")
     win.protocol("WM_DELETE_WINDOW", lambda: _close(win, True))
     win.bind("<Escape>", lambda e: _close(win, True))
-    win.bind("<Return>", lambda e: _close(win, True))
-    _center(win, parent)
+    _enter_presses(win, [ok], ok)
+    _center(win, parent, focus=ok)
     return _run(win, True)
 
 
@@ -204,13 +231,13 @@ def ask_string(parent, title, prompt):
 
     bar = ttk.Frame(body)
     bar.pack(fill="x", pady=(scaled(18), 0))
-    ttk.Button(bar, text=T("buttons.cancel"),
-               command=lambda: _close(win, None)).pack(side="right")
-    ttk.Button(bar, text=T("buttons.ok"), style="Accent.TButton",
-               command=accept).pack(side="right", padx=(0, scaled(8)))
+    cancel = ttk.Button(bar, text=T("buttons.cancel"), command=lambda: _close(win, None))
+    cancel.pack(side="right")
+    ok = ttk.Button(bar, text=T("buttons.ok"), style="Accent.TButton", command=accept)
+    ok.pack(side="right", padx=(0, scaled(8)))
     win.protocol("WM_DELETE_WINDOW", lambda: _close(win, None))
     win.bind("<Escape>", lambda e: _close(win, None))
-    win.bind("<Return>", lambda e: accept())
+    _enter_presses(win, [cancel, ok], ok)
     _center(win, parent, focus=entry)      # type straight away, no click needed
     return _run(win, None)
 
