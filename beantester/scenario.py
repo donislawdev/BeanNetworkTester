@@ -94,12 +94,13 @@ def _validate_step(index, step, warnings):
             raise _err("errors.scenario_step_value", step=where,
                        error=str(exc).rstrip(". ")) from exc
         # Loaded and then ignored: a step applies settings the way "Apply changes"
-        # does, and these a session only takes at START. Said, not refused - these
+        # does, and that cannot change these - a session takes them at START, or
+        # (row_limit) only the window's tables read them. Said, not refused - these
         # are users' files, and a refusal would break them (external review P3-12,
         # owner decision D-27).
         ignored = [k for k in settings if k in NOT_APPLIED_LIVE]
         if ignored:
-            warnings.append(translate("log.scenario_start_only", None, step=where,
+            warnings.append(translate("log.scenario_step_cannot_change", None, step=where,
                                       field=", ".join(sorted(ignored))))
 
     action = step.get("action")

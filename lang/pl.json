@@ -346,7 +346,7 @@
   "log.scenario_loaded": "Wczytano scenariusz",
   "log.scenario_reset": "zrywam połączenia (RST)",
   "log.scenario_start": "Scenariusz: start",
-  "log.scenario_start_only": "Scenariusz, krok {step}: pominięte, bo sesja przyjmuje je tylko przy START: {field}.",
+  "log.scenario_step_cannot_change": "Scenariusz, krok {step}: pominięte, bo krok nie może zmienić tych ustawień: {field}.",
   "log.schedule_skipped": "Harmonogram pominięty",
   "log.send_failed": "UWAGA: narzędzie nie zdołało odesłać pakietu do sieci ({n} do tej pory, ostatnio: {e}). Te pakiety przepadły i zgubiliśmy je my, a nie sieć. Jeśli to się powtarza, sprawdź, czy połączenie nadal działa i czy sterownik WinDivert jest wciąż załadowany.",
   "log.shared_port_footer": "Pozostałe porty celu są bez zmian.",

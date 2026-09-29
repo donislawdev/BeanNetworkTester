@@ -1136,9 +1136,10 @@ file** (that is, its command-line flag with the dashes turned into underscores):
 `down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`, `target`,
 `rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `internet_only` and the
 rest. Run
-`--print-config` to dump the full set of names with their current values. A session takes
-`filter`, `duration`, `narrow_filter`, `row_limit` and `seed` only at START, so a step that sets
-one of them does not change it - the file still loads, and says so.
+`--print-config` to dump the full set of names with their current values. A step cannot change
+`filter`, `duration`, `narrow_filter`, `row_limit` or `seed`: a session takes the first three and
+`seed` only at START, and only the window's tables read `row_limit`, never the engine. A step
+that sets one of them changes nothing - the file still loads, and says so.
 
 **Everything is validated when the file loads, and a mistake names itself.** An unknown setting, an
 unknown action, an unknown key, a `duration` that is not a number, a step that does nothing, a step

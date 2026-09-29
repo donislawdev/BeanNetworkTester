@@ -86,8 +86,11 @@ def test_loading_a_scenario_says_what_its_steps_cannot_change():
         fd.askopenfilename = lambda *a, **k: path
         app.load_scenario()
         app._logview.drain()
-        said = [line for line in app._log_lines if "seed" in line]
-        assert said and "START" in said[0], app._log_lines[-3:]
+        # The exact sentence, in whatever language the app came up in.
+        from beantester.i18n import translate
+        warning = translate("log.scenario_step_cannot_change", None, step=1, field="seed")
+        said = [line for line in app._log_lines if warning in line]
+        assert said, (warning, app._log_lines[-3:])
         assert app._scenario is not None, "the file must still load"
     """)
 

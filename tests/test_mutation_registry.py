@@ -4167,6 +4167,15 @@ MUTATIONS = [
         "test": "test_the_same_schedule_applied_again_keeps_its_cycle",
     },
     {
+        # The other half: a changed schedule restarts the clock AND replaces the
+        # steps. With the first one kept, only the step lengths tell them apart.
+        "label": "core: a changed schedule restarts its cycle but keeps the old steps",
+        "file": "beantester/core.py",
+        "old": "                self.schedule = schedule\n",
+        "new": "                self.schedule = self.schedule or schedule\n",
+        "test": "test_the_same_schedule_applied_again_keeps_its_cycle",
+    },
+    {
         "label": "core: a reset still running carries into the next session",
         "file": "beantester/core.py",
         "old": "            self._reset_now_deadline = 0.0\n",
@@ -4190,25 +4199,25 @@ MUTATIONS = [
     },
     {
         # External review P3-12: a step setting a START-only key loaded in silence.
-        "label": "scenario: a step's start-only keys are not looked for",
+        "label": "scenario: the keys a step cannot change are not looked for",
         "file": "beantester/scenario.py",
         "old": "        ignored = [k for k in settings if k in NOT_APPLIED_LIVE]",
         "new": "        ignored = []",
-        "test": "test_a_step_setting_what_a_session_takes_only_at_start_loads_and_says_so",
+        "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
     },
     {
         "label": "settings: the seed is taken for a setting a step can change",
         "file": "beantester/settings.py",
         "old": " + (\"seed\",)",
         "new": "",
-        "test": "test_a_step_setting_what_a_session_takes_only_at_start_loads_and_says_so",
+        "test": "test_a_step_setting_what_a_step_cannot_change_loads_and_says_so",
     },
     {
         "label": "cli: the scenario's load warnings are not said",
         "file": "beantester/cli.py",
         "old": "    for warning in scen.warnings:\n        log.warn(warning)\n",
         "new": "",
-        "test": "test_a_scenario_step_setting_a_start_only_key_is_said_by_the_dry_run_and_the_run",
+        "test": "test_a_scenario_step_setting_what_it_cannot_change_is_said_by_the_dry_run_and_the_run",
     },
     {
         "label": "gui: the scenario's load warnings are not said",

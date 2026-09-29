@@ -335,12 +335,12 @@ def test_a_reset_that_lasts_no_time_or_an_hour_and_more_is_refused():
         check(f"duration={good!r} still loads", sc.steps[0]["duration"] == good)
 
 
-def test_a_step_setting_what_a_session_takes_only_at_start_loads_and_says_so():
+def test_a_step_setting_what_a_step_cannot_change_loads_and_says_so():
     """External review P3-12: silently ignored, and the README invited it.
 
     ``apply_settings`` does not apply ``filter``, ``duration``, ``narrow_filter``,
-    ``row_limit`` or ``seed`` - a session takes them at START - so a step carrying
-    one changed nothing. Refusing would break users' files (owner decision D-27),
+    ``row_limit`` or ``seed`` - a session takes them at START, and ``row_limit``
+    only the window's tables read - so a step carrying one changed nothing. Refusing would break users' files (owner decision D-27),
     so the file loads and the warning names the step and the keys.
     """
     from beantester.scenario import parse_scenario

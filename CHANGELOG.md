@@ -31,7 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **A connection reset no longer carries into the next session.** A reset still running when
   a session stopped cut the next session's connections too.
 
-- **A scenario step that sets something only START can change now says so.** `filter`,
+- **A scenario step that sets something a step cannot change now says so.** `filter`,
   `duration`, `narrow_filter`, `row_limit` and `seed` in a step changed nothing, silently. The
   file still loads, and the log names the step. `failing-dns.json` set the traffic filter this
   way, so its description now says "port 53" rather than "UDP port 53".

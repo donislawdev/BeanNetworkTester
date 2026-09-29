@@ -346,7 +346,7 @@
   "log.scenario_loaded": "场景已加载",
   "log.scenario_reset": "正在重置连接（RST）",
   "log.scenario_start": "场景：开始",
-  "log.scenario_start_only": "场景第 {step} 步：以下设置只在会话开始时生效，此步骤不会更改它们：{field}。",
+  "log.scenario_step_cannot_change": "场景第 {step} 步：步骤无法更改以下设置，已忽略：{field}。",
   "log.schedule_skipped": "已跳过计划",
   "log.send_failed": "警告：本工具无法将数据包重新发送到网络（目前共 {n} 个，最近一次错误：{e}）。这些数据包已经丢失，原因是本工具而不是网络。若持续发生，请检查连接是否仍然正常，以及 WinDivert 驱动是否仍在加载。",
   "log.shared_port_footer": "目标进程的其他所有端口均不受影响。",

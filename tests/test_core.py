@@ -4,6 +4,7 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
 import random
+import time
 
 from beantester import BeanCore, Decision
 from beantester.core import MAX_FLOWS
@@ -1431,9 +1432,14 @@ def test_the_same_schedule_applied_again_keeps_its_cycle():
     apply_settings(engine, dict(settings, latency=50))
     check("another setting applied: the cycle stays where it was",
           core._sched_start == started, f"({core._sched_start - started:+.3f} s)")
+    before = time.monotonic()
     apply_settings(engine, dict(settings, rate_schedule="10:100:100,5:1000:1000"))
-    check("a changed schedule starts over", core._sched_start > started + 11.0,
-          f"({core._sched_start - started:+.3f} s)")
+    check("a changed schedule starts over", core._sched_start >= before,
+          f"({core._sched_start - before:+.3f} s)")
+    # The step lengths are what tell the two schedules apart: restarting the
+    # clock while keeping the old steps would pass the check above.
+    check("...and the changed schedule is the one installed",
+          [step[0] for step in core.schedule] == [10.0, 5.0], f"({core.schedule})")
 
 
 def test_a_reset_still_running_does_not_carry_into_the_next_session():

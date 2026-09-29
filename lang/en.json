@@ -346,7 +346,7 @@
   "log.scenario_loaded": "Scenario loaded",
   "log.scenario_reset": "resetting connections (RST)",
   "log.scenario_start": "Scenario: start",
-  "log.scenario_start_only": "Scenario, step {step}: ignored, because a session takes these only at START: {field}.",
+  "log.scenario_step_cannot_change": "Scenario, step {step}: ignored, because a step cannot change these settings: {field}.",
   "log.schedule_skipped": "Schedule skipped",
   "log.send_failed": "WARNING: the tool could not put a packet back on the wire ({n} so far, most recently: {e}). Those packets are gone, and it was us that lost them, not the network. If it keeps happening, check that the connection is still up and that the WinDivert driver is still loaded.",
   "log.shared_port_footer": "Every other port of the target is unaffected.",
