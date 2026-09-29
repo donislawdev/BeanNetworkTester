@@ -4235,6 +4235,15 @@ MUTATIONS = [
         "new": "\"settings\": { \"filter\": \"udp\", \"dst_port\": \"53\",",
         "test": "test_every_shipped_scenario_parses",
     },
+    {
+        # A key renamed in the code and not in lang/: every other i18n test stays
+        # green, and the user reads the key instead of the sentence.
+        "label": "i18n: a key the code names is missing from the language files",
+        "file": "beantester/gui/app.py",
+        "old": '        self.log(T("log.scenario_cleared"))',
+        "new": '        self.log(T("log.scenario_was_cleared"))',
+        "test": "test_every_key_the_code_names_is_in_the_language_files",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
