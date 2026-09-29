@@ -909,18 +909,27 @@ class BeanCore:
     def set_schedule(self, steps_kbps):
         """``steps_kbps``: ``[(dur_s, down_kbps, up_kbps), ...]``. Empty = constant limit."""
         with self._lock:
-            self.schedule = [(max(0.01, d), self._rate_bps(dn), self._rate_bps(up))
-                             for (d, dn, up) in (steps_kbps or [])]
-            self._sched_total = sum(s[0] for s in self.schedule)
-            # restart the cycle from the beginning so applying a schedule
-            # mid-session starts at step 1 instead of somewhere in the middle
-            self._sched_start = time.monotonic()
+            schedule = [(max(0.01, d), self._rate_bps(dn), self._rate_bps(up))
+                        for (d, dn, up) in (steps_kbps or [])]
+            # Only a CHANGED schedule restarts the cycle, so a new one starts at
+            # step 1 instead of somewhere in the middle. Every "Apply changes" and
+            # every scenario step passes the schedule again, and restarting on each
+            # of them kept a run on step 1 for as long as something else kept
+            # changing (external review P2-1) - the rule `_recompute` already
+            # follows for the loss chains.
+            if schedule != self.schedule:
+                self.schedule = schedule
+                self._sched_total = sum(s[0] for s in schedule)
+                self._sched_start = time.monotonic()
 
     def reset_buckets(self, now):
         with self._lock:
             self._bucket = {True: now, False: now}
             self._sched_start = now
             self._session_start = now
+            # A manual or scenario reset still running when the last session
+            # ended cut the NEXT session's connections too (external review P3-3).
+            self._reset_now_deadline = 0.0
             self._flow_last.clear()
             self._reset_until.clear()
             self._prune_next = 0.0

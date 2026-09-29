@@ -9,10 +9,11 @@ the UI happily reported "scenario loaded".
 import difflib
 import os
 
+from .fields import RESET_S
 from .i18n import translate
 from .jsonfile import load_json
 from .paths import shipped_scenario
-from .settings import DEFAULT_SETTINGS, validated_patch
+from .settings import DEFAULT_SETTINGS, NOT_APPLIED_LIVE, validated_patch
 from .validators import parse_bool, parse_number
 
 # The actions a step may carry. ``scenario_runner`` reads THIS tuple rather than
@@ -29,13 +30,22 @@ MAX_STEPS = 1000
 STEP_KEYS = ("at", "settings", "action", "duration")
 FILE_KEYS = ("steps", "loop")
 
+# How long an action may hold the connections down (owner decision D-26): the
+# bound of the "RST cooldown" field, the other number that says how long a reset
+# lasts. Any length used to be accepted, and a reset still running when a session
+# ended carried into the next one (external review P3-3).
+MAX_ACTION_S = RESET_S[1]
+
 
 def _err(key, **fmt):
     return ValueError(translate(key, None, **fmt))
 
 
-def _validate_step(index, step):
-    """Return a normalised step, or raise a translated ``ValueError``."""
+def _validate_step(index, step, warnings):
+    """Return a normalised step, or raise a translated ``ValueError``.
+
+    ``warnings`` collects what loads but will not do what it says.
+    """
     where = index + 1
     if not isinstance(step, dict):
         raise _err("errors.scenario_step_type", step=where)
@@ -83,6 +93,14 @@ def _validate_step(index, step):
             # so its own is stripped rather than printed twice.
             raise _err("errors.scenario_step_value", step=where,
                        error=str(exc).rstrip(". ")) from exc
+        # Loaded and then ignored: a step applies settings the way "Apply changes"
+        # does, and these a session only takes at START. Said, not refused - these
+        # are users' files, and a refusal would break them (external review P3-12,
+        # owner decision D-27).
+        ignored = [k for k in settings if k in NOT_APPLIED_LIVE]
+        if ignored:
+            warnings.append(translate("log.scenario_start_only", None, step=where,
+                                      field=", ".join(sorted(ignored))))
 
     action = step.get("action")
     if action is not None and str(action) not in ACTIONS:
@@ -100,12 +118,7 @@ def _validate_step(index, step):
     if "duration" in step:
         if action is None:
             raise _err("errors.scenario_duration_without_action", step=where)
-        try:
-            # Same reader as "at", for the same reason: `float("Infinity")` used
-            # to pass `>= 0` and become a reset that never ends.
-            duration = parse_number(step["duration"], bounds=(0, None))
-        except ValueError as exc:
-            raise _err("errors.scenario_step_duration", step=where) from exc
+        duration = _action_duration(step["duration"], where)
 
     unknown = [k for k in step if k not in STEP_KEYS]
     if unknown:
@@ -124,6 +137,26 @@ def _validate_step(index, step):
     return out
 
 
+def _action_duration(value, where):
+    """How long a step's reset holds the connections down, or a translated error.
+
+    Its own function so ``_validate_step`` stays out of the band near the
+    complexity ceiling (``tests/test_code_shape.py``).
+    """
+    try:
+        # Same reader as "at", for the same reason: `float("Infinity")` used to
+        # pass `>= 0` and become a reset that never ends. Zero is refused too: a
+        # reset that resets nothing looked like one that ran (external review
+        # NOWE-2-3, owner decision D-26).
+        duration = parse_number(value, bounds=(0, MAX_ACTION_S))
+        if duration <= 0:
+            raise ValueError(duration)
+    except ValueError as exc:
+        raise _err("errors.scenario_step_duration", step=where,
+                   max=f"{MAX_ACTION_S:g}") from exc
+    return duration
+
+
 class Scenario:
     """A sequence of events on a timeline.
 
@@ -132,9 +165,12 @@ class Scenario:
     each step patches the state from previous steps.
     """
 
-    def __init__(self, steps, loop=False, source=None):
+    def __init__(self, steps, loop=False, source=None, warnings=()):
         self.steps = sorted(steps, key=lambda s: float(s.get("at", 0)))
         self.loop = bool(loop)
+        # Translated sentences about what loaded but will not act: the CLI and
+        # the GUI each say them where they say the scenario loaded.
+        self.warnings = list(warnings)
         self.duration = max((float(s.get("at", 0)) for s in self.steps), default=0.0)
         # The file it was read from, EXACTLY as the caller named it - the command
         # that repeats a session names it again (repro.session_command). Not made
@@ -190,7 +226,9 @@ def parse_scenario(data):
         raise _err("errors.scenario_empty")
     if len(raw) > MAX_STEPS:
         raise _err("errors.scenario_too_many", limit=MAX_STEPS)
-    return Scenario([_validate_step(i, step) for i, step in enumerate(raw)], loop=loop)
+    warnings = []
+    steps = [_validate_step(i, step, warnings) for i, step in enumerate(raw)]
+    return Scenario(steps, loop=loop, warnings=warnings)
 
 
 def load_scenario_file(path):

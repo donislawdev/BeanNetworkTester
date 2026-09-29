@@ -419,7 +419,9 @@ SILENT_BROAD_HANDLERS = {
     # reporter that raises while reporting a crash is worse than a quiet one.
     "crashlog.py": 10,
     "gui/widgets/sortable_tree.py": 9,
-    "cli.py": 5,
+    # 5 until 2026-09-29: the run and --dry-run each carried a copy of the scenario
+    # reader, and R-13a made them one (`_read_scenario`).
+    "cli.py": 4,
     "engine.py": 5,
     "gui/tooltip.py": 4,
     "legal.py": 4,

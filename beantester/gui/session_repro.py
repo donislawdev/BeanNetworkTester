@@ -97,10 +97,16 @@ def copy_command(app):
         app.log(f"{T('log.not_copied')}: {e}")
 
 
-def read_scenario(path):
-    """Load a scenario picked in the file dialog, named the way a command names it."""
+def read_scenario(path, log):
+    """Load a scenario picked in the file dialog, named the way a command names it.
+
+    ``log`` hears what loads but will not act (a step setting what a session
+    takes only at START - external review P3-12), as the CLI's log does.
+    """
     scenario = load_scenario_file(path)
     scenario.source = command_path(path)
+    for warning in scenario.warnings:
+        log(warning)
     return scenario
 
 

@@ -1119,7 +1119,7 @@ moment. The file is JSON, either an object or a bare list of steps:
 | key | meaning |
 |---|---|
 | `steps` | required - the list of steps. A bare `[ ... ]` at the top level works too, and means `loop: false`. |
-| `loop` | optional, default `false`. Replays the timeline endlessly, restarting after the LAST step's `at`. |
+| `loop` | optional, default `false`. Replays the timeline endlessly, restarting after the LAST step's `at`. The last step's settings and action are applied just before each restart, so in a loop it lasts only a moment - to hold a final phase, add a later step. |
 
 **Step level** - a step needs `settings`, `action`, or both. One that has neither is an error, not a
 pause.
@@ -1129,14 +1129,16 @@ pause.
 | `at` | required - seconds from the start of the session (`>= 0`). Steps are sorted by it, so their order in the file does not matter. |
 | `settings` | a **partial** settings object. **Cumulative**: each step patches the state the previous ones left, so a value stays until some later step changes it back. |
 | `action` | `reset_tcp` - tear down the TCP connections in scope at that moment. **It is the only action.** The pre-1.3 spelling `reset_now` has been removed, so a file still using it fails to load with a message naming the step. |
-| `duration` | seconds the reset holds connections down (default `3`). Only valid together with an `action`. |
+| `duration` | seconds the reset holds connections down (default `3`), more than 0 and at most 3600. Only valid together with an `action`. |
 
 **Which names go in `settings`** - any setting the tool has, under the **same name as the config
 file** (that is, its command-line flag with the dashes turned into underscores): `loss`, `latency`, `jitter`,
 `down`, `up`, `buffer`, `spike_prob`, `flap_period`, `dst_ip`, `block_port`, `target`,
-`rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `internet_only`, `seed` and the
+`rate_schedule`, `max_size`, `nat_timeout`, `rst_prob`, `lan_mode`, `internet_only` and the
 rest. Run
-`--print-config` to dump the full set of names with their current values.
+`--print-config` to dump the full set of names with their current values. A session takes
+`filter`, `duration`, `narrow_filter`, `row_limit` and `seed` only at START, so a step that sets
+one of them does not change it - the file still loads, and says so.
 
 **Everything is validated when the file loads, and a mistake names itself.** An unknown setting, an
 unknown action, an unknown key, a `duration` that is not a number, a step that does nothing, a step
@@ -1158,7 +1160,7 @@ All of them loop except `upload-drop-midway.json`, so you can start one and leav
 | `cafe-wifi.json` | A cafe filling up over 85 s: a decent link degrades to ~240 ms of ping, 6% loss and 2 Mbit/s, with the connection cutting out entirely every 12 s at the worst point, then recovers. |
 | `mobile-lte-to-3g.json` | A phone walking out of LTE coverage: 33 Mbit/s down to 3G's 0.8, then a **full outage with a TCP reset** at 60 s, then a partial recovery and back to LTE. The one for testing what your app does when the network dies mid-request. |
 | `congested-vpn.json` | A VPN whose **upload** collapses while download stays fine (512 to 160 KB/s), with latency spikes, an MTU of 1400 and occasional resets. |
-| `failing-dns.json` | Aimed at **UDP port 53 only**: name resolution degrades to 60% loss and 1.5 s of ping, goes **100% dead for 13 s**, then comes back. Everything else on the machine keeps working, which is what makes it a DNS test rather than an outage test. |
+| `failing-dns.json` | Aimed at **port 53 only** (DNS - to leave DNS over TCP alone, set the Filter to "UDP only" before START): name resolution degrades to 60% loss and 1.5 s of ping, goes **100% dead for 13 s**, then comes back. Everything else on the machine keeps working, which is what makes it a DNS test rather than an outage test. |
 | `overloaded-game-server.json` | A server sagging under load: ping, jitter, loss and duplication all climb together, with latency spikes up to 800 ms at 45% of packets. |
 | `same-loss-in-runs.json` | The same 5% loss for the whole run, arriving four different ways: evenly spread, then in runs of 5, 15 and 40 packets. Nothing else changes, so whatever breaks is the SHAPE of the loss and not how much of it there is. The one for finding out whether your reconnect path works. |
 | `upload-drop-midway.json` | **Does not loop** - a one-shot: an upload that starts healthy, degrades, is **cut to zero mid-transfer** with a TCP reset, then partially recovers. For testing resumable uploads and progress bars that lie. |
@@ -1462,8 +1464,9 @@ seeded).
 ### Behaviours worth knowing
 
 - **The schedule loops** - after the last step it returns to the first (`2:100:0, 2:500:0` alternates
-  2 s at 100 KB/s and 2 s at 500 KB/s, endlessly). Applying a schedule mid-session starts the cycle
-  from the first step.
+  2 s at 100 KB/s and 2 s at 500 KB/s, endlessly). Applying a changed schedule mid-session starts
+  the cycle from the first step. Applying the same one again, or changing any other setting, leaves
+  the cycle where it is.
 - **The schedule takes precedence over a fixed limit** - when the "Schedule" field is non-empty the
   "Download/Upload" (KB/s) values are ignored, because throughput comes from the schedule steps.
 - **The schedule is optional but must be valid** - an empty field = no schedule, while a bad entry

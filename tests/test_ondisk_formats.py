@@ -300,6 +300,23 @@ def test_dry_run_actually_opens_the_scenario_it_calls_valid(tmp_path):
               "valid" not in out.lower(), f"({out!r})")
 
 
+def test_a_scenario_step_setting_a_start_only_key_is_said_by_the_dry_run_and_the_run(tmp_path):
+    """External review P3-12: the key did nothing, and nothing said so.
+
+    Both CLI doors read the file through one helper, so both say it - the gate
+    and the gated agree, like every other verdict about a scenario here.
+    """
+    path = tmp_path / "start_only.json"
+    path.write_text(json.dumps({"steps": [{"at": 0, "settings": {"loss": 1, "filter": "udp"}}]}),
+                    encoding="utf-8")
+    for argv in (["--dry-run"], ["--duration", "1"]):
+        code, _, err = cli(["--scenario", str(path), "--simulate"] + argv)
+        check(f"{argv[0]}: the file still loads", code == exitcodes.OK,
+              f"(code={code}, stderr={err!r})")
+        check(f"{argv[0]}: the warning names the key", "filter" in err and "START" in err,
+              f"({err!r})")
+
+
 def test_dry_run_and_a_real_run_agree_about_a_scenario(tmp_path):
     """The property behind the fix: the gate and the gated must give the same
     verdict, or the gate is worse than not having one."""

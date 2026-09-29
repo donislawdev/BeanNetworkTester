@@ -76,6 +76,22 @@ def test_language_switch_keeps_scenario_and_loop():
     """)
 
 
+def test_loading_a_scenario_says_what_its_steps_cannot_change():
+    """External review P3-12: the GUI hears what the CLI hears, in the log."""
+    run_gui("""
+        import json, tempfile, os
+        path = os.path.join(tempfile.mkdtemp(), "s.json")
+        json.dump({"steps": [{"at": 0, "settings": {"loss": 5, "seed": 7}}]}, open(path, "w"))
+        import tkinter.filedialog as fd
+        fd.askopenfilename = lambda *a, **k: path
+        app.load_scenario()
+        app._logview.drain()
+        said = [line for line in app._log_lines if "seed" in line]
+        assert said and "START" in said[0], app._log_lines[-3:]
+        assert app._scenario is not None, "the file must still load"
+    """)
+
+
 def test_language_switch_keeps_page_sorting_and_filter():
     run_gui("""
         app.select_page("connections")

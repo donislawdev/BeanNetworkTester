@@ -1409,3 +1409,44 @@ def test_every_impairment_can_differ_by_direction():
               abs(getattr(down, name) - expected_down) < 1e-9
               and abs(getattr(up, name) - expected_up) < 1e-9,
               f"(down={getattr(down, name)}, up={getattr(up, name)})")
+
+
+def test_the_same_schedule_applied_again_keeps_its_cycle():
+    """External review P2-1: every "Apply changes" restarted the schedule's cycle.
+
+    ``apply_settings`` passes the schedule on every Apply and every scenario step,
+    and ``set_schedule`` restarted the cycle each time - so `10:100:100,
+    10:1000:1000` under a scenario stepping every 5 s never left step 1, and the
+    "link recovers" half never came. Only a CHANGED schedule starts over, the rule
+    ``_recompute`` already follows for the loss chains. Through the real
+    ``apply_settings``, with only the latency changing, as the report had it.
+    """
+    from beantester import BeanEngine, DEFAULT_SETTINGS, apply_settings
+    engine = BeanEngine()
+    core = engine.core
+    settings = dict(DEFAULT_SETTINGS, rate_schedule="10:100:100,10:1000:1000")
+    apply_settings(engine, settings)
+    core._sched_start -= 12.0                     # 12 s in: the second step
+    started = core._sched_start
+    apply_settings(engine, dict(settings, latency=50))
+    check("another setting applied: the cycle stays where it was",
+          core._sched_start == started, f"({core._sched_start - started:+.3f} s)")
+    apply_settings(engine, dict(settings, rate_schedule="10:100:100,5:1000:1000"))
+    check("a changed schedule starts over", core._sched_start > started + 11.0,
+          f"({core._sched_start - started:+.3f} s)")
+
+
+def test_a_reset_still_running_does_not_carry_into_the_next_session():
+    """External review P3-3: the reset window outlived its session.
+
+    ``reset_buckets`` starts every other clock of a session afresh, and left the
+    manual / scenario reset deadline standing - a 600 s ``reset_tcp`` or the 3 s
+    button just before STOP cut the next session's connections too.
+    """
+    import time
+    core = BeanCore()
+    now = time.monotonic()
+    core.reset_now(600.0, now=now)
+    core.reset_buckets(now + 1.0)
+    check("the next session starts with no reset running",
+          core._reset_now_deadline == 0.0, f"({core._reset_now_deadline})")
