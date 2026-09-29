@@ -74,7 +74,14 @@ def load_json(path: str) -> Any:
     size = os.path.getsize(path)                     # OSError if it is not there
     if size > MAX_BYTES:
         raise ValueError(f"file is too large: {size} bytes, the limit is {MAX_BYTES}")
-    with open(path, encoding="utf-8") as f:
+    # BYTES, not text: ``json`` then picks the encoding itself - UTF-8 with or
+    # without a byte order mark, UTF-16 or UTF-32 (the documented contract of
+    # ``json.loads`` for bytes). Read as UTF-8 text, a file saved by Notepad or
+    # by PowerShell's ``-Encoding UTF8`` failed on its BOM, and ``>`` in Windows
+    # PowerShell 5.1 (UTF-16) on its first byte - a config refused, and a profile
+    # file quarantined, which lost every profile in it (external review P2-6,
+    # owner decision D-25). What this program WRITES stays UTF-8 without a BOM.
+    with open(path, "rb") as f:
         try:
             return json.load(f, parse_constant=_reject_constant)
         except RecursionError as exc:
@@ -113,29 +120,49 @@ def read_json(path: str,
     Returns ``(data, error)``:
       * ``(data, None)``            - success,
       * ``(None, None)``            - the file simply does not exist,
-      * ``(None, "message")``       - unreadable/broken (already quarantined).
+      * ``(None, "message")``       - unreadable/broken: quarantined, or - when
+        even that failed - left where it is. A caller that will SAVE to this path
+        passes ``unread=True`` to ``write_json`` while the file is still there.
     """
     if not os.path.exists(path):
         return None, None
     try:
         data = load_json(path)
     except (OSError, ValueError) as e:
-        backup = quarantine(path)
-        detail = f"{e}"
-        if backup:
-            detail += f" -> {os.path.basename(backup)}"
-        return None, detail
+        return None, _set_aside(path, f"{e}")
     if expect is not None and not isinstance(data, expect):
-        backup = quarantine(path)
-        detail = f"unexpected content ({type(data).__name__})"
-        if backup:
-            detail += f" -> {os.path.basename(backup)}"
-        return None, detail
+        return None, _set_aside(path, f"unexpected content ({type(data).__name__})")
     return data, None
 
 
-def write_json(path: str, data: Any, indent: int = 2) -> Optional[str]:
+def _set_aside(path: str, detail: str) -> str:
+    """Quarantine ``path`` and say where it went - or that it could not move."""
+    backup = quarantine(path)
+    if backup:
+        return f"{detail} -> {os.path.basename(backup)}"
+    if os.path.isfile(path):
+        return f"{detail} (could not be moved aside, so it is left as it is)"
+    return detail
+
+
+def write_json(path: str, data: Any, indent: int = 2,
+               unread: bool = False) -> Optional[str]:
     """Atomically write JSON. Returns an error message, or None on success.
+
+    ``unread=True``: the file at ``path`` is one this program could not read
+    and could not move aside (``read_json``). It is moved aside FIRST, and if
+    that still fails nothing is written. Writing straight over it is how a
+    profile file that an antivirus scan held open while it was being quarantined
+    lost every profile in it on the first save after the scan let go
+    (external review P3-16) - the one thing the quarantine exists to prevent.
+    """
+    if unread and os.path.isfile(path) and quarantine(path) is None:
+        return "the file could not be read or moved aside, so it was not overwritten"
+    return _write_json(path, data, indent)
+
+
+def _write_json(path: str, data: Any, indent: int) -> Optional[str]:
+    """The atomic write itself (see ``write_json``).
 
     ``allow_nan=False`` so the WRITER refuses exactly what the READER refuses. The
     default writes ``Infinity`` and ``NaN`` happily, which would let this program

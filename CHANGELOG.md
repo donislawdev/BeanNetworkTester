@@ -22,6 +22,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   record was lost while the run still ended with code 0. Such a character is now written as a
   `\u` escape. In `--format json` every record is plain ASCII and reads back the same.
 
+- **Files saved by Notepad or PowerShell now load.** A config, scenario, profile or window
+  state file saved as "UTF-8 with BOM" (Notepad, PowerShell's `-Encoding UTF8`) or as UTF-16
+  (`>` in Windows PowerShell 5.1) was refused, and a profiles file like that was set aside as
+  broken, so every profile disappeared from the program. They all load now.
+
+- **Profiles are no longer lost when their file is locked.** If a broken profiles file could
+  not be moved aside (for example while an antivirus was scanning it), the next save wrote
+  over it. Now nothing is saved until the file has been moved aside.
+
+- **A damaged table sort in the window state file no longer stops the program from
+  starting.** The sort goes back to the default instead.
+
 - **A number typed with a comma now counts everywhere.** A loss of "2,5" reached the engine as
   2.5%, but the line describing the settings said "no impairments". Blocking an address from a
   table, switching the language or "Reset window layout" turned the field into "0", so the
