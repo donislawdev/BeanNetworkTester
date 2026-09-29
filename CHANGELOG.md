@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The command that repeats a session now repeats all of it.** It now names the
+  scenario file and `--loop`, and the report saved with `--repro-out` keeps
+  `--simulate`, so a simulated run no longer turns into a real one when pasted. In the
+  window, the report and "Copy CLI command" use the settings the session ran with:
+  a change you did not apply, or a profile loaded after STOP, is left out. A pattern
+  such as `re:^edge` is quoted, so `cmd.exe` no longer drops the `^`, and a fractional
+  "Max size" no longer makes the command fail.
+
 - **Every row of a table can be scrolled into view, and tables work from the
   keyboard.** The last rows of every table (Connections, the event log, Port check,
   Sockets) could not be reached, a short table could not scroll at all, and Page Down

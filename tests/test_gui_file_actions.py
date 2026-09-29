@@ -219,6 +219,97 @@ def test_saving_a_repro_writes_the_report_and_logs_the_command_to_replay_it():
     """)
 
 
+def test_the_repro_describes_the_session_the_engine_ran_not_the_form():
+    """The report and "Copy CLI command" repeat the SESSION (external review, P2-15).
+
+    They read the form, so a Loss typed but never applied went into the command
+    next to the seed of a session that never ran with it, and one field left
+    mid-edit made the report of a finished session impossible to save. What START
+    and "Apply changes" gave the engine is recorded, and only a START that worked.
+    """
+    run_gui("""
+        import json, os, tempfile
+        from tkinter import filedialog
+        import beantester.gui.dialogs as dialogs
+        from beantester.synthetic import SyntheticDivert
+
+        def command():
+            app.copy_repro_cli()
+            app._logview.drain()
+            return [line for line in app._log_lines if "--seed 4242" in line][-1]
+
+        app.vars["loss"].set("5")
+        app._pending_start_settings = app._settings_from_widgets()
+        app.engine.set_seed(4242)
+        app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
+        try:
+            app._finish_start(None)
+            app.vars["loss"].set("20")                  # typed, NOT applied
+            assert "--loss 5 " in command() and "--loss 20" not in command(), command()
+
+            app.vars["latency"].set("abc")              # a field left mid-edit
+            assert "--loss 5 " in command(), command()
+            target = os.path.join(tempfile.mkdtemp(), "repro.json")
+            filedialog.asksaveasfilename = lambda **k: target
+            app.save_repro()
+            with open(target, encoding="utf-8") as f:
+                report = json.load(f)
+            assert report["settings"]["loss"] == 5, report["settings"]
+            assert "--loss 5 " in report["cli_command"], report["cli_command"]
+
+            app.vars["latency"].set("0")
+            app.apply_if_running()                      # now it IS applied
+            assert "--loss 20" in command(), command()
+
+            shown = []
+            dialogs.show_error = lambda *a, **k: shown.append(a)
+            app._pending_start_settings = dict(app._settings_from_widgets(), loss=77)
+            app._finish_start(OSError("the driver refused"))
+            assert shown, "the failed start must be reported"
+            assert "--loss 20" in command(), ("a failed START records nothing", command())
+        finally:
+            app.engine.stop()
+    """)
+
+
+def test_apply_during_a_running_scenario_keeps_the_session_it_started_as():
+    """While a scenario runs, its next step puts its own base back - so an Apply
+    in between does not change what repeats the session: the start settings plus
+    the scenario. A scenario that ships with the program is named from the
+    program's folder, not by the absolute path the dialog returns (owner decision
+    2026-09-29): it carries no account name and runs on any install."""
+    run_gui("""
+        import os, tempfile
+        from beantester.gui import session_repro
+        from beantester.paths import scenarios_dir
+        from beantester.synthetic import SyntheticDivert
+
+        app._scenario = session_repro.read_scenario(
+            os.path.join(scenarios_dir(), "cafe-wifi.json"))
+        app.loop_var.set(True)
+        app.vars["loss"].set("5")
+        app._pending_start_settings = app._settings_from_widgets()
+        app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
+        try:
+            app._finish_start(None)                     # starts the scenario as well
+            assert app.engine.scenario_running()
+            app.vars["loss"].set("20")
+            app.apply_if_running()
+            app.copy_repro_cli()
+            app._logview.drain()
+            line = [l for l in app._log_lines if "--scenario" in l][-1]
+            assert "--loss 20" not in line, line
+            # the ARGUMENT, not a substring: the absolute path ends the same way
+            shipped = os.path.join("scenarios", "cafe-wifi.json")
+            assert "--scenario " + shipped + " --loop" in line, line
+        finally:
+            app.engine.stop()
+
+        elsewhere = os.path.join(tempfile.mkdtemp(), "mine.json")
+        assert session_repro.command_path(elsewhere) == elsewhere
+    """)
+
+
 def test_saving_a_profile_with_a_bad_value_names_the_field():
     """The precise message existed and was thrown away.
 

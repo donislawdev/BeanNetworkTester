@@ -568,6 +568,41 @@ def test_an_explicit_duration_still_wins_over_the_scenario(tmp_path):
           f"({records[-1]['stop_reason']!r})")
 
 
+def test_the_repro_command_repeats_the_scenario_and_the_simulation(tmp_path):
+    """The summary and the report name ONE command, and it is the whole run (P1-3).
+
+    `Reproduce:` left out --scenario and --loop, so pasting it replayed the first
+    step's settings for the whole run with nothing changing over time. The
+    report's `cli_command` also left out --simulate, which the console line had:
+    pasted on an elevated machine it impairs the real network.
+    """
+    import shlex
+
+    from beantester.cli import build_arg_parser
+
+    scen = _scenario_file(tmp_path, "two-steps.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}},
+        {"at": 30, "settings": {"loss": 50}}]})
+    report = str(tmp_path / "rep.json")
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--simulate", "--scenario", scen, "--loop", "--duration", "0.3",
+                    "--interval", "1", "--format", "json", "--repro-out", report],
+                   sleep=_budgeted_sleep(), out=out, err=err)
+    records = [json.loads(l) for l in out.getvalue().splitlines() if l.strip()]
+    command = records[-1]["repro_command"]
+    with open(report, encoding="utf-8") as f:
+        written = json.load(f)["cli_command"]
+    check("repro: the run ended OK", code == exitcodes.OK, f"(code={code})")
+    check("repro: the report's command is the summary's", written == command,
+          f"({written!r} vs {command!r})")
+    parts = [p.strip('"') for p in shlex.split(command, posix=False)]
+    argv = parts[2:] if parts[0] == "python" else parts[1:]
+    args = build_arg_parser().parse_args(argv)
+    check("repro: the command names the scenario as it was typed, and loops it",
+          args.scenario == scen and args.loop, f"({command})")
+    check("repro: and it stays a simulation", args.simulate, f"({command})")
+
+
 def test_a_scenario_with_no_timeline_does_not_cut_the_run_short(tmp_path):
     """A one-step scenario is settings, not a timeline - it must not end the run.
 

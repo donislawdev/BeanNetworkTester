@@ -130,10 +130,16 @@ class Scenario:
     each step patches the state from previous steps.
     """
 
-    def __init__(self, steps, loop=False):
+    def __init__(self, steps, loop=False, source=None):
         self.steps = sorted(steps, key=lambda s: float(s.get("at", 0)))
         self.loop = bool(loop)
         self.duration = max((float(s.get("at", 0)) for s in self.steps), default=0.0)
+        # The file it was read from, EXACTLY as the caller named it - the command
+        # that repeats a session names it again (repro.session_command). Not made
+        # absolute: that command goes into reports people share, and a relative
+        # path typed by the user is the one they can run again. None when the
+        # steps did not come from a file.
+        self.source = source
 
     def settings_at(self, t, base=None):
         s = dict(base or DEFAULT_SETTINGS)
@@ -188,4 +194,6 @@ def load_scenario_file(path):
         data = load_json(path)
     except ValueError as e:
         raise _err("errors.scenario_bad_json", error=e) from e
-    return parse_scenario(data)
+    scenario = parse_scenario(data)
+    scenario.source = path
+    return scenario

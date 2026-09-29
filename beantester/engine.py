@@ -193,6 +193,14 @@ class BeanEngine:
         # Set at start(); an explicit attribute so session_info() can report it
         # before the first session as well as after one.
         self._narrowed = False
+        # How the session RAN, as only the engine knows it, for the command that
+        # repeats it (repro.session_command): on a stand-in for the driver
+        # (--simulate, tests) or not, and with which scenario file and loop. Set
+        # when a session starts and kept after it ends - a report is written after
+        # STOP, and it has to describe the session that just ended.
+        self._simulated = False
+        self._scenario_file = None
+        self._scenario_loop = False
         # QPC seams: bound here so a test can drive the driver-wait measurement
         # without Windows. _qpc_freq is read at start() (0/None = no QPC here).
         self._qpc = winenv.qpc_now
@@ -276,7 +284,11 @@ class BeanEngine:
                     # no longer counts every packet on the machine. A report from a
                     # machine you do not have in front of you must say which of the
                     # two worlds produced its numbers.
-                    narrowed=bool(getattr(self, "_narrowed", False)))
+                    narrowed=bool(getattr(self, "_narrowed", False)),
+                    # What the command that repeats this session needs and the
+                    # settings do not carry (see __init__). Additive keys.
+                    simulated=self._simulated, scenario=self._scenario_file,
+                    scenario_loop=self._scenario_loop)
 
     def capture_narrowed(self):
         """Did this session's driver filter get the destination folded into it?
@@ -526,6 +538,10 @@ class BeanEngine:
         self.stop_scenario()
         self._scenario_runner = ScenarioRunner(self)
         self._scenario_runner.start(scenario, base_settings, log)
+        # After the runner took it, so a scenario that never ran is not reported.
+        # The loop is read now: both callers set it on the object just before.
+        self._scenario_file = getattr(scenario, "source", None)
+        self._scenario_loop = bool(scenario.loop)
 
     def stop_scenario(self):
         if self._scenario_runner is not None:
@@ -558,6 +574,17 @@ class BeanEngine:
         """
         runner = self._scenario_runner
         return bool(runner is not None and runner.finished)
+
+    def scenario_running(self):
+        """True while a scenario still applies its steps to this session.
+
+        While it does, a live "Apply changes" lasts only until the next step: every
+        step is the scenario's BASE plus the steps so far, never what was applied
+        in between. So the settings that describe such a session stay the ones it
+        started with (gui/session_repro.py).
+        """
+        runner = self._scenario_runner
+        return bool(runner is not None and runner.running())
 
     # -- statistics / connection log ----------------------------------------- #
     def reset_stats(self):
@@ -847,6 +874,10 @@ class BeanEngine:
                 self._divert = None
                 raise
         self._running = True
+        # Only once the handle is open: a start that failed leaves the facts of the
+        # session before it, which is the one its seed and counters still describe.
+        self._simulated = not real_windivert
+        self._scenario_file, self._scenario_loop = None, False    # start_scenario sets
         self._driver_queue = self._read_driver_queue()
         # Only asked for when nobody has supplied one. The QPC pair is an injected
         # dependency, like the clock and sleep `run_cli` takes: a test that wants

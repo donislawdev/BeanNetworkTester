@@ -40,15 +40,13 @@ from ..paths import prepare_user_data, scenarios_dir
 from ..presets import (PRESETS, preset_to_settings, resolve_preset,
                        settings_to_preset)
 from ..processes import port_process_map
-from ..repro import save_repro_report, settings_to_cli_string
-from ..scenario import load_scenario_file
 from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
                         non_profile_active, save_config_file, settings_from_raw,
                         warn_if_unbounded)
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import dialogs
+from . import dialogs, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
@@ -1057,31 +1055,13 @@ class App:
         self.log(f"*** {T('log.bug_marked')} @ {info['elapsed']:.1f}s "
                  f"(seed={info['seed']}) ***")
 
+    # Both describe the SESSION, from what START and Apply recorded, not the form:
+    # gui/session_repro.py (external review, P2-15).
     def save_repro(self):
-        if self.engine.effective_seed() is None:
-            self.log(T("log.start_first"))
-            return
-        path = filedialog.asksaveasfilename(title=T("dialogs.save_repro"),
-                                            defaultextension=".json",
-                                            filetypes=[("JSON", "*.json")])
-        if not path:
-            return
-        try:
-            report = save_repro_report(path, self.engine, self._settings_from_widgets())
-            self.log(f"{T('log.repro_saved_to')} {os.path.basename(path)}")
-            self.log(f"{T('log.repro_command')}: {report['cli_command']}")
-        except Exception as e:
-            dialogs.show_error(self.root, T("log.error"),
-                               f"{T('dialogs.report_not_saved')}: {e}")
+        session_repro.save(self)
 
     def copy_repro_cli(self):
-        try:
-            cli = settings_to_cli_string(self._settings_from_widgets(),
-                                         seed=self.engine.effective_seed())
-            self.copy_to_clipboard(cli)
-            self.log(f"{T('log.copied')}: {cli}")
-        except Exception as e:
-            self.log(f"{T('log.not_copied')}: {e}")
+        session_repro.copy_command(self)
 
     def open_donate(self):
         """Open the support page (voluntary - it funds the project's development)."""
@@ -1134,7 +1114,7 @@ class App:
         if not path:
             return
         try:
-            self._scenario = load_scenario_file(path)
+            self._scenario = session_repro.read_scenario(path)
             self.loop_var.set(self._scenario.loop or self.loop_var.get())
             self._scenario_name = (f"{T('log.scenario')}: {os.path.basename(path)} "
                                    f"({len(self._scenario.steps)} {T('log.steps')}, "
@@ -1191,6 +1171,7 @@ class App:
             self.log(f"{T('log.error')}: {e}")
             return
         apply_settings(self.engine, s, self.log)
+        session_repro.applied(self, s)
         self._applied_target = str(s.get("target", "")).strip()
         # A session can BECOME unbounded: clear the target, press "Apply changes",
         # and from that moment everything on the machine is in scope. Warning only
@@ -1377,6 +1358,7 @@ class App:
             # not resurrect a UI nobody is driving any more
             return
         s = self._pending_start_settings
+        session_repro.started(self, s)
         self.running = True
         self._applied_sig = self._signature(self._raw_settings())
         self.peak_down = self.peak_up = 0.0

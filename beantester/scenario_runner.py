@@ -94,6 +94,11 @@ class ScenarioRunner:
                 and thread is not threading.current_thread()):
             thread.join(timeout=timeout)
 
+    def running(self):
+        """True while the thread is still applying the timeline (any ending: False)."""
+        thread = self._thread
+        return thread is not None and thread.is_alive()
+
     def _loop(self, scenario, base, log):
         """The thread body: run the timeline, and never die in silence.
 

@@ -409,9 +409,9 @@ MUTATIONS = [
     {
         "label": "gui: Apply changes forgets which target it applied",
         "file": "beantester/gui/app.py",
-        "old": "        apply_settings(self.engine, s, self.log)\n"
+        "old": "        session_repro.applied(self, s)\n"
                "        self._applied_target = str(s.get(\"target\", \"\")).strip()",
-        "new": "        apply_settings(self.engine, s, self.log)",
+        "new": "        session_repro.applied(self, s)",
         "test": "test_a_target_that_cannot_be_used_says_everything_is_impaired",
     },
     {
@@ -3707,6 +3707,119 @@ MUTATIONS = [
         "old": "kb=q[\"queue_size\"] // 1024,",
         "new": "kb=q[\"queue_size\"],",
         "test": "test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number",
+    },
+    {
+        # External review P1-3: the report's command was built from the settings
+        # alone, so it lost --simulate (and never had the scenario).
+        "label": "repro: the report's command forgets what only the engine knows",
+        "file": "beantester/repro.py",
+        "old": "        cli_command=session_command(engine, settings),",
+        "new": "        cli_command=settings_to_cli_string(settings, seed=seed),",
+        "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
+    },
+    {
+        "label": "repro: the command drops the scenario",
+        "file": "beantester/repro.py",
+        "old": "    if scenario:\n        args += [\"--scenario\", str(scenario)]\n",
+        "new": "    if False:\n        args += [\"--scenario\", str(scenario)]\n",
+        "test": "test_the_reproduction_command_parses_back_into_the_same_run",
+    },
+    {
+        # P3-15: the field holds 1400.5, the flag is type=int - exit 2.
+        "label": "repro: --max-size keeps its fraction and argparse refuses it",
+        "file": "beantester/repro.py",
+        "old": "        if key in WHOLE_NUMBER_FLAGS and math.isfinite(to_number(value)):",
+        "new": "        if False:",
+        "test": "test_the_reproduction_command_parses_back_into_the_same_run",
+    },
+    {
+        # P3-14: the old trigger list, which had no ^ - cmd.exe eats a bare one.
+        "label": "repro: a bare ^ is left for cmd.exe to eat",
+        "file": "beantester/repro.py",
+        "old": "    if arg and all(ch in _BARE for ch in arg):",
+        "new": "    if not any(ch in arg for ch in ' ,!<>*?|&$()\"'):",
+        "test": "test_the_command_survives_the_shell_it_is_pasted_into",
+    },
+    {
+        # A quote written \" ends cmd's quoting, and a | after it becomes a pipe.
+        "label": "repro: a quote in a pattern is escaped the way only argv reads",
+        "file": "beantester/repro.py",
+        "old": "    if \"re:\" in arg.lower():",
+        "new": "    if False:",
+        "test": "test_the_command_survives_the_shell_it_is_pasted_into",
+    },
+    {
+        "label": "engine: a stand-in driver is not reported as one",
+        "file": "beantester/engine.py",
+        "old": "        self._simulated = not real_windivert",
+        "new": "        self._simulated = False",
+        "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
+    },
+    {
+        "label": "engine: the scenario a session ran is not recorded",
+        "file": "beantester/engine.py",
+        "old": "        self._scenario_file = getattr(scenario, \"source\", None)",
+        "new": "        self._scenario_file = None",
+        "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
+    },
+    {
+        "label": "engine: a new session keeps the last one's scenario",
+        "file": "beantester/engine.py",
+        "old": "        self._scenario_file, self._scenario_loop = None, False    # start_scenario sets\n",
+        "new": "",
+        "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
+    },
+    {
+        # Cleared before the handle opened: a start that then FAILED erased the
+        # facts of the session whose seed and counters are still on screen.
+        "label": "engine: a failed start erases the last session's scenario",
+        "file": "beantester/engine.py",
+        "old": "        self._divert = divert\n",
+        "new": "        self._divert = divert\n        self._scenario_file = None\n",
+        "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
+    },
+    {
+        # External review P2-15: the command came from the form, unapplied edits
+        # and all.
+        "label": "gui: Copy CLI reads the form again",
+        "file": "beantester/gui/session_repro.py",
+        "old": "        recorded = settings_of(app)\n        if recorded is None:",
+        "new": "        recorded = None\n        if recorded is None:",
+        "test": "test_the_repro_describes_the_session_the_engine_ran_not_the_form",
+    },
+    {
+        "label": "gui: a START that failed is recorded as the session",
+        "file": "beantester/gui/app.py",
+        "old": "        if err is not None:\n            if isinstance(err, ImportError):",
+        "new": ("        if err is not None:\n"
+                "            session_repro.started(self, self._pending_start_settings)\n"
+                "            if isinstance(err, ImportError):"),
+        "test": "test_the_repro_describes_the_session_the_engine_ran_not_the_form",
+    },
+    {
+        # The next scenario step puts the base back; an Apply in between does
+        # not describe the session.
+        "label": "gui: an Apply during a running scenario rewrites the session",
+        "file": "beantester/gui/session_repro.py",
+        "old": "    if not app.engine.scenario_running():\n        _SESSIONS[app] = dict(settings)",
+        "new": "    if True:\n        _SESSIONS[app] = dict(settings)",
+        "test": "test_apply_during_a_running_scenario_keeps_the_session_it_started_as",
+    },
+    {
+        # The dialog's absolute path carries the Windows account name into every
+        # shared report (owner decision 2026-09-29).
+        "label": "gui: a shipped scenario is named by the dialog's absolute path",
+        "file": "beantester/gui/session_repro.py",
+        "old": "        return os.path.relpath(here, home)",
+        "new": "        return path",
+        "test": "test_apply_during_a_running_scenario_keeps_the_session_it_started_as",
+    },
+    {
+        "label": "crash: the report's command is the form's again",
+        "file": "beantester/gui/crash.py",
+        "old": "        state[\"repro_command\"] = session_command(app.engine, session)",
+        "new": "        pass",
+        "test": "test_a_gui_crash_report_repeats_the_session_not_the_form",
     },
 ]
 

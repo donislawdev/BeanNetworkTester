@@ -393,3 +393,164 @@ def test_every_setting_with_a_flag_reaches_the_reproduction_command():
 
     check("repro: every engine field with a CLI flag reaches the command",
           not missing, f"(missing: {missing})")
+
+
+def test_the_reproduction_command_parses_back_into_the_same_run():
+    """A flag in the command is only half of it: the command has to RUN.
+
+    Every engine field with a flag gets a value, a number field a FRACTIONAL one,
+    and the command is read back by the real parser. ``--max-size 1400.5`` was
+    refused by argparse (exit 2): the field holds any number, the flag takes a
+    whole one, and the core keeps only the whole part anyway (external review,
+    P3-15). The session's own flags - the scenario, its loop, --simulate - have to
+    come back too (P1-3).
+    """
+    from beantester import fields as F
+    from beantester.cli import build_arg_parser, config_from_args
+    from beantester.matchers import KIND_INT, KIND_IP
+    from beantester.repro import WHOLE_NUMBER_FLAGS, settings_to_cli
+    from beantester.settings import DEFAULT_SETTINGS
+
+    def value_for(field):
+        if field.kind == F.NUMBER:
+            lo, hi = field.bounds
+            return (lo + hi) / 2 + 0.25             # never a whole number
+        return {F.BOOL: True, F.SEED: 42, F.SCHEDULE: "1:100:0",
+                F.CHOICE: "out"}.get(field.kind) or (
+            "4433" if field.expr_kind == KIND_INT else
+            "192.0.2.9" if field.expr_kind == KIND_IP else "beanprobe.exe")
+
+    wrong = []
+    for field in F.FIELD_DEFS:
+        if not field.cli or field.ui_only:
+            continue
+        value = value_for(field)
+        argv = settings_to_cli(dict(DEFAULT_SETTINGS, **{field.key: value}), seed=7)
+        try:
+            back = config_from_args(build_arg_parser().parse_args(argv))["settings"]
+        except SystemExit as exc:
+            wrong.append((field.key, argv, f"refused: exit {exc.code}"))
+            continue
+        want = int(value) if field.key in WHOLE_NUMBER_FLAGS else value
+        got = back[field.key]
+        if field.kind == F.NUMBER and float(got) != float(want):
+            wrong.append((field.key, argv, got))
+    check("repro: the command runs, and every value comes back as the engine used it",
+          not wrong, f"({wrong})")
+
+    argv = settings_to_cli(dict(DEFAULT_SETTINGS, loss=5), seed=7, simulate=True,
+                           scenario="scenarios/cafe-wifi.json", loop=True)
+    cfg = config_from_args(build_arg_parser().parse_args(argv))
+    check("repro: the scenario, its loop and --simulate come back",
+          (cfg["scenario"], cfg["loop"], cfg["simulate"])
+          == ("scenarios/cafe-wifi.json", True, True), f"({argv})")
+    check("repro: --loop only with the scenario it loops",
+          "--loop" not in settings_to_cli(dict(DEFAULT_SETTINGS), loop=True))
+
+
+class _OpensThenFails(FakeDivert):
+    def open(self):
+        raise OSError("the stand-in refuses to open")
+
+
+def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine():
+    """What the settings do not carry, the engine does - and a caller cannot forget it.
+
+    ``--simulate`` was passed to the console line and forgotten in the report of
+    the same run; the scenario reached neither (external review, P1-3). Both are
+    now read off the session itself, by one function every caller uses.
+    """
+    from beantester import DEFAULT_SETTINGS, build_repro_report
+    from beantester.repro import session_command
+    from beantester.scenario import Scenario
+
+    settings = dict(DEFAULT_SETTINGS, loss=5)
+    eng = BeanEngine()
+    eng.set_seed(11)
+    eng.start("test", divert=SyntheticDivert(gen_kbps=200, seed=1))
+    try:
+        scenario = Scenario([{"at": 0, "settings": {"loss": 5}},
+                             {"at": 60, "settings": {"loss": 9}}],
+                            loop=True, source="my scenarios/lte.json")
+        eng.start_scenario(scenario, settings)
+        during = session_command(eng, settings)
+        report = build_repro_report(eng, settings)
+    finally:
+        eng.stop()
+    check("session command: the scenario, as it was named, quoted for its space",
+          '--scenario "my scenarios/lte.json" --loop' in during, f"({during})")
+    check("session command: a stand-in driver is --simulate", "--simulate" in during,
+          f"({during})")
+    check("session command: the report carries the same command",
+          report["cli_command"] == during, f"({report['cli_command']})")
+    check("session command: still the session's after STOP",
+          session_command(eng, settings) == during)
+
+    # A start that FAILS leaves the facts of the session before it: its seed and
+    # its counters are still the ones on screen and in the report.
+    try:
+        eng.start("test", divert=_OpensThenFails([]))
+    except OSError:
+        pass
+    check("session command: a failed start does not erase the last session",
+          session_command(eng, settings) == during,
+          f"({session_command(eng, settings)})")
+
+    eng.start("test", divert=SyntheticDivert(gen_kbps=200, seed=1))
+    eng.stop()
+    after = session_command(eng, settings)
+    check("session command: the next session without a scenario names none",
+          "--scenario" not in after and "--loop" not in after, f"({after})")
+
+
+def test_the_command_survives_the_shell_it_is_pasted_into():
+    """The command is pasted into cmd.exe; what arrives is what was meant (P3-14).
+
+    A bare ``^`` is cmd's escape character, so ``re:^edge`` arrived as ``re:edge``
+    and matched msedge.exe as well. Measured through a real ``cmd /c`` into a
+    real program's argv. A double quote inside a pattern is written ``\\x22``: no
+    spelling of a quote reads the same in cmd and PowerShell. What quoting cannot
+    stop is pinned too (owner decision 2026-09-29): cmd expands ``%NAME%`` even
+    inside quotes.
+    """
+    import json
+    import re
+    import subprocess
+    import sys
+    import tempfile
+
+    import pytest
+
+    if sys.platform != "win32":
+        pytest.skip("cmd.exe is the shell under test")
+    from beantester.repro import _quote
+
+    echo = os.path.join(tempfile.mkdtemp(), "argv_echo.py")
+    with open(echo, "w", encoding="utf-8") as f:
+        f.write("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    env = dict(os.environ, BNT_PROBE_VAR="EXPANDED")
+
+    def pasted(values):
+        # A STRING, not a list: `cmd /s /c "<line>"` reads the line exactly as a
+        # prompt would, and a list would pass it through list2cmdline first.
+        line = f'"{sys.executable}" "{echo}" ' + " ".join(_quote(v) for v in values)
+        done = subprocess.run(f'cmd /d /s /c "{line}"', capture_output=True,
+                              text=True, env=env, check=True)
+        return json.loads(done.stdout)
+
+    # `re:a"|b`: written the CommandLineToArgvW way (`\"`), cmd ends its quoting at
+    # that quote and reads the `|` after it as a pipe.
+    values = ["re:^edge", "80;443", "it's", "a b", "re:(a|b)$", "!chrome.exe",
+              "re:a\"b", "re:a\"|b", "C:\\My scenarios\\x.json", "x`y", "re:\\d{2}"]
+    probes = ('a"b', 'a"', "b", "ab", "")
+    # One command each: a quote left odd by one argument shifts cmd's quoting for
+    # every argument after it, which hid the pipe above when they shared a line.
+    for sent, back in ((value, pasted([value])[0]) for value in values):
+        if '"' in sent:
+            same = all(bool(re.fullmatch(sent[3:], p)) == bool(re.fullmatch(back[3:], p))
+                       for p in probes)
+            check(f"shell: {sent!r} arrives as the same pattern", same, f"({back!r})")
+        else:
+            check(f"shell: {sent!r} arrives unchanged", back == sent, f"({back!r})")
+    check("shell: the known limit - cmd still expands %NAME% inside quotes",
+          pasted(["re:a%BNT_PROBE_VAR%b"]) == ["re:aEXPANDEDb"])
