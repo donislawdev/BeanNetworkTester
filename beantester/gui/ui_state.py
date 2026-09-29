@@ -4,6 +4,8 @@ Deliberately separate from ``ProfileStore``: a profile describes the *network*,
 this describes the *window*. Corruption or an unwritable directory must never
 break startup, so every failure degrades to the defaults.
 """
+import os
+
 from ..jsonfile import read_json, write_json
 from ..paths import UI_STATE_FILE
 
@@ -21,19 +23,34 @@ DEFAULTS = {
 }
 
 
+def _fits(value, default):
+    """``value`` has ``default``'s type - and a dict has each of its keys, typed alike.
+
+    Extra keys in the dict are kept, like extra keys in the file.
+    """
+    if not isinstance(value, type(default)):
+        return False
+    if isinstance(default, dict):
+        return all(k in value and isinstance(value[k], type(v)) for k, v in default.items())
+    return True
+
+
 class UiStateStore:
     """Small JSON-backed key/value store for window state."""
 
     def __init__(self, path=UI_STATE_FILE):
         self.path = path
         self.problem = None
+        self._unread = False         # a broken file is still in the way (write_json)
         self.data = dict(DEFAULTS)
         self.data.update(self._load())
 
     def _load(self):
         data, error = read_json(self.path, expect=dict)
         if error:
+            # still there = it could not be moved aside: never save over it (P3-16)
             self.problem = error
+            self._unread = os.path.isfile(self.path)
             return {}
         clean, dropped = self._clean(data or {})
         if dropped:
@@ -56,7 +73,13 @@ class UiStateStore:
         Only the TYPE is checked, deliberately. Measured: every wrong VALUE of the
         right type already degrades gracefully - an unknown page id, a nonsense
         geometry string, a negative sash position, a sort column that does not
-        exist - so validating further would add rules that catch nothing.
+        exist (re-measured 2026-09-29: the table fills, with no arrow) - so
+        validating further would add rules that catch nothing.
+
+        For a DICT the type goes one level in: every key the default has, with
+        the type it has there (``_fits``). ``{"col": "kb"}`` is a dict, and it
+        stopped the app from starting - the table reads ``sort["reverse"]`` while
+        it is built (external review P3-28).
 
         Unknown keys are KEPT. ``get`` only reads keys it knows, so they cost
         nothing, and dropping them would silently discard state written by a newer
@@ -65,7 +88,7 @@ class UiStateStore:
         clean, dropped = {}, []
         for key, value in data.items():
             default = DEFAULTS.get(key)
-            if default is not None and not isinstance(value, type(default)):
+            if default is not None and not _fits(value, default):
                 dropped.append(str(key))
                 continue
             clean[key] = value
@@ -83,7 +106,9 @@ class UiStateStore:
 
     def persist(self):
         """Write the state; return an error message or None."""
-        error = write_json(self.path, self.data)
+        error = write_json(self.path, self.data, unread=self._unread)
         if error:
             self.problem = error
+        else:
+            self._unread = False
         return error

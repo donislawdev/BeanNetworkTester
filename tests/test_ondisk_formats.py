@@ -74,9 +74,22 @@ BROKEN_JSON = {
     "a boolean": "true",
     "truncated": '{"loss": 1',
     "empty file": "",
-    "utf-8 BOM": '﻿{"loss": 5}',
     "not json at all": "<html>nope</html>",
 }
+
+# NOT broken, though this list carried the first one until external review P2-6:
+# what Notepad, PowerShell's `-Encoding UTF8` and `>` in Windows PowerShell 5.1
+# save. Every door must read them (owner decision D-25).
+SAVED_BY_OTHER_TOOLS = {
+    "UTF-8 with a byte order mark": "utf-8-sig",
+    "UTF-16": "utf-16",
+}
+
+# A sort order is a dict, so a type check alone lets HALF of one through - and
+# the table reads both keys while it is being built. `{"col": "kb"}` stopped the
+# app from starting (external review P3-28).
+BROKEN_SORTS = [{"col": "kb"}, {"reverse": True}, {},
+                {"col": ["kb"], "reverse": True}, {"col": "kb", "reverse": "yes"}]
 
 # A dict whose VALUES are the wrong type for their key. This is what a hand edit
 # produces, and what read_json cannot catch: it checks the container, not what is
@@ -134,6 +147,30 @@ def test_every_ui_state_value_can_be_the_wrong_type(tmp_path):
               f"(got {store.get(key)!r}, expected the default {DEFAULTS[key]!r})")
 
 
+def test_a_sort_order_must_be_whole_and_the_extra_keys_stay(tmp_path):
+    """Both keys of a sort order, each of its type - and nothing stricter.
+
+    The strictness has a floor: the Statistics page stores its sort as the table
+    holds it, and keys a newer version adds must not cost the user the order.
+    """
+    for number, bad in enumerate(BROKEN_SORTS):
+        path = tmp_path / f"ui_sort_{number}.json"
+        path.write_text(json.dumps({"conn_sort": bad, "event_sort": bad}), encoding="utf-8")
+        store = UiStateStore(str(path))
+        for key in ("conn_sort", "event_sort"):
+            check(f"{key}={bad!r}: falls back to the default",
+                  store.get(key) == DEFAULTS[key], f"(got {store.get(key)!r})")
+        check(f"{bad!r}: the store says what it ignored",
+              "conn_sort" in (store.problem or ""), f"({store.problem!r})")
+    whole = {"col": "t", "reverse": True, "default_reverse": False}
+    path = tmp_path / "ui_sort_whole.json"
+    path.write_text(json.dumps({"event_sort": whole}), encoding="utf-8")
+    store = UiStateStore(str(path))
+    check("a whole sort order with an extra key is kept as it is",
+          store.get("event_sort") == whole and store.problem is None,
+          f"({store.get('event_sort')!r}, {store.problem!r})")
+
+
 def test_a_broken_ui_state_file_never_stops_the_app_from_starting():
     """The invariant the module docstring promises, asserted through a real App.
 
@@ -151,7 +188,7 @@ def test_a_broken_ui_state_file_never_stops_the_app_from_starting():
         POISON = %r
         path = _ui.UiStateStore.__init__.__defaults__[0]
         failures = []
-        for key, bad in POISON.items():
+        for key, bad in POISON:
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump({key: bad}, fh)
             try:
@@ -160,7 +197,8 @@ def test_a_broken_ui_state_file_never_stops_the_app_from_starting():
             except Exception as exc:
                 failures.append(f"{key}={bad!r}: {type(exc).__name__}: {exc}")
         assert not failures, "the app did not start: " + "; ".join(failures)
-    """ % (POISONED_UI_STATE,))
+    """ % (list(POISONED_UI_STATE.items())
+           + [(key, bad) for key in ("conn_sort", "event_sort") for bad in BROKEN_SORTS],))
 
 
 # --------------------------------------------------------------------------- #
@@ -195,6 +233,48 @@ def test_a_config_file_that_is_a_json_object_still_loads(tmp_path):
     code, out, err = cli(["--config", str(path), "--simulate", "--dry-run"])
     check("a well-formed config file is accepted", code == exitcodes.OK,
           f"(code={code}, stderr={err!r})")
+
+
+def test_a_file_saved_by_notepad_or_powershell_loads_through_every_door(tmp_path):
+    """A byte order mark, or UTF-16, is how another tool saves - not a broken file.
+
+    Every reader took the file as UTF-8 text and failed on its first bytes: a
+    config was CONFIG(3), and ``profiles.json`` was QUARANTINED - every profile
+    gone from the app (external review P2-6). The BOM case sat in ``BROKEN_JSON``
+    as a file that must be refused until then. All four doors, and nothing moved
+    aside: a quarantined file that loads fine is the same loss, only slower.
+    """
+    for label, encoding in SAVED_BY_OTHER_TOOLS.items():
+        tag = encoding.replace("-", "")
+        config = tmp_path / f"config_{tag}.json"
+        config.write_text(json.dumps({"loss": 5, "duration": 1}), encoding=encoding)
+        code, _, err = cli(["--config", str(config), "--simulate", "--dry-run"])
+        check(f"{label}: a config file loads", code == exitcodes.OK,
+              f"(code={code}, stderr={err!r})")
+
+        scen = tmp_path / f"scen_{tag}.json"
+        scen.write_text(json.dumps({"steps": [{"at": 0, "settings": {"loss": 5}}]}),
+                        encoding=encoding)
+        code, _, err = cli(["--scenario", str(scen), "--simulate", "--dry-run"])
+        check(f"{label}: a scenario loads", code == exitcodes.OK,
+              f"(code={code}, stderr={err!r})")
+
+        profiles = tmp_path / f"profiles_{tag}.json"
+        profiles.write_text(json.dumps({"mine": {"loss": 5}}), encoding=encoding)
+        store = ProfileStore(str(profiles))
+        check(f"{label}: the profiles are all there",
+              store.names() == ["mine"] and store.problem is None,
+              f"({store.names()!r}, {store.problem!r})")
+
+        ui = tmp_path / f"ui_{tag}.json"
+        ui.write_text(json.dumps({"page": "connections"}), encoding=encoding)
+        state = UiStateStore(str(ui))
+        check(f"{label}: the window state is read",
+              state.get("page") == "connections" and state.problem is None,
+              f"({state.get('page')!r}, {state.problem!r})")
+
+    moved = [p.name for p in tmp_path.iterdir() if ".corrupt-" in p.name]
+    check("nothing was quarantined", not moved, f"({moved})")
 
 
 # --------------------------------------------------------------------------- #
@@ -444,6 +524,37 @@ def test_a_hostile_file_is_quarantined_so_the_next_start_is_clean(tmp_path):
     again, error_again = read_json(str(path), expect=dict)
     check("and the second start finds nothing rather than the same wall",
           again is None and error_again is None, f"({error_again!r})")
+
+
+def test_a_broken_file_that_cannot_be_moved_aside_is_never_saved_over(tmp_path, monkeypatch):
+    """A failed quarantine must not turn into the overwrite it exists to stop.
+
+    An antivirus scan or a second program holding the file open makes the move
+    fail. The store then started empty, and the first save after the lock let
+    go wrote straight over the file - every profile in it lost (external review
+    P3-16; reproduced on Windows with a real open handle). Now a save moves the
+    file aside first, and writes nothing while it cannot.
+    """
+    import beantester.jsonfile as jsonfile
+    real = jsonfile.quarantine
+    broken = b'{"keep me": {"loss": 5}, "cut off'
+    for label, store_of in (("profiles", ProfileStore), ("window state", UiStateStore)):
+        path = tmp_path / f"{label.replace(' ', '_')}.json"
+        path.write_bytes(broken)
+        monkeypatch.setattr(jsonfile, "quarantine", lambda p: None)    # held open
+        store = store_of(str(path))
+        check(f"{label}: the log says the file stayed where it was",
+              "left as it is" in (store.problem or ""), f"({store.problem!r})")
+        error = store.persist()
+        check(f"{label}: a save while it is held writes nothing",
+              bool(error) and path.read_bytes() == broken, f"({error!r})")
+
+        monkeypatch.setattr(jsonfile, "quarantine", real)              # let go
+        check(f"{label}: the next save goes through", store.persist() is None)
+        kept = [p for p in tmp_path.iterdir() if p.name.startswith(path.stem + ".corrupt-")]
+        check(f"{label}: ...after moving the original aside, byte for byte",
+              len(kept) == 1 and kept[0].read_bytes() == broken,
+              f"(files: {sorted(p.name for p in tmp_path.iterdir())})")
 
 
 def test_a_profile_carrying_infinity_is_dropped_not_stored(tmp_path):

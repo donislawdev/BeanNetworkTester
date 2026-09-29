@@ -10,6 +10,8 @@ before the profile scope widened simply has fewer keys, and each missing one
 falls back to that field's default (see ``_clean``); a file written after it is
 read by an older build, which ignores the keys it does not know.
 """
+import os
+
 from ..jsonfile import read_json, write_json
 from ..paths import PROFILE_FILE
 from ..presets import PRESET_DEFAULTS, PRESET_TO_SETTING
@@ -23,13 +25,16 @@ class ProfileStore:
     def __init__(self, path=PROFILE_FILE):
         self.path = path
         self.problem = None          # last load/save error, for the log
+        self._unread = False         # a broken file is still in the way (write_json)
         self.profiles = self._load()
 
     def _load(self):
         data, error = read_json(self.path, expect=dict)
         if error:
-            # the broken file was moved aside; start clean rather than overwrite it
+            # The broken file was moved aside - or, when even that failed, it is
+            # still there, and the next save must not write over it (P3-16).
             self.problem = error
+            self._unread = os.path.isfile(self.path)
             return {}
         if not data:
             return {}
@@ -83,9 +88,11 @@ class ProfileStore:
 
     def persist(self):
         """Write profiles to disk; return an error message or None on success."""
-        error = write_json(self.path, self.profiles)
+        error = write_json(self.path, self.profiles, unread=self._unread)
         if error:
             self.problem = error
+        else:
+            self._unread = False
         return error
 
     # -- dict-like convenience ------------------------------------------------ #
