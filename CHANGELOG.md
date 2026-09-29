@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Every row of a table can be scrolled into view, and tables work from the
+  keyboard.** The last rows of every table (Connections, the event log, Port check,
+  Sockets) could not be reached, a short table could not scroll at all, and Page Down
+  skipped rows. Up, Down, Page Up, Page Down, Home and End now move the selection, and
+  with Shift they select a range across pages. A selected row stays selected when it
+  scrolls out of view, so Ctrl+C and Shift+F10 keep working on it.
+
 - **100% loss with "Losses in a row" set now loses every packet.** A run length used to
   let 11 to 33% of packets through, including during the full outage in the
   `mobile-lte-to-3g` scenario, and the log and the summary described runs of loss that

@@ -32,7 +32,12 @@ What callers must know
   row in the model, survive sorting, and are what selection is remembered by (the
   widget's item ids are recycled and meaningless);
 * :meth:`selection_values`, :meth:`selected_rows`, :meth:`selected_keys` and
-  :meth:`key_at` all answer from the model, so they survive a repaint;
+  :meth:`key_at` all answer from the model, so they survive a repaint - and a
+  scroll: the keyboard and a click choose rows by model position, with a cursor
+  and an anchor in model keys, so a range can run across any number of pages
+  (see ``_bind_navigation``);
+* the viewport is measured in the rows Tk shows IN FULL (``rows_shown_in_full``),
+  never in slots: the window also holds a partial row and a buffer nobody sees;
 * everything else - sorting, header arrows, tooltips, tags, Ctrl+C, column-width
   clamping - behaves exactly as before.
 
@@ -122,7 +127,54 @@ def fitted_widths(order, visible, natural, current, tree_width,
         out[col] += take
         left -= take
     return {c: w for c, w in out.items() if w != now[c]}
-BUFFER_ROWS = 4                 # slots kept past the viewport, hides scroll tearing
+
+
+def rows_shown_in_full(first_box, width, height, region_at):
+    """How many rows Tk draws IN FULL, asked of Tk's own layout - or None.
+
+    Pure, and tested without Tk, like ``fitted_widths``: the arithmetic is here,
+    the widget only answers the questions it is asked. ``first_box`` is the first
+    slot's ``bbox`` (where the rows start, how tall one is), ``width`` and
+    ``height`` the widget's, and ``region_at`` is its ``identify_region``.
+
+    Everything a table promises - that the last row can be scrolled into view, how
+    far a page goes, how big the scrollbar thumb is - hangs on this one number.
+    The count starts from the height as if nothing sat below the rows, which is
+    never too few, and steps back while the bottom pixel of the last row it counts
+    is not a row to Tk: the border under the rows is FOUND, never assumed. With a
+    border thinner than a row that is one or two questions.
+
+    **Why not the three ways that came before** (measured 2026-09-29 over 470
+    heights and 1340 resizes, on Tk 8.6.14 and 9.0.4):
+
+    * ``height // rowheight`` counts the header and the border as rows (external
+      review, P1-4): the last five rows of every table could never be shown.
+    * ``yview``, which this read at first, holds only on Tk 9. Tk 8.6 counts the
+      row cut off at the bottom as shown, and the count ran one too high at 66
+      heights of 470 - the render check caught it on the Linux runner.
+    * the height less the header less a bottom border as wide as the side one
+      holds until the table is scrolled sideways: the first slot's box then starts
+      left of the widget (x = -406 measured) and rows that are not there count.
+
+    That last box is also why Tk is asked at an x in the middle of the part of it
+    that is on screen, never at its left edge. None when there is no box yet (or
+    a dying widget's empty one) - the caller keeps what it had. At least one row
+    otherwise, so a page always moves.
+    """
+    try:
+        left, top, span, row_height = (int(value) for value in first_box)
+    except (TypeError, ValueError):
+        return None
+    if row_height <= 0:
+        return None
+    x = (max(left, 0) + min(left + span, int(width))) // 2
+    rows = (int(height) - top) // row_height
+    while rows > 1 and region_at(x, top + rows * row_height - 1) not in ("cell", "tree"):
+        rows -= 1
+    return max(1, rows)
+
+
+BUFFER_ROWS = 4                 # slots past the viewport: a partial row + resize slack
 MIN_WINDOW = 12                 # slots to keep even before the widget has a size
 
 
@@ -178,10 +230,16 @@ class SortableTree:
         self.offset = 0                 # model row rendered in slot 0
         self._slots = []                # widget item ids, recycled forever
         self._slot_keys = []            # slot index -> model key currently shown
-        self._selected = []             # selected MODEL KEYS (survive a repaint)
+        self._selected = {}             # selected MODEL KEYS in order (a dict: see
+                                        # _restore_selection)
+        self._written = ()              # slot iids _restore_selection last wrote
+        self._cursor = None             # model key the keyboard stands on
+        self._anchor = None             # model key a Shift range is measured from
         self._painted = {}              # slot iid -> (values, tags) last written
         self._show_row_menu = None      # the page's menu, once bind_row_menu is called
         self._height = max(1, int(height))
+        self._fits = self._height       # rows Tk shows IN FULL - see rows_shown_in_full
+        self._multi = selectmode == "extended"
 
         if horizontal and stretch:
             # ttk re-stretches such a column back to fill the tree on the next
@@ -225,7 +283,9 @@ class SortableTree:
                                      anchor="center") if empty_text else None
         self.refresh_headers()
         self._ensure_slots(self._height + BUFFER_ROWS)
+        self._bind_events()
 
+    def _bind_events(self):
         # Header tooltips only. The old code hung ONE tooltip on the whole tree,
         # so it popped up over the rows (covering them and the buttons below) and
         # said nothing useful about the column under the pointer.
@@ -252,8 +312,41 @@ class SortableTree:
         self.tree.bind("<Button-4>", self._on_wheel, add="+")
         self.tree.bind("<Button-5>", self._on_wheel, add="+")
         self.tree.bind("<Configure>", self._on_configure, add="+")
-        self.tree.bind("<Prior>", lambda e: self.scroll_by(-self.window()), add="+")
-        self.tree.bind("<Next>", lambda e: self.scroll_by(self.window()), add="+")
+        self._bind_navigation()
+
+    def _bind_navigation(self):
+        """Keys and clicks that choose rows, answered in the MODEL, never by ttk.
+
+        ttk's own handlers pick a row by its SLOT and then ``see`` it, and under a
+        recycled window both halves are wrong (external review, P2-18):
+
+        * ``see`` scrolls the widget's OWN view. The window holds a partial row and a
+          buffer below the rows on screen, so Down past the last full row, or a click
+          on the half row at the bottom, moved that view (measured on Tk 9.0.4: yview
+          0 -> 0.045) under a window that knew nothing of it. After 40 presses of
+          Down, rows 0-4 could not be scrolled back to at all.
+        * a slot is not a row. Shift+click measured its range from ttk's focus item,
+          which is a slot, so after a scroll the range started at whatever row that
+          slot held by then.
+
+        So every route that moves or extends the selection is taken over here and
+        ends in "break": the widget's own view never moves, and the selection is a
+        list of model keys with a cursor and an anchor that scrolling cannot touch.
+        Left and Right are swallowed because ttk's Right re-selects its focus slot
+        and ``see``s it. A click on a heading or a column separator stays with ttk -
+        that is sorting and resizing.
+        """
+        for sequence, step in (("Up", "up"), ("Down", "down"), ("Prior", "page_up"),
+                               ("Next", "page_down"), ("Home", "home"), ("End", "end")):
+            self.tree.bind(f"<{sequence}>",
+                           lambda _e, s=step: self._on_key(s, False), add="+")
+            self.tree.bind(f"<Shift-{sequence}>",
+                           lambda _e, s=step: self._on_key(s, True), add="+")
+        for sequence in ("<Left>", "<Right>"):
+            self.tree.bind(sequence, lambda _e: "break", add="+")
+        self.tree.bind("<Button-1>", self._on_press, add="+")
+        self.tree.bind("<Shift-Button-1>", self._on_extend_press, add="+")
+        self.tree.bind("<Control-Button-1>", self._on_toggle_press, add="+")
 
     # -- the viewport ---------------------------------------------------------- #
     def window(self):
@@ -286,8 +379,16 @@ class SortableTree:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
 
-    def _visible_rows(self):
-        """Rows that fit in the widget right now (falls back to the built height)."""
+    def _rows_upper_bound(self):
+        """Height over row height: MORE rows than fit, which is all it is used for.
+
+        It counts the header and the border as rows, so it is never the number on
+        screen (that is ``_fits``, see ``rows_shown_in_full``). It only sizes the
+        slots, and there it errs the right way: slots must outnumber the rows Tk
+        can show in full, or there is no row at the bottom of the row area for
+        ``identify_region`` to find. Read from the height Tk has already given the
+        widget, so it is current inside ``<Configure>``.
+        """
         try:
             height = int(self.tree.winfo_height() or 0)
             row_h = int(ttk.Style().lookup("Treeview", "rowheight") or 0)
@@ -298,9 +399,32 @@ class SortableTree:
         return self._height
 
     def _on_configure(self, _=None):
-        needed = self._visible_rows() + BUFFER_ROWS
-        if needed != self.window():
+        needed = self._rows_upper_bound() + BUFFER_ROWS
+        resized = needed != self.window()
+        if resized:
             self._ensure_slots(needed)
+        # Asked on EVERY resize, not only when the slot count moves: the rows that
+        # fit can change while height // rowheight does not. A treeview is laid out
+        # when Tk is next idle, and on Tk 8.6.14 (the Linux runner's) bbox and
+        # identify_region read the layout as it WAS - here, the old size: a table
+        # grown from 4 rows to 10 went on counting 4. yview first brings a pending
+        # layout up to date (ttkScroll.c, TtkUpdateScrollInfo); newer Tk does that
+        # inside bbox and identify too. With it, the count was right after every
+        # one of 1340 resizes on 8.6.14 and 9.0.4, in steps and in jumps, for a
+        # table as it is and for one scrolled sideways.
+        try:
+            self.tree.yview()
+            fits = rows_shown_in_full(self.tree.bbox(self._slots[0]),
+                                      self.tree.winfo_width(),
+                                      self.tree.winfo_height(),
+                                      self.tree.identify_region)
+        except Exception as _exc:          # a dying widget answers nothing
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
+            fits = None
+        if fits is not None and fits != self._fits:
+            self._fits = fits
+            resized = True
+        if resized:
             self.offset = min(self.offset, self.max_offset())
             self.repaint()
         # A wider widget means new slack to absorb. Guarded by the memo, so this
@@ -308,7 +432,10 @@ class SortableTree:
         self.fit_columns()
 
     def max_offset(self):
-        return max(0, len(self.items) - self.window())
+        # Measured in rows shown IN FULL, not in slots: at the bottom the last row
+        # has to sit in the last full slot, not in the partial row or the buffer
+        # below it, where nobody can see it (external review, P1-4).
+        return max(0, len(self.items) - self._fits)
 
     def scroll_by(self, lines):
         self.set_offset(self.offset + int(lines))
@@ -332,15 +459,19 @@ class SortableTree:
     def _on_scrollbar(self, action, value, unit=None):
         total = max(1, len(self.items))
         if action == "moveto":
-            self.set_offset(int(float(value) * total))
+            # Rounded, not truncated: the thumb at the end stands on
+            # (total - fits) / total, and that float can land a hair under the last
+            # offset - truncated, it stopped one row short. Measured over 233 840
+            # (total, fits) pairs: 2 227 lost a row that way, none once rounded.
+            self.set_offset(round(float(value) * total))
         elif action == "scroll":
-            step = int(value) * (self.window() if str(unit) == "pages" else 1)
+            step = int(value) * (self._fits if str(unit) == "pages" else 1)
             self.scroll_by(step)
 
     def _sync_scrollbar(self):
         total = max(1, len(self.items))
         first = min(1.0, self.offset / total)
-        last = min(1.0, (self.offset + self.window()) / total)
+        last = min(1.0, (self.offset + self._fits) / total)
         try:
             self.vsb.set(first, last)
         except Exception as _exc:
@@ -453,7 +584,6 @@ class SortableTree:
         blank = ("",) * len(self.columns)
         window = self.window()
         visible = self.items[self.offset:self.offset + window]
-        selected = set(self._selected)
         for i, iid in enumerate(self._slots):
             if i < len(visible):
                 item = visible[i]
@@ -468,7 +598,7 @@ class SortableTree:
             if self._painted.get(iid) != (values, tags):
                 self.tree.item(iid, values=values, tags=tags)
                 self._painted[iid] = (values, tags)
-        self._restore_selection(selected)
+        self._restore_selection()
         self._sync_scrollbar()
 
     # -- selection (by model key: item ids are recycled) ------------------------ #
@@ -480,8 +610,17 @@ class SortableTree:
 
     def _on_select(self, _=None):
         try:
-            chosen = self.tree.selection() or ()
+            chosen = tuple(self.tree.selection() or ())
         except Exception:
+            return
+        if chosen == self._written:
+            # Our own write coming back. <<TreeviewSelect>> is QUEUED, so it lands
+            # after _restore_selection has returned and no flag set around the write
+            # can recognise it (measured on Tk 9.0.4: every selection_set that
+            # leaves a selection behind fires one). Rebuilding from it kept only the
+            # rows on screen, so a selected row scrolled out of the window was
+            # dropped for good, and Ctrl+C then copied nothing (external review,
+            # P2-18). The model keys are the truth; the widget only mirrors them.
             return
         keys, wanted = [], []
         for iid in chosen:
@@ -492,12 +631,13 @@ class SortableTree:
             if key is not None:                 # a blank slot maps to no model row
                 keys.append(key)
                 wanted.append(iid)
-        self._selected = keys
+        self._selected = dict.fromkeys(keys)
         # A click can land on a blank slot below the last real row: ttk highlights
         # it, but it selects nothing. Drop those from the widget selection so an
         # empty row cannot sit there looking selected. Re-setting the selection
         # fires <<TreeviewSelect>> again, but with a clean set, so it settles at once.
-        if tuple(wanted) != tuple(chosen):
+        if tuple(wanted) != chosen:
+            self._written = tuple(wanted)
             try:
                 if wanted:
                     self.tree.selection_set(*wanted)
@@ -506,12 +646,16 @@ class SortableTree:
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
 
-    def _restore_selection(self, selected=None):
-        selected = set(self._selected) if selected is None else selected
-        wanted = [self._slots[i] for i, key in enumerate(self._slot_keys)
-                  if key is not None and key in selected]
+    def _restore_selection(self):
+        # A dict, asked as it is and never copied: a range may hold every row of the
+        # model, and a set rebuilt on each repaint made a one-row scroll 140 times
+        # dearer with 200 000 rows selected (measured 2026-09-29: 0.07 -> 9.9 ms).
+        selected = self._selected
+        wanted = tuple(self._slots[i] for i, key in enumerate(self._slot_keys)
+                       if key is not None and key in selected)
         try:
-            if tuple(self.tree.selection() or ()) != tuple(wanted):
+            if tuple(self.tree.selection() or ()) != wanted:
+                self._written = wanted          # so _on_select knows its own echo
                 self.tree.selection_set(*wanted)
         except Exception as _exc:
             crashlog.note(_exc, "gui.widgets.sortable_tree")
@@ -523,8 +667,123 @@ class SortableTree:
 
     def select_keys(self, keys):
         index = self._ensure_index()
-        self._selected = [str(k) for k in keys if str(k) in index]
+        self._selected = dict.fromkeys(str(k) for k in keys if str(k) in index)
+        # The keyboard continues from the first row, and an empty selection leaves
+        # no cursor and no anchor: a Shift range from a row cleared away would pick
+        # rows nobody chose. The keys then start from the top row on screen.
+        self._cursor = self._anchor = next(iter(self._selected), None)
         self._restore_selection()
+
+    # -- choosing rows: keyboard and pointer, both in model positions ---------- #
+    def _position_of(self, key):
+        """Model position of a key, or None. On screen first, which is O(window)."""
+        if key is None:
+            return None
+        try:
+            return self.offset + self._slot_keys.index(key)
+        except ValueError:
+            return self._ensure_index().get(key)
+
+    def _reveal(self, position):
+        """Scroll just far enough for ``position`` to be shown in full."""
+        if position < self.offset:
+            self.set_offset(position)
+        elif position >= self.offset + self._fits:
+            self.set_offset(position - self._fits + 1)
+
+    def _choose(self, position, extend=False, toggle=False):
+        """Put the cursor on ``position`` and select by the rules of the route.
+
+        Alone, a range from the anchor (Shift), or toggled in and out (Ctrl). A
+        range is built from MODEL positions, so it may run across any number of
+        pages and survives every scroll in between. Without an anchor still in
+        the model, Shift selects the one row, like a plain press.
+        """
+        key = str(self._key_of(self.items[position]))
+        anchor = self._position_of(self._anchor) if self._multi and extend else None
+        if anchor is not None:
+            low, high = sorted((anchor, position))
+            self._selected = dict.fromkeys(str(self._key_of(item))
+                                           for item in self.items[low:high + 1])
+        elif self._multi and toggle:
+            if key in self._selected:
+                del self._selected[key]
+            else:
+                self._selected[key] = None
+            self._anchor = key
+        else:
+            self._selected = {key: None}
+            self._anchor = key
+        self._cursor = key
+        self._reveal(position)
+        self._restore_selection()
+
+    def _on_key(self, step, extend):
+        """Up/Down, PageUp/PageDown and Home/End move the cursor through the MODEL.
+
+        A page is the rows shown in full, so paging never skips one. With no
+        cursor yet, or one whose row has left the model, the keys start where the
+        reader is looking: the top row on screen.
+        """
+        count = len(self.items)
+        if count:
+            here = self._position_of(self._cursor)
+            if step == "home":
+                target = 0
+            elif step == "end":
+                target = count - 1
+            elif here is None:
+                target = self.offset
+            else:
+                target = here + {"up": -1, "down": 1, "page_up": -self._fits,
+                                 "page_down": self._fits}[step]
+            self._choose(max(0, min(count - 1, target)), extend=extend)
+        return "break"
+
+    def _row_under(self, event):
+        """``(True, position)`` over a row slot, with None for a blank one;
+        ``(False, None)`` over a heading, a separator or empty space.
+
+        Built on ``_region`` and ``key_at``, which already answer a dying widget
+        with None - so no new place swallows an exception on its own.
+        """
+        if self._region(event) not in ("cell", "tree"):
+            return False, None
+        return True, self._position_of(self.key_at(event.y))
+
+    def _on_press(self, event, extend=False, toggle=False):
+        """A click on a row, chosen by model position - including the half row.
+
+        The row half cut off at the bottom is the one ttk would ``see``, which
+        scrolled its own view by a row. Here it is chosen like any other and
+        ``_reveal`` scrolls the WINDOW, so it ends up in full where it can be read.
+        """
+        # Tk runs one binding per tag and <Button-1> is the closer match, so the
+        # <ButtonPress> that hides a header tip no longer fires for button 1.
+        self._hide_tip()
+        is_row, position = self._row_under(event)
+        if not is_row:
+            return None                     # heading or separator: ttk sorts, resizes
+        try:
+            self.tree.focus_set()           # what ttk's own press would have done
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.widgets.sortable_tree")
+        if position is not None:
+            self._choose(position, extend=extend, toggle=toggle)
+        elif not (extend or toggle):
+            # A blank slot below the rows selects nothing and, like select_keys(()),
+            # leaves no cursor or anchor behind - written out, because select_keys
+            # builds the key index and a click should not cost O(rows).
+            self._selected = {}
+            self._cursor = self._anchor = None
+            self._restore_selection()
+        return "break"
+
+    def _on_extend_press(self, event):
+        return self._on_press(event, extend=True)
+
+    def _on_toggle_press(self, event):
+        return self._on_press(event, toggle=True)
 
     def item_for_key(self, key):
         """The RAW model item behind a key (None when it is gone)."""
