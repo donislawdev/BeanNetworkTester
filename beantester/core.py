@@ -1356,7 +1356,7 @@ class BeanCore:
                     src_port=src_port, dst_port=dst_port, seq_num=seq, ack_num=ack)
 
     @staticmethod
-    def build_rst_packet(packet, fields):
+    def build_rst_packet(packet, fields):       # pragma: no cover - Windows only (pydivert)
         """Build the pydivert RST that ``build_rst_fields`` describes - the real path.
 
         A divert with a ``make_rst`` hook (``SyntheticDivert``, test fakes) builds
