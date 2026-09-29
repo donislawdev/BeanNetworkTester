@@ -4511,10 +4511,34 @@ MUTATIONS = [
         # P2-12: the question is asked but nothing waits for the answer.
         "label": "settings: a target resolved after its session ended is installed",
         "file": "beantester/settings.py",
-        "old": ("    if live is not None and not live():\n"
+        "old": ("            targeting.refresh()\n"
+                "    if live is not None and not live():\n"
                 "        return None\n"),
-        "new": "",
+        "new": "            targeting.refresh()\n",
         "test": "test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session",
+    },
+    {
+        # P2-12, after review: a step that lost its session before its target was
+        # even looked up still publishes it through target_for - or, with no
+        # target, switches the running session's target off.
+        "label": "settings: a stale step still reaches the target",
+        "file": "beantester/settings.py",
+        "old": ("    if live is not None and not live():\n"
+                "        return None\n"
+                "    matcher = target if hasattr(target, \"matches\") else None"),
+        "new": "    matcher = target if hasattr(target, \"matches\") else None",
+        "test": "test_an_apply_that_is_no_longer_live_changes_nothing",
+    },
+    {
+        # P2-12, after review: a stale step's impairment values land in the
+        # session that runs now.
+        "label": "settings: a stale step still applies its values",
+        "file": "beantester/settings.py",
+        "old": ("    if live is not None and not live():\n"
+                "        return\n"
+                "    with _batch(engine):"),
+        "new": "    with _batch(engine):",
+        "test": "test_an_apply_that_is_no_longer_live_changes_nothing",
     },
 ]
 
