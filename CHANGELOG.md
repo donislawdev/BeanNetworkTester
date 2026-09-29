@@ -20,13 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
-- **A session that stops sending traffic back out now ends on its own.** If the tool
-  could not put packets back on the wire for 10 seconds, for example because the
-  WinDivert driver stopped answering, or because the console window was paused by
-  selecting text while the tool was reporting a failed packet, the session kept running
-  and the traffic in the filter went nowhere. The session now stops after 10 seconds, the
-  network goes back to normal, and the log says why. A failure on the capturing side
-  already worked this way.
+- **A session stuck while sending a packet back out now ends on its own.** If putting
+  one packet back on the wire got stuck, for example because the WinDivert driver stopped
+  answering, or because the console window was paused by selecting text while the tool
+  was reporting a failed packet, the session kept running and the traffic in the filter
+  went nowhere. After 10 seconds stuck, the session now stops, the network goes back to
+  normal, and the log says why. A packet that fails to go out at once is still only
+  counted and reported.
 
 - **STOP is quicker, also when part of the session is stuck.** An ordinary STOP waited up
   to about a fifth of a second for a background check to finish, and no longer does. When

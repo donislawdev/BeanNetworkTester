@@ -1598,12 +1598,32 @@ def test_stop_gives_its_stuck_workers_one_budget_between_them():
 def test_an_ordinary_stop_does_not_wait_for_the_watchdog_tick(monkeypatch):
     """The watchdog slept through its tick and STOP's join waited for it: nearly all
     of an ordinary STOP (median 82 ms, worst 212 ms, measured 2026-09-29). A tick
-    made long here stretches that to the whole join budget unless STOP wakes it."""
-    monkeypatch.setattr("beantester.engine.WATCHDOG_TICK_S", 5.0)
+    made long here stretches that to the whole join budget unless STOP wakes it.
+
+    The watchdog is seen ENTERING its wait before STOP, not assumed to be there
+    after a sleep: a watchdog still on its way when STOP drops the flag leaves at
+    once, and the test would then pass without the wake."""
+    import beantester.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "WATCHDOG_TICK_S", 5.0)
+    entered = threading.Event()
+    real_init = engine_module._Session.__init__
+
+    def init(session, divert, stuck=()):
+        real_init(session, divert, stuck)
+        real_wait = session.woken.wait
+
+        def wait(timeout=None):
+            entered.set()
+            return real_wait(timeout)       # the real wait, only announced
+
+        session.woken.wait = wait
+
+    monkeypatch.setattr(engine_module._Session, "__init__", init)
     eng = BeanEngine()
     eng.start("test", divert=QuietDivert())
     watchdog = eng._t_wd
-    time.sleep(0.1)                                 # well inside its first tick
+    check("the watchdog is inside its first tick", entered.wait(5))
     began = time.monotonic()
     eng.stop()
     took = time.monotonic() - began
