@@ -735,6 +735,15 @@ Designed so that after a bug you can recreate exactly the same conditions:
 - **Copy CLI command** - straight to the clipboard: `BeanNetworkTester.exe --seed ... --loss ...
   --duration ...` (the command adapts to the build: from the repository you get
   `python bean_network_tester.py ...`).
+- **What the report and the command describe** - the last session, not the form: the settings
+  START gave it, updated by every "Apply changes", with its seed and its scenario
+  (`--scenario`, plus `--loop` if it looped). A change you typed but did not apply is left out,
+  and so is a profile loaded after STOP. While a scenario runs, "Apply changes" lasts only until
+  its next step, so the command keeps the settings the session started with. A scenario that
+  ships with the program is named from the program's folder (`scenarios\...` from the sources,
+  `_internal\scenarios\...` next to the `.exe`), and the command finds it from any folder you
+  run it in. Any other file is named by the path you picked.
+  Before the first session, **Copy CLI command** copies the settings in the form.
 
 ## Configuration file
 
@@ -844,8 +853,9 @@ applications, and a test suite that only ever saw one of them has only tested on
 The refusal covers **connections this computer starts, over TCP**: traffic over UDP, and
 connections arriving from outside, are still blocked in silence.
 
-> In `cmd.exe`/PowerShell **quote the expression** if it contains a comma, `!`, `>`, `<` or `*` -
-> otherwise the shell interprets it its own way. The command that recreates the session
+> In `cmd.exe`/PowerShell **quote the expression** if it contains a comma, `!`, `>`, `<`, `*` or
+> `^` - otherwise the shell interprets it its own way (`cmd.exe` drops a bare `^`, so `re:^edge`
+> would arrive as `re:edge`). The command that recreates the session
 > (`Copy CLI command` and the `Reproduce:` line) quotes them for you.
 
 **Run and reporting**
@@ -939,6 +949,9 @@ BeanNetworkTester.exe --simulate --seed 42 --loss 20 --duration 10
 BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 ```
 
+`scenarios/<name>.json` (or `_internal\scenarios\<name>.json`) opens a scenario that ships with
+the program from any folder. If the current folder has a file under that path, that file is used.
+
 The seed guarantees identical **per-packet decisions** for the same packet sequence. Scenario steps
 are cumulative (each patches the state), and `action: reset_tcp` tears down TCP connections at that
 moment. The scenario file is **validated when you open it** - random JSON ends with a readable
@@ -946,8 +959,9 @@ error, not a "scenario with 0 steps", and a step's settings are checked by the s
 form uses, so a value the program cannot use is named with its step number instead of stopping
 the run halfway through.
 
-Every CLI run ends by printing the **effective seed** and a ready command to reproduce it, and
-`--repro-out file.json` saves the full reproduction report.
+Every CLI run ends by printing the **effective seed** and a ready command to reproduce it - with
+the `--scenario` file as you typed it, `--loop` and `--simulate` when the run had them - and
+`--repro-out file.json` saves the full reproduction report with the same command.
 
 ## Connections columns
 
@@ -1409,6 +1423,7 @@ beantester/              the implementation package
     scope.py             what the numbers on screen cover (one pure verdict)
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
     csv_export.py        the two CSV exports and the column names they write
+    session_repro.py     what the session ran with: the repro report and "Copy CLI command"
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl, zh)
 tests/                   pytest tests

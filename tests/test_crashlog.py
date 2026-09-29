@@ -264,6 +264,38 @@ def test_a_gui_crash_report_never_reads_tk_off_the_main_thread(isolated):
     assert "CONTEXT_OK" in out, out
 
 
+def test_a_gui_crash_report_repeats_the_session_not_the_form(isolated):
+    """A crash report is one step from a repro - of the SESSION its seed describes.
+
+    Its command came from the form, so an edit nobody applied was reported as
+    what the session ran with, and an invalid field left no command at all
+    (external review, P2-15). With a session recorded, the command is the
+    session's; the form is still reported beside it, as the user left it.
+    """
+    from gui_harness import run_gui
+
+    out = run_gui("""
+        from beantester.gui import crash as gui_crash
+        from beantester.synthetic import SyntheticDivert
+
+        app.vars["loss"].set("5")
+        app._pending_start_settings = app._settings_from_widgets()
+        app.engine.start("test", divert=SyntheticDivert(gen_kbps=300, seed=3))
+        try:
+            app._finish_start(None)
+            app.vars["loss"].set("abc")          # an edit, invalid, never applied
+            app._tick()                          # the main thread copies the form
+            context = gui_crash.context(app)
+        finally:
+            app.engine.stop()
+        assert "--loss 5 " in context["repro_command"], context.get("repro_command")
+        assert context["session_settings"]["loss"] == 5, context["session_settings"]
+        assert context["form"]["loss"] == "abc", context
+        print("SESSION_OK")
+    """, lang="en")
+    assert "SESSION_OK" in out, out
+
+
 # -- 4) it catches what nothing else does ------------------------------------ #
 def test_a_worker_thread_exception_is_recorded(isolated):
     """Previously recorded NOWHERE: threads print to a stderr a windowed build

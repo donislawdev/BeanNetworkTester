@@ -103,7 +103,11 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-28 from 1166: the target field stopped being applied from the
 # tick (convention 15), which took `_snapshot_target` and half of the old
 # `_refresh_target` out of `app.py`.
-FILE_CEILING = 1150             # beantester/gui/app.py
+# Lowered 2026-09-29 from 1150: the repro report and "Copy CLI command" moved to
+# `gui/session_repro.py` with the record of the session's settings they are now
+# built from (external review, P2-15). The band falls to 791; `engine.py` is 768
+# after gaining the session facts the repro command needs - 23 lines clear.
+FILE_CEILING = 1130             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

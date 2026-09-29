@@ -1,6 +1,9 @@
 """Bug reproduction: CLI command builder and the full repro report (JSON)."""
 import json
+import math
 import os
+import re
+import string
 import time
 
 from .appinfo import TOOL_ID, command_name
@@ -11,9 +14,25 @@ from .settings import DEFAULT_SETTINGS, setting_expression
 from .utils import bytes_to_mb, number_string, to_number
 from . import crashlog
 
+# Settings whose flag takes a WHOLE number (`type=int` in cli.build_arg_parser).
+# The field itself is a number like any other, so the form and a config file can
+# hold 1400.5 - and `--max-size 1400.5` is then refused by argparse (exit 2). The
+# core truncates it anyway (core.set_advanced), so the whole part is the setting.
+WHOLE_NUMBER_FLAGS = frozenset({"max_size"})
 
-def settings_to_cli(settings, seed=None, simulate=False):
-    """Build the list of CLI arguments that reproduce the given settings."""
+# What an argument may hold and still be pasted into cmd.exe and PowerShell alike
+# without quotes. Everything else is quoted - a list of the characters that break
+# a shell is the list that goes missing (`^` did: cmd drops it, so `re:^edge`
+# arrived as `re:edge` and matched msedge.exe too).
+_BARE = frozenset(string.ascii_letters + string.digits + "-_.:/\\+=")
+
+
+def settings_to_cli(settings, seed=None, simulate=False, scenario=None, loop=False):
+    """Build the list of CLI arguments that reproduce the given settings.
+
+    ``scenario`` is the scenario file as it was named when the session ran, and
+    ``loop`` whether it looped; both come from the engine (see session_command).
+    """
     g = lambda k: settings.get(k, DEFAULT_SETTINGS[k])
     args = []
     numeric = [("loss", "--loss"), ("loss_burst", "--loss-burst"),
@@ -37,8 +56,11 @@ def settings_to_cli(settings, seed=None, simulate=False):
                ("spike_prob_up", "--spike-prob-up"),
                ("spike_ms_up", "--spike-ms-up")]
     for key, flag in numeric:
-        if to_number(g(key)) != to_number(DEFAULT_SETTINGS[key]):
-            args += [flag, number_string(g(key))]
+        value = g(key)
+        if key in WHOLE_NUMBER_FLAGS and math.isfinite(to_number(value)):
+            value = int(to_number(value))
+        if to_number(value) != to_number(DEFAULT_SETTINGS[key]):
+            args += [flag, number_string(value)]
     if str(g("rate_schedule")).strip():
         args += ["--rate-schedule", str(g("rate_schedule")).strip()]
     if str(g("target")).strip():
@@ -87,19 +109,68 @@ def settings_to_cli(settings, seed=None, simulate=False):
     sd = seed if seed is not None else g("seed")
     if sd not in (None, -1, "", "-1"):
         args += ["--seed", str(int(sd))]
+    # The scenario is what changed the settings over time, so a command without it
+    # replays the first step for the whole run (external review, P1-3).
+    if scenario:
+        args += ["--scenario", str(scenario)]
+        if loop:
+            args += ["--loop"]
     if simulate:
         args += ["--simulate"]
     return args
 
 
-def settings_to_cli_string(settings, seed=None, simulate=False):
-    # filter expressions carry shell metacharacters (, ! > < * ? |), so quote
-    # any argument that has one - the command must be copy-paste ready.
-    # The program name follows the build: a frozen user has no
+def _quote(arg):
+    """One argument as cmd.exe and PowerShell will both hand it to the program.
+
+    Bare when every character is in ``_BARE``, double-quoted otherwise. A double
+    quote INSIDE has no spelling both shells read the same way (cmd flips its
+    quoting on it, PowerShell does not take ``\\"``), so in an expression with a
+    ``re:`` term - the only term an address or a port can hold one in - it is
+    written ``\\x22``, the same pattern with no quote in it; a process name cannot
+    hold one on Windows, and anywhere else it is escaped the way
+    CommandLineToArgvW reads it. What quotes do not stop - measured, and accepted (owner decision
+    2026-09-29): cmd expands ``%NAME%`` inside them, PowerShell ``$name`` and a
+    backtick. None of those has a place in a process name, an address or a port.
+    """
+    if arg and all(ch in _BARE for ch in arg):
+        return arg
+    if "re:" in arg.lower():
+        # `\"` in a pattern is an escaped quote, `\\"` a backslash and a quote
+        arg = re.sub(r'(\\*)"', lambda m: (m.group(1)[:-1] if len(m.group(1)) % 2
+                                          else m.group(1)) + r"\x22", arg)
+    else:
+        arg = re.sub(r'(\\*)"', lambda m: m.group(1) * 2 + '\\"', arg)
+    # a backslash that ends the argument would escape the closing quote
+    return '"' + re.sub(r"(\\+)$", lambda m: m.group(1) * 2, arg) + '"'
+
+
+def settings_to_cli_string(settings, seed=None, simulate=False, scenario=None, loop=False):
+    # Copy-paste ready: every argument a shell would read its own way is quoted
+    # (see _quote). The program name follows the build: a frozen user has no
     # "python bean_network_tester.py" to paste (appinfo.command_name).
-    def q(a):
-        return f'"{a}"' if any(ch in a for ch in ' ,!<>*?|&$()') else a
-    return f"{command_name()} " + " ".join(q(a) for a in settings_to_cli(settings, seed, simulate))
+    args = settings_to_cli(settings, seed, simulate, scenario, loop)
+    return f"{command_name()} " + " ".join(_quote(a) for a in args)
+
+
+def session_command(engine, settings):
+    """The command that repeats the session ``engine`` ran with ``settings``.
+
+    ``settings`` are what the session was STARTED and APPLIED with, which only the
+    caller knows (the CLI's configuration, the GUI's record of START and Apply).
+    The rest is the engine's: the seed, whether the driver was a stand-in, and the
+    scenario. It is read from the engine rather than handed in by each caller,
+    because a handed-in flag is one a caller forgets - ``--simulate`` reached the
+    console line and was missing from the report of the same run, which pasted on
+    an elevated machine impairs the real network (external review, P1-3).
+    """
+    # hasattr, as cli._report_session already asks: the CLI's engine stand-ins in
+    # the tests have no session_info, and a real BeanEngine always does.
+    info = engine.session_info() if hasattr(engine, "session_info") else {}
+    return settings_to_cli_string(settings, seed=engine.effective_seed(),
+                                  simulate=bool(info.get("simulated")),
+                                  scenario=info.get("scenario"),
+                                  loop=bool(info.get("scenario_loop")))
 
 
 def build_repro_report(engine, settings):
@@ -161,7 +232,7 @@ def build_repro_report(engine, settings):
         events=[dict(t=e[0], time=e[1], type=e[2],
                      description=translate(e[3], "en")) for e in engine.events_snapshot()],
         connections=engine.connections_snapshot(limit=50),
-        cli_command=settings_to_cli_string(settings, seed=seed),
+        cli_command=session_command(engine, settings),
     )
 
 

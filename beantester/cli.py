@@ -28,7 +28,7 @@ from .i18n import T
 from .paths import is_frozen, user_data_dir
 from .presets import (PRESETS, closest_preset, preset_to_settings,
                       resolve_preset)
-from .repro import save_repro_report, settings_to_cli_string
+from .repro import save_repro_report, session_command
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
@@ -831,8 +831,9 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     stats = engine.stats_snapshot()
     elapsed = round(clock() - t0, 1)
     eff = engine.effective_seed()
-    repro = settings_to_cli_string(cfg["settings"], seed=eff,
-                                   simulate=cfg["simulate"]) if eff is not None else None
+    # The same function the report uses, so the console line and the report of one
+    # run cannot disagree: `--simulate` and the scenario come from the engine.
+    repro = session_command(engine, cfg["settings"]) if eff is not None else None
 
     if cfg["log_conns"] and log.fmt == clilog.TEXT:
         _print_conns(engine, log)

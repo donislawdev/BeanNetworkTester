@@ -29,8 +29,9 @@ neighbour can read them - would freeze more, not less.
 import weakref
 
 from .. import crashlog
-from ..repro import settings_to_cli_string
+from ..repro import session_command, settings_to_cli_string
 from ..settings import settings_from_raw
+from . import session_repro
 
 # The raw form as the MAIN thread last read it, per App - the only way a report
 # written on another thread may learn what the form held. Kept here and not on
@@ -76,6 +77,14 @@ def _fill(app, state):
         state["counters"] = dict(app.last_snapshot)
     state["log_tail"] = list(app._log_lines[-crashlog.MAX_LOG_TAIL:])
     state["open_windows"] = app.windows.open_ids()
+    # The session is what the seed and the counters above describe, so its repro
+    # command comes from what START and Apply recorded; the form below may hold
+    # edits nobody applied (external review, P2-15). Plain data and no lock:
+    # session_info reads attributes, and this may run on any thread.
+    session = session_repro.settings_of(app)
+    if session is not None:
+        state["session_settings"] = dict(session)
+        state["repro_command"] = session_command(app.engine, session)
     raw = _FORMS.get(app)
     if raw is None:
         return                      # a fault before the first tick read the form
@@ -86,7 +95,8 @@ def _fill(app, state):
         state["form"] = raw
         return
     state["settings"] = settings
-    state["repro_command"] = settings_to_cli_string(settings, seed=state["seed"])
+    if session is None:             # no session yet: the command the form would run
+        state["repro_command"] = settings_to_cli_string(settings, seed=state["seed"])
 
 
 def leave_breadcrumb(app):
