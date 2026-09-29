@@ -1002,8 +1002,11 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
         # Worded to name its PHASE. A fault in something the summary also needs
         # (the counters, say) trips the session handler first and then this one,
         # and two identical "unexpected failure" lines read like two separate
-        # bugs instead of one fault and the report it took down with it.
-        log.error(f"unexpected failure while finishing the run: "
+        # bugs instead of one fault and the report it took down with it. "Outside"
+        # and not "while finishing": this handler also catches what fails BEFORE
+        # the session - loading the settings, starting the engine - and said
+        # "finishing" about a run that never began (external review NOWE-3-5).
+        log.error(f"unexpected failure outside the session: "
                   f"{type(exc).__name__}: {exc}")
         return exitcodes.RUNTIME
     finally:

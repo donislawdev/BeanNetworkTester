@@ -820,6 +820,40 @@ def test_a_fault_outside_the_session_is_still_a_coded_exit():
           len(set(lines)) == len(lines), f"({lines})")
 
 
+def test_a_failure_before_the_session_is_not_called_finishing_the_run():
+    """The last-resort handler also catches what fails BEFORE the session - loading
+    the settings, starting the engine - and said "while finishing the run" about a
+    run that never began (external review NOWE-3-5)."""
+    from beantester.engine import BeanEngine
+
+    class _FaultsOnSeed(BeanEngine):
+        def set_seed(self, seed):
+            raise RuntimeError("the seed went away")
+
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--simulate", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                   engine=_FaultsOnSeed(), out=out, err=err)
+    lines = [l for l in err.getvalue().splitlines() if "unexpected failure" in l]
+    check("fault before the session: RUNTIME, not a traceback",
+          code == exitcodes.RUNTIME, f"(code={code})")
+    check("fault before the session: the line names its phase truthfully",
+          len(lines) == 1 and "outside the session" in lines[0]
+          and "finishing" not in lines[0], f"({lines})")
+
+
+def test_a_schedule_that_is_not_a_time_and_speeds_is_a_config_error():
+    """``--rate-schedule 1:nan:0`` passed --dry-run and ended the real run with
+    "unexpected failure" and exit 1; ``10:-100:0`` ran with NO limit in silence
+    (external review P2-2). Both are the settings' fault: CONFIG, before anything
+    starts."""
+    for bad in ("1:nan:0", "10:-100:0", "0:100:100", "1:99999999999:0"):
+        for mode in (["--dry-run"], ["--duration", "1"]):
+            code, _, err = cli(["--simulate", "--rate-schedule", bad] + mode)
+            check(f"schedule {bad!r} {mode[0]}: CONFIG", code == exitcodes.CONFIG,
+                  f"(code={code}, err={err!r})")
+
+
 def test_exit_code_interrupted_and_terminated():
     def boom_interrupt(_s):
         raise KeyboardInterrupt()

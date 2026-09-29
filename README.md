@@ -410,7 +410,8 @@ middle of otherwise normal traffic.
 - *Schedule* - throughput that changes over time: `time:download:upload` in KB/s, comma-separated.
   E.g. `2:100:0, 2:500:0` = 2 s at 100 KB/s, then 2 s at 500, in a loop. When the schedule is
   non-empty it **overrides** the fixed "Download/Upload" fields - the GUI greys them out and says
-  so explicitly.
+  so explicitly. A step's time is more than 0 and at most 86400 s, and each speed is from 0 (no
+  limit) to 10000000 KB/s, like the fixed fields. A step outside that is refused and named.
 
 **Session:**
 - *Duration (s)* - after this many seconds the program **stops itself** (exactly as if you clicked
@@ -750,6 +751,13 @@ Designed so that after a bug you can recreate exactly the same conditions:
 The "Save/Load file" buttons write all settings to JSON. The same file works in the CLI via
 `--config`. Precedence order: defaults < file < preset < flags.
 
+Every value is checked for its kind when the file is read, and a scenario step is checked the
+same way. A switch (`lan_mode`, `internet_only`, `narrow_filter`...) is `true` or `false`, or `1`
+or `0`. The text `"false"` is refused, not read as "on". `filter` is one of the `--filter`
+choices, and `seed` is a whole number (`-1` for a random one). A value of the wrong kind stops
+the CLI with code `3` and names the setting. The window shows the same message and leaves the
+form as it was.
+
 ## Command-line mode (CLI)
 
 The CLI runs **from the same `BeanNetworkTester.exe`** as the GUI: launching it with any argument
@@ -817,7 +825,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--nat-timeout` | s | after N s of silence the NAT mapping "disappears" (0 = off) |
 | `--rst-prob` `--rst-cooldown` | % / s | percentage of connections torn with RST and how long the tear-down is held |
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
-| `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped |
+| `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped. Time above 0 and at most 86400 s, speeds 0 (no limit) to 10000000 |
 | `--asym` | - | give uploads their own values. Without it one set of numbers applies both ways, which is the default |
 | `--loss-up` `--corrupt-up` `--dup-up` | % | the same three impairments, for packets this machine SENDS. Used only with `--asym` |
 | `--latency-up` `--jitter-up` | ms | delay and its variation, for packets this machine SENDS. Used only with `--asym` |

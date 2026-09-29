@@ -1214,10 +1214,10 @@ MUTATIONS = [
     {
         "label": "errors: a config value is called invalid and left at that",
         "file": "beantester/settings.py",
-        "old": "                                       field=key, value=repr(value),\n"
-               "                                       expected=_expected_shape(key)))",
-        "new": "                                       field=key, value=repr(value),\n"
-               "                                       expected=\"\"))",
+        "old": "                                   field=key, value=repr(value),\n"
+               "                                   expected=_expected_shape(key)))",
+        "new": "                                   field=key, value=repr(value),\n"
+               "                                   expected=\"\"))",
         "test": "test_a_config_value_says_what_the_setting_takes",
     },
     {
@@ -3860,6 +3860,88 @@ MUTATIONS = [
         "old": "        state[\"repro_command\"] = session_command(app.engine, session)",
         "new": "        pass",
         "test": "test_a_gui_crash_report_repeats_the_session_not_the_form",
+    },
+    {
+        # External review P1-2: bool("false") is True - "lan_mode": "false"
+        # switched on the mode that cuts all public traffic.
+        "label": "validators: a switch takes the truth of any value again",
+        "file": "beantester/validators.py",
+        "old": "    if isinstance(value, bool):\n        return value\n"
+               "    if isinstance(value, (int, float)) and value in (0, 1):",
+        "new": "    if not isinstance(value, (list, dict)):\n        return bool(value)\n"
+               "    if isinstance(value, (int, float)) and value in (0, 1):",
+        "test": "test_a_switch_in_a_file_is_true_or_false_and_nothing_else",
+    },
+    {
+        # P2-4: "tcpp" reached the driver, "outbound" became a raw filter.
+        "label": "validators: the traffic filter takes any text again",
+        "file": "beantester/validators.py",
+        "old": "    if text in choices:\n        return text",
+        "new": "    if text is not None:\n        return text",
+        "test": "test_the_filter_in_a_file_is_one_the_program_knows",
+    },
+    {
+        # P2-5: 1.9 became 1 in silence.
+        "label": "validators: a fractional seed is taken again",
+        "file": "beantester/validators.py",
+        "old": "        if not value.is_integer() or abs(value) > _EXACT_FLOAT_INT:",
+        "new": "        if False:",
+        "test": "test_a_seed_in_a_file_is_a_whole_number",
+    },
+    {
+        # P2-5: 42 came back as 42.0, which the seed field refuses - START blocked.
+        "label": "validators: a seed written 42.0 stays a float",
+        "file": "beantester/validators.py",
+        "old": "        return int(value)\n    if isinstance(value, int):",
+        "new": "        return value\n    if isinstance(value, int):",
+        "test": "test_a_file_seed_written_42_0_no_longer_blocks_start",
+    },
+    {
+        "label": "settings: the form and scenario steps skip the type layer",
+        "file": "beantester/settings.py",
+        "old": "            s[f.key] = coerce_field(f, raw[f.key], lang, bounded=True)",
+        "new": "            s[f.key] = raw[f.key]",
+        "test": "test_a_switch_in_a_file_is_true_or_false_and_nothing_else",
+    },
+    {
+        # NOWE-3-1: {"target": 1e400} became the process name "inf".
+        "label": "settings: an infinite number becomes an expression's text again",
+        "file": "beantester/settings.py",
+        "old": "        if isinstance(value, float) and not math.isfinite(value):",
+        "new": "        if False:",
+        "test": "test_a_number_too_large_for_a_float_is_refused_not_a_crash",
+    },
+    {
+        # P2-2: a time of 0 or less became a 10 ms step.
+        "label": "schedule: any step time is taken again",
+        "file": "beantester/settings.py",
+        "old": "        if not (0 < dur <= F.SECONDS[1]\n",
+        "new": "        if not (True\n",
+        "test": "test_a_schedule_step_is_a_real_time_and_real_speeds",
+    },
+    {
+        # P2-2: a negative speed meant NO limit, NaN crashed the run.
+        "label": "schedule: any step speed is taken again",
+        "file": "beantester/settings.py",
+        "old": "                and all(F.RATE[0] <= rate <= F.RATE[1] for rate in (dn, up))):",
+        "new": "                and True):",
+        "test": "test_a_schedule_step_is_a_real_time_and_real_speeds",
+    },
+    {
+        # P1-2: "loop": "false" looped, and a CI run without --duration never ended.
+        "label": "scenario: loop takes the truth of any value again",
+        "file": "beantester/scenario.py",
+        "old": "            loop = parse_bool(data.get(\"loop\", False))",
+        "new": "            loop = bool(data.get(\"loop\", False))",
+        "test": "test_a_switch_in_a_file_is_true_or_false_and_nothing_else",
+    },
+    {
+        # NOWE-3-5: a run that never began was reported as "finishing".
+        "label": "cli: a failure before the session is called finishing the run",
+        "file": "beantester/cli.py",
+        "old": "        log.error(f\"unexpected failure outside the session: \"",
+        "new": "        log.error(f\"unexpected failure while finishing the run: \"",
+        "test": "test_a_failure_before_the_session_is_not_called_finishing_the_run",
     },
 ]
 
