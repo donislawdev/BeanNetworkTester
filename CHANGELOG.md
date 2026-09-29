@@ -16,6 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Nothing goes missing from the command line's output on Windows.** With the output sent to
+  a file, a line holding a character the system's code page cannot show - a Chinese process
+  name, a Cyrillic folder - was left out without a word, and with `--format json` the whole
+  record was lost while the run still ended with code 0. Such a character is now written as a
+  `\u` escape. In `--format json` every record is plain ASCII and reads back the same.
+
 - **Files saved by Notepad or PowerShell now load.** A config, scenario, profile or window
   state file saved as "UTF-8 with BOM" (Notepad, PowerShell's `-Encoding UTF8`) or as UTF-16
   (`>` in Windows PowerShell 5.1) was refused, and a profiles file like that was set aside as

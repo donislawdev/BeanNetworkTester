@@ -36,7 +36,24 @@ def _write(stream, text):
     try:
         stream.write(text + "\n")
         stream.flush()
+    except UnicodeEncodeError:
+        # A character the stream's code page has no place for: stdout redirected
+        # to a file on Windows is the ANSI code page with errors="strict". This
+        # WAS the ValueError below, so the whole line - a data record included -
+        # vanished and the run still ended 0 (external review P1-6). The line goes
+        # out again with that character as a backslash escape, and nothing else
+        # about it changes.
+        _write_escaped(stream, text)
     except (OSError, ValueError, AttributeError) as _exc:
+        crashlog.note(_exc, "clilog")
+
+
+def _write_escaped(stream, text):
+    encoding = getattr(stream, "encoding", None) or "ascii"
+    try:
+        stream.write(text.encode(encoding, "backslashreplace").decode(encoding) + "\n")
+        stream.flush()
+    except (OSError, ValueError, AttributeError, LookupError) as _exc:
         crashlog.note(_exc, "clilog")
 
 
@@ -81,8 +98,14 @@ class CliLog:
 
     # -- data channel (stdout) ----------------------------------------------- #
     def data(self, record, text):
-        """Emit one data record: JSON object (``--format json``) or text line."""
-        _write(self._out, json.dumps(record, ensure_ascii=False)
+        """Emit one data record: JSON object (``--format json``) or text line.
+
+        ``ensure_ascii``: a record is ASCII on the wire whatever it carries, so no
+        code page can refuse it, and ``json.loads`` gives back the same text. The
+        escape fallback in ``_write`` is not enough here: a character outside the
+        BMP comes out as ``\\U0001f600``, which is not JSON (external review P1-6).
+        """
+        _write(self._out, json.dumps(record, ensure_ascii=True)
                if self.fmt == JSON else text)
         self._to_file(text)
 
