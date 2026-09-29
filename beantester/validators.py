@@ -6,12 +6,13 @@ depends on tkinter. The GUI shows the message under the field, the CLI turns
 it into ``error: ...`` and the config loader into ``errors.bad_config_value``.
 """
 import math
+from typing import Optional
 
 from .i18n import field_name, translate
 from .utils import number_string
 
 
-def _decimal(value):
+def _decimal(value: object) -> Optional[float]:
     """A finite number read from user text, decimal comma included - or None.
 
     The one place the comma rule lives (owner decision D-3): ``"2,5"`` is 2.5 and
@@ -28,7 +29,7 @@ def _decimal(value):
     return number if math.isfinite(number) else None
 
 
-def number_or_zero(value):
+def number_or_zero(value: object) -> float:
     """``value`` read exactly as ``parse_number`` reads it, or 0.0 where it refuses.
 
     For text that DESCRIBES the form instead of validating it - the preview
