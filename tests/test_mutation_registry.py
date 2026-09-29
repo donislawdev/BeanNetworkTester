@@ -4540,6 +4540,98 @@ MUTATIONS = [
         "new": "    with _batch(engine):",
         "test": "test_an_apply_that_is_no_longer_live_changes_nothing",
     },
+    {
+        # P3-9: the injector never says it is on a packet, so a hung send()
+        # leaves the session running with nothing delivered.
+        "label": "engine: the inject thread's busy marker is never set",
+        "file": "beantester/engine.py",
+        "old": ("                heapq.heappop(self._heap)\n"
+                "                # Busy from HERE, not from the wait above: a packet waiting out its\n"
+                "                # delay is the job, and seconds of it are normal. Until the line\n"
+                "                # after the except, so a warning held by the log counts as well.\n"
+                "                session.busy = now\n"),
+        "new": "                heapq.heappop(self._heap)\n",
+        "test": "test_an_inject_thread_that_is_alive_but_no_longer_moving_fails_open",
+    },
+    {
+        # P3-9: the marker outlives its packet - a quiet link after one packet
+        # reads as a stalled injector and stops a healthy session.
+        "label": "engine: the inject thread's busy marker is never cleared",
+        "file": "beantester/engine.py",
+        "old": ("                    self._warn_send_failed(e)\n"
+                "            session.busy = None"),
+        "new": "                    self._warn_send_failed(e)",
+        "test": "test_a_packet_waiting_out_its_delay_is_not_a_stalled_injector",
+    },
+    {
+        # P3-9: waiting out a packet's delay counts as being stuck on it.
+        "label": "engine: a packet waiting out its delay counts as a busy injector",
+        "file": "beantester/engine.py",
+        "old": ("                now = time.monotonic()\n"
+                "                if release > now:"),
+        "new": ("                now = session.busy = time.monotonic()\n"
+                "                if release > now:"),
+        "test": "test_a_packet_waiting_out_its_delay_is_not_a_stalled_injector",
+    },
+    {
+        # P3-9: the marker is kept, and nobody reads it.
+        "label": "engine: the watchdog stops noticing an inject thread that stalled",
+        "file": "beantester/engine.py",
+        "old": "            if busy is not None and time.monotonic() - busy > self.CAPTURE_STALL_S:",
+        "new": "            if False:",
+        "test": "test_an_inject_thread_that_is_alive_but_no_longer_moving_fails_open",
+    },
+    {
+        # NOWE-5a-2: each stuck worker gets a whole join of its own again.
+        "label": "engine: STOP gives each stuck worker its own join timeout",
+        "file": "beantester/engine.py",
+        "old": "            t.join(timeout=max(0.0, deadline - time.monotonic()))",
+        "new": "            t.join(timeout=self.JOIN_S)",
+        "test": "test_stop_gives_its_stuck_workers_one_budget_between_them",
+    },
+    {
+        # D-32: the watchdog is left to sleep out its tick, and STOP's join waits
+        # for it.
+        "label": "engine: STOP no longer wakes the watchdog",
+        "file": "beantester/engine.py",
+        "old": "        self._session.woken.set()\n",
+        "new": "",
+        "test": "test_an_ordinary_stop_does_not_wait_for_the_watchdog_tick",
+    },
+    {
+        # D-33: the stuck worker is known, and START keeps quiet about it.
+        "label": "engine: START no longer says the previous session is still stuck",
+        "file": "beantester/engine.py",
+        "old": ("        if stuck:\n"
+                "            self.log(T(\"log.previous_session_stuck\"))\n"),
+        "new": "",
+        "test": "test_a_start_says_when_part_of_the_previous_session_is_still_stuck",
+    },
+    {
+        # D-33: STOP no longer records the workers it gave up on.
+        "label": "engine: STOP forgets the workers it could not join",
+        "file": "beantester/engine.py",
+        "old": "        self._session.stuck += tuple(t for t in workers if t.is_alive())\n",
+        "new": "",
+        "test": "test_a_start_says_when_part_of_the_previous_session_is_still_stuck",
+    },
+    {
+        # D-33: only the session right before is asked, so a worker stuck two
+        # sessions ago is forgotten after one clean session.
+        "label": "engine: a stuck worker is not carried into the next session",
+        "file": "beantester/engine.py",
+        "old": "        session = self._session = _Session(divert, stuck)",
+        "new": "        session = self._session = _Session(divert)",
+        "test": "test_a_start_says_when_part_of_the_previous_session_is_still_stuck",
+    },
+    {
+        # D-33: a worker that has since ended is still reported at every START.
+        "label": "engine: a stuck worker that has ended is still reported",
+        "file": "beantester/engine.py",
+        "old": "        stuck = tuple(t for t in previous.stuck if t.is_alive()) if previous else ()",
+        "new": "        stuck = tuple(previous.stuck) if previous else ()",
+        "test": "test_a_start_says_when_part_of_the_previous_session_is_still_stuck",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

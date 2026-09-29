@@ -325,6 +325,7 @@
   "log.note_windows": "UWAGA: przechwytywanie działa tylko na Windows (WinDivert).",
   "log.once": "jednorazowo",
   "log.ports": "portów",
+  "log.previous_session_stuck": "UWAGA: część poprzedniej sesji wciąż wisi i nie dała się zatrzymać. Nie przeszkadza to tej sesji działać, ale może zajmować procesor do ponownego uruchomienia programu.",
   "log.process_excluded": "Cel",
   "log.processes": "procesów",
   "log.profile_deleted": "Usunięto profil",
