@@ -50,6 +50,8 @@ try:
 except (AttributeError, ValueError):
     pass
 
+import atexit                                        # noqa: E402
+import shutil                                        # noqa: E402
 import subprocess                                    # noqa: E402
 import tempfile                                      # noqa: E402
 import time                                          # noqa: E402
@@ -67,6 +69,9 @@ import beantester.gui.ui_state as _ui_state          # noqa: E402
 # whatever language the last real run had left behind - and a saved window geometry
 # would have hidden exactly the clipping we are here to find.
 _TMP = tempfile.mkdtemp()
+# Every pass (each language, --tables, --dialogs) is a process of its own and makes
+# one of these, so without this a render run left five behind.
+atexit.register(shutil.rmtree, _TMP, ignore_errors=True)
 _ui_state.UiStateStore.__init__.__defaults__ = (os.path.join(_TMP, "ui.json"),)
 _profiles.ProfileStore.__init__.__defaults__ = (os.path.join(_TMP, "profiles.json"),)
 
@@ -674,10 +679,19 @@ def _dialog_case(root, opener, keys):
     """
     from beantester.gui import dialogs
     seen = {"focus": None, "problem": None, "timed_out": False}
+    jobs = {}           # the pending step and the timeout, cancelled however this ends
+    own = {}            # THIS case's dialog, once found
 
     def dialog():
-        return next((w for w in root.winfo_children()
-                     if isinstance(w, tk.Toplevel) and w.winfo_exists()), None)
+        # Pinned to the dialog this case opened: a step left over from a case that
+        # ended early must not press keys into - or close - the NEXT case's dialog.
+        win = own.get("win") or next((w for w in root.winfo_children()
+                                      if isinstance(w, tk.Toplevel) and w.winfo_exists()),
+                                     None)
+        if win is not None and win.winfo_exists():
+            own["win"] = win
+            return win
+        return None
 
     def step(i=0):
         win = dialog()
@@ -695,7 +709,7 @@ def _dialog_case(root, opener, keys):
                 focus.insert("end", keys[i][len("type:"):])
             else:
                 focus.event_generate(keys[i])
-            root.after(DIALOG_STEP_MS, lambda: step(i + 1))
+            jobs["step"] = root.after(DIALOG_STEP_MS, lambda: step(i + 1))
 
     def give_up():
         # Recorded HERE, not read from the answer: ask_yes_no returns bool(...),
@@ -706,52 +720,108 @@ def _dialog_case(root, opener, keys):
             seen["timed_out"] = True
             dialogs._close(win, _NOT_ANSWERED)
 
-    root.after(DIALOG_STEP_MS * 3, step)
-    timer = root.after(DIALOG_TIMEOUT_MS, give_up)
-    if opener == "ask_string":
-        answer = dialogs.ask_string(root, "check", "name?")
-    elif opener == "show_help":
-        answer = dialogs.show_help(root, "check", "a, b, !c")
-    else:
-        answer = getattr(dialogs, opener)(root, "check", "proceed?")
-    root.after_cancel(timer)
+    jobs["step"] = root.after(DIALOG_STEP_MS * 3, step)
+    jobs["timer"] = root.after(DIALOG_TIMEOUT_MS, give_up)
+    try:
+        if opener == "ask_string":
+            answer = dialogs.ask_string(root, "check", "name?")
+        elif opener == "show_help":
+            answer = dialogs.show_help(root, "check", "a, b, !c")
+        else:
+            answer = getattr(dialogs, opener)(root, "check", "proceed?")
+    finally:
+        # Also after a failure: a timer left armed would close the next case's
+        # dialog as "not answered" five seconds into it.
+        for job in jobs.values():
+            root.after_cancel(job)
     if seen["timed_out"]:
         answer = _NOT_ANSWERED
     return answer, seen["focus"], seen["problem"]
 
 
-def _delivers(root, sequence):
-    """Whether this Tk delivers a GENERATED ``sequence`` to a binding for it at all.
+def _delivers(root, sequence, tries=10):
+    """Whether this Tk delivers a GENERATED ``sequence`` to a binding for it at all:
+    True / False, or None when the check never held the keyboard focus to ask.
 
     Measured 2026-09-29 on Windows (Tk 9.0.4): a generated ``<KP_Enter>`` arrives
     with keysym "??" and reaches no binding, so a keypad case there would measure
     nothing - it is reported as not measured instead. X11 has a keycode for it.
+
+    Tk hands a key event to the FOCUS window, and a window manager can take the
+    focus away just after the window maps (WSLg, measured: one run in a few called
+    ``<Tab>`` undeliverable, then 10 of 10 probes delivered it). So the focus is
+    checked before the key is sent, and a key is only called undeliverable when
+    the probe held the focus and its binding still did not fire.
     """
     probe = ttk.Frame(root)
     probe.pack()
     hits = []
     probe.bind(sequence, lambda _e: hits.append(sequence))
-    root.update()
-    probe.focus_force()         # Tk hands a key event to the focus window
-    root.update()
-    probe.event_generate(sequence)
-    root.update()
-    probe.destroy()
-    return bool(hits)
+    try:
+        for _ in range(tries):
+            root.update()
+            probe.focus_force()
+            root.update()
+            if root.focus_get() is probe:
+                probe.event_generate(sequence)
+                root.update()
+                return bool(hits)
+            time.sleep(0.05)
+        return None
+    finally:
+        probe.destroy()
+
+
+# The only key a case may go unmeasured for. Every other one carries the finding
+# itself (Tab to "No", then Enter): a Tk that cannot deliver it measures nothing
+# that matters, and that has to fail, not pass on the Escape case alone.
+DIALOG_OPTIONAL_KEYS = ("<KP_Enter>",)
 
 
 def check_dialogs():
-    """Enter presses the button the keyboard is on, on real Tk (external review P2-19)."""
-    from beantester.i18n import T
+    """Enter presses the button the keyboard is on, on real Tk (external review P2-19).
+
+    The answer here is the one under Xvfb, as CI runs it: no window manager, no
+    other window to take the keyboard. On a desktop one can - measured 2026-09-29
+    under WSLg, 4 runs in 8 lost the focus somewhere mid-case. A loss the check can
+    see is reported as not measured; one between two keys can surface as a wrong
+    answer, so a red run on a desktop is re-run before it is believed.
+    """
     n.set_language("en")
     root = tk.Tk()
-    scaling.init_scaling(root)
-    theme.init_style(root)
-    root.geometry("600x400")
-    root.update()
+    try:
+        scaling.init_scaling(root)
+        theme.init_style(root)
+        root.geometry("600x400")
+        root.update()
+        problems = _dialog_problems(root)
+    finally:
+        _cancel_afters(root)
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
+    for problem in problems:
+        print(f"  [dialogs] {problem}")
+    print(f"  [dialogs] {'OK' if not problems else f'{len(problems)} problem(s)'}")
+    return not problems
+
+
+def _dialog_problems(root):
+    from beantester.i18n import T
     problems = []
-    undelivered = {key for _l, _o, keys, _e, _f in DIALOG_CASES for key in keys
-                   if not key.startswith("type:") and not _delivers(root, key)}
+    pressed = sorted({key for _l, _o, keys, _e, _f in DIALOG_CASES for key in keys
+                      if not key.startswith("type:")})
+    delivered = {key: _delivers(root, key) for key in pressed}      # each asked once
+    unasked = sorted(key for key, answer in delivered.items() if answer is None)
+    if unasked:
+        problems.append(f"the check never held the keyboard focus to ask about "
+                        f"{', '.join(unasked)}, so the cases that press it were not measured")
+    undelivered = {key for key, answer in delivered.items() if answer is not True}
+    required = sorted(undelivered.difference(DIALOG_OPTIONAL_KEYS, unasked))
+    if required:
+        problems.append(f"this Tk delivers no generated {', '.join(required)}, so the "
+                        f"cases that press it were not measured")
     measured = 0
     for label, opener, keys, expected, first in DIALOG_CASES:
         missing = undelivered.intersection(keys)
@@ -779,15 +849,7 @@ def check_dialogs():
                             f"expected {want}")
     if not measured:
         problems.append("no case could be measured: this Tk delivers none of the keys")
-    for problem in problems:
-        print(f"  [dialogs] {problem}")
-    print(f"  [dialogs] {'OK' if not problems else f'{len(problems)} problem(s)'}")
-    _cancel_afters(root)
-    try:
-        root.destroy()
-    except tk.TclError:
-        pass
-    return not problems
+    return problems
 
 
 def main(argv):

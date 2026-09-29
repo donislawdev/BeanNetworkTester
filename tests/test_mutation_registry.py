@@ -3995,6 +3995,14 @@ MUTATIONS = [
         "new": "        [sys.executable, os.path.abspath(__file__), \"--lang\"]).returncode",
         "test": "test_the_render_check_presses_the_dialogs_keys_on_real_tk",
     },
+    {
+        # Review of #218: with Tab excused, the check passed on Escape alone.
+        "label": "render check: a Tk that cannot deliver Tab passes the dialogs",
+        "file": "tools/ci_gui_render.py",
+        "old": 'DIALOG_OPTIONAL_KEYS = ("<KP_Enter>",)',
+        "new": 'DIALOG_OPTIONAL_KEYS = ("<KP_Enter>", "<Tab>", "<Return>")',
+        "test": "test_the_render_check_presses_the_dialogs_keys_on_real_tk",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

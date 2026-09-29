@@ -172,3 +172,12 @@ def test_the_render_check_presses_the_dialogs_keys_on_real_tk():
     check("the review's case is measured: Tab to No, then Enter, answers No",
           (("<Tab>", "<Return>"), False) in keys_and_answers, f"({keys_and_answers})")
     check("and the keypad's Enter", any("<KP_Enter>" in keys for keys, _a in keys_and_answers))
+    # Only the keypad's Enter may go unmeasured: a Tk that cannot deliver Tab or
+    # Return measures nothing that matters, and has to fail rather than pass on
+    # the Escape case alone (review of #218).
+    optional = next(ast.literal_eval(node.value) for node in module.body
+                    if isinstance(node, ast.Assign)
+                    and any(getattr(t, "id", None) == "DIALOG_OPTIONAL_KEYS"
+                            for t in node.targets))
+    check("only the keypad's Enter may be skipped", optional == ("<KP_Enter>",),
+          f"({optional})")
