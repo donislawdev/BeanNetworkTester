@@ -17,7 +17,7 @@ from beantester.presets import (PRESET_DEFAULTS, PRESETS, SETTING_TO_PRESET,
                                 preset_to_settings, settings_to_preset)
 from beantester.settings import (DEFAULT_SETTINGS, settings_from_raw,
                                  validate_ranges)
-from beantester.validators import parse_number, parse_seed
+from beantester.validators import number_or_zero, parse_number, parse_seed
 from fakes import check
 
 
@@ -38,6 +38,23 @@ def test_parse_number_enforces_bounds():
     with pytest.raises(ValueError):
         parse_number("-1", "fields.latency", (0, 600000))
     check("number: NaN/inf rejected", True)
+
+
+def test_number_or_zero_reads_what_parse_number_reads_and_zero_where_it_refuses():
+    """What the preview strip reads and what the engine gets are ONE rule.
+
+    Two copies of the rule is how "2,5" came to be a 2.5% loss in the engine and
+    "no impairment" in the strip (external review P1-7). The comma is a decimal
+    separator and thousands are never grouped (owner decision D-3), so "10,000"
+    is ten - in both readings, since they can no longer differ.
+    """
+    for text in ("2,5", "10,000", " 150,5 ", "0,5", "12.5", 7, 2.5, "-1"):
+        assert number_or_zero(text) == parse_number(text), text
+    assert number_or_zero("10,000") == 10.0
+    for refused in ("inf", "-inf", "nan", "1e400", "abc", "1,000,000", "", None):
+        with pytest.raises(ValueError):
+            parse_number(refused)
+        assert number_or_zero(refused) == 0.0, refused
     with pytest.raises(ValueError):
         parse_number("inf", "fields.loss", (0, 100))
 

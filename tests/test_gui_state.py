@@ -158,6 +158,44 @@ def test_connection_row_feeds_the_targeting_fields():
     """)
 
 
+def test_a_row_action_and_a_rebuild_keep_a_number_as_it_was_typed():
+    """"2,5" stays "2,5"; it used to come back as "0" (external review P1-7).
+
+    Every road that re-reads the form hands its TEXT back to ``form.set_values``
+    - a row action from a table, a language switch, "Reset layout" - and that
+    formatted the text as a number: ``float("2,5")`` fails, so a loss the engine
+    accepts as 2.5% was replaced by 0, and the next Apply sent 0. "inf" raised
+    there instead, halfway: the target was written, while the dirty flag and the
+    log line never came (NOWE-3-3).
+
+    A value from a file is a number, and is still shown as one.
+    """
+    run_gui("""
+        app.vars["loss"].set("2,5")
+        app.vars["latency"].set("150,5")
+        app.set_target_expression("chrome.exe")
+        assert (app.vars["loss"].get(), app.vars["latency"].get()) == ("2,5", "150,5")
+        assert app._settings_from_widgets()["loss"] == 2.5
+
+        app.lang_var.set("English")
+        app._switch_language()                 # rebuilds the form from its own text
+        assert app.vars["loss"].get() == "2,5", app.vars["loss"].get()
+
+        app.vars["loss"].set("inf")
+        app._form_changed = False
+        app.set_target_expression("firefox.exe")
+        app._logview.drain()
+        assert app._form_changed, "the row action stopped before on_form_changed"
+        assert any("firefox.exe" in line for line in app._log_lines), app._log_lines[-3:]
+        assert app.vars["loss"].get() == "inf"
+        app._refresh_summary()                 # used to raise OverflowError
+        assert "firefox.exe" in app._summary_text, app._summary_text
+
+        app._settings_to_widgets(dict(bnt.DEFAULT_SETTINGS, loss=2.5, latency=100.0))
+        assert (app.vars["loss"].get(), app.vars["latency"].get()) == ("2.5", "100")
+    """)
+
+
 def test_a_row_action_fills_the_form_and_does_not_reach_a_running_engine():
     """Convention 15 for the Connections context menu: nothing applies itself.
 

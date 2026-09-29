@@ -5,8 +5,38 @@ place, raises a *translated* ``ValueError`` (keys ``errors.*``) and never
 depends on tkinter. The GUI shows the message under the field, the CLI turns
 it into ``error: ...`` and the config loader into ``errors.bad_config_value``.
 """
+import math
+
 from .i18n import field_name, translate
 from .utils import number_string
+
+
+def _decimal(value):
+    """A finite number read from user text, decimal comma included - or None.
+
+    The one place the comma rule lives (owner decision D-3): ``"2,5"`` is 2.5 and
+    ``"10,000"`` is ten, because the comma is a decimal separator and thousands
+    are never grouped. ``parse_number`` refuses on None, ``number_or_zero`` reads
+    it as zero; two copies of the rule is how the preview strip came to read a
+    value the engine accepted as no value at all (external review P1-7).
+    """
+    text = str("" if value is None else value).strip().replace(",", ".")
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def number_or_zero(value):
+    """``value`` read exactly as ``parse_number`` reads it, or 0.0 where it refuses.
+
+    For text that DESCRIBES the form instead of validating it - the preview
+    strip - which has to say what the engine will get. A field it refuses is 0
+    here, and the field itself is the one that says why.
+    """
+    number = _decimal(value)
+    return 0.0 if number is None else number
 
 
 def parse_number(value, field_key=None, bounds=None, lang=None):
@@ -19,12 +49,8 @@ def parse_number(value, field_key=None, bounds=None, lang=None):
     # The label carries a colon for the form ("Latency:"); a sentence naming the
     # field must not (`Field 'Latency:' must be...`). One place strips it.
     name = field_name(field_key, lang) if field_key else ""
-    text = str("" if value is None else value).strip().replace(",", ".")
-    try:
-        number = float(text)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(translate("errors.field_number", lang, name=name)) from exc
-    if number != number or number in (float("inf"), float("-inf")):   # NaN / inf
+    number = _decimal(value)
+    if number is None:                  # not a number, or NaN / infinity
         raise ValueError(translate("errors.field_number", lang, name=name))
     if bounds:
         low, high = bounds

@@ -16,6 +16,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A number typed with a comma now counts everywhere.** A loss of "2,5" reached the engine as
+  2.5%, but the line describing the settings said "no impairments". Blocking an address from a
+  table, switching the language or "Reset window layout" turned the field into "0", so the
+  next "Apply changes" sent 0. Numbers now stay exactly as you typed them. The comma is the
+  decimal point, so "10,000" is ten. "inf" in a number field no longer stops a table action
+  halfway.
+
 - **A config file's seed no longer blocks START.** A seed loaded from a file showed as "42.0",
   which the Seed field refuses, so START stayed blocked until the field was edited by hand.
 

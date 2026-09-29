@@ -2,12 +2,13 @@
 from .core import burst_loss_params
 from .i18n import translate
 from .settings import DEFAULT_SETTINGS, parse_schedule, setting_expression
-from .utils import number_string, to_number
+from .utils import number_string
+from .validators import number_or_zero
 
 
 def _plain_parts(g, tr, num, pairs):
     """One phrase per ``(key, phrase)`` pair whose value is not zero."""
-    return [tr(phrase, v=num(key)) for key, phrase in pairs if to_number(g(key))]
+    return [tr(phrase, v=num(key)) for key, phrase in pairs if number_or_zero(g(key))]
 
 
 def _loss_parts(g, tr, num, key):
@@ -20,11 +21,11 @@ def _loss_parts(g, tr, num, key):
     the strip cannot claim runs the engine is not producing - at 100% loss, for
     one, there are none.
     """
-    if not to_number(g(key)):
+    if not number_or_zero(g(key)):
         return []
     parts = [tr("summary.loss", v=num(key))]
-    if burst_loss_params(to_number(g(key)) / 100.0,
-                         to_number(g("loss_burst"))) is not None:
+    if burst_loss_params(number_or_zero(g(key)) / 100.0,
+                         number_or_zero(g("loss_burst"))) is not None:
         parts.append(tr("summary.loss_burst", v=num("loss_burst")))
     return parts
 
@@ -51,7 +52,7 @@ def _upload_parts(g, tr, num):
              + _loss_parts(g, tr, num, "loss_up")
              + _plain_parts(g, tr, num, (("corrupt_up", "summary.corrupt"),
                                          ("dup_up", "summary.dup"))))
-    if to_number(g("spike_prob_up")) and to_number(g("spike_ms_up")):
+    if number_or_zero(g("spike_prob_up")) and number_or_zero(g("spike_ms_up")):
         inner.append(tr("summary.spikes", ms=num("spike_ms_up"),
                         p=num("spike_prob_up")))
     if not inner:
@@ -71,13 +72,16 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     # number_string, NOT "%.0f": rounding to whole units turned "0.5% loss" into
     # "0% loss" (and 0.9 KB/s into 1 KB/s) - the preview strip contradicted the
     # very fields it was describing.
-    num = lambda k: number_string(g(k))
+    # Every number here - this one and each test below - is read through
+    # number_or_zero, the reading the engine gets: "2,5" is 2.5 there, and
+    # float() made it "no impairment" in the strip (external review P1-7).
+    num = lambda k: number_string(number_or_zero(g(k)))
     parts = []
-    if to_number(g("latency")):
+    if number_or_zero(g("latency")):
         parts.append(tr("summary.latency", v=num("latency")))
-    if to_number(g("jitter")):
+    if number_or_zero(g("jitter")):
         parts.append(tr("summary.jitter", v=num("jitter")))
-    if to_number(g("loss")):
+    if number_or_zero(g("loss")):
         parts.append(tr("summary.loss", v=num("loss")))
         # Same loss figure, very different link: the run length is asked of the
         # function that DECIDES it rather than compared against a threshold here,
@@ -87,12 +91,12 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         # two branches out lowers the ceiling onto `decide` - which leaves the
         # "add an impairment" recipe no room - and doubles COMPLEX_NEAR_CEILING
         # (measured 2026-09-29: 4 -> 8). Both are the owner's call, not a tidy-up's.
-        if burst_loss_params(to_number(g("loss")) / 100.0,
-                             to_number(g("loss_burst"))) is not None:
+        if burst_loss_params(number_or_zero(g("loss")) / 100.0,
+                             number_or_zero(g("loss_burst"))) is not None:
             parts.append(tr("summary.loss_burst", v=num("loss_burst")))
-    if to_number(g("corrupt")):
+    if number_or_zero(g("corrupt")):
         parts.append(tr("summary.corrupt", v=num("corrupt")))
-    if to_number(g("dup")):
+    if number_or_zero(g("dup")):
         parts.append(tr("summary.dup", v=num("dup")))
     sched = str(g("rate_schedule")).strip()
     scheduled = False
@@ -105,24 +109,24 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     # printing "download <= 256 KB/s" next to "variable throughput" described a
     # limit the engine was not applying
     if not scheduled:
-        if to_number(g("down")):
+        if number_or_zero(g("down")):
             parts.append(tr("summary.down", v=num("down")))
-        if to_number(g("up")):
+        if number_or_zero(g("up")):
             parts.append(tr("summary.up", v=num("up")))
-    if to_number(g("spike_prob")) and to_number(g("spike_ms")):
+    if number_or_zero(g("spike_prob")) and number_or_zero(g("spike_ms")):
         parts.append(tr("summary.spikes", ms=num("spike_ms"), p=num("spike_prob")))
     # Everything named so far describes DOWNLOADS once this is on, so the upload
     # half is said right after them rather than at the end among the switches.
     parts += _upload_parts(g, tr, num)
-    if to_number(g("syn_drop")):
+    if number_or_zero(g("syn_drop")):
         parts.append(tr("summary.syn", v=num("syn_drop")))
-    if to_number(g("max_size")):
+    if number_or_zero(g("max_size")):
         parts.append(tr("summary.mtu", v=num("max_size")))
-    if to_number(g("nat_timeout")):
+    if number_or_zero(g("nat_timeout")):
         parts.append(tr("summary.nat", v=num("nat_timeout")))
-    if to_number(g("rst_prob")):
+    if number_or_zero(g("rst_prob")):
         parts.append(tr("summary.rst", v=num("rst_prob")))
-    if to_number(g("flap_period")) and to_number(g("flap_down")):
+    if number_or_zero(g("flap_period")) and number_or_zero(g("flap_down")):
         parts.append(tr("summary.flap", v=num("flap_period")))
     # The plain on/off switches, as a table rather than four identical branches.
     # Each one adds a fixed phrase when it is on and nothing when it is off, so
