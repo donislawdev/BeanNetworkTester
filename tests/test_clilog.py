@@ -144,6 +144,50 @@ def test_writing_to_a_dead_stream_is_survived():
     check("writing to a dead stream does not raise", True)
 
 
+# --- a code page that cannot hold every character ---------------------------- #
+def _strict_cp1252():
+    """What stdout redirected to a file is on a Windows CI runner."""
+    raw = io.BytesIO()
+    return raw, io.TextIOWrapper(raw, encoding="cp1252", errors="strict", newline="\n")
+
+
+def test_a_line_the_code_page_cannot_hold_arrives_escaped_not_lost():
+    """External review P1-6: the whole line vanished and the run still said 0.
+
+    ``UnicodeEncodeError`` IS a ``ValueError``, and ``_write`` swallowed that
+    class for closed streams - so a Cyrillic folder in ``--doctor``'s "user
+    files:" line, or a Chinese process name in ``--log-conns``, took the line
+    with it, silently.
+    """
+    raw, out = _strict_cp1252()
+    _, err = _strict_cp1252()
+    log = CliLog(fmt=TEXT, out=out, err=err)
+    log.data({}, "user files: D:/\u0414\u043c\u0438\u0442\u0440\u0438\u0439/data")
+    log.data({}, "next line")
+    out.flush()
+    lines = raw.getvalue().decode("cp1252").splitlines()
+    check("the line is there, the character escaped",
+          lines == ["user files: D:/\\u0414\\u043c\\u0438\\u0442\\u0440\\u0438\\u0439/data",
+                    "next line"], f"({lines!r})")
+
+
+def test_a_json_record_is_ascii_so_no_code_page_can_drop_it():
+    """``--format json`` lost the WHOLE record the same way (0 bytes, exit 0).
+
+    ASCII on the wire, and ``json.loads`` gives back the exact text - a
+    character outside the BMP too, which the text fallback's escape could not
+    carry (``\\U0001f600`` is not JSON).
+    """
+    raw, out = _strict_cp1252()
+    log = CliLog(fmt=JSON, out=out, err=io.StringIO())
+    record = {"event": "config", "target": "\u5fae\u4fe1.exe", "note": "\U0001f600 \u0142"}
+    log.data(record, "ignored")
+    out.flush()
+    lines = raw.getvalue().decode("ascii").splitlines()
+    check("one record arrived", len(lines) == 1, f"({lines!r})")
+    check("and it reads back unchanged", json.loads(lines[0]) == record, f"({lines!r})")
+
+
 # --- level_from_args --------------------------------------------------------- #
 def test_level_from_args_precedence():
     check("explicit --log-level wins over everything",
