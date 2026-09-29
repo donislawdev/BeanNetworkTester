@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Enter in a question window presses the button you are on.** With the
+  keyboard moved to "No", Enter still answered "Yes" - for example when closing
+  the window during a session or unloading the driver, and Enter on "Cancel" saved
+  a profile name anyway. The default button is highlighted when the window opens,
+  and the Enter key on the number pad works too.
+
 - **The command that repeats a session now repeats all of it.** It now names the
   scenario file and `--loop`, and the report saved with `--repro-out` keeps
   `--simulate`, so a simulated run no longer turns into a real one when pasted. In the

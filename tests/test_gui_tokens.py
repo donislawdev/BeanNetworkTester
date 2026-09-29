@@ -10,7 +10,8 @@ This guard covers the files that FOLLOW the rule today - the Tools tab, which wa
 written against the tokens in ``gui/theme.py`` (``SPACE``, ``CHARS``, ``space()``)
 from its first line. It is a glob, not a list: a new tool panel is covered the day
 it is created. The older pages are not in scope; they move over in their own change
-and join the glob then.
+and join the glob then. One rule is already kept everywhere - no hex colour outside
+``theme.py`` - so that one alone holds the whole ``beantester/gui`` package.
 
 What counts as raw, each with the reason:
 * a hex colour string - colours are ``theme.py`` constants and ttk styles;
@@ -64,15 +65,21 @@ def _keys_handed_to_t(tree):
             and node.args and isinstance(node.args[0], ast.Constant)}
 
 
+def colours(source):
+    """Every hex colour string in ``source`` outside a docstring, as ``(line, value)``."""
+    tree = ast.parse(source)
+    prose = _docstrings(tree)
+    return [(node.lineno, node.value) for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in prose and HEX.match(node.value)]
+
+
 def violations(source):
     """Every raw value in ``source``, as ``(line, what)``. Exposed for the canary."""
     tree = ast.parse(source)
-    prose, keys = _docstrings(tree), _keys_handed_to_t(tree)
-    found = []
+    keys = _keys_handed_to_t(tree)
+    found = [(line, f"hex colour {value!r}") for line, value in colours(source)]
     for node in ast.walk(tree):
-        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
-                and id(node) not in prose and HEX.match(node.value)):
-            found.append((node.lineno, f"hex colour {node.value!r}"))
         if isinstance(node, ast.Call) and _callee(node) == "scaled":
             found.append((node.lineno, "scaled() - ask space(<role>) instead"))
         if not isinstance(node, ast.keyword) or node.arg is None:
@@ -110,6 +117,29 @@ def test_the_tools_tab_names_no_raw_colour_pixel_or_text():
         if found:
             offenders[os.path.relpath(path, ROOT)] = found
     check("no hex colour, scaled(), numeric spacing, literal text or font in a view",
+          not offenders, f"({offenders})")
+
+
+# The one rule above that the WHOLE GUI already keeps, so it is enforced on all of
+# it: a colour is a ``theme.py`` token. Measured 2026-09-29: outside theme.py the
+# only literals were one in gui/dialogs.py (a copy of ``CAUTION``, which the
+# warning dialog now names; external review P2-19) and ``icon.py``'s, which are the
+# program icon's own drawing, not a view's paint.
+COLOUR_HOMES = ("beantester/gui/theme.py", "beantester/gui/icon.py")
+
+
+def test_no_gui_module_but_the_theme_names_a_colour():
+    files = [path for path in glob.glob(os.path.join(ROOT, "beantester", "gui", "**", "*.py"),
+                                        recursive=True)
+             if os.path.relpath(path, ROOT).replace(os.sep, "/") not in COLOUR_HOMES]
+    check("the scan found the GUI package", len(files) >= 30, f"({len(files)} files)")
+    offenders = {}
+    for path in sorted(files):
+        with open(path, encoding="utf-8") as handle:
+            found = colours(handle.read())
+        if found:
+            offenders[os.path.relpath(path, ROOT)] = found
+    check("no hex colour outside gui/theme.py (and the icon's drawing)",
           not offenders, f"({offenders})")
 
 
