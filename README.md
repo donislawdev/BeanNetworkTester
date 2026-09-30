@@ -1520,7 +1520,9 @@ seeded).
 - **If the program under test restarts, aim by NAME, not by process id.** Measured: a target that
   exits and comes back under a new process id is picked up again by itself, and the restart costs
   exactly one connection - the one it opens before it owns any socket. Aiming at a **process id**
-  never recovers, because that id no longer exists: everything after the restart is left untouched.
+  never recovers, because that id named the process that exited: everything after the restart is
+  left untouched. A program that Windows later gives the same number is left untouched too - a
+  process id only ever means the process that had it when you set the target.
   From the command line the run says so when it happens, and ends with how much of the captured
   traffic was actually in scope. In the window it is the red note under the process field.
 - **An exclusion on its own also covers everything the tool cannot identify.** `!chrome` in the

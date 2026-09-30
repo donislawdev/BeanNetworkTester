@@ -561,6 +561,10 @@ def _process_table():
     return native if native is not None else _psutil_process_table()
 
 
+# Two start times closer than this describe the same moment (see _looks_recycled).
+_SAME_START_S = 0.001
+
+
 def _looks_recycled(current, cached):
     """True only when we can PROVE the PID now belongs to a different process.
 
@@ -578,7 +582,30 @@ def _looks_recycled(current, cached):
     """
     if current is None or cached is None:
         return False
-    return abs(current - cached) >= 0.001
+    return abs(current - cached) >= _SAME_START_S
+
+
+def _snapshot_entries(cached, snapshot, now):
+    """What a whole-system snapshot may write into ``PortTable._info``.
+
+    Every pid the cache lacks, and every entry it holds WITHOUT a start time. An
+    entry that carries one was verified (read through the process's own handle)
+    and stays, its age untouched, unless the snapshot shows a DIFFERENT process
+    under that number: another name, or a start time that proves it.
+
+    Overwriting used to strip the very fact the recycle check runs on: the
+    toolhelp snapshot carries no start time, so a verified ``chrome.exe`` became
+    unverifiable and got another 30 s, and once its number was recycled
+    ``name_of`` kept answering ``chrome.exe`` (external review P2-9). The name test
+    is what still catches a recycle onto a process that cannot be opened.
+    """
+    fresh = {}
+    for pid, (name, ppid, created) in snapshot.items():
+        old = cached.get(pid)
+        if (old is None or old[2] is None or old[0].lower() != name.lower()
+                or _looks_recycled(created, old[2])):
+            fresh[pid] = (name, ppid, created, now)
+    return fresh
 
 
 # -- one process, read through ONE handle --------------------------------------- #
@@ -1120,8 +1147,7 @@ class PortTable:
                 table = _process_table()
                 with self._lock:
                     self._bulk_at = now
-                    for other, (name, ppid, created) in table.items():
-                        self._info[other] = (name, ppid, created, now)
+                    self._info.update(_snapshot_entries(self._info, table, now))
                     entry = self._info.get(pid)
                 return (entry[0], entry[1]) if entry else ("", None)
             with self._lock:
@@ -1133,6 +1159,29 @@ class PortTable:
 
     def name_of(self, pid, cheap=False):
         return self.info(pid, cheap=cheap)[0]
+
+    def _stamp(self, pid):
+        """The start time the cache holds for ``pid``. Never asks the OS."""
+        if pid is None:
+            return None
+        with self._lock:
+            entry = self._info.get(int(pid))
+        return entry[2] if entry else None
+
+    def created_of(self, pid):
+        """When the process holding ``pid`` NOW started (epoch seconds), or ``None``.
+
+        Verified first (``info``), so an entry about the previous holder of a
+        recycled number is dropped, not answered. Targeting asks it only for a pid
+        the user typed as a number (``ProcessTargeting._as_named``), on the
+        resolver thread - never the capture one. ``None`` is "cannot tell": the
+        process will not open and psutil cannot say either.
+        """
+        if pid is None:
+            return None
+        self.info(pid)
+        created = self._stamp(pid)
+        return created if created is not None else _psutil_created(pid)
 
     def warm_names(self):
         """Resolve (and verify) the name of every PID that currently owns a socket.
@@ -1163,17 +1212,34 @@ class PortTable:
             self.info(pid)
 
     def ancestors(self, pid, depth=8):
-        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe)."""
+        """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe).
+
+        Stops at a "parent" that started AFTER its child. A ppid is only the number
+        the parent had, and Windows hands a freed number to a new process: a
+        launcher long gone, its number taken by a new ``chrome.exe``, made a target
+        of ``chrome`` impair the launcher's children (external review P2-9).
+
+        Only when BOTH start times are in the cache already, which ``info`` has
+        just filled: this walk runs for every socket owner the expression does not
+        name, and a stamp asked of the OS costs ~5.7 ms a pid where ``OpenProcess``
+        is denied. An unknown time never breaks the chain - Chrome's hardened
+        children resolve only through the snapshot, which carries none.
+        """
         chain, seen = [], {int(pid)} if pid is not None else set()
         current = self.info(pid)[1] if pid is not None else None
+        born = self._stamp(pid)
         while current and len(chain) < depth:
             current = int(current)
             if current in seen or current <= 0:
                 break
             seen.add(current)
             name, parent = self.info(current)
+            parent_born = self._stamp(current)
+            if (parent_born is not None and born is not None
+                    and parent_born - born >= _SAME_START_S):
+                break
             chain.append((current, name))
-            current = parent
+            current, born = parent, parent_born
         return chain
 
     def process_for_port(self, port, now=None, allow_refresh=True):

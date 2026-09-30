@@ -206,6 +206,23 @@ def test_process_pids_ranges_and_comparisons():
           m.matches(1, "chrome.exe") and m.matches(2500, "firefox.exe"))
 
 
+def test_a_pid_written_as_a_bare_number_names_a_process():
+    """`1234` names the process the user saw; `1000-2000` and `>1000` are about
+    numbers. Targeting keeps the two apart (review P2-9), so the matcher has to
+    say which terms are which - by the parser's own reading of each term."""
+    m = _proc("1234, !77, ! 88, 0042, 1000-2000, >5, <=9, chrome, re:12, 12*, !re:3")
+    check("literals, excluded or not, and nothing else",
+          m.literal_pids == {1234, 77, 88, 42}, f"({sorted(m.literal_pids)})")
+    check("none where none is written",
+          _proc("chrome, 100-200, >5").literal_pids == frozenset())
+    check("an empty field has none", _proc("").literal_pids == frozenset())
+    for pid in m.literal_pids:
+        term = next(t for t in m.terms if t.text.lstrip("!").strip().lstrip("0") ==
+                    str(pid))
+        check(f"{pid} is a term the parser reads as that very pid",
+              term.matches(m._context(pid, "")) and not term.matches(m._context(pid + 1, "")))
+
+
 def test_process_regex():
     m = _proc("re:^fire")
     check("regex matches the process name", m.matches(1, "firefox.exe"))
