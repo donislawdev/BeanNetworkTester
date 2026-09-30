@@ -20,6 +20,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **`--cleanup-driver` and "Clean up the driver" say what really happened.** Every line
+  said "stopped", also when Windows refused the stop, for example while another program
+  was still using the driver. Each line now says whether the WinDivert service stopped,
+  is still unloading, was not running, or could not be stopped and why. The exit code of
+  `--cleanup-driver` is still `0` in every case, so read the lines.
+
+- **Closing the program no longer stops another program's WinDivert driver.** On exit it
+  stopped every WinDivert service it knew by name, including `WinDivert1.4` and
+  `WinDivert1.1`, which belong to other programs. It now unloads only its own `WinDivert`
+  service, and leaves it loaded if another copy of this program has started a session in
+  the meantime. `--cleanup-driver` still cleans up all of them.
+
 - **A running target with no connection open is no longer called "not running".** The red
   note under Target process and the log line at START said that no running process
   matched, which was false for a program idle between two connections. They now say that

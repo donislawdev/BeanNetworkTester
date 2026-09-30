@@ -1750,10 +1750,10 @@ MUTATIONS = [
     {
         "label": "driver: a scheduled removal is reported as a failure again",
         "file": "beantester/driver.py",
-        "old": "            if err == _ERROR_SERVICE_MARKED_FOR_DELETE:\n"
-               "                return f\"{name}: stopped (removal was already scheduled)\"",
-        "new": "            if False:\n"
-               "                return f\"{name}: stopped (removal was already scheduled)\"",
+        "old": "    if err == _ERROR_SERVICE_MARKED_FOR_DELETE:\n"
+               "        return f\"{stop} (removal was already scheduled)\"",
+        "new": "    if False:\n"
+               "        return f\"{stop} (removal was already scheduled)\"",
         "test": "test_a_removal_windivert_already_scheduled_is_not_reported_as_a_failure",
     },
     {
@@ -2977,8 +2977,8 @@ MUTATIONS = [
         # A START pressed during the cleanup opens its handle while the driver stops.
         "label": "driver: a window's cleanup runs outside the claim",
         "file": "beantester/driver.py",
-        "old": "    with _CLAIM:\n        return _cleanup_claimed(release_own, opens_seen)",
-        "new": "    if True:\n        return _cleanup_claimed(release_own, opens_seen)",
+        "old": "    with _CLAIM:\n        return _cleanup_claimed(release_own, opens_seen, on_exit)",
+        "new": "    if True:\n        return _cleanup_claimed(release_own, opens_seen, on_exit)",
         "test": "test_a_window_cleanup_and_a_start_hold_one_claim",
     },
     {
@@ -3051,6 +3051,43 @@ MUTATIONS = [
         "old": 'checks.append(("driver queue", "ok",',
         "new": 'checks.append(("driver queues", "ok",',
         "test": "test_every_check_doctor_can_give_has_a_name_in_every_language",
+    },
+    {
+        # External review P2-22: every line began "stopped", whatever STOP did.
+        "label": "driver: the result of the STOP is thrown away",
+        "file": "beantester/driver.py",
+        "old": "            stop = _stop_service(api, handle)\n",
+        "new": "            _stop_service(api, handle)\n            stop = \"stopped\"\n",
+        "test": "test_a_stop_that_did_not_happen_is_not_reported_as_stopped",
+    },
+    {
+        "label": "driver: a driver still unloading reads as stopped",
+        "file": "beantester/driver.py",
+        "old": '        return "stop pending, it unloads when the last program using it closes"\n',
+        "new": '        return "stopped"\n',
+        "test": "test_a_stop_that_did_not_happen_is_not_reported_as_stopped",
+    },
+    {
+        # External review P2-23: every exit stopped every WinDivert service by name.
+        "label": "driver: the exit path stops another program's WinDivert service",
+        "file": "beantester/driver.py",
+        "old": "        drivers = {n: s for n, s in drivers.items() if n == OWN_SERVICE}\n",
+        "new": "        pass\n",
+        "test": "test_the_exit_path_leaves_another_programs_windivert_service_alone",
+    },
+    {
+        "label": "driver: the exit path warns about a new instance and stops its driver",
+        "file": "beantester/driver.py",
+        "old": "    if someone_else and on_exit:\n        return [_STAND_DOWN]\n",
+        "new": "",
+        "test": "test_the_exit_path_stands_down_for_an_instance_that_started_meanwhile",
+    },
+    {
+        "label": "driver: the exit path runs the cleanup somebody asks for",
+        "file": "beantester/driver.py",
+        "old": "        lines = cleanup_driver(on_exit=True)\n",
+        "new": "        lines = cleanup_driver()\n",
+        "test": "test_the_last_instance_out_still_unloads_the_driver",
     },
     {
         "label": "diagnostics: one broken report section takes the report down",
