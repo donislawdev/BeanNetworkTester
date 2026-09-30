@@ -757,6 +757,35 @@ def test_a_target_that_restarts_under_a_new_pid_is_picked_up_from_its_event():
     check("...and its connection is in scope", 5100 in targeting)
 
 
+def test_a_pid_typed_as_a_number_is_checked_through_the_live_map_too():
+    """A real session resolves against the watcher, so a start time has to reach
+    targeting through it - or a later holder of a pid typed as a number (review
+    P2-9) is judged by the number again, on the path that adopts it from its
+    first socket event."""
+    class _Stamped(_Names):
+        def __init__(self, names, created):
+            super().__init__(names)
+            self._created = dict(created)
+
+        def created_of(self, pid):
+            return self._created.get(pid)
+
+    later = time.time() + 3600                  # started after the target was set
+    watcher = SocketWatcher(names=_Stamped({1234: "innocent.exe"}, {1234: later}),
+                            source_factory=lambda: _Source([]))
+    targeting = ProcessTargeting(bnt.parse_target("1234"), table=watcher)
+    targeting.refresh()
+    watcher.apply(ev(CONNECT, 1234, 7000))
+    targeting.note_socket(7000, 1234)
+    check("the watcher hands the start time through", watcher.created_of(1234) == later,
+          f"({watcher.created_of(1234)})")
+    check("so the new process is not adopted by its number",
+          targeting.adopt_new_pids() is False and 7000 not in targeting,
+          f"({sorted(targeting.ports())})")
+    check("a name cache without start times cannot tell",
+          SocketWatcher(names=_Names({})).created_of(1234) is None)
+
+
 def test_a_process_already_running_when_the_session_starts_is_in_scope_at_once():
     """The other order, and the one a user hits most: the app is already open and
     THEN capture starts. Nothing announces those sockets - events only carry new

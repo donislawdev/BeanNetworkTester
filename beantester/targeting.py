@@ -32,7 +32,9 @@ So targeting is a live object instead:
 * a socket belongs to the target when its owning process **or any of its
   ancestors** matches the expression - so a PID (or a name) covers the whole
   process tree. An explicitly EXCLUDED process (``!chromedriver``) is never
-  pulled back in by its parent.
+  pulled back in by its parent. A pid typed as a number names the process that
+  held it when the target was set, never a later holder of that number
+  (``_as_named``).
 
 ``BeanCore.decide()`` keeps its ``local_port not in target_ports`` test: this
 class simply *is* the container it tests against (``__contains__``).
@@ -89,7 +91,7 @@ from . import portmap
 class ProcessTargeting:
     """The set of local ports owned by the processes matching an expression."""
 
-    def __init__(self, matcher, table=None, clock=time.monotonic):
+    def __init__(self, matcher, table=None, clock=time.monotonic, wall=time.time):
         # No interval/miss_interval here any more. They used to drive the rate
         # limiting inside __contains__; the pacing now lives entirely in
         # TargetResolver, and leaving dead knobs on the constructor would invite
@@ -98,6 +100,11 @@ class ProcessTargeting:
         self.expression = getattr(matcher, "raw", str(matcher))
         self.table = table if table is not None else portmap.default_table()
         self.clock = clock
+        # When this target was set, on the WALL clock: process start times are
+        # seconds since the epoch, so `clock` (monotonic) cannot be compared with
+        # them. Read ONCE - see `_as_named`.
+        self._set_at = wall()
+        self._literal_pids = frozenset(getattr(matcher, "literal_pids", ()))
         self._lock = threading.RLock()
         # A SECOND, deliberately tiny lock, held for microseconds and never across
         # anything that can block. `_lock` is held by refresh() for the whole walk
@@ -137,6 +144,39 @@ class ProcessTargeting:
         excluded = getattr(self.matcher, "excluded", None)
         return bool(excluded(pid, name)) if excluded else False
 
+    # A process named by its NUMBER must have existed when the target was set. The
+    # slack absorbs two clocks read a moment apart, not a real start.
+    LITERAL_PID_SLACK_S = 1.0
+
+    def _as_named(self, pid, table):
+        """``pid`` as the expression may see it, or ``None`` for "not the one named".
+
+        A pid the user typed as a NUMBER names the process that held it when the
+        target was set, not the number (external review P2-9). Windows hands a
+        freed pid to a new process after 19-36 s (measured), and matching the bare
+        number impaired whoever got it next, and that process's children. So a
+        literal pid whose current holder started after the target was set reaches
+        the expression as ``None``: no numeric term matches it, and a NAME term
+        still can (``1234, chrome``). A range or a comparison written next to it
+        (``1234, 1000-2000``) does not cover that number either while a newer
+        process holds it - decided, not overlooked.
+
+        A pid not written as a literal costs one frozenset lookup. "Cannot tell"
+        (no start time) keeps the old answer, as everywhere in ``portmap``: unknown
+        is not "somebody else". A clock set back during a session makes the target
+        look older than it is, which is exactly the old behaviour. And the moment
+        is this object's: ``engine.target_for`` reuses it while the text holds, so
+        a process that takes the number later stays a stranger across STOP and
+        START as well.
+        """
+        if pid not in self._literal_pids:
+            return pid
+        created_of = getattr(table, "created_of", None)
+        created = created_of(pid) if created_of is not None else None
+        if created is None or created <= self._set_at + self.LITERAL_PID_SLACK_S:
+            return pid
+        return None
+
     def _pid_matches(self, pid, name, table):
         """Does this pid belong to the target - itself, or through its tree?
 
@@ -146,13 +186,16 @@ class ProcessTargeting:
         (one path would impair a process the other does not).
 
         ``table`` is the caller's, read once for its whole pass (see ``set_table``).
+        Every pid the expression sees, the owner's own and each ancestor's, goes
+        through ``_as_named``; the tree is still walked by the real number.
         """
-        if self._matches(pid, name):
+        own = self._as_named(pid, table)
+        if self._matches(own, name):
             return True
-        if self._excluded(pid, name):
+        if self._excluded(own, name):
             return False          # an explicit "!" wins over an inherited match
         for ancestor_pid, ancestor_name in table.ancestors(pid):
-            if self._matches(ancestor_pid, ancestor_name):
+            if self._matches(self._as_named(ancestor_pid, table), ancestor_name):
                 return True
         return False
 
@@ -360,8 +403,10 @@ class ProcessTargeting:
         WinDivert, or the SOCKET handle could not open). Both expose the same read
         surface (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``, plus
         ``pid_for`` since ``owner_targeted`` exists - both real tables have always had
-        it, but it is part of the contract now), which is why the swap is a
-        one-line reference change. The resolved port set is left as
+        it, but it is part of the contract now - and ``created_of``, asked through
+        getattr: a table without it matches a pid typed as a number by the number
+        alone, see ``_as_named``), which is why the swap is a one-line reference
+        change. The resolved port set is left as
         it is until the next ``refresh()`` (the resolver runs those continuously), so
         the swap never blips the hot-path ``__contains__``.
 
@@ -426,10 +471,11 @@ class ProcessTargeting:
           therefore costs exactly ONE connection - the one it opens before it
           owns any socket - and then recovers on its own, with no restart of the
           session. That recovery belongs to the EXPRESSION, not to this code: by
-          NAME the new pid is matched by the next rebuild, by PID nothing can
-          match again, because the number the user typed no longer exists. Same
-          probe, targeting the pid, killed and restarted: **5 of 5** fresh
-          connections untouched.
+          NAME the new pid is matched by the next rebuild, by PID nothing matches
+          again, because the number the user typed named the process that exited.
+          Same probe, targeting the pid, killed and restarted: **5 of 5** fresh
+          connections untouched. Nor does a process that the system later hands
+          that number: it started after the target was set (``_as_named``).
 
           Closing the one-connection gap for the FIRST PACKET is not a tuning
           question, and that has not changed. The SOCKET event beats the SYN by

@@ -40,7 +40,8 @@
   <h2>Targeting a process by name survives its restart</h2>
   <p>Restart the application while a session is running and a target by <strong>name</strong> picks
   the new process up again. A target by <strong>process id</strong> cannot - the id belonged to the
-  process that exited. If your test restarts the thing under test, target it by name.</p>
+  process that exited. Another program that Windows later gives the same id is not affected either.
+  If your test restarts the thing under test, target it by name.</p>
 </section>
 
 <section>

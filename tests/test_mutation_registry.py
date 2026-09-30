@@ -851,7 +851,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 9         # make_gear_icon at 5, eight more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -5004,6 +5004,172 @@ MUTATIONS = [
         "old": "        if (now - self._tried) >= limit or not self._ports:\n",
         "new": "        if (now - self._last) >= limit or not self._ports:\n",
         "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
+    },
+    {
+        # P2-9: a pid typed as a number follows the NUMBER to its next holder.
+        "label": "targeting: a pid typed as a number matches whoever holds it now",
+        "file": "beantester/targeting.py",
+        "old": "        if created is None or created <= self._set_at + self.LITERAL_PID_SLACK_S:\n",
+        "new": "        if True:\n",
+        "test": "test_a_pid_typed_as_a_number_is_not_handed_to_its_next_holder",
+    },
+    {
+        # P2-9: "cannot tell" read as "somebody else" - the literal pid stops matching.
+        "label": "targeting: an unknown start time makes a literal pid a stranger",
+        "file": "beantester/targeting.py",
+        "old": "        if created is None or created <= self._set_at + self.LITERAL_PID_SLACK_S:\n",
+        "new": "        if created is not None and created <= self._set_at + self.LITERAL_PID_SLACK_S:\n",
+        "test": "test_what_the_identity_check_leaves_as_it_was",
+    },
+    {
+        # P2-9: judged against "now" - every running process is older than that.
+        "label": "targeting: a literal pid is judged against now, not the moment it was set",
+        "file": "beantester/targeting.py",
+        "old": "        if created is None or created <= self._set_at + self.LITERAL_PID_SLACK_S:\n",
+        "new": "        if created is None or created <= time.time() + self.LITERAL_PID_SLACK_S:\n",
+        "test": "test_the_moment_a_target_was_set_is_read_once",
+    },
+    {
+        # P2-9: no slack - two clocks read a moment apart disown the real target.
+        "label": "targeting: a process started a moment after the target was set is a stranger",
+        "file": "beantester/targeting.py",
+        "old": "        if created is None or created <= self._set_at + self.LITERAL_PID_SLACK_S:\n",
+        "new": "        if created is None or created <= self._set_at:\n",
+        "test": "test_the_moment_a_target_was_set_is_read_once",
+    },
+    {
+        # P2-9: `!1234` excludes the NUMBER, so the app's next process under it too.
+        "label": "targeting: an exclusion by pid follows the number",
+        "file": "beantester/targeting.py",
+        "old": "        if self._excluded(own, name):\n",
+        "new": "        if self._excluded(pid, name):\n",
+        "test": "test_a_pid_excluded_by_number_stays_with_the_process_it_named",
+    },
+    {
+        # P2-9: the next holder's CHILD is matched through its parent's number.
+        "label": "targeting: an ancestor typed as a number is matched by the number",
+        "file": "beantester/targeting.py",
+        "old": "            if self._matches(self._as_named(ancestor_pid, table), ancestor_name):\n",
+        "new": "            if self._matches(ancestor_pid, ancestor_name):\n",
+        "test": "test_a_pid_typed_as_a_number_is_not_handed_to_its_next_holder",
+    },
+    {
+        # P2-9: a range or a comparison is checked as if it named one process.
+        "label": "targeting: every pid is checked as if typed as a number",
+        "file": "beantester/targeting.py",
+        "old": "        if pid not in self._literal_pids:\n",
+        "new": "        if False:\n",
+        "test": "test_what_the_identity_check_leaves_as_it_was",
+    },
+    {
+        # P2-9: `!1234` is not known as a literal pid - its "!" hides the number.
+        "label": "matchers: an excluded pid is not a literal pid",
+        "file": "beantester/matchers.py",
+        "old": "        bodies = (_split_negation(term.text)[1] for term in self.terms)\n",
+        "new": "        bodies = (term.text for term in self.terms)\n",
+        "test": "test_a_pid_written_as_a_bare_number_names_a_process",
+    },
+    {
+        # P2-9: a new process under a dead parent's number is walked as its parent.
+        "label": "portmap: the ancestor walk goes on past a younger parent",
+        "file": "beantester/portmap.py",
+        "old": "                    and parent_born - born >= _SAME_START_S):\n",
+        "new": "                    and parent_born - born >= 1e18):\n",
+        "test": "test_a_parent_younger_than_its_child_is_not_its_parent",
+    },
+    {
+        # P2-9: "cannot tell" cuts the chain - Chrome's hardened children fall off.
+        "label": "portmap: an unknown start time breaks the ancestor walk",
+        "file": "beantester/portmap.py",
+        "old": ("            if (parent_born is not None and born is not None\n"
+                "                    and parent_born - born >= _SAME_START_S):\n"),
+        "new": ("            if (parent_born is None or born is None\n"
+                "                    or parent_born - born >= _SAME_START_S):\n"),
+        "test": "test_a_parent_younger_than_its_child_is_not_its_parent",
+    },
+    {
+        # P2-9: a stamp asked of the OS per ancestor (~5.7 ms a pid where denied).
+        "label": "portmap: the ancestor walk asks the OS for every start time",
+        "file": "beantester/portmap.py",
+        "old": "            parent_born = self._stamp(current)\n",
+        "new": "            parent_born = self.created_of(current)\n",
+        "test": "test_a_parent_younger_than_its_child_is_not_its_parent",
+    },
+    {
+        # P2-9: the cache's stamp for "no pid" raises - `ancestors(None)` with it.
+        "label": "portmap: the cached stamp of no pid raises",
+        "file": "beantester/portmap.py",
+        "old": ("        \"\"\"The start time the cache holds for ``pid``. Never asks the OS.\"\"\"\n"
+                "        if pid is None:\n"
+                "            return None\n"),
+        "new": "        \"\"\"The start time the cache holds for ``pid``. Never asks the OS.\"\"\"\n",
+        "test": "test_a_parent_younger_than_its_child_is_not_its_parent",
+    },
+    {
+        # P2-9: the snapshot writes over a verified entry and strips its stamp again.
+        "label": "portmap: a snapshot overwrites a verified entry",
+        "file": "beantester/portmap.py",
+        "old": ("        if (old is None or old[2] is None or old[0].lower() != name.lower()\n"
+                "                or _looks_recycled(created, old[2])):\n"),
+        "new": "        if True:\n",
+        "test": "test_a_snapshot_does_not_strip_a_verified_start_time",
+    },
+    {
+        # P2-9: a verified entry survives a snapshot naming ANOTHER process.
+        "label": "portmap: a snapshot keeps an entry under another name",
+        "file": "beantester/portmap.py",
+        "old": "        if (old is None or old[2] is None or old[0].lower() != name.lower()\n",
+        "new": "        if (old is None or old[2] is None or False\n",
+        "test": "test_a_snapshot_still_replaces_an_entry_about_another_process",
+    },
+    {
+        # P2-9: a verified entry survives a start time that proves another process.
+        "label": "portmap: a snapshot keeps an entry another start time disproves",
+        "file": "beantester/portmap.py",
+        "old": "                or _looks_recycled(created, old[2])):\n",
+        "new": "                or False):\n",
+        "test": "test_a_snapshot_still_replaces_an_entry_about_another_process",
+    },
+    {
+        # P2-9: an entry nobody verified is no longer refreshed by a snapshot.
+        "label": "portmap: a snapshot stops refreshing an unverified entry",
+        "file": "beantester/portmap.py",
+        "old": "        if (old is None or old[2] is None or old[0].lower() != name.lower()\n",
+        "new": "        if (old is None or old[0].lower() != name.lower()\n",
+        "test": "test_a_snapshot_still_replaces_an_entry_about_another_process",
+    },
+    {
+        # P2-9: "Chrome.exe" and "chrome.exe" taken for two processes.
+        "label": "portmap: a snapshot compares process names case by case",
+        "file": "beantester/portmap.py",
+        "old": "        if (old is None or old[2] is None or old[0].lower() != name.lower()\n",
+        "new": "        if (old is None or old[2] is None or old[0] != name\n",
+        "test": "test_a_snapshot_does_not_strip_a_verified_start_time",
+    },
+    {
+        # P2-9: the cache is read without verifying - the previous holder's stamp.
+        "label": "portmap: created_of answers without verifying the entry",
+        "file": "beantester/portmap.py",
+        "old": ("        self.info(pid)\n"
+                "        created = self._stamp(pid)\n"),
+        "new": "        created = self._stamp(pid)\n",
+        "test": "test_created_of_answers_for_the_process_holding_the_number_now",
+    },
+    {
+        # P2-9: an entry the snapshot wrote has no stamp, and nobody asks psutil.
+        "label": "portmap: created_of gives up on an entry without a stamp",
+        "file": "beantester/portmap.py",
+        "old": "        return created if created is not None else _psutil_created(pid)\n",
+        "new": "        return created\n",
+        "test": "test_created_of_answers_for_the_process_holding_the_number_now",
+    },
+    {
+        # P2-9: a real session resolves against the watcher, which keeps it back.
+        "label": "socketwatch: the live map keeps start times to itself",
+        "file": "beantester/socketwatch.py",
+        "old": "        return created_of(pid) if created_of is not None else None\n",
+        "new": "        return None\n",
+        "test": "test_a_pid_typed_as_a_number_is_checked_through_the_live_map_too",
     },
 ]
 

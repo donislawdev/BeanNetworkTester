@@ -49,8 +49,9 @@ What it is NOT
   :mod:`beantester.portmap`'s cache, composed in rather than duplicated: resolving
   a name is a psutil call and has nothing to do with how we learned the pid. That
   is why this class exposes the same read surface targeting already uses on
-  ``PortTable`` (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh``) - so it
-  can stand in as the table a ``ProcessTargeting`` resolves against.
+  ``PortTable`` (``snapshot`` / ``name_of`` / ``ancestors`` / ``refresh`` /
+  ``created_of``) - so it can stand in as the table a ``ProcessTargeting``
+  resolves against.
 * **Not the whole story alone.** Socket events can be missed under extreme load,
   and connections open BEFORE the handle are never announced. Both are covered by
   ``reconcile()`` (seeded from a ``portmap`` snapshot): the events are the live
@@ -331,6 +332,12 @@ class SocketWatcher:
 
     def ancestors(self, pid, depth=8):
         return self._names.ancestors(pid, depth=depth)
+
+    def created_of(self, pid):
+        # By getattr: the name caches the tests hand in predate it, and without an
+        # answer targeting keeps matching a pid typed as a number by the number.
+        created_of = getattr(self._names, "created_of", None)
+        return created_of(pid) if created_of is not None else None
 
     # -- lifecycle (driven by BeanEngine) -------------------------------------- #
     def start(self):

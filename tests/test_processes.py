@@ -2,6 +2,7 @@
 
 psutil is faked, so the tests run anywhere (the real lookup needs a live system).
 """
+import itertools
 import sys
 import threading
 import time
@@ -950,9 +951,9 @@ class _World:
         return table
 
 
-def _targeting_on(table, expr="myapp"):
+def _targeting_on(table, expr="myapp", **kw):
     from beantester.targeting import ProcessTargeting
-    return ProcessTargeting(parse_target(expr), table=table)
+    return ProcessTargeting(parse_target(expr), table=table, **kw)
 
 
 def test_a_target_restarting_onto_a_recycled_pid_is_still_impaired(monkeypatch):
@@ -1139,6 +1140,246 @@ def test_names_are_warmed_for_the_connection_log_without_a_target(monkeypatch):
     check("warming resolves every socket-owning pid", table._info.get(8100) is not None)
     check("so the capture thread's cheap read now answers",
           table.name_of(8100, cheap=True) == "app.exe")
+
+
+# -- a pid typed as a NUMBER names a process, not the number (review P2-9) ----- #
+#
+# Windows hands a freed pid to a new process after 19-36 s (measured with 300
+# processes). A target written as `1234` followed the NUMBER, so whoever got it
+# next was impaired, and so were that process's children. Start times here are
+# relative to the real clock: `time.time() + 3600` is a process that started
+# after the target was set.
+
+
+def test_a_pid_typed_as_a_number_is_not_handed_to_its_next_holder(monkeypatch):
+    world = _World()
+    table = world.install(monkeypatch)
+    now = time.time()
+    world.procs[1234] = ("target.exe", 1); world.created[1234] = now - 60
+    world.ports[5000] = 1234
+    targeting = _targeting_on(table, "1234")
+    targeting.refresh()
+    check("the target is in scope while it lives", targeting.ports() == {5000},
+          f"({sorted(targeting.ports())})")
+
+    # it exits; the number goes to an innocent process, which starts a child
+    world.procs = {1234: ("innocent.exe", 1), 2000: ("innocent-child.exe", 1234)}
+    world.created = {1234: now + 3600, 2000: now + 3601}
+    world.ports = {7000: 1234, 7001: 2000}
+    targeting.refresh()
+    check("the next holder of the number is not the target",
+          7000 not in targeting.ports(), f"({sorted(targeting.ports())})")
+    check("nor is its child", 7001 not in targeting.ports(),
+          f"({sorted(targeting.ports())})")
+    check("and no pid is taken for the target", targeting.pids() == set(),
+          f"({sorted(targeting.pids())})")
+
+    by_name = _targeting_on(table, "1234, innocent")
+    by_name.refresh()
+    check("a name written next to the number still catches it",
+          by_name.ports() == {7000, 7001}, f"({sorted(by_name.ports())})")
+
+
+def test_a_pid_excluded_by_number_stays_with_the_process_it_named(monkeypatch):
+    """`app, !1234` spares one child of the app, which the tree would pull in. A
+    new child of the same app that later gets the number is not that child."""
+    world = _World()
+    table = world.install(monkeypatch)
+    now = time.time()
+    world.procs = {1300: ("app.exe", 1), 1234: ("helper.exe", 1300)}
+    world.created = {1300: now - 120, 1234: now - 60}
+    world.ports = {5000: 1234, 5001: 1300}
+    targeting = _targeting_on(table, "app, !1234")
+    targeting.refresh()
+    check("the excluded child is left alone", targeting.ports() == {5001},
+          f"({sorted(targeting.ports())})")
+
+    # the helper exits, and a new child of the app gets its number
+    world.procs[1234] = ("worker.exe", 1300); world.created[1234] = now + 3600
+    world.ports = {5001: 1300, 7000: 1234}
+    targeting.refresh()
+    check("the exclusion went with the process it named", 7000 in targeting.ports(),
+          f"({sorted(targeting.ports())})")
+
+
+def test_a_pid_nobody_held_when_the_target_was_set_matches_nobody_later(monkeypatch):
+    """A typo, or a process that was already gone: the number names nobody, and
+    the first process to get it later must not become the target."""
+    world = _World()
+    table = world.install(monkeypatch)
+    targeting = _targeting_on(table, "4321")
+    targeting.refresh()
+    check("nothing to match yet", targeting.ports() == set(),
+          f"({sorted(targeting.ports())})")
+
+    world.procs[4321] = ("somebody.exe", 1); world.created[4321] = time.time() + 3600
+    world.ports[7002] = 4321
+    targeting.refresh()
+    check("the process that gets the number later is not the target",
+          targeting.ports() == set(), f"({sorted(targeting.ports())})")
+
+
+def test_what_the_identity_check_leaves_as_it_was(monkeypatch):
+    """Green before the fix as well: the mutations prove what each check guards."""
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {1234: ("myapp.exe", 1), 1500: ("late.exe", 1)}
+    world.created = {1500: time.time() + 3600}    # 1234: cannot tell when it started
+    world.ports = {7003: 1234, 7004: 1500}
+
+    unknown = _targeting_on(table, "1234")
+    unknown.refresh()
+    check("a pid whose start time cannot be told is matched as before",
+          unknown.ports() == {7003}, f"({sorted(unknown.ports())})")
+    for expr in ("1000-2000", ">1000"):
+        numbers = _targeting_on(table, expr)
+        numbers.refresh()
+        check(f"{expr!r} is about numbers, so a later process is in it",
+              7004 in numbers.ports(), f"({sorted(numbers.ports())})")
+    mixed = _targeting_on(table, "1500, 1000-2000")
+    mixed.refresh()
+    check("...except a number also typed as a pid, while a later process holds it",
+          mixed.ports() == {7003}, f"({sorted(mixed.ports())})")
+
+
+def test_the_moment_a_target_was_set_is_read_once(monkeypatch):
+    """The wall clock moves on during a session; the target's moment does not.
+    Comparing with "now" instead finds every running process older than that -
+    the old behaviour by another route. So this clock MOVES at every read."""
+    world = _World()
+    table = world.install(monkeypatch)
+    ticks = itertools.count(1500.0, 1000.0)           # 1500, 2500, 3500, ...
+    world.procs = {1234: ("first.exe", 1), 1235: ("close.exe", 1)}
+    world.created = {1234: 1000.0, 1235: 1500.5}      # 1235: inside the slack
+    world.ports = {5000: 1234, 5001: 1235}
+    targeting = _targeting_on(table, "1234, 1235", wall=lambda: next(ticks))
+    targeting.refresh()
+    check("a process started a moment after the target was set still counts",
+          targeting.ports() == {5000, 5001}, f"({sorted(targeting.ports())})")
+
+    world.procs[1234] = ("second.exe", 1); world.created[1234] = 2000.0
+    targeting.refresh()
+    targeting.refresh()
+    check("a process started after that moment is not the target, however late",
+          targeting.ports() == {5001}, f"({sorted(targeting.ports())})")
+
+
+def test_a_parent_younger_than_its_child_is_not_its_parent(monkeypatch):
+    """A ppid is the number the parent HAD. Its launcher long gone, a backup
+    agent's parent number went to a new chrome, and a target of `chrome` took the
+    agent in (review P2-9). A time the cache does not hold never breaks the chain:
+    Chrome's hardened children are named only by the snapshot, which has none."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {500: ("backup_agent.exe", 900), 900: ("chrome.exe", 4),
+                   501: ("helper.exe", 901), 901: ("chrome.exe", 4),
+                   502: ("tab.exe", 902), 902: ("chrome.exe", 4),
+                   503: ("gpu.exe", 903), 903: ("chrome.exe", 4)}
+    world.created = {500: 100.0, 900: 200.0,      # 900: a NEW chrome took the number
+                     901: 50.0,                   # 501: its start time is unknown
+                     502: 100.0, 902: 50.0,      # a real parent, older than its child
+                     503: 100.0}                 # 903: its start time is unknown
+    world.ports = {6000: 500, 6001: 501, 6002: 502, 6003: 503}
+    check("the walk stops at a younger 'parent'", table.ancestors(500) == [],
+          f"({table.ancestors(500)})")
+    for child, parent in ((501, 901), (503, 903), (502, 902)):
+        chain = [pid for pid, _ in table.ancestors(child)]
+        check(f"{child} keeps its parent {parent}", chain[:1] == [parent], f"({chain})")
+
+    targeting = _targeting_on(table, "chrome")
+    targeting.refresh()
+    check("a target of chrome leaves the stranger's child alone",
+          6000 not in targeting.ports(), f"({sorted(targeting.ports())})")
+    check("...and keeps chrome's own", {6001, 6002, 6003} <= targeting.ports(),
+          f"({sorted(targeting.ports())})")
+
+    asked = []
+    stamp = portmap._psutil_created
+    monkeypatch.setattr(portmap, "_psutil_created", lambda pid: asked.append(pid) or stamp(pid))
+    table.info(500)
+    table.info(900)
+    by_info, asked[:] = len(asked), []
+    table.ancestors(500)
+    check("the walk takes start times from the cache, not from the OS",
+          len(asked) == by_info, f"({asked} vs {by_info} for info alone)")
+    check("no pid, no chain - and no error", table.ancestors(None) == [])
+
+
+def test_a_snapshot_does_not_strip_a_verified_start_time(monkeypatch):
+    """The toolhelp snapshot names processes that will not open, and carries no
+    start times. Written over a verified entry, it stripped the stamp the recycle
+    check runs on and renewed the entry for 30 s: once the number was recycled,
+    `name_of` kept answering with the old name (review P2-9)."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    table.clock = itertools.count(1000.0, 5.0).__next__     # every read is later
+    world.procs[100] = ("chrome.exe", 4); world.created[100] = 1111.0
+    table.info(100)
+    written = table._info[100][3]
+
+    world.procs[100] = ("CHROME.EXE", 4)          # the snapshot's spelling
+    world.procs[777] = ("hardened.exe", 4)        # will not open: the snapshot runs
+    monkeypatch.setattr(portmap, "_psutil_process_info", lambda pid: None)
+    monkeypatch.setattr(portmap, "_psutil_process_table", lambda: {
+        p: (n, pp, None) for p, (n, pp) in world.procs.items()})
+    check("the process that will not open is named by the snapshot",
+          table.name_of(777) == "hardened.exe", f"({table.name_of(777)!r})")
+    check("the verified entry keeps its start time", table._info[100][2] == 1111.0,
+          f"({table._info[100]})")
+    check("...and its age: a snapshot does not renew it",
+          table._info[100][3] == written, f"({table._info[100][3]} vs {written})")
+
+    world.procs[100] = ("notepad.exe", 4); world.created[100] = 2222.0   # recycled
+    check("so a recycled number is noticed", table.name_of(100) == "notepad.exe",
+          f"({table.name_of(100)!r})")
+
+
+def test_a_snapshot_still_replaces_an_entry_about_another_process(monkeypatch):
+    """The other half of keeping a verified entry: never when the snapshot shows a
+    DIFFERENT process under the number - by its name, or by a start time that
+    proves it - and an entry nobody could verify is refreshed as it always was."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    table.clock = itertools.count(1000.0, 5.0).__next__
+    world.procs = {100: ("chrome.exe", 4), 200: ("svc.exe", 4), 300: ("old.exe", 4)}
+    world.created = {100: 1111.0, 200: 1111.0}       # 300: cannot tell when it started
+    for pid in (100, 200, 300):
+        table.info(pid)
+    unverified = table._info[300][3]
+
+    world.procs.update({100: ("notepad.exe", 4), 777: ("hardened.exe", 4)})
+    world.created[200] = 2222.0
+    monkeypatch.setattr(portmap, "_psutil_process_info", lambda pid: None)
+    table.info(777)                                   # will not open: the snapshot runs
+    check("another name under the number replaces the entry",
+          table._info[100][0] == "notepad.exe", f"({table._info[100]})")
+    check("so does a start time that proves another process",
+          table._info[200][2] == 2222.0, f"({table._info[200]})")
+    check("an entry nobody could verify is refreshed as before",
+          table._info[300][3] > unverified, f"({table._info[300][3]} vs {unverified})")
+
+
+def test_created_of_answers_for_the_process_holding_the_number_now(monkeypatch):
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[100] = ("chrome.exe", 4); world.created[100] = 1111.0
+    table.info(100)                                 # the cache remembers chrome
+    check("the start time of the process", table.created_of(100) == 1111.0,
+          f"({table.created_of(100)})")
+    world.procs[100] = ("notepad.exe", 4); world.created[100] = 2222.0   # recycled
+    check("the current holder's, not the one the cache remembers",
+          table.created_of(100) == 2222.0, f"({table.created_of(100)})")
+
+    world.procs[300] = ("hardened.exe", 4)          # resolved without a start time...
+    table.info(300)
+    world.created[300] = 3333.0                     # ...which psutil CAN tell
+    check("an entry without a stamp asks psutil", table.created_of(300) == 3333.0,
+          f"({table.created_of(300)})")
+    check("nothing to tell about a pid nobody holds", table.created_of(4242) is None)
+    check("nor about no pid", table.created_of(None) is None)
 
 
 # -- the refresh lock: the capture thread waits on exactly what it holds ------- #
