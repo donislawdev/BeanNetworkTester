@@ -948,14 +948,6 @@ class BeanEngine:
             self._divert = None
             self._stop_socketwatch()
             raise
-        if socket_error is not None:
-            # Recorded only now, with the NETWORK handle open (D-35). A start that
-            # fails there has usually failed the SOCKET handle for the same reason
-            # (no rights, no driver), and its own error already reaches the user -
-            # a crash record of the same cause would be noise in crashes/. A SOCKET
-            # handle that failed ALONE is worth one: targeting then runs on the
-            # poller for the whole session.
-            crashlog.once("engine.socketwatch.start", socket_error)
         self._running = True
         session = self._session = _Session(divert, stuck)
         # From here a failure stops the session (the except below), because the
@@ -1045,6 +1037,16 @@ class BeanEngine:
             self._driver_wait.begin()
             self._t_cap.start()
             self._t_inj.start()
+            if socket_error is not None:
+                # Recorded only for a start whose NETWORK handle opened (D-35). A
+                # start that fails there has usually failed the SOCKET handle for
+                # the same reason (no rights, no driver), and its own error already
+                # reaches the user - a crash record of the same cause would be noise
+                # in crashes/. A SOCKET handle that failed ALONE is worth one:
+                # targeting then runs on the poller for the whole session. Here, not
+                # right after the open: a record writes a file and asks the GUI for
+                # its context, and nothing drained the handle meanwhile.
+                crashlog.once("engine.socketwatch.start", socket_error)
             # ANNOUNCED ONCE THE HANDLE IS BEING DRAINED, and before the watchdog.
             # The log is the caller's code and can block (a console paused by a
             # text selection): said while the handle was open and nothing read it,
@@ -1136,7 +1138,8 @@ class BeanEngine:
         the session. A tester who cannot open a second handle still gets impairment
         via the (racier) polling path, not a dead session - and it is recorded, not
         swallowed: the failure is RETURNED, and start() records it once the NETWORK
-        handle has opened (see there for why not before). None otherwise.
+        handle has opened and the capture thread drains it (see there for why not
+        before). None otherwise.
         """
         factory = None
         if socket_source is not None:

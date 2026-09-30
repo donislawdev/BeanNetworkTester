@@ -4805,8 +4805,25 @@ MUTATIONS = [
         # D-35: a SOCKET handle that failed alone is no longer recorded at all.
         "label": "engine: a socket handle that failed alone is not recorded",
         "file": "beantester/engine.py",
-        "old": "            crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
-        "new": "            pass\n",
+        "old": "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
+        "new": "                pass\n",
+        "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
+    },
+    {
+        # P1-5 after review: the SOCKET record written again before the capture
+        # thread reads - a file write and the GUI's context while nothing drains.
+        "label": "engine: a socket handle failure is recorded before the capture reads",
+        "file": "beantester/engine.py",
+        "old": ("            self._driver_wait.begin()\n"
+                "            self._t_cap.start()\n"
+                "            self._t_inj.start()\n"
+                "            if socket_error is not None:\n"),
+        "new": ("            if socket_error is not None:\n"
+                "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n"
+                "            self._driver_wait.begin()\n"
+                "            self._t_cap.start()\n"
+                "            self._t_inj.start()\n"
+                "            if False:\n"),
         "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
     },
     {

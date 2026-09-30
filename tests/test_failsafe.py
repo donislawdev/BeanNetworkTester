@@ -567,11 +567,20 @@ def test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened(monkey
     the driver fails there before it fails at the NETWORK handle - the same cause
     twice. The start's own error reaches the user (dialog, CLI line); a crash
     record of the SOCKET half would be noise (D-35). One that failed ALONE is
-    recorded: targeting then runs on the slower poller all session."""
+    recorded: targeting then runs on the slower poller all session.
+
+    And only once the capture thread drains the handle: a record writes a file and
+    asks the GUI for its context, which must not hold the traffic (P1-5)."""
     monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
-    recorded = []
-    monkeypatch.setattr("beantester.crashlog.once",
-                        lambda subsystem, exc: recorded.append(subsystem))
+    recorded, draining = [], []
+
+    def once(subsystem, exc):
+        recorded.append(subsystem)
+        if subsystem == "engine.socketwatch.start":
+            cap = eng._t_cap
+            draining.append(cap is not None and cap.is_alive())
+
+    monkeypatch.setattr("beantester.crashlog.once", once)
 
     def refuse():
         raise OSError("[WinError 5] Access is denied.")
@@ -585,6 +594,8 @@ def test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened(monkey
     eng.stop()
     check("a socket handle that failed alone is recorded, once",
           recorded.count("engine.socketwatch.start") == 1, f"({recorded})")
+    check("P1-5: recorded while the capture thread drains the handle",
+          draining == [True], f"({draining})")
 
 
 def test_a_socket_watcher_that_cannot_start_its_thread_closes_its_handle(monkeypatch):
@@ -1762,19 +1773,33 @@ def test_a_watchdog_that_outlives_its_session_never_faults_the_next_one():
     """An old watchdog, held past its join by a slow tick, woke up inside the next
     START - after the new workers were created, before they were started - judged
     them dead and recorded "worker thread ... died unexpectedly" against a session
-    that was perfectly healthy. The fault stayed on it and went into its report."""
+    that was perfectly healthy. The fault stayed on it and went into its report.
+
+    The old watchdog is let go at the next START's DriverWait.begin(), the step
+    right before the capture thread starts, and the test PROVES what it found
+    there. It used to be let go at the "Start." line, which moved after the
+    workers started (D-36): the watchdog then met two live threads and this
+    test passed with the guard removed."""
     lines, gate = [], threading.Event()
-    state = {"held": False, "second": False}
+    state = {"held": False, "second": False, "unstarted": None}
 
     def log(text):
         lines.append(text)
-        if state["second"] and "seed=" in text and not gate.is_set():
-            # The next START's banner: its workers exist but are not started yet,
-            # which is where the reproduction found them.
-            gate.set()
-            old_watchdog.join(5)
 
     eng = BeanEngine(log_fn=log)
+    real_begin = eng._driver_wait.begin
+
+    def begin():
+        if state["second"] and not gate.is_set():
+            # The next START: its workers exist and are not started yet, which is
+            # where the reproduction found them.
+            state["unstarted"] = all(t is not None and t.ident is None
+                                     for t in (eng._t_cap, eng._t_inj))
+            gate.set()
+            old_watchdog.join(5)
+        return real_begin()
+
+    eng._driver_wait.begin = begin
     real_trim = eng._conns_log.trim
 
     def slow_trim():
@@ -1793,6 +1818,8 @@ def test_a_watchdog_that_outlives_its_session_never_faults_the_next_one():
         state["second"] = True
         first_line = len(lines)
         eng.start("test", divert=QuietDivert())
+        check("the old watchdog woke with the next workers built, not started",
+              state["unstarted"] is True, f"({state['unstarted']})")
         check("the old watchdog has finished its tick", not old_watchdog.is_alive())
         check("P2-12: the next session is not marked as failed",
               eng.is_running() and eng.fault is None, f"({eng.fault})")
