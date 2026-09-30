@@ -3694,7 +3694,7 @@ MUTATIONS = [
         # T() never raises on a missing argument: the whole line comes back raw.
         "label": "engine: the driver queue line stops passing the warning threshold",
         "file": "beantester/engine.py",
-        "old": "kb=q[\"queue_size\"] // 1024, warn=f\"{self.DRIVER_WAIT_WARN_MS:g}\"))",
+        "old": "kb=q[\"queue_size\"] // 1024, warn=f\"{driverwait.WARN_MS:g}\"))",
         "new": "kb=q[\"queue_size\"] // 1024))",
         "test": "test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number",
     },
@@ -4710,6 +4710,59 @@ MUTATIONS = [
         "old": "        stuck = tuple(t for t in previous.stuck if t.is_alive()) if previous else ()",
         "new": "        stuck = tuple(previous.stuck) if previous else ()",
         "test": "test_a_start_says_when_part_of_the_previous_session_is_still_stuck",
+    },
+    # -- the driver-wait measurement, carved out of engine.py (driverwait.py) ----- #
+    {
+        # A later, healthier packet erases the worst moment.
+        "label": "driverwait: a healthier sample lowers the recorded peak",
+        "file": "beantester/driverwait.py",
+        "old": ("        if waited_ms > self.peak_ms:\n"
+                "            self.peak_ms = round(waited_ms, 3)\n"),
+        "new": "        self.peak_ms = round(waited_ms, 3)\n",
+        "test": "test_a_shorter_wait_never_lowers_the_recorded_peak",
+    },
+    {
+        # One line per sample: the log fills with the same complaint.
+        "label": "driverwait: the warning is said on every sample",
+        "file": "beantester/driverwait.py",
+        "old": ("        if now - self._warned < WARN_S:\n"
+                "            return\n"),
+        "new": "",
+        "test": "test_a_long_driver_wait_warns_once_not_per_packet",
+    },
+    {
+        # A test's QPC frequency overwritten by the machine's: on Windows a known
+        # 200 ms wait reads 20 ms, on Linux there is no frequency at all.
+        "label": "driverwait: a session start overwrites a supplied QPC frequency",
+        "file": "beantester/driverwait.py",
+        "old": ("        if self.freq is None:\n"
+                "            self.freq = winenv.qpc_frequency()\n"),
+        "new": "        self.freq = winenv.qpc_frequency()\n",
+        "test": "test_the_capture_loop_actually_takes_the_sample",
+    },
+    {
+        # The measurement exists and the packet path never reaches it.
+        "label": "engine: the capture loop never samples the driver wait",
+        "file": "beantester/engine.py",
+        "old": "                wait.sample(packet, now)\n",
+        "new": "                pass\n",
+        "test": "test_the_capture_loop_actually_takes_the_sample",
+    },
+    {
+        # The peak is measured and never reaches the stats, the CSV or the report.
+        "label": "engine: the stats leave out the driver-wait peak",
+        "file": "beantester/engine.py",
+        "old": "        s[\"driver_wait_peak_ms\"] = self._driver_wait.peak_ms\n",
+        "new": "",
+        "test": "test_the_wait_inside_the_driver_is_measured_and_kept",
+    },
+    {
+        # The first session's worst moment handed to every later one.
+        "label": "engine: a stats reset keeps the driver-wait peak",
+        "file": "beantester/engine.py",
+        "old": "        self._driver_wait.reset()\n",
+        "new": "",
+        "test": "test_a_stats_reset_starts_a_new_driver_wait_window",
     },
 ]
 
