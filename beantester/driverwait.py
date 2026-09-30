@@ -46,6 +46,7 @@ class DriverWait:
         self._log, self._log_event = log, log_event
         self.qpc = winenv.qpc_now
         self.freq = None
+        self.floor = 0          # QPC when the session's capture thread started
         self.reset()
 
     def reset(self):
@@ -59,10 +60,22 @@ class DriverWait:
         self._warned = 0.0
 
     def begin(self):
-        """A session starts: the QPC frequency (once), and the first packet sampled."""
+        """A session's capture thread is about to start.
+
+        The QPC frequency (once), the first packet sampled - and the FLOOR: a
+        packet stamped before this moment was queued while nothing read the
+        handle, so its wait measures how long the START took, not a driver the
+        tool cannot keep up with. External review P1-5: the first packet of a
+        session was sampled, it was the oldest one in the queue, and a slow start
+        (35-56 ms measured, elevated, with a target) became the session's peak and
+        a "the driver is dropping packets" warning. Read by the caller the moment
+        before the capture thread starts, so what it excludes is exactly the time
+        nobody was reading.
+        """
         if self.freq is None:
             self.freq = winenv.qpc_frequency()
         self.next_at = 0.0
+        self.floor = (self.qpc() or 0) if self.freq else 0
 
     def sample(self, packet, now):
         """Record how long ``packet`` waited inside the driver before we saw it.
@@ -76,12 +89,13 @@ class DriverWait:
         path, which has no driver queue - the same reason
         ``BeanEngine._read_driver_queue`` returns None there. A stamp from the
         future (clock skew, or a stamp this tool did not write) gives a negative
-        wait, which neither comparison below can take.
+        wait, which neither comparison below can take. A stamp under the floor
+        is the start's, not the driver's (see ``begin``).
         """
         self.next_at = now + SAMPLE_S
         stamp = getattr(packet, "timestamp", 0)
         freq = self.freq
-        if not stamp or not freq:
+        if not stamp or not freq or stamp < self.floor:
             return
         ticks = self.qpc()
         if ticks is None:

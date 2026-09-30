@@ -486,6 +486,188 @@ def test_a_failed_start_never_leaves_an_open_divert(monkeypatch):
           recover.closed is True)
 
 
+class _IdleSocketSource:
+    """A socket-event source that announces nothing until it is closed."""
+
+    def __init__(self):
+        self.closed = threading.Event()
+
+    def __iter__(self):
+        self.closed.wait(10)
+        return iter(())
+
+    def close(self):
+        self.closed.set()
+
+
+def test_the_slow_part_of_a_start_runs_before_the_handle_opens():
+    """External review P1-5: from the open on, WinDivert queues every packet the
+    filter matches for a capture thread that does not exist yet. The socket watcher
+    and the first target resolve ran in that gap - 35-56 ms measured (elevated,
+    cold), most of it the resolve. Before the open they hold nothing: the traffic
+    still flows untouched. The resolve still comes before the first packet, which
+    is what it is for, and still after the watcher, whose map it reads."""
+    from beantester.matchers import KIND_PROCESS, parse_matcher
+    order = []
+    eng = BeanEngine()
+    targeting = eng.target_for(parse_matcher("no-such-process.exe", KIND_PROCESS, "target"))
+    real_refresh = targeting.refresh
+
+    def refresh(*a, **k):
+        order.append("target resolved")
+        return real_refresh(*a, **k)
+
+    targeting.refresh = refresh
+    eng.set_target(True, targeting)
+
+    class Driver(QuietDivert):
+        def open(self):
+            order.append("handle opened")
+
+        def recv(self):
+            order.append("capture reading")
+            return super().recv()
+
+    def socket_source():
+        order.append("socket watcher opened")
+        return _IdleSocketSource()
+
+    eng.start("test", divert=Driver(), socket_source=socket_source)
+    try:
+        _wait_until(lambda: "capture reading" in order)
+        first = list(dict.fromkeys(order))          # first time each step happened
+    finally:
+        eng.stop()
+    check("start order: watcher, target, handle, capture",
+          first == ["socket watcher opened", "target resolved", "handle opened",
+                    "capture reading"], f"({order})")
+
+
+def test_a_handle_that_will_not_open_leaves_no_socket_watcher_behind(monkeypatch):
+    """The other side of opening the socket watcher first (P1-5): when the NETWORK
+    handle then refuses, the watcher's own WinDivert handle and thread go with the
+    failed start instead of sniffing on with nothing to stop them."""
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    source = _IdleSocketSource()
+    eng = BeanEngine()
+    raised = None
+    try:
+        eng.start("test", divert=_UnloadingDivert(fails=99), socket_source=lambda: source)
+    except OSError as exc:
+        raised = exc
+    check("the start fails with the handle's own error",
+          getattr(raised, "winerror", None) == 433, f"({raised!r})")
+    check("the socket watcher's handle is closed with it", source.closed.is_set())
+    check("and the engine keeps no watcher", eng._socketwatch is None)
+    check("and nothing runs", eng.is_running() is False)
+
+
+def test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened(monkeypatch):
+    """The SOCKET handle opens first now (P1-5), so a start without the rights or
+    the driver fails there before it fails at the NETWORK handle - the same cause
+    twice. The start's own error reaches the user (dialog, CLI line); a crash
+    record of the SOCKET half would be noise (D-35). One that failed ALONE is
+    recorded: targeting then runs on the slower poller all session."""
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    recorded = []
+    monkeypatch.setattr("beantester.crashlog.once",
+                        lambda subsystem, exc: recorded.append(subsystem))
+
+    def refuse():
+        raise OSError("[WinError 5] Access is denied.")
+
+    eng = BeanEngine()
+    with pytest.raises(OSError):
+        eng.start("test", divert=_UnloadingDivert(fails=99), socket_source=refuse)
+    check("a start that failed anyway leaves no record of the same cause",
+          "engine.socketwatch.start" not in recorded, f"({recorded})")
+    eng.start("test", divert=QuietDivert(), socket_source=refuse)
+    eng.stop()
+    check("a socket handle that failed alone is recorded, once",
+          recorded.count("engine.socketwatch.start") == 1, f"({recorded})")
+
+
+def test_a_socket_watcher_that_cannot_start_its_thread_closes_its_handle(monkeypatch):
+    """The SOCKET handle opens before the watcher's thread starts, so a thread that
+    will not start (out of threads - the load this tool is pointed at) left an open
+    handle behind a watcher the engine had already let go of. It is closed now,
+    and the session carries on without the live map, as for any SOCKET failure."""
+    source = _IdleSocketSource()
+    real_start = threading.Thread.start
+
+    def start(thread, *a, **k):
+        if thread.name == "bean-socket-watcher":
+            raise RuntimeError("can't start new thread")
+        return real_start(thread, *a, **k)
+
+    monkeypatch.setattr(threading.Thread, "start", start)
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert(), socket_source=lambda: source)
+    try:
+        closed, watcher, running = source.closed.is_set(), eng._socketwatch, eng.is_running()
+    finally:
+        monkeypatch.undo()
+        eng.stop()
+    check("the socket handle is closed", closed)
+    check("the engine keeps no watcher", watcher is None)
+    check("and the session runs on without it", running is True)
+
+
+def test_a_socket_handle_waits_for_an_unloading_driver_too(monkeypatch):
+    """The SOCKET handle opens first now (P1-5), so it is the one that meets a
+    driver another program is still unloading. Without the wait the NETWORK handle
+    has always had, it fell back to the poller for the whole session while the
+    NETWORK handle, a moment later, found the driver ready."""
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    attempts = []
+
+    def unloading_then_ready():
+        attempts.append(1)
+        if len(attempts) == 1:
+            error = OSError("[WinError 433] The specified device does not exist.")
+            error.winerror = 433
+            raise error
+        return _IdleSocketSource()
+
+    lines = []
+    eng = BeanEngine(log_fn=lines.append)
+    eng.start("test", divert=QuietDivert(), socket_source=unloading_then_ready)
+    try:
+        watcher = eng._socketwatch
+        live = watcher is not None and watcher.is_running()
+    finally:
+        eng.stop()
+    check("the socket watcher waited for the driver and runs", live, f"({attempts})")
+    check("after exactly the one retry it needed", len(attempts) == 2, f"({attempts})")
+    check("and the pause is explained in the log",
+          T("log.driver_still_unloading") in lines, f"({lines})")
+
+
+def test_a_failure_right_after_the_handle_opens_still_closes_it(monkeypatch):
+    """Between the open and the workers, a dozen steps sat outside the try that
+    stops a failed start: an exception there - or a Ctrl+C, which lands on the
+    CLI's main thread, the one running start() - left the session "running" with
+    an open handle nothing drained and atexit could not see (P1-5, found in the
+    analysis of the start order)."""
+    def refuse():
+        raise RuntimeError("no timer for this session")
+
+    monkeypatch.setattr("beantester.winenv.request_fine_timers", refuse)
+    divert = QuietDivert()
+    eng = BeanEngine()
+    try:
+        with pytest.raises(RuntimeError):
+            eng.start("test", divert=divert)
+        closed, running = divert.closed, eng.is_running()
+        tracked = eng in set(_LIVE_ENGINES)
+    finally:
+        monkeypatch.undo()
+        eng.stop()
+    check("the handle is closed (network restored)", closed is True)
+    check("the session is not left running", running is False)
+    check("and atexit is not left tracking it", tracked is False)
+
+
 def _count_timer_calls(monkeypatch, granted=True):
     """Replace the winenv timer calls with counters; returns the call log."""
     from beantester import engine as engine_mod
@@ -2010,6 +2192,40 @@ def test_a_stop_closes_the_divert_while_the_log_is_still_blocked(path, monkeypat
         check("the caller still gets the start's own error",
               _wait_until(lambda: log.raised is not None)
               and log.raised == "the resolver would not start", f"({log.raised!r})")
+
+
+def test_a_start_line_held_by_the_log_does_not_hold_the_traffic():
+    """The START lines are said by start() itself, holding the stop lock. They used
+    to be said with the handle already open and no capture thread yet, so a log
+    that blocked on them (a console paused by a text selection) held ALL the
+    filtered traffic for as long as it blocked - found with NOWE-5a-1, pinned to
+    P1-5. Said now once the capture thread is reading."""
+    log = _FrozenLog()
+    log.needle = "seed="
+
+    class Drained(QuietDivert):
+        def __init__(self):
+            super().__init__()
+            self.reading = threading.Event()
+
+        def recv(self):
+            self.reading.set()
+            return super().recv()
+
+    divert = Drained()
+    eng = BeanEngine(log_fn=log)
+    starting = threading.Thread(target=eng.start, args=("test",), kwargs={"divert": divert},
+                                daemon=True)
+    starting.start()
+    try:
+        check("the start line reached the log and the log is held",
+              log.frozen.wait(5), f"({log.lines})")
+        check("and the handle is being read while it is held",
+              divert.reading.wait(5), f"({log.lines})")
+    finally:
+        log.thaw.set()
+        starting.join(5)
+        eng.stop()
 
 
 class _RefusingSendDivert(_GoesQuietDivert):

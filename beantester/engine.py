@@ -902,148 +902,127 @@ class BeanEngine:
             # can actually be needed). No-op under --simulate/tests (no real driver).
             crashlog.arm_native()
         self._divert = divert
-        if hasattr(self._divert, "open"):
-            try:
-                self._open_divert()
-            except BaseException:
-                # A handle that will not open is NOT a session. This used to be
-                # swallowed into a debug crash record, and the damage was entirely
-                # in what happened next: `_running` went True, three workers were
-                # spawned, and the capture thread's first `recv()` failed with
-                # `RuntimeError("WinDivert handle is not open")`. That message -
-                # a symptom, naming nothing - became `self.fault`, the log line,
-                # the event log and the repro report, while the actual cause
-                # (measured with a filter the driver rejects: `OSError [WinError
-                # 87] The parameter is incorrect`; `[WinError 5]` when not
-                # elevated) never left crashlog at severity=debug.
-                #
-                # Both callers already handle this properly and neither could ever
-                # reach that code: `cli._run_session` wraps start() to report
-                # "cannot start the capture: {e}" with exit RUNTIME, and the GUI's
-                # `_finish_start` shows the start-failed dialog. Both then add the
-                # advice that fits THIS error code (`driver.open_failure_hint`) -
-                # which for a long time was "run as Administrator" whatever had
-                # failed. Raising is what wires them up.
-                #
-                # Cleared first so the engine is clean for a retry: `_running` is
-                # still False here and this object never reached _LIVE_ENGINES, so
-                # dropping the reference is the whole of the cleanup. No close() -
-                # a WinDivert handle that never opened raises from close() too
-                # (measured), which would replace the real error with a second
-                # meaningless one.
-                self._divert = None
-                raise
+        # EVERYTHING SLOW HAPPENS BEFORE THE HANDLE OPENS (external review P1-5).
+        # From the open on, WinDivert diverts every packet the filter matches into a
+        # queue nothing reads until the capture thread starts: the user's traffic
+        # waits there (and past the queue's limits is dropped), there is no watchdog
+        # yet, and a STOP waits for this lock. The socket watcher and the first
+        # target resolve used to run in that gap. MEASURED 2026-09-30 (elevated,
+        # cold, with a target): 35.7-56.1 ms from the open to the first recv(),
+        # 30-36 ms of it the target resolve, and 2 starts in 6 crossed the 50 ms
+        # driver-wait threshold - a false "the driver is dropping packets" at START.
+        # Before the open the same work holds nothing: the traffic flows as it did.
+        # Starting the capture thread first instead is not an option - the first
+        # packet has to meet a resolved target (_bind_targeting).
+        try:
+            socket_error = self._start_socketwatch(real_windivert, socket_source)
+            self._bind_targeting()
+            if hasattr(self._divert, "open"):
+                self._open_with_retry(self._divert.open)
+        except BaseException:
+            # A handle that will not open is NOT a session. This used to be
+            # swallowed into a debug crash record, and the damage was entirely
+            # in what happened next: `_running` went True, three workers were
+            # spawned, and the capture thread's first `recv()` failed with
+            # `RuntimeError("WinDivert handle is not open")`. That message -
+            # a symptom, naming nothing - became `self.fault`, the log line,
+            # the event log and the repro report, while the actual cause
+            # (measured with a filter the driver rejects: `OSError [WinError
+            # 87] The parameter is incorrect`; `[WinError 5]` when not
+            # elevated) never left crashlog at severity=debug.
+            #
+            # Both callers already handle this properly and neither could ever
+            # reach that code: `cli._run_session` wraps start() to report
+            # "cannot start the capture: {e}" with exit RUNTIME, and the GUI's
+            # `_finish_start` shows the start-failed dialog. Both then add the
+            # advice that fits THIS error code (`driver.open_failure_hint`) -
+            # which for a long time was "run as Administrator" whatever had
+            # failed. Raising is what wires them up.
+            #
+            # Cleared first so the engine is clean for a retry: `_running` is
+            # still False here and this object never reached _LIVE_ENGINES. No
+            # close() - a WinDivert handle that never opened raises from close()
+            # too (measured), which would replace the real error with a second
+            # meaningless one. What DID open before it is closed: the socket
+            # watcher holds a WinDivert handle of its own, and a thread.
+            self._divert = None
+            self._stop_socketwatch()
+            raise
+        if socket_error is not None:
+            # Recorded only now, with the NETWORK handle open (D-35). A start that
+            # fails there has usually failed the SOCKET handle for the same reason
+            # (no rights, no driver), and its own error already reaches the user -
+            # a crash record of the same cause would be noise in crashes/. A SOCKET
+            # handle that failed ALONE is worth one: targeting then runs on the
+            # poller for the whole session.
+            crashlog.once("engine.socketwatch.start", socket_error)
         self._running = True
         session = self._session = _Session(divert, stuck)
-        # Only once the handle is open: a start that failed leaves the facts of the
-        # session before it, which is the one its seed and counters still describe.
-        self._simulated = not real_windivert
-        self._scenario_file, self._scenario_loop = None, False    # start_scenario sets
-        self._driver_queue = self._read_driver_queue()
-        # The QPC frequency, unless a test supplied one (the pair is an injected
-        # dependency, like the clock and sleep `run_cli` takes), and the first
-        # packet sampled, then on the tick. See driverwait.DriverWait.
-        self._driver_wait.begin()
-        # Cleared, not carried: a beat left over from the previous session is older
-        # than CAPTURE_STALL_S the moment this one starts, so an engine reused for
-        # a second run would fail-stop itself before its capture thread drew breath.
-        self._cap_waiting = False
-        self._cap_beat_at = None
-        # always establish a concrete seed - this makes EVERY session reproducible
-        self._effective_seed = self._seed if self._seed is not None else random.randrange(1, 2**31 - 1)
-        self._rng = random.Random(self._effective_seed)
-        self._filter = filt
-        self._start_wall = time.time()
-        self._start_mono = time.monotonic()
-        self._stop_mono = self._stop_wall = None
-        self.reset_stats()
-        with self._elock:
-            self._events = []
-        self.core.reset_buckets(time.monotonic())
+        # From here a failure stops the session (the except below), because the
+        # handle is open. The try used to begin only where the workers were built,
+        # so an exception in between - or a Ctrl+C, which lands on the CLI's main
+        # thread, the one running this - left `_running` True and an open handle
+        # that nothing drained and atexit could not see.
         try:
-            self._duration = max(0.0, float(duration or 0))
-        except (TypeError, ValueError):
-            self._duration = 0.0
-        self._deadline = (self._start_mono + self._duration) if self._duration > 0 else None
-        self.stop_reason = None
-        self.fault = None
-        # One synchronous resolve before the capture thread exists, so the very
-        # first packet is tested against a populated port set instead of an empty
-        # one. Safe to block here: start() already runs off the UI thread (the GUI
-        # drives it through _begin_transition), and this is the only place the
-        # resolution is allowed to be synchronous.
-        # Registered BEFORE the workers are spawned, not after: from the moment the
-        # divert is open and _running is True, atexit and the watchdog must be able to
-        # find this engine. Adding it only once every thread was already up meant a
-        # failed Thread.start() (out of threads/memory - most likely in the very load
-        # tests this tool is aimed at) left a "running" engine holding an open divert
-        # that NOTHING would ever close: the exact fail-open hole convention 20 forbids.
-        _LIVE_ENGINES.add(self)
-        # Ask Windows for a fine timer tick, for the life of the SESSION. The
-        # injector releases a delayed packet by waiting on a Condition with a
-        # timeout, and Windows rounds such a timeout up to the system tick, so
-        # without this the tool overshoots every configured delay by up to a tick
-        # (measured: a 10 ms setting delivered at a median of 18.3 ms). Taken here
-        # rather than at import so an idle program holds nothing; released in
-        # _stop_locked, AFTER the injector thread has been joined. See
-        # winenv.request_fine_timers for why querying the system-wide resolution
-        # instead would be reading the wrong number.
-        self._fine_timers = winenv.request_fine_timers()
-        # ...and ask the INTERPRETER for the same courtesy, also for the life of
-        # the session. The capture and inject threads hand every packet to each
-        # other and both leave the interpreter for a syscall, so each packet
-        # costs two waits for the interpreter lock - and CPython lets a waiter
-        # sleep up to sys.getswitchinterval() (5 ms) before it insists. That
-        # wait, not the driver, is what the syscalls were spending their time on:
-        # send measured 26.9 us with nobody to contend with and 56.7 us here.
-        # Paired, inside one session, this is worth a median 1.33-1.36x end to
-        # end (24 pairs of 24, loopback and a real interface) at LOWER CPU per
-        # packet. Full measurement in winenv.request_fast_thread_switch.
-        self._fast_switch = winenv.request_fast_thread_switch()
-        try:
-            # The live socket-event map (2b/2c): created FIRST, so the initial
-            # targeting resolve below already reads it instead of the poller.
-            # Session-length, like the resolver; its bootstrap is done before the
-            # first packet flows. Only on the real path (or an injected source) -
-            # otherwise None and the poller stands. A failure to open the SOCKET
-            # handle degrades, not kills.
-            self._start_socketwatch(real_windivert, socket_source)
-            # Held across the whole binding, not just the read. ``_targeting`` is
-            # shared with every other thread that can install a target (a GUI
-            # "Apply", a scenario step), and this block reads it and then acts on
-            # that reference three times. Bare, a concurrent set_target() landing in
-            # the middle would leave the resolver pointed at an ORPHAN while the core
-            # tested against the object that replaced it - the same class of mismatch
-            # set_target() was fixed for (see its docstring). Consistency of access,
-            # not an observed symptom: the race was NOT reproduced (25 start/stop
-            # cycles against a concurrent applier in test_concurrency_chaos.py stayed
-            # green), and it is narrow today because the CLI applies before start.
-            #
-            # Safe to hold here. Lock order is _stop_lock -> _target_lock ->
-            # ProcessTargeting._lock -> PortTable._lock, and nothing walks it the
-            # other way: the resolver never calls back into the engine, and
-            # retarget() is only ever reached with _target_lock already held. In this
-            # spot there is not even contention - _resolver.start() is below, and
-            # stop() joins the resolver - so the synchronous refresh() has no
-            # contender; it costs a cold resolve (~36 ms elevated, see portmap.info)
-            # once, at session start.
-            with self._target_lock:
-                targeting = self._targeting
-                if targeting is not None:
-                    # Point targeting at the live map when we have one, at the poller
-                    # otherwise (2c). Targeting may have been built before start()
-                    # (the GUI applies it first), against the poller, so this is
-                    # where it is (re)bound to whatever this session actually has.
-                    targeting.set_table(self._targeting_table())
-                    with crashlog.quiet("engine.target"):
-                        targeting.refresh()
-                    # Reconcile: whichever path installed the target (target_for
-                    # alone, or set_target), the session starts with the resolver
-                    # pointed at it - and with the live map talking to it, which
-                    # set_target could not do when it ran before this session had
-                    # a map at all.
-                    self._resolver.retarget(targeting)
-                    self._bind_socket_listener()
+            # Only once the handle is open: a start that failed leaves the facts of
+            # the session before it, which is the one its seed and counters still
+            # describe.
+            self._simulated = not real_windivert
+            self._scenario_file, self._scenario_loop = None, False    # start_scenario sets
+            self._driver_queue = self._read_driver_queue()
+            # Cleared, not carried: a beat left over from the previous session is
+            # older than CAPTURE_STALL_S the moment this one starts, so an engine
+            # reused for a second run would fail-stop itself before its capture
+            # thread drew breath.
+            self._cap_waiting = False
+            self._cap_beat_at = None
+            # always establish a concrete seed - this makes EVERY session reproducible
+            self._effective_seed = self._seed if self._seed is not None else random.randrange(1, 2**31 - 1)
+            self._rng = random.Random(self._effective_seed)
+            self._filter = filt
+            self._start_wall = time.time()
+            self._start_mono = time.monotonic()
+            self._stop_mono = self._stop_wall = None
+            self.reset_stats()
+            with self._elock:
+                self._events = []
+            self.core.reset_buckets(time.monotonic())
+            try:
+                self._duration = max(0.0, float(duration or 0))
+            except (TypeError, ValueError):
+                self._duration = 0.0
+            self._deadline = (self._start_mono + self._duration) if self._duration > 0 else None
+            self.stop_reason = None
+            self.fault = None
+            # Registered BEFORE the workers are spawned, not after: from the moment
+            # the divert is open and _running is True, atexit and the watchdog must
+            # be able to find this engine. Adding it only once every thread was
+            # already up meant a failed Thread.start() (out of threads/memory - most
+            # likely in the very load tests this tool is aimed at) left a "running"
+            # engine holding an open divert that NOTHING would ever close: the exact
+            # fail-open hole convention 20 forbids.
+            _LIVE_ENGINES.add(self)
+            # Ask Windows for a fine timer tick, for the life of the SESSION. The
+            # injector releases a delayed packet by waiting on a Condition with a
+            # timeout, and Windows rounds such a timeout up to the system tick, so
+            # without this the tool overshoots every configured delay by up to a
+            # tick (measured: a 10 ms setting delivered at a median of 18.3 ms).
+            # Taken here rather than at import so an idle program holds nothing;
+            # released in _stop_locked, AFTER the injector thread has been joined.
+            # See winenv.request_fine_timers for why querying the system-wide
+            # resolution instead would be reading the wrong number.
+            self._fine_timers = winenv.request_fine_timers()
+            # ...and ask the INTERPRETER for the same courtesy, also for the life of
+            # the session. The capture and inject threads hand every packet to each
+            # other and both leave the interpreter for a syscall, so each packet
+            # costs two waits for the interpreter lock - and CPython lets a waiter
+            # sleep up to sys.getswitchinterval() (5 ms) before it insists. That
+            # wait, not the driver, is what the syscalls were spending their time
+            # on: send measured 26.9 us with nobody to contend with and 56.7 us
+            # here. Paired, inside one session, this is worth a median 1.33-1.36x
+            # end to end (24 pairs of 24, loopback and a real interface) at LOWER
+            # CPU per packet. Full measurement in winenv.request_fast_thread_switch.
+            self._fast_switch = winenv.request_fast_thread_switch()
             # UNCONDITIONALLY, target or no target: the resolver's life is the SESSION's.
             # Starting it only when a target already exists meant that narrowing down
             # mid-run - press START, watch, then type a process - left nobody keeping
@@ -1055,20 +1034,33 @@ class BeanEngine:
             self._t_cap = threading.Thread(target=self._capture_loop, args=(session,), daemon=True)
             self._t_inj = threading.Thread(target=self._inject_loop, args=(session,), daemon=True)
             self._t_wd = threading.Thread(target=self._watchdog_loop, args=(session,), daemon=True)
-            # ANNOUNCED BEFORE THE WORKERS EXIST, not after. These lines used to sit
-            # below the except block, so a session that faulted early printed its log
-            # BACKWARDS - measured with a filter the driver rejects:
+            # Before any worker exists, so the event log starts with START whatever
+            # a worker records next; it is a list in memory and cannot block.
+            self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
+                                    + (f", duration={self._duration:g}s" if self._duration else ""))
+            # The QPC frequency (unless a test supplied one) and the floor under the
+            # driver-wait samples, read the moment before the capture thread exists:
+            # a packet stamped earlier waited for this start, not in a driver the
+            # tool cannot keep up with (external review P1-5, see DriverWait.begin).
+            self._driver_wait.begin()
+            self._t_cap.start()
+            self._t_inj.start()
+            # ANNOUNCED ONCE THE HANDLE IS BEING DRAINED, and before the watchdog.
+            # The log is the caller's code and can block (a console paused by a
+            # text selection): said while the handle was open and nothing read it,
+            # a blocked line held ALL the filtered traffic for as long as it blocked
+            # (external review, pinned to P1-5 from NOWE-5a-1; reproduced). Now the
+            # capture and inject threads run meanwhile. NOT after the watchdog: a
+            # watchdog that finds a fault while this start still holds _stop_lock
+            # leaves the stop to the lock's holder - this line, blocked.
             #
-            #     recv error: WinDivert handle is not open
-            #     engine fault: ... - the session was stopped, the network is normal
-            #     Start. Filter: <the filter>  (seed=...)
-            #     Stop.
-            #
-            # A tester reading that cannot tell what happened when, which is the one
-            # thing a log is for. The event log was already ordered correctly (a
-            # worker-initiated stop blocks on _stop_lock until start() returns), so
-            # only the live log lied. Announcing first also reads correctly when the
-            # spawn itself fails: START, then the fault, then STOP.
+            # The log still reads START -> fault -> STOP. These lines once sat after
+            # the workers had RUN, and a session that faulted at once printed its
+            # log backwards (recv error, engine fault, then "Start. Filter: ...");
+            # a fault is said by the stop, and a stop waits for this lock, so it now
+            # comes after these lines. A worker's WARNING takes no lock, so one
+            # raised in the first instant (a first send that fails) can precede
+            # "Start." - the price of not holding the traffic (D-36).
             self.log(f"{T('log.start_filter')}: {filt}  (seed={self._effective_seed})")
             if self._driver_queue:
                 # Said once, at START, because it frames every number that follows. The
@@ -1077,10 +1069,6 @@ class BeanEngine:
                 q = self._driver_queue
                 self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
                            kb=q["queue_size"] // 1024, warn=f"{driverwait.WARN_MS:g}"))
-            self.log_event("START", f"filter={filt}, seed={self._effective_seed}"
-                                    + (f", duration={self._duration:g}s" if self._duration else ""))
-            self._t_cap.start()
-            self._t_inj.start()
             self._t_wd.start()
         except BaseException as exc:
             # A worker (or the resolver) could not be spawned. Do NOT leave a running
@@ -1102,8 +1090,8 @@ class BeanEngine:
     # says so instead of stalling the window.
     OPEN_RETRY_DELAYS_S = (0.15, 0.30)
 
-    def _open_divert(self):
-        """Open the handle, letting a driver that is mid-unload finish first.
+    def _open_with_retry(self, open_handle):
+        """Open a handle, letting a driver that is mid-unload finish first.
 
         MEASURED 2026-08-04: stopping the WinDivert service while another handle is
         open leaves it in "stop pending", and every open until that finishes fails
@@ -1111,12 +1099,18 @@ class BeanEngine:
         ``driver.release_on_exit``), but nothing stops ANOTHER program that uses
         WinDivert from doing it, and a start that fails because it arrived 100 ms
         early is a start that should simply have waited.
+
+        ``open_handle`` - the NETWORK handle's ``open``, or the socket watcher's
+        ``start``, which opens the SOCKET one. That one opens FIRST (external review
+        P1-5), so it meets an unloading driver first: without the wait it would
+        fall back to the poller for the whole session while the NETWORK handle,
+        opened a moment later, found the driver ready.
         """
         from .driver import ERROR_NO_SUCH_DEVICE
         said = False
         for delay in self.OPEN_RETRY_DELAYS_S + (None,):
             try:
-                self._divert.open()
+                open_handle()
                 return
             except BaseException as exc:
                 if (delay is None
@@ -1136,12 +1130,13 @@ class BeanEngine:
         does. On the synthetic/simulate path there is nothing to open, so the engine
         keeps using the polling port table - the testable-without-WinDivert contract
         holds. This method only keeps the map LIVE; pointing targeting at it is
-        _start_locked's job (see _targeting_table).
+        _bind_targeting's job (see _targeting_table).
 
         Failure to open the SOCKET handle DEGRADES to the poller; it does not fail
         the session. A tester who cannot open a second handle still gets impairment
         via the (racier) polling path, not a dead session - and it is recorded, not
-        swallowed.
+        swallowed: the failure is RETURNED, and start() records it once the NETWORK
+        handle has opened (see there for why not before). None otherwise.
         """
         factory = None
         if socket_source is not None:
@@ -1151,7 +1146,7 @@ class BeanEngine:
             factory = windivert_socket_source
         if factory is None:
             self._socketwatch = None
-            return
+            return None
         from .socketwatch import SocketWatcher
         watcher = SocketWatcher(names=self._ports, source_factory=factory)
         # SUBSCRIBE FIRST, THEN SNAPSHOT. The other order looks equally sensible and
@@ -1178,11 +1173,13 @@ class BeanEngine:
         # caught it. Same shape as `_LIVE_ENGINES.add(self)` in start().
         self._socketwatch = watcher
         try:
-            watcher.start()
+            self._open_with_retry(watcher.start)
         except Exception as exc:
-            crashlog.once("engine.socketwatch.start", exc)
+            # Stopped, not only dropped: a start that failed past the open (its
+            # thread would not start) holds an open handle nothing else will close.
+            watcher.stop()
             self._socketwatch = None
-            return
+            return exc
         # Bootstrap from the current socket table, so connections OPEN before this
         # session are known from the first packet (events only announce NEW sockets).
         with crashlog.quiet("engine.socketwatch.bootstrap"):
@@ -1191,6 +1188,60 @@ class BeanEngine:
             # its own events say, so it needs to know WHEN the data was gathered.
             ports, collected_at = self._ports.collected()
             watcher.reconcile(ports, collected_at)
+        return None
+
+    def _stop_socketwatch(self):
+        """Stop this session's live socket map, if it has one: it holds a WinDivert
+        handle and a thread, and nothing may be left sniffing after the session."""
+        watcher, self._socketwatch = self._socketwatch, None
+        if watcher is not None:
+            watcher.stop()
+
+    def _bind_targeting(self):
+        """Resolve the target once, synchronously, for the session that is starting.
+
+        So the very first packet is tested against a populated port set instead of
+        an empty one. Safe to block here: start() already runs off the UI thread
+        (the GUI drives it through _begin_transition), and this is the only place
+        the resolution is allowed to be synchronous. It is the slowest step of a
+        START - 30-36 ms cold and elevated (measured 2026-09-30) - which is why
+        start() runs it before the handle opens.
+        """
+        # Held across the whole binding, not just the read. ``_targeting`` is
+        # shared with every other thread that can install a target (a GUI
+        # "Apply", a scenario step), and this block reads it and then acts on
+        # that reference three times. Bare, a concurrent set_target() landing in
+        # the middle would leave the resolver pointed at an ORPHAN while the core
+        # tested against the object that replaced it - the same class of mismatch
+        # set_target() was fixed for (see its docstring). Consistency of access,
+        # not an observed symptom: the race was NOT reproduced (25 start/stop
+        # cycles against a concurrent applier in test_concurrency_chaos.py stayed
+        # green), and it is narrow today because the CLI applies before start.
+        #
+        # Safe to hold here. Lock order is _stop_lock -> _target_lock ->
+        # ProcessTargeting._lock -> PortTable._lock, and nothing walks it the
+        # other way: the resolver never calls back into the engine, and
+        # retarget() is only ever reached with _target_lock already held. There is
+        # not even contention here - the resolver starts after this, and stop()
+        # joins it - so the synchronous refresh() has no contender.
+        with self._target_lock:
+            targeting = self._targeting
+            if targeting is None:
+                return
+            # Point targeting at the live map when we have one, at the poller
+            # otherwise (2c). Targeting may have been built before start() (the GUI
+            # applies it first), against the poller, so this is where it is
+            # (re)bound to whatever this session actually has - which is why the
+            # socket watcher starts first.
+            targeting.set_table(self._targeting_table())
+            with crashlog.quiet("engine.target"):
+                targeting.refresh()
+            # Reconcile: whichever path installed the target (target_for alone, or
+            # set_target), the session starts with the resolver pointed at it - and
+            # with the live map talking to it, which set_target could not do when
+            # it ran before this session had a map at all.
+            self._resolver.retarget(targeting)
+            self._bind_socket_listener()
 
     EVENT_BY_REASON = {"duration": "events.duration_reached",
                        "fault": "events.fault"}
@@ -1305,9 +1356,7 @@ class BeanEngine:
         self._resolver.stop()
         # Same reasoning: the socket watcher holds a WinDivert handle. Stop it here,
         # next to the resolver, so the session leaves nothing sniffing.
-        if self._socketwatch is not None:
-            self._socketwatch.stop()
-            self._socketwatch = None
+        self._stop_socketwatch()
         self.log_event("STOP", self.EVENT_BY_REASON.get(reason, "events.stopped"))
         with self._cv:
             self._cv.notify_all()

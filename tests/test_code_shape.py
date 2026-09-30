@@ -169,8 +169,10 @@ DEPTH_BAND = 4                  # absolute: see above
 # without anyone aiming at this axis. Lowering a crowd count is free; the test
 # below is what forces it, and that is the whole point of pinning it. 11 -> 10 on
 # 2026-09-29 the same way: the scenario reader nested inside the --dry-run branch
-# of `cli.py` became one function for both doors (R-13a).
-DEPTHS_NEAR_CEILING = 10        # make_gear_icon at 5, nine more at 4
+# of `cli.py` became one function for both doors (R-13a). 10 -> 9 on 2026-09-30:
+# the target binding left `engine._start_locked` for its own method when the start
+# order changed (external review P1-5).
+DEPTHS_NEAR_CEILING = 9         # make_gear_icon at 5, eight more at 4
 
 
 def _logic_lines(source):

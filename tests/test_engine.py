@@ -3,6 +3,7 @@
 Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
+import itertools
 import os
 import random
 import re
@@ -1390,6 +1391,12 @@ def test_the_capture_loop_actually_takes_the_sample():
     by deleting the call site without turning any of them red. This one runs a
     real session, with the QPC pair injected BEFORE start() so the loop measures a
     known 200 ms rather than whatever the machine's clock says.
+
+    The clock MOVES: its first reading is the floor start() takes just before the
+    capture thread exists (external review P1-5), the packets are stamped at that
+    floor, and every later reading is 200 ms on. A clock standing still, as this
+    test once had, would put every packet under the floor - and a test that
+    measures nothing proves nothing.
     """
     # 1 MHz on purpose, NOT this machine's real 10 MHz: if start() overwrote the
     # injected frequency with the machine's own, the same stamp would read 20 ms
@@ -1397,10 +1404,11 @@ def test_the_capture_loop_actually_takes_the_sample():
     # is invisible on Windows and only breaks on the Linux runner, which is the
     # kind of mutant that gets waved through.
     now_ticks, freq = 50_000_000, 1_000_000
-    pkts = [StampedPacket(now_ticks - 200_000, size=100, port=8504)
-            for _ in range(3)]
+    floor = now_ticks - 200_000
+    readings = itertools.chain([floor], itertools.repeat(now_ticks))
+    pkts = [StampedPacket(floor, size=100, port=8504) for _ in range(3)]
     sh = BeanEngine()
-    sh._driver_wait.qpc = lambda: now_ticks
+    sh._driver_wait.qpc = lambda: next(readings)
     sh._driver_wait.freq = freq
     sh.start("test", divert=FakeDivert(pkts))
     deadline = time.time() + 15
@@ -1410,6 +1418,30 @@ def test_the_capture_loop_actually_takes_the_sample():
     sh.stop()
     check("driver wait: the capture loop sampled it", abs(peak - 200.0) < 0.001,
           f"({peak})")
+
+
+def test_a_packet_queued_before_the_capture_thread_started_is_not_a_driver_wait():
+    """External review P1-5: the first packet of a session was sampled, and it was
+    the OLDEST one in the queue - queued while the start was still resolving its
+    target, with nothing reading the handle. Its wait was the start's (35-56 ms
+    measured, elevated and cold), and it became the session's peak and, past
+    50 ms, a "the driver is dropping packets" warning in the log and the report.
+    A packet stamped before the capture thread existed is not a driver wait."""
+    floor, freq = 50_000_000, 1_000_000
+    readings = itertools.chain([floor], itertools.repeat(floor + 10_000))
+    lines = []
+    sh = BeanEngine(log_fn=lines.append)
+    sh._driver_wait.qpc = lambda: next(readings)
+    sh._driver_wait.freq = freq
+    # queued 200 ms before the capture thread started
+    sh.start("test", divert=FakeDivert([StampedPacket(floor - 200_000, size=100, port=8506)]))
+    wait_until(lambda: sh.stats_snapshot()["seen"] >= 1, timeout=15)
+    peak = sh.stats_snapshot()["driver_wait_peak_ms"]
+    events = [e[3] for e in sh.events_snapshot()]
+    sh.stop()
+    check("driver wait: the start's own wait is not the peak", peak == 0.0, f"({peak})")
+    check("driver wait: and it is not reported as the driver dropping packets",
+          "events.driver_wait" not in events, f"({events})")
 
 
 def test_a_shorter_wait_never_lowers_the_recorded_peak():

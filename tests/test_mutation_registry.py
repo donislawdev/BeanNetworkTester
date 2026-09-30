@@ -851,7 +851,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 10        # make_gear_icon at 5, nine more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 9         # make_gear_icon at 5, eight more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -1546,7 +1546,7 @@ MUTATIONS = [
     {
         "label": "driver: a start no longer waits for a driver that is unloading",
         "file": "beantester/engine.py",
-        "old": "                self._open_divert()",
+        "old": "                self._open_with_retry(self._divert.open)",
         "new": "                self._divert.open()",
         "test": "test_a_driver_that_is_still_unloading_is_waited_for_not_reported",
     },
@@ -1720,22 +1720,21 @@ MUTATIONS = [
     {
         "label": "targeting: a running watcher is not published for stop() to find",
         "file": "beantester/engine.py",
-        "old": "        self._socketwatch = watcher\n        try:\n            watcher.start()",
-        "new": "        try:\n            watcher.start()",
+        "old": ("        self._socketwatch = watcher\n        try:\n"
+                "            self._open_with_retry(watcher.start)"),
+        "new": "        try:\n            self._open_with_retry(watcher.start)",
         "test": "test_the_socket_watcher_survives_start_stop_cycles",
     },
     {
         "label": "targeting: the bootstrap snapshot is taken before subscribing",
         "file": "beantester/engine.py",
         "old": "        try:\n"
-               "            watcher.start()\n"
-               "        except Exception as exc:\n"
-               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+               "            self._open_with_retry(watcher.start)\n"
+               "        except Exception as exc:\n",
         "new": "        ports, collected_at = self._ports.collected()\n"
                "        try:\n"
-               "            watcher.start()\n"
-               "        except Exception as exc:\n"
-               "            crashlog.once(\"engine.socketwatch.start\", exc)",
+               "            self._open_with_retry(watcher.start)\n"
+               "        except Exception as exc:\n",
         "test": "test_the_event_source_is_open_before_the_bootstrap_snapshot_is_taken",
     },
     {
@@ -3750,8 +3749,8 @@ MUTATIONS = [
     {
         "label": "engine: a stand-in driver is not reported as one",
         "file": "beantester/engine.py",
-        "old": "        self._simulated = not real_windivert",
-        "new": "        self._simulated = False",
+        "old": "            self._simulated = not real_windivert",
+        "new": "            self._simulated = False",
         "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
     },
     {
@@ -3764,7 +3763,7 @@ MUTATIONS = [
     {
         "label": "engine: a new session keeps the last one's scenario",
         "file": "beantester/engine.py",
-        "old": "        self._scenario_file, self._scenario_loop = None, False    # start_scenario sets\n",
+        "old": "            self._scenario_file, self._scenario_loop = None, False    # start_scenario sets\n",
         "new": "",
         "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
     },
@@ -4763,6 +4762,103 @@ MUTATIONS = [
         "old": "        self._driver_wait.reset()\n",
         "new": "",
         "test": "test_a_stats_reset_starts_a_new_driver_wait_window",
+    },
+    # -- the start order (external review P1-5) ------------------------------------ #
+    {
+        # The socket watcher and the target resolve back in the gap between the
+        # open and the capture thread, holding every matching packet.
+        "label": "engine: the slow start work runs after the handle opens again",
+        "file": "beantester/engine.py",
+        "old": ("            socket_error = self._start_socketwatch(real_windivert, socket_source)\n"
+                "            self._bind_targeting()\n"
+                "            if hasattr(self._divert, \"open\"):\n"
+                "                self._open_with_retry(self._divert.open)\n"),
+        "new": ("            if hasattr(self._divert, \"open\"):\n"
+                "                self._open_with_retry(self._divert.open)\n"
+                "            socket_error = self._start_socketwatch(real_windivert, socket_source)\n"
+                "            self._bind_targeting()\n"),
+        "test": "test_the_slow_part_of_a_start_runs_before_the_handle_opens",
+    },
+    {
+        # The NETWORK handle refuses and the socket watcher opened before it sniffs on.
+        "label": "engine: a handle that will not open leaves the socket watcher running",
+        "file": "beantester/engine.py",
+        "old": ("            self._divert = None\n"
+                "            self._stop_socketwatch()\n"
+                "            raise\n"),
+        "new": ("            self._divert = None\n"
+                "            raise\n"),
+        "test": "test_a_handle_that_will_not_open_leaves_no_socket_watcher_behind",
+    },
+    {
+        # D-35: the SOCKET half of a start that fails anyway is a crash record.
+        "label": "engine: a socket handle failure is recorded before the start opens",
+        "file": "beantester/engine.py",
+        "old": ("            self._socketwatch = None\n"
+                "            return exc\n"),
+        "new": ("            self._socketwatch = None\n"
+                "            crashlog.once(\"engine.socketwatch.start\", exc)\n"
+                "            return None\n"),
+        "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
+    },
+    {
+        # D-35: a SOCKET handle that failed alone is no longer recorded at all.
+        "label": "engine: a socket handle that failed alone is not recorded",
+        "file": "beantester/engine.py",
+        "old": "            crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
+        "new": "            pass\n",
+        "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
+    },
+    {
+        # A watcher whose thread would not start is dropped with its handle open.
+        "label": "engine: a socket watcher that cannot start keeps its handle open",
+        "file": "beantester/engine.py",
+        "old": ("            watcher.stop()\n"
+                "            self._socketwatch = None\n"
+                "            return exc\n"),
+        "new": ("            self._socketwatch = None\n"
+                "            return exc\n"),
+        "test": "test_a_socket_watcher_that_cannot_start_its_thread_closes_its_handle",
+    },
+    {
+        # The SOCKET handle, now first, meets an unloading driver without waiting.
+        "label": "engine: the socket handle does not wait for an unloading driver",
+        "file": "beantester/engine.py",
+        "old": "            self._open_with_retry(watcher.start)\n",
+        "new": "            watcher.start()\n",
+        "test": "test_a_socket_handle_waits_for_an_unloading_driver_too",
+    },
+    {
+        # A step between the open and the try again: its exception escapes with
+        # the session "running" and the handle open.
+        "label": "engine: a step right after the open escapes the try that stops a start",
+        "file": "beantester/engine.py",
+        "old": "        session = self._session = _Session(divert, stuck)\n",
+        "new": ("        session = self._session = _Session(divert, stuck)\n"
+                "        self._fine_timers = winenv.request_fine_timers()\n"),
+        "test": "test_a_failure_right_after_the_handle_opens_still_closes_it",
+    },
+    {
+        # The start line said again before the capture thread exists: a log that
+        # blocks on it holds all the filtered traffic.
+        "label": "engine: the start line is said before the capture thread reads",
+        "file": "beantester/engine.py",
+        "old": ("            self._driver_wait.begin()\n"
+                "            self._t_cap.start()\n"),
+        "new": ("            self.log(f\"{T('log.start_filter')}: {filt}  "
+                "(seed={self._effective_seed})\")\n"
+                "            self._driver_wait.begin()\n"
+                "            self._t_cap.start()\n"),
+        "test": "test_a_start_line_held_by_the_log_does_not_hold_the_traffic",
+    },
+    {
+        # The packet queued while the start still resolved its target is sampled,
+        # and the start's wait becomes the peak and a false warning.
+        "label": "driverwait: the start's own wait counts as a driver wait",
+        "file": "beantester/driverwait.py",
+        "old": "        if not stamp or not freq or stamp < self.floor:\n",
+        "new": "        if not stamp or not freq:\n",
+        "test": "test_a_packet_queued_before_the_capture_thread_started_is_not_a_driver_wait",
     },
 ]
 

@@ -424,7 +424,12 @@ SILENT_BROAD_HANDLERS = {
     "cli.py": 4,
     # 5 until 2026-09-29: the RST builder's two identical handlers (the divert's own
     # `make_rst` and the pydivert fallback) became one when the builder moved to core.
-    "engine.py": 4,
+    # 5 again from 2026-09-30, on purpose (external review P1-5, decision D-35): the
+    # SOCKET handle now opens BEFORE the NETWORK one, and `_start_socketwatch` hands
+    # its failure back instead of recording it - start() records it once the NETWORK
+    # handle has opened. A start that fails there failed the SOCKET handle for the
+    # same reason, and a crash record of that would be noise the dialog explains.
+    "engine.py": 5,
     "gui/tooltip.py": 4,
     "legal.py": 4,
     "winenv.py": 4,
