@@ -57,7 +57,7 @@ class _SyntheticUDP:
 def build_synthetic_rst(packet, fields):
     """Build a synthetic RST packet from ``BeanCore.build_rst_fields`` output.
 
-    Mirrors the real (pydivert) construction in ``BeanEngine._build_rst_packet``:
+    Mirrors the real (pydivert) construction in ``BeanCore.build_rst_packet``:
     an INBOUND TCP segment with only the RST flag set, addresses/ports taken from
     ``fields`` (already aimed at the local end). Returned to the engine, which
     hands it to ``divert.send`` and counts ``rst_sent`` - so the RST path is

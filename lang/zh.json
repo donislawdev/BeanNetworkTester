@@ -325,6 +325,7 @@
   "log.note_windows": "注意：捕获功能仅支持 Windows（WinDivert）。",
   "log.once": "一次",
   "log.ports": "端口",
+  "log.previous_session_stuck": "警告：上一次会话的一部分仍然卡住，无法停止。这不会妨碍本次会话运行，但在重新启动程序之前可能会一直占用处理器。",
   "log.process_excluded": "目标",
   "log.processes": "进程",
   "log.profile_deleted": "配置方案已删除",

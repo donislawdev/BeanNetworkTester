@@ -20,6 +20,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A session stuck while sending a packet back out now ends on its own.** If putting
+  one packet back on the wire got stuck, for example because the WinDivert driver stopped
+  answering, or because the console window was paused by selecting text while the tool
+  was reporting a failed packet, the session kept running and the traffic in the filter
+  went nowhere. After 10 seconds stuck, the session now stops, the network goes back to
+  normal, and the log says why. A packet that fails to go out at once is still only
+  counted and reported.
+
+- **STOP is quicker, also when part of the session is stuck.** An ordinary STOP waited up
+  to about a fifth of a second for a background check to finish, and no longer does. When
+  parts of a session were stuck, STOP waited 2 seconds for each of them, up to 6 seconds.
+  It now waits 2 seconds for all of them together. The network is restored first either
+  way. If a stuck part is still running at the next START, the log says so: it may keep
+  using the processor until you restart the program.
+
 - **A quick STOP and START no longer lets the previous session act on the next one.**
   A scenario step that was still running when you pressed STOP could set its target
   process or its values in the next session, which then impaired something you did not

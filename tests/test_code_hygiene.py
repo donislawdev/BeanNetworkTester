@@ -422,7 +422,9 @@ SILENT_BROAD_HANDLERS = {
     # 5 until 2026-09-29: the run and --dry-run each carried a copy of the scenario
     # reader, and R-13a made them one (`_read_scenario`).
     "cli.py": 4,
-    "engine.py": 5,
+    # 5 until 2026-09-29: the RST builder's two identical handlers (the divert's own
+    # `make_rst` and the pydivert fallback) became one when the builder moved to core.
+    "engine.py": 4,
     "gui/tooltip.py": 4,
     "legal.py": 4,
     "winenv.py": 4,
