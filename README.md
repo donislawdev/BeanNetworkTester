@@ -1534,9 +1534,10 @@ seeded).
   untouched, which is the safe direction. This mirrors `!53` on ports, below.
 - **Targeting that catches nothing breaks nothing** - if no matching process has a connection open,
   traffic passes untouched. That covers a program that is not running and one that is running but
-  idle. Its next connection is impaired as usual. The program says so explicitly (a red note under
-  the field and a log entry), because "a run in which nothing broke" looks identical to "the app
-  held up".
+  idle. When such a program opens a connection, the tool adds it within milliseconds, so the first
+  packets of that connection can pass untouched and the rest is impaired. The program says so
+  explicitly (a red note under the field and a log entry), because "a run in which nothing broke"
+  looks identical to "the app held up".
 - **A bare process name is a substring** - `chrome` also catches `chromedriver.exe`. This is kept on
   purpose (compatibility with old configs). For precision reach for `re:^chrome\.exe$` or the
   exclusion `chrome, !chromedriver`.

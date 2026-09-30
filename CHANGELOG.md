@@ -24,8 +24,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   note under Target process and the log line at START said that no running process
   matched, which was false for a program idle between two connections. They now say that
   no matching process has a connection open, which is true either way. On the command
-  line the mid-run warning no longer says "from here on": the target's next connection is
-  impaired as usual.
+  line the mid-run warning no longer says "from here on": when the target opens a
+  connection again, the tool adds it within milliseconds, and only the first packets of
+  that connection can pass untouched.
 
 - **`--target *.exe` now gets the warning about impairing the whole machine.** `*.exe`,
   `exe` and `re:\.exe$` match every program with a connection except Windows itself, yet
