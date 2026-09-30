@@ -105,7 +105,19 @@ _ADD = frozenset({BIND, CONNECT, LISTEN, ACCEPT})
 # NETWORK-layer packet the engine already holds is a strictly better source for all
 # four (it even distinguishes ICMP, which the SOCKET layer does not). The one thing
 # a packet cannot tell us is the owning pid, which is exactly what is left here.
-SocketEvent = namedtuple("SocketEvent", "kind pid local_port")
+#
+# ...and WHICH of the owner's endpoints the event is about. One process can hold
+# several endpoints on one local port - a listener and every connection it accepted,
+# TCP and UDP, IPv4 and IPv6 - and each ends with its own CLOSE (external review
+# P2-8). MEASURED 2026-09-30, elevated, sniff-only (`sondy/g4/m2_socket_endpoints.py`):
+# every endpoint gets a CLOSE carrying its own `endpoint`; an ACCEPT's `parent` is
+# the listener's endpoint, a CONNECT's the endpoint its socket bound; a UDP socket's
+# CLOSE arrives TWICE with the same id. 0 = not told (a test double, an old source).
+SocketEvent = namedtuple("SocketEvent", "kind pid local_port endpoint parent",
+                         defaults=(0, 0))
+
+# "no endpoints known for this port" (see SocketWatcher._endpoints)
+_NO_ENDPOINTS: tuple[None, frozenset[int]] = (None, frozenset())
 
 # "no event has ever touched this port". Deliberately -inf and not 0.0: a
 # ``PortTable`` that has never refreshed reports a collection time of 0.0, and
@@ -140,9 +152,19 @@ class SocketWatcher:
         # under _lock only - never by pid_for, so the packet path pays nothing.
         self._evidence = {}
         self._suspect = set()            # ports absent from the last snapshot (grace)
+        # local_port -> (pid, {endpoint ids}): the owner's endpoints on that port an
+        # event told us about and no CLOSE has ended yet. A CLOSE takes the port out
+        # of the map only when it ends the LAST of them (external review P2-8).
+        # Tagged with the pid, so endpoints of a previous owner never hold the port
+        # for the next one. Keyed by port, so it never outgrows the port space.
+        self._endpoints = {}
         self._source = None
         self._thread = None
         self._stopping = threading.Event()
+        # Set by the reader thread when its source broke while nobody was stopping
+        # it: the map is then kept only by reconcile, and the engine goes back to the
+        # poller (external review P3-21). A watcher not started yet has not died.
+        self._died = False
         self._events = 0                 # applied-event counter (tests/diagnostics)
         self._reconciles = 0
         # Told about every socket this map GAINS, so a consumer can act on the
@@ -190,12 +212,14 @@ class SocketWatcher:
                     self._events += 1
                     return
                 self._ports[port] = pid
+                self._opened(port, pid, ev)
                 self._evidence[port] = self.clock()
             elif ev.kind == CLOSE:
                 # pid-checked: a late CLOSE for a port the OS has already handed to
                 # a DIFFERENT process must not evict the new owner. Windows reuses
                 # both PIDs and ports, so "same port" is not "same socket".
-                if self._ports.get(port) == pid:
+                # ...and "one socket closed" is not "the port is free": see _closed.
+                if self._ports.get(port) == pid and self._closed(port, pid, ev):
                     del self._ports[port]
                 # Stamped even when the pid did NOT match, and even though the map
                 # did not change: the driver still told us something current about
@@ -226,6 +250,46 @@ class SocketWatcher:
             if listener is not None:
                 with crashlog.quiet("socketwatch.listener"):
                     listener(port, pid)
+
+    def _opened(self, port, pid, ev):
+        """Note the owner's endpoint (and its parent) on ``port``. Under ``_lock``.
+
+        The parent counts as open too: it is the listener behind an ACCEPT, or the
+        endpoint a connecting socket bound, and both end with a CLOSE of their own
+        (measured, see ``SocketEvent``). That is how a listener opened BEFORE this
+        watcher becomes known at its first ACCEPT - the usual case, a server started
+        before the session. A set, not a count: a UDP socket's CLOSE comes twice.
+        """
+        if not ev.endpoint:
+            return
+        owner, endpoints = self._endpoints.get(port, _NO_ENDPOINTS)
+        if owner != pid:
+            endpoints = set()
+            self._endpoints[port] = (pid, endpoints)
+        endpoints.add(ev.endpoint)
+        if ev.parent:
+            endpoints.add(ev.parent)
+
+    def _closed(self, port, pid, ev):
+        """Does this CLOSE free ``port``? Under ``_lock``, for the port's own owner.
+
+        Only when it ends the LAST endpoint of the owner's this map knows of. It used
+        to be every CLOSE, so a server lost its port when ONE client disconnected -
+        its listener and every other connection still open (external review P2-8,
+        reproduced with the real events: `pid_for` was None 20 times out of 20).
+
+        A port with no endpoint known - it came from a snapshot, or from events that
+        carry no id - frees at any CLOSE, as before: nothing tells us whether others
+        are open. If one is, the next snapshot puts it back (``reconcile``).
+        """
+        owner, endpoints = self._endpoints.get(port, _NO_ENDPOINTS)
+        if owner != pid:
+            return True
+        endpoints.discard(ev.endpoint)
+        if endpoints:
+            return False
+        del self._endpoints[port]
+        return True
 
     def reconcile(self, port_pid, collected_at):
         """Merge a socket-table snapshot in (bootstrap + safety net).
@@ -281,6 +345,7 @@ class SocketWatcher:
             doomed = absent & self._suspect          # absent twice running
             for port in doomed:
                 merged.pop(port, None)
+                self._endpoints.pop(port, None)      # their CLOSEs never came
             self._suspect = absent - doomed          # first-time absentees wait one pass
             self._evidence = {port: at for port, at in evidence.items()
                               if port in merged or at >= collected_at}
@@ -369,6 +434,11 @@ class SocketWatcher:
     def reconciles(self):
         return self._reconciles
 
+    @property
+    def died(self):
+        """True once the reader's source broke while nothing was stopping it."""
+        return self._died
+
     def _loop(self):
         source = self._source
         if source is None:
@@ -384,11 +454,14 @@ class SocketWatcher:
             # recv() then raises (WinError 995, "I/O aborted"). That is the NORMAL
             # shutdown path, not a fault - recording it made every STOP leave a
             # spurious crash entry. Only an error while we are NOT stopping means the
-            # socket stream really died, which is traffic the tester asked to impair
-            # sailing through - worth one traceback. Mirrors the capture loop's
-            # ``if self._running`` guard.
+            # socket stream really died. The map then lives on reconcile alone, and
+            # the engine's watchdog sees `died` and goes back to the poller. Recorded
+            # EVERY time: `crashlog.once` kept the first death per process, so a
+            # later GUI session's left no trace (external review P3-21). Mirrors the
+            # capture loop's ``if self._running`` guard.
             if not self._stopping.is_set():
-                crashlog.once("socketwatch.loop", exc)
+                self._died = True
+                crashlog.note(exc, "socketwatch.loop")
 
 
 # -- the real Windows source (smoke-tested, not unit-tested) ------------------- #
@@ -410,13 +483,15 @@ class _WinDivertSocketSource:
                                           flags=Flag.SNIFF | Flag.RECV_ONLY)
         self._handle.open()
 
-    def __iter__(self):
+    def __iter__(self):  # pragma: no cover - Windows only (pydivert, a real driver)
         for pkt in self._handle:
             sock = pkt.socket
             if sock is None:
                 continue
             yield SocketEvent(kind=int(pkt.event), pid=int(sock.ProcessId),
-                              local_port=int(sock.LocalPort))
+                              local_port=int(sock.LocalPort),
+                              endpoint=int(sock.EndpointId),
+                              parent=int(sock.ParentEndpointId))
 
     def close(self):
         with crashlog.quiet("socketwatch.source.close"):

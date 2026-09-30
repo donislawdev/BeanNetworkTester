@@ -4797,7 +4797,7 @@ MUTATIONS = [
         "old": ("            self._socketwatch = None\n"
                 "            return exc\n"),
         "new": ("            self._socketwatch = None\n"
-                "            crashlog.once(\"engine.socketwatch.start\", exc)\n"
+                "            crashlog.note(exc, \"engine.socketwatch.start\")\n"
                 "            return None\n"),
         "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
     },
@@ -4805,7 +4805,7 @@ MUTATIONS = [
         # D-35: a SOCKET handle that failed alone is no longer recorded at all.
         "label": "engine: a socket handle that failed alone is not recorded",
         "file": "beantester/engine.py",
-        "old": "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
+        "old": "                crashlog.note(socket_error, \"engine.socketwatch.start\")\n",
         "new": "                pass\n",
         "test": "test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened",
     },
@@ -4819,7 +4819,7 @@ MUTATIONS = [
                 "            self._t_inj.start()\n"
                 "            if socket_error is not None:\n"),
         "new": ("            if socket_error is not None:\n"
-                "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n"
+                "                crashlog.note(socket_error, \"engine.socketwatch.start\")\n"
                 "            self._driver_wait.begin()\n"
                 "            self._t_cap.start()\n"
                 "            self._t_inj.start()\n"
@@ -5004,6 +5004,123 @@ MUTATIONS = [
         "old": "        if (now - self._tried) >= limit or not self._ports:\n",
         "new": "        if (now - self._last) >= limit or not self._ports:\n",
         "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
+    },
+    {
+        # P2-8: one endpoint's CLOSE frees the port of a server still listening.
+        "label": "socketwatch: every CLOSE frees the port again",
+        "file": "beantester/socketwatch.py",
+        "old": "                if self._ports.get(port) == pid and self._closed(port, pid, ev):\n",
+        "new": "                if self._ports.get(port) == pid:\n",
+        "test": "test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes",
+    },
+    {
+        # P2-8: a listener opened before the watcher is never learnt from its ACCEPT.
+        "label": "socketwatch: an event's parent endpoint is not counted",
+        "file": "beantester/socketwatch.py",
+        "old": ("        if ev.parent:\n"
+                "            endpoints.add(ev.parent)\n"),
+        "new": "        pass\n",
+        "test": "test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes",
+    },
+    {
+        # P2-8: a CLOSE ends ANY endpoint, as a count would - UDP's comes twice.
+        "label": "socketwatch: endpoints are counted instead of named",
+        "file": "beantester/socketwatch.py",
+        "old": "        endpoints.discard(ev.endpoint)\n",
+        "new": "        endpoints.pop()\n",
+        "test": "test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes",
+    },
+    {
+        # P2-8: the next owner's endpoints go on top of the previous owner's.
+        "label": "socketwatch: the next owner inherits the previous owner's endpoints",
+        "file": "beantester/socketwatch.py",
+        "old": ("        if owner != pid:\n"
+                "            endpoints = set()\n"),
+        "new": ("        if owner is None:\n"
+                "            endpoints = set()\n"),
+        "test": "test_endpoints_of_the_previous_owner_do_not_hold_the_port_for_the_next",
+    },
+    {
+        # P2-8: a port known from a snapshot only outlives every CLOSE.
+        "label": "socketwatch: a port with no endpoint known outlives its CLOSE",
+        "file": "beantester/socketwatch.py",
+        "old": ("        if owner != pid:\n"
+                "            return True\n"),
+        "new": ("        if owner != pid:\n"
+                "            return False\n"),
+        "test": "test_a_port_with_no_endpoint_known_is_freed_by_any_close_as_before",
+    },
+    {
+        # P2-8: the endpoints of a port the snapshots pruned stay for ever.
+        "label": "socketwatch: a pruned port keeps its endpoints",
+        "file": "beantester/socketwatch.py",
+        "old": "                self._endpoints.pop(port, None)      # their CLOSEs never came\n",
+        "new": "",
+        "test": "test_a_port_the_snapshots_prune_forgets_its_endpoints",
+    },
+    {
+        # P2-8: the empty endpoint set of a freed port stays behind.
+        "label": "socketwatch: a freed port leaves its endpoint set behind",
+        "file": "beantester/socketwatch.py",
+        "old": "        del self._endpoints[port]\n",
+        "new": "",
+        "test": "test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes",
+    },
+    {
+        # P3-21: a reader that dies mid-session does not say so.
+        "label": "socketwatch: a reader that dies does not say so",
+        "file": "beantester/socketwatch.py",
+        "old": "                self._died = True\n",
+        "new": "",
+        "test": "test_a_dead_socket_reader_hands_targeting_back_to_the_poller",
+    },
+    {
+        # P3-21, D-44: a reader's death is recorded once per PROCESS again.
+        "label": "socketwatch: a reader's death is recorded once per process",
+        "file": "beantester/socketwatch.py",
+        "old": "                crashlog.note(exc, \"socketwatch.loop\")\n",
+        "new": "                crashlog.once(\"socketwatch.loop\", exc)\n",
+        "test": "test_stop_does_not_record_the_close_induced_error_as_a_crash",
+    },
+    {
+        # P3-21: a dead socket map stays the session's - targeting waits for snapshots.
+        "label": "engine: a dead socket watcher stays in the session",
+        "file": "beantester/engine.py",
+        "old": "                if watcher is not None and watcher.died:\n",
+        "new": "                if False:\n",
+        "test": "test_a_dead_socket_reader_hands_targeting_back_to_the_poller",
+    },
+    {
+        # P3-21: a watchdog kept past its session retires the next session's watcher.
+        "label": "engine: another session's watchdog retires the socket watcher",
+        "file": "beantester/engine.py",
+        "old": "        if session is not self._session or not self._stop_lock.acquire(blocking=False):\n",
+        "new": "        if not self._stop_lock.acquire(blocking=False):\n",
+        "test": "test_only_its_own_session_retires_a_dead_watcher_and_never_waits_for_a_stop",
+    },
+    {
+        # P3-21: retiring waits for a STOP that holds the lock while joining this thread.
+        "label": "engine: retiring a dead socket watcher waits for STOP",
+        "file": "beantester/engine.py",
+        "old": "        if session is not self._session or not self._stop_lock.acquire(blocking=False):\n",
+        "new": "        if session is not self._session or not self._stop_lock.acquire():\n",
+        "test": "test_only_its_own_session_retires_a_dead_watcher_and_never_waits_for_a_stop",
+    },
+    {
+        # P3-21: a watcher that is not the session's any more is stopped anyway.
+        "label": "engine: a socket watcher the session replaced is retired",
+        "file": "beantester/engine.py",
+        "old": "            if self._socketwatch is watcher:\n",
+        "new": "            if True:\n",
+        "test": "test_only_its_own_session_retires_a_dead_watcher_and_never_waits_for_a_stop",
+    },
+    {
+        # P3-21, D-44: a SOCKET handle that failed alone is recorded once per PROCESS.
+        "label": "engine: a socket handle failure is recorded once per process",
+        "file": "beantester/engine.py",
+        "old": "                crashlog.note(socket_error, \"engine.socketwatch.start\")\n",
+        "new": "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
+        "test": "test_a_socket_handle_failure_is_recorded_in_every_session",
     },
 ]
 

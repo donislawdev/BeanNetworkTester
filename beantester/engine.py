@@ -1042,11 +1042,12 @@ class BeanEngine:
                 # start that fails there has usually failed the SOCKET handle for
                 # the same reason (no rights, no driver), and its own error already
                 # reaches the user - a crash record of the same cause would be noise
-                # in crashes/. A SOCKET handle that failed ALONE is worth one:
-                # targeting then runs on the poller for the whole session. Here, not
-                # right after the open: a record writes a file and asks the GUI for
-                # its context, and nothing drained the handle meanwhile.
-                crashlog.once("engine.socketwatch.start", socket_error)
+                # in crashes/. A SOCKET handle that failed ALONE is worth one, every
+                # session (`once` kept the first per process, P3-21): targeting then
+                # runs on the poller for the whole session. Here, not right after the
+                # open: a record writes a file and asks the GUI for its context, and
+                # nothing drained the handle meanwhile.
+                crashlog.note(socket_error, "engine.socketwatch.start")
             # ANNOUNCED ONCE THE HANDLE IS BEING DRAINED, and before the watchdog.
             # The log is the caller's code and can block (a console paused by a
             # text selection): said while the handle was open and nothing read it,
@@ -1208,6 +1209,23 @@ class BeanEngine:
                 if self._targeting is not None:
                     self._targeting.set_table(self._ports)
             watcher.stop()
+
+    def _retire_socketwatch(self, watcher, session):
+        """Back to the poller when the live socket map's reader died (P3-21).
+
+        The map would live on the watchdog's reconcile alone, while targeting's
+        ``refresh`` is a no-op on it - so a new socket waited for the next snapshot
+        (0.2-0.5 s), where the poller rebuilds on a miss (0.05 s). Same guards as
+        ``_worker_stop``: this session's watchdog only, and never waiting for
+        ``_stop_lock`` - a START or STOP holding it runs this again next tick.
+        """
+        if session is not self._session or not self._stop_lock.acquire(blocking=False):
+            return
+        try:
+            if self._socketwatch is watcher:
+                self._stop_socketwatch()
+        finally:
+            self._stop_lock.release()
 
     def _bind_targeting(self):
         """Resolve the target once, synchronously, for the session that is starting.
@@ -1564,7 +1582,9 @@ class BeanEngine:
                 # second read be None. The AttributeError landed in the tick's
                 # except and left a crash record for an ORDINARY stop.
                 watcher = self._socketwatch
-                if watcher is not None:
+                if watcher is not None and watcher.died:
+                    self._retire_socketwatch(watcher, session)
+                elif watcher is not None:
                     ports, collected_at = self._ports.collected()
                     watcher.reconcile(ports, collected_at)
             except Exception as _exc:
