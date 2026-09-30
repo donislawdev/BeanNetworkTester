@@ -822,6 +822,11 @@ class PortTable:
         self._info = {}                  # pid -> (name, ppid, created, written_at)
         self._bulk_at = 0.0              # last full process_iter (fallback path)
         self._last = 0.0                 # last successful refresh
+        # ...and the last ATTEMPT, which is what paces the next one. One stamp
+        # served both, so a refresh that failed stamped the OLD map as freshly
+        # collected, and collected() handed it to SocketWatcher.reconcile as
+        # newer than the events it then undid (external review P3-19).
+        self._tried = 0.0
         # Generation counter for concurrent refreshes: a collection takes a number
         # before it starts and installs only if nothing NEWER landed meanwhile. See
         # refresh() for why this is a counter and not a timestamp.
@@ -871,7 +876,7 @@ class PortTable:
         """
         now = self.clock() if now is None else now
         with self._lock:
-            if not force and (now - self._last) < self.interval and self._ports:
+            if not force and (now - self._tried) < self.interval and self._ports:
                 return False
             self._gen += 1
             gen = self._gen
@@ -919,7 +924,7 @@ class PortTable:
                 self._native = None                  # stop using the broken path
                 self.native = False
             if ports is None:
-                self._last = now                     # do not hammer a broken lookup
+                self._tried = now                    # do not hammer a broken lookup
                 return False
             if gen < self._installed_gen:
                 # A newer collection already landed, so ours describes an older world.
@@ -931,16 +936,16 @@ class PortTable:
             # generation guard: a shared-port list from an older walk beside a newer
             # map would name processes that no longer own anything.
             self._shared = {port: frozenset(pids) for port, pids in owners.items()}
-            self._last = now
+            self._last = self._tried = now
             for pid in departed:
                 self._info.pop(pid, None)
             self._expire_info(now)
             return True
 
     def refresh_if_stale(self, now=None, miss=False):
-        """Refresh when the map is older than the (miss) interval.
+        """Refresh when the last attempt is older than the (miss) interval.
 
-        **Reads ``_last`` and ``_ports`` WITHOUT ``_lock``, deliberately** - every
+        **Reads ``_tried`` and ``_ports`` WITHOUT ``_lock``, deliberately** - every
         neighbour here takes it (``snapshot``, ``shared_ports``, ``collected``),
         and the one other exception, ``pid_for``, carries its reason in writing.
         This one had none, which is the silence this project treats as a defect in
@@ -949,7 +954,7 @@ class PortTable:
 
         * **Nothing here can be read half-written.** ``_ports`` is only ever
           REPLACED (one assignment in ``refresh``, under the lock), never mutated
-          in place, and every write to ``_last`` is under the lock too. A reader
+          in place, and every write to ``_tried`` is under the lock too. A reader
           without the lock therefore sees the old value or the new one, never a
           torn one.
         * **The answer is ADVISORY.** All it decides is whether to ASK for a
@@ -963,7 +968,7 @@ class PortTable:
         """
         now = self.clock() if now is None else now
         limit = self.miss_interval if miss else self.interval
-        if (now - self._last) >= limit or not self._ports:
+        if (now - self._tried) >= limit or not self._ports:
             return self.refresh(now, force=True)
         return False
 

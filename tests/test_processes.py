@@ -1211,6 +1211,51 @@ def test_collected_hands_over_the_map_and_when_it_was_gathered_together():
           f"({at_again} vs {at})")
 
 
+def test_a_refresh_that_failed_does_not_make_the_old_map_look_new(monkeypatch):
+    """External review P3-19: one stamp paced the refreshes AND dated the map. A
+    refresh that failed stamped the OLD map with the time of the failed attempt, so
+    ``SocketWatcher.reconcile`` weighed it as newer than the events received since:
+    a socket that closed in between came back from the dead. The failure still
+    paces the next attempt - a broken lookup is not hammered."""
+    from beantester import portmap
+    from beantester.socketwatch import CLOSE, CONNECT, SocketEvent, SocketWatcher
+
+    answers, calls = iter([{8080: 500}]), []
+
+    def lookup(owners=None):
+        calls.append(1)
+        return next(answers, None)          # one good walk, then only failures
+
+    monkeypatch.setattr(portmap, "_psutil_port_pid_map", lookup)
+    table = portmap.PortTable()
+    table._native, table.native = None, False
+    table.refresh(now=10.0, force=True)
+    table.refresh(now=50.0, force=True)     # this one fails
+    ports, at = table.collected()
+    check("P3-19: the map keeps the time it was collected", (ports, at) == ({8080: 500}, 10.0),
+          f"({ports}, {at})")
+    check("the failed attempt still paces the next one",
+          table.refresh(now=50.1) is False and table.refresh_if_stale(now=50.1) is False
+          and len(calls) == 2, f"({len(calls)} lookups)")
+
+    class _Names:
+        def name_of(self, pid, cheap=False):
+            return ""
+
+        def ancestors(self, pid, depth=8):
+            return []
+
+    clock = [30.0]
+    watcher = SocketWatcher(names=_Names(), source_factory=lambda: None,
+                            clock=lambda: clock[0])
+    watcher.apply(SocketEvent(CONNECT, 500, 8080))
+    clock[0] = 40.0
+    watcher.apply(SocketEvent(CLOSE, 500, 8080))    # after the good walk
+    watcher.reconcile(*table.collected())
+    check("so a socket that closed since stays closed", watcher.pid_for(8080) is None,
+          f"({watcher.pid_for(8080)})")
+
+
 def test_an_older_collection_does_not_overwrite_a_newer_map():
     """Collecting outside the lock lets two refreshes overlap, so a slow one must not
     move the map BACKWARDS when it finishes late.

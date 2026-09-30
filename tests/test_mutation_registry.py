@@ -1560,7 +1560,7 @@ MUTATIONS = [
     {
         "label": "targeting: a brand-new process is never adopted from its event",
         "file": "beantester/targeting.py",
-        "old": "                if self._pid_matches(pid, name):\n"
+        "old": "                if self._pid_matches(pid, name, table):\n"
                "                    matched.add(pid)",
         "new": "                if False:\n"
                "                    matched.add(pid)",
@@ -1616,8 +1616,8 @@ MUTATIONS = [
         "file": "beantester/targeting.py",
         "old": "            with self._ports_lock:\n"
                "                self._late_owners = {}\n"
-               "            self.table.refresh(force=force)",
-        "new": "            self.table.refresh(force=force)",
+               "            table.refresh(force=force)",
+        "new": "            table.refresh(force=force)",
         "test": "test_a_failing_refresh_does_not_leave_late_owners_behind",
     },
     {
@@ -4876,6 +4876,126 @@ MUTATIONS = [
         "old": "        if not stamp or not freq or stamp < self.floor:\n",
         "new": "        if not stamp or not freq:\n",
         "test": "test_a_packet_queued_before_the_capture_thread_started_is_not_a_driver_wait",
+    },
+    {
+        # P2-10(a): the owner of a late port the walk never saw is dropped unjudged,
+        # and its connection waits for the next rebuild.
+        "label": "targeting: a pid the walk never saw is dropped unjudged",
+        "file": "beantester/targeting.py",
+        "old": ("                unseen = frozenset(owner for owner in self._late_owners.values()\n"
+                "                                   if owner not in seen)\n"),
+        "new": "                unseen = frozenset()\n",
+        "test": "test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one",
+    },
+    {
+        # P2-10(a): a late owner the walk saw and ruled out is queued to be judged again.
+        "label": "targeting: a pid the walk ruled out is queued again",
+        "file": "beantester/targeting.py",
+        "old": "                                   if owner not in seen)\n",
+        "new": "                                   if owner not in pids)\n",
+        "test": "test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one",
+    },
+    {
+        # P2-10(a): what the walk queued waits for a bell that some packet rings.
+        "label": "targeting: the resolver is not rung for what the walk queued",
+        "file": "beantester/targeting.py",
+        "old": ("            if pending and wake is not None:\n"
+                "                wake()\n"),
+        "new": "",
+        "test": "test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one",
+    },
+    {
+        # P2-10(b): the walk empties the whole queue, judged or not.
+        "label": "targeting: the walk empties a queue it did not judge",
+        "file": "beantester/targeting.py",
+        "old": "                pending = (self._pending_pids - seen) | unseen\n",
+        "new": "                pending = unseen\n",
+        "test": "test_a_new_process_announced_while_a_walk_runs_is_still_judged",
+    },
+    {
+        # P2-10: what a walk queues grows the queue past its ceiling.
+        "label": "targeting: a walk pushes the queue past its ceiling",
+        "file": "beantester/targeting.py",
+        "old": ("                if len(pending) > self.MAX_PENDING_PIDS:\n"
+                "                    pending = frozenset(list(pending)[:self.MAX_PENDING_PIDS])\n"),
+        "new": "",
+        "test": "test_the_pending_queue_cannot_grow_without_a_bound",
+    },
+    {
+        # P2-10(b): a pid the walk judged stays queued and is judged twice.
+        "label": "targeting: a pid the walk judged stays queued",
+        "file": "beantester/targeting.py",
+        "old": "                pending = (self._pending_pids - seen) | unseen\n",
+        "new": "                pending = self._pending_pids | unseen\n",
+        "test": "test_a_new_process_announced_while_a_walk_runs_is_still_judged",
+    },
+    {
+        # P3-20: a walk that reads self.table at every step mixes two tables.
+        "label": "targeting: a walk reads names from a table swapped under it",
+        "file": "beantester/targeting.py",
+        "old": ("                name = table.name_of(pid)\n"
+                "                if self._pid_matches(pid, name, table):\n"
+                "                    pids.add(pid)"),
+        "new": ("                name = self.table.name_of(pid)\n"
+                "                if self._pid_matches(pid, name, table):\n"
+                "                    pids.add(pid)"),
+        "test": "test_a_table_swap_does_not_wait_for_a_walk_nor_change_the_one_under_way",
+    },
+    {
+        # P3-20: the swap under the walk's lock - STOP waits for a walk in flight.
+        "label": "targeting: a table swap waits for the walk under way",
+        "file": "beantester/targeting.py",
+        "old": ("        on the table it started with.\n"
+                "        \"\"\"\n"
+                "        self.table = table if table is not None else portmap.default_table()\n"),
+        "new": ("        on the table it started with.\n"
+                "        \"\"\"\n"
+                "        with self._lock:\n"
+                "            self.table = table if table is not None else portmap.default_table()\n"),
+        "test": "test_a_table_swap_does_not_wait_for_a_walk_nor_change_the_one_under_way",
+    },
+    {
+        # P3-20: targeting stays on the session's stopped socket map after STOP.
+        "label": "engine: targeting stays on the stopped socket watcher",
+        "file": "beantester/engine.py",
+        "old": ("            with self._target_lock:\n"
+                "                if self._targeting is not None:\n"
+                "                    self._targeting.set_table(self._ports)\n"
+                "            watcher.stop()\n"),
+        "new": "            watcher.stop()\n",
+        "test": "test_between_sessions_the_target_resolves_against_the_poller",
+    },
+    {
+        # P3-19: a failed refresh dates the OLD map as freshly collected.
+        "label": "portmap: a failed refresh dates the old map as new",
+        "file": "beantester/portmap.py",
+        "old": "                self._tried = now                    # do not hammer a broken lookup\n",
+        "new": "                self._last = self._tried = now\n",
+        "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
+    },
+    {
+        # P3-19: a failed refresh no longer paces the next attempt.
+        "label": "portmap: a failed refresh does not pace the next one",
+        "file": "beantester/portmap.py",
+        "old": "                self._tried = now                    # do not hammer a broken lookup\n",
+        "new": "                pass\n",
+        "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
+    },
+    {
+        # P3-19: refresh() paces by the last success again - a broken lookup is hammered.
+        "label": "portmap: refresh paces by the last success",
+        "file": "beantester/portmap.py",
+        "old": "            if not force and (now - self._tried) < self.interval and self._ports:\n",
+        "new": "            if not force and (now - self._last) < self.interval and self._ports:\n",
+        "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
+    },
+    {
+        # P3-19: refresh_if_stale judges by the last success again.
+        "label": "portmap: staleness is judged by the last success",
+        "file": "beantester/portmap.py",
+        "old": "        if (now - self._tried) >= limit or not self._ports:\n",
+        "new": "        if (now - self._last) >= limit or not self._ports:\n",
+        "test": "test_a_refresh_that_failed_does_not_make_the_old_map_look_new",
     },
 ]
 
