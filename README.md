@@ -1570,10 +1570,12 @@ seeded).
   filter). Once the limit is reached the program simply STOPs and leaves the results on screen.
 - **STOP drops the packets waiting in the delay queue** - the end of a session is immediate. At a
   large `latency` this shows as a one-off "gap". It is not a bug.
-- **A failure mid-session always ends with the network restored** - if the capture thread dies, the
-  engine STOPs itself and releases the driver (*fail-open*), instead of holding an open handle no one
-  reaches (this was a real path to "the user suddenly has no internet"). The reason goes to the log
-  and the event log.
+- **A failure mid-session always ends with the network restored** - if the capture or the inject
+  thread dies, or stops making progress for 10 seconds, the engine STOPs itself and releases the
+  driver (*fail-open*), instead of holding an open handle no one reaches (this was a real path to
+  "the user suddenly has no internet"). The reason goes to the log and the event log. A thread that
+  is still stuck after STOP is left behind rather than waited for, and the next START says so in
+  the log.
 - **Closing the program releases the WinDivert driver** - not after every session (a session restart
   should be instant), but **once, on exit**. As long as the driver is loaded, the kernel holds the
   `WinDivert64.sys` sitting next to the exe open - and then **the program directory cannot be

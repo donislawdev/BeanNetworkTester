@@ -1492,6 +1492,183 @@ def test_a_stop_or_a_fault_from_a_finished_session_leaves_the_running_one_alone(
         eng.stop()
 
 
+# --- an injector that stops moving, and what STOP waits for -------------------- #
+#
+# The injector had no watchdog of its own: stuck on one packet it delivered nothing
+# while the session looked healthy (external review P3-9). STOP gave every stuck
+# worker a 2 s join of its own, long after the divert had closed (NOWE-5a-2). And a
+# worker it gave up on could spin on a core for the rest of the program's life
+# without a word (owner decision D-33).
+
+
+def test_an_inject_thread_that_is_alive_but_no_longer_moving_fails_open():
+    """A ``send()`` the driver never answers stops the session and closes the
+    divert, as a stalled capture thread does. The threshold is lowered on the
+    instance for the same reason as there."""
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.3
+    eng.JOIN_S = 0.2                    # the hung send outlives the join; keep it short
+    divert = _HungSendDivert()
+    eng.start("test", divert=divert)
+    try:
+        check("the injector is hung in send()", divert.sending.wait(5))
+        check("P3-9: the session stops and the divert closes",
+              _wait_until(lambda: not eng.is_running() and divert.closed),
+              f"(running={eng.is_running()}, closed={divert.closed})")
+        check("P3-9: as a fault", eng.stop_reason == "fault", f"({eng.stop_reason})")
+        check("P3-9: that names the injector",
+              "inject thread" in str(eng.fault), f"({eng.fault})")
+    finally:
+        divert.released.set()
+        eng.stop()
+
+
+def test_a_packet_waiting_out_its_delay_is_not_a_stalled_injector():
+    """Seconds spent waiting for a packet's release time are the job, not a stall:
+    the injector counts as busy from the moment the packet leaves the queue until
+    it is back on the wire, and not a moment longer. Either end in the wrong place
+    stops a healthy session with a false fault."""
+    eng = BeanEngine()
+    eng.CAPTURE_STALL_S = 0.3
+    eng.set_params(0, 0, 0, 1000, 0, 0, 0)         # every packet is held for 1 s
+    divert = _GoesQuietDivert()
+    eng.start("test", divert=divert)
+    try:
+        # Past the release, and past the threshold twice more after it.
+        time.sleep(1.8)
+        check("latency: the packet was delivered",
+              eng.stats_snapshot()["bytes_out"] == 100,
+              f"({eng.stats_snapshot()['bytes_out']})")
+        check("latency: the session is still running", eng.is_running() is True,
+              f"(fault={eng.fault})")
+        check("latency: nothing was recorded as a fault", eng.fault is None,
+              f"({eng.fault})")
+    finally:
+        eng.stop()
+
+
+class _EveryWorkerHungDivert(QuietDivert):
+    """One packet in; then ``recv()`` and ``send()`` both hang until released,
+    deaf to ``close()`` - a driver that stopped answering."""
+
+    def __init__(self):
+        super().__init__()
+        self.reading, self.sending = threading.Event(), threading.Event()
+        self.released = threading.Event()
+        self._handed_over = False
+
+    def recv(self):
+        if not self._handed_over:
+            self._handed_over = True
+            return FakePacket(size=100, port=7003)
+        self.reading.set()
+        self.released.wait(10)
+        raise OSError("closed")
+
+    def send(self, packet, recalculate_checksum=True):
+        self.sending.set()
+        self.released.wait(10)
+
+
+def test_stop_gives_its_stuck_workers_one_budget_between_them():
+    """Two stuck workers made STOP wait 2 s EACH - up to 6 s with the watchdog -
+    with the divert already closed and nothing left to restore (NOWE-5a-2)."""
+    eng = BeanEngine()
+    eng.JOIN_S = 1.0
+    divert = _EveryWorkerHungDivert()
+    eng.start("test", divert=divert)
+    capture, injector = eng._t_cap, eng._t_inj
+    try:
+        check("both workers are stuck",
+              divert.reading.wait(5) and divert.sending.wait(5))
+        began = time.monotonic()
+        eng.stop()
+        took = time.monotonic() - began
+        check("and both outlive the STOP", capture.is_alive() and injector.is_alive())
+        check("NOWE-5a-2: STOP waited out one budget, not one each",
+              0.9 <= took < 1.6, f"({took:.2f} s against a budget of 1.0 s)")
+        check("the divert was closed all the same", divert.closed is True)
+    finally:
+        divert.released.set()
+        capture.join(5)
+        injector.join(5)
+        eng.stop()
+
+
+def test_an_ordinary_stop_does_not_wait_for_the_watchdog_tick(monkeypatch):
+    """The watchdog slept through its tick and STOP's join waited for it: nearly all
+    of an ordinary STOP (median 82 ms, worst 212 ms, measured 2026-09-29). A tick
+    made long here stretches that to the whole join budget unless STOP wakes it.
+
+    The watchdog is seen ENTERING its wait before STOP, not assumed to be there
+    after a sleep: a watchdog still on its way when STOP drops the flag leaves at
+    once, and the test would then pass without the wake."""
+    import beantester.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "WATCHDOG_TICK_S", 5.0)
+    entered = threading.Event()
+    real_init = engine_module._Session.__init__
+
+    def init(session, divert, stuck=()):
+        real_init(session, divert, stuck)
+        real_wait = session.woken.wait
+
+        def wait(timeout=None):
+            entered.set()
+            return real_wait(timeout)       # the real wait, only announced
+
+        session.woken.wait = wait
+
+    monkeypatch.setattr(engine_module._Session, "__init__", init)
+    eng = BeanEngine()
+    eng.start("test", divert=QuietDivert())
+    watchdog = eng._t_wd
+    check("the watchdog is inside its first tick", entered.wait(5))
+    began = time.monotonic()
+    eng.stop()
+    took = time.monotonic() - began
+    check("STOP woke the watchdog, and it has ended", not watchdog.is_alive())
+    check("STOP did not wait out the tick", took < 1.0, f"({took:.2f} s)")
+
+
+def test_a_start_says_when_part_of_the_previous_session_is_still_stuck():
+    """A worker STOP gave up on is said at the next START - first, before the
+    handle opens - and at every START while it lives, not only the next one. Once
+    it has ended, nothing is said."""
+    lines = []
+    eng = BeanEngine(log_fn=lines.append)
+    eng.JOIN_S = 0.2
+    stuck_line = T("log.previous_session_stuck")
+    first = _HungSendDivert()
+    eng.start("test", divert=first)
+    hung = eng._t_inj
+
+    def said_at_start():
+        mark = len(lines)
+        eng.start("test", divert=QuietDivert())
+        return stuck_line in lines[mark:], lines[mark:mark + 1]
+
+    try:
+        check("the injector is hung in send()", first.sending.wait(5))
+        eng.stop()
+        check("and outlived the STOP", hung.is_alive())
+        said, head = said_at_start()
+        check("D-33: the next START says so", said, f"({lines[-4:]})")
+        check("D-33: as its first line", head == [stuck_line], f"({head})")
+        eng.stop()                                  # a clean session in between
+        said, _ = said_at_start()
+        check("D-33: and the START after that, while it still hangs", said,
+              f"({lines[-4:]})")
+        eng.stop()
+        first.released.set()
+        hung.join(5)
+        said, _ = said_at_start()
+        check("D-33: nothing once it has ended", not said, f"({lines[-4:]})")
+    finally:
+        first.released.set()
+        eng.stop()
+
+
 # --- the log is the caller's code: it can block, and it can raise ------------- #
 #
 # On the CLI the log is a plain write to stderr. A console whose text is being
@@ -1624,6 +1801,44 @@ def test_a_stop_closes_the_divert_while_the_log_is_still_blocked(path, monkeypat
         check("the caller still gets the start's own error",
               _wait_until(lambda: log.raised is not None)
               and log.raised == "the resolver would not start", f"({log.raised!r})")
+
+
+class _RefusingSendDivert(_GoesQuietDivert):
+    """One packet in, and the driver refuses to put it back on the wire."""
+
+    def send(self, packet, recalculate_checksum=True):
+        raise OSError("the driver refused the packet")
+
+
+def test_an_injector_held_by_the_log_it_warns_in_still_fails_open():
+    """A failed ``send()`` is said on the injector's own thread, and a console
+    paused mid-selection holds that line - with nothing watching the injector, the
+    divert stayed open for as long as the console stayed paused (P3-9).
+
+    Not a case of the parametrized test above, on purpose: there the log holds a
+    line the STOP says, after its teardown. Here it holds a worker BEFORE any stop,
+    and the stop then spends its join budget on that worker - so "nothing of the
+    session is still held" is not true yet while the log is, and only the divert is
+    asked about.
+    """
+    log = _FrozenLog()
+    log.needle = "the driver refused the packet"
+    eng = BeanEngine(log_fn=log)
+    eng.CAPTURE_STALL_S = 0.3
+    divert = _RefusingSendDivert()
+    eng.start("test", divert=divert)
+    try:
+        check("the injector is held by its own warning", log.frozen.wait(5),
+              f"({log.lines})")
+        check("P3-9: the divert closes while the log is still held (network restored)",
+              _wait_until(lambda: divert.closed, 3.0),
+              f"(running={eng.is_running()}, lines={log.lines})")
+        check("P3-9: and the session is over", eng.is_running() is False)
+        check("P3-9: stopped for the injector", "inject thread" in str(eng.fault),
+              f"({eng.fault})")
+    finally:
+        log.thaw.set()
+        eng.stop()
 
 
 def test_a_log_that_raises_cannot_cancel_a_stop(monkeypatch):
