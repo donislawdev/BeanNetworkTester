@@ -621,7 +621,13 @@ class ProcessTargeting:
 
     @property
     def matched(self):
-        """True when at least one process (with a socket) matched."""
+        """True when at least one matching process OWNS A SOCKET.
+
+        Not "a matching process is running": the walk judges socket owners only,
+        so a running target with no connection open reads False. Every message
+        built on this says "has no connection open", never "is not running" -
+        which was false for an idle target (external review P3-23).
+        """
         return bool(self._pids)
 
     @property

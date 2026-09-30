@@ -117,6 +117,11 @@ def test_empty_and_exclusion_only_expressions_are_flagged():
     assert spare.state == MATCH and spare.bounds_nothing and not spare.everything, spare
     everything = evaluate("target", "*", "chrome.exe")
     assert everything.state == MATCH and everything.bounds_nothing, everything
+    # every program but System (external review P3-17), beside a name that narrows
+    every_exe = evaluate("target", "*.exe", "chrome.exe")
+    assert every_exe.state == MATCH and every_exe.bounds_nothing, every_exe
+    one_name = evaluate("target", "chrome", "chrome.exe")
+    assert one_name.state == MATCH and not one_name.bounds_nothing, one_name
     narrow = evaluate("dst_ip", "10.0.0.0/8", "10.1.1.1")
     assert not narrow.bounds_nothing and not narrow.everything, narrow
 

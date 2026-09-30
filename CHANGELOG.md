@@ -20,6 +20,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A running target with no connection open is no longer called "not running".** The red
+  note under Target process and the log line at START said that no running process
+  matched, which was false for a program idle between two connections. They now say that
+  no matching process has a connection open, which is true either way. On the command
+  line the mid-run warning no longer says "from here on": when the target opens a
+  connection again, the tool adds it within milliseconds, and only the first packets of
+  that connection can pass untouched.
+
+- **`--target *.exe` now gets the warning about impairing the whole machine.** `*.exe`,
+  `exe` and `re:\.exe$` match every program with a connection except Windows itself, yet
+  counted as a target, so `--loss 100 --target *.exe` started without a word. It now warns
+  like a run with no target, and the Filter tester says it narrows nothing. The warning now
+  begins "Nothing in this run narrows it", because "This run has no target" was false
+  whenever a target was set but covered everything.
+
 - **A target with tens of thousands of connections no longer slows the tool down.**
   Each new connection of such a target, a load generator for example, made the tool copy
   the whole list of the target's connections. At 60 000 of them that took about half a

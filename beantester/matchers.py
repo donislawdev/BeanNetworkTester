@@ -195,8 +195,9 @@ class Matcher:
     #
     # GROUPS, not one flat list, because of address families: a rule can cover
     # the whole of IPv4 and none of IPv6, and that still bounds nothing worth
-    # having. Covering any ONE group completely is enough. Kinds without such a
-    # split declare a single group.
+    # having. Covering any ONE group completely is enough. Processes use the same
+    # to hold the names that really own sockets beside the unlikely ones; kinds
+    # with no such split declare a single group.
     BLAST_PROBES: tuple[tuple[tuple, ...], ...] = ()
 
     @property
@@ -214,8 +215,13 @@ class Matcher:
         A heuristic, and named as one. It answers by ASKING the compiled terms
         rather than by inspecting their text, because "matches everything" is not
         a syntactic property: ``>0`` on pids and ``0-999999`` cover every process
-        without a wildcard in sight, and ``*.*`` covers only names containing a
-        dot despite looking universal.
+        without a wildcard in sight, and ``exe`` - a plain substring - covers
+        nearly every process on Windows.
+
+        "Everything" means what the user would notice, not every value there is:
+        a group of probes may stand for the values that really occur, and
+        covering that group is enough. ``*.exe`` misses ``System`` and still
+        impairs the whole machine (see ``ProcessMatcher.BLAST_PROBES``).
 
         What it cannot see, written down rather than left to be discovered:
 
@@ -337,8 +343,15 @@ class ProcessMatcher(Matcher):
     """Processes, matched on ``(pid, name)``."""
     kind = KIND_PROCESS
     # Unlike each other in both halves a term can look at: the pid and the name.
+    # The second group is what a machine's sockets are really owned by. Every
+    # owner but ``System`` is an ``.exe`` - MEASURED on a real table (external
+    # review P3-17): ``*.exe`` matched 33 of 34 owners and 186 of 190 ports, and
+    # passed as narrow because the first group holds ``System`` and ``a``. The
+    # three names share nothing but ".exe", so ``chrome``, ``s*`` or ``*host*``
+    # still narrow.
     BLAST_PROBES = (((4, "System"), (1234, "chrome.exe"),
-                     (2, "svchost.exe"), (65000, "a")),)
+                     (2, "svchost.exe"), (65000, "a")),
+                    ((1234, "chrome.exe"), (2, "svchost.exe"), (65000, "a.exe")))
 
     @staticmethod
     def _context(pid, name=""):
