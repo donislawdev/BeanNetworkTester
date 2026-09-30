@@ -477,6 +477,61 @@ def test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added():
     check("and the walk's own result is still there", 5000 in targeting)
 
 
+def test_a_new_socket_of_the_target_joins_the_port_set_without_copying_it():
+    """External review P3-22: every new socket of the target COPIED the whole port
+    set, on the watcher thread and holding the GIL - measured 453 us per socket at
+    60 000 ports, which halved the packets a second the capture thread could judge
+    while a load generator opened 1 000 connections a second, and left the watcher
+    behind at 3 000. Added in place it is O(1), and the set staying the SAME object
+    is what proves nothing was copied. Adoption adds the same way."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe", 200: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    live = targeting._ports
+
+    targeting.note_socket(5001, 100)
+    check("the new socket is in scope", 5001 in targeting)
+    check("added to the set the packet path reads, not to a copy of it",
+          targeting._ports is live)
+
+    table.ports[6000] = 200                   # another process of the target
+    targeting.note_socket(6000, 200)
+    check("adopted", targeting.adopt_new_pids() is True)
+    check("the adopted process's socket is in scope", 6000 in targeting)
+    check("adoption adds in place too", targeting._ports is live)
+
+
+def test_iterating_the_target_survives_a_socket_announced_meanwhile():
+    """The watcher adds to the port set IN PLACE (P3-22), so a caller walking the
+    target walks a copy: a set that grows under its iterator is a RuntimeError in
+    the middle of somebody's report."""
+    table = _EventTable(ports={5000: 100, 5001: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    walked = []
+    for port in targeting:
+        walked.append(port)
+        targeting.note_socket(7000 + len(walked), 100)    # the watcher, mid-walk
+    check("the walk saw the set as it was", sorted(walked) == [5000, 5001], f"({walked})")
+    check("and the sockets announced meanwhile are in scope",
+          {7001, 7002} <= targeting.ports(), f"({sorted(targeting.ports())})")
+
+
+def test_a_rebuild_never_changes_the_set_a_packet_may_be_holding():
+    """The packet path reads the port set without a lock, so a packet can hold the
+    set a rebuild is about to replace. A rebuild publishes a NEW set: emptying and
+    refilling the old one in place would show that packet an empty target."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    held = targeting._ports                      # what a packet mid-lookup holds
+    table.ports = {5001: 100}
+    targeting.refresh()
+    check("the rebuild published its own set", targeting.ports() == {5001},
+          f"({sorted(targeting.ports())})")
+    check("and left the one a packet may hold as it was", held == {5000}, f"({held})")
+
+
 def test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one():
     """External review P2-10(a). A target that owns no socket when the walk reads
     the table (between two connections) opens one while the walk resolves names.

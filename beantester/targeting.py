@@ -45,7 +45,7 @@ Who does the rebuilding, and where
 150 000 calls a second on the synthetic path (a real WinDivert session was
 measured an order of magnitude below that - see "What this actually sustains" in
 ``engine.py``, the one place that number lives). It therefore does no work beyond
-a frozenset lookup: the reason below is about what a MISS used to cost, and four
+a set lookup: the reason below is about what a MISS used to cost, and four
 syscalls in the packet path are unaffordable at either rate.
 
 It used to call ``refresh()`` itself, which meant the capture thread paid for
@@ -112,7 +112,14 @@ class ProcessTargeting:
         # queue behind that: it is the thread that has to apply a SOCKET event
         # before the SYN it precedes by ~0.02 ms.
         self._ports_lock = threading.Lock()
-        self._ports = frozenset()
+        # A plain set, and it used to be a frozenset copied whole for every new
+        # socket of the target: 453 us per socket at 60 000 ports, on the watcher
+        # thread and holding the GIL (external review P3-22). The watcher now adds
+        # IN PLACE under _ports_lock; a rebuild publishes a NEW set, never clears
+        # this one. The packet path reads it without a lock - one C-level lookup,
+        # which cannot interleave with an add, the same way SocketWatcher.pid_for
+        # reads the dict it writes in place.
+        self._ports = set()
         self._names = ()
         self._pids = frozenset()
         self._refreshes = 0
@@ -200,7 +207,11 @@ class ProcessTargeting:
         return False
 
     def refresh(self, now=None, force=True):
-        """Rebuild the port set from the current socket table."""
+        """Rebuild the port set from the current socket table.
+
+        Returns nothing: the set is live (see ``_ports`` in ``__init__``), and
+        handing it out would let a caller change it. ``ports()`` is the copy.
+        """
         now = self.clock() if now is None else now
         with self._lock:
             # ONE table for the whole walk. set_table() swaps it without this lock,
@@ -244,7 +255,7 @@ class ProcessTargeting:
                 if self._pid_matches(pid, name, table):
                     pids.add(pid)
                     names.add(name or str(pid))
-            resolved = frozenset(port for port, pid in port_pid.items() if pid in pids)
+            resolved = {port for port, pid in port_pid.items() if pid in pids}
             with self._ports_lock:
                 # A late port is rescued only if the owner its EVENT named still
                 # matches. Merging them blindly kept a port whose pid this very walk
@@ -278,7 +289,10 @@ class ProcessTargeting:
                 # newer than the walk, so it survives it - if it is still ours (see
                 # `late` above). It is part of _ports from here on, and the next
                 # walk empties the dict again before it starts.
-                self._ports = resolved | late
+                resolved |= late
+                # A NEW set, published by reassignment. Emptying and refilling the
+                # old one in place would show a packet that holds it an empty target.
+                self._ports = resolved
                 # Only what this walk judged leaves the queue. Emptying all of it
                 # dropped a new process whose first socket landed mid-walk without
                 # judging it at all (P2-10).
@@ -297,7 +311,6 @@ class ProcessTargeting:
             wake = self._on_miss
             if pending and wake is not None:
                 wake()
-            return self._ports
 
     # -- what the live socket map tells us, as it happens ---------------------- #
     # A ceiling on the queue below, because it is fed by every socket event on the
@@ -332,8 +345,7 @@ class ProcessTargeting:
         """
         if pid in self._pids:
             with self._ports_lock:
-                if port not in self._ports:
-                    self._ports = self._ports | {port}
+                self._ports.add(port)          # in place: see _ports in __init__
                 self._late_owners[port] = pid
             return
         if pid in self._not_ours or pid in self._pending_pids:
@@ -387,7 +399,7 @@ class ProcessTargeting:
             ports = frozenset(owners)
             with self._ports_lock:
                 self._pids = self._pids | matched
-                self._ports = self._ports | ports
+                self._ports.update(ports)
                 for port in ports:
                     self._late_owners[port] = owners[port]
                 self._not_ours = self._not_ours | judged
@@ -424,7 +436,7 @@ class ProcessTargeting:
         Named ``syn_covers`` until UDP was covered too, which made the old name a
         lie about when it runs - see ``BeanCore.decide`` step 1 for the callers.
 
-        ``__contains__`` answers from ``_ports``, a frozenset rebuilt on another
+        ``__contains__`` answers from ``_ports``, a set rebuilt on another
         thread, so the first packet of a fresh flow is judged BEFORE any rebuild
         it triggers - it was never in scope, however early the SOCKET event
         arrived. MEASURED end to end 2026-07-28: 20 fresh connections against a
@@ -537,7 +549,7 @@ class ProcessTargeting:
 
     # -- the container BeanCore tests against ---------------------------------- #
     def __contains__(self, port):
-        """A frozenset lookup and nothing else. See "Who does the rebuilding".
+        """A set lookup and nothing else. See "Who does the rebuilding".
 
         THE PACKET PATH CALLS THIS, inside ``BeanCore._lock``. It must not touch
         the socket table, psutil, or any lock of its own.
@@ -577,7 +589,8 @@ class ProcessTargeting:
         return self._miss
 
     def __iter__(self):
-        return iter(self._ports)
+        # Over a copy: the watcher adds to the live set while a caller iterates.
+        return iter(self.ports())
 
     def __len__(self):
         return len(self._ports)
@@ -588,7 +601,7 @@ class ProcessTargeting:
         return NotImplemented
 
     def __hash__(self):                                   # pragma: no cover
-        return hash(self._ports)
+        return hash(frozenset(self._ports))
 
     def __repr__(self):                                   # pragma: no cover
         return f"<ProcessTargeting {self.expression!r} {len(self._ports)} ports>"

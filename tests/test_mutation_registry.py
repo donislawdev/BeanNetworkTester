@@ -1659,8 +1659,8 @@ MUTATIONS = [
     {
         "label": "targeting: a rebuild in flight loses a socket the event added",
         "file": "beantester/targeting.py",
-        "old": "                self._ports = resolved | late",
-        "new": "                self._ports = resolved",
+        "old": "                resolved |= late\n",
+        "new": "",
         "test": "test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added",
     },
     {
@@ -5315,6 +5315,78 @@ MUTATIONS = [
         "old": "                crashlog.note(socket_error, \"engine.socketwatch.start\")\n",
         "new": "                crashlog.once(\"engine.socketwatch.start\", socket_error)\n",
         "test": "test_a_socket_handle_failure_is_recorded_in_every_session",
+    },
+    {
+        # P3-22: the old copy of the whole port set per new socket of the target.
+        "label": "targeting: every new socket of the target copies the whole port set",
+        "file": "beantester/targeting.py",
+        "old": "                self._ports.add(port)          # in place: see _ports in __init__\n",
+        "new": "                self._ports = self._ports | {port}\n",
+        "test": "test_a_new_socket_of_the_target_joins_the_port_set_without_copying_it",
+    },
+    {
+        # P3-22: adoption copies the whole port set.
+        "label": "targeting: adoption copies the whole port set",
+        "file": "beantester/targeting.py",
+        "old": "                self._ports.update(ports)\n",
+        "new": "                self._ports = self._ports | ports\n",
+        "test": "test_a_new_socket_of_the_target_joins_the_port_set_without_copying_it",
+    },
+    {
+        # P3-22: iterating the target walks the set the watcher adds to.
+        "label": "targeting: iterating the target walks the live port set",
+        "file": "beantester/targeting.py",
+        "old": "        return iter(self.ports())\n",
+        "new": "        return iter(self._ports)\n",
+        "test": "test_iterating_the_target_survives_a_socket_announced_meanwhile",
+    },
+    {
+        # P3-22: a rebuild empties and refills the set a packet may be holding.
+        "label": "targeting: a rebuild refills the port set in place",
+        "file": "beantester/targeting.py",
+        "old": "                self._ports = resolved\n",
+        "new": "                self._ports.clear()\n                self._ports.update(resolved)\n",
+        "test": "test_a_rebuild_never_changes_the_set_a_packet_may_be_holding",
+    },
+    {
+        # P2-11: a retry asks for exactly the size the table reported.
+        "label": "portmap: a retry asks for exactly the size the table reported",
+        "file": "beantester/portmap.py",
+        "old": "            size.value = self._roomy(size.value, row_type)\n",
+        "new": "",
+        "test": "test_a_table_that_grows_while_it_is_read_is_still_read_in_one_walk",
+    },
+    {
+        # P2-11: the first attempt asks for exactly the size remembered.
+        "label": "portmap: the first attempt asks for exactly the size remembered",
+        "file": "beantester/portmap.py",
+        "old": "        size = wintypes.DWORD(self._roomy(need, row_type) if need else 8192)\n",
+        "new": "        size = wintypes.DWORD(need or 8192)\n",
+        "test": "test_a_table_that_grows_while_it_is_read_is_still_read_in_one_walk",
+    },
+    {
+        # P2-11: the buffer's size is remembered, so the room compounds.
+        "label": "portmap: the buffer's size is remembered, room included",
+        "file": "beantester/portmap.py",
+        "old": "        self._sizes[(proto, family)] = header + count * ctypes.sizeof(row_type)\n",
+        "new": "        self._sizes[(proto, family)] = size.value\n",
+        "test": "test_the_size_remembered_is_what_the_table_needed_not_the_buffer",
+    },
+    {
+        # P2-11, D-48: a failing socket table is recorded once per PROCESS.
+        "label": "portmap: a failing socket table is recorded once per process",
+        "file": "beantester/portmap.py",
+        "old": "            crashlog.note(error, \"portmap.native.\" + \".\".join(failed))\n",
+        "new": "            crashlog.once(\"portmap.native.\" + \".\".join(failed), error)\n",
+        "test": "test_a_table_that_fails_is_recorded_every_time_and_so_is_none_answering",
+    },
+    {
+        # P2-11, D-48: no table answering at all is not recorded.
+        "label": "portmap: no socket table answering is not recorded",
+        "file": "beantester/portmap.py",
+        "old": "        if failed:\n            error = RuntimeError(\n",
+        "new": "        if 0 < len(failed) < 4:\n            error = RuntimeError(\n",
+        "test": "test_a_table_that_fails_is_recorded_every_time_and_so_is_none_answering",
     },
 ]
 
