@@ -5230,16 +5230,34 @@ MUTATIONS = [
         # P2-8: the endpoints of a port the snapshots pruned stay for ever.
         "label": "socketwatch: a pruned port keeps its endpoints",
         "file": "beantester/socketwatch.py",
-        "old": "                self._endpoints.pop(port, None)      # their CLOSEs never came\n",
-        "new": "",
+        "old": "                     if merged.get(port) != entry[0]]\n",
+        "new": "                     if False]\n",
         "test": "test_a_port_the_snapshots_prune_forgets_its_endpoints",
+    },
+    {
+        # P2-8 after review: a snapshot's new owner inherits the old owner's endpoints.
+        "label": "socketwatch: a port a snapshot hands on keeps the old endpoints",
+        "file": "beantester/socketwatch.py",
+        "old": "                     if merged.get(port) != entry[0]]\n",
+        "new": "                     if port not in merged]\n",
+        "test": "test_a_port_a_snapshot_hands_to_another_pid_drops_the_old_endpoints",
+    },
+    {
+        # P2-8 after review: ids whose CLOSE was missed pile up for a whole session.
+        "label": "socketwatch: a port's endpoints grow without a bound",
+        "file": "beantester/socketwatch.py",
+        "old": ("        if len(endpoints) > self.MAX_ENDPOINTS_PER_PORT:\n"
+                "            del self._endpoints[port]\n"),
+        "new": "        pass\n",
+        "test": "test_the_endpoints_kept_for_one_port_are_bounded",
     },
     {
         # P2-8: the empty endpoint set of a freed port stays behind.
         "label": "socketwatch: a freed port leaves its endpoint set behind",
         "file": "beantester/socketwatch.py",
-        "old": "        del self._endpoints[port]\n",
-        "new": "",
+        "old": ("        del self._endpoints[port]\n"
+                "        return True\n"),
+        "new": "        return True\n",
         "test": "test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes",
     },
     {

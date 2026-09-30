@@ -124,8 +124,8 @@ def test_close_for_an_unknown_port_is_harmless():
 
 # -- several endpoints of one process on one port (external review P2-8) ------- #
 #
-# The SOCKET layer's own sequences, MEASURED 2026-09-30 (elevated, sniff-only,
-# `sondy/g4/m2_socket_endpoints.py`), for one process and one local port, endpoint
+# The SOCKET layer's own sequences, MEASURED 2026-09-30 (an elevated, sniff-only
+# probe on its own loopback sockets), for one process and one local port, endpoint
 # ids renumbered from 1. Each step: (what happened, its events as (kind, endpoint,
 # parent), who owns the port afterwards). Before, the first CLOSE freed the port.
 MEASURED = {
@@ -216,6 +216,43 @@ def test_a_port_the_snapshots_prune_forgets_its_endpoints():
         w.reconcile({}, clock())
     check("the port is pruned", w.pid_for(6000) is None, f"({w.pid_for(6000)})")
     check("...and so are its endpoints", 6000 not in w._endpoints, f"({w._endpoints})")
+
+
+def test_a_port_a_snapshot_hands_to_another_pid_drops_the_old_endpoints():
+    """Review of #234: a CLOSE missed, then a snapshot names another owner. Kept,
+    the old owner's endpoints would hold the port for its NEXT socket on it."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(SocketEvent(BIND, 100, 6000, 1))           # its CLOSE never comes
+    clock.tick()
+    w.reconcile({6000: 200}, clock())                   # the port is 200's now
+    check("the snapshot's owner is taken", w.pid_for(6000) == 200, f"({w.pid_for(6000)})")
+    w.apply(SocketEvent(BIND, 100, 6000, 2))           # 100 binds the port again
+    w.apply(SocketEvent(CLOSE, 100, 6000, 2))
+    check("its new socket closing frees the port", w.pid_for(6000) is None,
+          f"({w.pid_for(6000)}, {w._endpoints})")
+
+
+def test_the_endpoints_kept_for_one_port_are_bounded(monkeypatch):
+    """Review of #234: a listener lives on, its accepted connections' CLOSEs are
+    missed under load, and every snapshot still lists the port. Unbounded, the set
+    grew for the whole session."""
+    monkeypatch.setattr(SocketWatcher, "MAX_ENDPOINTS_PER_PORT", 8)
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(SocketEvent(LISTEN, 100, 8080, 1))
+    for i in range(50):
+        w.apply(SocketEvent(ACCEPT, 100, 8080, 100 + i, 1))     # no CLOSE, ever
+        clock.tick()
+        w.reconcile({8080: 100}, clock())
+        size = len(w._endpoints.get(8080, (None, ()))[1])
+        if size > 8:
+            break
+    check("the set never outgrows its ceiling", size <= 8, f"({size})")
+    w.apply(SocketEvent(ACCEPT, 100, 8080, 999, 1))
+    w.apply(SocketEvent(CLOSE, 100, 8080, 999, 1))
+    check("the next ACCEPT names the listener again, so the port stays",
+          w.pid_for(8080) == 100, f"({w.pid_for(8080)}, {w._endpoints})")
 
 
 def test_junk_events_are_ignored_not_raised():

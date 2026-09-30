@@ -110,8 +110,8 @@ _ADD = frozenset({BIND, CONNECT, LISTEN, ACCEPT})
 # ...and WHICH of the owner's endpoints the event is about. One process can hold
 # several endpoints on one local port - a listener and every connection it accepted,
 # TCP and UDP, IPv4 and IPv6 - and each ends with its own CLOSE (external review
-# P2-8). MEASURED 2026-09-30, elevated, sniff-only (`sondy/g4/m2_socket_endpoints.py`):
-# every endpoint gets a CLOSE carrying its own `endpoint`; an ACCEPT's `parent` is
+# P2-8). MEASURED 2026-09-30 with an elevated, sniff-only SOCKET-layer probe on its
+# own loopback sockets: every endpoint gets a CLOSE carrying its own `endpoint`; an ACCEPT's `parent` is
 # the listener's endpoint, a CONNECT's the endpoint its socket bound; a UDP socket's
 # CLOSE arrives TWICE with the same id. 0 = not told (a test double, an old source).
 SocketEvent = namedtuple("SocketEvent", "kind pid local_port endpoint parent",
@@ -157,7 +157,8 @@ class SocketWatcher:
         # event told us about and no CLOSE has ended yet. A CLOSE takes the port out
         # of the map only when it ends the LAST of them (external review P2-8).
         # Tagged with the pid, so endpoints of a previous owner never hold the port
-        # for the next one. Keyed by port, so it never outgrows the port space.
+        # for the next one. Bounded twice: a set lives only while its owner owns the
+        # port in the map (reconcile), and holds at most MAX_ENDPOINTS_PER_PORT ids.
         self._endpoints = {}
         self._source = None
         self._thread = None
@@ -270,6 +271,17 @@ class SocketWatcher:
         endpoints.add(ev.endpoint)
         if ev.parent:
             endpoints.add(ev.parent)
+        if len(endpoints) > self.MAX_ENDPOINTS_PER_PORT:
+            del self._endpoints[port]
+
+    # Ids whose CLOSE never came (missed under load) stay in a set while its port
+    # lives - a listener's can live for the whole session - so each set has a
+    # ceiling. Over it, what this map knew about the port is dropped: until the
+    # next event names an endpoint the port frees at any CLOSE, as a port from a
+    # snapshot does, and its next ACCEPT names the listener again (its parent).
+    # 4096 ids is ~0.3 MB; a server with more connections open on one port simply
+    # starts afresh every 4096 accepts.
+    MAX_ENDPOINTS_PER_PORT = 4096
 
     def _closed(self, port, pid, ev):
         """Does this CLOSE free ``port``? Under ``_lock``, for the port's own owner.
@@ -346,10 +358,18 @@ class SocketWatcher:
             doomed = absent & self._suspect          # absent twice running
             for port in doomed:
                 merged.pop(port, None)
-                self._endpoints.pop(port, None)      # their CLOSEs never came
             self._suspect = absent - doomed          # first-time absentees wait one pass
             self._evidence = {port: at for port, at in evidence.items()
                               if port in merged or at >= collected_at}
+            # An endpoint set lives only while its owner owns the port HERE: pruned,
+            # or handed to another pid by this snapshot, its CLOSEs never came - and
+            # kept, it would hold the port for that pid's NEXT socket on it. Deleted
+            # in place, and there is usually nothing to delete: measured at 60 000
+            # ports, rebuilding the dict added 6 ms a pass under this lock, this 3.5.
+            stale = [port for port, entry in self._endpoints.items()
+                     if merged.get(port) != entry[0]]
+            for port in stale:
+                del self._endpoints[port]
             self._ports = merged                     # atomic swap for lock-free readers
             self._reconciles += 1
 
