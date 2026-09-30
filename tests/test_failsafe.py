@@ -1047,11 +1047,16 @@ def test_closing_the_window_while_start_resolves_opens_no_driver_afterwards():
     """The window closed while START was still resolving its target (external
     review P2-14). on_close stopped an engine that was not running yet and
     released a driver nothing had loaded, and the start then opened one that
-    nothing unloaded - reproduced in exactly that order on the old code."""
+    nothing unloaded - reproduced in exactly that order on the old code.
+
+    The REAL engine, not a stand-in for ``engine.start``: whether this start may
+    still go ahead is asked inside it, under its stop lock (``admit``), and a
+    stand-in would skip exactly that question."""
     run_gui("""
         import threading
         import beantester.gui.app as appmod
         import beantester.driver as drv
+        from beantester.synthetic import SyntheticDivert
         resolving, resolved = threading.Event(), threading.Event()
         real_apply = appmod.apply_settings
 
@@ -1061,52 +1066,126 @@ def test_closing_the_window_while_start_resolves_opens_no_driver_afterwards():
             return real_apply(*a, **k)
 
         appmod.apply_settings = slow_apply
-        started = []
-        app.engine.start = lambda *a, **k: started.append(1)
+        opened = []
+
+        class Driver(SyntheticDivert):
+            def open(self):
+                opened.append(1)
+
+        real_start = app.engine.start
+        app.engine.start = lambda filt, **k: real_start(filt, divert=Driver(seed=1), **k)
         drv.release_on_exit = lambda log=None: []
         app._start()
         worker = app._transition_thread
         assert resolving.wait(5)
-        threading.Timer(0.3, resolved.set).start()   # done while the window closes
-        app.on_close()
+        app.on_close()                          # stop and release, still resolving
+        resolved.set()
         worker.join(5)
         assert not worker.is_alive()
-        assert not started, "the driver was opened after the window had closed"
+        assert not opened, "the driver was opened after the window had closed"
+        assert not app.engine.is_running()
     """)
 
 
 def test_closing_the_window_waits_for_a_start_already_opening_the_driver():
     """The other half of P2-14: past the target and inside engine.start, the stop
     and the driver release have to come AFTER it - before it, the release finds
-    nothing loaded and the stop nothing running."""
+    nothing loaded and the stop nothing running. Nothing in on_close waits for the
+    start: the engine's stop lock, which the start holds while the driver loads,
+    is what puts them in that order, so this runs the real engine."""
     run_gui("""
         import threading
         import beantester.driver as drv
-        opening, opened = threading.Event(), threading.Event()
+        from beantester.synthetic import SyntheticDivert
+        opening, loaded = threading.Event(), threading.Event()
         order = []
 
-        def slow_start(*a, **k):
-            opening.set()
-            opened.wait(10)                     # the driver load
-            order.append("started")
+        class Driver(SyntheticDivert):
+            def open(self):
+                opening.set()
+                loaded.wait(10)                 # the driver load
+                order.append("opened")
 
-        app.engine.start = slow_start
-        app.engine.stop = lambda *a, **k: order.append("stopped")
+            def close(self):
+                order.append("closed")
+                super().close()
+
+        real_start = app.engine.start
+        app.engine.start = lambda filt, **k: real_start(filt, divert=Driver(seed=1), **k)
         drv.release_on_exit = lambda log=None: order.append("released") or []
         app._start()
         assert opening.wait(5)
-        threading.Timer(0.3, opened.set).start()
+        threading.Timer(0.3, loaded.set).start()
         app.on_close()
-        assert order == ["started", "stopped", "released"], order
+        assert order == ["opened", "closed", "released"], order
     """)
+
+
+def test_a_start_asks_admit_under_the_lock_its_stop_takes():
+    """``admit`` is the start's "still wanted?", and it only means something asked
+    under the lock a stop takes (external review P2-14, CodeRabbit on PR #230):
+    asked before it, a stop and a driver release could land between the answer
+    and the start, and the start then loaded a driver nothing unloaded."""
+    engine, held = BeanEngine(), []
+
+    def refuse():
+        held.append(engine._stop_lock._is_owned())
+        return False
+
+    divert = QuietDivert()
+    result = engine.start("test", divert=divert, admit=refuse)
+    check("admit: asked holding the stop lock", held == [True], f"({held})")
+    check("admit: a refused start says so", result is False, f"({result!r})")
+    check("admit: and nothing runs", engine.is_running() is False)
+    check("admit: a refused start leaves nothing for atexit",
+          engine not in set(_LIVE_ENGINES))
+
+
+def test_a_window_that_closes_right_after_admit_stops_after_the_start():
+    """The race itself, made certain: the window closes the moment ``admit`` says
+    yes, and is given every chance to finish its stop and its driver release
+    first. Asked under the lock, that close waits for the start, then stops it -
+    so what the start loaded is unloaded."""
+    engine, order = BeanEngine(), []
+
+    class Driver(QuietDivert):
+        def open(self):
+            order.append("opened")
+
+        def close(self):
+            order.append("closed")
+            super().close()
+
+    def close_the_window():
+        engine.stop()
+        order.append("released")
+
+    def admit():
+        closing = threading.Thread(target=close_the_window, daemon=True)
+        closing.start()
+        closing.join(0.3)
+        return True
+
+    try:
+        engine.start("test", divert=Driver(), admit=admit)
+        _wait_until(lambda: "released" in order)
+        seen, left_running = list(order), engine.is_running()
+    finally:
+        engine.stop()                   # a broken admit must not leak a session
+    check("admit: a close landing after the answer stops the session it let in",
+          seen == ["opened", "closed", "released"], f"({seen})")
+    check("admit: nothing is left running", left_running is False)
 
 
 def test_a_scenario_that_cannot_start_ends_the_session():
     """P3-30: ``start_scenario`` raising out of ``_finish_start`` skipped the UI
     sync, so a running session sat behind a START button - and clicking it
     stopped the session. A timeline that cannot start now fails the session, as
-    it does on the command line, and the UI follows on the next tick."""
+    it does on the command line, and the UI follows on the next tick. Recorded
+    only once the session is stopped (CodeRabbit on PR #230): a record writes a
+    file, and nothing may stand between a fault and giving the network back."""
     run_gui("""
+        from beantester import crashlog
         from beantester.synthetic import SyntheticDivert
         real_start = app.engine.start
         app.engine.start = lambda filt, **k: real_start(
@@ -1116,6 +1195,15 @@ def test_a_scenario_that_cannot_start_ends_the_session():
             raise RuntimeError("can't start new thread")
 
         app.engine.start_scenario = refuse
+        running_when_recorded = []
+        real_note = crashlog.note
+
+        def note(exc, subsystem, message=""):
+            if subsystem == "gui.app":
+                running_when_recorded.append(app.engine.is_running())
+            return real_note(exc, subsystem, message)
+
+        crashlog.note = note
 
         class _Scenario:
             loop = False
@@ -1125,9 +1213,10 @@ def test_a_scenario_that_cannot_start_ends_the_session():
         app._settle_transition()                # this raised out of _finish_start
         assert not app.engine.is_running(), "the session runs without its scenario"
         assert "can't start new thread" in str(app.engine.fault), app.engine.fault
-        from beantester import crashlog
         assert any("can't start new thread" in (e.get("message") or "")
                    for e in crashlog.recent(10)), "not recorded"
+        assert running_when_recorded == [False], (
+            "recorded while the session still ran: %r" % running_when_recorded)
         app._tick()
         assert app.running is False
         assert app.btn_start.kw["text"] == bnt.T("buttons.start")

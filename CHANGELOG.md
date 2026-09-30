@@ -45,9 +45,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **Closing the window while START is still getting ready no longer leaves the WinDivert
   driver loaded.** A START that was still looking up the target process when the window
   closed went on to open the driver after the window was gone. Nothing unloaded it, so
-  the program's folder could not be deleted until a restart. Closing now waits a moment
-  for that START: if it has not opened the driver yet, it never does; if it has, the
-  session is stopped and the driver unloaded as usual.
+  the program's folder could not be deleted until a restart. Now a START that has not
+  opened the driver when the window closes never opens it, and one that is already
+  opening it is stopped once it has, and the driver is unloaded as usual.
 
 - **A scenario that cannot start now ends the session.** The session used to keep
   running without its scenario while the button said START, and clicking it stopped the

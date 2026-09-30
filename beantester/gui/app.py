@@ -1329,11 +1329,13 @@ class App:
             # target resolution above can take seconds, and on_close has stopped
             # an engine that was not running yet and released a driver nobody had
             # loaded - a start from here would open one that nothing unloads.
-            # `narrow` is start-only, like `filter` and `duration`: it decides what
-            # the DRIVER hands over, and a handle's filter is fixed when it opens.
-            if not self._closing:
-                self.engine.start(filt, duration=duration,
-                                  narrow=bool(s.get("narrow_filter")))
+            # Asked by the engine under the lock its stop takes (see `admit`), not
+            # here: checked here, a close could still land between the answer and
+            # the start. `narrow` is start-only, like `filter` and `duration`: it
+            # decides what the DRIVER hands over, and a handle's filter is fixed
+            # when it opens.
+            self.engine.start(filt, duration=duration, narrow=bool(s.get("narrow_filter")),
+                              admit=lambda: not self._closing)
 
         self._begin_transition("starting", work)
 
@@ -1367,9 +1369,11 @@ class App:
             # thread, which matters: the likely reason a runner cannot start is
             # that no new thread could be had. The tick then turns the UI round the
             # way it does for any other fault. Recorded as well: out of threads is
-            # not an ordinary event.
-            crashlog.note(e, "gui.app")
+            # not an ordinary event - but AFTER the stop, which is what gives the
+            # network back. A record writes a file and asks for context, and neither
+            # may stand between the fault and the stop (the rule of _stop_locked).
             self.engine.worker_failed(e)
+            crashlog.note(e, "gui.app")
         note = scope.capture_scope_note(s, self.engine.capture_narrowed())
         if note:
             self.log(T(note))
@@ -1582,19 +1586,13 @@ class App:
                 return
         # From here the window IS closing: a start still in flight must not
         # resurrect the UI when its worker finishes, and must not open the driver
-        # at all if it has not yet (see _start).
+        # at all if it has not yet (external review P2-14). Nothing here waits for
+        # it: the engine asks the start's `admit` under the lock engine.stop()
+        # below takes, so a start still resolving its target is told "no" after
+        # this line, and one already opening the driver holds that lock - the stop
+        # waits for it, and the driver release comes after both.
         self._closing = True
         try:
-            # ...and one that is already opening it is waited for, so the stop and
-            # the driver release below come AFTER it (external review P2-14). They
-            # used to run first - a no-op stop, a release with nothing loaded - and
-            # the start then loaded a driver nothing unloaded. Bounded: an
-            # in-flight START is a cold target resolution (~1.7 s measured) plus
-            # the driver open; past that, a start still resolving sees _closing
-            # and opens nothing, and one inside engine.start holds the engine's
-            # _stop_lock, which the stop below waits for.
-            if self._transition_thread is not None:
-                self._transition_thread.join(timeout=3.0)
             # secondary windows persist their geometry on the way out, so they
             # come back where the user left them
             self.windows.close_all()

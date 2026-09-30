@@ -826,8 +826,9 @@ class BeanEngine:
             self.st[key] += n
 
     # -- lifecycle ------------------------------------------------------------ #
-    def start(self, filt, divert=None, duration=0, socket_source=None, narrow=False):
-        """Start a session.
+    def start(self, filt, divert=None, duration=0, socket_source=None, narrow=False,
+              admit=None):
+        """Start a session. Returns False when ``admit`` turned it down.
 
         ``divert``        - optional object with recv()/send()/close() (tests, --simulate),
         ``duration``      - seconds after which the engine stops itself (0 = no limit),
@@ -839,11 +840,23 @@ class BeanEngine:
                             be impaired is not handed to this process at all. Start-only
                             for the same reason ``filter`` is: the handle's filter is
                             fixed when it opens.
+        ``admit``         - "is this session still wanted?", asked under the lock
+                            STOP takes, before anything opens. For a caller that can
+                            be told to go away while it prepares the start: the GUI
+                            window closing while START resolves its target (external
+                            review P2-14). Asked before the lock, a close could land
+                            between the answer and the start - its stop found nothing
+                            running and its driver release nothing loaded, and the
+                            start then loaded a driver that nothing unloaded. Under
+                            the lock, a close either comes first and is told "no"
+                            here, or waits in stop() until this start is over.
         """
         # Held for the whole start: a worker can fail (and call stop()) before the
         # remaining threads are even spawned - stop() would then null out the
         # thread handles under our feet.
         with self._stop_lock:
+            if admit is not None and not admit():
+                return False
             return self._start_locked(filt, divert, duration, socket_source, narrow)
 
     def _start_locked(self, filt, divert, duration, socket_source=None, narrow=False):
