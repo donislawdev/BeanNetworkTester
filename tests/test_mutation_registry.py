@@ -3955,6 +3955,93 @@ MUTATIONS = [
         "test": "test_a_failure_before_the_session_is_not_called_finishing_the_run",
     },
     {
+        # P2-24: as an Exception, a signal inside engine.start was a failed start
+        # (exit 1) and left the engine running.
+        "label": "cli: a termination signal is an Exception again",
+        "file": "beantester/cli.py",
+        "old": "class _Terminated(BaseException):\n",
+        "new": "class _Terminated(Exception):\n",
+        "test": "test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes",
+    },
+    {
+        # P2-24: every signal raised, so a second one cut the cleanup short.
+        "label": "cli: a second signal cuts the cleanup short",
+        "file": "beantester/cli.py",
+        "old": "        if not _signal_gate[0]:\n            return\n",
+        "new": "",
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: Ctrl+Break is called SIGTERM",
+        "file": "beantester/cli.py",
+        "old": '_SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "Ctrl+Break"}\n',
+        "new": '_SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "SIGTERM"}\n',
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: restoring the signal handlers restores nothing",
+        "file": "beantester/cli.py",
+        "old": "                signal.signal(sig, old)\n",
+        "new": "                pass\n",
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: the run leaves its signal handlers installed",
+        "file": "beantester/cli.py",
+        "old": "        log.close()\n        restore_signals()\n",
+        "new": "        log.close()\n",
+        "test": "test_a_termination_is_logged_under_the_name_of_its_signal",
+    },
+    {
+        "label": "cli: the session log calls every termination SIGTERM",
+        "file": "beantester/cli.py",
+        "old": ('        log.warn(f"Terminated ({exc.label}).")\n'
+                '        code, stop_reason = exitcodes.TERMINATED, "terminated"\n'),
+        "new": ('        log.warn("Terminated (SIGTERM).")\n'
+                '        code, stop_reason = exitcodes.TERMINATED, "terminated"\n'),
+        "test": "test_a_termination_is_logged_under_the_name_of_its_signal",
+    },
+    {
+        # P2-24/NOWE-5b-1: a signal between engine.start and the loop's finally.
+        "label": "cli: the session guard leaves the engine running",
+        "file": "beantester/cli.py",
+        "old": "        _close_signal_gate()\n        engine.stop()\n        raise\n",
+        "new": "        _close_signal_gate()\n        raise\n",
+        "test": "test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes",
+    },
+    {
+        # NOWE-5b-1: a Ctrl+C while the scenario starts escapes with no summary.
+        "label": "cli: the scenario is armed outside the session's try",
+        "file": "beantester/cli.py",
+        "old": "    try:\n        armed = scen is None or _arm_scenario(engine, cfg, log, scen)\n",
+        "new": "    armed = scen is None or _arm_scenario(engine, cfg, log, scen)\n    try:\n",
+        "test": "test_a_signal_or_ctrl_c_while_the_scenario_starts_is_an_ordinary_interrupted_run",
+    },
+    {
+        # P2-21: the loop slept to the next report before it looked.
+        "label": "cli: the report loop sleeps until the next report",
+        "file": "beantester/cli.py",
+        "old": "            sleep(min(wake - now, POLL_S))\n",
+        "new": "            sleep(wake - now)\n",
+        "test": "test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report",
+    },
+    {
+        # P3-18: stepping to the next tick never ends below the clock's resolution.
+        "label": "cli: the next report is stepped to instead of computed",
+        "file": "beantester/cli.py",
+        "old": "            next_report = _next_tick(t0, interval, now)\n",
+        "new": ("            while next_report <= now:\n"
+                "                next_report += interval\n"),
+        "test": "test_a_report_interval_finer_than_the_clock_still_ends_the_run",
+    },
+    {
+        "label": "cli: a report a hair before its tick leaves that tick next",
+        "file": "beantester/cli.py",
+        "old": "    ticks = (now + 1e-9 - t0) / interval\n",
+        "new": "    ticks = (now - t0) / interval\n",
+        "test": "test_a_report_taken_a_hair_before_its_tick_is_that_tick_and_not_taken_twice",
+    },
+    {
         # External review P2-19: Tab to "No", Enter answered "Yes" - on closing
         # the window during a session and on unloading the driver.
         "label": "dialogs: Enter presses the default whatever has the focus",

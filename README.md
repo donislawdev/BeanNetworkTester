@@ -794,7 +794,7 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 | `6` | assertion | the run succeeded but `--min-packets` / `--fail-on-no-traffic` did not pass |
 | `7` | permission | administrator rights are required and missing |
 | `130` | interrupted | Ctrl+C (SIGINT) |
-| `143` | terminated | SIGTERM (job cancellation, `docker stop`) |
+| `143` | terminated | SIGTERM (job cancellation, `docker stop`) or Ctrl+Break |
 
 `BeanNetworkTester.exe --help` prints the same codes.
 

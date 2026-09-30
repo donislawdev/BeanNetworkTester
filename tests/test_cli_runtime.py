@@ -870,6 +870,234 @@ def test_exit_code_interrupted_and_terminated():
     check("exit: SIGTERM -> 143", code == exitcodes.TERMINATED, f"(code={code})")
 
 
+def test_a_termination_is_logged_under_the_name_of_its_signal():
+    """Ctrl+Break arrives as SIGBREAK and was logged as "Terminated (SIGTERM)",
+    which sent the reader looking for a job runner that never sent one. The code
+    stays 143 for both (the exit codes are a contract)."""
+    def ctrl_break(_s):
+        raise _Terminated("Ctrl+Break")
+
+    import signal
+    before = signal.getsignal(signal.SIGTERM)
+    err = io.StringIO()
+    code = run_cli(["--simulate", "--duration", "5"], sleep=ctrl_break,
+                   out=io.StringIO(), err=err)
+    check("exit: Ctrl+Break -> 143", code == exitcodes.TERMINATED, f"(code={code})")
+    check("and the log names Ctrl+Break", "Terminated (Ctrl+Break)." in err.getvalue(),
+          f"({err.getvalue()!r})")
+    # Left installed, the handler outlived the run with nothing left to end, and
+    # a process running the CLI in-process (this suite) ignored SIGTERM after it.
+    check("the run leaves the process's own SIGTERM handler as it found it",
+          signal.getsignal(signal.SIGTERM) is before)
+
+
+def _record_signal_handlers(monkeypatch):
+    """Install the CLI's handlers into a dict instead of the process: {signum: handler}.
+
+    ``SIGBREAK`` exists only on Windows, so it is given a number here too - the
+    Linux runner has to prove the same thing.
+    """
+    import signal
+    monkeypatch.setattr(signal, "SIGBREAK", getattr(signal, "SIGBREAK", 21), raising=False)
+    installed = {}
+
+    def fake_signal(sig, handler):
+        previous = installed.get(sig, "before")
+        installed[sig] = handler
+        return previous
+    monkeypatch.setattr(signal, "signal", fake_signal)
+    return signal, installed
+
+
+def test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short(monkeypatch):
+    """External review P2-24. The handler raised on EVERY signal, so a second one
+    - a CI runner that repeats SIGTERM, a second Ctrl+Break - landed in the middle
+    of the cleanup (the engine stopping, the driver unloading) and cut it short.
+    It raises once, never after the run has begun to end, and the run leaves the
+    process's own handlers as it found them."""
+    import pytest
+    signal, installed = _record_signal_handlers(monkeypatch)
+    restore = cli_module._install_signal_handlers()
+    handler = installed[signal.SIGTERM]
+    check("both signals are handled", installed[signal.SIGBREAK] is handler)
+
+    with pytest.raises(_Terminated) as first:
+        handler(signal.SIGTERM, None)
+    check("the first one ends the run, named", first.value.label == "SIGTERM")
+    check("a second one is ignored", handler(signal.SIGTERM, None) is None)
+
+    cli_module._install_signal_handlers()
+    handler = installed[signal.SIGBREAK]
+    with pytest.raises(_Terminated) as brk:
+        handler(signal.SIGBREAK, None)
+    check("Ctrl+Break is called Ctrl+Break", brk.value.label == "Ctrl+Break")
+
+    cli_module._install_signal_handlers()
+    cli_module._close_signal_gate()
+    check("nothing is raised once the run has begun to end",
+          installed[signal.SIGTERM](signal.SIGTERM, None) is None)
+
+    restore()
+    check("the previous handlers are back", installed[signal.SIGTERM] == "before",
+          f"({installed[signal.SIGTERM]!r})")
+
+
+def _signal_after(monkeypatch, method, exc):
+    """``BeanEngine.<method>`` does its job, then ``exc`` lands on the next bytecode."""
+    from beantester.engine import BeanEngine
+    real = getattr(BeanEngine, method)
+
+    def patched(self, *args, **kwargs):
+        real(self, *args, **kwargs)
+        raise exc
+    monkeypatch.setattr(BeanEngine, method, patched)
+
+
+def _run_watching_the_release(monkeypatch, argv):
+    """Run the CLI; returns ``(code, stdout, stderr, engine running when the driver
+    was released)``. Unloading the driver under our own open handle fails, so the
+    engine must be stopped by then."""
+    from beantester.engine import BeanEngine
+    engine, seen = BeanEngine(), {}
+
+    def release():
+        seen["running"] = engine.is_running()
+        return []
+    monkeypatch.setattr(cli_module.driver, "release_on_exit", release)
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(argv, engine=engine, sleep=FakeClock().sleep, out=out, err=err)
+    return code, out.getvalue(), err.getvalue(), seen.get("running")
+
+
+def test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes(
+        monkeypatch):
+    """External review P2-24, reproduced: SIGTERM landing just after
+    ``engine.start`` returned was caught as an ordinary failure - exit 1 with
+    "cannot start the capture: " and nothing after the colon - and the engine was
+    still running when ``run_cli`` returned."""
+    _signal_after(monkeypatch, "start", _Terminated())
+    code, _, err, running = _run_watching_the_release(
+        monkeypatch, ["--simulate", "--duration", "5"])
+    check("a signal is a terminated run", code == exitcodes.TERMINATED, f"(code={code})")
+    check("not a capture that failed to start", "cannot start the capture" not in err,
+          f"({err!r})")
+    check("the engine was stopped before the driver was released", running is False,
+          f"(running={running})")
+
+
+def test_a_signal_or_ctrl_c_while_the_scenario_starts_is_an_ordinary_interrupted_run(
+        monkeypatch, tmp_path):
+    """External review P2-24 and NOWE-5b-1, reproduced: a signal while the
+    scenario started was "scenario error: " with exit 4, and a Ctrl+C there left
+    the engine running at the driver release, with no summary. Arming the scenario
+    is part of the session now: the same code, the same summary as a Ctrl+C in
+    the loop."""
+    scen = _scenario_file(tmp_path, "two.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}}, {"at": 5, "settings": {"loss": 50}}]})
+    for exc, want, reason in ((_Terminated(), exitcodes.TERMINATED, "terminated"),
+                              (KeyboardInterrupt(), exitcodes.INTERRUPTED, "interrupted")):
+        monkeypatch.undo()               # the real start_scenario under each patch
+        _signal_after(monkeypatch, "start_scenario", exc)
+        code, out, err, running = _run_watching_the_release(
+            monkeypatch, ["--simulate", "--scenario", scen, "--format", "json"])
+        name = type(exc).__name__
+        check(f"{name} while the scenario starts: exit {want}", code == want,
+              f"(code={code}, err={err!r})")
+        summary = [json.loads(line) for line in out.splitlines() if '"summary"' in line]
+        check(f"{name}: the run still hands back its summary",
+              len(summary) == 1 and summary[0]["stop_reason"] == reason,
+              f"({summary!r})")
+        check(f"{name}: the engine was stopped before the driver was released",
+              running is False, f"(running={running})")
+
+
+def test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report(tmp_path):
+    """External review P2-21, reproduced: a scenario that ended after about a
+    second ran to 6.0 s at ``--interval 6`` - the loop slept to the next report
+    before it looked. In a real session the last step went on impairing for up to
+    ``--interval``, which can be a day. No nap is longer than ``POLL_S`` now, and
+    a nap asked for longer than a second fails this test rather than sleeping it."""
+    scen = _scenario_file(tmp_path, "short.json", {"loop": False, "steps": [
+        {"at": 0, "settings": {"loss": 5}}, {"at": 0.2, "settings": {"loss": 50}}]})
+    asked = []
+
+    def sleep(seconds):
+        asked.append(seconds)
+        if seconds > 1.0:
+            raise _NeverEnded(f"asked to sleep {seconds:g} s before looking again")
+        time.sleep(seconds)
+
+    out = io.StringIO()
+    code = run_cli(["--simulate", "--scenario", scen, "--interval", "20", "--format",
+                    "json"], sleep=sleep, out=out, err=io.StringIO())
+    summary = [json.loads(line) for line in out.getvalue().splitlines()
+               if '"summary"' in line]
+    check("the scenario ended the run", code == exitcodes.OK and len(summary) == 1
+          and summary[0]["stop_reason"] == "scenario_done", f"(code={code}, {summary!r})")
+    check("no nap was longer than the poll", max(asked) <= cli_module.POLL_S,
+          f"(longest {max(asked):g} s)")
+    check("the run ended near the scenario's end, not at the 20 s report",
+          summary[0]["elapsed_s"] < 2.0, f"({summary[0]['elapsed_s']} s)")
+
+
+def test_a_report_taken_a_hair_before_its_tick_is_that_tick_and_not_taken_twice():
+    """A real clock can wake a little early. The report condition allows 1e-9 s
+    early, and the next tick is computed with the same allowance: without it a
+    report taken just before its tick left that same tick as the next one, and it
+    was reported again a moment later - two samples for one second."""
+    clock = FakeClock()
+
+    def sleep(seconds):
+        clock.t += seconds
+        if seconds >= 1e-3 and abs(clock.t - round(clock.t)) < 1e-6:
+            clock.t = round(clock.t) - 5e-10          # woke a hair before the tick
+
+    out = io.StringIO()
+    run_cli(["--simulate", "--duration", "3", "--interval", "1", "--format", "json"],
+            sleep=sleep, clock=clock, out=out, err=io.StringIO())
+    samples = [line for line in out.getvalue().splitlines() if '"sample"' in line]
+    check("one report per tick", len(samples) == 3, f"({len(samples)} reports)")
+
+
+class _MovingClock(FakeClock):
+    """Virtual time that also moves on every READ, as a real clock does, starting
+    where a real monotonic clock is after a few days of uptime."""
+
+    def __init__(self, start=5e5, step=1e-3):
+        super().__init__()
+        self.t, self.step = start, step
+
+    def __call__(self):
+        self.t += self.step
+        return self.t
+
+
+def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
+    """External review P3-18, reproduced: ``--interval 1e-300 --duration 1`` never
+    ended. ``next_report += interval`` in a loop until it passed the clock: 1e-300
+    added to a clock near 5e5 is lost to rounding, so that loop spun forever, the
+    engine long stopped by its own deadline and no summary written. The tick is
+    computed from the start now, and an interval that fine reports on every pass
+    until the deadline.
+
+    Run on a thread with a timeout, because the regression is a HANG and a test
+    that hangs reports nothing; the virtual clock moves on every read, since the
+    loop no longer sleeps once the interval is below the clock's resolution."""
+    import threading
+    clock, out, result = _MovingClock(), io.StringIO(), {}
+
+    def run():
+        result["code"] = run_cli(["--simulate", "--interval", "1e-300", "--duration", "1",
+                                  "--format", "json"], sleep=clock.sleep, clock=clock,
+                                 out=out, err=io.StringIO())
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(10)
+    check("the run ended", not worker.is_alive())
+    check("with exit OK and its summary", result.get("code") == exitcodes.OK
+          and '"summary"' in out.getvalue(), f"({result})")
+
+
 def test_usage_errors_keep_argparse_exit_code_2():
     raised = None
     try:
