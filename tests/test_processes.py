@@ -1264,6 +1264,37 @@ def test_the_moment_a_target_was_set_is_read_once(monkeypatch):
           targeting.ports() == {5001}, f"({sorted(targeting.ports())})")
 
 
+def test_applying_the_same_pid_again_does_not_hand_it_to_its_next_holder(monkeypatch):
+    """Decision D-38 (T), kept after review. Every Apply and every scenario step
+    sends the target again (`apply_settings` -> `apply_targeting`), and the engine
+    reuses the targeting object while the text holds. Taking that as "the target
+    was set again" would make whoever got the number the target at the next change
+    of ANY setting. A new text is a new moment, and that is how to re-aim."""
+    world = _World()
+    table = world.install(monkeypatch)
+    now = time.time()
+    world.procs[1234] = ("target.exe", 1); world.created[1234] = now - 300
+    world.ports = {5000: 1234}
+    engine = BeanEngine()
+    engine._ports = table
+    first = apply_targeting(engine, "1234")
+    check("the target is in scope", first.ports() == {5000}, f"({sorted(first.ports())})")
+    first._set_at = now - 120              # it was set two minutes ago...
+
+    # ...the target exited since, and the number went to an innocent process
+    world.procs[1234] = ("innocent.exe", 1); world.created[1234] = now - 30
+    world.ports = {7000: 1234}
+    again = apply_targeting(engine, "1234")
+    check("the same text keeps the same target", again is first)
+    check("an Apply does not hand the number to its next holder",
+          again.ports() == set(), f"({sorted(again.ports())})")
+
+    apply_targeting(engine, "innocent")
+    aimed = apply_targeting(engine, "1234")
+    check("a new text is a new moment: the number's holder now is the target",
+          aimed is not first and aimed.ports() == {7000}, f"({sorted(aimed.ports())})")
+
+
 def test_a_parent_younger_than_its_child_is_not_its_parent(monkeypatch):
     """A ppid is the number the parent HAD. Its launcher long gone, a backup
     agent's parent number went to a new chrome, and a target of `chrome` took the

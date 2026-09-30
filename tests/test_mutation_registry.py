@@ -5014,6 +5014,16 @@ MUTATIONS = [
         "test": "test_a_pid_typed_as_a_number_is_not_handed_to_its_next_holder",
     },
     {
+        # P2-9, D-38 (T) kept after review: the moment is refreshed whenever the same
+        # text is applied again - every Apply and every scenario step does that.
+        "label": "engine: applying the same target again resets the moment it was set",
+        "file": "beantester/engine.py",
+        "old": "        # Pointing the RESOLVER at it is set_target's job (one place, one\n",
+        "new": ("        current._set_at = time.time()\n"
+                "        # Pointing the RESOLVER at it is set_target's job (one place, one\n"),
+        "test": "test_applying_the_same_pid_again_does_not_hand_it_to_its_next_holder",
+    },
+    {
         # P2-9: "cannot tell" read as "somebody else" - the literal pid stops matching.
         "label": "targeting: an unknown start time makes a literal pid a stranger",
         "file": "beantester/targeting.py",
