@@ -4916,9 +4916,17 @@ MUTATIONS = [
         # P2-10: what a walk queues grows the queue past its ceiling.
         "label": "targeting: a walk pushes the queue past its ceiling",
         "file": "beantester/targeting.py",
-        "old": ("                if len(pending) > self.MAX_PENDING_PIDS:\n"
-                "                    pending = frozenset(list(pending)[:self.MAX_PENDING_PIDS])\n"),
-        "new": "",
+        "old": "                    pending = frozenset(keep + rest)\n",
+        "new": "                    pending = pending\n",
+        "test": "test_the_pending_queue_cannot_grow_without_a_bound",
+    },
+    {
+        # P2-10 after review: the cap cuts in set order and drops the owners the
+        # walk queued - the ones P2-10 exists to rescue.
+        "label": "targeting: a full queue drops the owners the walk queued",
+        "file": "beantester/targeting.py",
+        "old": "                    pending = frozenset(keep + rest)\n",
+        "new": "                    pending = frozenset(list(pending)[:self.MAX_PENDING_PIDS])\n",
         "test": "test_the_pending_queue_cannot_grow_without_a_bound",
     },
     {

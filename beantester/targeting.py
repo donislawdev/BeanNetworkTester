@@ -241,7 +241,12 @@ class ProcessTargeting:
                 # judging it at all (P2-10).
                 pending = (self._pending_pids - seen) | unseen
                 if len(pending) > self.MAX_PENDING_PIDS:
-                    pending = frozenset(list(pending)[:self.MAX_PENDING_PIDS])
+                    # The owners this walk queued go first: they were targets a
+                    # moment ago, the rest are pids nobody has judged, most of them
+                    # not ours. Cut in set order, a full queue dropped all of them.
+                    keep = list(unseen)[:self.MAX_PENDING_PIDS]
+                    rest = list(pending - unseen)[:self.MAX_PENDING_PIDS - len(keep)]
+                    pending = frozenset(keep + rest)
                 self._pending_pids = pending
                 self._not_ours = frozenset()
             self._names = tuple(sorted(n for n in names if n))

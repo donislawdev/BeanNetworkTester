@@ -725,6 +725,9 @@ def test_the_pending_queue_cannot_grow_without_a_bound():
     check("a walk does not push it past the ceiling either",
           len(targeting._pending_pids) == targeting.MAX_PENDING_PIDS,
           f"({len(targeting._pending_pids)})")
+    check("and what it cuts is not the owners it queued - they were targets",
+          set(range(20000, 20010)) <= targeting._pending_pids,
+          f"({len(set(range(20000, 20010)) & targeting._pending_pids)} of 10 kept)")
 
 
 def test_a_target_that_restarts_under_a_new_pid_is_picked_up_from_its_event():
