@@ -5349,6 +5349,15 @@ MUTATIONS = [
         "test": "test_a_rebuild_never_changes_the_set_a_packet_may_be_holding",
     },
     {
+        # D-46, kept after review: the old return value, but now the LIVE set.
+        "label": "targeting: a rebuild hands out the live port set",
+        "file": "beantester/targeting.py",
+        "old": "            if pending and wake is not None:\n                wake()\n",
+        "new": ("            if pending and wake is not None:\n                wake()\n"
+                "            return self._ports\n"),
+        "test": "test_what_a_rebuild_returns_cannot_change_the_target",
+    },
+    {
         # P2-11: a retry asks for exactly the size the table reported.
         "label": "portmap: a retry asks for exactly the size the table reported",
         "file": "beantester/portmap.py",

@@ -8,6 +8,7 @@ instant its SOCKET event arrives. These tests prove the table swap (unit), the
 end-to-end resolution through a watcher (integration), and the engine binding -
 all without WinDivert.
 """
+import contextlib
 import threading
 import time
 
@@ -530,6 +531,23 @@ def test_a_rebuild_never_changes_the_set_a_packet_may_be_holding():
     check("the rebuild published its own set", targeting.ports() == {5001},
           f"({sorted(targeting.ports())})")
     check("and left the one a packet may hold as it was", held == {5000}, f"({held})")
+
+
+def test_what_a_rebuild_returns_cannot_change_the_target():
+    """A rebuild returns nothing (D-46, kept after the review of PR 235). It used to
+    return the port set, a frozenset nobody could change. The set is live now
+    (P3-22), and handing IT out would let a caller change what the packet path
+    impairs. A frozenset copy would restore the old return value at 402 us, in one
+    C call holding the GIL, per rebuild at 60 000 ports - for a value no caller in
+    the tree reads. ``ports()`` is the copy."""
+    table = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    returned = targeting.refresh()
+    with contextlib.suppress(AttributeError):     # None or a frozenset: no add()
+        returned.add(9999)                        # what a caller could do with it
+    check("changing what a rebuild returned leaves the target as it was",
+          targeting.ports() == {5000}, f"({sorted(targeting.ports())})")
+    check("and a rebuild returns nothing", returned is None, f"({returned!r})")
 
 
 def test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one():
