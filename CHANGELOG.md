@@ -20,6 +20,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **New connections of the target process are no longer missed while its list is
+  updated.** The tool rebuilds this list several times a second. A connection opened
+  during a rebuild, or the first one of a program that had just started, was left
+  untouched until the next rebuild - a short one for its whole life. After STOP, the
+  "Targeting" line of the next START counted the connections open at that STOP, not the
+  current ones. When reading the system's connection list fails, a connection closed since
+  the last good read is no longer brought back.
+
 - **START no longer holds your traffic while it looks up the target process.** The
   lookup ran after the WinDivert driver had started catching packets, and nothing passed
   them on until it finished, which took tens of milliseconds. It now runs first. The first packets also no longer count as waiting in the driver's queue, so a

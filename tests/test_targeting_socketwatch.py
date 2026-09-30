@@ -477,6 +477,116 @@ def test_a_rebuild_in_flight_does_not_lose_a_socket_the_event_added():
     check("and the walk's own result is still there", 5000 in targeting)
 
 
+def test_a_target_with_no_socket_at_the_walk_is_judged_again_when_it_opens_one():
+    """External review P2-10(a). A target that owns no socket when the walk reads
+    the table (between two connections) opens one while the walk resolves names.
+    Its event puts the port in scope, the publish took it out again - the walk
+    never saw that pid - and the pid left the target with nothing to queue it
+    back. The connection stayed unimpaired until the next rebuild, 50-300 ms,
+    which for a short one is its whole life.
+
+    The walk still keeps no port it cannot vouch for (the recycled-pid bound), but
+    it does not decide about a pid it never saw either: that pid is queued, the
+    resolver's bell rings, and adoption judges it at once. A late owner the walk
+    DID see and rule out stays out."""
+    table = _EventTable(ports={5000: 100, 5001: 101},
+                        names={100: "chrome.exe", 101: "chrome.exe", 900: "other.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.refresh()
+    check("both are targeted", targeting.pids() == {100, 101}, f"({targeting.pids()})")
+    bells = []
+    targeting.on_miss(lambda: bells.append(1))
+
+    # 100 is between two connections; the number 101 now belongs to somebody else
+    table.ports = {40000: 900, 5001: 101}
+    table.names[101] = "innocent.exe"
+    walked = []
+
+    def name_of(pid, cheap=False):
+        if not walked:                          # both sockets announced mid-walk
+            walked.append(pid)
+            table.ports[6000] = 100
+            targeting.note_socket(6000, 100)
+            targeting.note_socket(7001, 101)
+        return table.names.get(pid, "")
+
+    table.name_of = name_of
+    targeting.refresh()
+    check("the events really landed mid-walk", walked, "(the interposition never ran)")
+    check("P2-10: the pid the walk never saw is queued to be judged",
+          targeting._pending_pids == frozenset({100}), f"({set(targeting._pending_pids)})")
+    check("...and the resolver is rung for it", bells, "(no bell)")
+    check("the pid the walk saw and ruled out stays out", 7001 not in targeting)
+    check("adoption judges it", targeting.adopt_new_pids() is True)
+    check("and the socket it opened mid-walk is in scope",
+          6000 in targeting and targeting.pids() == {100},
+          f"({sorted(targeting.ports())}, {targeting.pids()})")
+
+
+def test_a_new_process_announced_while_a_walk_runs_is_still_judged():
+    """External review P2-10(b). A brand-new process whose first socket lands
+    while a walk runs is queued by its event - and the publish emptied the whole
+    queue, judging nothing: the process stayed out until the next rebuild. The
+    walk takes out of the queue only what it judged itself."""
+    table = _EventTable(ports={5000: 100, 5002: 102},
+                        names={100: "chrome.exe", 102: "chrome.exe", 300: "chrome.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=table)
+    targeting.note_socket(5002, 102)            # queued BEFORE the walk, which sees it
+    walked = []
+
+    def name_of(pid, cheap=False):
+        if not walked:
+            walked.append(pid)
+            table.ports[7000] = 300
+            targeting.note_socket(7000, 300)
+        return table.names.get(pid, "")
+
+    table.name_of = name_of
+    targeting.refresh()
+    check("the event really landed mid-walk", walked, "(the interposition never ran)")
+    check("P2-10: the process nobody judged is still queued, the judged one is not",
+          targeting._pending_pids == frozenset({300}), f"({set(targeting._pending_pids)})")
+    targeting.adopt_new_pids()
+    check("adoption puts its first socket in scope", 7000 in targeting,
+          f"({sorted(targeting.ports())})")
+
+
+def test_a_table_swap_does_not_wait_for_a_walk_nor_change_the_one_under_way():
+    """External review P3-20: the engine hands targeting back to the poller at
+    STOP, and a resolver that outlived its join can still be walking. A swap under
+    the walk's lock made STOP wait for that walk. The walk reads its table once, so
+    it finishes where it started instead of mixing two tables' answers."""
+    a = _EventTable(ports={5000: 100}, names={100: "chrome.exe"})
+    b = _EventTable(ports={}, names={100: "innocent.exe"})
+    targeting = ProcessTargeting(bnt.parse_target("chrome"), table=a)
+    in_walk, release = threading.Event(), threading.Event()
+
+    def snapshot():
+        # Held BEFORE any name is asked, so every name the walk reads comes after
+        # the swap - the walk has to read them from its own table to stay on A.
+        in_walk.set()
+        release.wait(10)
+        return dict(a.ports)
+
+    a.snapshot = snapshot
+    walker = threading.Thread(target=targeting.refresh, daemon=True)
+    walker.start()
+    try:
+        check("the walk is under way", in_walk.wait(5))
+        swapper = threading.Thread(target=targeting.set_table, args=(b,), daemon=True)
+        swapper.start()
+        swapper.join(2)
+        check("P3-20: the swap does not wait for the walk", not swapper.is_alive())
+    finally:
+        release.set()
+    walker.join(5)
+    check("the walk finished on the table it started with",
+          targeting.pids() == {100}, f"({targeting.pids()})")
+    targeting.refresh()
+    check("and the next walk reads the new one", targeting.pids() == set(),
+          f"({targeting.pids()})")
+
+
 def test_an_adopted_pid_still_falls_out_at_the_next_rebuild():
     """Adoption must not become a way to accumulate pids for ever - the recycled-pid
     bound is exactly "until the next rebuild", and a union would erase it."""
@@ -597,6 +707,27 @@ def test_the_pending_queue_cannot_grow_without_a_bound():
     check("the queue stops at its ceiling",
           len(targeting._pending_pids) == targeting.MAX_PENDING_PIDS,
           f"({len(targeting._pending_pids)})")
+
+    # A walk queues the owners it never saw on top of that (P2-10) - still capped.
+    # Announced WHILE it runs: a walk empties the late ports noted before it.
+    targeting._pids = frozenset(range(20000, 20010))
+    walked = []
+
+    def snapshot():
+        walked.append(1)
+        for pid in targeting._pids:
+            targeting.note_socket(pid, pid)
+        return {}
+
+    table.snapshot = snapshot
+    targeting.refresh()
+    check("the sockets were announced mid-walk", walked, "(the interposition never ran)")
+    check("a walk does not push it past the ceiling either",
+          len(targeting._pending_pids) == targeting.MAX_PENDING_PIDS,
+          f"({len(targeting._pending_pids)})")
+    check("and what it cuts is not the owners it queued - they were targets",
+          set(range(20000, 20010)) <= targeting._pending_pids,
+          f"({len(set(range(20000, 20010)) & targeting._pending_pids)} of 10 kept)")
 
 
 def test_a_target_that_restarts_under_a_new_pid_is_picked_up_from_its_event():

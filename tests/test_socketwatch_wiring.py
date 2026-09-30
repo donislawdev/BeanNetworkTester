@@ -358,6 +358,53 @@ def test_a_second_session_gets_a_fresh_watcher_wired_to_the_target():
     check("each session really got its own watcher", first is not eng._socketwatch)
 
 
+class _RefusedDivert(FakeDivert):
+    """A handle the driver will not open."""
+
+    def open(self):
+        raise OSError("the driver refused the handle")
+
+
+def test_between_sessions_the_target_resolves_against_the_poller():
+    """External review P3-20: the live map stops with its session, and targeting
+    kept resolving against it - a map frozen at STOP. The next START resolves the
+    target before its handle opens and announces the result, so that "Targeting"
+    line counted the sockets of the moment of the last STOP. A start whose handle
+    does not open leaves targeting on its stopped watcher the same way."""
+    import bean_network_tester as bnt
+
+    ports = _FakePorts({5000: 100})
+    eng = BeanEngine()
+    eng._ports = ports
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)
+    eng.start("true", divert=FakeDivert([]), socket_source=_FakeSocketSource([]))
+    check("in session it resolves against the live map", targeting.table is eng._socketwatch)
+    eng.stop()
+    check("P3-20: after STOP, against the poller", targeting.table is ports,
+          f"({targeting.table!r})")
+    ports._ports[6000] = 100                    # a socket opened between sessions
+    targeting.refresh()                         # what the next START's announcement does
+    check("so it counts the sockets of now", 6000 in targeting,
+          f"({sorted(targeting.ports())})")
+
+    bound, real_set_table = [], targeting.set_table
+
+    def set_table(table):
+        bound.append(table)
+        real_set_table(table)
+
+    targeting.set_table = set_table
+    try:
+        eng.start("true", divert=_RefusedDivert([]), socket_source=_FakeSocketSource([]))
+    except OSError:
+        pass
+    check("the failed start bound the target to its own watcher first",
+          bool(bound) and bound[0] is not ports and not eng.is_running(), f"({bound})")
+    check("P3-20: a failed start leaves it on the poller too", targeting.table is ports,
+          f"({targeting.table!r})")
+
+
 def test_stopping_the_engine_leaves_no_watcher_thread_behind():
     before = {t.name for t in threading.enumerate()}
     eng = BeanEngine()

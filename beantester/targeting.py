@@ -118,8 +118,9 @@ class ProcessTargeting:
         # table happens to say a moment later.
         self._late_owners = {}
         # pids the live map has seen that we have not judged yet, and the ones we
-        # have judged as not ours. Both are cleared at every full rebuild, so
-        # neither can grow beyond the churn of one refresh interval.
+        # have judged as not ours. A full rebuild clears the second and takes out
+        # of the first every pid it judged; the queue has a ceiling of its own
+        # (MAX_PENDING_PIDS), and adopt_new_pids empties it.
         self._pending_pids = frozenset()
         self._not_ours = frozenset()
         # Set by the packet path when it is asked about a port it does not know;
@@ -136,19 +137,21 @@ class ProcessTargeting:
         excluded = getattr(self.matcher, "excluded", None)
         return bool(excluded(pid, name)) if excluded else False
 
-    def _pid_matches(self, pid, name):
+    def _pid_matches(self, pid, name, table):
         """Does this pid belong to the target - itself, or through its tree?
 
         THE rule, in one place. It used to be inline in ``refresh``'s loop, and
         ``adopt_new_pids`` needs exactly the same answer: two copies of "what counts
         as the target" would drift at the first edit, and the drift would be silent
         (one path would impair a process the other does not).
+
+        ``table`` is the caller's, read once for its whole pass (see ``set_table``).
         """
         if self._matches(pid, name):
             return True
         if self._excluded(pid, name):
             return False          # an explicit "!" wins over an inherited match
-        for ancestor_pid, ancestor_name in self.table.ancestors(pid):
+        for ancestor_pid, ancestor_name in table.ancestors(pid):
             if self._matches(ancestor_pid, ancestor_name):
                 return True
         return False
@@ -157,6 +160,10 @@ class ProcessTargeting:
         """Rebuild the port set from the current socket table."""
         now = self.clock() if now is None else now
         with self._lock:
+            # ONE table for the whole walk. set_table() swaps it without this lock,
+            # so a walk reading self.table at every step could take its snapshot
+            # from one table and its names from the other.
+            table = self.table
             # Emptied HERE, before the walk, and it used to be emptied at the end
             # of it. Two things follow, and both matter:
             #
@@ -179,18 +186,19 @@ class ProcessTargeting:
             # a count would only start dropping legitimate rescues in a burst.
             with self._ports_lock:
                 self._late_owners = {}
-            self.table.refresh(force=force)
-            port_pid = self.table.snapshot()
+            table.refresh(force=force)
+            port_pid = table.snapshot()
+            seen = set(port_pid.values())           # every pid this walk judges
             pids, names = set(), set()
-            for pid in set(port_pid.values()):
+            for pid in seen:
                 # Names must resolve even for HARDENED processes (Chrome's network
                 # service refuses OpenProcess), or targeting `chrome` by NAME matches
                 # nothing while targeting its PID works. That is why the name lookup is
                 # allowed its snapshot fallback - now a ~6 ms native toolhelp snapshot,
                 # not the ~2 s psutil.process_iter that used to make the first
                 # target-start crawl (see portmap._process_table).
-                name = self.table.name_of(pid)
-                if self._pid_matches(pid, name):
+                name = table.name_of(pid)
+                if self._pid_matches(pid, name, table):
                     pids.add(pid)
                     names.add(name or str(pid))
             resolved = frozenset(port for port, pid in port_pid.items() if pid in pids)
@@ -210,6 +218,14 @@ class ProcessTargeting:
                 # comprehension is short and the lock stays a microsecond affair.
                 late = frozenset(port for port, owner in self._late_owners.items()
                                  if owner in pids)
+                # An owner the walk never SAW is not one it dropped (external review
+                # P2-10): a target that owned no socket when the table was read and
+                # opened one since. Its port goes too, but the owner is queued, and
+                # adopt_new_pids judges it right after this walk (the bell below).
+                # Nothing used to queue it, so that connection stayed unimpaired
+                # until the next rebuild, 50-300 ms - all of a short one's life.
+                unseen = frozenset(owner for owner in self._late_owners.values()
+                                   if owner not in seen)
                 # REPLACED, never unioned: a pid that no longer matches has to fall
                 # out here, and that is the whole bound on the recycled-pid window
                 # (test_targeting_socketwatch.py::
@@ -220,10 +236,24 @@ class ProcessTargeting:
                 # `late` above). It is part of _ports from here on, and the next
                 # walk empties the dict again before it starts.
                 self._ports = resolved | late
-                self._pending_pids = frozenset()
+                # Only what this walk judged leaves the queue. Emptying all of it
+                # dropped a new process whose first socket landed mid-walk without
+                # judging it at all (P2-10).
+                pending = (self._pending_pids - seen) | unseen
+                if len(pending) > self.MAX_PENDING_PIDS:
+                    # The owners this walk queued go first: they were targets a
+                    # moment ago, the rest are pids nobody has judged, most of them
+                    # not ours. Cut in set order, a full queue dropped all of them.
+                    keep = list(unseen)[:self.MAX_PENDING_PIDS]
+                    rest = list(pending - unseen)[:self.MAX_PENDING_PIDS - len(keep)]
+                    pending = frozenset(keep + rest)
+                self._pending_pids = pending
                 self._not_ours = frozenset()
             self._names = tuple(sorted(n for n in names if n))
             self._refreshes += 1
+            wake = self._on_miss
+            if pending and wake is not None:
+                wake()
             return self._ports
 
     # -- what the live socket map tells us, as it happens ---------------------- #
@@ -287,10 +317,11 @@ class ProcessTargeting:
         if not pending:
             return False
         with self._lock:              # serialise with refresh(): same table reads
+            table = self.table        # one table for the pass, as in refresh()
             matched, names, judged = set(), set(), set()
             for pid in pending:
-                name = self.table.name_of(pid)
-                if self._pid_matches(pid, name):
+                name = table.name_of(pid)
+                if self._pid_matches(pid, name, table):
                     matched.add(pid)
                     names.add(name or str(pid))
                 elif name:
@@ -308,7 +339,7 @@ class ProcessTargeting:
                 return False
             # Their ports, from the live map - including sockets this pid opened
             # while we were deciding.
-            owners = {port: owner for port, owner in self.table.snapshot().items()
+            owners = {port: owner for port, owner in table.snapshot().items()
                       if owner in matched}
             ports = frozenset(owners)
             with self._ports_lock:
@@ -333,9 +364,14 @@ class ProcessTargeting:
         one-line reference change. The resolved port set is left as
         it is until the next ``refresh()`` (the resolver runs those continuously), so
         the swap never blips the hot-path ``__contains__``.
+
+        NOT under ``_lock``, which a walk holds from start to end: the engine calls
+        this at STOP (back to the poller, external review P3-20), and a resolver
+        that outlived its join could still be walking - STOP would wait for it. A
+        walk reads the table once (``refresh``, ``adopt_new_pids``), so it finishes
+        on the table it started with.
         """
-        with self._lock:
-            self.table = table if table is not None else portmap.default_table()
+        self.table = table if table is not None else portmap.default_table()
 
     def owner_targeted(self, port):
         """Is this port a brand-new socket of a process we ALREADY target?

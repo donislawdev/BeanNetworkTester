@@ -1195,9 +1195,18 @@ class BeanEngine:
 
     def _stop_socketwatch(self):
         """Stop this session's live socket map, if it has one: it holds a WinDivert
-        handle and a thread, and nothing may be left sniffing after the session."""
+        handle and a thread, and nothing may be left sniffing after the session.
+
+        Targeting goes back to the poller first (external review P3-20). Left on
+        the stopped map, it resolved against the sockets of the moment of STOP, and
+        the "Targeting" line of the next START counted those. Under _target_lock,
+        so a target_for() racing this cannot leave a new targeting on the watcher.
+        """
         watcher, self._socketwatch = self._socketwatch, None
         if watcher is not None:
+            with self._target_lock:
+                if self._targeting is not None:
+                    self._targeting.set_table(self._ports)
             watcher.stop()
 
     def _bind_targeting(self):
