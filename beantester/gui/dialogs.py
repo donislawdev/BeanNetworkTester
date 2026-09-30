@@ -168,6 +168,15 @@ def start_failure_message(err, elevated):
     return f"{err}\n\n{T(key)}" if key else str(err)
 
 
+def show_start_failure(parent, err, elevated):
+    """The dialog for a START that failed: a missing pydivert is its own case (the
+    fix is an install, not a driver or a right), anything else gets the advice
+    that fits it (``start_failure_message``)."""
+    if isinstance(err, ImportError):
+        return show_error(parent, T("dialogs.missing_library"), T("dialogs.install_pydivert"))
+    return show_error(parent, T("dialogs.start_failed"), start_failure_message(err, elevated))
+
+
 def show_error(parent, title, message):
     return _message(parent, title, message, WARN,
                     [("buttons.ok", True, "Accent.TButton")], default=True)

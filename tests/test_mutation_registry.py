@@ -3789,10 +3789,9 @@ MUTATIONS = [
     {
         "label": "gui: a START that failed is recorded as the session",
         "file": "beantester/gui/app.py",
-        "old": "        if err is not None:\n            if isinstance(err, ImportError):",
-        "new": ("        if err is not None:\n"
-                "            session_repro.started(self, self._pending_start_settings)\n"
-                "            if isinstance(err, ImportError):"),
+        "old": "            dialogs.show_start_failure(self.root, err, self._is_admin)\n",
+        "new": ("            session_repro.started(self, self._pending_start_settings)\n"
+                "            dialogs.show_start_failure(self.root, err, self._is_admin)\n"),
         "test": "test_the_repro_describes_the_session_the_engine_ran_not_the_form",
     },
     {
@@ -4383,6 +4382,86 @@ MUTATIONS = [
                 "dict(UI_DEFAULTS[\"event_sort\"])\n"),
         "new": "",
         "test": "test_reset_layout_forgets_open_windows_and_live_sorts_and_keeps_the_filter",
+    },
+    {
+        # External review P2-14: a START still resolving its target when the
+        # window closes goes on to open the driver after the window is gone.
+        "label": "gui: a start still resolving when the window closes opens the driver",
+        "file": "beantester/gui/app.py",
+        "old": ("            self.engine.start(filt, duration=duration, "
+                "narrow=bool(s.get(\"narrow_filter\")),\n"
+                "                              admit=lambda: not self._closing)"),
+        "new": ("            self.engine.start(filt, duration=duration, "
+                "narrow=bool(s.get(\"narrow_filter\")))"),
+        "test": "test_closing_the_window_while_start_resolves_opens_no_driver_afterwards",
+    },
+    {
+        # External review P2-14: the driver release runs before the stop, while a
+        # start is still loading the driver, so it finds nothing to unload.
+        "label": "gui: closing unloads the driver before stopping a start loading it",
+        "file": "beantester/gui/app.py",
+        "old": ("            self.engine.stop()\n"
+                "            self.running = False\n"),
+        "new": ("            driver.release_on_exit(lambda line: "
+                "self.log(f\"{T('log.driver')}: {line}\"))\n"
+                "            self.engine.stop()\n"
+                "            self.running = False\n"),
+        "test": "test_closing_the_window_waits_for_a_start_already_opening_the_driver",
+    },
+    {
+        # CodeRabbit on PR #230: "still wanted?" asked BEFORE the stop lock - a
+        # close landing between the answer and the start stops nothing and
+        # releases nothing, and the start then loads a driver nobody unloads.
+        "label": "engine: a start's admit is asked before the stop lock, not under it",
+        "file": "beantester/engine.py",
+        "old": ("        with self._stop_lock:\n"
+                "            if admit is not None and not admit():\n"
+                "                return False\n"),
+        "new": ("        if admit is not None and not admit():\n"
+                "            return False\n"
+                "        with self._stop_lock:\n"),
+        "test": "test_a_window_that_closes_right_after_admit_stops_after_the_start",
+    },
+    {
+        # The start ignores admit's "no" and opens the driver anyway.
+        "label": "engine: a start that admit turned down opens anyway",
+        "file": "beantester/engine.py",
+        "old": ("            if admit is not None and not admit():\n"
+                "                return False\n"),
+        "new": "",
+        "test": "test_a_start_asks_admit_under_the_lock_its_stop_takes",
+    },
+    {
+        # External review P3-30: the scenario's failure escapes _finish_start and
+        # leaves a running session behind a START button.
+        "label": "gui: a scenario that cannot start leaves the session running",
+        "file": "beantester/gui/app.py",
+        "old": "            self.engine.worker_failed(e)\n",
+        "new": "            raise\n",
+        "test": "test_a_scenario_that_cannot_start_ends_the_session",
+    },
+    {
+        # CodeRabbit on PR #230: the crash record (a file write, a context
+        # request) stands between the failed scenario and the stop that gives
+        # the network back.
+        "label": "gui: a failed scenario is recorded before its session is stopped",
+        "file": "beantester/gui/app.py",
+        "old": ("            self.engine.worker_failed(e)\n"
+                "            crashlog.note(e, \"gui.app\")\n"),
+        "new": ("            crashlog.note(e, \"gui.app\")\n"
+                "            self.engine.worker_failed(e)\n"),
+        "test": "test_a_scenario_that_cannot_start_ends_the_session",
+    },
+    {
+        # The start-failed dialog moved to dialogs: a missing pydivert is an
+        # install, and gets its own dialog.
+        "label": "dialogs: a missing pydivert gets the generic start-failed dialog",
+        "file": "beantester/gui/dialogs.py",
+        "old": ("    if isinstance(err, ImportError):\n"
+                "        return show_error(parent, T(\"dialogs.missing_library\"), "
+                "T(\"dialogs.install_pydivert\"))\n"),
+        "new": "",
+        "test": "test_a_start_that_fails_shows_the_dialog_that_fits_the_failure",
     },
     {
         # External review P2-12: the capture thread reads the engine's flag and

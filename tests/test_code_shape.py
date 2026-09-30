@@ -114,7 +114,10 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # (`SessionPeaks`, one peak per view - external review P3-26) and the "applied"
 # fingerprint to `gui/applied.py` (P2-16c, P3-24), which paid for the two lines
 # "Reset layout" needed to reset the live table sorts (NOWE-1-1).
-FILE_CEILING = 1120             # beantester/gui/app.py
+# Lowered 2026-09-30 from 1120: closing the window no longer waits for a START in
+# flight - the engine asks the start's `admit` under its own stop lock (external
+# review P2-14). The band falls to 781.9; `engine.py` is 780 after taking `admit`.
+FILE_CEILING = 1117             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
