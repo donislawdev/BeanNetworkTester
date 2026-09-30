@@ -17,7 +17,7 @@ from typing import NamedTuple
 
 import pytest
 
-from beantester import portmap
+from beantester import crashlog, portmap
 from beantester.portmap import _AF_INET, _AF_INET6, SocketRow
 from fakes import check
 
@@ -158,6 +158,93 @@ def test_the_walk_grows_its_buffer_and_remembers_the_size():
     native.port_pid_map()
     offered = [size for key, size in api.calls if key == UDP4]
     check("the next walk starts from the size that worked", len(offered) == 1, f"({offered})")
+
+
+class _GrowingIphlpapi(FakeIphlpapi):
+    """A udp/v4 table that gains ``per_call`` rows before every call answers - a load
+    test opening sockets while the table is read."""
+
+    def __init__(self, start, per_call):
+        super().__init__({UDP4: [self._row(n) for n in range(start)]})
+        self.per_call = per_call
+
+    @staticmethod
+    def _row(n):
+        return dict(dwLocalAddr=_v4("0.0.0.0"), dwLocalPort=_port(1024 + n), dwOwningPid=n + 1)
+
+    def _answer(self, key, buffer, size_ref):
+        if key == UDP4:
+            rows = self.tables[UDP4]
+            rows.extend(self._row(len(rows) + n) for n in range(self.per_call))
+        return super()._answer(key, buffer, size_ref)
+
+
+def _asked(api, key):
+    return [size for called, size in api.calls if called == key]
+
+
+def test_a_table_that_grows_while_it_is_read_is_still_read_in_one_walk():
+    """External review P2-11. The table grows between the call that reports its
+    size and the call that fills it, and a buffer of exactly the reported size
+    then fails again: a table that gained rows before every call was given up
+    after six tries. MEASURED on loopback with ~11 000 rows a second added: every
+    read walked the table TWICE, because the size remembered no longer fitted,
+    and a walk that fails costs what one that succeeds does. Room on every
+    attempt, the first one included."""
+    api = _GrowingIphlpapi(start=800, per_call=20)      # 800 x 12 B > 8192
+    native = _native(api)
+    rows, failed = native.socket_rows()
+    udp = [r for r in rows if r.proto == "UDP" and r.family == 4]
+    check("a table that grew before every call is still read", "udp/v4" not in failed,
+          f"({failed}, {_asked(api, UDP4)})")
+    check("all of it, as it was when it answered", len(udp) == len(api.tables[UDP4]),
+          f"({len(udp)} of {len(api.tables[UDP4])})")
+    check("on the second try - the first was the default guess",
+          len(_asked(api, UDP4)) == 2, f"({_asked(api, UDP4)})")
+
+    api.calls.clear()
+    native.socket_rows()
+    check("the next read of a table that grew again is ONE walk",
+          len(_asked(api, UDP4)) == 1, f"({_asked(api, UDP4)})")
+
+
+def test_the_size_remembered_is_what_the_table_needed_not_the_buffer():
+    """The buffer is bigger than the table on purpose (the room above). Remembering
+    ITS size would add the room again on every read - a quarter more each time, a
+    few times a second - so what is remembered is the table's own size, from its
+    rows. The fake writes nothing back on success, which is all the documentation
+    promises; Windows writes the table's size (measured), not the buffer's."""
+    api = FakeIphlpapi(_machine())
+    native = _native(api)
+    for _ in range(5):
+        native.port_pid_map()
+    offered = _asked(api, TCP4)
+    check("the first read offers the default guess", offered[0] == 8192, f"({offered})")
+    check("and every later one the same buffer, not a growing one",
+          len(set(offered[1:])) == 1 and offered[1] < 8192, f"({offered})")
+
+
+def test_a_table_that_fails_is_recorded_every_time_and_so_is_none_answering(monkeypatch):
+    """External review P2-11. A failing table was recorded ONCE per process
+    (``crashlog.once``), so a later session's failure left no trace; and when none
+    of the four answered, the caller dropped to psutil - ten times slower - for the
+    rest of the program without a word. The crash log counts repeats."""
+    recorded = []
+    monkeypatch.setattr(crashlog, "record",
+                        lambda exc, **kw: recorded.append((kw.get("subsystem"), str(exc))))
+    native = _native(FakeIphlpapi(_machine(), refuse={TCP6: 87}))
+    native.port_pid_map()
+    native.port_pid_map()
+    check("a table that failed twice is recorded twice",
+          [subsystem for subsystem, _ in recorded] == ["portmap.native.tcp/v6"] * 2,
+          f"({recorded})")
+
+    recorded.clear()
+    silent = _native(FakeIphlpapi(refuse={TCP4: 5, TCP6: 5, UDP4: 5, UDP6: 5}))
+    check("none answering is a None for the caller", silent.port_pid_map() is None)
+    check("and it is recorded, naming all four",
+          [subsystem for subsystem, _ in recorded]
+          == ["portmap.native.tcp/v4.tcp/v6.udp/v4.udp/v6"], f"({recorded})")
 
 
 def test_a_table_that_keeps_outgrowing_its_buffer_is_a_failed_table():

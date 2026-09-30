@@ -20,6 +20,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A target with tens of thousands of connections no longer slows the tool down.**
+  Each new connection of such a target, a load generator for example, made the tool copy
+  the whole list of the target's connections. At 60 000 of them that took about half a
+  millisecond per new connection, which slowed packet handling and let the live watching
+  of connections fall behind. A new connection now takes the same short time at any size.
+
 - **A server under test stays in the target when one of its connections closes.** A
   program that listens on a port, or uses one port for both TCP and UDP or for both IPv4
   and IPv6, dropped out of the Target process for about half a second each time one of

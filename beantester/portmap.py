@@ -259,9 +259,10 @@ class _Native:
         table_class = (_TCP_TABLE_OWNER_PID_ALL if proto == "tcp"
                        else _UDP_TABLE_OWNER_PID)
 
-        # Start from the size this table needed last time. The socket table is
-        # queried several times per second and its size barely moves, so the first
-        # attempt normally fits and we skip the grow-and-retry round trip.
+        # Start from the size this table needed last time, with room to grow
+        # (_roomy). The socket table is queried several times per second and its
+        # size barely moves, so the first attempt normally fits and we skip the
+        # grow-and-retry round trip.
         #
         # The BUFFER is deliberately not reused. A previous version stored it and
         # claimed to reuse it, but allocated a fresh one on every call anyway and
@@ -269,25 +270,43 @@ class _Native:
         # reuse was considered and rejected: it saves four allocations a few times
         # a second and buys aliasing between calls in ctypes code, which is a poor
         # trade in the module the packet path leans on.
-        size = wintypes.DWORD(self._sizes.get((proto, family)) or 8192)
+        need = self._sizes.get((proto, family))
+        size = wintypes.DWORD(self._roomy(need, row_type) if need else 8192)
         for _ in range(6):                       # the table can grow between calls
             buffer = ctypes.create_string_buffer(size.value)
             rc = call(buffer, ctypes.byref(size), False, family, table_class, 0)
             if rc == 0:
-                self._sizes[(proto, family)] = size.value
                 break
             if rc != _ERROR_INSUFFICIENT_BUFFER:
                 return None
+            size.value = self._roomy(size.value, row_type)
         else:
             return None
 
+        header = ctypes.sizeof(wintypes.DWORD)
         count = ctypes.cast(buffer, ctypes.POINTER(wintypes.DWORD))[0]
+        # What the table NEEDED, from its rows. Not the buffer: its headroom would
+        # be padded again on every call. Not ``size`` either: on success Windows
+        # writes the table's own size there - measured, but not documented.
+        self._sizes[(proto, family)] = header + count * ctypes.sizeof(row_type)
         if not count:
             return buffer, ()
         rows = ctypes.cast(
-            ctypes.byref(buffer, ctypes.sizeof(wintypes.DWORD)),
+            ctypes.byref(buffer, header),
             ctypes.POINTER(row_type * count)).contents
         return buffer, rows
+
+    # Room on EVERY attempt, the first one included (external review P2-11). The
+    # table can grow between the call that reports its size and the call that
+    # fills it, and a buffer of exactly that size then fails again. MEASURED on
+    # loopback with ~11 000 rows a second added: two walks of the table per read
+    # with the exact size, one with this - and a walk that fails costs what one
+    # that succeeds does (4.9 ms at 6 000 rows).
+    HEADROOM_ROWS = 64
+
+    def _roomy(self, size, row_type):
+        """``size`` bytes plus a quarter and HEADROOM_ROWS rows more."""
+        return size + size // 4 + self.HEADROOM_ROWS * self.ctypes.sizeof(row_type)
 
     FAMILY_NAMES = {_AF_INET: "v4", _AF_INET6: "v6"}
 
@@ -343,8 +362,12 @@ class _Native:
         What it must not be is SILENT. A table that stops answering means sockets
         this tool can no longer see, and a socket it cannot see is traffic the user
         asked to impair sailing through untouched - which looks exactly like "the
-        application coped". ``once()`` keeps that free in the hot path, and the key
-        carries WHICH tables failed, so a different failure still gets recorded.
+        application coped". The key carries WHICH tables failed. Recorded EVERY
+        time, and the crash log counts repeats: ``once()`` kept the first per
+        PROCESS, so a later session's failure left no trace - and this is not the
+        packet path, ``PortTable.refresh`` runs on the resolver, the watchdog and at
+        START (external review P2-11). When NONE answers the caller stops asking
+        for the rest of the program, which used to happen without a word.
         """
         out = {}
         failed = []
@@ -352,12 +375,14 @@ class _Native:
             for family in (_AF_INET, _AF_INET6):
                 if not self._table(proto, family, out, owners):
                     failed.append(f"{proto}/{self.FAMILY_NAMES[family]}")
+        if failed:
+            error = RuntimeError(
+                "socket table(s) did not answer: " + ", ".join(failed)
+                + ("; none did, psutil answers from now on" if len(failed) == 4
+                   else "; the port map may be incomplete"))
+            crashlog.note(error, "portmap.native." + ".".join(failed))
         if len(failed) == 4:
             return None                  # nothing answered at all: let psutil try
-        if failed:
-            crashlog.once("portmap.native." + ".".join(failed), RuntimeError(
-                "socket table(s) unavailable, the port map may be incomplete: "
-                + ", ".join(failed)))
         return out
 
 
@@ -923,13 +948,14 @@ class PortTable:
                 ports = native.port_pid_map(owners)
             except Exception as _exc:                # pragma: no cover
                 # `native_broke` below retires the native path for the rest of
-                # the session. That is the right behaviour and it used to happen
-                # without a word: the session silently changed how it resolves
-                # every port and nothing said why.
+                # the PROGRAM (this table is shared by every session). That is the
+                # right behaviour and it used to happen without a word: the session
+                # silently changed how it resolves every port and nothing said why.
                 crashlog.note(_exc, "portmap.native.port_pid_map")
                 ports = None
             if ports is None:
-                native_broke = True                  # it stopped answering
+                # it stopped answering - a None was recorded by port_pid_map itself
+                native_broke = True
         if ports is None:
             owners.clear()                           # belongs to the walk that failed
             ports = _psutil_port_pid_map(owners)
