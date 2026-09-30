@@ -574,13 +574,13 @@ def test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened(monkey
     monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
     recorded, draining = [], []
 
-    def once(subsystem, exc):
+    def note(exc, subsystem, message=""):
         recorded.append(subsystem)
         if subsystem == "engine.socketwatch.start":
             cap = eng._t_cap
             draining.append(cap is not None and cap.is_alive())
 
-    monkeypatch.setattr("beantester.crashlog.once", once)
+    monkeypatch.setattr("beantester.crashlog.note", note)
 
     def refuse():
         raise OSError("[WinError 5] Access is denied.")
@@ -596,6 +596,28 @@ def test_a_socket_handle_failure_is_recorded_only_for_a_start_that_opened(monkey
           recorded.count("engine.socketwatch.start") == 1, f"({recorded})")
     check("P1-5: recorded while the capture thread drains the handle",
           draining == [True], f"({draining})")
+
+
+def test_a_socket_handle_failure_is_recorded_in_every_session(monkeypatch):
+    """External review P3-21, decision D-44: `crashlog.once` recorded the first
+    failure per PROCESS, so in a GUI that runs many sessions the next one's left
+    no trace. Through the real crash-log entry point, not a stand-in for it."""
+    from beantester import crashlog
+    monkeypatch.setattr(BeanEngine, "OPEN_RETRY_DELAYS_S", (0.0, 0.0))
+    monkeypatch.setattr(crashlog, "_once_seen", set())
+    recorded = []
+    monkeypatch.setattr(crashlog, "record",
+                        lambda exc, **kw: recorded.append(kw.get("subsystem")))
+
+    def refuse():
+        raise OSError("[WinError 5] Access is denied.")
+
+    eng = BeanEngine()
+    for _ in range(2):
+        eng.start("test", divert=QuietDivert(), socket_source=refuse)
+        eng.stop()
+    check("each session's failure is recorded",
+          recorded.count("engine.socketwatch.start") == 2, f"({recorded})")
 
 
 def test_a_socket_watcher_that_cannot_start_its_thread_closes_its_handle(monkeypatch):

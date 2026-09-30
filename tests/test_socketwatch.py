@@ -122,6 +122,139 @@ def test_close_for_an_unknown_port_is_harmless():
     check("closing an unknown port does nothing", w.snapshot() == {}, f"({w.snapshot()})")
 
 
+# -- several endpoints of one process on one port (external review P2-8) ------- #
+#
+# The SOCKET layer's own sequences, MEASURED 2026-09-30 (an elevated, sniff-only
+# probe on its own loopback sockets), for one process and one local port, endpoint
+# ids renumbered from 1. Each step: (what happened, its events as (kind, endpoint,
+# parent), who owns the port afterwards). Before, the first CLOSE freed the port.
+MEASURED = {
+    "a listener and two accepted connections": [
+        ("listening", [(BIND, 1, 0), (LISTEN, 1, 0)], 100),
+        ("A accepted", [(ACCEPT, 4, 1)], 100),
+        ("B accepted", [(ACCEPT, 7, 1)], 100),
+        ("A closed", [(CLOSE, 4, 1)], 100),
+        ("B closed", [(CLOSE, 7, 1)], 100),
+        ("the listener closed", [(CLOSE, 1, 0)], None)],
+    "TCP and UDP on one port": [
+        ("both open", [(BIND, 1, 0), (LISTEN, 1, 0), (BIND, 2, 0)], 100),
+        ("UDP closed - its CLOSE comes twice", [(CLOSE, 2, 0), (CLOSE, 2, 0)], 100),
+        ("TCP closed", [(CLOSE, 1, 0)], None)],
+    "IPv4 and IPv6 listeners on one port": [
+        ("both listening", [(BIND, 1, 0), (LISTEN, 1, 0), (BIND, 2, 0), (LISTEN, 2, 0)], 100),
+        ("IPv6 closed", [(CLOSE, 2, 0)], 100),
+        ("IPv4 closed", [(CLOSE, 1, 0)], None)],
+    "a client that binds, then connects": [
+        ("bound", [(BIND, 2, 0)], 100),
+        ("connected", [(CONNECT, 3, 2)], 100),
+        ("the connection closed, the bind not yet", [(CLOSE, 3, 2)], 100),
+        ("the bind closed", [(CLOSE, 2, 0)], None)],
+    "a UDP socket that connects": [
+        ("bound and connected", [(BIND, 2, 0), (CONNECT, 2, 0)], 100),
+        ("closed", [(CLOSE, 2, 0)], None),
+        ("its second CLOSE", [(CLOSE, 2, 0)], None)],
+    "a listener opened before the watcher": [
+        ("known from a snapshot only", "snapshot", 100),
+        ("A accepted", [(ACCEPT, 3, 4)], 100),
+        ("A closed", [(CLOSE, 3, 4)], 100),
+        ("the listener closed", [(CLOSE, 4, 0)], None)],
+}
+
+
+def test_a_port_stays_its_owners_until_the_last_of_its_endpoints_closes():
+    for shape, steps in MEASURED.items():
+        w = _watcher()
+        for label, events, owner in steps:
+            if events == "snapshot":
+                w.reconcile({8080: 100}, time.monotonic())
+                events = []
+            for kind, endpoint, parent in events:
+                w.apply(SocketEvent(kind, 100, 8080, endpoint, parent))
+            check(f"{shape}: after '{label}' the port is {owner}'s",
+                  w.pid_for(8080) == owner, f"({w.pid_for(8080)})")
+        check(f"{shape}: nothing is left behind", w._endpoints == {}, f"({w._endpoints})")
+
+
+def test_endpoints_of_the_previous_owner_do_not_hold_the_port_for_the_next():
+    """A port changes hands with its old owner's CLOSE never seen: what the new
+    owner opens is counted on its own, not on top of the old owner's."""
+    w = _watcher()
+    w.apply(SocketEvent(LISTEN, 100, 8080, 1))
+    w.apply(SocketEvent(LISTEN, 200, 8080, 9))          # the port is somebody else's
+    w.apply(SocketEvent(ACCEPT, 200, 8080, 10, 9))
+    w.apply(SocketEvent(CLOSE, 200, 8080, 10, 9))
+    check("the new owner keeps it while its listener is open", w.pid_for(8080) == 200,
+          f"({w.pid_for(8080)})")
+    w.apply(SocketEvent(CLOSE, 200, 8080, 9))
+    check("...and loses it with its own last endpoint", w.pid_for(8080) is None,
+          f"({w.pid_for(8080)})")
+
+
+def test_a_port_with_no_endpoint_known_is_freed_by_any_close_as_before():
+    """Known from a snapshot only: nothing says whether other endpoints are open,
+    so a CLOSE frees it, and the next snapshot puts it back if one is."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.reconcile({8080: 100}, clock())
+    clock.tick()
+    w.apply(SocketEvent(CLOSE, 100, 8080, 5))
+    check("the port is freed", w.pid_for(8080) is None, f"({w.pid_for(8080)})")
+    clock.tick()
+    w.reconcile({8080: 100}, clock())
+    check("a snapshot taken after the close puts it back", w.pid_for(8080) == 100,
+          f"({w.pid_for(8080)})")
+
+
+def test_a_port_the_snapshots_prune_forgets_its_endpoints():
+    """A CLOSE that never came (missed under load) leaves the endpoints open in
+    this map; the snapshots prune the port, and its endpoints go with it."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(SocketEvent(BIND, 100, 6000, 1))
+    for _ in range(2):                                   # absent twice running
+        clock.tick()
+        w.reconcile({}, clock())
+    check("the port is pruned", w.pid_for(6000) is None, f"({w.pid_for(6000)})")
+    check("...and so are its endpoints", 6000 not in w._endpoints, f"({w._endpoints})")
+
+
+def test_a_port_a_snapshot_hands_to_another_pid_drops_the_old_endpoints():
+    """Review of #234: a CLOSE missed, then a snapshot names another owner. Kept,
+    the old owner's endpoints would hold the port for its NEXT socket on it."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(SocketEvent(BIND, 100, 6000, 1))           # its CLOSE never comes
+    clock.tick()
+    w.reconcile({6000: 200}, clock())                   # the port is 200's now
+    check("the snapshot's owner is taken", w.pid_for(6000) == 200, f"({w.pid_for(6000)})")
+    w.apply(SocketEvent(BIND, 100, 6000, 2))           # 100 binds the port again
+    w.apply(SocketEvent(CLOSE, 100, 6000, 2))
+    check("its new socket closing frees the port", w.pid_for(6000) is None,
+          f"({w.pid_for(6000)}, {w._endpoints})")
+
+
+def test_the_endpoints_kept_for_one_port_are_bounded(monkeypatch):
+    """Review of #234: a listener lives on, its accepted connections' CLOSEs are
+    missed under load, and every snapshot still lists the port. Unbounded, the set
+    grew for the whole session."""
+    monkeypatch.setattr(SocketWatcher, "MAX_ENDPOINTS_PER_PORT", 8)
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(SocketEvent(LISTEN, 100, 8080, 1))
+    for i in range(50):
+        w.apply(SocketEvent(ACCEPT, 100, 8080, 100 + i, 1))     # no CLOSE, ever
+        clock.tick()
+        w.reconcile({8080: 100}, clock())
+        size = len(w._endpoints.get(8080, (None, ()))[1])
+        if size > 8:
+            break
+    check("the set never outgrows its ceiling", size <= 8, f"({size})")
+    w.apply(SocketEvent(ACCEPT, 100, 8080, 999, 1))
+    w.apply(SocketEvent(CLOSE, 100, 8080, 999, 1))
+    check("the next ACCEPT names the listener again, so the port stays",
+          w.pid_for(8080) == 100, f"({w.pid_for(8080)}, {w._endpoints})")
+
+
 def test_junk_events_are_ignored_not_raised():
     """The hot path must never be handed a crash: port 0 (not yet assigned) and
     pid 0 (the idle process) are dropped, quietly."""
@@ -477,6 +610,7 @@ def test_stop_does_not_record_the_close_induced_error_as_a_crash(monkeypatch):
     time.sleep(0.05)
     check("the close-induced error was NOT recorded as a crash", recorded == [],
           f"({recorded})")
+    check("...nor does a stopped watcher say it died", not w.died)
 
     # ...but an error while NOT stopping still is: a socket stream that dies mid-run
     # is traffic sailing through unimpaired.
@@ -491,12 +625,24 @@ def test_stop_does_not_record_the_close_induced_error_as_a_crash(monkeypatch):
         def close(self):
             pass
 
+    check("a watcher not started has not died", not _watcher().died)
     w2 = SocketWatcher(names=_FakeNames(), source_factory=_DiesWhileRunning)
     w2.start()
     check("the failing source ran", raised.wait(timeout=5))
-    time.sleep(0.05)
-    check("a mid-run failure IS recorded", len(recorded) == 1, f"({recorded})")
+    check("the watcher says it died, for the engine to act on", _wait(lambda: w2.died))
+    check("a mid-run failure IS recorded", _wait(lambda: len(recorded) == 1),
+          f"({recorded})")
     w2.stop()
+
+    # ...every time, not once per process: the GUI runs many sessions (P3-21)
+    raised.clear()
+    w3 = SocketWatcher(names=_FakeNames(), source_factory=_DiesWhileRunning)
+    w3.start()
+    check("the next session's source failed too", raised.wait(timeout=5))
+    check("and it died as well", _wait(lambda: w3.died))
+    check("its failure is recorded as well", _wait(lambda: len(recorded) == 2),
+          f"({recorded})")
+    w3.stop()
 
 
 # -- the lock-free read the capture thread depends on ------------------------- #

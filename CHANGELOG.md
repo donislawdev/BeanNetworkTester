@@ -20,6 +20,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A server under test stays in the target when one of its connections closes.** A
+  program that listens on a port, or uses one port for both TCP and UDP or for both IPv4
+  and IPv6, dropped out of the Target process for about half a second each time one of
+  those connections or sockets closed, and its other connections went through untouched
+  meanwhile. It now stays in until the last of them closes. If the tool's live watching
+  of connections stops during a session, it now switches to its regular scans at once.
+
 - **A target set by PID no longer impairs another program that gets that PID later.**
   Windows gives the PID of a closed program to a new one, often within a minute. A PID in
   the Target process field now means the program that had it when you set the target; one

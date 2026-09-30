@@ -417,3 +417,91 @@ def test_stopping_the_engine_leaves_no_watcher_thread_behind():
     leaked = {t.name for t in threading.enumerate()} - before
     watchers = {n for n in leaked if "socket-watcher" in n}
     check("no watcher thread outlives the session", not watchers, f"({leaked})")
+
+
+class _BreakingSource:
+    """Parks like a blocking recv(), then breaks the way a dead SOCKET handle does:
+    while the session runs, not because STOP closed it."""
+
+    def __init__(self):
+        self.go = threading.Event()
+        self.closed = threading.Event()
+
+    def __iter__(self):
+        self.go.wait()
+        if not self.closed.is_set():
+            raise OSError("the SOCKET handle broke")
+        return
+        yield                                            # an iterator all the same
+
+    def close(self):
+        self.closed.set()
+        self.go.set()
+
+
+def test_a_dead_socket_reader_hands_targeting_back_to_the_poller(monkeypatch):
+    """External review P3-21. The map would live on the watchdog's reconcile alone,
+    and targeting's refresh is a no-op on it - new sockets waited for a snapshot."""
+    import bean_network_tester as bnt
+
+    monkeypatch.setattr(crashlog, "record", lambda exc, **kw: None)   # not crashes/
+    ports = _FakePorts({5000: 100})
+    eng = BeanEngine()
+    eng._ports = ports
+    targeting = eng.target_for(bnt.parse_target("chrome"))
+    eng.set_target(True, targeting)
+    source = _BreakingSource()
+    eng.start("true", divert=FakeDivert([]), socket_source=source)
+    try:
+        watcher = eng._socketwatch
+        check("the session resolves against the live map", targeting.table is watcher)
+        source.go.set()
+        check("the watchdog takes the dead map out of the session",
+              _wait(lambda: eng._socketwatch is None), f"({eng._socketwatch!r})")
+        check("because it died, not because anything stopped it", watcher.died)
+        check("targeting is back on the poller", targeting.table is ports,
+              f"({targeting.table!r})")
+        check("the dead map's handle is closed", source.closed.is_set())
+        check("and the session runs on", eng.is_running())
+    finally:
+        eng.stop()
+
+
+def test_only_its_own_session_retires_a_dead_watcher_and_never_waits_for_a_stop():
+    """The guards `_worker_stop` has, for the same reasons: a watchdog kept past its
+    session must not act on the next one, and STOP holds `_stop_lock` while it
+    joins the watchdog - waiting for the lock here would hang STOP."""
+    class _Dead:
+        died, stopped = True, False
+
+        def stop(self):
+            self.stopped = True
+
+    eng = BeanEngine()
+    session, dead = object(), _Dead()
+    eng._session, eng._socketwatch = session, dead
+
+    eng._retire_socketwatch(dead, object())
+    check("another session's watchdog leaves it", eng._socketwatch is dead)
+
+    eng._retire_socketwatch(_Dead(), session)
+    check("so does one holding a watcher that is not the session's any more",
+          eng._socketwatch is dead and not dead.stopped)
+
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with eng._stop_lock:
+            held.set()
+            release.wait(0.5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    held.wait(5)
+    eng._retire_socketwatch(dead, session)
+    check("a START or STOP holding the lock is not waited for", eng._socketwatch is dead)
+    release.set()
+    holder.join(5)
+
+    eng._retire_socketwatch(dead, session)
+    check("the next tick retires it", eng._socketwatch is None and dead.stopped)
