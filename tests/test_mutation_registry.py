@@ -4061,17 +4061,24 @@ MUTATIONS = [
         # P2-21: the loop slept to the next report before it looked.
         "label": "cli: the report loop sleeps until the next report",
         "file": "beantester/cli.py",
-        "old": "        sleep(min(max(wake - now, 0.0), POLL_S))\n",
-        "new": "        sleep(max(wake - now, 0.0))\n",
+        "old": "            sleep(min(wake - now, POLL_S))\n",
+        "new": "            sleep(wake - now)\n",
         "test": "test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report",
     },
     {
-        # Review of #237: a pass with a report due at once never slept (GIL).
+        # Review of #237: below the clock's resolution no pass napped at all.
         "label": "cli: a report due at once takes no nap",
         "file": "beantester/cli.py",
-        "old": "        sleep(min(max(wake - now, 0.0), POLL_S))\n",
-        "new": "        if wake > now:\n            sleep(min(wake - now, POLL_S))\n",
-        "test": "test_a_report_on_every_pass_still_lets_the_capture_thread_have_the_gil",
+        "old": "            sleep(min(interval, POLL_S))\n",
+        "new": "            pass\n",
+        "test": "test_a_report_on_every_pass_still_naps_for_the_interval",
+    },
+    {
+        "label": "cli: a report due at once naps for zero seconds",
+        "file": "beantester/cli.py",
+        "old": "            sleep(min(interval, POLL_S))\n",
+        "new": "            sleep(0)\n",
+        "test": "test_a_report_on_every_pass_still_naps_for_the_interval",
     },
     {
         # P3-18: stepping to the next tick never ends below the clock's resolution.

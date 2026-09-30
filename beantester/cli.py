@@ -731,14 +731,17 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
     while True:
         now = clock()
         wake = next_report if deadline is None else min(next_report, deadline)
-        # A nap on every pass, if only sleep(0), even when a report is due at
-        # once (every pass, when --interval is finer than the clock). A pass that
-        # never sleeps keeps the GIL, and the capture thread gives it up on every
-        # packet. MEASURED 2026-10-01 on the mechanism: a thread giving it up on
-        # every iteration made ~1.7 million of them a second beside a sleeping
-        # main thread, 632 to 851 beside a spinning one, ~570 000 beside one
-        # calling sleep(0).
-        sleep(min(max(wake - now, 0.0), POLL_S))
+        if next_report <= prev_t:
+            # The grid cannot advance (an interval finer than the clock, see
+            # _next_tick), so every pass reports - and still naps for the interval,
+            # which the OS rounds up to its shortest sleep (~0.53 ms on Windows,
+            # the same as for 1e-4). MEASURED 2026-10-01, real capture of ~8 000
+            # packets/s: passes with no nap at all (about 43 000 reports a second)
+            # left 13 000 of 16 000 packets captured, --interval 1e-4 and 1 about
+            # 15 700; sleep(0), which returns at once, did not help.
+            sleep(min(interval, POLL_S))
+        elif wake > now:
+            sleep(min(wake - now, POLL_S))
         now = clock()
         if now >= next_report - 1e-9:
             s = engine.stats_snapshot()

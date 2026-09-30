@@ -1161,7 +1161,7 @@ def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
 
     Run on a thread with a timeout, because the regression is a HANG and a test
     that hangs reports nothing; the virtual clock moves on every read, since the
-    loop's naps are ``sleep(0)`` once the interval is below the clock's resolution."""
+    loop's naps are lost to rounding once the interval is below its resolution."""
     import threading
     clock, out, result = _MovingClock(), io.StringIO(), {}
 
@@ -1177,14 +1177,13 @@ def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
           and '"summary"' in out.getvalue(), f"({result})")
 
 
-def test_a_report_on_every_pass_still_lets_the_capture_thread_have_the_gil():
+def test_a_report_on_every_pass_still_naps_for_the_interval():
     """Review of #237. An interval finer than the clock reports on every pass, and
-    such a pass had no nap left at all: a loop that never sleeps keeps the GIL,
-    and the capture thread gives it up on every packet (each pydivert call is a
-    ctypes call) and then waits to get it back. MEASURED 2026-10-01 on the
-    mechanism: a thread giving the GIL up on every iteration managed 632 to 851 of
-    them a second beside a spinning main thread, against ~1.7 million beside a
-    sleeping one. Every pass naps now, ``sleep(0)`` when nothing is left to wait."""
+    such a pass had no nap left at all - about 43 000 reports a second. MEASURED
+    2026-10-01 on a real capture of ~8 000 packets/s: 13 000 of 16 000 packets
+    captured that way, about 15 700 at ``--interval 1e-4`` or ``1``. ``sleep(0)``
+    returns at once (0.5 us) and did not help; a nap for the interval, which the OS
+    rounds up to its shortest sleep (~0.53 ms on Windows), is what 1e-4 gets."""
     clock, asked = _MovingClock(), []
 
     def sleep(seconds):
@@ -1197,8 +1196,10 @@ def test_a_report_on_every_pass_still_lets_the_capture_thread_have_the_gil():
     samples = [line for line in out.getvalue().splitlines() if '"sample"' in line]
     check("the run reported and ended", code == exitcodes.OK and len(samples) > 1,
           f"(code={code}, {len(samples)} reports)")
-    check("every pass took a nap, if only sleep(0)", len(asked) >= len(samples),
-          f"({len(asked)} naps for {len(samples)} reports)")
+    check("every pass napped for the interval",
+          len(asked) >= len(samples) and all(nap == 1e-300 for nap in asked),
+          f"({len(asked)} naps for {len(samples)} reports, shortest "
+          f"{min(asked, default=None)!r})")
 
 
 def test_usage_errors_keep_argparse_exit_code_2():
