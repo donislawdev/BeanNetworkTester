@@ -1354,9 +1354,29 @@ def test_a_target_that_matches_everything_is_not_a_bound_either(monkeypatch):
         _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
         check(f"warning: --target {expression} bounds nothing", _warned(err), f"({err!r})")
 
-    for expression in ("chrome.exe", "chrome.exe, !chromedriver", "?", "*.exe"):
+    for expression in ("chrome.exe", "chrome.exe, !chromedriver", "?"):
         _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
         check(f"no warning: --target {expression} really does narrow",
+              not _warned(err), f"({err!r})")
+
+
+def test_a_target_that_names_every_exe_is_not_a_bound(monkeypatch):
+    """External review P3-17. Every socket on Windows but those of ``System`` is
+    owned by an ``.exe`` - MEASURED on a real table: ``*.exe`` matched 33 of 34
+    owners and 186 of 190 ports. It passed as narrow, and the test above PINNED
+    that (``*.exe`` sat in its "really does narrow" list): the probes stood for
+    every value there is, and ``System`` and ``a`` are not ``.exe``.
+
+    Each form is checked beside names that really narrow, some of them broad, so
+    a fix that simply warns more often does not pass."""
+    for expression in ("*.exe", "exe", r"re:\.exe$", "*.*"):
+        _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
+        check(f"warning: --target {expression} impairs every program", _warned(err),
+              f"({err!r})")
+
+    for expression in ("svchost", "chrome, firefox, msedge", "*host*", "s*"):
+        _, _, err, _ = _real_run(monkeypatch, ["--loss", "50", "--target", expression])
+        check(f"no warning: --target {expression} still narrows",
               not _warned(err), f"({err!r})")
 
     # The same rule on a destination, where "everything" is spelled differently.

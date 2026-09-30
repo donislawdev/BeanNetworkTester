@@ -619,8 +619,11 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
             if state[0]:
                 log.info(f"the process target matches again: {state[1]}")
             else:
-                log.warn("the process target no longer matches any process - "
-                         "nothing is being impaired from here on")
+                # "matched" means a matching process OWNS A SOCKET (see
+                # ProcessTargeting.matched): an idle target that is still running
+                # lands here too, and its next connection brings it back above.
+                log.warn("the process target no longer matches any process with a "
+                         "connection open - nothing is being impaired until one opens")
         verdict = state
         if deadline is not None and now >= deadline - 1e-9:
             return "duration"

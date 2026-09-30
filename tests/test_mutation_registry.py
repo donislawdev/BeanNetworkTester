@@ -1026,6 +1026,16 @@ MUTATIONS = [
         "test": "test_a_target_that_matches_everything_is_not_a_bound_either",
     },
     {
+        # P3-17: without the group of real socket owners, `*.exe` - every program
+        # but System - passes as a narrow target again.
+        "label": "blast radius: no probe stands for the programs that own sockets",
+        "file": "beantester/matchers.py",
+        "old": ('                     (2, "svchost.exe"), (65000, "a")),\n'
+                '                    ((1234, "chrome.exe"), (2, "svchost.exe"), (65000, "a.exe")))\n'),
+        "new": '                     (2, "svchost.exe"), (65000, "a")),)\n',
+        "test": "test_a_target_that_names_every_exe_is_not_a_bound",
+    },
+    {
         # The class that already crashed this project once (driver._advapi). The
         # generic half of the guard: argtypes is the only part of a prototype that
         # ctypes leaves as None, so it is the only part a walk can check.

@@ -1532,12 +1532,17 @@ seeded).
   **So do not use an exclusion to protect an application.** If you want one app left alone, name
   the app you DO want broken (`--target thatapp`) - then anything unidentified passes through
   untouched, which is the safe direction. This mirrors `!53` on ports, below.
-- **Targeting that catches nothing breaks nothing** - if no running process matches the expression,
-  traffic passes untouched. The program says so explicitly (a red note under the field and a log
-  entry), because "a run in which nothing broke" looks identical to "the app held up".
+- **Targeting that catches nothing breaks nothing** - if no matching process has a connection open,
+  traffic passes untouched. That covers a program that is not running and one that is running but
+  idle. Its next connection is impaired as usual. The program says so explicitly (a red note under
+  the field and a log entry), because "a run in which nothing broke" looks identical to "the app
+  held up".
 - **A bare process name is a substring** - `chrome` also catches `chromedriver.exe`. This is kept on
   purpose (compatibility with old configs). For precision reach for `re:^chrome\.exe$` or the
   exclusion `chrome, !chromedriver`.
+- **A target that names every program narrows nothing** - `*.exe`, `exe` or `*` match nearly every
+  process that has a connection, so such a run gets the same start-time warning as a run with no
+  target at all.
 - **Statistics and Connections show ALL captured traffic by default** - whatever the "Traffic to
   modify" filter passes. Targeting (process / IP / port) decides only **what gets broken**, not what
   is visible in the tables and counters. Two switches in Settings, in the **"Scope"** card, change
