@@ -171,8 +171,9 @@ DEPTH_BAND = 4                  # absolute: see above
 # 2026-09-29 the same way: the scenario reader nested inside the --dry-run branch
 # of `cli.py` became one function for both doors (R-13a). 10 -> 9 on 2026-09-30:
 # the target binding left `engine._start_locked` for its own method when the start
-# order changed (external review P1-5).
-DEPTHS_NEAR_CEILING = 9         # make_gear_icon at 5, eight more at 4
+# order changed (external review P1-5). 9 -> 8 on 2026-09-30: the snapshot merge
+# left `portmap.PortTable.info` for a function of its own (external review P2-9).
+DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4
 
 
 def _logic_lines(source):

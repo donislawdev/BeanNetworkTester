@@ -344,6 +344,23 @@ class ProcessMatcher(Matcher):
     def _context(pid, name=""):
         return _ProcValue(pid, name)
 
+    @property
+    def literal_pids(self):
+        """The pids written as a bare number, ``!`` or not: ``1234``, ``!1234``.
+
+        Each one names a PROCESS - the one the user saw under that number - while a
+        range or a comparison (``1000-2000``, ``>1000``) is a statement about
+        numbers. Windows hands a freed number to a new process within seconds, so
+        targeting needs the difference (``ProcessTargeting._as_named``).
+
+        Read from each term's text by the parser's own rule rather than a second
+        one: a body of digits alone is the literal branch of ``_parse_int_atom``,
+        and nothing ahead of it in ``_parse_process_term`` can claim such a body
+        (no ``re:`` prefix, no operator).
+        """
+        bodies = (_split_negation(term.text)[1] for term in self.terms)
+        return frozenset(int(body) for body in bodies if body.isdigit())
+
 
 _MATCHER_CLASSES = {KIND_INT: IntMatcher, KIND_IP: IpMatcher,
                     KIND_PROCESS: ProcessMatcher}
@@ -442,6 +459,12 @@ def add_term(text, term):
     existing = split_terms(text)
     terms = existing if term in existing else existing + [term]
     return ",".join(t.replace(",", "\\,") for t in terms)
+
+
+def _split_negation(raw_term):
+    """``(negated, body)`` of one term as ``split_terms`` returned it."""
+    negated = raw_term.startswith("!")
+    return negated, (raw_term[1:].strip() if negated else raw_term)
 
 
 # -- atom parsers --------------------------------------------------------------- #
@@ -784,8 +807,7 @@ def parse_matcher(text, kind, field="fields.filter", bounds=None):
 
     terms = []
     for raw_term in split_terms(text):
-        negated = raw_term.startswith("!")
-        body = raw_term[1:].strip() if negated else raw_term
+        negated, body = _split_negation(raw_term)
         if not body:
             raise _err("errors.bad_filter_term", field, raw_term)
         if kind == KIND_INT:

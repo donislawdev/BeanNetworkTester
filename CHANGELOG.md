@@ -27,6 +27,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   meanwhile. It now stays in until the last of them closes. If the tool's live watching
   of connections stops during a session, it now switches to its regular scans at once.
 
+- **A target set by PID no longer impairs another program that gets that PID later.**
+  Windows gives the PID of a closed program to a new one, often within a minute. A PID in
+  the Target process field now means the program that had it when you set the target; one
+  that gets it later is left alone, with its child processes. Nor is a program impaired
+  because a new target process got the PID of its long-closed parent. A closed program's
+  name no longer stays with its PID for up to 30 seconds once another program takes it.
+
 - **New connections of the target process are no longer missed while its list is
   updated.** The tool rebuilds this list several times a second. A connection opened
   during a rebuild, or the first one of a program that had just started, was left
