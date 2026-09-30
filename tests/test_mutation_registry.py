@@ -3981,16 +3981,56 @@ MUTATIONS = [
     {
         "label": "cli: restoring the signal handlers restores nothing",
         "file": "beantester/cli.py",
-        "old": "                signal.signal(sig, old)\n",
-        "new": "                pass\n",
+        "old": "            signal.signal(sig, old)\n",
+        "new": "            pass\n",
         "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
     },
     {
         "label": "cli: the run leaves its signal handlers installed",
         "file": "beantester/cli.py",
-        "old": "        log.close()\n        restore_signals()\n",
-        "new": "        log.close()\n",
+        "old": "            _restore_signal_handlers(previous_signals)\n",
+        "new": "            pass\n",
         "test": "test_a_termination_is_logged_under_the_name_of_its_signal",
+    },
+    {
+        # Review of #237: a signal between the handler and the open gate was lost.
+        "label": "cli: a signal while the handlers are installed is dropped",
+        "file": "beantester/cli.py",
+        "old": "            _signal_held[0] = _signal_held[0] or label\n",
+        "new": "            pass\n",
+        "test": "test_a_signal_while_the_handlers_are_installed_ends_the_run_it_cancelled",
+    },
+    {
+        # Review of #237: installed before the try, a signal or Ctrl+C escaped.
+        "label": "cli: the signal handlers are installed outside the try",
+        "file": "beantester/cli.py",
+        "old": ("    try:\n"
+                "        # Inside the try, and the gate opens last: a signal while the handlers\n"
+                "        # were installed escaped as a traceback, or was dropped (see above).\n"
+                "        _install_signal_handlers(previous_signals)\n"),
+        "new": "    _install_signal_handlers(previous_signals)\n    try:\n",
+        "test": "test_an_installation_cut_short_still_puts_back_what_it_replaced",
+    },
+    {
+        "label": "cli: the old signal handler is known only from signal.signal",
+        "file": "beantester/cli.py",
+        "old": ("            previous[sig] = signal.getsignal(sig)\n"
+                "            signal.signal(sig, handler)\n"),
+        "new": "            previous[sig] = signal.signal(sig, handler)\n",
+        "test": "test_an_installation_cut_short_still_puts_back_what_it_replaced",
+    },
+    {
+        # Review of #237: a second Ctrl+C in the driver release skipped the restore.
+        "label": "cli: an interrupted cleanup leaves the signal handlers installed",
+        "file": "beantester/cli.py",
+        "old": ("        finally:\n"
+                "            # After the unloading, which a restored SIGTERM could cut short again,\n"
+                "            # and even when a second Ctrl+C did.\n"
+                "            _restore_signal_handlers(previous_signals)\n"),
+        "new": ("        except BaseException:\n"
+                "            raise\n"
+                "        _restore_signal_handlers(previous_signals)\n"),
+        "test": "test_a_ctrl_c_during_the_cleanup_still_puts_the_handlers_back",
     },
     {
         "label": "cli: the session log calls every termination SIGTERM",
@@ -4021,9 +4061,17 @@ MUTATIONS = [
         # P2-21: the loop slept to the next report before it looked.
         "label": "cli: the report loop sleeps until the next report",
         "file": "beantester/cli.py",
-        "old": "            sleep(min(wake - now, POLL_S))\n",
-        "new": "            sleep(wake - now)\n",
+        "old": "        sleep(min(max(wake - now, 0.0), POLL_S))\n",
+        "new": "        sleep(max(wake - now, 0.0))\n",
         "test": "test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report",
+    },
+    {
+        # Review of #237: a pass with a report due at once never slept (GIL).
+        "label": "cli: a report due at once takes no nap",
+        "file": "beantester/cli.py",
+        "old": "        sleep(min(max(wake - now, 0.0), POLL_S))\n",
+        "new": "        if wake > now:\n            sleep(min(wake - now, POLL_S))\n",
+        "test": "test_a_report_on_every_pass_still_lets_the_capture_thread_have_the_gil",
     },
     {
         # P3-18: stepping to the next tick never ends below the clock's resolution.

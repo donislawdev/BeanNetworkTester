@@ -502,8 +502,11 @@ _SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "Ctrl+Break"}
 
 # Open while a signal may still interrupt the run. A list and not an Event: the
 # handler runs on the main thread between two bytecodes - possibly inside the
-# very code that closes the gate - so it must not take a lock.
+# very code that closes the gate - so it must not take a lock. None while the
+# handlers are being installed: a signal then is held, not dropped.
 _signal_gate = [False]
+# The label of the signal held while the handlers were being installed.
+_signal_held = [None]
 
 
 def _close_signal_gate():
@@ -511,15 +514,35 @@ def _close_signal_gate():
     _signal_gate[0] = False
 
 
-def _install_signal_handlers():
+def _open_signal_gate():
+    """From here a SIGTERM or Ctrl+Break ends the run - and so does one that came
+    while the handlers were being installed. That one used to be dropped: the
+    handler was in place, the gate not yet open, and a job cancelled in its first
+    moment went on to run its session. Opened before the held signal is read, so
+    a signal between the two lines finds the gate open and raises by itself."""
+    _signal_gate[0] = True
+    held = _signal_held[0]
+    if held is not None:
+        _signal_gate[0] = False
+        raise _Terminated(held)
+
+
+def _install_signal_handlers(previous):
     """Make SIGTERM (CI cancellation, docker stop) and Ctrl+Break a clean, coded
-    shutdown. Returns the function that puts the previous handlers back.
+    shutdown. Fills ``previous`` for ``_restore_signal_handlers`` and opens the
+    gate as its last step.
 
     The handler raises ONCE, and not at all after ``_close_signal_gate``. A
     second signal during the cleanup - the engine stopping, the summary, the
     driver unloading - used to cut that cleanup short, and the driver stayed
     loaded (external review P2-24). The first signal is what the exit code
     reports. Ctrl+C is not routed here: a second one still forces the matter.
+
+    The caller owns ``previous`` and calls this inside its ``try``, so an
+    installation stopped half way - by a Ctrl+C, say - still has what it replaced
+    put back. Each old handler is recorded BEFORE it is replaced, not taken from
+    what ``signal.signal`` returns: an interruption on the bytecode after that
+    call would have lost it.
     """
     import signal
 
@@ -527,31 +550,40 @@ def _install_signal_handlers():
               if hasattr(signal, name)}
 
     def handler(signum, _frame):
+        label = labels.get(signum, "SIGTERM")
+        if _signal_gate[0] is None:          # still installing: held for the gate
+            _signal_held[0] = _signal_held[0] or label
+            return
         if not _signal_gate[0]:
             return
         _signal_gate[0] = False
-        raise _Terminated(labels.get(signum, "SIGTERM"))
+        raise _Terminated(label)
 
-    previous = {}
+    _signal_held[0] = None
+    _signal_gate[0] = None
     for sig in labels:
         try:
-            previous[sig] = signal.signal(sig, handler)
+            previous[sig] = signal.getsignal(sig)
+            signal.signal(sig, handler)
+        except (ValueError, OSError) as _exc:
+            previous.pop(sig, None)          # not replaced: nothing to put back
+            crashlog.note(_exc, "cli")
+    _open_signal_gate()
+
+
+def _restore_signal_handlers(previous):
+    """Put back the handlers ``_install_signal_handlers`` replaced."""
+    import signal
+    # Left installed, the handler outlived the run with the gate closed, and a
+    # process that ran the CLI in-process (the test suite) ignored SIGTERM.
+    _close_signal_gate()
+    for sig, old in previous.items():
+        if old is None:                      # installed outside Python: leave it
+            continue
+        try:
+            signal.signal(sig, old)
         except (ValueError, OSError) as _exc:
             crashlog.note(_exc, "cli")
-    _signal_gate[0] = True
-
-    def restore():
-        # Left installed, the handler outlived the run with the gate closed, and
-        # a process that ran the CLI in-process (the test suite) ignored SIGTERM.
-        _close_signal_gate()
-        for sig, old in previous.items():
-            if old is None:                  # installed outside Python: leave it
-                continue
-            try:
-                signal.signal(sig, old)
-            except (ValueError, OSError) as _exc:
-                crashlog.note(_exc, "cli")
-    return restore
 
 
 def _log_effective_settings(log, cfg):
@@ -699,8 +731,14 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
     while True:
         now = clock()
         wake = next_report if deadline is None else min(next_report, deadline)
-        if wake > now:
-            sleep(min(wake - now, POLL_S))
+        # A nap on every pass, if only sleep(0), even when a report is due at
+        # once (every pass, when --interval is finer than the clock). A pass that
+        # never sleeps keeps the GIL, and the capture thread gives it up on every
+        # packet. MEASURED 2026-10-01 on the mechanism: a thread giving it up on
+        # every iteration made ~1.7 million of them a second beside a sleeping
+        # main thread, 632 to 851 beside a spinning one, ~570 000 beside one
+        # calling sleep(0).
+        sleep(min(max(wake - now, 0.0), POLL_S))
         now = clock()
         if now >= next_report - 1e-9:
             s = engine.stats_snapshot()
@@ -1037,8 +1075,11 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
     log = CliLog(level=clilog.level_from_args(args.quiet, args.verbose, args.log_level),
                  fmt=args.format, log_file=args.log_file, samples=not args.quiet,
                  out=out, err=err)
-    restore_signals = _install_signal_handlers()
+    previous_signals = {}
     try:
+        # Inside the try, and the gate opens last: a signal while the handlers
+        # were installed escaped as a traceback, or was dropped (see above).
+        _install_signal_handlers(previous_signals)
         # --gui reaching the CLI runner means it was combined with something else:
         # main() sends a bare --gui straight to the GUI. It used to be accepted and
         # then ignored, so `--gui --loss 30 --duration 600` promised a window and
@@ -1137,10 +1178,14 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
         # keeps WinDivert64.sys open - and locks the folder - while it is loaded).
         # No signal may cut this short (see _install_signal_handlers).
         _close_signal_gate()
-        for line in driver.release_on_exit():
-            log.debug(line)
-        log.close()
-        restore_signals()
+        try:
+            for line in driver.release_on_exit():
+                log.debug(line)
+            log.close()
+        finally:
+            # After the unloading, which a restored SIGTERM could cut short again,
+            # and even when a second Ctrl+C did.
+            _restore_signal_handlers(previous_signals)
 
 
 def _run_gui(argv):

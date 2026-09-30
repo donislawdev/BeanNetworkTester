@@ -906,6 +906,7 @@ def _record_signal_handlers(monkeypatch):
         installed[sig] = handler
         return previous
     monkeypatch.setattr(signal, "signal", fake_signal)
+    monkeypatch.setattr(signal, "getsignal", lambda sig: installed.get(sig, "before"))
     return signal, installed
 
 
@@ -917,7 +918,8 @@ def test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short(monke
     process's own handlers as it found them."""
     import pytest
     signal, installed = _record_signal_handlers(monkeypatch)
-    restore = cli_module._install_signal_handlers()
+    previous = {}
+    cli_module._install_signal_handlers(previous)
     handler = installed[signal.SIGTERM]
     check("both signals are handled", installed[signal.SIGBREAK] is handler)
 
@@ -926,20 +928,97 @@ def test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short(monke
     check("the first one ends the run, named", first.value.label == "SIGTERM")
     check("a second one is ignored", handler(signal.SIGTERM, None) is None)
 
-    cli_module._install_signal_handlers()
+    cli_module._install_signal_handlers({})
     handler = installed[signal.SIGBREAK]
     with pytest.raises(_Terminated) as brk:
         handler(signal.SIGBREAK, None)
     check("Ctrl+Break is called Ctrl+Break", brk.value.label == "Ctrl+Break")
 
-    cli_module._install_signal_handlers()
+    cli_module._install_signal_handlers({})
     cli_module._close_signal_gate()
     check("nothing is raised once the run has begun to end",
           installed[signal.SIGTERM](signal.SIGTERM, None) is None)
 
-    restore()
+    cli_module._restore_signal_handlers(previous)
     check("the previous handlers are back", installed[signal.SIGTERM] == "before",
           f"({installed[signal.SIGTERM]!r})")
+
+
+def _run_cli_catching(argv, **kwargs):
+    """``run_cli`` that turns an exception ESCAPING it into a result: the promise
+    under test is an exit code, and a raw traceback is the regression."""
+    out, err = io.StringIO(), io.StringIO()
+    try:
+        code = run_cli(argv, out=out, err=err, **kwargs)
+    except (KeyboardInterrupt, _Terminated) as exc:
+        code = f"escaped: {type(exc).__name__}"
+    return code, out.getvalue(), err.getvalue()
+
+
+def test_a_signal_while_the_handlers_are_installed_ends_the_run_it_cancelled(
+        monkeypatch):
+    """Review of #237. The handler was in place before the gate opened, so a
+    SIGTERM in between was dropped and the cancelled run went on - a session, on a
+    real run. Opening the gate before ``run_cli``'s ``try`` instead let it escape
+    as a traceback. It is held now, and raised as the gate opens: 143, and nothing
+    of the run it cancelled is done."""
+    signal, installed = _record_signal_handlers(monkeypatch)
+    record, order = signal.signal, []
+
+    def signal_meanwhile(sig, handler):
+        old = record(sig, handler)
+        order.append(sig)
+        if len(order) == 2:          # the first one is in place, the gate not open
+            installed[order[0]](order[0], None)
+        return old
+    monkeypatch.setattr(signal, "signal", signal_meanwhile)
+    code, out, err = _run_cli_catching(["--print-config"])
+    check("the signal ends the run: 143", code == exitcodes.TERMINATED,
+          f"(code={code!r}, err={err!r})")
+    check("logged under its name", "Terminated (SIGTERM)." in err, f"({err!r})")
+    check("and nothing of the cancelled run was done", out == "", f"({out!r})")
+    check("the previous handlers are back",
+          [installed[s] for s in order[:2]] == ["before", "before"], f"({installed!r})")
+
+
+def test_an_installation_cut_short_still_puts_back_what_it_replaced(monkeypatch):
+    """Review of #237. A Ctrl+C on the bytecode after ``signal.signal`` replaced a
+    handler: the old one was only known from that call's return value, which was
+    lost with it, and the installation ran outside ``run_cli``'s ``try`` - a
+    traceback instead of 130, and the CLI's handler left in the process."""
+    signal, installed = _record_signal_handlers(monkeypatch)
+    record, calls = signal.signal, []
+
+    def ctrl_c_after(sig, handler):
+        old = record(sig, handler)
+        calls.append(sig)
+        if len(calls) == 1:          # the first replacement; the rest put back
+            raise KeyboardInterrupt
+        return old
+    monkeypatch.setattr(signal, "signal", ctrl_c_after)
+    code, _, err = _run_cli_catching(["--print-config"])
+    check("an ordinary Ctrl+C: 130", code == exitcodes.INTERRUPTED,
+          f"(code={code!r}, err={err!r})")
+    check("the handler it replaced is back", installed[signal.SIGTERM] == "before",
+          f"({installed!r})")
+
+
+def test_a_ctrl_c_during_the_cleanup_still_puts_the_handlers_back(monkeypatch):
+    """Review of #237. The handlers were put back after the driver was unloaded and
+    the log closed, in the same block, so a second Ctrl+C while the driver unloaded
+    - Ctrl+C is not gated, a second one forces the matter - left the CLI's handler
+    in the process, gate closed, ignoring SIGTERM from then on."""
+    import pytest
+    signal, installed = _record_signal_handlers(monkeypatch)
+
+    def release():
+        raise KeyboardInterrupt
+    monkeypatch.setattr(cli_module.driver, "release_on_exit", release)
+    with pytest.raises(KeyboardInterrupt):
+        run_cli(["--print-config"], out=io.StringIO(), err=io.StringIO())
+    check("the previous handlers are back",
+          installed[signal.SIGTERM] == "before" and installed[signal.SIGBREAK] == "before",
+          f"({installed!r})")
 
 
 def _signal_after(monkeypatch, method, exc):
@@ -1082,7 +1161,7 @@ def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
 
     Run on a thread with a timeout, because the regression is a HANG and a test
     that hangs reports nothing; the virtual clock moves on every read, since the
-    loop no longer sleeps once the interval is below the clock's resolution."""
+    loop's naps are ``sleep(0)`` once the interval is below the clock's resolution."""
     import threading
     clock, out, result = _MovingClock(), io.StringIO(), {}
 
@@ -1096,6 +1175,30 @@ def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
     check("the run ended", not worker.is_alive())
     check("with exit OK and its summary", result.get("code") == exitcodes.OK
           and '"summary"' in out.getvalue(), f"({result})")
+
+
+def test_a_report_on_every_pass_still_lets_the_capture_thread_have_the_gil():
+    """Review of #237. An interval finer than the clock reports on every pass, and
+    such a pass had no nap left at all: a loop that never sleeps keeps the GIL,
+    and the capture thread gives it up on every packet (each pydivert call is a
+    ctypes call) and then waits to get it back. MEASURED 2026-10-01 on the
+    mechanism: a thread giving the GIL up on every iteration managed 632 to 851 of
+    them a second beside a spinning main thread, against ~1.7 million beside a
+    sleeping one. Every pass naps now, ``sleep(0)`` when nothing is left to wait."""
+    clock, asked = _MovingClock(), []
+
+    def sleep(seconds):
+        asked.append(seconds)
+        clock.sleep(seconds)
+    out = io.StringIO()
+    code = run_cli(["--simulate", "--interval", "1e-300", "--duration", "0.5",
+                    "--format", "json"], sleep=sleep, clock=clock, out=out,
+                   err=io.StringIO())
+    samples = [line for line in out.getvalue().splitlines() if '"sample"' in line]
+    check("the run reported and ended", code == exitcodes.OK and len(samples) > 1,
+          f"(code={code}, {len(samples)} reports)")
+    check("every pass took a nap, if only sleep(0)", len(asked) >= len(samples),
+          f"({len(asked)} naps for {len(samples)} reports)")
 
 
 def test_usage_errors_keep_argparse_exit_code_2():
