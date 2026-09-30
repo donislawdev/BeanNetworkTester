@@ -278,7 +278,7 @@ def qpc_now():
     """The current QPC tick count, or ``None`` where there is no QPC.
 
     Costs one syscall-ish call, so the caller decides how often to ask - this is
-    not something to do per packet (see ``BeanEngine._sample_driver_wait``).
+    not something to do per packet (see ``driverwait.DriverWait.sample``).
     """
     if not is_windows():
         return None

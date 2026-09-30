@@ -3,6 +3,7 @@
 Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
+import itertools
 import os
 import random
 import re
@@ -10,7 +11,7 @@ import time
 
 import pytest
 
-from beantester import BeanEngine
+from beantester import BeanEngine, driverwait
 from beantester.connlog import ConnectionLog
 from beantester.core import BeanCore
 from beantester.damage import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
@@ -1283,7 +1284,7 @@ def test_a_session_records_the_driver_queue_it_is_running_behind():
 def test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number():
     """The START line quotes the queue's three ceilings AND the warning threshold.
 
-    The threshold comes from ``DRIVER_WAIT_WARN_MS`` at the call site, not from the
+    The threshold comes from ``driverwait.WARN_MS`` at the call site, not from the
     translations, so the sentence cannot drift from the constant it quotes. The
     cost of that is a fourth argument the call site must pass - and a missing one
     is silent: ``T()`` never raises, it hands back the template with EVERY brace
@@ -1302,7 +1303,7 @@ def test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number()
     check("driver queue line: the size is in KB, not in bytes",
           f"{ParamDivert.QUEUE[2] // 1024} KB" in line, f"({line})")
     check("driver queue line: quotes the threshold the warning really uses",
-          f"{BeanEngine.DRIVER_WAIT_WARN_MS:g} ms" in line, f"({line})")
+          f"{driverwait.WARN_MS:g} ms" in line, f"({line})")
 
 
 def test_the_driver_queue_param_numbers_match_pydivert():
@@ -1350,16 +1351,21 @@ class StampedPacket(FakePacket):
 def _engine_with_qpc(ticks, freq=10_000_000, log_fn=None):
     """An engine whose QPC always reads `ticks`, with NO session started.
 
-    Deliberately not started: `_sample_driver_wait` needs only the stats dict and
-    the lock, and a live capture thread would race the test - it samples the first
+    Deliberately not started: the measurement needs only the engine's log and
+    stats, and a live capture thread would race the test - it samples the first
     packet with the REAL clock before the seam can be installed, which is exactly
     what happened when this was written the other way round. 10 MHz is the
     frequency measured on the owner's machine, so one tick is 100 ns.
     """
     eng = BeanEngine(log_fn=log_fn) if log_fn else BeanEngine()
-    eng._qpc = lambda: ticks
-    eng._qpc_freq = freq
+    eng._driver_wait.qpc = lambda: ticks
+    eng._driver_wait.freq = freq
     return eng
+
+
+def _sample(eng, packet):
+    """One sample, the way the capture loop takes it when the tick comes round."""
+    eng._driver_wait.sample(packet, time.monotonic())
 
 
 def test_the_wait_inside_the_driver_is_measured_and_kept():
@@ -1372,7 +1378,7 @@ def test_the_wait_inside_the_driver_is_measured_and_kept():
     """
     now_ticks = 50_000_000
     sh = _engine_with_qpc(now_ticks)
-    sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8500))
+    _sample(sh, StampedPacket(now_ticks - 2_000_000, size=100, port=8500))
     peak = sh.stats_snapshot()["driver_wait_peak_ms"]
     check("driver wait: measured in milliseconds", abs(peak - 200.0) < 0.001, f"({peak})")
 
@@ -1380,11 +1386,17 @@ def test_the_wait_inside_the_driver_is_measured_and_kept():
 def test_the_capture_loop_actually_takes_the_sample():
     """The measurement is only worth anything if the packet path calls it.
 
-    The other tests here drive `_sample_driver_wait` directly, so they say nothing
+    The other tests here drive `DriverWait.sample` directly, so they say nothing
     about whether the capture loop ever reaches it - mutation proved exactly that
     by deleting the call site without turning any of them red. This one runs a
     real session, with the QPC pair injected BEFORE start() so the loop measures a
     known 200 ms rather than whatever the machine's clock says.
+
+    The clock MOVES: its first reading is the floor start() takes just before the
+    capture thread exists (external review P1-5), the packets are stamped at that
+    floor, and every later reading is 200 ms on. A clock standing still, as this
+    test once had, would put every packet under the floor - and a test that
+    measures nothing proves nothing.
     """
     # 1 MHz on purpose, NOT this machine's real 10 MHz: if start() overwrote the
     # injected frequency with the machine's own, the same stamp would read 20 ms
@@ -1392,11 +1404,12 @@ def test_the_capture_loop_actually_takes_the_sample():
     # is invisible on Windows and only breaks on the Linux runner, which is the
     # kind of mutant that gets waved through.
     now_ticks, freq = 50_000_000, 1_000_000
-    pkts = [StampedPacket(now_ticks - 200_000, size=100, port=8504)
-            for _ in range(3)]
+    floor = now_ticks - 200_000
+    readings = itertools.chain([floor], itertools.repeat(now_ticks))
+    pkts = [StampedPacket(floor, size=100, port=8504) for _ in range(3)]
     sh = BeanEngine()
-    sh._qpc = lambda: now_ticks
-    sh._qpc_freq = freq
+    sh._driver_wait.qpc = lambda: next(readings)
+    sh._driver_wait.freq = freq
     sh.start("test", divert=FakeDivert(pkts))
     deadline = time.time() + 15
     while time.time() < deadline and sh.stats_snapshot()["seen"] < len(pkts):
@@ -1407,13 +1420,37 @@ def test_the_capture_loop_actually_takes_the_sample():
           f"({peak})")
 
 
+def test_a_packet_queued_before_the_capture_thread_started_is_not_a_driver_wait():
+    """External review P1-5: the first packet of a session was sampled, and it was
+    the OLDEST one in the queue - queued while the start was still resolving its
+    target, with nothing reading the handle. Its wait was the start's (35-56 ms
+    measured, elevated and cold), and it became the session's peak and, past
+    50 ms, a "the driver is dropping packets" warning in the log and the report.
+    A packet stamped before the capture thread existed is not a driver wait."""
+    floor, freq = 50_000_000, 1_000_000
+    readings = itertools.chain([floor], itertools.repeat(floor + 10_000))
+    lines = []
+    sh = BeanEngine(log_fn=lines.append)
+    sh._driver_wait.qpc = lambda: next(readings)
+    sh._driver_wait.freq = freq
+    # queued 200 ms before the capture thread started
+    sh.start("test", divert=FakeDivert([StampedPacket(floor - 200_000, size=100, port=8506)]))
+    wait_until(lambda: sh.stats_snapshot()["seen"] >= 1, timeout=15)
+    peak = sh.stats_snapshot()["driver_wait_peak_ms"]
+    events = [e[3] for e in sh.events_snapshot()]
+    sh.stop()
+    check("driver wait: the start's own wait is not the peak", peak == 0.0, f"({peak})")
+    check("driver wait: and it is not reported as the driver dropping packets",
+          "events.driver_wait" not in events, f"({events})")
+
+
 def test_a_shorter_wait_never_lowers_the_recorded_peak():
     """It is a PEAK. A later, healthier packet must not erase the worst moment -
     that is the moment worth knowing about."""
     now_ticks = 50_000_000
     sh = _engine_with_qpc(now_ticks)
-    sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8501))
-    sh._sample_driver_wait(StampedPacket(now_ticks - 1_000, size=100, port=8501))
+    _sample(sh, StampedPacket(now_ticks - 2_000_000, size=100, port=8501))
+    _sample(sh, StampedPacket(now_ticks - 1_000, size=100, port=8501))
     peak = sh.stats_snapshot()["driver_wait_peak_ms"]
     check("driver wait: the peak survives a healthy sample",
           abs(peak - 200.0) < 0.001, f"({peak})")
@@ -1426,17 +1463,17 @@ def test_nothing_to_measure_is_reported_as_nothing():
     dropped rather than reported as a negative wait."""
     sh = _engine_with_qpc(50_000_000)
 
-    sh._sample_driver_wait(FakePacket(size=100, port=8502))          # no timestamp
+    _sample(sh, FakePacket(size=100, port=8502))                 # no timestamp
     check("driver wait: no timestamp -> nothing recorded",
           sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0)
 
-    sh._qpc_freq = None                                              # no QPC here
-    sh._sample_driver_wait(StampedPacket(1, size=100, port=8502))
+    sh._driver_wait.freq = None                                  # no QPC here
+    _sample(sh, StampedPacket(1, size=100, port=8502))
     check("driver wait: no QPC -> nothing recorded",
           sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0)
 
-    sh._qpc_freq = 10_000_000
-    sh._sample_driver_wait(StampedPacket(50_000_001, size=100, port=8502))
+    sh._driver_wait.freq = 10_000_000
+    _sample(sh, StampedPacket(50_000_001, size=100, port=8502))
     check("driver wait: a stamp from the future is dropped, not negated",
           sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0,
           f"({sh.stats_snapshot()['driver_wait_peak_ms']})")
@@ -1449,7 +1486,7 @@ def test_a_long_driver_wait_warns_once_not_per_packet():
     lines = []
     sh = _engine_with_qpc(now_ticks, log_fn=lines.append)
     for _ in range(200):
-        sh._sample_driver_wait(StampedPacket(now_ticks - 2_000_000, size=100, port=8503))
+        _sample(sh, StampedPacket(now_ticks - 2_000_000, size=100, port=8503))
     kinds = [e[2] for e in sh.events_snapshot()]
 
     complaints = [ln for ln in lines if "WinDivert" in ln or "sterownik" in ln.lower()]
@@ -1458,6 +1495,28 @@ def test_a_long_driver_wait_warns_once_not_per_packet():
     check("driver wait: the line carries the number", "200" in complaints[0],
           f"({complaints[0][:90]})")
     check("driver wait: and it reaches the event log", "WARN" in kinds, f"({kinds})")
+
+
+def test_a_stats_reset_starts_a_new_driver_wait_window():
+    """No peak, and the warning armed again, after the counters go back to zero.
+
+    ``reset_stats`` is what START calls, so this is also the next session on the
+    same engine. The peak used to live in the stats dict and went with it for
+    free; it now lives in ``driverwait.DriverWait`` and is only cleared if
+    ``reset_stats`` says so - forgetting that would hand every later session the
+    first one's worst moment.
+    """
+    now_ticks = 50_000_000
+    lines = []
+    sh = _engine_with_qpc(now_ticks, log_fn=lines.append)
+    _sample(sh, StampedPacket(now_ticks - 2_000_000, size=100, port=8505))
+    sh.reset_stats()
+    check("driver wait: a reset clears the peak",
+          sh.stats_snapshot()["driver_wait_peak_ms"] == 0.0,
+          f"({sh.stats_snapshot()['driver_wait_peak_ms']})")
+    _sample(sh, StampedPacket(now_ticks - 2_000_000, size=100, port=8505))
+    said = [ln for ln in lines if "200" in ln]
+    check("driver wait: and the warning can fire again", len(said) == 2, f"({said})")
 
 
 def test_event_log_trim():
