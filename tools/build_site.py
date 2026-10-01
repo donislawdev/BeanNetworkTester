@@ -78,7 +78,7 @@ LINK_LEN = (4, 42)
 # that stops being true the day a file is added - the pages said "seven" while the
 # folder held eight - so the count is read from the folder, here and in the page bodies
 # (``{{page.scenario_count}}``).
-SCENARIO_COUNT_TOKEN = "{scenario_count}"
+SCENARIO_COUNT_MARKER = "{scenario_count}"
 
 SLUG_RE = re.compile(r"^$|^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$")
 PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}\}")
@@ -390,8 +390,8 @@ def load_pages(root, registry):
             slug = entry.get("slug", None)
             title = (entry.get("title") or "").strip()
             description = (entry.get("description") or "").strip()
-            if SCENARIO_COUNT_TOKEN in description:
-                description = description.replace(SCENARIO_COUNT_TOKEN,
+            if SCENARIO_COUNT_MARKER in description:
+                description = description.replace(SCENARIO_COUNT_MARKER,
                                                   str(len(scenario_files(root))))
             link_text = (entry.get("link_text") or "").strip()
             if slug is None or not SLUG_RE.match(slug):

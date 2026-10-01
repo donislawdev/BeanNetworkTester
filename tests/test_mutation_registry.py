@@ -1350,9 +1350,9 @@ MUTATIONS = [
     {
         "label": "site: the scenario count in a description is typed in again",
         "file": "tools/build_site.py",
-        "old": "                description = description.replace(SCENARIO_COUNT_TOKEN,\n"
+        "old": "                description = description.replace(SCENARIO_COUNT_MARKER,\n"
                "                                                  str(len(scenario_files(root))))",
-        "new": '                description = description.replace(SCENARIO_COUNT_TOKEN, "7")',
+        "new": '                description = description.replace(SCENARIO_COUNT_MARKER, "7")',
         "test": "test_the_scenario_count_is_the_number_of_files_that_ship",
     },
     {
