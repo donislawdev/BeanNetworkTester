@@ -85,6 +85,12 @@
       "title": "Tải Bean Network Tester cho Windows",
       "description": "Tải miễn phí cho Windows 10 và 11, dạng zip hoặc trình cài đặt. Bản phát hành gồm gì, cách xác minh đúng tệp chúng tôi build và cần gì để chạy.",
       "link_text": "Tải về"
+    },
+    "hi": {
+      "slug": "download-karein",
+      "title": "Windows के लिए Bean Network Tester डाउनलोड करें",
+      "description": "Windows 10 और 11 के लिए मुफ़्त डाउनलोड, zip या इंस्टॉलर में। रिलीज़ में क्या है, फ़ाइल हमारी बनाई है यह कैसे जाँचें, और चलाने के लिए क्या चाहिए।",
+      "link_text": "डाउनलोड"
     }
   }
 }

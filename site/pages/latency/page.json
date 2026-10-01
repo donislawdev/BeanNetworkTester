@@ -85,6 +85,12 @@
       "title": "Thêm độ trễ và jitter cho ứng dụng trên Windows",
       "description": "Cho một ứng dụng Windows độ trễ như máy chủ ở xa hay đường hầm tàu: độ trễ cố định, jitter ngẫu nhiên hoặc những cú giật thỉnh thoảng.",
       "link_text": "Độ trễ và jitter"
+    },
+    "hi": {
+      "slug": "letensi-aur-jitar",
+      "title": "Windows ऐप में लेटेंसी और जिटर जोड़ें",
+      "description": "किसी Windows ऐप को दूर के सर्वर या ट्रेन की सुरंग जैसी पिंग दें: स्थिर देरी, यादृच्छिक जिटर या कभी-कभार के झटके।",
+      "link_text": "लेटेंसी और जिटर"
     }
   }
 }

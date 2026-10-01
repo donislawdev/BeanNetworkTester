@@ -85,6 +85,12 @@
       "title": "Ngắt kết nối và chặn cổng trên Windows",
       "description": "Giết kết nối, chặn một cổng hay địa chỉ, ngắt đường truyền một lúc hoặc thu nhỏ gói tin đến khi không gì qua được, rồi xem ứng dụng phục hồi.",
       "link_text": "Ngắt kết nối"
+    },
+    "hi": {
+      "slug": "connection-todna",
+      "title": "Windows पर कनेक्शन तोड़ें और पोर्ट ब्लॉक करें",
+      "description": "कनेक्शन मारें, कोई पोर्ट या पता ब्लॉक करें, लिंक कुछ देर काटें या पैकेट इतने छोटे करें कि कुछ न निकले, फिर देखें ऐप कैसे सँभलता है।",
+      "link_text": "कनेक्शन तोड़ें"
     }
   }
 }

@@ -85,6 +85,12 @@
       "title": "Mô phỏng mạng kém trong CI trên Windows",
       "description": "Cùng một tệp thực thi chạy không cần cửa sổ, báo kết quả qua mã thoát và NDJSON rồi tự dừng, nên pipeline có thể thử kết nối kém.",
       "link_text": "Kiểm thử mạng trong CI"
+    },
+    "hi": {
+      "slug": "ci-mein-network-test",
+      "title": "CI में Windows पर खराब नेटवर्क का सिमुलेशन",
+      "description": "वही एक्ज़ीक्यूटेबल बिना विंडो के चलता है, एग्ज़िट कोड और NDJSON से नतीजा बताता है और खुद रुकता है, इसलिए पाइपलाइन खराब कनेक्शन परख सकती है।",
+      "link_text": "CI में नेटवर्क टेस्ट"
     }
   }
 }

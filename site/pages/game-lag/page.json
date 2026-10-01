@@ -85,6 +85,12 @@
       "title": "Mô phỏng lag game và mất gói tin",
       "description": "Cho một ứng dụng khách game ping, jitter và mất gói tin của kết nối kém, chỉ nhắm vào tiến trình đó, và chạy lại đúng lần ấy nhờ seed.",
       "link_text": "Lag trong game"
+    },
+    "hi": {
+      "slug": "game-lag-simuleshan",
+      "title": "गेम लैग और पैकेट लॉस का सिमुलेशन",
+      "description": "गेम क्लाइंट को खराब कनेक्शन जैसी पिंग, जिटर और पैकेट लॉस दें, सिर्फ़ उसी प्रोसेस पर, और उसी रन को seed से दोहराएँ।",
+      "link_text": "गेम लैग"
     }
   }
 }

@@ -85,6 +85,12 @@
       "title": "Mô phỏng mất gói tin trên Windows cho một ứng dụng",
       "description": "Loại bỏ một tỷ lệ phần trăm gói tin của một ứng dụng trên Windows, xem điều gì hỏng, rồi chạy lại đúng lần đó nhờ seed.",
       "link_text": "Mất gói tin"
+    },
+    "hi": {
+      "slug": "paiket-los",
+      "title": "Windows पर एक ऐप के लिए पैकेट लॉस सिमुलेशन",
+      "description": "Windows पर किसी एक ऐप के पैकेट का तय प्रतिशत गिराएँ, देखें क्या टूटता है, और उसी रन को seed से हूबहू दोहराएँ।",
+      "link_text": "पैकेट लॉस"
     }
   }
 }

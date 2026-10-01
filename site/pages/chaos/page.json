@@ -85,6 +85,12 @@
       "title": "Kiểm thử hỗn loạn mạng trên Windows",
       "description": "Cố ý chèn lỗi mạng, lặp lại chính xác bằng seed và để pipeline dựa vào mã thoát quyết định ứng dụng có trụ được hay không.",
       "link_text": "Kiểm thử hỗn loạn"
+    },
+    "hi": {
+      "slug": "network-kaos-test",
+      "title": "Windows पर नेटवर्क कैओस टेस्टिंग",
+      "description": "नेटवर्क की गड़बड़ियाँ जानबूझकर डालें, seed से हूबहू दोहराएँ और पाइपलाइन को एग्ज़िट कोड से तय करने दें कि ऐप टिका या नहीं।",
+      "link_text": "कैओस टेस्टिंग"
     }
   }
 }

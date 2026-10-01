@@ -85,6 +85,12 @@
       "title": "Lựa chọn thay thế Clumsy cho Windows, có dòng lệnh",
       "description": "Cần chú ý gì ở một công cụ làm suy giảm mạng trên Windows, công cụ này có gì hơn loại chỉ tương tác, và khi nào nên chọn công cụ khác.",
       "link_text": "Lựa chọn thay thế Clumsy"
+    },
+    "hi": {
+      "slug": "clumsy-vikalp",
+      "title": "Windows के लिए Clumsy का विकल्प, कमांड लाइन के साथ",
+      "description": "Windows के नेटवर्क बिगाड़ने वाले टूल में क्या देखें, यह टूल केवल इंटरैक्टिव टूल से क्या ज़्यादा देता है, और कब कुछ और चुनें।",
+      "link_text": "Clumsy का विकल्प"
     }
   }
 }

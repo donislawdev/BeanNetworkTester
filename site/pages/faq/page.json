@@ -85,6 +85,12 @@
       "title": "Câu hỏi thường gặp về Bean Network Tester",
       "description": "Quyền quản trị, có ảnh hưởng cả máy không, cách hoàn tác, cảnh báo SmartScreen và chương trình làm gì với dữ liệu của bạn.",
       "link_text": "Hỏi và đáp"
+    },
+    "hi": {
+      "slug": "aksar-puche-jane-wale-sawal",
+      "title": "Bean Network Tester के बारे में आम सवाल",
+      "description": "एडमिनिस्ट्रेटर अधिकार, क्या यह पूरी मशीन को छूता है, इसे कैसे पलटें, SmartScreen की चेतावनी, और यह आपके डेटा का क्या करता है।",
+      "link_text": "सवाल और जवाब"
     }
   }
 }

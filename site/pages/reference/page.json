@@ -85,6 +85,12 @@
       "title": "Cấu hình mẫu, thiết lập và mã thoát",
       "description": "Mọi cấu hình mẫu cùng số liệu nó đặt, mọi thiết lập với cờ, đơn vị và phạm vi, và mọi mã thoát mà dòng lệnh có thể trả về.",
       "link_text": "Bảng tra cứu"
+    },
+    "hi": {
+      "slug": "sandarbh-talika",
+      "title": "प्रोफ़ाइल, सेटिंग और एग्ज़िट कोड",
+      "description": "हर तैयार प्रोफ़ाइल अपने तय आँकड़ों के साथ, हर सेटिंग अपने फ़्लैग, इकाई और सीमा के साथ, और कमांड लाइन के हर संभावित एग्ज़िट कोड।",
+      "link_text": "संदर्भ तालिकाएँ"
     }
   }
 }

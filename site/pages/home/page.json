@@ -85,6 +85,12 @@
       "title": "Bean Network Tester - mô phỏng mạng kém trên Windows",
       "description": "Công cụ Windows miễn phí thêm độ trễ, mất gói tin và giới hạn tốc độ cho một ứng dụng, để bạn thử xem nó chạy ra sao trên kết nối kém.",
       "link_text": "Trang chủ"
+    },
+    "hi": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows पर खराब नेटवर्क का सिमुलेशन",
+      "description": "एक ऐप में लेटेंसी, पैकेट लॉस और स्पीड सीमा जोड़ने वाला मुफ़्त Windows टूल, ताकि आप खराब कनेक्शन पर उसका व्यवहार परख सकें।",
+      "link_text": "मुखपृष्ठ"
     }
   },
   "schema": "software_application"

@@ -85,6 +85,12 @@
       "title": "Giới hạn tốc độ tải xuống và tải lên trên Windows",
       "description": "Giới hạn một ứng dụng Windows ở số KB mỗi giây nhất định theo từng chiều, và xem modem 56k hay wifi trên máy bay làm gì với nó.",
       "link_text": "Giới hạn tốc độ"
+    },
+    "hi": {
+      "slug": "speed-seema",
+      "title": "Windows पर डाउनलोड और अपलोड स्पीड सीमित करें",
+      "description": "किसी Windows ऐप को हर दिशा में तय KB प्रति सेकंड तक सीमित करें और देखें कि 56k मॉडेम या विमान का वाई-फ़ाई उसके साथ क्या करता है।",
+      "link_text": "स्पीड सीमा"
     }
   }
 }

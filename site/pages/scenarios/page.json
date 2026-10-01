@@ -85,6 +85,12 @@
       "title": "Thay đổi điều kiện mạng theo thời gian",
       "description": "Tệp kịch bản là một dòng thời gian: ở những giây này, dùng những thiết lập này. Chương trình có sẵn các kịch bản và lặp lại chúng khi bạn theo dõi.",
       "link_text": "Kịch bản theo thời gian"
+    },
+    "hi": {
+      "slug": "samay-ke-anusar-scenario",
+      "title": "समय के साथ नेटवर्क की स्थितियाँ बदलें",
+      "description": "सिनेरियो फ़ाइल एक टाइमलाइन है: इन सेकंड पर ये सेटिंग। प्रोग्राम के साथ तैयार सिनेरियो आते हैं और आप देखते रहें तो वह उन्हें दोहराता है।",
+      "link_text": "समय आधारित सिनेरियो"
     }
   }
 }

@@ -85,6 +85,12 @@
       "title": "Kiểm tra ứng dụng khi không có internet trên Windows",
       "description": "Lấy đi internet của một ứng dụng trong khi mạng nội bộ vẫn chạy, làm một dịch vụ không truy cập được hoặc làm hỏng DNS mà không rút dây nào.",
       "link_text": "Không có internet"
+    },
+    "hi": {
+      "slug": "bina-internet-test",
+      "title": "Windows पर बिना इंटरनेट के ऐप का टेस्ट",
+      "description": "लोकल नेटवर्क चालू रखकर किसी ऐप से इंटरनेट छीनें, एक सेवा को पहुँच से बाहर करें या DNS बिगाड़ें, कुछ भी अनप्लग किए बिना।",
+      "link_text": "बिना इंटरनेट"
     }
   }
 }

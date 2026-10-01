@@ -87,6 +87,12 @@
       "name": "Tiếng Việt",
       "dir": "vi",
       "og_locale": "vi_VN"
+    },
+    {
+      "code": "hi",
+      "name": "हिन्दी",
+      "dir": "hi",
+      "og_locale": "hi_IN"
     }
   ],
   "og_image": "assets/bean.png",
