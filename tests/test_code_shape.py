@@ -575,10 +575,11 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
 # the band that hangs off it, and this number has to be re-measured when it moves,
 # exactly like the ceiling itself.
 # 5 -> 4 on 2026-09-06: `_run_session` left the band by being split into three
-# phases. `decide` stays at 27 and stays the ceiling - its twelve steps are a
+# phases. `decide` is not split to move this number - its twelve steps are a
 # pipeline whose ORDER is a contract pinned by two other tests, so splitting it to
 # move a metric would be damaging something that works in order to make a number
-# look better.
+# look better. (It is 24 today and `summary.settings_summary` holds the ceiling of
+# 26 - measured with ruff 2026-10-01; read them there, a comment does not move.)
 COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,
                             # test_layering._module_level
 

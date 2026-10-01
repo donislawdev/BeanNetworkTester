@@ -56,6 +56,25 @@ def test_the_summary_reads_a_typed_number_the_way_the_engine_does():
         assert s == "Active: +5 ms ping.", (refused, s)
 
 
+def test_a_block_on_an_address_and_a_port_reads_as_either_not_both():
+    """External review, P3-5: the engine blocks a packet whose address matches OR
+    whose port does, and the strip wrote both as ``address:port`` - the shape the
+    destination rule uses, where it really does mean both at once."""
+    from beantester import settings_summary
+    both = settings_summary({"block_ip": "203.0.113.0/24", "block_port": "8080,9090"}, "en")
+    assert "blocking 203.0.113.0/24 (any port) and port 8080,9090 (any IP)" in both, both
+    assert "203.0.113.0/24:8080" not in both, both
+    port = settings_summary({"block_port": "8080"}, "en")
+    assert "blocking any IP:8080" in port, port
+    address = settings_summary({"block_ip": "10.0.0.1"}, "en")
+    assert "blocking 10.0.0.1." in address, address
+    dest = settings_summary({"dst_ip": "203.0.113.0/24", "dst_port": "443"}, "en")
+    assert "dest only 203.0.113.0/24:443" in dest, dest   # here it DOES mean both
+    for lang in ("pl", "zh"):
+        text = settings_summary({"block_ip": "1.2.3.4", "block_port": "53"}, lang)
+        assert "1.2.3.4" in text and "53" in text and "1.2.3.4:53" not in text, (lang, text)
+
+
 def test_a_number_that_cannot_be_written_as_digits_is_displayed_not_raised():
     """``number_string`` only displays; ``int(inf)`` used to raise out of it.
 

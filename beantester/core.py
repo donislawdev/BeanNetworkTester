@@ -319,9 +319,9 @@ class _Impairments:
 
     ``decide()`` picks the set for the packet's direction with a single index and
     then reads plain attributes, which is why asymmetry costs no BRANCH: the
-    function sits exactly on the complexity ceiling pinned in ``pyproject.toml``
-    (27, measured), so a per-direction ``if`` in the packet path would have to be
-    paid for by taking something else out.
+    function sits close under the complexity ceiling pinned in ``pyproject.toml``
+    (read both numbers with ruff, not from here), so a per-direction ``if`` in the
+    packet path would have to be paid for by taking something else out.
 
     MEASURED 2026-09-05, against ``internal_tools/bench_decide.py`` on the same
     tree (4750 ns/packet for the impairing mix, spread 6.6%): one index plus seven
@@ -871,7 +871,16 @@ class BeanCore:
 
     def set_nat(self, timeout_s):
         with self._lock:
+            was_on = self.nat_timeout_s > 0
             self.nat_timeout_s = max(0.0, timeout_s)
+            if self.nat_timeout_s > 0 and not was_on:
+                # The table is written only while NAT is on, so every stamp in it
+                # stopped moving when NAT went off. Switched on again, a flow busy
+                # all along read as silent since then and its next inbound packets
+                # were dropped as "nat" (external review, P3-2). Forgotten instead:
+                # a flow nobody has stamped reads as "never seen" and passes. Only
+                # on the switch itself - every Apply calls this with the same value.
+                self._flow_last.clear()
             # While NAT is on, the flow record IS the impairment: an expired mapping
             # stays shut only for as long as its record survives, because a retired
             # record reads back as "never seen" and the next inbound packet reopens
@@ -940,10 +949,18 @@ class BeanCore:
 
     # -- helpers ------------------------------------------------------------ #
     @staticmethod
-    def _flowkey(local_port, remote_ip, remote_port):
+    def _flowkey(local_port, remote_ip, remote_port, *protocol):
+        """The flow a packet belongs to, or None when it has no ports.
+
+        Two shapes from one function. The connection log keys its rows by the
+        3-tuple (the engine calls this without a protocol). This module's own flow
+        tables pass ``is_tcp`` as well: without it a TCP and a UDP flow on the same
+        ports and peer shared ONE NAT mapping, so UDP traffic kept a silent TCP
+        mapping alive (external review, P3-8).
+        """
         if local_port is None or remote_ip is None or remote_port is None:
             return None
-        return (local_port, remote_ip, remote_port)
+        return (local_port, remote_ip, remote_port, *protocol)
 
     def _current_rates(self, now):
         if not self.schedule or self._sched_total <= 0:
@@ -1102,7 +1119,7 @@ class BeanCore:
             # 2) targeting: the destination expressions and the address family.
             #
             # One gate and one branch for all three, and that is not tidiness:
-            # this function sits ON the complexity ceiling pinned in
+            # this function sits close under the complexity ceiling pinned in
             # pyproject.toml, where the rule is that splitting lowers the number
             # rather than raising it. The three tests answer the same question
             # ("is this remote end in scope?") and returned the identical verdict
@@ -1117,7 +1134,7 @@ class BeanCore:
 
             # 2b) the two address-class switches: LAN mode (cut the internet) and
             # "Internet only" (cut the local network). Both are asked through one
-            # gate so this function does not grow a branch per switch - it sits on
+            # gate so this function does not grow a branch per switch - it sits by
             # the complexity ceiling, and the answer to that is to move code out,
             # not to raise the number.
             #
@@ -1127,10 +1144,11 @@ class BeanCore:
             #
             # One statement rather than the obvious nested pair, MEASURED: ruff's
             # complexity metric counts BRANCH STATEMENTS and not the boolean
-            # operators inside them, so a second `if` here reads as 30 while this
-            # form reads as 29 - the ceiling, which is pinned to the measurement
-            # and may not be raised to make room. The "is there a remote end at
-            # all" test lives inside the helper for the same reason.
+            # operators inside them, so a second `if` here costs one point of
+            # complexity and this form costs none (measured when it was written:
+            # 30 against 29). The ceiling is pinned to the measurement and may not
+            # be raised to make room. The "is there a remote end at all" test lives
+            # inside the helper for the same reason.
             if (self.lan_only or self.internet_only) and (
                     cut := self._address_class_cut(remote_ip)):
                 return Decision(True, False, [], cut)
@@ -1146,9 +1164,9 @@ class BeanCore:
                 # `block_reject` answers instead of staying silent - the difference
                 # between a refusal and a timeout, which is two different code paths
                 # in every client. Carried as a boolean expression rather than an
-                # `if` for the reason step 2b gives above: this function scores 27
-                # against `max-complexity = 27`, so one more BRANCH here fails the
-                # build, while an operator inside the call is free.
+                # `if` for the reason step 2b gives above: a BRANCH here counts
+                # against the complexity ceiling in pyproject.toml, while an
+                # operator inside the call is free.
                 #
                 # OUTBOUND ONLY, and TCP only, and both are measured rather than
                 # cautious. An inbound SYN is somebody connecting TO this machine:
@@ -1160,7 +1178,7 @@ class BeanCore:
                 return Decision(True, False, [], "block",
                                 self.block_reject and is_tcp and is_outbound)
 
-            key = self._flowkey(local_port, remote_ip, remote_port)
+            key = self._flowkey(local_port, remote_ip, remote_port, is_tcp)
 
             # 3) NAT mapping expiry (keep-alive test)
             #
@@ -1199,6 +1217,13 @@ class BeanCore:
             # invent one), and it is NOT the resurrection above - there the dropped
             # packet did the reopening itself, once per timeout, for as long as
             # traffic kept coming.
+            #
+            # Known and left (D-56): a flow that leaves the scope checked above and
+            # comes back keeps the stamp from before it left - an out-of-scope
+            # packet returns before this step - so its inbound packets can be
+            # dropped until it next sends, although it sent all along. Stamping
+            # out-of-scope packets would put this table on the path of every packet
+            # the session does not touch; leaving the scope takes an Apply.
             if self.nat_timeout_s > 0 and key is not None:
                 last = self._flow_last.get(key)
                 expired = last is not None and (now - last) > self.nat_timeout_s
@@ -1256,9 +1281,9 @@ class BeanCore:
 
             # 8) loss - independent, or arriving in runs when a burst length is
             # set. The whole question moves into _loses() rather than growing a
-            # branch here: this function sits ON the complexity ceiling pinned in
-            # pyproject.toml, where the rule is to move code out instead of
-            # raising the number. Measured after the change: still 27.
+            # branch here: this function sits close under the complexity ceiling
+            # pinned in pyproject.toml, where the rule is to move code out instead
+            # of raising the number.
             # The values from here down are read PER DIRECTION: one index, then
             # plain attributes. Resolved in _recompute, so nothing below has to
             # ask whether asymmetry is on - see _Impairments for the measurement

@@ -34,8 +34,8 @@ def _upload_parts(g, tr, num):
     """The upload half of the description, or nothing when the link is symmetric.
 
     A function of its own so that ``settings_summary`` gains NO branch: it sits
-    one step below the complexity ceiling pinned in ``pyproject.toml``, where the
-    rule is to move code out rather than raise the number.
+    on the complexity ceiling pinned in ``pyproject.toml``, where the rule is to
+    move code out rather than raise the number.
 
     An asymmetric run with every upload value at zero still says so. Silence
     there would be the misleading answer: the reader would take the numbers above
@@ -58,6 +58,22 @@ def _upload_parts(g, tr, num):
     if not inner:
         return [tr("summary.asym_up_clean")]
     return [tr("summary.asym_up", v=", ".join(inner))]
+
+
+def _block_part(block_ip, block_port, tr):
+    """The block rule, read the way the engine applies it.
+
+    A packet is blocked when its address matches OR its port does. Written as
+    ``address:port`` - the shape of the destination rule, where it does mean both
+    at once - "blocking 203.0.113.0/24:8080,9090" said the opposite of what
+    happens (external review, P3-5). A function of its own for the reason
+    ``_upload_parts`` gives.
+    """
+    if block_ip and block_port:
+        return tr("summary.block_either", ip=block_ip, port=block_port)
+    if block_port:
+        return tr("summary.block", v=tr("summary.any_ip")) + f":{block_port}"
+    return tr("summary.block", v=block_ip)
 
 
 def settings_summary(s, lang=None, prefix_key="summary.prefix"):
@@ -154,8 +170,7 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     if block_ip or block_port:
-        tgt = block_ip or tr("summary.any_ip")
-        parts.append(tr("summary.block", v=tgt) + (f":{block_port}" if block_port else ""))
+        parts.append(_block_part(block_ip, block_port, tr))
     seed = g("seed")
     if seed not in (None, -1, "", "-1"):
         parts.append(tr("summary.seed", v=seed))

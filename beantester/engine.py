@@ -2013,7 +2013,7 @@ class BeanEngine:
             self._warn_overflow()       # outside the lock: it logs, and logging waits
         return queued
 
-    def _note_order(self, arrived, is_out):
+    def _note_order(self, arrived, is_out, copy=False):
         """Did this packet leave after one that arrived AFTER it? Then it was overtaken.
 
         The injector knows both orders: the heap entry carries the number the packet
@@ -2043,11 +2043,34 @@ class BeanEngine:
         It lives outside ``_inject_loop`` because the loop is already four levels deep
         at the call site and the nesting ratchet (``tests/test_code_shape.py``) is
         answered by moving code out, not by raising the number.
+
+        A duplicate COPY is not looked at: it leaves after its original, so the
+        packet that arrived next usually goes before it, and every copy read as one
+        packet overtaken - 877 of 878 copies with duplication alone and no delay at
+        all (external review, P3-7b).
         """
+        if copy:
+            return
         if arrived < self._last_sent[is_out]:
             self._bump("reordered")
         else:
             self._last_sent[is_out] = arrived
+
+    def _release_lost(self, copy, key, counter):
+        """Count a release that left the queue and never reached the wire.
+
+        True when that was a packet lost. A duplicate COPY is not one: the
+        application gets the packet once instead of twice, which is the packet -
+        the same rule ``_enqueue`` follows for overflow, and for the same reason
+        the warning that quotes ``counter`` must not fire for it. Charging every
+        release counted twice the packets they were: seen 200, drop_send 400 with
+        every send refused at 100% duplication (external review, P3-7a, NOWE-2-4).
+        """
+        if copy:
+            return False
+        self._bump(counter)
+        self._conns_log.charge(key, "dropped")
+        return True
 
     def _inject_loop(self, session):
         divert = session.divert         # this session's handle, never the next one's
@@ -2057,7 +2080,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not session.live:
                     break
-                release, arrived, packet, _, key, modified = self._heap[0]
+                release, arrived, packet, copy, key, modified = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))
@@ -2078,8 +2101,7 @@ class BeanEngine:
                     # batched injector (built, measured and rejected): the hole
                     # was one packet wide already, and batching would have made it
                     # a whole batch wide.
-                    self._bump("drop_shutdown")
-                    self._conns_log.charge(key, "dropped")
+                    self._release_lost(copy, key, "drop_shutdown")
                 else:
                     # Recompute the checksums only when this tool actually edited
                     # the bytes. An untouched packet goes back exactly as it
@@ -2112,15 +2134,13 @@ class BeanEngine:
                     # bytes_in = 5 122 600 B in a row that received 409 600 B.
                     self._log_delivered(key, size, is_out)
                     # AFTER the send, deliberately - see _note_order.
-                    self._note_order(arrived, bool(is_out))
+                    self._note_order(arrived, bool(is_out), copy)
             except Exception as e:
                 # The packet is already off the heap: not delivered, and until this
                 # counter existed, not recorded either - it simply left the
                 # seen/delivered/dropped balance, which is the one thing keeping
                 # these numbers honest. Every other way a packet can die has a
                 # counter; this one only had a log line.
-                self._bump("drop_send")
-                self._conns_log.charge(key, "dropped")
-                if session.live:
+                if self._release_lost(copy, key, "drop_send") and session.live:
                     self._warn_send_failed(e)
             session.busy = None

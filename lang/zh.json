@@ -461,6 +461,7 @@
   "summary.asym_up": "上传：{v}",
   "summary.asym_up_clean": "上传：不做处理",
   "summary.block": "阻断 {v}",
+  "summary.block_either": "阻断 {ip}（任意端口）及端口 {port}（任意 IP）",
   "summary.corrupt": "{v}% 数据损坏",
   "summary.dest": "仅目标地址 {v}",
   "summary.down": "下载 ≤ {v} KB/s",

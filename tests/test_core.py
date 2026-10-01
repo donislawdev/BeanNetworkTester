@@ -787,6 +787,62 @@ def test_a_dropped_packet_does_not_revive_an_expired_nat_mapping():
     check("NAT: inbound flows again once the app has sent", back.drop is False)
 
 
+def test_switching_nat_back_on_does_not_judge_a_busy_flow_by_old_stamps():
+    """External review, P3-2: the table is written only while NAT is on, so its
+    stamps stop moving when NAT goes off. Switched on again, a flow that was busy
+    the whole time read as silent since then, and inbound packets were dropped as
+    "nat" until the application next sent - 11 of 11 in the reproduction."""
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+    kw = dict(remote_ip="1.2.3.4", remote_port=443, is_tcp=False)
+    core.set_nat(5.0)
+    core.decide(100, True, 5000, 0.0, rng, **kw)        # outbound opens the mapping
+    core.set_nat(0)                                     # off for 20 s, the flow stays busy
+    for t in range(1, 21):
+        core.decide(100, False, 5000, float(t), rng, **kw)
+        core.decide(100, True, 5000, t + 0.5, rng, **kw)
+    core.set_nat(5.0)                                   # on again
+    verdicts = [core.decide(100, False, 5000, 21.0 + i * 0.1, rng, **kw).drop
+                for i in range(5)]
+    check("NAT switched back on: a flow busy all along keeps flowing",
+          not any(verdicts), f"(drops={verdicts})")
+
+
+def test_applying_the_same_nat_timeout_again_keeps_an_expired_mapping_shut():
+    """The other half: every Apply and every scenario step calls ``set_nat`` with
+    the value it already has. Forgetting the stamps THEN would end every blackhole
+    the next time anything at all was applied."""
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+    kw = dict(remote_ip="1.2.3.4", remote_port=443, is_tcp=True)
+    core.set_nat(5.0)
+    core.decide(100, True, 5000, 0.0, rng, **kw)
+    core.set_nat(5.0)                                   # an Apply with NAT unchanged
+    d = core.decide(100, False, 5000, 10.0, rng, **kw)
+    check("NAT: an Apply that changes nothing keeps the expired mapping shut",
+          d.drop and d.reason == "nat", f"(drop={d.drop}, reason={d.reason})")
+
+
+def test_a_udp_flow_does_not_keep_a_tcp_mapping_alive():
+    """External review, P3-8: the flow key had no protocol, so a TCP and a UDP flow
+    on the same ports and peer shared one NAT mapping. UDP traffic every second
+    kept a TCP mapping that had been silent for 20 s open. (The reset cooldown
+    shares the key too, but only TCP ever reads it.)"""
+    core = BeanCore()
+    core.reset_buckets(0.0)
+    core.set_nat(5.0)
+    rng = random.Random(1)
+    kw = dict(remote_ip="1.2.3.4", remote_port=443)
+    core.decide(100, True, 5000, 0.0, rng, is_tcp=True, **kw)
+    for t in range(1, 20):
+        core.decide(100, False, 5000, float(t), rng, is_tcp=False, **kw)
+    d = core.decide(100, False, 5000, 20.0, rng, is_tcp=True, **kw)
+    check("NAT: the silent TCP mapping expired, whatever UDP did on the same ports",
+          d.drop and d.reason == "nat", f"(drop={d.drop}, reason={d.reason})")
+
+
 def test_a_long_rst_cooldown_is_honoured_not_truncated_by_the_flow_table():
     """The cooldown deadline lives in a table that used to retire records on a
     30 s timer, so any cooldown longer than that quietly became ~30-60 s.
@@ -995,6 +1051,8 @@ def test_decision_defaults_and_flowkey():
           and BeanCore._flowkey(5000, "1.1.1.1", None) is None)
     check("flowkey: complete data -> tuple",
           BeanCore._flowkey(5000, "1.1.1.1", 80) == (5000, "1.1.1.1", 80))
+    check("flowkey: core's own tables add the protocol",
+          BeanCore._flowkey(5000, "1.1.1.1", 80, True) == (5000, "1.1.1.1", 80, True))
 
 
 def test_corrupt_uses_rng():

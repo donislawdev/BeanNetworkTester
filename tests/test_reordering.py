@@ -41,23 +41,34 @@ class RefusingDivert(FakeDivert):
         super().send(p, recalculate_checksum=recalculate_checksum)
 
 
-def _run(releases, divert=None):
+class RefusingCopies(FakeDivert):
+    """A diverter that takes each packet ONCE: the duplicate copy is refused."""
+
+    def send(self, p, recalculate_checksum=True):
+        if any(p is q for _, q in self.sent):
+            raise OSError("the driver refused the copy")
+        super().send(p, recalculate_checksum=recalculate_checksum)
+
+
+def _run(releases, divert=None, engine=None, expect=None):
     """Queue ``(offset, packet)`` pairs in order, wait for delivery, return stats.
 
     ``releases`` is queued in list order, so the first entry is the packet that
-    ARRIVED first - which is the whole variable these tests turn.
+    ARRIVED first - which is the whole variable these tests turn. A third item,
+    ``True``, queues that entry as a duplicate COPY (pipeline step 12).
     """
     fake = divert if divert is not None else FakeDivert([])
-    engine = BeanEngine()
+    engine = engine if engine is not None else BeanEngine()
     engine.start("test", divert=fake)
     try:
         now = time.monotonic()
-        for offset, packet in releases:
-            engine._enqueue(now + offset, packet)
+        for offset, packet, *copy in releases:
+            engine._enqueue(now + offset, packet, copy=bool(copy and copy[0]))
         deadline = time.time() + 10
         while time.time() < deadline:
             s = engine.stats_snapshot()
-            if s["queue"] == 0 and len(fake.sent) + s["drop_send"] >= len(releases):
+            done = len(releases) if expect is None else expect
+            if s["queue"] == 0 and len(fake.sent) + s["drop_send"] >= done:
                 break
             time.sleep(0.01)
         time.sleep(0.05)
@@ -130,6 +141,39 @@ def test_a_packet_the_driver_refused_does_not_make_the_next_one_look_overtaken()
           stats["drop_send"] == 1, f"(drop_send={stats['drop_send']})")
     check("nothing is reported as overtaken", stats["reordered"] == 0,
           f"(reordered={stats['reordered']})")
+
+
+def test_a_duplicate_copy_is_not_counted_as_overtaken():
+    """External review, P3-7b: a copy leaves after its original, so the packet that
+    arrived next usually goes out before it - and every copy read as a packet
+    overtaken. Measured 877 "reordered" for 878 copies with duplication alone and
+    no delay set. A late duplicate is not a reorder of anything."""
+    first, second = FakePacket(port=1001), FakePacket(port=1002)
+    stats, sent = _run([(0.05, first), (0.40, first, True), (0.10, second)])
+
+    check("the copy left last", sent == [first, second, first], f"(sent {len(sent)})")
+    check("a copy leaving late is not a reorder", stats["reordered"] == 0,
+          f"(reordered={stats['reordered']})")
+
+
+def test_a_copy_the_driver_refused_is_not_a_lost_packet():
+    """External review, P3-7a and NOWE-2-4: the injector threw the copy flag away,
+    so a refused COPY was counted in ``drop_send`` and charged to the row - twice
+    the packets at 100% duplication (seen 200, drop_send 400) - and the warning
+    fired for it, quoting that number. The application got the packet once, which
+    is the packet."""
+    engine = BeanEngine()
+    warned = []
+    engine._warn_send_failed = warned.append
+    packet = FakePacket(port=1003)
+    stats, sent = _run([(0.05, packet), (0.20, packet, True)],
+                       divert=RefusingCopies([]), engine=engine, expect=1)
+
+    check("the original was delivered", sent == [packet], f"(sent {len(sent)})")
+    check("a refused copy is not a lost packet", stats["drop_send"] == 0,
+          f"(drop_send={stats['drop_send']})")
+    check("and nothing warns about a loss that did not happen", warned == [],
+          f"(warned {warned})")
 
 
 def test_a_restarted_session_does_not_inherit_the_previous_high_water_mark():
