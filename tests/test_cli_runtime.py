@@ -1021,6 +1021,60 @@ def test_a_ctrl_c_during_the_cleanup_still_puts_the_handlers_back(monkeypatch):
           f"({installed!r})")
 
 
+def _a_signal_on_the_first_gate_close(monkeypatch):
+    """Where a pending SIGTERM lands on the way out: CPython runs a pending handler
+    when a function is entered, so in ``_close_signal_gate()`` itself, with the
+    gate still open. The handler closes the gate and raises, and that is what the
+    first call does here. Returns the list of calls."""
+    real, calls = cli_module._close_signal_gate, []
+
+    def close():
+        calls.append(1)
+        if len(calls) == 1:
+            cli_module._signal_gate[0] = False
+            raise _Terminated("SIGTERM")
+        real()
+    monkeypatch.setattr(cli_module, "_close_signal_gate", close)
+    return calls
+
+
+def test_a_signal_on_the_way_out_is_still_a_coded_exit_with_its_cleanup(monkeypatch):
+    """Review of #237. ``run_cli`` closed the gate in the first line of its
+    ``finally``. A SIGTERM landing there - the run done and the gate still open,
+    as after ``--print-config``, ``--doctor`` or a usage error - escaped as a
+    traceback, and the driver release, ``log.close()`` and the restore were all
+    skipped. An error being reported with the gate open could be cut short the
+    same way. The gate closes before ``run_cli`` reports anything now, and a
+    signal on that close is an ordinary 143."""
+    from beantester.clilog import CliLog
+    signal, installed = _record_signal_handlers(monkeypatch)
+    released, closed = [], []
+    monkeypatch.setattr(cli_module.driver, "release_on_exit",
+                        lambda: released.append(1) or [])
+    real_close = CliLog.close
+    monkeypatch.setattr(CliLog, "close", lambda self: closed.append(1) or real_close(self))
+    _a_signal_on_the_first_gate_close(monkeypatch)
+    code, _, err = _run_cli_catching(["--print-config"])
+    check("a coded exit, not a traceback: 143", code == exitcodes.TERMINATED,
+          f"(code={code!r}, err={err!r})")
+    check("logged under its name", "Terminated (SIGTERM)." in err, f"({err!r})")
+    check("the driver release ran", released == [1], f"({released})")
+    check("the log was closed", closed == [1], f"({closed})")
+    check("the previous handlers are back",
+          installed[signal.SIGTERM] == "before" and installed[signal.SIGBREAK] == "before",
+          f"({installed!r})")
+
+    gate_when_reported = []
+    real_error = CliLog.error
+    monkeypatch.setattr(CliLog, "error", lambda self, msg: gate_when_reported.append(
+        cli_module._signal_gate[0]) or real_error(self, msg))
+    code, _, err = _run_cli_catching(["--gui", "--loss", "30"])
+    check("a usage error is still a usage error", code == exitcodes.USAGE,
+          f"(code={code!r}, err={err!r})")
+    check("and it is reported with the gate already closed",
+          gate_when_reported == [False], f"({gate_when_reported})")
+
+
 def _signal_after(monkeypatch, method, exc):
     """``BeanEngine.<method>`` does its job, then ``exc`` lands on the next bytecode."""
     from beantester.engine import BeanEngine
@@ -1060,6 +1114,21 @@ def test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_go
     check("a signal is a terminated run", code == exitcodes.TERMINATED, f"(code={code})")
     check("not a capture that failed to start", "cannot start the capture" not in err,
           f"({err!r})")
+    check("the engine was stopped before the driver was released", running is False,
+          f"(running={running})")
+
+
+def test_a_signal_on_the_session_guard_still_stops_the_engine(monkeypatch):
+    """Review of #237. The guard around the session's start closed the gate and
+    then stopped the engine. A SIGTERM landing on that close - a Ctrl+C had just
+    left ``engine.start`` - skipped the stop, and the driver was released under a
+    running engine. The engine is stopped whatever the close raised."""
+    _signal_after(monkeypatch, "start", KeyboardInterrupt())
+    _a_signal_on_the_first_gate_close(monkeypatch)
+    code, _, err, running = _run_watching_the_release(
+        monkeypatch, ["--simulate", "--duration", "5"])
+    # 143 and not the Ctrl+C's 130: proof that the signal did land on the close.
+    check("a coded exit: 143", code == exitcodes.TERMINATED, f"(code={code}, err={err!r})")
     check("the engine was stopped before the driver was released", running is False,
           f"(running={running})")
 
@@ -1115,8 +1184,11 @@ def test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report(tmp_p
           and summary[0]["stop_reason"] == "scenario_done", f"(code={code}, {summary!r})")
     check("no nap was longer than the poll", max(asked) <= cli_module.POLL_S,
           f"(longest {max(asked):g} s)")
+    # Half the report interval: far enough from 20 s to tell the two apart, and
+    # out of reach of a slow runner (the scenario ends on a real thread, in real
+    # time, so the run takes about 0.2-0.45 s; review of #237).
     check("the run ended near the scenario's end, not at the 20 s report",
-          summary[0]["elapsed_s"] < 2.0, f"({summary[0]['elapsed_s']} s)")
+          summary[0]["elapsed_s"] < 10.0, f"({summary[0]['elapsed_s']} s)")
 
 
 def test_a_report_taken_a_hair_before_its_tick_is_that_tick_and_not_taken_twice():

@@ -1207,10 +1207,10 @@ MUTATIONS = [
     {
         "label": "warning: --dry-run previews the values but not the shape",
         "file": "beantester/cli.py",
-        "old": "            if not cfg[\"simulate\"]:\n"
-               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
-        "new": "            if False:\n"
-               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "old": "        if not cfg[\"simulate\"]:\n"
+               "            warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "new": "        if False:\n"
+               "            warn_if_unbounded(cfg[\"settings\"], log.warn)",
         "test": "test_dry_run_previews_the_shape_and_not_only_the_values",
     },
     {
@@ -4005,10 +4005,11 @@ MUTATIONS = [
         "label": "cli: the signal handlers are installed outside the try",
         "file": "beantester/cli.py",
         "old": ("    try:\n"
-                "        # Inside the try, and the gate opens last: a signal while the handlers\n"
-                "        # were installed escaped as a traceback, or was dropped (see above).\n"
-                "        _install_signal_handlers(previous_signals)\n"),
-        "new": "    _install_signal_handlers(previous_signals)\n    try:\n",
+                "        try:\n"
+                "            # Inside the try, and the gate opens last: a signal while the handlers\n"
+                "            # were installed escaped as a traceback, or was dropped (see above).\n"
+                "            _install_signal_handlers(previous_signals)\n"),
+        "new": "    _install_signal_handlers(previous_signals)\n    try:\n        try:\n",
         "test": "test_an_installation_cut_short_still_puts_back_what_it_replaced",
     },
     {
@@ -4045,9 +4046,30 @@ MUTATIONS = [
         # P2-24/NOWE-5b-1: a signal between engine.start and the loop's finally.
         "label": "cli: the session guard leaves the engine running",
         "file": "beantester/cli.py",
-        "old": "        _close_signal_gate()\n        engine.stop()\n        raise\n",
-        "new": "        _close_signal_gate()\n        raise\n",
+        "old": "        finally:\n            engine.stop()\n        raise\n",
+        "new": "        finally:\n            pass\n        raise\n",
         "test": "test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes",
+    },
+    {
+        # Review of #237: a signal on the guard's gate close skipped the engine stop.
+        "label": "cli: a signal on the session guard's gate skips the engine stop",
+        "file": "beantester/cli.py",
+        "old": ("        try:\n"
+                "            _close_signal_gate()\n"
+                "        finally:\n"
+                "            engine.stop()\n"
+                "        raise\n"),
+        "new": "        _close_signal_gate()\n        engine.stop()\n        raise\n",
+        "test": "test_a_signal_on_the_session_guard_still_stops_the_engine",
+    },
+    {
+        # Review of #237: closed only in the last finally, a signal on the way out
+        # escaped as a traceback and an error was reported with the gate open.
+        "label": "cli: the gate stays open until run_cli's last finally",
+        "file": "beantester/cli.py",
+        "old": "            _close_signal_gate()\n    except CliError as e:\n",
+        "new": "            pass\n    except CliError as e:\n",
+        "test": "test_a_signal_on_the_way_out_is_still_a_coded_exit_with_its_cleanup",
     },
     {
         # NOWE-5b-1: a Ctrl+C while the scenario starts escapes with no summary.

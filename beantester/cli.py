@@ -826,8 +826,12 @@ def _run_session(cfg, log, sleep, clock, engine):
         scen = _open_session(cfg, log, engine)
         code, stop_reason, t0 = _drive_session(engine, cfg, log, sleep, clock, scen)
     except BaseException:
-        _close_signal_gate()
-        engine.stop()
+        # A signal can land on the gate close itself (see run_cli), and the
+        # engine is stopped whatever that call raised.
+        try:
+            _close_signal_gate()
+        finally:
+            engine.stop()
         raise
     return _report_session(engine, cfg, log, clock, code, stop_reason, t0)
 
@@ -1067,6 +1071,80 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     return code
 
 
+def _run_command(args, log, sleep, clock, engine):
+    """Do what the command line asked for; returns the exit code.
+
+    Split out of ``run_cli`` so that one ``try`` there can close the signal gate
+    before ``run_cli`` reports anything. Fails through ``_fail``, like the rest
+    of the CLI.
+    """
+    # --gui reaching the CLI runner means it was combined with something else:
+    # main() sends a bare --gui straight to the GUI. It used to be accepted and
+    # then ignored, so `--gui --loss 30 --duration 600` promised a window and
+    # instead ran a headless ten-minute impairment - no window, no STOP button,
+    # on a tool whose whole job is to break the user's own network.
+    if args.gui:
+        _fail(exitcodes.USAGE,
+              "--gui cannot be combined with other options: it opens the GUI, "
+              "which has its own controls. Launch the GUI with no arguments, or "
+              "drop --gui to run these settings from the command line.")
+    if args.license:
+        return _run_license(log)
+    if args.doctor:
+        return _run_doctor(log)
+    if args.cleanup_driver:
+        return _run_cleanup(log)
+
+    cfg = config_from_args(args)
+
+    if args.print_config:
+        log.data(dict(event="config", settings=cfg["settings"]),
+                 json.dumps(cfg["settings"], indent=2, sort_keys=True))
+        return exitcodes.OK
+    if cfg["save_config"]:
+        try:
+            save_config_file(cfg["save_config"], cfg["settings"])
+        except OSError as e:
+            _fail(exitcodes.IO,
+                  f"cannot save the config file {cfg['save_config']!r}: {e}")
+        log.info(f"Saved settings to {cfg['save_config']}")
+        return exitcodes.OK
+    if args.dry_run:
+        # What this gate checks is the CONFIGURATION: every value, every
+        # expression, the schedule, and the scenario file. What it does NOT
+        # check is the MACHINE - it never asks about Administrator rights or
+        # about pydivert, so on a box without them it answers OK about a
+        # command that will exit PERMISSION(7) or RUNTIME(1). That is on
+        # purpose: validating a config on a build agent and running it on
+        # another machine is a normal thing to do, and widening the check
+        # would break it. The success line names --doctor for the other half,
+        # so the pair answers the question this one alone cannot.
+        #
+        # The scenario is part of the configuration and used to be loaded
+        # only once the session started, so --dry-run reported "Configuration
+        # is valid" about a file it had never opened: a truncated, empty or
+        # non-object scenario passed the check with exit OK and then failed
+        # the real run with SCENARIO(4).
+        if cfg["scenario"]:
+            scen = _read_scenario(cfg["scenario"], log)
+            log.debug(f"scenario: {len(scen.steps)} steps, "
+                      f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
+        _log_effective_settings(log, cfg)
+        # A preview that stays quiet about the dangerous shape is a preview
+        # that misleads: "Configuration is valid" is about each value, and the
+        # warning is about the SHAPE - impairment armed, nothing aimed at,
+        # nothing to end it. This is the cheapest place a user can find that
+        # out, since --dry-run touches neither the driver nor the traffic.
+        if not cfg["simulate"]:
+            warn_if_unbounded(cfg["settings"], log.warn)
+        log.info("Configuration is valid (--dry-run: nothing was started). "
+                 "This checks the settings, not the machine - run --doctor "
+                 "for Administrator rights and the WinDivert driver.")
+        return exitcodes.OK
+
+    return _run_session(cfg, log, sleep, clock, engine)
+
+
 def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             out=None, err=None):
     """Run the CLI. Returns the process exit code (see ``exitcodes``)."""
@@ -1080,74 +1158,20 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
                  out=out, err=err)
     previous_signals = {}
     try:
-        # Inside the try, and the gate opens last: a signal while the handlers
-        # were installed escaped as a traceback, or was dropped (see above).
-        _install_signal_handlers(previous_signals)
-        # --gui reaching the CLI runner means it was combined with something else:
-        # main() sends a bare --gui straight to the GUI. It used to be accepted and
-        # then ignored, so `--gui --loss 30 --duration 600` promised a window and
-        # instead ran a headless ten-minute impairment - no window, no STOP button,
-        # on a tool whose whole job is to break the user's own network.
-        if args.gui:
-            _fail(exitcodes.USAGE,
-                  "--gui cannot be combined with other options: it opens the GUI, "
-                  "which has its own controls. Launch the GUI with no arguments, or "
-                  "drop --gui to run these settings from the command line.")
-        if args.license:
-            return _run_license(log)
-        if args.doctor:
-            return _run_doctor(log)
-        if args.cleanup_driver:
-            return _run_cleanup(log)
-
-        cfg = config_from_args(args)
-
-        if args.print_config:
-            log.data(dict(event="config", settings=cfg["settings"]),
-                     json.dumps(cfg["settings"], indent=2, sort_keys=True))
-            return exitcodes.OK
-        if cfg["save_config"]:
-            try:
-                save_config_file(cfg["save_config"], cfg["settings"])
-            except OSError as e:
-                _fail(exitcodes.IO,
-                      f"cannot save the config file {cfg['save_config']!r}: {e}")
-            log.info(f"Saved settings to {cfg['save_config']}")
-            return exitcodes.OK
-        if args.dry_run:
-            # What this gate checks is the CONFIGURATION: every value, every
-            # expression, the schedule, and the scenario file. What it does NOT
-            # check is the MACHINE - it never asks about Administrator rights or
-            # about pydivert, so on a box without them it answers OK about a
-            # command that will exit PERMISSION(7) or RUNTIME(1). That is on
-            # purpose: validating a config on a build agent and running it on
-            # another machine is a normal thing to do, and widening the check
-            # would break it. The success line names --doctor for the other half,
-            # so the pair answers the question this one alone cannot.
-            #
-            # The scenario is part of the configuration and used to be loaded
-            # only once the session started, so --dry-run reported "Configuration
-            # is valid" about a file it had never opened: a truncated, empty or
-            # non-object scenario passed the check with exit OK and then failed
-            # the real run with SCENARIO(4).
-            if cfg["scenario"]:
-                scen = _read_scenario(cfg["scenario"], log)
-                log.debug(f"scenario: {len(scen.steps)} steps, "
-                          f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
-            _log_effective_settings(log, cfg)
-            # A preview that stays quiet about the dangerous shape is a preview
-            # that misleads: "Configuration is valid" is about each value, and the
-            # warning is about the SHAPE - impairment armed, nothing aimed at,
-            # nothing to end it. This is the cheapest place a user can find that
-            # out, since --dry-run touches neither the driver nor the traffic.
-            if not cfg["simulate"]:
-                warn_if_unbounded(cfg["settings"], log.warn)
-            log.info("Configuration is valid (--dry-run: nothing was started). "
-                     "This checks the settings, not the machine - run --doctor "
-                     "for Administrator rights and the WinDivert driver.")
-            return exitcodes.OK
-
-        return _run_session(cfg, log, sleep, clock, engine)
+        try:
+            # Inside the try, and the gate opens last: a signal while the handlers
+            # were installed escaped as a traceback, or was dropped (see above).
+            _install_signal_handlers(previous_signals)
+            return _run_command(args, log, sleep, clock, engine)
+        finally:
+            # Closed HERE, before any handler below reports and before anything
+            # is released. A signal that lands on the way out - CPython runs a
+            # pending handler when a function is entered, this one included - is
+            # then still caught below: 143, with the whole cleanup. Closed only in
+            # the outer finally, it escaped run_cli as a traceback and skipped the
+            # driver release, log.close() and the restore, and an error being
+            # reported could be cut short the same way (review of #237).
+            _close_signal_gate()
     except CliError as e:
         log.error(f"error: {e.message}")
         return e.code
@@ -1179,8 +1203,7 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
         # is free where it does not matter; where it does, it is what makes the
         # tool's own directory deletable right after the process exits (the kernel
         # keeps WinDivert64.sys open - and locks the folder - while it is loaded).
-        # No signal may cut this short (see _install_signal_handlers).
-        _close_signal_gate()
+        # No signal can cut this short: the gate closed above.
         try:
             for line in driver.release_on_exit():
                 log.debug(line)
