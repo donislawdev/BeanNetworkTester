@@ -13,6 +13,36 @@
       "link_text": "Lagi w grach",
       "title": "Symulator lagów i utraty pakietów w grach",
       "description": "Daj klientowi gry ping, jitter i utratę pakietów słabego łącza, celując tylko w ten proces, i powtórz ten sam przebieg z ziarnem."
+    },
+    "zh-Hans": {
+      "slug": "youxi-yanchi-moni",
+      "title": "模拟游戏延迟和丢包",
+      "description": "只针对游戏进程，给客户端加上糟糕连接的延迟、抖动和丢包，并用随机种子重放同一次运行。",
+      "link_text": "游戏延迟"
+    },
+    "ja": {
+      "slug": "gemu-ragu-shimyureta",
+      "title": "ゲームのラグとパケットロスを再現する",
+      "description": "ゲームのクライアントだけに、悪い回線のpingとジッターとパケットロスを与えます。シードを使えば同じ実行を再現できます。",
+      "link_text": "ゲームのラグ"
+    },
+    "de": {
+      "slug": "spiele-lag-simulator",
+      "title": "Spiele-Lag und Paketverlust simulieren",
+      "description": "Gib einem Spielclient Ping, Jitter und Paketverlust einer schlechten Verbindung, nur für diesen Prozess, und wiederhole den Durchlauf mit einem Seed.",
+      "link_text": "Lag in Spielen"
+    },
+    "fr": {
+      "slug": "simulateur-de-lag-jeux",
+      "title": "Simuler le lag et la perte de paquets d’un jeu",
+      "description": "Donnez à un client de jeu le ping, la gigue et les pertes d’une mauvaise connexion, pour ce seul processus, et rejouez l’exécution avec une graine.",
+      "link_text": "Lag dans les jeux"
+    },
+    "es": {
+      "slug": "simulador-de-lag-en-juegos",
+      "title": "Simula lag y pérdida de paquetes en juegos",
+      "description": "Dale a un cliente de juego el ping, el jitter y la pérdida de paquetes de una mala conexión, solo para ese proceso, y repite la ejecución con una semilla.",
+      "link_text": "Lag en juegos"
     }
   }
 }

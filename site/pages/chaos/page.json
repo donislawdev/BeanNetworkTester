@@ -13,6 +13,36 @@
       "link_text": "Chaos testing",
       "title": "Chaos testing sieci na Windows",
       "description": "Wstrzykuj awarie sieci celowo, powtarzaj je dokładnie z ziarnem i pozwól pipeline'owi ocenić z kodu wyjścia, czy aplikacja przeżyła."
+    },
+    "zh-Hans": {
+      "slug": "wangluo-hundun-ceshi",
+      "title": "Windows 上的网络混沌测试",
+      "description": "有意注入网络故障，用随机种子精确重复，并让流水线根据退出码判断应用是否扛住了故障。",
+      "link_text": "混沌测试"
+    },
+    "ja": {
+      "slug": "nettowaku-kaosu-tesuto",
+      "title": "Windowsでのネットワークカオステスト",
+      "description": "ネットワーク障害をわざと注入し、シードで正確に繰り返し、アプリが耐えたかどうかをパイプラインが終了コードで判断できます。",
+      "link_text": "カオステスト"
+    },
+    "de": {
+      "slug": "netzwerk-chaos-tests",
+      "title": "Netzwerk-Chaos-Tests unter Windows",
+      "description": "Netzwerkfehler gezielt auslösen, mit einem Seed exakt wiederholen und die Pipeline am Exit-Code entscheiden lassen, ob die Anwendung durchgehalten hat.",
+      "link_text": "Chaos-Testing"
+    },
+    "fr": {
+      "slug": "chaos-testing-reseau",
+      "title": "Chaos testing réseau sous Windows",
+      "description": "Injectez des pannes réseau exprès, répétez-les à l’identique avec une graine, et laissez le pipeline juger d’après le code de sortie si l’application a tenu.",
+      "link_text": "Chaos testing"
+    },
+    "es": {
+      "slug": "pruebas-de-caos-de-red",
+      "title": "Pruebas de caos de red en Windows",
+      "description": "Inyecta fallos de red a propósito, repítelos exactamente con una semilla y deja que un pipeline decida por el código de salida si la aplicación resistió.",
+      "link_text": "Pruebas de caos"
     }
   }
 }

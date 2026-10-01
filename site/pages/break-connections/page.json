@@ -13,6 +13,36 @@
       "link_text": "Zrywanie połączeń",
       "title": "Zrywanie połączeń i blokowanie portów",
       "description": "Zabijaj połączenia, blokuj port albo adres, wyłączaj łącze na chwilę lub zmniejsz pakiety tak, że nic nie przechodzi, i patrz, jak aplikacja wraca."
+    },
+    "zh-Hans": {
+      "slug": "duankai-lianjie",
+      "title": "在 Windows 上断开连接并阻断端口",
+      "description": "重置连接、阻断端口或地址、让链路时断时续，或把数据包缩小到什么都过不去，看看应用如何恢复。",
+      "link_text": "断开连接"
+    },
+    "ja": {
+      "slug": "setsuzoku-setsudan",
+      "title": "Windowsで接続を切断し、ポートをブロックする",
+      "description": "接続のリセット、ポートやアドレスのブロック、回線の断続、パケットを小さくして通信を止める操作まで。アプリが回復できるかを確認します。",
+      "link_text": "接続の切断"
+    },
+    "de": {
+      "slug": "verbindungen-trennen",
+      "title": "Unter Windows Verbindungen trennen und Ports sperren",
+      "description": "Verbindungen zurücksetzen, Ports oder Adressen sperren, die Leitung unterbrechen oder Pakete verkleinern, bis nichts durchkommt: sieh, wie sich die App erholt.",
+      "link_text": "Verbindungen trennen"
+    },
+    "fr": {
+      "slug": "couper-les-connexions",
+      "title": "Couper des connexions et bloquer des ports sous Windows",
+      "description": "Réinitialisez des connexions, bloquez un port ou une adresse, coupez la liaison ou réduisez les paquets jusqu’à tout bloquer, et observez la reprise.",
+      "link_text": "Couper les connexions"
+    },
+    "es": {
+      "slug": "cortar-conexiones",
+      "title": "Corta conexiones y bloquea puertos en Windows",
+      "description": "Restablece conexiones, bloquea un puerto o una dirección, corta el enlace por ratos o reduce los paquetes hasta que nada pase, y mira cómo se recupera la app.",
+      "link_text": "Cortar conexiones"
     }
   }
 }

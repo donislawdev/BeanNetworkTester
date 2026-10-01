@@ -13,6 +13,36 @@
       "link_text": "Bez internetu",
       "title": "Test aplikacji bez internetu na Windows",
       "description": "Zabierz internet jednej aplikacji, zostawiając sieć lokalną, uczyń jedną usługę nieosiągalną albo zepsuj DNS - bez wyciągania żadnej wtyczki."
+    },
+    "zh-Hans": {
+      "slug": "lixian-ceshi",
+      "title": "在 Windows 上测试应用断网时的表现",
+      "description": "只对一个应用断开互联网而保留局域网，让某个服务无法访问，或让 DNS 失效，全程无需拔网线。",
+      "link_text": "无网络"
+    },
+    "ja": {
+      "slug": "netto-nashi-tesuto",
+      "title": "Windowsでインターネットなしのアプリ動作をテスト",
+      "description": "ローカルネットワークはそのままに、1つのアプリからインターネットだけを奪います。特定のサービスを到達不能にしたり、DNSを壊したりも、ケーブルを抜かずに可能です。",
+      "link_text": "ネットなし"
+    },
+    "de": {
+      "slug": "test-ohne-internet",
+      "title": "Eine Windows-App ohne Internet testen",
+      "description": "Nimm einer App das Internet weg, während das lokale Netz weiterläuft, mache einen Dienst unerreichbar oder lege DNS lahm, ohne ein Kabel zu ziehen.",
+      "link_text": "Ohne Internet"
+    },
+    "fr": {
+      "slug": "test-sans-internet",
+      "title": "Tester une application Windows sans internet",
+      "description": "Coupez internet pour une application tandis que le réseau local continue de fonctionner, rendez un service injoignable ou cassez le DNS, sans rien débrancher.",
+      "link_text": "Sans internet"
+    },
+    "es": {
+      "slug": "probar-sin-internet",
+      "title": "Prueba una aplicación de Windows sin internet",
+      "description": "Quita internet a una aplicación mientras la red local sigue funcionando, deja inalcanzable un servicio o rompe el DNS, sin desenchufar nada.",
+      "link_text": "Sin internet"
     }
   }
 }

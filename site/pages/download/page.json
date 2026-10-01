@@ -13,6 +13,36 @@
       "link_text": "Pobieranie",
       "title": "Pobierz Bean Network Tester na Windows",
       "description": "Darmowe pobranie na Windows 10 i 11, jako zip albo instalator. Co jest w wydaniu, jak sprawdzić, że to nasz plik, i czego program potrzebuje."
+    },
+    "zh-Hans": {
+      "slug": "xiazai",
+      "title": "下载 Windows 版 Bean Network Tester",
+      "description": "免费下载，支持 Windows 10 和 11，提供 zip 压缩包和安装程序。发行包里有什么、如何验证文件确实出自我们的构建，以及运行需要什么。",
+      "link_text": "下载"
+    },
+    "ja": {
+      "slug": "daunrodo",
+      "title": "Windows向けBean Network Testerのダウンロード",
+      "description": "Windows 10 / 11向けの無料ダウンロード。zipまたはインストーラー。リリースの内容、ビルドしたファイルかどうかの確認方法、動作要件を説明します。",
+      "link_text": "ダウンロード"
+    },
+    "de": {
+      "slug": "herunterladen",
+      "title": "Bean Network Tester für Windows herunterladen",
+      "description": "Kostenloser Download für Windows 10 und 11 als Zip oder Installer. Was im Release steckt, wie du die Datei prüfst und was zum Laufen nötig ist.",
+      "link_text": "Download"
+    },
+    "fr": {
+      "slug": "telechargement",
+      "title": "Télécharger Bean Network Tester pour Windows",
+      "description": "Téléchargement gratuit pour Windows 10 et 11, en zip ou en installeur. Contenu de la version, vérification du fichier que nous avons construit, et prérequis.",
+      "link_text": "Téléchargement"
+    },
+    "es": {
+      "slug": "descarga",
+      "title": "Descargar Bean Network Tester para Windows",
+      "description": "Descarga gratuita para Windows 10 y 11, en zip o instalador. Qué incluye la versión, cómo comprobar el archivo y qué necesita para funcionar.",
+      "link_text": "Descarga"
     }
   }
 }

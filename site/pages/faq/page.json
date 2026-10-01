@@ -13,6 +13,36 @@
       "link_text": "Pytania i odpowiedzi",
       "title": "Częste pytania o Bean Network Tester",
       "description": "Prawa administratora, czy rusza cały komputer, jak to cofnąć, ostrzeżenie SmartScreen i co program robi z Twoimi danymi."
+    },
+    "zh-Hans": {
+      "slug": "changjian-wenti",
+      "title": "关于 Bean Network Tester 的常见问题",
+      "description": "管理员权限、是否影响整台电脑、如何撤销、SmartScreen 警告，以及程序会如何处理你的数据。",
+      "link_text": "常见问题"
+    },
+    "ja": {
+      "slug": "yokuaru-shitsumon",
+      "title": "Bean Network Testerのよくある質問",
+      "description": "管理者権限、マシン全体に影響するのか、元に戻す方法、SmartScreenの警告、そしてデータの扱いについて。",
+      "link_text": "よくある質問"
+    },
+    "de": {
+      "slug": "haeufige-fragen",
+      "title": "Häufige Fragen zu Bean Network Tester",
+      "description": "Administratorrechte, ob der ganze Rechner betroffen ist, wie du alles rückgängig machst, die SmartScreen-Warnung und was das Programm mit deinen Daten macht.",
+      "link_text": "Fragen und Antworten"
+    },
+    "fr": {
+      "slug": "questions-frequentes",
+      "title": "Questions fréquentes sur Bean Network Tester",
+      "description": "Droits d’administrateur, impact sur toute la machine, comment tout annuler, avertissement SmartScreen et ce que le programme fait de vos données.",
+      "link_text": "Questions fréquentes"
+    },
+    "es": {
+      "slug": "preguntas-frecuentes",
+      "title": "Preguntas frecuentes sobre Bean Network Tester",
+      "description": "Permisos de administrador, si afecta a todo el sistema, cómo deshacerlo, el aviso de SmartScreen y qué hace el programa con tus datos.",
+      "link_text": "Preguntas y respuestas"
     }
   }
 }

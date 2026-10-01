@@ -13,6 +13,36 @@
       "link_text": "Limit prędkości",
       "title": "Limit prędkości pobierania i wysyłania aplikacji",
       "description": "Dław jedną aplikację na Windows do zadanej liczby KB na sekundę, w wybranym kierunku, i sprawdź, co robi z nią modem 56k."
+    },
+    "zh-Hans": {
+      "slug": "xianzhi-wangsu",
+      "title": "在 Windows 上限制下载和上传速度",
+      "description": "把单个 Windows 应用限制在指定的每秒 KB 数，上下行可分别设置，看看 56k 调制解调器或机上 Wi-Fi 会对它造成什么影响。",
+      "link_text": "限速"
+    },
+    "ja": {
+      "slug": "sokudo-seigen",
+      "title": "Windowsでダウンロードとアップロードの速度を制限",
+      "description": "Windowsの1つのアプリを毎秒のKB数で制限します。上りと下りは別々に設定でき、56kモデムや機内Wi-Fiのような環境を試せます。",
+      "link_text": "速度制限"
+    },
+    "de": {
+      "slug": "geschwindigkeitslimit",
+      "title": "Download- und Upload-Tempo unter Windows begrenzen",
+      "description": "Drossle eine Windows-App auf eine feste Zahl KB pro Sekunde, getrennt für beide Richtungen, und sieh, was ein 56k-Modem oder WLAN im Flugzeug mit ihr macht.",
+      "link_text": "Geschwindigkeitslimit"
+    },
+    "fr": {
+      "slug": "limite-de-debit",
+      "title": "Limiter le débit de téléchargement et d’envoi sous Windows",
+      "description": "Bridez une application Windows à un nombre fixe de KB/s, dans chaque sens, et voyez ce que lui font un modem 56k ou le Wi-Fi d’un avion.",
+      "link_text": "Limite de débit"
+    },
+    "es": {
+      "slug": "limite-de-velocidad",
+      "title": "Limita la velocidad de descarga y subida en Windows",
+      "description": "Limita una aplicación de Windows a un número fijo de KB/s, en cada sentido, y comprueba qué le hacen un módem de 56k o el Wi-Fi de un avión.",
+      "link_text": "Límite de velocidad"
     }
   }
 }

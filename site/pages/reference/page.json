@@ -13,6 +13,36 @@
       "link_text": "Tabele referencyjne",
       "title": "Profile, ustawienia i kody wyjścia",
       "description": "Każdy gotowy profil z wartościami, które ustawia, każde ustawienie z flagą, jednostką i zakresem, oraz każdy kod wyjścia linii komend."
+    },
+    "zh-Hans": {
+      "slug": "cankao-biao",
+      "title": "配置方案、设置与退出码",
+      "description": "每个现成配置方案的具体数值，每项设置对应的参数、单位和范围，以及命令行可能返回的每个退出码。",
+      "link_text": "参考表"
+    },
+    "ja": {
+      "slug": "rifarensu",
+      "title": "プロファイル・設定・終了コード一覧",
+      "description": "すべてのプロファイルの設定値、すべての設定のフラグ・単位・範囲、コマンドラインが返すすべての終了コードをまとめています。",
+      "link_text": "リファレンス表"
+    },
+    "de": {
+      "slug": "referenztabellen",
+      "title": "Profile, Einstellungen und Exit-Codes",
+      "description": "Jedes fertige Profil mit seinen Werten, jede Einstellung mit Option, Einheit und Bereich und jeder Exit-Code, den die Befehlszeile zurückgeben kann.",
+      "link_text": "Referenztabellen"
+    },
+    "fr": {
+      "slug": "tableaux-de-reference",
+      "title": "Profils, réglages et codes de sortie",
+      "description": "Chaque profil prêt à l’emploi avec ses valeurs, chaque réglage avec son option, son unité et sa plage, et chaque code de sortie de la ligne de commande.",
+      "link_text": "Tableaux de référence"
+    },
+    "es": {
+      "slug": "tablas-de-referencia",
+      "title": "Perfiles, ajustes y códigos de salida",
+      "description": "Cada perfil listo con sus valores, cada ajuste con su opción, unidad y rango, y cada código de salida que puede devolver la línea de comandos.",
+      "link_text": "Tablas de referencia"
     }
   }
 }

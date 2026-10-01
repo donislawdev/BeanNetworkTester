@@ -19,7 +19,31 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   font-size: 17px;
   line-height: 1.6;
+  /* A long German compound or a long path must wrap rather than push the page wider
+     than a phone. */
+  overflow-wrap: break-word;
 }
+
+/* -- scripts that need their own stack ------------------------------------ */
+/* The pages say which language they are in (<html lang>), and a browser usually picks
+   a fitting CJK font from that. These stacks make it a choice instead of a guess: every
+   system ships one of these, named after the script so a Japanese page never falls into
+   a Chinese design of the same character. Nothing is loaded - they are local fonts. */
+:lang(ja) body {
+  font-family: "Segoe UI", "Yu Gothic UI", "Meiryo UI", "Hiragino Sans",
+               "Noto Sans CJK JP", "Noto Sans JP", system-ui, sans-serif;
+}
+:lang(zh) body {
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+               "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+}
+/* Han and kana set at full width read best with more air between the lines, and a
+   measure counted in `ch` (the width of a "0") is half of what it means in Latin: the
+   same 62ch holds about 31 characters. */
+:lang(ja) body, :lang(zh) body { line-height: 1.8; }
+:lang(ja) :is(.lead, .note, .steps), :lang(zh) :is(.lead, .note, .steps) { max-width: 42em; }
+/* Hyphenation is what keeps a narrow card of German from ragged, one-word lines. */
+:lang(de) body { hyphens: auto; }
 
 /* Keyboard users must be able to see where they are. The program follows the same
    rule: hover is the fill, focus is the ring. */
@@ -90,6 +114,7 @@ code {
 
 .langs {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: .35rem;
   align-items: center;
 }

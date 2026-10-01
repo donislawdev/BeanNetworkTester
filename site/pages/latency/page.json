@@ -13,6 +13,36 @@
       "link_text": "Opóźnienie i jitter",
       "title": "Dodawanie opóźnienia i jittera na Windows",
       "description": "Nadaj jednej aplikacji na Windows ping odległego serwera albo tunelu w pociągu: stałe opóźnienie, losowy jitter lub skoki."
+    },
+    "zh-Hans": {
+      "slug": "yanchi-yu-doudong",
+      "title": "为 Windows 应用增加延迟和抖动",
+      "description": "让单个 Windows 应用拥有远距离服务器或火车隧道里的延迟：固定延迟、随机抖动，或偶发的延迟尖峰。",
+      "link_text": "延迟与抖动"
+    },
+    "ja": {
+      "slug": "chien-to-jitta",
+      "title": "Windowsのアプリに遅延とジッターを加える",
+      "description": "遠くのサーバーやトンネル内の列車のような遅延を、Windowsの1つのアプリに与えます。一定の遅延、ランダムなジッター、まれなスパイクに対応。",
+      "link_text": "遅延とジッター"
+    },
+    "de": {
+      "slug": "latenz-und-jitter",
+      "title": "Latenz und Jitter für eine Windows-App hinzufügen",
+      "description": "Gib einer Windows-App den Ping eines weit entfernten Servers oder eines Tunnels: mit konstanter Verzögerung, zufälligem Jitter oder gelegentlichen Spitzen.",
+      "link_text": "Latenz und Jitter"
+    },
+    "fr": {
+      "slug": "latence-et-gigue",
+      "title": "Ajouter de la latence et de la gigue à une application Windows",
+      "description": "Donnez à une application Windows le ping d’un serveur lointain ou d’un tunnel de train : délai constant, gigue aléatoire ou pics occasionnels.",
+      "link_text": "Latence et gigue"
+    },
+    "es": {
+      "slug": "latencia-y-jitter",
+      "title": "Añade latencia y jitter a una aplicación de Windows",
+      "description": "Dale a una aplicación de Windows el ping de un servidor lejano o de un túnel: con retardo constante, jitter aleatorio o picos ocasionales.",
+      "link_text": "Latencia y jitter"
     }
   }
 }

@@ -13,6 +13,36 @@
       "link_text": "Celowanie w aplikację",
       "title": "Celuj w jedną aplikację, nie w cały komputer",
       "description": "Skieruj zaburzenie na jeden proces, PID, adres albo port, żeby test psuł badaną aplikację, a resztę komputera zostawił w spokoju."
+    },
+    "zh-Hans": {
+      "slug": "zhendui-yige-yingyong",
+      "title": "在 Windows 上只针对一个应用，而不是整台电脑",
+      "description": "把弱网影响指向某个进程、PID、地址或端口，让测试只破坏被测应用，而不影响电脑上的其他程序。",
+      "link_text": "只针对一个应用"
+    },
+    "ja": {
+      "slug": "hitotsu-no-apuri",
+      "title": "マシン全体ではなく、1つのアプリだけを対象にする",
+      "description": "劣化の対象をプロセス、PID、アドレス、ポートのいずれかに絞れます。テスト対象のアプリだけを壊し、ほかの通信には影響しません。",
+      "link_text": "1つのアプリに絞る"
+    },
+    "de": {
+      "slug": "eine-app-anvisieren",
+      "title": "Unter Windows eine App anvisieren, nicht den ganzen Rechner",
+      "description": "Richte die Störung auf einen Prozess, eine PID, eine Adresse oder einen Port, damit dein Test nur die getestete App trifft und den Rest in Ruhe lässt.",
+      "link_text": "Eine App anvisieren"
+    },
+    "fr": {
+      "slug": "cibler-une-application",
+      "title": "Cibler une seule application sous Windows, pas la machine",
+      "description": "Dirigez la dégradation vers un processus, un PID, une adresse ou un port : votre test casse l’application visée et laisse le reste de la machine tranquille.",
+      "link_text": "Cibler une application"
+    },
+    "es": {
+      "slug": "apuntar-a-una-app",
+      "title": "Apunta a una sola aplicación en Windows, no a todo el sistema",
+      "description": "Dirige el deterioro a un proceso, un PID, una dirección o un puerto, para que tu prueba rompa solo la aplicación que estás probando y deje en paz el resto.",
+      "link_text": "Apuntar a una app"
     }
   }
 }

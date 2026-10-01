@@ -13,6 +13,36 @@
       "title": "Bean Network Tester - symulator słabego internetu (Windows)",
       "description": "Darmowe narzędzie dla Windows. Dodaje opóźnienie, utratę pakietów i limit prędkości wybranej aplikacji, żeby sprawdzić, jak działa przy słabym połączeniu.",
       "link_text": "Strona główna"
+    },
+    "zh-Hans": {
+      "slug": "",
+      "title": "Bean Network Tester - 在 Windows 上模拟弱网环境",
+      "description": "免费的 Windows 工具，可为单个应用增加延迟、丢包和限速，帮你测试它在糟糕网络下的表现。",
+      "link_text": "首页"
+    },
+    "ja": {
+      "slug": "",
+      "title": "Bean Network Tester - Windowsで悪いネットワークを再現",
+      "description": "1つのアプリに遅延・パケットロス・速度制限を加える無料のWindowsツール。回線が悪いときの挙動をテストできます。",
+      "link_text": "ホーム"
+    },
+    "de": {
+      "slug": "",
+      "title": "Bean Network Tester - Netzwerkprobleme unter Windows simulieren",
+      "description": "Kostenloses Windows-Tool, das einer App Verzögerung, Paketverlust und Tempolimits hinzufügt, um zu testen, wie sie bei schlechter Verbindung reagiert.",
+      "link_text": "Startseite"
+    },
+    "fr": {
+      "slug": "",
+      "title": "Bean Network Tester - simuler un mauvais réseau sous Windows",
+      "description": "Outil Windows gratuit qui ajoute latence, perte de paquets et limites de débit à une application, pour tester son comportement sur une mauvaise connexion.",
+      "link_text": "Accueil"
+    },
+    "es": {
+      "slug": "",
+      "title": "Bean Network Tester - simula una mala red en Windows",
+      "description": "Herramienta gratuita para Windows que añade lag, pérdida de paquetes y límites de velocidad a una aplicación, para probar cómo responde con una mala conexión.",
+      "link_text": "Inicio"
     }
   },
   "schema": "software_application"

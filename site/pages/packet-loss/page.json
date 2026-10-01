@@ -13,6 +13,36 @@
       "link_text": "Utrata pakietów",
       "title": "Jak symulować utratę pakietów na Windows",
       "description": "Odrzucaj ustalony procent pakietów jednej aplikacji na Windows, patrz co się psuje i powtórz ten sam przebieg z ziarnem."
+    },
+    "zh-Hans": {
+      "slug": "moni-diubao",
+      "title": "在 Windows 上为单个应用模拟丢包",
+      "description": "按设定的百分比丢弃单个 Windows 应用的数据包，观察哪里会出问题，并用随机种子重放同一次运行。",
+      "link_text": "丢包"
+    },
+    "ja": {
+      "slug": "paketto-rosu",
+      "title": "Windowsで特定のアプリにパケットロスを発生させる",
+      "description": "Windows上の1つのアプリのパケットを指定した割合で破棄し、何が壊れるかを確認します。シードを指定すれば同じ実行を再現できます。",
+      "link_text": "パケットロス"
+    },
+    "de": {
+      "slug": "paketverlust",
+      "title": "Paketverlust unter Windows für eine App simulieren",
+      "description": "Verwirf unter Windows einen festen Prozentsatz der Pakete einer App, sieh, was kaputtgeht, und wiederhole denselben Durchlauf mit einem Seed.",
+      "link_text": "Paketverlust"
+    },
+    "fr": {
+      "slug": "perte-de-paquets",
+      "title": "Simuler la perte de paquets sous Windows pour une application",
+      "description": "Abandonnez un pourcentage donné des paquets d’une application Windows, observez ce qui casse et rejouez exactement la même exécution grâce à une graine.",
+      "link_text": "Perte de paquets"
+    },
+    "es": {
+      "slug": "perdida-de-paquetes",
+      "title": "Simula pérdida de paquetes en Windows para una aplicación",
+      "description": "Descarta un porcentaje fijo de los paquetes de una aplicación en Windows, observa qué se rompe y repite exactamente la misma ejecución con una semilla.",
+      "link_text": "Pérdida de paquetes"
     }
   }
 }
