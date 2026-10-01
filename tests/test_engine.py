@@ -1616,8 +1616,10 @@ def test_simulated_inbound_traffic_comes_from_the_remote_end():
     sh = BeanEngine()
     sh.set_lan(True)                     # cut the internet: every remote here is public
     sh.start("both", divert=SyntheticDivert(gen_kbps=3000, seed=7))
-    time.sleep(1.0)
-    sh.stop()
+    try:
+        wait_until(lambda: sh.stats_snapshot()["seen"] > 50, timeout=10.0)
+    finally:
+        sh.stop()
     s = sh.stats_snapshot()
     check("--lan cuts the internet in BOTH directions",
           s["seen"] > 50 and s["bytes_in"] == 0 and s["bytes_out"] == 0,
