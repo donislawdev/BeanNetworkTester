@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>CI에서 나쁜 네트워크 시뮬레이션</h1>
+  <p class="lead">창은 선택 사항입니다. 같은 실행 파일이 명령줄 도구로 동작하고, 정해진 시간이 지나면 스스로 끝나며, 파이프라인이 읽을 수 있는 방식으로 결과를 알립니다.</p>
+</section>
+
+<section>
+  <h2>단계의 모양</h2>
+  <p>테스트하는 동안만 열화시키고 도구가 스스로 멈추게 하세요. 잊을 수 있는 정리 단계가 없습니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>셀프 호스트 Windows 러너의 GitHub Actions 작업에서:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>러너에 대해 두 가지: 트래픽 캡처에는 관리자 권한이 필요한데 호스팅 러너는 그 권한을 주지 않으므로, 이 용도는 셀프 호스트 Windows 머신에 속합니다.</p>
+</section>
+
+<section>
+  <h2>모든 종료에는 종료 코드가 있습니다</h2>
+  <p>트레이스백으로 끝나는 경우는 없습니다. 실행이 끝나는 방식마다 번호가 있어 파이프라인이 “앱이 실패했다”와 “도구를 시작할 수 없었다”를 구분할 수 있습니다:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>기계가 읽을 수 있는 출력</h2>
+  <p><code>--format json</code>은 한 줄에 JSON 객체 하나를 씁니다. 실행 중에는 샘플을, 끝에는 요약을 쓰므로 이후 단계에서 그 내용으로 검증할 수 있습니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>로그 줄은 표준 오류로, 데이터는 표준 출력으로 나가므로 데이터를 리다이렉트해도 둘이 섞이지 않습니다. <code>--seed</code>는 실행을 반복 가능하게 만들며, 불안정한(flaky) 테스트는 누군가 따지기 전에 이것이 필요합니다.</p>
+</section>
+
+<section>
+  <h2>아무것도 건드리지 않는 드라이 런</h2>
+  <p>두 플래그 덕분에 신뢰하기 전에 안전하게 연결해 볼 수 있습니다. <code>--dry-run</code>은 설정이 무엇을 하는지 보고하고 종료하며, <code>--simulate</code>는 드라이버를 불러오거나 네트워크를 건드리지 않고 합성 트래픽으로 전체 엔진을 실행합니다. 둘 다 자신이 실행되는 머신을 열화시키면 안 되는 빌드에서 유용합니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

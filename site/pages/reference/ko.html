@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>프로필, 설정, 종료 코드</h1>
+  <p class="lead">표는 세 개이며 어느 것도 손으로 쓰지 않았습니다. 이 페이지를 빌드할 때 프로그램 자체의 레지스트리에서 생성되므로 프로그램이 말하지 않는 것을 말할 수 없습니다.</p>
+</section>
+
+<section>
+  <h2>준비된 프로필</h2>
+  <p>이 중 하나를 고르면 양식이 저절로 채워집니다. 대시는 프로필이 그 설정을 건드리지 않는다는 뜻입니다. 속도 단위는 초당 킬로바이트이며, 업체가 광고하는 수치와 비교하려면 8을 곱하세요.</p>
+  {{page.preset_table}}
+  <p>프로필을 선택하면 필드만 채워집니다. {{app.buttons.start}} 버튼을 누르기 전에는 네트워크에 아무 변화도 없습니다.</p>
+</section>
+
+<section>
+  <h2>모든 설정과 그것을 지정하는 플래그</h2>
+  <p>창과 명령줄은 같은 설정을 받습니다. 각 설정이 받는 단위와 범위를 포함한 전체 목록입니다.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>종료 코드</h2>
+  <p>명령줄은 트레이스백으로 끝나는 일이 없습니다. 실행이 끝나는 방식마다 번호가 있어, 파이프라인이 실패한 애플리케이션과 시작하지 못한 도구를 구분할 수 있습니다.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>관련 문서</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

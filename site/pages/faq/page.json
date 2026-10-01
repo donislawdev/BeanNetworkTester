@@ -91,6 +91,12 @@
       "title": "Bean Network Tester के बारे में आम सवाल",
       "description": "एडमिनिस्ट्रेटर अधिकार, क्या यह पूरी मशीन को छूता है, इसे कैसे पलटें, SmartScreen की चेतावनी, और यह आपके डेटा का क्या करता है।",
       "link_text": "सवाल और जवाब"
+    },
+    "ko": {
+      "slug": "jaju-mutneun-jilmun",
+      "title": "Bean Network Tester 자주 묻는 질문",
+      "description": "관리자 권한, 컴퓨터 전체에 영향을 주는지, 되돌리는 방법, SmartScreen 경고, 프로그램이 데이터를 어떻게 다루는지 설명합니다.",
+      "link_text": "질문과 답변"
     }
   }
 }

@@ -91,6 +91,12 @@
       "title": "Windows के लिए Bean Network Tester डाउनलोड करें",
       "description": "Windows 10 और 11 के लिए मुफ़्त डाउनलोड, zip या इंस्टॉलर में। रिलीज़ में क्या है, फ़ाइल हमारी बनाई है यह कैसे जाँचें, और चलाने के लिए क्या चाहिए।",
       "link_text": "डाउनलोड"
+    },
+    "ko": {
+      "slug": "dauninrodeu",
+      "title": "Windows용 Bean Network Tester 다운로드",
+      "description": "Windows 10과 11용 무료 다운로드(zip 또는 설치 프로그램). 릴리스 구성, 직접 빌드한 파일인지 확인하는 법, 실행 요건을 안내합니다.",
+      "link_text": "다운로드"
     }
   }
 }

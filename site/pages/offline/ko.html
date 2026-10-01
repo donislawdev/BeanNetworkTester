@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>인터넷 없이 앱 테스트하기</h1>
+  <p class="lead">네트워크 케이블을 뽑으면 한 가지만 테스트됩니다. 네트워크가 전혀 없는 컴퓨터입니다. 대부분의 오프라인 버그는 그런 경우가 아닙니다. 어댑터는 켜져 있고, 와이파이 아이콘도 정상으로 보이는데, 앱에 필요한 것에만 닿을 수 없을 때 생깁니다.</p>
+</section>
+
+<section>
+  <h2>“오프라인”의 세 가지 종류</h2>
+  <table>
+    <tr><th>켜는 것</th><th>앱에 보이는 모습</th><th>찾아내는 버그</th></tr>
+    <tr><td><strong>LAN 모드</strong></td><td>로컬 네트워크는 동작합니다. 그 너머는 되지 않습니다.</td><td>로그인 전의 호텔 와이파이, 죽은 업링크, 바깥으로 나가는 경로가 없는 회사 네트워크.</td></tr>
+    <tr><td><strong>주소 차단</strong></td><td>서버 하나에 닿을 수 없습니다. 나머지는 모두 동작합니다.</td><td>앱 자체는 멀쩡한데 의존성 하나가 다운된 경우로, 헬스 체크가 보통 놓치는 상황입니다.</td></tr>
+    <tr><td><strong>포트 53 차단</strong></td><td>이름 확인이 멈추지만 주소로 하는 연결은 여전히 동작합니다.</td><td>깨진 DNS. 사용자에게는 “인터넷이 안 된다”로 보이고 로그에서는 전혀 다른 것으로 보입니다.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>명령줄에서</h2>
+  <p>앱 하나의 인터넷을 2분 동안 끊고 로컬 네트워크는 그대로 둡니다:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>서비스 하나에 닿을 수 없고 나머지는 정상입니다:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>이름 확인이 멈춥니다:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>DNS를 깨뜨렸다가 스스로 되돌리는 준비된 타임라인도 있습니다. 프로그램 옆 <code>scenarios</code> 폴더의 <code>failing-dns.json</code>입니다. <a href="../sigan-byeol-sinario/">시간별 시나리오</a>를 보세요.</p>
+</section>
+
+<section>
+  <h2>실제로 무엇을 봐야 할까</h2>
+  <ul>
+    <li><strong>메시지.</strong> 앱이 무슨 일이 일어났는지 알려 주나요, 아니면 스피너만 영원히 보여 주나요?</li>
+    <li><strong>재시도.</strong> 간격을 늘려 가며 시도하나요, 아니면 같은 주소를 반복문처럼 두드려 대나요?</li>
+    <li><strong>대기열.</strong> 사용자가 오프라인 중에 한 작업이 보존되었다가 나중에 전송되나요, 아니면 사라지나요?</li>
+    <li><strong>복구.</strong> {{app.buttons.stop}} 버튼이 네트워크를 되돌립니다. 앱이 스스로 알아차리나요, 아니면 재시작이 필요한가요?</li>
+  </ul>
+  <p>가장 가치 있는 것은 마지막 항목입니다. 오프라인이 되는 것은 서투르게 처리하기도 쉽고 테스트하기도 쉽습니다. 상태가 틀어지는 곳은 돌아올 때입니다.</p>
+</section>
+
+<section>
+  <h2>이것이 아닌 것</h2>
+  <p>어댑터는 켜져 있고 컴퓨터가 주소를 유지하므로, Windows에 “네트워크가 있나요”만 묻는 애플리케이션은 여전히 예라는 답을 받습니다. 이것은 의도된 동작이며 더 흥미로운 테스트이기도 합니다. 실제 사용자는 완전히 끊기는 일이 드뭅니다. 필요한 곳에 닿지 못하는 무언가에 연결되어 있을 뿐입니다. 특별히 “어댑터 없음” 상황을 원한다면 어댑터를 비활성화하면 되고 도구는 필요 없습니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

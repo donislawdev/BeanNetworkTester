@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>다운로드와 업로드 속도 제한</h1>
+  <p class="lead">앱 하나를 초당 정해진 킬로바이트로 제한하면 그 이상은 받지 못합니다. 두 방향은 따로 설정되므로, 다운로드는 빠르고 업로드는 형편없는 환경도 만들 수 있습니다. 대부분의 가정용·모바일 연결이 바로 그런 모습입니다.</p>
+</section>
+
+<section>
+  <h2>창에서</h2>
+  <ol class="steps">
+    <li><strong>{{app.fields.target_process}}</strong> 필드에 앱을 지정하세요.</li>
+    <li><strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> 또는 둘 다 KB/s 단위로 입력하세요. 건드리지 않을 방향은 0으로 두면 됩니다.</li>
+    <li><strong>{{app.buttons.start}}</strong> 버튼을 누르세요.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>숫자의 의미</h2>
+  <table>
+    <tr><th>KB/s</th><th>대략</th><th>무엇인지</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>전화 접속 모뎀. “{{app.presets.modem56k}}” 프로필.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>기내 와이파이, 붐비는 호텔, 약한 모바일 신호.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>평범한 가정용 회선. 동영상 한 개를 보기에 충분합니다.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>오늘날의 일반적인 유선 연결.</td></tr>
+  </table>
+  <p>킬로비트가 아니라 킬로바이트이므로, 인터넷 업체가 광고하는 수치와 비교하려면 8을 곱하세요. 두 방향을 동시에 제한해야 연결이 단순히 느린 다운로드가 아니라 나쁜 핫스팟처럼 느껴집니다.</p>
+</section>
+
+<section>
+  <h2>제한만큼 중요한 대기열</h2>
+  <p>속도 제한에는 아직 들어가지 못한 패킷을 둘 곳이 필요합니다. 그것이 밀리초 단위의 <strong>{{app.fields.buffer}}</strong> 설정이며, 계산대 앞 대기 줄처럼 동작합니다:</p>
+  <ul>
+    <li><strong>짧은 대기열</strong>은 회선이 차는 즉시 패킷을 버린다는 뜻입니다. 앱은 손실을 보고 빠르게 반응합니다.</li>
+    <li><strong>긴 대기열</strong>은 아무것도 버리지 않지만 모든 것이 기다린다는 뜻입니다. 앱은 연결이 실패하는 대신 점점 느려지는 것을 봅니다. 혼잡한 가정용 회선에서 나타나는 효과이며, 다운로드가 계속되는 동안 화상 통화가 나빠지는 이유이기도 합니다.</li>
+  </ul>
+  <p>“{{app.presets.bufferbloat}}” 프로필이 바로 이것입니다. 긴 대기열이 있는 속도 제한입니다. 같은 속도로 짧은 대기열과 긴 대기열을 번갈아 시험해 앱의 동작이 얼마나 달라지는지 확인해 보세요.</p>
+</section>
+
+<section>
+  <h2>알아 둘 점</h2>
+  <p>제한이 동작 중에도 버려진 패킷 카운터가 0으로 유지될 수 있습니다. 버그가 아닙니다. 제한은 먼저 패킷을 기다리게 하고, 대기열이 실제로 가득 찼을 때만 버립니다. 버퍼를 작게 주면 버려지는 패킷이 나타납니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Windows 네트워크 카오스 테스트</h1>
+  <p class="lead">카오스 테스트란 지켜보는 동안 일부러 무언가를 망가뜨려, 소프트웨어가 어떻게 대응하는지 알아내는 것입니다. 네트워크 계층에서는 이 도구가 바로 그 역할을 합니다. 앱 하나에 장애를 주입하고 그 앱이 버티는지 확인하는 방법입니다.</p>
+</section>
+
+<section>
+  <h2>주입할 수 있는 장애</h2>
+  <table>
+    <tr><th>장애</th><th>무엇을 모사하는가</th></tr>
+    <tr><td>손실, 손상, 중복</td><td>열화된 경로. 패킷이 사라지거나, 손상되어 도착하거나, 두 번 도착합니다.</td></tr>
+    <tr><td>지연, 지터, 스파이크</td><td>느리거나 불안정한 경로. 타임아웃을 깨는 수 초짜리 정지도 포함합니다.</td></tr>
+    <tr><td>연결 재설정</td><td>전송 도중 연결을 끊어 버리는 방화벽이나 로드 밸런서.</td></tr>
+    <tr><td>링크 끊김</td><td>경로가 주기적으로 사라졌다가 돌아옵니다.</td></tr>
+    <tr><td>차단된 주소 또는 포트</td><td>나머지는 모두 동작하는데 의존성 하나만 닿지 않습니다.</td></tr>
+    <tr><td>인터넷 끊김, LAN 유지</td><td>캡티브 포털의 모습. 로컬은 되고 바깥세상은 안 됩니다.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>카오스와 잡음의 차이: 반복 가능성</h2>
+  <p>재생할 수 없는 무작위 실패는 버그 리포트가 아니라 이야기만 남깁니다. 여기서 모든 무작위 결정은 시드에서 나오므로, 같은 명령은 같은 실행을 재현합니다. 같은 패킷 손실, 같은 지터가 같은 순서로 재현됩니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>“지난주 화요일에 한 번 죽었어요”와 다른 사람이 실행해 볼 수 있는 실패하는 테스트는 그 점에서 다릅니다.</p>
+</section>
+
+<section>
+  <h2>파이프라인에서</h2>
+  <p>명령줄은 종료 코드로 결과를 알리므로 빌드가 “애플리케이션이 실패했다”와 “도구를 시작할 수 없었다”를 구분할 수 있고, 세션은 스스로 끝나므로 잊을 수 있는 정리 단계가 없습니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>장애 하나가 아니라 장애의 연속은 시나리오 파일이며, 이것도 반복할 수 있습니다. 종료 코드와 필요한 러너는 <a href="../sigan-byeol-sinario/">시간별 시나리오</a>와 <a href="../ci-neteuwokeu-teseuteu/">CI의 네트워크 테스트</a>를 보세요.</p>
+</section>
+
+<section>
+  <h2>영향이 어디서 멈추는가</h2>
+  <p>두 가지 한계가 있으며 둘 다 의도된 것입니다. 열화는 조준했을 때 프로세스, PID, 주소, 포트 하나에만 닿으므로 작업 중인 컴퓨터는 계속 동작합니다. 그리고 대상은 컴퓨터 한 대입니다. 클러스터가 아니라 클라이언트와 그 연결을 위한 장애 주입입니다. 서비스와 노드 전반의 카오스를 찾는다면 다른 종류의 도구이며, 이 도구는 Windows 애플리케이션 하나 아래의 네트워크를 깨뜨리는 부분을 맡습니다.</p>
+  <p>모든 것은 그 자리에서 되돌릴 수 있습니다. {{app.buttons.stop}} 버튼이 네트워크를 복원하고, 시간 제한도 같은 일을 하며, 도구 자체가 죽으면 내장 워치독이 캡처를 종료합니다. 주입한 장애가 그것을 주입한 실행보다 오래 남아서는 안 됩니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

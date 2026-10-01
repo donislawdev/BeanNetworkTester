@@ -91,6 +91,12 @@
       "title": "Bean Network Tester - Windows पर खराब नेटवर्क का सिमुलेशन",
       "description": "एक ऐप में लेटेंसी, पैकेट लॉस और स्पीड सीमा जोड़ने वाला मुफ़्त Windows टूल, ताकि आप खराब कनेक्शन पर उसका व्यवहार परख सकें।",
       "link_text": "मुखपृष्ठ"
+    },
+    "ko": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows에서 나쁜 네트워크 시뮬레이션",
+      "description": "앱 하나에 지연, 패킷 손실, 속도 제한을 더하는 무료 Windows 도구입니다. 나쁜 연결에서 앱이 어떻게 동작하는지 확인하세요.",
+      "link_text": "홈페이지"
     }
   },
   "schema": "software_application"

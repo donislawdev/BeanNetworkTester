@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Windows에서 패킷 손실 시뮬레이션</h1>
+  <p class="lead">패킷 손실은 사용자가 “그냥 멈춘다”고 표현하는 장애입니다. 비율을 정하면 도구가 그만큼의 패킷을 버리고, 앱은 그것을 처리해야 합니다.</p>
+</section>
+
+<section>
+  <h2>창에서</h2>
+  <ol class="steps">
+    <li><strong>{{app.fields.target_process}}</strong> 필드에 앱을 입력하면 컴퓨터 전체가 아니라 그 앱만 영향을 받습니다.</li>
+    <li><strong>{{app.fields.loss}}</strong> 필드를 0에서 100 사이의 비율로 설정하세요. 5로 시작하세요.</li>
+    <li><strong>{{app.buttons.start}}</strong> 버튼을 누르고 앱을 사용하세요.</li>
+  </ol>
+  <p>창 상단의 표시줄은 실행 중인 내용을 요약하고, <strong>{{app.app.tabs.statistics}}</strong> 탭은 버려진 패킷 수를 셉니다.</p>
+</section>
+
+<section>
+  <h2>명령줄에서</h2>
+  <p>같은 실행 파일이 창 없이도 동작합니다. 브라우저 하나에 5퍼센트 손실을 2분 동안 주고 나면 모든 것이 저절로 정상으로 돌아옵니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>실제 트래픽을 건드리지 않고 명령을 미리 시험하려면 <code>--simulate</code>를 추가하세요.</p>
+</section>
+
+<section>
+  <h2>어떤 비율을 고를까</h2>
+  <table>
+    <tr><th>손실</th><th>체감</th></tr>
+    <tr><td>1퍼센트</td><td>좋은 연결이 겪는 나쁜 1분. 대부분의 앱은 이를 숨깁니다.</td></tr>
+    <tr><td>5퍼센트</td><td>약한 와이파이. 페이지가 느리게 열리고 영상 화질이 떨어집니다.</td></tr>
+    <tr><td>20퍼센트</td><td>붐비는 카페 핫스팟이나 열차 터널. 타임아웃이 나타나기 시작합니다.</td></tr>
+    <tr><td>60퍼센트 이상</td><td>거의 사용할 수 없습니다. 아무도 테스트한 적 없는 오류 메시지를 찾기에 좋습니다.</td></tr>
+  </table>
+  <p>준비된 프로필이 이 값을 대신 설정해 줍니다. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}”, “{{app.presets.3g}}”는 모두 지연과 속도 제한과 함께 손실 값을 가지고 있습니다.</p>
+</section>
+
+<section>
+  <h2>사람들이 놀라는 두 가지</h2>
+  <p><strong>TCP에서는 아무것도 보이지 않을 수 있습니다.</strong> TCP는 잃어버린 것을 재전송하므로 HTTPS 다운로드는 실패하는 대신 그저 느려집니다. 손실을 손실로 보고 싶다면 UDP로 동작하는 것을 테스트하세요. 음성 통화, 게임, 영상 스트림, DNS가 그렇습니다.</p>
+  <p><strong>손실은 무작위이므로 두 번의 실행은 다릅니다.</strong> 시드를 지정하면 같은 실행이 정확히 반복되며, 이것이 “한 번 깨졌다”를 다른 사람이 재현할 수 있는 버그 리포트로 바꿔 줍니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>다음</h2>
+  <p>손실만 있는 경우는 드뭅니다. 실제로 나쁜 연결은 패킷을 잃고 <em>그리고</em> 지연을 더하고 <em>그리고</em> 속도가 모자라며, 프로필이 재현하는 것이 바로 그것입니다.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>앱에 지연과 지터 추가하기</h1>
+  <p class="lead">빠른 로컬 연결에서는 모든 것이 잘 동작합니다. 앱에 핑 300 ms를 주면 응답이 즉시 도착하는 것처럼 작성된 화면이 어디인지 드러납니다.</p>
+</section>
+
+<section>
+  <h2>서로 다른 세 가지</h2>
+  <table>
+    <tr><th>설정</th><th>하는 일</th><th>실제 세계에서의 원인</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>모든 패킷에 같은 지연을 밀리초 단위로 더합니다.</td><td>거리. 다른 대륙의 서버나 위성.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>그 위에 무작위 양을 더하므로 지연이 계속 변합니다.</td><td>공유 와이파이, 모바일 네트워크, 혼잡한 모든 것.</td></tr>
+    <tr><td><strong>스파이크</strong></td><td>가끔 발생하는 긴 정지이며 빈도와 길이로 정합니다.</td><td>기지국 사이의 핸드오버, 부하가 걸린 라우터.</td></tr>
+  </table>
+  <p>셋 모두 밀리초 단위이며 함께 사용할 수 있습니다. 두 지연 값 모두 0 이상의 어떤 값이든 받으므로 그럴듯한 40 ms에서 터무니없는 60초까지 설정할 수 있습니다.</p>
+</section>
+
+<section>
+  <h2>명령줄에서</h2>
+  <p>앱 하나에 일정한 200 ms와 80 ms의 지터:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>대신 드물고 긴 정지: 패킷 스무 개 중 하나꼴로 1초씩 더 기다립니다:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>시도해 볼 만한 숫자</h2>
+  <ul>
+    <li><strong>40 ms</strong>: 같은 나라의 서버. 아무것도 변하지 않아야 합니다.</li>
+    <li><strong>150 ms</strong>: 다른 대륙. 왕복마다 비용이 들기 때문에 수다스러운 것은 모두 느리게 느껴지기 시작합니다.</li>
+    <li><strong>600 ms 이상</strong>: 정지궤도 위성 또는 기내 와이파이. 진행률 표시줄이 멈추고 재시도 로직이 마침내 실행되는 구간입니다.</li>
+  </ul>
+  <p>준비된 프로필에는 측정된 값이 들어 있습니다: “{{app.presets.distant}}”, “{{app.presets.leo}}”, “{{app.presets.satellite}}”, “{{app.presets.inflight}}”, “{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>측정: 평균이 아니라 최악의 경우를 보세요</h2>
+  <p>지터는 평균을 거의 움직이지 않으며 중앙값도 거의 움직이지 않습니다. 지터 30 ms가 있는 실행과 없는 실행이 거의 같은 “일반적인” 핑을 보고하면서도 체감은 전혀 다를 수 있습니다.</p>
+  <p>대신 <strong>95번째 백분위수와 중앙값</strong>을 비교하세요. 둘 사이의 간격이 곧 지터이며, 평균이 멀쩡해 보여도 음성 통화를 끊기게 하고 게임을 플레이할 수 없게 만드는 것이 그 간격입니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

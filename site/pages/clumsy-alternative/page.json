@@ -91,6 +91,12 @@
       "title": "Windows के लिए Clumsy का विकल्प, कमांड लाइन के साथ",
       "description": "Windows के नेटवर्क बिगाड़ने वाले टूल में क्या देखें, यह टूल केवल इंटरैक्टिव टूल से क्या ज़्यादा देता है, और कब कुछ और चुनें।",
       "link_text": "Clumsy का विकल्प"
+    },
+    "ko": {
+      "slug": "clumsy-daeche",
+      "title": "명령줄을 지원하는 Windows용 Clumsy 대안",
+      "description": "Windows 네트워크 열화 도구에서 무엇을 봐야 하는지, 대화형 도구만 있는 경우보다 이 도구가 더하는 점, 다른 도구가 나은 경우.",
+      "link_text": "Clumsy 대안"
     }
   }
 }

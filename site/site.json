@@ -93,6 +93,12 @@
       "name": "हिन्दी",
       "dir": "hi",
       "og_locale": "hi_IN"
+    },
+    {
+      "code": "ko",
+      "name": "한국어",
+      "dir": "ko",
+      "og_locale": "ko_KR"
     }
   ],
   "og_image": "assets/bean.png",

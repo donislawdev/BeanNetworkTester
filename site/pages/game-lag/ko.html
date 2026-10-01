@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>게임 랙과 패킷 손실 시뮬레이션</h1>
+  <p class="lead">넷코드는 핑 1 ms인 로컬 연결에서 작성되고 호텔 와이파이를 쓰는 플레이어가 테스트합니다. 이 도구는 그 간극을 내 컴퓨터에서, 게임 프로세스에만 적용해 메웁니다. 나머지 컴퓨터는 계속 쓸 수 있습니다.</p>
+</section>
+
+<section>
+  <h2>여기서 시작하세요</h2>
+  <p>게임 클라이언트를 대상으로 지정하고 현실적인 나쁜 연결을 준 뒤 5분 후에 스스로 멈추게 하세요:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>이를 위한 준비된 타임라인도 있습니다. <code>scenarios</code> 폴더의 <code>overloaded-game-server.json</code>은 연결을 혼잡 상태로 몰아넣었다가 되돌리므로, 클라이언트가 변화의 양방향을 어떻게 처리하는지 볼 수 있습니다. <a href="../sigan-byeol-sinario/">시간별 시나리오</a>를 보세요.</p>
+</section>
+
+<section>
+  <h2>브라우저는 괜찮은데 게임은 손실이 보이는 이유</h2>
+  <p>대부분의 게임 트래픽은 UDP이고, UDP에는 손실을 숨길 곳이 없습니다. TCP 위의 웹 페이지는 조용히 재전송하며 시간이 더 걸릴 뿐이므로, 5% 손실에서도 브라우저는 괜찮게 느껴질 수 있지만 같은 5%에서 매치는 끊기고, 캐릭터가 되돌려지고, 동기화가 어긋납니다.</p>
+  <p>그래서 게임은 손실을 정직하게 테스트할 수 있는 곳입니다. 설정한 값이 곧 클라이언트가 실제로 겪는 값입니다.</p>
+</section>
+
+<section>
+  <h2>무엇을 설정하고, 무엇이 드러나는가</h2>
+  <table>
+    <tr><th>설정</th><th>시도해 보세요</th><th>드러나는 것</th></tr>
+    <tr><td>지연</td><td>80에서 250 ms</td><td>예측과 보간. 사격 뒤에 캐릭터가 뒤로 미끄러지지 않나요?</td></tr>
+    <tr><td>지터</td><td>40에서 100 ms</td><td>버퍼링. 일정한 200 ms는 계속 움직이는 핑보다 숨기기 쉽습니다.</td></tr>
+    <tr><td>손실</td><td>2에서 10%</td><td>누락된 상태 업데이트, 그리고 클라이언트가 복구하는지 어긋나는지.</td></tr>
+    <tr><td>스파이크</td><td>1초, 드물게</td><td>기지국 핸드오버가 일으키는 정지. 보통 가장 보기 흉합니다.</td></tr>
+    <tr><td>링크 켜기와 끄기</td><td>10 s 주기, 30% 끊김</td><td>재연결과 다시 참가하기.</td></tr>
+  </table>
+  <p>지터는 평균이 아니라 95번째 백분위수와 중앙값의 차이로 측정하세요. 지터는 평균을 거의 움직이지 않으며, 그래서 실행이 표로는 같아 보여도 플레이는 다르게 느껴질 수 있습니다.</p>
+</section>
+
+<section>
+  <h2>두 빌드를 비교하려면 시드가 필요합니다</h2>
+  <p>무작위 손실 때문에 두 번의 실행이 서로 다르므로 “새 빌드가 더 나쁜 것 같다”는 증거가 되지 못합니다. 같은 시드는 같은 손실과 같은 지터를 재생하여 느낌을 비교로 바꿔 줍니다:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>할 수 없는 것</h2>
+  <p>이 도구는 <em>여러분</em> 컴퓨터의 트래픽을 가공합니다. 서버를 느리게 하지 않고, 서버의 틱 레이트를 바꾸지 않으며, 다른 플레이어를 나쁜 연결에 두지도 않으므로, 부하 상태의 서버가 아니라 나쁜 링크에 놓인 클라이언트를 테스트합니다. 서버 쪽에는 부하 테스트가 필요하고, 나쁜 연결로 가득한 로비에는 컴퓨터가 두 대 이상 필요합니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
