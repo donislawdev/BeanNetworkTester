@@ -64,7 +64,7 @@ class CliError(SystemExit):
 
 
 class _Terminated(BaseException):
-    """SIGTERM / Ctrl+Break / the console closed - the job was cancelled, stop cleanly.
+    """SIGTERM / Ctrl+Break / console window closed - the job was cancelled, stop cleanly.
 
     A BaseException, like KeyboardInterrupt and for the same reason (external
     review P2-24): as an Exception it was caught by every ``except Exception`` on
@@ -515,7 +515,7 @@ _signal_held = [None]
 # by this label - set on the handler's thread just before, read by the signal
 # handler on the main one. A list, like the gate: one write, one read, no lock.
 _CTRL_CLOSE_EVENT = 2
-_CONSOLE_CLOSED = "console closed"
+_CONSOLE_CLOSED = "console window closed"
 _console_label = [None]
 # The handler is registered once per process and never removed (removing it
 # while it runs blocks - see winenv.add_console_ctrl_handler), so it asks this
@@ -553,6 +553,11 @@ def _on_console_event(ctrl_type):
     with user32 loaded (this one has it) and which must not end a run under a
     service if they ever come.
     """
+    # Accepted race (review of #240): a close that passes this check just as the
+    # run puts its handlers back finds SIGBREAK no longer ours. interrupt_main
+    # then does nothing (or Python notes "Signal ignored due to race condition"),
+    # the hold lasts until the main thread exits with its own code, and the
+    # cleanup has already run by then.
     if ctrl_type != _CTRL_CLOSE_EVENT or not _console_active[0]:
         return False
     import signal

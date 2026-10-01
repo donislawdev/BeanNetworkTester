@@ -283,3 +283,47 @@ def test_the_theme_no_longer_calls_windows_without_a_prototype():
     names = {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
     check("it goes through the winenv factories instead",
           {"user32", "dwmapi"} <= names, f"({sorted(names & {'user32', 'dwmapi'})})")
+
+
+class _FakeConsole:
+    """``winenv.console()`` without Windows: the callback type hands the function
+    back as it is, and SetConsoleCtrlHandler answers what the test says."""
+
+    def __init__(self, accept):
+        self.accept = accept
+
+    @staticmethod
+    def HandlerRoutine(function):
+        return function
+
+    def SetConsoleCtrlHandler(self, _token, _add):
+        return self.accept
+
+
+def test_a_console_handler_windows_refuses_is_let_go_and_said(monkeypatch):
+    """Review of #240. A handler Windows refused stayed in the list that keeps
+    callbacks alive, and the CLI asks again every run, so they piled up - with
+    nothing said, although a closed console then ends the process at once. A
+    refused one is let go and recorded. An accepted one is kept for good, passes
+    its answer through, and a fault inside it, on a thread Windows created, is
+    recorded and answers False instead of escaping."""
+    recorded = []
+    monkeypatch.setattr(winenv.crashlog, "record",
+                        lambda exc, **kw: recorded.append((exc, kw.get("subsystem"))))
+    monkeypatch.setattr(winenv, "_CONSOLE_HANDLERS", [])
+    monkeypatch.setattr(winenv, "console", lambda: _FakeConsole(accept=0))
+    check("refused: no token", winenv.add_console_ctrl_handler(lambda _t: True) is None)
+    check("and nothing kept", winenv._CONSOLE_HANDLERS == [], f"({winenv._CONSOLE_HANDLERS})")
+    check("but it is said", len(recorded) == 1 and "refused" in str(recorded[0][0]),
+          f"({recorded})")
+
+    monkeypatch.setattr(winenv, "console", lambda: _FakeConsole(accept=1))
+    token = winenv.add_console_ctrl_handler(lambda ctrl_type: ctrl_type == 2)
+    check("accepted: kept for good", winenv._CONSOLE_HANDLERS == [token])
+    check("its answer goes through", token(2) is True and token(0) is False)
+
+    def fault(_ctrl_type):
+        raise RuntimeError("a fault in the handler")
+    token = winenv.add_console_ctrl_handler(fault)
+    check("a fault inside answers False", token(2) is False)
+    check("and is recorded", isinstance(recorded[-1][0], RuntimeError), f"({recorded})")

@@ -4329,6 +4329,33 @@ MUTATIONS = [
         "test": "test_the_console_handler_takes_only_a_close_during_a_run",
     },
     {
+        # Review of #240: a refused handler stayed in the keep-alive list.
+        "label": "winenv: a refused console handler is kept anyway",
+        "file": "beantester/winenv.py",
+        "old": "        _CONSOLE_HANDLERS.remove(token)\n",
+        "new": "        pass\n",
+        "test": "test_a_console_handler_windows_refuses_is_let_go_and_said",
+    },
+    {
+        "label": "winenv: a refused console handler is not said",
+        "file": "beantester/winenv.py",
+        "old": ("        crashlog.note(OSError(_last_error(), \"SetConsoleCtrlHandler refused the \"\n"
+                "                              \"console handler\"), \"winenv.console_handler\")\n"),
+        "new": "",
+        "test": "test_a_console_handler_windows_refuses_is_let_go_and_said",
+    },
+    {
+        "label": "winenv: a fault in the console handler escapes to Windows' thread",
+        "file": "beantester/winenv.py",
+        "old": ("    def call(ctrl_type):\n"
+                "        with crashlog.quiet(\"winenv.console_handler\"):\n"
+                "            return bool(handler(ctrl_type))\n"
+                "        return False\n"),
+        "new": ("    def call(ctrl_type):\n"
+                "        return bool(handler(ctrl_type))\n"),
+        "test": "test_a_console_handler_windows_refuses_is_let_go_and_said",
+    },
+    {
         # External review P2-19: Tab to "No", Enter answered "Yes" - on closing
         # the window during a session and on unloading the driver.
         "label": "dialogs: Enter presses the default whatever has the focus",

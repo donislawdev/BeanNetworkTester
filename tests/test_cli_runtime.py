@@ -1187,7 +1187,7 @@ def test_closing_the_console_ends_the_run_with_its_cleanup(monkeypatch):
     check("as a SIGBREAK for the main thread", asked == [signal.SIGBREAK], f"({asked})")
     check("the run ends terminated: 143", code == exitcodes.TERMINATED,
           f"(code={code}, err={err.getvalue()!r})")
-    check("named for what happened", "Terminated (console closed)." in err.getvalue(),
+    check("named for what happened", "Terminated (console window closed)." in err.getvalue(),
           f"({err.getvalue()!r})")
     check("with its summary", len(summary) == 1
           and summary[0]["stop_reason"] == "terminated", f"({summary!r})")
@@ -1223,7 +1223,7 @@ def test_the_console_handler_takes_only_a_close_during_a_run(monkeypatch):
     check("a close is taken", cli_module._on_console_event(2) is True)
     check("handed over as SIGBREAK, named, with the process held",
           asked == [signal.SIGBREAK] and held == [cli_module._CONSOLE_HOLD_S]
-          and cli_module._console_label[0] == "console closed", f"({asked}, {held})")
+          and cli_module._console_label[0] == "console window closed", f"({asked}, {held})")
     cli_module._console_active[0] = False
     check("outside a run a close goes on too", cli_module._on_console_event(2) is False)
     check("without a word to the main thread", asked == [signal.SIGBREAK], f"({asked})")

@@ -234,17 +234,28 @@ def add_console_ctrl_handler(handler):
     if lib is None:
         return None
 
-    def call(ctrl_type):  # pragma: no cover - Windows only (called by Windows)
+    def call(ctrl_type):
         with crashlog.quiet("winenv.console_handler"):
             return bool(handler(ctrl_type))
         return False
 
-    with crashlog.quiet("winenv.console_handler"):  # pragma: no cover - Windows only
+    with crashlog.quiet("winenv.console_handler"):
         token = lib.HandlerRoutine(call)
         _CONSOLE_HANDLERS.append(token)          # kept BEFORE Windows can call it
         if lib.SetConsoleCtrlHandler(token, True):
             return token
-    return None  # pragma: no cover - Windows only (refused)
+        # Refused: never on the list, so Windows cannot call it - let it go, or a
+        # caller that asks again every run piles them up (review of #240). And say
+        # so, since the console's close will end the process at once as before.
+        _CONSOLE_HANDLERS.remove(token)
+        crashlog.note(OSError(_last_error(), "SetConsoleCtrlHandler refused the "
+                              "console handler"), "winenv.console_handler")
+    return None
+
+
+def _last_error():
+    import ctypes
+    return ctypes.get_last_error() if hasattr(ctypes, "get_last_error") else 0
 
 
 # What the prototype guard walks. A factory added here without an entry is a
