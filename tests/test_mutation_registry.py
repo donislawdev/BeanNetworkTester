@@ -5820,9 +5820,17 @@ MUTATIONS = [
         # P3-41: every clean exit - a --doctor too - took whatever breadcrumb was there.
         "label": "crashlog: a clean exit takes any breadcrumb, not only its own",
         "file": "beantester/crashlog.py",
-        "old": "    if _written_here(path):\n",
+        "old": "    if wrote and _written_here(path):\n",
         "new": "    if os.path.exists(path):\n",
         "test": "test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running",
+    },
+    {
+        # P3-41: pids come back within seconds, so the pid alone is not "ours".
+        "label": "crashlog: a pid handed out again owns a crashed copy's breadcrumb",
+        "file": "beantester/crashlog.py",
+        "old": "    if wrote and _written_here(path):\n",
+        "new": "    if _written_here(path):\n",
+        "test": "test_a_clean_exit_leaves_a_crashed_copys_breadcrumb_that_had_our_pid",
     },
     {
         # P3-41: one name for every copy, so "ours" is the pid in it.

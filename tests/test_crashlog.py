@@ -946,6 +946,20 @@ def test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours(isolated)
     assert os.path.exists(path), "a clean exit took the breadcrumb another copy wrote last"
 
 
+def test_a_clean_exit_leaves_a_crashed_copys_breadcrumb_that_had_our_pid(isolated):
+    """Windows hands a pid out again within seconds (measured 19-36 s for the
+    external review, P2-9). A GUI that crashed natively leaves a breadcrumb naming
+    its pid; a ``--doctor`` given that pid later never wrote one, and must not take
+    the crash's evidence with it on the way out."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    path = _breadcrumb_of_another_copy(pid_offset=0)    # this pid, written by a dead copy
+
+    crashlog._cleanup_native()
+
+    assert os.path.exists(path), "a process that wrote no breadcrumb took one naming its pid"
+
+
 def test_a_temp_breadcrumb_another_copy_is_writing_survives_a_clean_exit(isolated):
     """A temp file lives for milliseconds between its create and its replace. The
     sweep took it anyway, and the other copy's replace then failed."""

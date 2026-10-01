@@ -664,9 +664,10 @@ def _cleanup_native():
         faulthandler.disable()
     except Exception:
         pass
+    wrote = _breadcrumb_last is not None
     _breadcrumb_last = None
     directory = crash_dir()
-    _sweep_breadcrumbs(directory)
+    _sweep_breadcrumbs(directory, wrote)
     stream, path = _native_stream, _native_path
     _native_stream = _native_path = None
     if stream is not None:
@@ -687,14 +688,16 @@ def _cleanup_native():
         pass
 
 
-def _sweep_breadcrumbs(directory):
+def _sweep_breadcrumbs(directory, wrote):
     """Remove this process's breadcrumb and the temp files no writer is using.
 
     The breadcrumb has ONE name for every copy of the program, so it goes only
-    when it says it is ours (``pid``). Reading and then removing leaves a window
-    of microseconds in which another copy can replace it; that copy then loses
-    one breadcrumb until its state changes, which is what used to happen on
-    every exit.
+    when this process wrote one (``wrote``) AND the file still names its ``pid``.
+    The pid alone is not enough: Windows hands a pid out again within seconds, so
+    a ``--doctor`` given the pid of a GUI that crashed would take that crash's
+    breadcrumb. Reading and then removing leaves a window of microseconds in
+    which another copy can replace it; that copy then loses one breadcrumb until
+    its state changes, which is what used to happen on every exit.
 
     A temp file is unique per writer (``paths.temp_beside``) and lives for
     milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
@@ -704,7 +707,7 @@ def _sweep_breadcrumbs(directory):
     an older version (fixed ``breadcrumb.json.tmp``) goes the same way.
     """
     path = os.path.join(directory, BREADCRUMB_NAME)
-    if _written_here(path):
+    if wrote and _written_here(path):
         try:
             os.remove(path)
         except OSError:
