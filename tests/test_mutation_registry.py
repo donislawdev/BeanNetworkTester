@@ -4269,6 +4269,66 @@ MUTATIONS = [
         "test": "test_a_report_taken_a_hair_before_its_tick_is_that_tick_and_not_taken_twice",
     },
     {
+        # P2-20: closing the console ended the process before any Python ran.
+        "label": "cli: the console handler is never registered",
+        "file": "beantester/cli.py",
+        "old": "            _console_token[0] = winenv.add_console_ctrl_handler(_on_console_event)\n",
+        "new": "            pass\n",
+        "test": "test_closing_the_console_ends_the_run_with_its_cleanup",
+    },
+    {
+        "label": "cli: a closed console is not handed to the main thread",
+        "file": "beantester/cli.py",
+        "old": "    _interrupt_main(signal.SIGBREAK)\n",
+        "new": "    pass\n",
+        "test": "test_closing_the_console_ends_the_run_with_its_cleanup",
+    },
+    {
+        "label": "cli: a closed console is called Ctrl+Break",
+        "file": "beantester/cli.py",
+        "old": ("        if signum == breaks and _console_label[0]:   # see _on_console_event\n"
+                "            label = _console_label[0]\n"),
+        "new": "",
+        "test": "test_closing_the_console_ends_the_run_with_its_cleanup",
+    },
+    {
+        "label": "cli: the run leaves the console handler taking closes",
+        "file": "beantester/cli.py",
+        "old": "    _console_active[0] = False\n    # Left installed, the handler outlived",
+        "new": "    pass\n    # Left installed, the handler outlived",
+        "test": "test_closing_the_console_ends_the_run_with_its_cleanup",
+    },
+    {
+        "label": "cli: a closed console names the next run's Ctrl+Break",
+        "file": "beantester/cli.py",
+        "old": "    _console_active[0] = False\n    _console_label[0] = None\n",
+        "new": "    _console_active[0] = False\n",
+        "test": "test_closing_the_console_ends_the_run_with_its_cleanup",
+    },
+    {
+        # First in the list, the handler would swallow what Python handles itself.
+        "label": "cli: the console handler takes Ctrl+C and Ctrl+Break too",
+        "file": "beantester/cli.py",
+        "old": "    if ctrl_type != _CTRL_CLOSE_EVENT or not _console_active[0]:\n",
+        "new": "    if not _console_active[0]:\n",
+        "test": "test_the_console_handler_takes_only_a_close_during_a_run",
+    },
+    {
+        "label": "cli: the console handler takes a close outside a run",
+        "file": "beantester/cli.py",
+        "old": "    if ctrl_type != _CTRL_CLOSE_EVENT or not _console_active[0]:\n",
+        "new": "    if ctrl_type != _CTRL_CLOSE_EVENT:\n",
+        "test": "test_the_console_handler_takes_only_a_close_during_a_run",
+    },
+    {
+        # Returning ends the process at once: no cleanup, exit 0xC000013A.
+        "label": "cli: the console handler returns without holding the process",
+        "file": "beantester/cli.py",
+        "old": "    _hold_the_process(_CONSOLE_HOLD_S)\n",
+        "new": "    pass\n",
+        "test": "test_the_console_handler_takes_only_a_close_during_a_run",
+    },
+    {
         # External review P2-19: Tab to "No", Enter answered "Yes" - on closing
         # the window during a session and on unloading the driver.
         "label": "dialogs: Enter presses the default whatever has the focus",

@@ -30,6 +30,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Closing the console window stops a command-line run cleanly.** Closing the window ended
+  the program at once: no summary, no `--repro-out` report, and after a real capture the
+  WinDivert driver stayed loaded. It now ends the run the way Ctrl+Break does: the capture
+  stops, the reports and `--log-file` are written, the driver is unloaded, and the exit code is
+  `143`. Windows allows about 5 seconds for this. Signing out or shutting down still ends the
+  program at once.
+
 - **`--cleanup-driver` and "Clean up the driver" say what really happened.** Every line
   said "stopped", also when Windows refused the stop, for example while another program
   was still using the driver. Each line now says whether the WinDivert service stopped,

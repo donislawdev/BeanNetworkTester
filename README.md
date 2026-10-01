@@ -795,7 +795,7 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 | `6` | assertion | the run succeeded but `--min-packets` / `--fail-on-no-traffic` did not pass |
 | `7` | permission | administrator rights are required and missing |
 | `130` | interrupted | Ctrl+C (SIGINT) |
-| `143` | terminated | SIGTERM (job cancellation, `docker stop`) or Ctrl+Break |
+| `143` | terminated | SIGTERM (job cancellation, `docker stop`), Ctrl+Break, or closing the console window |
 
 `BeanNetworkTester.exe --help` prints the same codes.
 
@@ -1279,6 +1279,12 @@ for normal operation.
   timeline: `--scenario` with a file that does not loop and has more than one step now ends the
   run when the scenario ends, and says so at the start. A looping or single-step scenario has no
   end to stop at, so it warns and keeps going until you stop it.
+- **Closing the console window stops a run cleanly, signing out does not.** Closing the window
+  ends the run the way Ctrl+Break does: the capture stops, `--repro-out` and `--log-file` are
+  written, the WinDivert driver is unloaded, and the exit code is `143`. Windows waits only about
+  5 seconds for this. Signing out or shutting down ends the program at once. Windows still closes
+  its capture, so no traffic stays impaired, but after signing out the driver can stay loaded until
+  `--cleanup-driver` or a restart.
 - **No traffic = a green run.** If the filter catches not a single packet, the program works
   correctly and exits with code `0`. Want that to be an error -> `--fail-on-no-traffic`.
 - **The traffic filter and duration take effect only from START** (as in the GUI): "Apply changes"
