@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>只针对一个应用，而不是整台机器</h1>
+  <p class="lead">没有目标时，电脑上的每个连接都会受影响，包括你正在使用的远程桌面，以及用来下载修复程序的下载。有了目标，只有一个进程会得到糟糕的网络，其他一切照常进行。</p>
+</section>
+
+<section>
+  <h2>按进程</h2>
+  <p>在<strong>{{app.fields.target_process}}</strong>中输入一个名称，或者传入 <code>--target</code>。仅写名称时按片段匹配，所以 <code>chrome</code> 会匹配 <code>chrome.exe</code>：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>它会跟随进程树，这对会派生子进程的程序很重要：浏览器为每个标签页打开一个进程，这些进程也会受到影响。</p>
+  <p>这个字段可以接受不止一个名称，也可以同时接受不止一种内容：</p>
+  <table>
+    <tr><th>你输入的内容</th><th>含义</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>两个应用。</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome，但绝不包括驱动程序。排除优先。</td></tr>
+    <tr><td><code>my*.exe</code></td><td>所有以“my”开头的程序。</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>正则表达式，用于通配符不够用的情形。</td></tr>
+    <tr><td><code>4812</code></td><td>单个进程 ID。</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>所有大于 1000 的进程 ID。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>按地址或端口</h2>
+  <p>有时关注的单位不是应用，而是某一台服务器。这些参数接受同样的列表、范围和排除语法，并支持 CIDR 和 IPv6：</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>第二条值得了解：除 DNS 之外的所有流量。把目标<em>排除</em>某个端口，往往比列出你想要的那些端口更容易。</p>
+</section>
+
+<section>
+  <h2>按名称指定进程，在它重启后依然有效</h2>
+  <p>在会话运行期间重启应用，按<strong>名称</strong>指定的目标会重新找到新进程。按<strong>进程 ID</strong>指定的目标则做不到，因为那个 ID 属于已经退出的进程。Windows 之后把同一个 ID 分配给的另一个程序同样不会受到影响。如果你的测试会重启被测对象，请按名称指定目标。</p>
+</section>
+
+<section>
+  <h2>不应忽视的警告</h2>
+  <p>在开启影响、没有可瞄准的目标且没有时间限制的情况下启动，窗口和命令行都会提示：这会影响这台机器上的每个连接。这是警告，而不是拒绝，有时这正是你想要的。如果不是，请设置目标或 <code>--duration</code>，而{{app.buttons.stop}}始终会把一切恢复原状。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Les questions que l’on pose en premier</h1>
+  <p class="lead">Celles qui valent mieux une réponse avant le téléchargement qu’après.</p>
+</section>
+
+<section>
+  <h2>Pourquoi faut-il des droits d’administrateur ?</h2>
+  <p>Parce que les paquets sont interceptés par un pilote noyau, et que Windows n’en charge pas pour un utilisateur ordinaire. Le programme demande lui-même ces droits au démarrage. En ligne de commande, il refuse avec un code de sortie précis au lieu d’échouer en cours de route.</p>
+</section>
+
+<section>
+  <h2>Va-t-il casser toute la machine ou seulement mon application ?</h2>
+  <p>Ce que vous visez. Définissez une cible et seule cette application est touchée. Laissez la cible vide et toutes les connexions de l’ordinateur le sont, ce dont le programme vous avertit, dans la fenêtre comme en ligne de commande, avant que vous ne vous demandiez pourquoi l’appel vidéo a coupé.</p>
+</section>
+
+<section>
+  <h2>Comment annuler ?</h2>
+  <p>{{app.buttons.stop}}. Fermer le programme fait la même chose, tout comme une limite de durée si vous en avez fixé une. Si l’outil lui-même meurt en pleine session, un chien de garde intégré arrête la capture au lieu de laisser votre réseau dégradé : une session ne doit jamais survivre au programme qui l’a lancée.</p>
+</section>
+
+<section>
+  <h2>Envoie-t-il quoi que ce soit quelque part ?</h2>
+  <p>Non. Il n’y a ni statistiques d’usage, ni rapport de plantage vers un service, ni vérification de mises à jour. Le programme n’a aucun client réseau. La seule connexion sortante qu’il peut établir est l’ouverture de la page d’assistance dans votre navigateur, après un clic de votre part. Il intercepte votre trafic, donc ce trafic ne doit jamais quitter votre machine, et cette page que vous lisez ne charge rien non plus depuis un autre site.</p>
+</section>
+
+<section>
+  <h2>Windows m’a averti à propos du téléchargement. Pourquoi ?</h2>
+  <p>Le programme est signé, donc l’avertissement indique qui l’a signé au lieu d’afficher « Éditeur inconnu ». SmartScreen peut encore avertir un certain temps, car le certificat est récent et il ne l’a pas souvent rencontré. Certains antivirus peuvent aussi réagir à un programme qui demande des droits d’administrateur et charge un pilote réseau. Chaque version publie une somme de contrôle SHA-256 et une liste signée de ses composants, pour que vous puissiez vérifier ce que vous avez téléchargé au lieu de vous fier à une coche verte.</p>
+</section>
+
+<section>
+  <h2>Mon téléchargement est mort et rien n’en indique la raison</h2>
+  <p>Vérifiez la taille de paquet maximale. Réglée assez bas, ce n’est plus un paquet plus petit, c’est un trou noir : le réseau jette ce qui est trop gros et ne le signale jamais. Remettez-la comme avant et le transfert revient.</p>
+</section>
+
+<section>
+  <h2>Fonctionne-t-il sous Linux ou macOS ?</h2>
+  <p>Non, et cela ne changera pas. Il repose sur un pilote noyau Windows. Sous Linux, <code>tc</code> avec <code>netem</code> fait ce travail et est déjà installé.</p>
+</section>
+
+<section>
+  <h2>Est-il vraiment gratuit ? Puis-je l’utiliser au travail ?</h2>
+  <p>Oui. Il est gratuit et open source sous GNU GPL v3, y compris au travail, avec le code source disponible pour que tout le monde puisse le lire ou le modifier. Le téléchargement est le même fichier pour tout le monde.</p>
+</section>
+
+<section>
+  <h2>Plus</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

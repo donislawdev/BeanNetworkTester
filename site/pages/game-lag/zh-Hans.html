@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>模拟游戏延迟和丢包</h1>
+  <p class="lead">网络代码是在 ping 只有 1 ms 的本地连接上写的，却由酒店 Wi-Fi 上的玩家来测试。本工具在你自己的机器上弥合这一差距，只针对游戏进程，电脑的其余部分仍可正常使用。</p>
+</section>
+
+<section>
+  <h2>从这里开始</h2>
+  <p>瞄准游戏客户端，给它一个真实的糟糕连接，并让它在五分钟后自行停止：</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>这方面也有现成的时间线：<code>scenarios</code> 文件夹里的 <code>overloaded-game-server.json</code> 会让连接陷入拥塞再恢复，你可以看到客户端如何应对这两个方向的变化。参见<a href="../dingshi-changjing/">定时场景</a>。</p>
+</section>
+
+<section>
+  <h2>为什么游戏会出现丢包，而浏览器不会</h2>
+  <p>大多数游戏流量是 UDP，而 UDP 没有任何东西可以用来掩盖丢包。通过 TCP 加载网页时会悄悄重传，只是花的时间更长，这就是为什么 5% 丢包时浏览器可能感觉还行，而同样 5% 的一局游戏却会卡顿、回拉并且失去同步。</p>
+  <p>这使游戏成为测试丢包最诚实的地方：你设置的，就是客户端实际经历的。</p>
+</section>
+
+<section>
+  <h2>该设置什么，它能检验什么</h2>
+  <table>
+    <tr><th>设置</th><th>建议值</th><th>它暴露什么问题</th></tr>
+    <tr><td>延迟</td><td>80 到 250 ms</td><td>预测与插值。开枪之后你的角色会被拉回去吗？</td></tr>
+    <tr><td>抖动</td><td>40 到 100 ms</td><td>缓冲。稳定的 200 ms 比不断变化的 ping 更容易掩盖。</td></tr>
+    <tr><td>丢包</td><td>2% 到 10%</td><td>缺失的状态更新，以及客户端是能恢复还是会逐渐偏离。</td></tr>
+    <tr><td>尖峰</td><td>偶尔出现的 1 秒</td><td>基站切换造成的停顿。通常是最难看的一种。</td></tr>
+    <tr><td>链路时通时断</td><td>10 秒周期，30% 时间中断</td><td>重连与重新加入。</td></tr>
+  </table>
+  <p>衡量抖动时，请看第 95 百分位与中位数之间的差距，而不是平均值：抖动几乎不会改变平均值，这就是为什么一次运行在纸面上看起来相同，玩起来却不一样。</p>
+</section>
+
+<section>
+  <h2>比较两个版本需要随机种子</h2>
+  <p>随机丢包会让两次运行不同，所以“新版本感觉更差”并不是证据。同一个随机种子会重放同样的丢包和同样的抖动，把一种感觉变成一次对比：</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>它做不到什么</h2>
+  <p>它塑造的是<em>你的</em>机器的流量。它不会让服务器变慢，不会改变服务器的 tick 速率，也不会让其他玩家处于糟糕的连接中，所以它测试的是你的客户端面对糟糕链路的表现，而不是你的服务器在负载下的表现。服务器端需要的是负载测试，而要让整个大厅都是糟糕的连接，你需要不止一台机器。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

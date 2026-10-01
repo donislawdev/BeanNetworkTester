@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simuler le lag et la perte de paquets d’un jeu</h1>
+  <p class="lead">Le netcode s’écrit sur une connexion locale à 1 ms de ping et se teste avec des joueurs sur le Wi-Fi d’un hôtel. Cet outil comble cet écart sur votre propre machine, sur le seul processus du jeu, tandis que le reste de l’ordinateur reste utilisable.</p>
+</section>
+
+<section>
+  <h2>Pour commencer</h2>
+  <p>Visez le client du jeu, donnez-lui une mauvaise connexion réaliste et laissez-le s’arrêter de lui-même au bout de cinq minutes :</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Il existe aussi une chronologie prête à l’emploi : <code>overloaded-game-server.json</code>, dans le dossier <code>scenarios</code>, conduit une connexion jusqu’à la congestion puis l’en ramène, pour que vous voyiez comment le client gère les deux sens du changement. Voir <a href="../scenarios-dans-le-temps/">scénarios temporels</a>.</p>
+</section>
+
+<section>
+  <h2>Pourquoi un jeu montre de la perte alors qu’un navigateur non</h2>
+  <p>La plupart du trafic de jeu est de l’UDP, et l’UDP n’a rien derrière quoi cacher la perte. Une page web en TCP retransmet discrètement et met simplement plus de temps, ce qui explique qu’un navigateur puisse sembler correct à 5 % de perte alors qu’une partie, avec ces mêmes 5 %, saccade, revient en arrière et se désynchronise.</p>
+  <p>Cela fait d’un jeu l’endroit honnête pour tester la perte : ce que vous réglez est ce que le client vit réellement.</p>
+</section>
+
+<section>
+  <h2>Quoi régler, et ce que cela met à l’épreuve</h2>
+  <table>
+    <tr><th>Réglage</th><th>À essayer</th><th>Ce que cela révèle</th></tr>
+    <tr><td>Latence</td><td>80 à 250 ms</td><td>Prédiction et interpolation. Votre personnage glisse-t-il en arrière après un tir ?</td></tr>
+    <tr><td>Gigue</td><td>40 à 100 ms</td><td>Mise en tampon. Un 200 ms constant se cache plus facilement qu’un ping qui bouge sans cesse.</td></tr>
+    <tr><td>Perte</td><td>2 à 10 %</td><td>Les mises à jour d’état manquantes, et si le client se rétablit ou dérive.</td></tr>
+    <tr><td>Pics</td><td>1 seconde, rarement</td><td>Le blocage que provoque un transfert entre antennes-relais. Souvent le plus moche.</td></tr>
+    <tr><td>Liaison coupée puis rétablie</td><td>cycle de 10 s, 30 % hors service</td><td>Reconnexion et retour dans la partie.</td></tr>
+  </table>
+  <p>Mesurez la gigue comme l’écart entre le 95e centile et la médiane plutôt que comme une moyenne : la gigue modifie à peine une moyenne, ce qui explique qu’une exécution puisse sembler identique sur le papier et se jouer différemment.</p>
+</section>
+
+<section>
+  <h2>Comparer deux versions demande une graine</h2>
+  <p>Une perte aléatoire rend deux exécutions différentes, donc « la nouvelle version me semble moins bonne » n’est pas une preuve. La même graine rejoue la même perte et la même gigue, ce qui transforme une impression en comparaison :</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Ce qu’il ne peut pas faire</h2>
+  <p>Cela façonne le trafic de <em>votre</em> machine. Il ne ralentit pas le serveur, ne change pas son taux de tick et ne met pas les autres joueurs sur une mauvaise connexion : il teste donc votre client face à une mauvaise liaison, pas votre serveur sous charge. Pour le côté serveur, il faut des tests de charge, et pour un salon plein de mauvaises connexions, il faut plus d’une machine.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

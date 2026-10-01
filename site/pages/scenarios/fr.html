@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Faire évoluer les conditions réseau au fil du temps</h1>
+  <p class="lead">Une perte fixe de 10 % est une condition de laboratoire. Les vraies connexions se dégradent, se rétablissent, se figent quatre secondes et reviennent, et le bug que vous traquez se trouve généralement dans le changement, pas dans l’état stable.</p>
+</section>
+
+<section>
+  <h2>Un scénario est une chronologie</h2>
+  <p>Un fichier JSON. Chaque étape dit <em>à cette seconde, ces réglages</em>, et tout ce que vous ne mentionnez pas garde sa valeur :</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Les temps sont des secondes depuis le début de l’exécution, pas des intervalles entre étapes. Avec <code>"loop": true</code>, la chronologie recommence quand elle se termine, ce qui convient à un long test d’endurance : laissez-la tourner et utilisez l’application.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} scénarios prêts à l’emploi sont fournis avec le programme</h2>
+  <p>Dans le dossier <code>scenarios</code> à côté de l’exécutable. Lus depuis ces fichiers, c’est donc bien ce que vous avez réellement :</p>
+  {{page.scenario_table}}
+  <p>Ce sont de simples fichiers texte : ouvrez-en un, changez un nombre, enregistrez. Les noms disent ce qu’ils reproduisent : un café bondé, une connexion mobile qui passe de la LTE à la 3G, un envoi qui meurt à mi-chemin, un serveur qui se surcharge, un DNS qui ne répond plus.</p>
+</section>
+
+<section>
+  <h2>Deux façons plus simples d’obtenir du changement</h2>
+  <p>Un scénario vaut la peine d’être écrit quand l’enchaînement compte. Quand ce n’est pas le cas, deux réglages varient d’eux-mêmes :</p>
+  <ul>
+    <li><strong>Liaison coupée puis rétablie</strong> : une durée de cycle et la part de ce cycle passée hors service. Des cycles de dix secondes, quatre secondes hors service, indéfiniment.</li>
+    <li><strong>Un plan de débit</strong> : une série de vitesses que parcourt la limite, de sorte que la connexion se dégrade et se rétablit sans fichier.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Pourquoi cela fonctionne pendant que l’application tourne</h2>
+  <p>Chaque réglage qu’un scénario touche est appliqué en direct à la session déjà en cours : l’application n’a pas besoin d’être redémarrée, l’outil non plus. Le journal d’événements consigne chaque étape au moment où elle se produit, si bien que lorsque quelque chose casse, vous voyez à quel changement cela a succédé. Associez cela à une graine et toute la séquence, y compris la perte aléatoire qu’elle contient, se répète à l’identique.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

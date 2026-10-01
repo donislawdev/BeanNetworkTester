@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simular una mala red en CI</h1>
+  <p class="lead">La ventana es opcional. El mismo ejecutable funciona como herramienta de línea de comandos, termina por sí solo pasado un tiempo fijado e informa de lo ocurrido de una forma que un pipeline puede leer.</p>
+</section>
+
+<section>
+  <h2>La forma de un paso</h2>
+  <p>Deteriora durante lo que dure la prueba y deja que se detenga solo. No hay ningún paso de limpieza que olvidar:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>En un job de GitHub Actions, en un runner de Windows autoalojado:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Dos cosas sobre el runner: capturar tráfico necesita permisos de administrador, y un runner alojado no te los dará, así que esto pertenece a una máquina Windows autoalojada.</p>
+</section>
+
+<section>
+  <h2>Cada final tiene un código de salida</h2>
+  <p>Nada termina con un traceback. Cada forma en que puede acabar una ejecución tiene un número, así que un pipeline puede distinguir «tu aplicación falló» de «la herramienta no pudo arrancar»:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Salida legible por máquinas</h2>
+  <p><code>--format json</code> escribe un objeto JSON por línea: muestras mientras corre la ejecución y un resumen al final, para que un paso posterior pueda hacer aserciones sobre él:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Las líneas de registro van a la salida de error estándar y los datos a la salida estándar, así que redirigir los datos nunca mezcla ambas. <code>--seed</code> hace la ejecución repetible, que es lo que necesita una prueba inestable antes de que nadie pueda discutir.</p>
+</section>
+
+<section>
+  <h2>Una ejecución de prueba que no toca nada</h2>
+  <p>Dos opciones hacen seguro conectarlo antes de confiar en él: <code>--dry-run</code> informa de lo que harían los ajustes y termina, y <code>--simulate</code> ejecuta todo el motor contra tráfico sintético, sin cargar el controlador y sin tocar la red. Ambas son útiles en una compilación que no debe deteriorar la máquina en la que se ejecuta.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

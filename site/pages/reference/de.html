@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profile, Einstellungen und Exit-Codes</h1>
+  <p class="lead">Drei Tabellen, keine davon von Hand getippt. Sie werden beim Bau dieser Seite aus den eigenen Registern des Programms erzeugt, sodass sie nichts sagen können, was das Programm nicht sagt.</p>
+</section>
+
+<section>
+  <h2>Fertige Profile</h2>
+  <p>Wähle eines davon, und das Formular füllt sich von selbst. Ein Strich bedeutet, dass das Profil diese Einstellung unberührt lässt. Die Geschwindigkeiten sind in Kilobyte pro Sekunde angegeben: Multipliziere mit acht, um sie mit dem zu vergleichen, was ein Provider bewirbt.</p>
+  {{page.preset_table}}
+  <p>Ein Profil auszuwählen, füllt nur die Felder. Im Netzwerk ändert sich nichts, bis du {{app.buttons.start}} drückst.</p>
+</section>
+
+<section>
+  <h2>Jede Einstellung und die Option, die sie setzt</h2>
+  <p>Das Fenster und die Befehlszeile nehmen dieselben Einstellungen. Das ist die vollständige Liste, mit der Einheit und dem Bereich, die jede akzeptiert.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Exit-Codes</h2>
+  <p>Die Befehlszeile endet nie mit einem Traceback. Jede Art, wie ein Durchlauf enden kann, hat eine Nummer, sodass eine Pipeline eine fehlschlagende Anwendung von einem Tool unterscheiden kann, das nicht starten konnte.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Verwandtes</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

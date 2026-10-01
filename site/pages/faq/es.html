@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Preguntas que se hacen primero</h1>
+  <p class="lead">Las que conviene responder antes de descargar y no después.</p>
+</section>
+
+<section>
+  <h2>¿Por qué necesita permisos de administrador?</h2>
+  <p>Porque los paquetes los intercepta un controlador del kernel, y Windows no carga uno para un usuario normal. El programa pide los permisos por sí mismo al arrancar. Desde la línea de comandos se niega con un código de salida concreto en lugar de fallar a mitad de camino.</p>
+</section>
+
+<section>
+  <h2>¿Romperá todo el sistema o solo mi aplicación?</h2>
+  <p>Lo que le indiques. Fija un objetivo y solo esa aplicación se ve afectada. Deja el objetivo vacío y se ve afectada toda conexión del sistema, algo de lo que el programa te avisa, en la ventana y en la línea de comandos, antes de que te preguntes por qué se cortó la videollamada.</p>
+</section>
+
+<section>
+  <h2>¿Cómo lo deshago?</h2>
+  <p>{{app.buttons.stop}}. Cerrar el programa hace lo mismo, y también un límite de tiempo si pusiste uno. Si la herramienta misma muere en mitad de una sesión, un watchdog interno apaga la captura en lugar de dejar tu red deteriorada: una sesión nunca debe sobrevivir al programa que la inició.</p>
+</section>
+
+<section>
+  <h2>¿Envía algo a alguna parte?</h2>
+  <p>No. No hay analíticas, ni informes de fallos a ningún servicio, ni comprobación de actualizaciones. El programa no tiene ningún cliente de red. La única conexión saliente que puede hacer es abrir la página de apoyo en tu navegador, después de que hagas clic. Intercepta tu tráfico, así que ese tráfico nunca debe salir de tu máquina, y esta página que estás leyendo tampoco carga nada de nadie más.</p>
+</section>
+
+<section>
+  <h2>Windows me avisó de la descarga. ¿Por qué?</h2>
+  <p>El programa está firmado, así que el aviso indica quién lo firmó en lugar de decir «Editor desconocido». SmartScreen aún puede avisar durante un tiempo, porque el certificado es nuevo y todavía no lo ha visto mucho. Algunos antivirus también pueden reaccionar ante un programa que pide permisos de administrador y carga un controlador de red. Cada versión publica una suma de comprobación SHA-256 y una lista firmada de sus componentes, para que puedas verificar lo que descargaste en lugar de fiarte de una marca verde.</p>
+</section>
+
+<section>
+  <h2>Mi descarga murió por completo y nada dice por qué</h2>
+  <p>Comprueba el tamaño máximo de paquete. Fijado lo bastante bajo, ya no es un paquete más pequeño, es un agujero negro: la red descarta lo que es demasiado grande y nunca lo comunica. Vuelve a ponerlo como estaba y la transferencia regresa.</p>
+</section>
+
+<section>
+  <h2>¿Funciona en Linux o macOS?</h2>
+  <p>No, y no lo hará. Se apoya en un controlador de kernel de Windows. En Linux, <code>tc</code> con <code>netem</code> hace este trabajo y ya viene instalado.</p>
+</section>
+
+<section>
+  <h2>¿Es realmente gratis? ¿Puedo usarlo en el trabajo?</h2>
+  <p>Sí. Es gratuito y de código abierto bajo la GNU GPL v3, también en el trabajo, con el código fuente disponible para que cualquiera lo lea o lo modifique. La descarga es el mismo archivo para todos.</p>
+</section>
+
+<section>
+  <h2>Más</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

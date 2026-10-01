@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Testez votre application sur un mauvais réseau</h1>
+  <p class="lead">Bean Network Tester ajoute de la latence, des pertes de paquets et des limites de débit à une seule application Windows. Vous voyez ce que vivent vos utilisateurs dans un train, sur le hotspot d’un hôtel ou avec un téléphone qui n’a qu’une barre de réseau.</p>
+  <p>C’est un émulateur de réseau visant un seul programme plutôt que toute la machine : vous pouvez donc reproduire un Internet lent pour l’application testée pendant que tout le reste continue de fonctionner.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Un ping en direct perd des paquets et gagne en délai pendant que l’outil fonctionne">
+  <figcaption>Ajout de latence et de pertes de paquets sur une connexion en cours.</figcaption>
+</figure>
+
+<section>
+  <h2>Ce qu’il fait à votre réseau</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Le ralentit</h3>
+      <p>Ajoutez un délai fixe ou aléatoire. Découvrez ce que 300 ms de ping font à votre indicateur de chargement.</p>
+    </article>
+    <article class="card">
+      <h3>Perd des paquets</h3>
+      <p>Abandonnez-les, dupliquez-les ou corrompez-les, puis regardez si votre application se rétablit ou se fige.</p>
+    </article>
+    <article class="card">
+      <h3>Plafonne le débit</h3>
+      <p>Limitez le téléchargement ou l’envoi à un nombre fixe de KB par seconde, comme le fait une mauvaise liaison mobile.</p>
+    </article>
+    <article class="card">
+      <h3>Coupe la liaison</h3>
+      <p>Coupez des connexions, bloquez un port ou une adresse, ou faites aller et venir le réseau.</p>
+    </article>
+    <article class="card">
+      <h3>Vise une seule application</h3>
+      <p>Choisissez un processus, un PID, une adresse ou un port. Le reste de la machine continue de fonctionner normalement.</p>
+    </article>
+    <article class="card">
+      <h3>Se répète à l’identique</h3>
+      <p>La même graine rejoue la même exécution. C’est la différence entre un rapport de bug et une anecdote.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Trois étapes suffisent</h2>
+  <ol class="steps">
+    <li>Téléchargez le zip depuis la page des versions et décompressez-le où vous voulez.</li>
+    <li>Lancez <code>BeanNetworkTester.exe</code>. Il demande lui-même les droits d’administrateur, car la capture du trafic en a besoin.</li>
+    <li>Choisissez un profil prêt à l’emploi comme « {{app.presets.3g}} », appuyez sur {{app.buttons.start}} et utilisez votre application.</li>
+  </ol>
+  <p>Le même fichier propose un mode texte : l’ensemble fonctionne donc aussi dans un pipeline. Une seule commande suffit pour vérifier que votre service résiste à 10 % de perte de paquets :</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Il s’arrête tout seul quand le temps est écoulé, si bien qu’une étape bloquée ne peut pas laisser derrière elle un réseau cassé. Ajoutez <code>--simulate</code> pour répéter une commande sans toucher au trafic réel.</p>
+</section>
+
+<section>
+  <h2>Qui l’utilise</h2>
+  <p>Les testeurs qui doivent reproduire « ça marche chez moi ». Les développeurs qui ont besoin qu’un délai d’attente se produise vraiment. Les développeurs de jeux qui vérifient ce que le lag fait à leur netcode. Toute personne à qui l’on a déjà demandé si l’application fonctionne avec une mauvaise connexion et qui n’avait aucun moyen honnête de le savoir.</p>
+</section>
+
+<section>
+  <h2>Comment faire une chose précise</h2>
+  <p>De courts guides, chacun avec les valeurs qui valent la peine d’être essayées et la commande qui les applique.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Tester une application sans Internet</h1>
+  <p class="lead">Débrancher le câble réseau ne teste qu’une chose : une machine sans réseau. La plupart des bugs hors ligne ne sont pas de cet ordre. Ils surviennent quand la carte réseau est active, que l’icône Wi-Fi a l’air normale et que ce dont l’application a besoin est simplement injoignable.</p>
+</section>
+
+<section>
+  <h2>Trois sortes différentes de « hors ligne »</h2>
+  <table>
+    <tr><th>Ce que vous activez</th><th>Ce que voit l’application</th><th>Le bug qu’il révèle</th></tr>
+    <tr><td><strong>Mode LAN</strong></td><td>Le réseau local fonctionne. Rien au-delà ne fonctionne.</td><td>Le Wi-Fi d’un hôtel avant que vous vous connectiez, une liaison montante morte, un réseau d’entreprise sans route vers l’extérieur.</td></tr>
+    <tr><td><strong>Bloquer une adresse</strong></td><td>Un serveur est injoignable. Tout le reste fonctionne.</td><td>Une dépendance en panne alors que l’application elle-même va bien : le cas qu’un contrôle de santé manque généralement.</td></tr>
+    <tr><td><strong>Bloquer le port 53</strong></td><td>Les noms ne se résolvent plus, mais les connexions par adresse fonctionnent toujours.</td><td>Un DNS cassé, qui ressemble à « Internet est en panne » pour un utilisateur et à tout autre chose dans les journaux.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>En ligne de commande</h2>
+  <p>Internet coupé pour une application, réseau local intact, pendant deux minutes :</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Un service injoignable, tout le reste normal :</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Les noms ne se résolvent plus :</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Il existe aussi une chronologie prête à l’emploi qui casse le DNS puis le rétablit d’elle-même : <code>failing-dns.json</code>, dans le dossier <code>scenarios</code> à côté du programme. Voir <a href="../scenarios-dans-le-temps/">scénarios temporels</a>.</p>
+</section>
+
+<section>
+  <h2>Ce qu’il faut vraiment observer</h2>
+  <ul>
+    <li><strong>Le message.</strong> L’application dit-elle ce qui s’est passé, ou affiche-t-elle un indicateur d’attente à l’infini ?</li>
+    <li><strong>La nouvelle tentative.</strong> Espace-t-elle ses essais, ou martèle-t-elle la même adresse en boucle ?</li>
+    <li><strong>La file.</strong> Le travail que l’utilisateur a fait hors ligne est-il conservé puis envoyé plus tard, ou perdu ?</li>
+    <li><strong>Le rétablissement.</strong> {{app.buttons.stop}} remet le réseau en place. L’application s’en rend-elle compte d’elle-même, ou faut-il la redémarrer ?</li>
+  </ul>
+  <p>Ce dernier point est celui où se trouve l’essentiel de la valeur. Passer hors ligne est facile à mal gérer et facile à tester. C’est au retour que l’état se dérègle.</p>
+</section>
+
+<section>
+  <h2>Ce que ce n’est pas</h2>
+  <p>La carte réseau reste active et la machine garde son adresse, si bien qu’une application qui demande seulement à Windows « y a-t-il un réseau » obtient toujours « oui ». C’est voulu, et c’est le test le plus intéressant : les vrais utilisateurs sont rarement déconnectés, ils sont connectés à quelque chose qui ne peut pas joindre ce dont ils ont besoin. Si vous voulez précisément le cas « aucune carte réseau », désactivez la carte : aucun outil n’est nécessaire.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

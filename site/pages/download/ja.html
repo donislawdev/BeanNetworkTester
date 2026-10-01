@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Bean Network Tester のダウンロード</h1>
+  <p class="lead">インストール不要で動くzip、またはコンピューター上のすべてのユーザー向けのインストーラーです。どちらでも、プログラムは自分で管理者権限を求めます。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>基本情報まとめ</h2>
+  <ul class="facts">
+    <li><strong>価格：</strong>無料。自由なソフトウェアで、GNU GPL v3です。</li>
+    <li><strong>動作環境：</strong>Windows 10およびWindows 11、64ビット。</li>
+    <li><strong>必要なもの：</strong>管理者権限。通信をドライバーで取得するためです。</li>
+    <li><strong>インストール：</strong>不要です。zipをどこかに展開して実行してください。または <code>.msi</code> インストーラーを使うと、スタートメニューに項目が追加され、プログラムが <code>PATH</code> に入ります（管理者権限が必要です）。</li>
+    <li><strong>データの送信：</strong>どこにも送りません。テレメトリも更新確認もネットワーククライアントもありません。</li>
+    <li><strong>モード：</strong>ウィンドウと、同じファイルによるコマンドラインツール。</li>
+    <li><strong>ソース：</strong><a href="{{site.repo_url}}">GitHub上</a>に、同じライセンスで公開しています。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>リリースの内容</h2>
+  <p>リリースでは5つのファイルを公開します。2つがプログラム本体で、残りの3つは、ダウンロードを鵜呑みにしなくて済むようにするためのものです：</p>
+  <ul>
+    <li><strong>zip</strong>：プログラムと、それが使うドライバーを1つのフォルダーにまとめたもの。</li>
+    <li><strong>.msiインストーラー</strong>：同じプログラムを、コンピューターのすべてのユーザー向けにインストールします。スタートメニューの項目付き。</li>
+    <li><strong>SHA256SUMS.txt</strong>：zipとインストーラーのチェックサム。</li>
+    <li><strong>SBOM</strong>：内部の全コンポーネントを、バージョンとライセンス付きで並べた標準形式の一覧。zipに対して署名されています。</li>
+    <li><strong>.sigstore.jsonファイル</strong>：その署名をファイルにしたもので、GitHubに問い合わせずに検証できます。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ビルドしたものを受け取ったことの確認</h2>
+  <p>チェックサムが答えるのは「これは変更されずに届いたか」です。PowerShellで、出力を <code>SHA256SUMS.txt</code> の該当行と比較します（インストーラーの場合は <code>.zip</code> を <code>.msi</code> に置き換えます）：</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>署名が答えるのは別の問い、「これはそのリポジトリから出てきたものか」で、GitHubのコマンドラインツールが必要です：</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>最初の部分には、ダウンロードしたzipの名前を入力してください。<code>gh</code> はそこで <code>*</code> を受け付けません。<code>--predicate-type</code> は残してください。ないと <code>gh</code> は別の種類の証明を探し、見つからなかったと報告します。</p>
+  <p>ダウンロードと同じページからコピーしたチェックサムは、署名より証明力が弱くなります。どちらも公開しているので、どちらも確認する価値があります。</p>
+</section>
+
+<section>
+  <h2>Windowsが警告を出すことがあります</h2>
+  <p>プログラムとインストーラーは署名されているため、Windowsは「不明な発行元」ではなく、署名者を表示します。証明書は新しいため、SmartScreenはしばらく警告を出すかもしれません。まだ見かける機会が少ないからです。それは証明書の話でファイルの話ではなく、上の2つの確認で、ファイルは自分で検証できます。<a href="../yokuaru-shitsumon/">よくある質問のページ</a>に、これとドライバーが必要とするものについての説明があります。</p>
+</section>
+
+<section>
+  <h2>動いたあと、どこから始めるか</h2>
+  {{page.guide_links}}
+</section>

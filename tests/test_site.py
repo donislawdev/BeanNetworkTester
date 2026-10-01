@@ -122,10 +122,15 @@ def test_every_page_carries_a_title_and_a_description_search_engines_can_show(tm
         desc = re.search(r'<meta name="description" content="(.*?)">', html, re.S)
         check(f"{rel}: has a title", title and title.group(1).strip())
         check(f"{rel}: has a description", desc and desc.group(1).strip())
-        check(f"{rel}: the title fits in {build_site.TITLE_LEN[1]} characters",
-              len(title.group(1)) <= build_site.TITLE_LEN[1], f"({len(title.group(1))})")
-        check(f"{rel}: the description fits in {build_site.DESC_LEN[1]} characters",
-              len(desc.group(1)) <= build_site.DESC_LEN[1], f"({len(desc.group(1))})")
+        # Measured in display width, as the builder does: a full-width character is as
+        # wide as two Latin ones in a result page, so counting characters would pass a
+        # Chinese description that a search engine shows half of.
+        check(f"{rel}: the title fits in {build_site.TITLE_LEN[1]} columns",
+              build_site.display_width(title.group(1)) <= build_site.TITLE_LEN[1],
+              f"({build_site.display_width(title.group(1))})")
+        check(f"{rel}: the description fits in {build_site.DESC_LEN[1]} columns",
+              build_site.display_width(desc.group(1)) <= build_site.DESC_LEN[1],
+              f"({build_site.display_width(desc.group(1))})")
 
 
 def test_the_download_button_points_at_the_release_page(tmp_path):
@@ -320,12 +325,14 @@ def test_no_two_pages_claim_the_same_title_or_description(tmp_path):
                   f"({duplicates})")
 
 
-def test_the_polish_pages_have_polish_addresses(tmp_path):
+def test_every_translated_page_has_a_translated_address(tmp_path):
     """A localised page with an English address is a half-translated page.
 
     Not cosmetic: the words in a URL are read by both a person deciding whether to
     click and a search engine deciding what the page is about. The home page is
-    exempt - its slug is empty in every language by design.
+    exempt - its slug is empty in every language by design. Scripts that a URL cannot
+    carry unescaped (Chinese, Japanese, Korean, Hindi, Arabic, Russian) are written in
+    Latin letters, which is still a translated address and not a copied one.
     """
     registry = build_site.load_registry(ROOT)
     pages = build_site.load_pages(ROOT, registry)
@@ -394,7 +401,10 @@ def test_the_pages_never_write_a_name_from_the_program_by_hand(tmp_path):
     from beantester import presets
     registry = build_site.load_registry(ROOT)
     for code in build_site.language_codes(registry):
-        strings = jsonlib.load(open(os.path.join(ROOT, "lang", "%s.json" % code),
+        # The names a page quotes are the ones of the program language it reads, which
+        # is the default language's while the program has no file for this one.
+        program = build_site.program_language(ROOT, registry, code)
+        strings = jsonlib.load(open(os.path.join(ROOT, "lang", "%s.json" % program),
                                     encoding="utf-8"))
         names = [strings[key] for key in presets.PRESETS if key in strings]
         check(f"{code}: there are preset names to look for", len(names) > 10, f"({len(names)})")
@@ -447,7 +457,8 @@ def test_the_program_strings_really_reach_the_built_pages(tmp_path):
     pages = build_site.load_pages(ROOT, registry)
     used = 0
     for code in build_site.language_codes(registry):
-        strings = build_site.load_app_strings(ROOT, code)
+        strings = build_site.load_app_strings(
+            ROOT, build_site.program_language(ROOT, registry, code))
         for page in pages:
             if code not in page["languages"]:
                 continue
@@ -459,8 +470,8 @@ def test_the_program_strings_really_reach_the_built_pages(tmp_path):
             target = page["output"] or rel
             text = _read(os.path.join(out, target.replace("/", os.sep)))
             for key in keys:
-                check(f"{target}: {key} is a real key in lang/{code}.json", key in strings,
-                      "(missing)")
+                check(f"{target}: {key} is a real key in the program's language file",
+                      key in strings, "(missing)")
                 check(f"{target}: the page shows {strings[key]!r} for {key}",
                       strings[key] in text, "(not in the built page)")
                 used += 1
@@ -778,7 +789,8 @@ def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
     registry = build_site.load_registry(ROOT)
     ref = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "reference")
     for code in ref["codes"]:
-        app = build_site.load_app_strings(ROOT, code)
+        app = build_site.load_app_strings(
+            ROOT, build_site.program_language(ROOT, registry, code))
         rel = posixpath.join(ref["languages"][code]["dir_path"], "index.html").lstrip("/")
         text = _read(os.path.join(out, rel.replace("/", os.sep)))
         for key in presets.PRESETS:
@@ -830,7 +842,7 @@ def test_no_page_writes_its_own_table_of_exit_codes(tmp_path):
     codes = sorted(str(value) for name, value in vars(exitcodes).items()
                    if name.isupper() and isinstance(value, int))
     offenders = []
-    for path in glob.glob(os.path.join(SITE, "pages", "*", "??.html")):
+    for path in glob.glob(os.path.join(SITE, "pages", "*", "*.html")):
         text = _read(path)
         rows = re.findall(r"<td>(\d+)</td>", text)
         if len([c for c in rows if c in codes]) >= 3:

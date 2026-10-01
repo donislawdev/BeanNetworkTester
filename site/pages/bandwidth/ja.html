@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>ダウンロードとアップロードの速度を制限する</h1>
+  <p class="lead">1つのアプリケーションを毎秒のキロバイト数で絞ると、それ以上は出なくなります。上りと下りは別々なので、速い下りと絶望的な上りを組み合わせられます。家庭用やモバイルの回線の多くはまさにそういう姿です。</p>
+</section>
+
+<section>
+  <h2>ウィンドウでの手順</h2>
+  <ol class="steps">
+    <li><strong>{{app.fields.target_process}}</strong>にアプリを指定します。</li>
+    <li><strong>{{app.fields.download}}</strong>、<strong>{{app.fields.upload}}</strong>、またはその両方をKB/sで入力します。フィールドを0のままにすると、その方向には手を加えません。</li>
+    <li><strong>{{app.buttons.start}}</strong>を押します。</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>数値の意味</h2>
+  <table>
+    <tr><th>KB/s</th><th>おおよそ</th><th>どんな回線か</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>ダイヤルアップモデム。「{{app.presets.modem56k}}」プロファイルです。</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>機内Wi-Fi、混雑したホテル、電波の悪いモバイル回線。</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>控えめな家庭用回線。動画1本を流すには足ります。</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>現在の普通の固定回線。</td></tr>
+  </table>
+  <p>キロビットではなくキロバイトなので、プロバイダーが宣伝している数字と比べるには8倍してください。両方向を同時に絞ると、単に下りが遅いのではなく、悪いホットスポットのような感触になります。</p>
+</section>
+
+<section>
+  <h2>制限と同じくらい、キューが重要</h2>
+  <p>速度制限には、まだ流せないパケットを置いておく場所が必要です。それが<strong>{{app.fields.buffer}}</strong>の設定で、単位はミリ秒、スーパーのレジの列のように振る舞います：</p>
+  <ul>
+    <li><strong>短いキュー</strong>は、回線がいっぱいになるとすぐパケットが捨てられることを意味します。アプリはパケットロスを見て、素早く反応します。</li>
+    <li><strong>長いキュー</strong>は、何も捨てられない代わりに、すべてが待たされることを意味します。アプリが見るのは失敗ではなく、接続がどんどん遅くなる様子です。混雑した家庭用回線で起きる現象であり、ダウンロード中にビデオ通話の品質が落ちる理由でもあります。</li>
+  </ul>
+  <p>「{{app.presets.bufferbloat}}」プロファイルがまさにこれで、長いキューを持つ速度制限です。同じ速度で短いキューと長いキューを試し、アプリの振る舞いがどれほど違うか観察してください。</p>
+</section>
+
+<section>
+  <h2>予想しておくべきこと</h2>
+  <p>制限をかけている間、破棄されたパケットのカウンターが0のままのことがあります。バグではありません。制限はまずパケットを待たせ、キューが本当にいっぱいになったときにだけ破棄します。バッファーを小さくすると、破棄が現れます。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -74,6 +74,12 @@ DESC_LEN = (50, 160)
 # nine of them fit in a footer without wrapping into a wall.
 LINK_LEN = (4, 42)
 
+# A description may say how many scenarios ship. A number typed into prose is a number
+# that stops being true the day a file is added - the pages said "seven" while the
+# folder held eight - so the count is read from the folder, here and in the page bodies
+# (``{{page.scenario_count}}``).
+SCENARIO_COUNT_TOKEN = "{scenario_count}"
+
 SLUG_RE = re.compile(r"^$|^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$")
 PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}\}")
 
@@ -83,13 +89,21 @@ class SiteError(Exception):
 
 
 def display_width(text):
-    """How many Latin-letter columns ``text`` takes up: a full-width character is two.
+    """How many Latin-letter columns ``text`` takes up.
 
-    The unit the title and description bounds are really about. Unicode already
-    classifies every character as narrow or wide for exactly this purpose (East Asian
-    Width), so nothing here is a list somebody has to keep up to date.
+    A full-width character (Chinese, Japanese, Korean) is two, and a combining mark or
+    a joiner (the vowel signs of Hindi, the zero-width joiners of Arabic and Hindi) is
+    none, because it is drawn on top of the letter before it. The unit the title and
+    description bounds are really about. Unicode already classifies every character for
+    exactly this purpose (East Asian Width, general category), so nothing here is a list
+    somebody has to keep up to date.
     """
-    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+    width = 0
+    for ch in text:
+        if unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
 
 
 class Raw(str):
@@ -149,6 +163,9 @@ def load_registry(root):
     if len(set(dirs)) != len(dirs):
         raise SiteError("site.json: two languages share one directory in %s" % dirs)
     for lang in reg["languages"]:
+        if lang.get("direction", "ltr") not in ("ltr", "rtl"):
+            raise SiteError("site.json: language %r has direction %r (ltr or rtl)"
+                            % (lang["code"], lang.get("direction")))
         declared = lang.get("app_language", "")
         if not isinstance(declared, str) or not re.fullmatch(r"[a-z]*", declared):
             raise SiteError("site.json: language %r has app_language %r, which is not a "
@@ -373,6 +390,9 @@ def load_pages(root, registry):
             slug = entry.get("slug", None)
             title = (entry.get("title") or "").strip()
             description = (entry.get("description") or "").strip()
+            if SCENARIO_COUNT_TOKEN in description:
+                description = description.replace(SCENARIO_COUNT_TOKEN,
+                                                  str(len(scenario_files(root))))
             link_text = (entry.get("link_text") or "").strip()
             if slug is None or not SLUG_RE.match(slug):
                 raise SiteError("pages/%s [%s]: %r is not a valid slug "
@@ -936,6 +956,17 @@ def exit_code_table(texts):
     return Raw("<table>%s</table>" % "".join(rows))
 
 
+def scenario_files(root):
+    """The scenario files that ship, sorted: the one list the table and the count read."""
+    folder = os.path.join(root, "scenarios")
+    files = sorted(f for f in os.listdir(folder) if f.endswith(".json")) \
+        if os.path.isdir(folder) else []
+    if not files:
+        raise SiteError("no scenario files in %s (the table would be empty and the page "
+                        "would claim the program ships none)" % folder)
+    return files
+
+
 def scenario_table(root, texts):
     """The scenario files that ship next to the program, read from ``scenarios/``.
 
@@ -950,11 +981,7 @@ def scenario_table(root, texts):
     like a page nobody edited.
     """
     folder = os.path.join(root, "scenarios")
-    files = sorted(f for f in os.listdir(folder) if f.endswith(".json")) \
-        if os.path.isdir(folder) else []
-    if not files:
-        raise SiteError("no scenario files in %s (the table would be empty and the page "
-                        "would claim the program ships none)" % folder)
+    files = scenario_files(root)
     heads = [texts["table.scenario"], texts["table.steps"], texts["table.length"],
              texts["table.repeats"]]
     rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
@@ -1040,6 +1067,8 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.settings_table": settings_table(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
+        "page.scenario_count": len(scenario_files(root)),
+        "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),
         "page.source_glyph": Raw(SOURCE_GLYPH),
         "page.nav_links": page_links(pages, page, code, "foot-nav",

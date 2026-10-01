@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simuler un mauvais réseau en CI</h1>
+  <p class="lead">La fenêtre est facultative. Le même exécutable fonctionne comme outil en ligne de commande, se termine tout seul après une durée donnée et rend compte de ce qui s’est passé d’une manière qu’un pipeline sait lire.</p>
+</section>
+
+<section>
+  <h2>La forme d’une étape</h2>
+  <p>Dégradez pendant la durée du test, puis laissez l’outil s’arrêter tout seul. Aucune étape de nettoyage à oublier :</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Dans un job GitHub Actions, sur un runner Windows auto-hébergé :</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Deux choses à propos du runner : la capture du trafic exige des droits d’administrateur, et un runner hébergé ne vous les donnera pas, donc cela a sa place sur une machine Windows auto-hébergée.</p>
+</section>
+
+<section>
+  <h2>Chaque fin a un code de sortie</h2>
+  <p>Rien ne se termine par une trace d’appels. Chaque façon dont une exécution peut finir a un numéro, si bien qu’un pipeline peut distinguer « votre application a échoué » de « l’outil n’a pas pu démarrer » :</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Sortie lisible par une machine</h2>
+  <p><code>--format json</code> écrit un objet JSON par ligne, des échantillons pendant l’exécution et un récapitulatif à la fin, afin qu’une étape ultérieure puisse faire des assertions dessus :</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Les lignes de journal vont sur l’erreur standard et les données sur la sortie standard, si bien que rediriger les données ne mélange jamais les deux. <code>--seed</code> rend l’exécution répétable, ce dont un test instable a besoin avant que quiconque puisse en discuter.</p>
+</section>
+
+<section>
+  <h2>Un essai à blanc qui ne touche à rien</h2>
+  <p>Deux options permettent de l’intégrer sans risque avant de lui faire confiance : <code>--dry-run</code> indique ce que feraient les réglages puis se termine, et <code>--simulate</code> fait tourner tout le moteur sur du trafic synthétique, sans charger le pilote et sans toucher au réseau. Les deux sont utiles dans une build qui ne doit pas dégrader la machine sur laquelle elle tourne.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

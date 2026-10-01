@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>在 Windows 上模拟丢包</h1>
+  <p class="lead">丢包就是用户口中的“它就是卡住了”。你设定一个百分比，工具就会丢弃相应比例的数据包，而你的应用必须自己应对。</p>
+</section>
+
+<section>
+  <h2>在窗口中</h2>
+  <ol class="steps">
+    <li>填写<strong>{{app.fields.target_process}}</strong>，让受影响的只是你的应用，而不是整台电脑。</li>
+    <li>把<strong>{{app.fields.loss}}</strong>设为 0 到 100 之间的百分比。建议从 5 开始。</li>
+    <li>点击<strong>{{app.buttons.start}}</strong>，然后使用你的应用。</li>
+  </ol>
+  <p>窗口顶部的状态栏会概括当前正在运行的内容，<strong>{{app.app.tabs.statistics}}</strong>选项卡会统计被丢弃的数据包。</p>
+</section>
+
+<section>
+  <h2>从命令行运行</h2>
+  <p>同一个可执行文件无需窗口也能运行。对一个浏览器施加 5% 的丢包，持续两分钟，之后一切自动恢复正常：</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>加上 <code>--simulate</code> 可以演练这条命令，而不触碰真实流量。</p>
+</section>
+
+<section>
+  <h2>该选多大的百分比</h2>
+  <table>
+    <tr><th>丢包率</th><th>实际感觉</th></tr>
+    <tr><td>1%</td><td>一条良好的连接遇到了糟糕的一分钟。大多数应用都能掩盖它。</td></tr>
+    <tr><td>5%</td><td>弱 Wi-Fi。页面加载变慢，视频画质下降。</td></tr>
+    <tr><td>20%</td><td>拥挤的咖啡馆热点或火车隧道。开始出现超时。</td></tr>
+    <tr><td>60% 及以上</td><td>几乎无法使用。适合找出那条从没人测试过的错误提示。</td></tr>
+  </table>
+  <p>现成的配置方案会替你设置这一项。“{{app.presets.weak_wifi}}”、“{{app.presets.cafe}}”和“{{app.presets.3g}}”除了延迟和限速之外，都带有丢包数值。</p>
+</section>
+
+<section>
+  <h2>两件让人意外的事</h2>
+  <p><strong>在 TCP 上你可能什么都看不到。</strong>TCP 会重传丢失的数据，所以通过 HTTPS 下载只会变慢，而不会失败。如果想把丢包看作丢包，请测试基于 UDP 的东西：语音通话、游戏、视频流，或者 DNS。</p>
+  <p><strong>丢包是随机的，所以两次运行会不同。</strong>设置一个随机种子，同一次运行就会精确重复，这正是把“出过一次问题”变成别人也能复现的 bug 报告的办法：</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  <p>单独的丢包很少见。真实的糟糕连接会丢包，<em>并且</em>增加延迟，<em>并且</em>速度不足，配置方案重现的就是这种组合。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

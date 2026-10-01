@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>下载 Bean Network Tester</h1>
+  <p class="lead">一个无需安装就能运行的 zip 压缩包，或者面向电脑上所有用户的安装程序。无论哪种方式，程序都会自行请求管理员权限。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>关键信息一览</h2>
+  <ul class="facts">
+    <li><strong>价格：</strong>免费，并且是自由软件，采用 GNU GPL v3。</li>
+    <li><strong>运行环境：</strong>Windows 10 和 Windows 11，64 位。</li>
+    <li><strong>需要：</strong>管理员权限，因为流量由驱动程序捕获。</li>
+    <li><strong>安装：</strong>无需安装。把 zip 解压到任意位置即可运行。也可以使用 <code>.msi</code> 安装程序，它会添加“开始”菜单项，并把程序加入 <code>PATH</code>（需要管理员权限）。</li>
+    <li><strong>是否发送数据：</strong>不发送。没有遥测，没有更新检查，没有网络客户端。</li>
+    <li><strong>模式：</strong>一个窗口，以及同一个文件作为命令行工具。</li>
+    <li><strong>源码：</strong><a href="{{site.repo_url}}">在 GitHub 上</a>，采用相同的许可证。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>发行包里有什么</h2>
+  <p>每个版本会发布五个文件。其中两个是程序本身，另外三个则是为了让你不必盲目信任这份下载：</p>
+  <ul>
+    <li><strong>zip 压缩包</strong>：程序及其使用的驱动，放在同一个文件夹里；</li>
+    <li><strong>.msi 安装程序</strong>：同一个程序，为电脑上所有用户安装，并带有“开始”菜单项；</li>
+    <li><strong>SHA256SUMS.txt</strong>：zip 压缩包和安装程序的校验和；</li>
+    <li><strong>SBOM</strong>：一份标准格式的清单，列出内部的每个组件及其版本和许可证，并针对 zip 压缩包签名；</li>
+    <li><strong>.sigstore.json 文件</strong>：以文件形式保存的该签名，无需询问 GitHub 就能校验。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>确认你拿到的就是我们构建的文件</h2>
+  <p>校验和回答的是“这个文件在传输中有没有被改动”。在 PowerShell 中，把输出与 <code>SHA256SUMS.txt</code> 里对应的那一行比较（对于安装程序，把 <code>.zip</code> 换成 <code>.msi</code>）：</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>签名回答的是另一个问题：“这个文件是不是出自那个仓库”，并且需要 GitHub 命令行工具：</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>把你下载的 zip 文件的名称写在第一部分：<code>gh</code> 在这里不接受 <code>*</code>。请保留 <code>--predicate-type</code>：没有它，<code>gh</code> 会去找另一种声明，并报告说什么都没找到。</p>
+  <p>从下载所在的同一个页面复制来的校验和，证明力不如签名。两者都已发布，所以都值得花一点时间核对。</p>
+</section>
+
+<section>
+  <h2>Windows 可能会发出警告</h2>
+  <p>程序和安装程序都已签名，所以 Windows 会显示签名者，而不是“未知发布者”。证书是新的，所以 SmartScreen 可能仍会警告一段时间，因为它还没有经常见到这个证书。这涉及的是证书，而不是文件本身，上面的两种校验可以让你自己验证文件。<a href="../changjian-wenti/">常见问题页面</a>对此以及驱动所需的条件有说明。</p>
+</section>
+
+<section>
+  <h2>运行起来之后从哪里开始</h2>
+  {{page.guide_links}}
+</section>

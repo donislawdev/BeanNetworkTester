@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>ネットワークの状態を時間とともに変化させる</h1>
+  <p class="lead">10%固定のパケットロスは、実験室の条件です。実際の回線は悪くなり、回復し、4秒間止まっては戻ります。追いかけているバグが潜んでいるのは、たいてい定常状態ではなく、その変化のほうです。</p>
+</section>
+
+<section>
+  <h2>シナリオは時系列</h2>
+  <p>1つのJSONファイルです。各ステップに<em>この秒に、これらの設定</em>と書き、触れなかったものは値が保たれます：</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>時刻は、ステップ間の間隔ではなく、実行開始からの秒数です。<code>"loop": true</code> を付けると、終わったところでタイムラインが最初から始まります。長時間の耐久テストに向いています。動かしたままにして、アプリを使います。</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}}個の用意済みシナリオがプログラムに付属します</h2>
+  <p>実行ファイルの隣の <code>scenarios</code> フォルダーにあります。それらのファイルから読み取った内容なので、実際に手元にあるのはこれです：</p>
+  {{page.scenario_table}}
+  <p>ただのテキストです。1つ開いて、数字を変えて、保存します。名前が再現するものを表しています。混雑したカフェ、LTEから3Gに落ちるモバイル回線、途中で死ぬアップロード、過負荷になるサーバー、応答しなくなるDNSなどです。</p>
+</section>
+
+<section>
+  <h2>変化をつけるもっと簡単な2つの方法</h2>
+  <p>順序が重要なときは、シナリオを書く価値があります。そうでないときは、2つの設定が自動で変化します：</p>
+  <ul>
+    <li><strong>回線のオン・オフ</strong>：周期の長さと、そのうちどれだけが断になるか。10秒周期で4秒断、を永遠に。</li>
+    <li><strong>速度スケジュール</strong>：制限が順に通っていく速度の並びで、ファイルなしで接続を悪化させ、回復させます。</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>アプリの実行中でも動くのはなぜか</h2>
+  <p>シナリオが触れる設定はすべて、すでに進行中のセッションにそのまま適用されます。アプリの再起動は不要で、ツールの再起動も要りません。イベントログが各ステップを発生時に記録するので、何かが壊れたとき、どの変更の直後だったかがわかります。シードと組み合わせれば、中のランダムなパケットロスも含めて、全体の流れが正確に繰り返されます。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

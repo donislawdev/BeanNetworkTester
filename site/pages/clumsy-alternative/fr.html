@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Une alternative à Clumsy pour Windows</h1>
+  <p class="lead">Clumsy est l’outil que la plupart des gens trouvent en premier, et c’est un bon outil : gratuit, sous licence MIT, interactif et construit sur le même pilote WinDivert que celui-ci. S’il fait ce dont vous avez besoin, utilisez-le. Cette page traite des cas où il ne le fait pas.</p>
+</section>
+
+<section>
+  <h2>Ce qu’il faut regarder, quel que soit votre choix</h2>
+  <table>
+    <tr><th>Question</th><th>Pourquoi elle décide de l’outil</th></tr>
+    <tr><td>Peut-il viser <strong>une seule application</strong> ?</td><td>Sinon vous dégradez la machine sur laquelle vous travaillez, y compris la session distante et le navigateur où vous lisez la documentation.</td></tr>
+    <tr><td>A-t-il une <strong>ligne de commande</strong> ?</td><td>Un pipeline ne peut pas cocher une case. Sans ligne de commande, un test réseau ne pourra jamais faire partie de la build.</td></tr>
+    <tr><td>Une exécution est-elle <strong>répétable</strong> ?</td><td>Une perte aléatoire qu’on ne peut pas rejouer produit des rapports de bug que personne d’autre ne peut reproduire.</td></tr>
+    <tr><td><strong>S’arrête-t-il tout seul</strong> ?</td><td>Un outil qu’il faut penser à éteindre finira par rester allumé.</td></tr>
+    <tr><td>Pouvez-vous savoir ce qu’il a <strong>réellement fait</strong> ?</td><td>Des compteurs et une liste de connexions transforment « c’était lent » en chiffres.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ce qu’apporte celui-ci</h2>
+  <ul>
+    <li><strong>Ciblage par processus, PID, adresse ou port</strong>, en suivant l’arbre des processus, de sorte qu’un navigateur avec trente processus enfants reste une seule cible.</li>
+    <li><strong>Le même exécutable est la ligne de commande</strong>, avec un code de sortie pour chaque issue et une sortie NDJSON, de sorte qu’il fonctionne en CI.</li>
+    <li><strong>Exécutions avec graine</strong> : la même graine rejoue la même perte aléatoire et la même gigue.</li>
+    <li><strong>Profils prêts à l’emploi</strong> : 3G, LTE, satellite, un café bondé, Wi-Fi en avion, un modem 56k par ligne commutée, pour partir de quelque chose de crédible au lieu de deviner des chiffres.</li>
+    <li><strong>Sessions minutées et scénarios scriptés</strong>, pour que la dégradation change d’elle-même pendant que vous observez l’application.</li>
+    <li><strong>Une vue en direct</strong> : graphique, compteurs et tableau des connexions montrant laquelle a été touchée.</li>
+    <li>Interface en <strong>anglais, polonais et chinois simplifié</strong>, et aucune télémétrie d’aucune sorte.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Si vous venez d’un autre outil</h2>
+  <p>Quatre noms reviennent chaque fois qu’on en parle, et ils ne sont pas interchangeables.</p>
+  <table>
+    <tr><th>Vous connaissez</th><th>Ce que c’est</th><th>Ce qu’il faut attendre ici</th></tr>
+    <tr><td><strong>tc avec netem</strong></td><td>La réponse de Linux, intégrée au noyau et pilotée en ligne de commande. Souvent ce que renvoie une recherche sur l’émulation WAN.</td><td>Il n’y a pas de <code>tc</code> sous Windows. C’est ce qui s’en rapproche le plus dans l’esprit : les mêmes types de dégradation, une ligne de commande avec des codes de sortie, et un pilote au lieu d’une discipline de file d’attente.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Un outil Windows gratuit, sous licence MIT et interactif, sur le même pilote WinDivert.</td><td>Prenez-le quand une fenêtre et un filtre vous suffisent. Venez ici pour le ciblage par processus, les exécutions avec graine et une ligne de commande qu’un pipeline peut appeler.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Un produit Windows commercial pour gérer la bande passante par application, en permanence.</td><td>Un autre métier. Ceci est un instrument de test : allumé un moment, puis éteint, et il dégrade bien plus que la vitesse.</td></tr>
+    <tr><td><strong>Fiddler ou Charles</strong></td><td>Des proxys capables d’inspecter, de réécrire et de brider le trafic qui les traverse.</td><td>Un autre métier aussi. Un proxy façonne ce qu’il relaie et voit les données. Celui-ci façonne la connexion elle-même, y compris l’UDP et tout ce qui ne touche jamais un proxy.</td></tr>
+  </table>
+  <p>En clair : si vous voulez un émulateur de réseau pour une application Windows, avec une ligne de commande, voici la forme d’outil que vous cherchez. Si vous voulez lire et modifier les données d’une application, il vous faut un proxy, et si vous êtes sous Linux, vous avez déjà netem.</p>
+</section>
+
+<section>
+  <h2>Quand utiliser autre chose</h2>
+  <p>Être honnête coûte moins cher qu’un téléchargement décevant.</p>
+  <ul>
+    <li><strong>Vous êtes sous Linux ou macOS.</strong> Il ne fonctionne que sous Windows, et il en sera toujours ainsi, car il repose sur un pilote Windows. Sous Linux, <code>tc</code> avec <code>netem</code> est la réponse standard et ne demande aucun logiciel supplémentaire.</li>
+    <li><strong>Vous voulez une gestion permanente de la bande passante</strong> pour toute la machine, application par application, comme fonction d’un produit plutôt que comme un test. C’est à cela que servent les outils commerciaux de mise en forme du trafic comme NetLimiter. Celui-ci est un instrument de test : il est fait pour être allumé un moment puis éteint.</li>
+    <li><strong>Vous ne pouvez pas obtenir de droits d’administrateur.</strong> La capture de paquets en a besoin. Il n’y a aucun moyen de contourner cela, et un outil qui prétend le contraire ne capture pas votre trafic.</li>
+    <li><strong>Vous devez inspecter et réécrire les données d’une application</strong> plutôt que dégrader la liaison. C’est le travail d’un proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

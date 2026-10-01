@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simuler la perte de paquets sous Windows</h1>
+  <p class="lead">La perte de paquets est la panne que les utilisateurs décrivent par « ça se fige ». Vous fixez un pourcentage, l’outil jette cette part des paquets, et votre application doit s’en accommoder.</p>
+</section>
+
+<section>
+  <h2>Dans la fenêtre</h2>
+  <ol class="steps">
+    <li>Renseignez <strong>{{app.fields.target_process}}</strong> pour que seule votre application soit touchée, et non toute la machine.</li>
+    <li>Réglez <strong>{{app.fields.loss}}</strong> sur un pourcentage compris entre 0 et 100. Commencez à 5.</li>
+    <li>Appuyez sur <strong>{{app.buttons.start}}</strong> et utilisez l’application.</li>
+  </ol>
+  <p>La barre en haut de la fenêtre résume ce qui tourne, et l’onglet <strong>{{app.app.tabs.statistics}}</strong> compte les paquets abandonnés.</p>
+</section>
+
+<section>
+  <h2>En ligne de commande</h2>
+  <p>Le même exécutable fonctionne sans la fenêtre. Cinq pour cent de perte sur un navigateur pendant deux minutes, puis tout revient à la normale tout seul :</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Ajoutez <code>--simulate</code> pour répéter la commande sans toucher au trafic réel.</p>
+</section>
+
+<section>
+  <h2>Quel pourcentage choisir</h2>
+  <table>
+    <tr><th>Perte</th><th>Ce que ça donne</th></tr>
+    <tr><td>1 %</td><td>Une bonne connexion qui passe une mauvaise minute. La plupart des applications le masquent.</td></tr>
+    <tr><td>5 %</td><td>Wi-Fi faible. Les pages se chargent lentement, la qualité vidéo baisse.</td></tr>
+    <tr><td>20 %</td><td>Le hotspot d’un café bondé ou un tunnel de train. Les délais d’attente commencent à apparaître.</td></tr>
+    <tr><td>60 % et plus</td><td>Presque inutilisable. Idéal pour trouver le message d’erreur que personne n’a jamais testé.</td></tr>
+  </table>
+  <p>Les profils prêts à l’emploi règlent cela pour vous. « {{app.presets.weak_wifi}} », « {{app.presets.cafe}} » et « {{app.presets.3g}} » portent tous une valeur de perte, en plus d’un délai et d’une limite de débit.</p>
+</section>
+
+<section>
+  <h2>Deux choses qui surprennent</h2>
+  <p><strong>Avec TCP, vous pouvez ne rien voir du tout.</strong> TCP retransmet ce qu’il perd : un téléchargement en HTTPS devient donc simplement plus lent au lieu d’échouer. Si vous voulez voir la perte comme une perte, testez quelque chose qui passe par UDP : un appel vocal, un jeu, un flux vidéo ou le DNS.</p>
+  <p><strong>La perte est aléatoire, donc deux exécutions diffèrent.</strong> Fixez une graine et la même exécution se répète à l’identique, ce qui transforme « ça a planté une fois » en un rapport de bug qu’un autre peut reproduire :</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  <p>La perte seule est rare. Les vraies mauvaises connexions perdent des paquets <em>et</em> ajoutent du délai <em>et</em> manquent de débit, et c’est ce que reproduisent les profils.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

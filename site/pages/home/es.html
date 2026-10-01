@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Prueba tu aplicación en una mala red</h1>
+  <p class="lead">Bean Network Tester añade lag, pérdida de paquetes y límites de velocidad a una sola aplicación de Windows. Verás lo que ven tus usuarios en un tren, en el hotspot de un hotel o con un móvil que solo tiene una barra de cobertura.</p>
+  <p>Es un emulador de red pensado para un solo programa y no para todo el sistema, así que puedes reproducir un internet lento para la aplicación que estás probando mientras todo lo demás sigue funcionando.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Un ping en directo pierde paquetes y gana retardo mientras la herramienta está en marcha">
+  <figcaption>Añadiendo retardo y pérdida de paquetes a una conexión en curso.</figcaption>
+</figure>
+
+<section>
+  <h2>Qué le hace a tu red</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>La ralentiza</h3>
+      <p>Añade un retardo fijo o aleatorio. Descubre qué hacen 300 ms de ping con tu indicador de carga.</p>
+    </article>
+    <article class="card">
+      <h3>Pierde paquetes</h3>
+      <p>Descártalos, duplícalos o corrómpelos, y observa si tu aplicación se recupera o simplemente se cuelga.</p>
+    </article>
+    <article class="card">
+      <h3>Limita la velocidad</h3>
+      <p>Mantén la descarga o la subida en un número fijo de KB por segundo, como hace un enlace móvil débil.</p>
+    </article>
+    <article class="card">
+      <h3>Corta el enlace</h3>
+      <p>Derriba conexiones, bloquea un puerto o una dirección, o haz que la red vaya y venga.</p>
+    </article>
+    <article class="card">
+      <h3>Apunta a una sola app</h3>
+      <p>Elige un proceso, un PID, una dirección o un puerto. El resto del sistema sigue funcionando con normalidad.</p>
+    </article>
+    <article class="card">
+      <h3>Se repite exactamente</h3>
+      <p>La misma semilla reproduce la misma ejecución. Esa es la diferencia entre un informe de error y una anécdota.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Ponerlo en marcha lleva tres pasos</h2>
+  <ol class="steps">
+    <li>Descarga el zip desde la página de versiones y descomprímelo donde quieras.</li>
+    <li>Inicia <code>BeanNetworkTester.exe</code>. Pide por sí mismo permisos de administrador, porque capturar el tráfico los necesita.</li>
+    <li>Elige un perfil listo para usar, como «{{app.presets.3g}}», pulsa {{app.buttons.start}} y usa tu aplicación.</li>
+  </ol>
+  <p>Hay un modo de texto en el mismo archivo, así que todo también funciona en un pipeline. Un solo comando basta para comprobar que tu servicio sobrevive a un 10 % de pérdida de paquetes:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Se detiene solo cuando se acaba el tiempo, así que un paso que se cuelga no puede dejar tras de sí una red rota. Añade <code>--simulate</code> para ensayar un comando sin tocar el tráfico real.</p>
+</section>
+
+<section>
+  <h2>Quién lo usa</h2>
+  <p>Testers que tienen que reproducir el «en mi máquina funciona». Desarrolladores que necesitan que un timeout ocurra de verdad. Desarrolladores de juegos que comprueban qué le hace el lag a su netcode. Cualquiera a quien alguna vez le hayan preguntado si la aplicación funciona con una conexión débil y no haya tenido una forma honesta de averiguarlo.</p>
+</section>
+
+<section>
+  <h2>Cómo hacer algo concreto</h2>
+  <p>Guías breves, cada una con los valores que merece la pena probar y el comando que lo hace.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>配置方案、设置与退出码</h1>
+  <p class="lead">三张表，没有一张是手写的。它们是在构建本页时从程序自己的注册表生成的，所以不可能说出程序并不具备的内容。</p>
+</section>
+
+<section>
+  <h2>现成的配置方案</h2>
+  <p>选择其中一个，表单就会自动填好。短横线表示该配置方案不改动那项设置。速度单位是千字节每秒，乘以八才能与服务商宣传的数字比较。</p>
+  {{page.preset_table}}
+  <p>选择配置方案只会填写各个字段。在你点击{{app.buttons.start}}之前，网络上不会发生任何变化。</p>
+</section>
+
+<section>
+  <h2>每项设置，以及设置它的参数</h2>
+  <p>窗口和命令行接受的是同样的设置。这是完整的列表，附有每项设置接受的单位和范围。</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>退出码</h2>
+  <p>命令行永远不会以堆栈回溯收场。一次运行的每种结束方式都有一个编号，所以流水线能区分应用失败和工具无法启动。</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>相关内容</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

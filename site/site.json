@@ -14,6 +14,37 @@
       "name": "Polski",
       "dir": "pl",
       "og_locale": "pl_PL"
+    },
+    {
+      "code": "zh-Hans",
+      "name": "简体中文",
+      "dir": "zh-hans",
+      "og_locale": "zh_CN",
+      "app_language": "zh"
+    },
+    {
+      "code": "ja",
+      "name": "日本語",
+      "dir": "ja",
+      "og_locale": "ja_JP"
+    },
+    {
+      "code": "de",
+      "name": "Deutsch",
+      "dir": "de",
+      "og_locale": "de_DE"
+    },
+    {
+      "code": "fr",
+      "name": "Français",
+      "dir": "fr",
+      "og_locale": "fr_FR"
+    },
+    {
+      "code": "es",
+      "name": "Español",
+      "dir": "es",
+      "og_locale": "es_ES"
     }
   ],
   "og_image": "assets/bean.png",

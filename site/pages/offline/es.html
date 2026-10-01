@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Probar una aplicación sin internet</h1>
+  <p class="lead">Desenchufar el cable de red prueba una sola cosa: una máquina sin red. La mayoría de los errores sin conexión no son eso. Ocurren cuando el adaptador está activo, el icono de Wi-Fi parece normal y lo que la aplicación necesita simplemente no es accesible.</p>
+</section>
+
+<section>
+  <h2>Tres tipos distintos de «sin conexión»</h2>
+  <table>
+    <tr><th>Lo que activas</th><th>Qué ve la aplicación</th><th>El error que encuentra</th></tr>
+    <tr><td><strong>Modo LAN</strong></td><td>La red local funciona. Nada más allá funciona.</td><td>El Wi-Fi de un hotel antes de iniciar sesión, un enlace de subida caído, una red de empresa sin ruta hacia fuera.</td></tr>
+    <tr><td><strong>Bloquear una dirección</strong></td><td>Un servidor es inaccesible. Todo lo demás funciona.</td><td>Una dependencia caída mientras la aplicación en sí está bien: el caso que una comprobación de estado suele pasar por alto.</td></tr>
+    <tr><td><strong>Bloquear el puerto 53</strong></td><td>Los nombres dejan de resolverse, las conexiones por dirección siguen funcionando.</td><td>DNS roto, que a un usuario le parece «internet se ha caído» y en los registros parece algo completamente distinto.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Desde la línea de comandos</h2>
+  <p>Sin internet para una aplicación, red local intacta, durante dos minutos:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Un servicio inaccesible, todo lo demás normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Los nombres dejan de resolverse:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>También hay una línea de tiempo lista que rompe el DNS y lo devuelve por sí sola: <code>failing-dns.json</code>, en la carpeta <code>scenarios</code> junto al programa. Consulta <a href="../escenarios-en-el-tiempo/">escenarios temporales</a>.</p>
+</section>
+
+<section>
+  <h2>Qué observar de verdad</h2>
+  <ul>
+    <li><strong>El mensaje.</strong> ¿Dice la aplicación qué ha pasado, o muestra un indicador de carga para siempre?</li>
+    <li><strong>El reintento.</strong> ¿Espera cada vez más, o martillea la misma dirección en un bucle?</li>
+    <li><strong>La cola.</strong> ¿El trabajo que hizo el usuario sin conexión se conserva y se envía después, o se pierde?</li>
+    <li><strong>La recuperación.</strong> {{app.buttons.stop}} devuelve la red. ¿La aplicación se da cuenta por sí sola, o necesita reiniciarse?</li>
+  </ul>
+  <p>Ese último punto es donde está la mayor parte del valor. Quedarse sin conexión es fácil de manejar mal y fácil de probar. Es al volver cuando el estado se descontrola.</p>
+</section>
+
+<section>
+  <h2>Lo que esto no es</h2>
+  <p>El adaptador sigue activo y la máquina conserva su dirección, así que una aplicación que solo le pregunta a Windows «¿hay red?» sigue recibiendo un sí. Es deliberado, y es la prueba más interesante: los usuarios reales rara vez están desconectados, están conectados a algo que no llega a lo que necesitan. Si quieres específicamente el caso «sin adaptador», desactiva el adaptador: no hace falta ninguna herramienta.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

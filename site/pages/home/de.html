@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Teste deine App in einem schlechten Netzwerk</h1>
+  <p class="lead">Bean Network Tester fügt einer einzelnen Windows-Anwendung Verzögerung, Paketverlust und Tempolimits hinzu. So siehst du, was deine Nutzer im Zug, im Hotel-WLAN oder mit einem Strich Empfang am Handy erleben.</p>
+  <p>Es ist ein Netzwerk-Emulator für ein einzelnes Programm statt für den ganzen Rechner. Du kannst also langsames Internet für die getestete App nachstellen, während alles andere normal weiterläuft.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Ein Live-Ping verliert Pakete und bekommt Verzögerung, während das Tool läuft">
+  <figcaption>Verzögerung und Paketverlust für eine laufende Verbindung.</figcaption>
+</figure>
+
+<section>
+  <h2>Was es mit deinem Netzwerk macht</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Bremst es aus</h3>
+      <p>Füge eine feste oder zufällige Verzögerung hinzu. Finde heraus, was 300 ms Ping mit deinem Ladeindikator machen.</p>
+    </article>
+    <article class="card">
+      <h3>Verliert Pakete</h3>
+      <p>Verwirf, dupliziere oder beschädige sie und beobachte, ob sich deine App erholt oder einfach hängt.</p>
+    </article>
+    <article class="card">
+      <h3>Drosselt das Tempo</h3>
+      <p>Begrenze Download oder Upload auf eine feste Zahl KB pro Sekunde, so wie es eine schwache Mobilfunkverbindung tut.</p>
+    </article>
+    <article class="card">
+      <h3>Kappt die Verbindung</h3>
+      <p>Trenne Verbindungen, sperre einen Port oder eine Adresse oder lass das Netzwerk kommen und gehen.</p>
+    </article>
+    <article class="card">
+      <h3>Zielt auf eine App</h3>
+      <p>Wähle einen Prozess, eine PID, eine Adresse oder einen Port. Der Rest des Rechners arbeitet ganz normal weiter.</p>
+    </article>
+    <article class="card">
+      <h3>Wiederholt sich exakt</h3>
+      <p>Derselbe Seed spielt denselben Durchlauf ab. Das ist der Unterschied zwischen einem Fehlerbericht und einer Geschichte.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>In drei Schritten loslegen</h2>
+  <ol class="steps">
+    <li>Lade das Zip von der Release-Seite herunter und entpacke es, wohin du willst.</li>
+    <li>Starte <code>BeanNetworkTester.exe</code>. Es fragt selbst nach Administratorrechten, weil das Abfangen von Datenverkehr sie braucht.</li>
+    <li>Wähle ein fertiges Profil wie „{{app.presets.3g}}“, drücke {{app.buttons.start}} und benutze deine App.</li>
+  </ol>
+  <p>Dieselbe Datei hat auch einen Textmodus, sodass das Ganze in einer Pipeline läuft. Ein einziger Befehl genügt, um zu prüfen, ob dein Dienst 10 % Paketverlust übersteht:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Es stoppt von selbst, wenn die Zeit abgelaufen ist, sodass ein hängender Schritt kein kaputtes Netzwerk hinterlassen kann. Mit <code>--simulate</code> probst du einen Befehl, ohne echten Datenverkehr anzufassen.</p>
+</section>
+
+<section>
+  <h2>Wer es nutzt</h2>
+  <p>Tester, die „bei mir läuft es“ nachstellen müssen. Entwickler, bei denen ein Timeout endlich wirklich auftreten soll. Spieleentwickler, die prüfen, was Lag mit ihrem Netcode macht. Jeder, der schon einmal gefragt wurde, ob die App bei schwacher Verbindung funktioniert, und keine ehrliche Möglichkeit hatte, das herauszufinden.</p>
+</section>
+
+<section>
+  <h2>So erledigst du etwas Bestimmtes</h2>
+  <p>Kurze Anleitungen, jeweils mit den Werten, die sich auszuprobieren lohnen, und dem Befehl, der es macht.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

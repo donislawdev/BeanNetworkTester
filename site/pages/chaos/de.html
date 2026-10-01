@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Netzwerk-Chaos-Tests unter Windows</h1>
+  <p class="lead">Chaos-Testing bedeutet, absichtlich etwas kaputtzumachen, während du zusiehst, um herauszufinden, was deine Software dagegen tut. Auf der Netzwerkebene ist genau das dieses Tool: eine Möglichkeit, einen Fehler in eine Anwendung einzuspeisen und zu sehen, ob sie überlebt.</p>
+</section>
+
+<section>
+  <h2>Die Fehler, die du einspeisen kannst</h2>
+  <table>
+    <tr><th>Fehler</th><th>Was er nachbildet</th></tr>
+    <tr><td>Verlust, Beschädigung, Duplizierung</td><td>Ein verschlechterter Pfad. Pakete verschwinden, kommen beschädigt an oder kommen doppelt an.</td></tr>
+    <tr><td>Latenz, Jitter, Spitzen</td><td>Ein langsamer oder instabiler Pfad, einschließlich des mehrsekündigen Aussetzers, der Timeouts bricht.</td></tr>
+    <tr><td>Verbindungs-Resets</td><td>Eine Firewall oder ein Load Balancer, der Verbindungen mitten in der Übertragung beendet.</td></tr>
+    <tr><td>Verbindungsausfälle</td><td>Der Pfad verschwindet und kommt in einem Zyklus wieder.</td></tr>
+    <tr><td>Gesperrte Adresse oder gesperrter Port</td><td>Eine Abhängigkeit ist unerreichbar, während alles andere funktioniert.</td></tr>
+    <tr><td>Internet weg, LAN am Leben</td><td>Die Form des Captive Portals: Lokal geht es, die Welt nicht.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Was Chaos von Rauschen unterscheidet: Wiederholbarkeit</h2>
+  <p>Ein zufälliger Fehler, der sich nicht wiederholen lässt, liefert eine Geschichte statt eines Fehlerberichts. Jede Zufallsentscheidung hier stammt aus einem Seed, sodass derselbe Befehl denselben Durchlauf reproduziert: dieselben verlorenen Pakete, derselbe Jitter, in derselben Reihenfolge:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Das ist der Unterschied zwischen „es ist letzten Dienstag einmal umgefallen“ und einem fehlschlagenden Test, den jemand anderes ausführen kann.</p>
+</section>
+
+<section>
+  <h2>In einer Pipeline</h2>
+  <p>Die Befehlszeile meldet über Exit-Codes, sodass ein Build „die Anwendung ist fehlgeschlagen“ von „das Tool konnte nicht starten“ unterscheiden kann, und die Sitzung endet von selbst: Es gibt keinen Aufräumschritt, den man vergessen könnte:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Eine Folge von Fehlern statt eines einzelnen ist eine Szenario-Datei, und auch diese sind wiederholbar. Siehe <a href="../szenarien-ueber-zeit/">Szenarien über die Zeit</a> und <a href="../netzwerktests-in-ci/">Netzwerktests in CI</a> für die Exit-Codes und den Runner, den es braucht.</p>
+</section>
+
+<section>
+  <h2>Wo der Wirkungsradius endet</h2>
+  <p>Zwei Grenzen, beide gewollt. Die Störung erreicht einen Prozess, eine PID, eine Adresse oder einen Port, wenn du sie darauf richtest, sodass der Rechner, an dem du arbeitest, weiter funktioniert. Und es ist ein einzelner Rechner: Das ist Fehlerinjektion für einen Client und seine Verbindung, nicht für einen Cluster. Suchst du Chaos über Dienste und Knoten hinweg, ist das eine andere Art von Werkzeug, und dieses hier ist das Stück, das das Netzwerk unter einer einzelnen Windows-Anwendung kaputtmacht.</p>
+  <p>Alles ist auf der Stelle umkehrbar. {{app.buttons.stop}} stellt das Netzwerk wieder her, ein Zeitlimit tut dasselbe, und ein Watchdog im Tool beendet die Erfassung, falls das Tool selbst stirbt: Ein Fehler, den du eingespeist hast, darf den Durchlauf, der ihn eingespeist hat, nie überleben.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

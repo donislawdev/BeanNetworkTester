@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Paketverlust unter Windows simulieren</h1>
+  <p class="lead">Paketverlust ist der Fehler, den Nutzer mit „es hängt einfach“ beschreiben. Du legst einen Prozentsatz fest, das Tool wirft diesen Anteil der Pakete weg, und deine App muss damit zurechtkommen.</p>
+</section>
+
+<section>
+  <h2>Im Fenster</h2>
+  <ol class="steps">
+    <li>Trage <strong>{{app.fields.target_process}}</strong> ein, damit nur deine Anwendung betroffen ist und nicht der ganze Rechner.</li>
+    <li>Setze <strong>{{app.fields.loss}}</strong> auf einen Prozentwert zwischen 0 und 100. Fang mit 5 an.</li>
+    <li>Drücke <strong>{{app.buttons.start}}</strong> und benutze die App.</li>
+  </ol>
+  <p>Die Leiste oben im Fenster fasst zusammen, was gerade läuft, und der Tab <strong>{{app.app.tabs.statistics}}</strong> zählt die verworfenen Pakete.</p>
+</section>
+
+<section>
+  <h2>Über die Befehlszeile</h2>
+  <p>Dieselbe ausführbare Datei läuft auch ohne Fenster. Fünf Prozent Verlust für einen Browser, zwei Minuten lang, danach ist von selbst wieder alles normal:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Mit <code>--simulate</code> probst du den Befehl, ohne echten Datenverkehr anzufassen.</p>
+</section>
+
+<section>
+  <h2>Welchen Prozentsatz du wählen solltest</h2>
+  <table>
+    <tr><th>Verlust</th><th>Wie es sich anfühlt</th></tr>
+    <tr><td>1 %</td><td>Eine gute Verbindung mit einer schlechten Minute. Die meisten Apps überspielen es.</td></tr>
+    <tr><td>5 %</td><td>Schwaches WLAN. Seiten laden langsam, Videos verlieren an Qualität.</td></tr>
+    <tr><td>20 %</td><td>Ein überfüllter Café-Hotspot oder ein Tunnel im Zug. Timeouts tauchen auf.</td></tr>
+    <tr><td>60 % und mehr</td><td>Kaum benutzbar. Gut, um die Fehlermeldung zu finden, die nie jemand getestet hat.</td></tr>
+  </table>
+  <p>Die fertigen Profile stellen das für dich ein. „{{app.presets.weak_wifi}}“, „{{app.presets.cafe}}“ und „{{app.presets.3g}}“ enthalten alle einen Verlustwert, dazu Verzögerung und ein Tempolimit.</p>
+</section>
+
+<section>
+  <h2>Zwei Dinge, die Leute überraschen</h2>
+  <p><strong>Bei TCP siehst du womöglich gar nichts.</strong> TCP überträgt Verlorenes erneut, sodass ein Download über HTTPS nur langsamer wird, statt zu scheitern. Willst du Verlust als Verlust sehen, teste etwas, das über UDP läuft: einen Sprachanruf, ein Spiel, einen Videostream oder DNS.</p>
+  <p><strong>Verlust ist zufällig, deshalb unterscheiden sich zwei Durchläufe.</strong> Setze einen Seed, und derselbe Durchlauf wiederholt sich exakt. Genau das macht aus „es ist einmal kaputtgegangen“ einen Fehlerbericht, den jemand anderes nachstellen kann:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  <p>Verlust allein ist selten. Echte schlechte Verbindungen verlieren Pakete <em>und</em> fügen Verzögerung hinzu <em>und</em> haben zu wenig Tempo, und genau das bilden die Profile nach.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

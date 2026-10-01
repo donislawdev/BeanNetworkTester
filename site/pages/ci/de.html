@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Ein schlechtes Netzwerk in der CI simulieren</h1>
+  <p class="lead">Das Fenster ist optional. Dieselbe ausführbare Datei läuft als Befehlszeilenprogramm, endet nach einer festgelegten Zeit von selbst und meldet, was passiert ist, so, dass eine Pipeline es lesen kann.</p>
+</section>
+
+<section>
+  <h2>Die Form eines Schritts</h2>
+  <p>Störe für die Dauer des Tests und lass es dann von selbst enden. Es gibt keinen Aufräumschritt, den man vergessen könnte:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>In einem GitHub-Actions-Job auf einem selbst gehosteten Windows-Runner:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Zwei Dinge zum Runner: Das Abfangen von Datenverkehr braucht Administratorrechte, und ein gehosteter Runner gibt dir diese nicht, deshalb gehört das auf einen selbst gehosteten Windows-Rechner.</p>
+</section>
+
+<section>
+  <h2>Jedes Ende hat einen Exit-Code</h2>
+  <p>Nichts endet mit einem Traceback. Jede Art, wie ein Durchlauf enden kann, hat eine Nummer, sodass eine Pipeline „deine App ist fehlgeschlagen“ von „das Tool konnte nicht starten“ unterscheiden kann:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Maschinenlesbare Ausgabe</h2>
+  <p><code>--format json</code> schreibt ein JSON-Objekt pro Zeile, Messwerte während des Durchlaufs und am Ende eine Zusammenfassung, sodass ein späterer Schritt darauf prüfen kann:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Logzeilen gehen an die Standardfehlerausgabe und Daten an die Standardausgabe, sodass die Umleitung der Daten beides nie vermischt. <code>--seed</code> macht den Durchlauf wiederholbar, und das braucht ein instabiler Test, bevor irgendjemand darüber streiten kann.</p>
+</section>
+
+<section>
+  <h2>Ein Probelauf, der nichts anfasst</h2>
+  <p>Zwei Schalter machen es sicher, das einzubauen, bevor du ihm vertraust: <code>--dry-run</code> meldet, was die Einstellungen bewirken würden, und beendet sich, und <code>--simulate</code> lässt die ganze Engine gegen synthetischen Datenverkehr laufen, ohne den Treiber zu laden und ohne das Netzwerk anzufassen. Beides ist nützlich in einem Build, der den Rechner, auf dem er läuft, nicht stören darf.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

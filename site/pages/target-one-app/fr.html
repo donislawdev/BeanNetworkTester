@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Viser une application, pas la machine</h1>
+  <p class="lead">Sans cible, toutes les connexions de l’ordinateur sont touchées, y compris le bureau à distance que vous utilisez et le téléchargement du correctif. Avec une cible, un seul processus subit le mauvais réseau et tout le reste continue.</p>
+</section>
+
+<section>
+  <h2>Par processus</h2>
+  <p>Saisissez un nom dans <strong>{{app.fields.target_process}}</strong>, ou passez <code>--target</code>. Un nom seul correspond comme fragment, si bien que <code>chrome</code> couvre <code>chrome.exe</code> :</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Il suit l’arbre des processus, ce qui compte pour tout ce qui lance des processus enfants : un navigateur ouvre un processus par onglet, et ceux-ci sont touchés aussi.</p>
+  <p>Le champ accepte plus d’un nom, et plus d’un type de valeur à la fois :</p>
+  <table>
+    <tr><th>Ce que vous saisissez</th><th>Ce que cela signifie</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Deux applications.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, mais jamais le pilote. Les exclusions l’emportent.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Tout ce qui commence par « my ».</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Une expression régulière, quand un caractère générique ne suffit pas.</td></tr>
+    <tr><td><code>4812</code></td><td>Un identifiant de processus unique.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Tous les identifiants de processus supérieurs à 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Par adresse ou port</h2>
+  <p>Parfois, l’unité qui compte n’est pas l’application mais un serveur. Ces options acceptent la même syntaxe de liste, de plage et d’exclusion, et comprennent le CIDR et l’IPv6 :</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>La seconde mérite d’être connue : tout sauf le DNS. Viser <em>en dehors</em> d’un port est souvent plus facile que de lister ceux que l’on veut.</p>
+</section>
+
+<section>
+  <h2>Cibler un processus par son nom survit à son redémarrage</h2>
+  <p>Redémarrez l’application pendant qu’une session tourne et une cible par <strong>nom</strong> retrouve le nouveau processus. Une cible par <strong>identifiant de processus</strong> ne le peut pas : l’identifiant appartenait au processus qui s’est terminé. Un autre programme auquel Windows attribue plus tard le même identifiant n’est pas touché non plus. Si votre test redémarre l’objet testé, ciblez-le par son nom.</p>
+</section>
+
+<section>
+  <h2>L’avertissement à ne pas ignorer</h2>
+  <p>Démarrez avec la dégradation activée, sans rien à viser et sans limite de durée, et la fenêtre comme la ligne de commande vous le disent : cela affecte toutes les connexions de cette machine. C’est un avertissement, pas un refus : c’est parfois exactement ce que vous voulez. Sinon, définissez une cible ou un <code>--duration</code>, et {{app.buttons.stop}} remet toujours tout en place.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

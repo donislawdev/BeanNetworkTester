@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Fragen, die zuerst gestellt werden</h1>
+  <p class="lead">Die, die man besser vor dem Download beantwortet als danach.</p>
+</section>
+
+<section>
+  <h2>Warum braucht es Administratorrechte?</h2>
+  <p>Weil Pakete von einem Kernel-Treiber abgefangen werden und Windows für normale Nutzer keinen lädt. Das Programm fragt beim Start selbst nach den Rechten. In der Befehlszeile verweigert es mit einem eigenen Exit-Code, statt auf halbem Weg zu scheitern.</p>
+</section>
+
+<section>
+  <h2>Macht es den ganzen Rechner kaputt oder nur meine App?</h2>
+  <p>Das, worauf du es richtest. Setze ein Ziel, und nur diese Anwendung ist betroffen. Lässt du das Ziel leer, ist jede Verbindung auf dem Rechner betroffen. Davor warnt das Programm im Fenster und in der Befehlszeile, bevor du dich fragen kannst, warum der Videoanruf abgebrochen ist.</p>
+</section>
+
+<section>
+  <h2>Wie mache ich es rückgängig?</h2>
+  <p>{{app.buttons.stop}}. Das Schließen des Programms bewirkt dasselbe, und auch ein Zeitlimit, falls du eines gesetzt hast. Stirbt das Tool selbst mitten in der Sitzung, beendet ein Watchdog darin die Erfassung, statt dein Netzwerk gestört zu lassen: Eine Sitzung darf nie das Programm überleben, das sie gestartet hat.</p>
+</section>
+
+<section>
+  <h2>Sendet es irgendetwas irgendwohin?</h2>
+  <p>Nein. Es gibt keine Analytik, keine Absturzberichte an einen Dienst und keine Update-Prüfung. Das Programm hat überhaupt keinen Netzwerkclient. Die einzige ausgehende Verbindung, die es herstellen kann, ist das Öffnen der Support-Seite in deinem Browser, nachdem du darauf geklickt hast. Es fängt deinen Datenverkehr ab, also darf dieser Datenverkehr deinen Rechner nie verlassen, und auch diese Seite, die du gerade liest, lädt nichts von anderen.</p>
+</section>
+
+<section>
+  <h2>Windows hat mich vor dem Download gewarnt. Warum?</h2>
+  <p>Das Programm ist signiert, sodass die Warnung nennt, wer es signiert hat, statt „Unbekannter Herausgeber“ zu sagen. SmartScreen kann trotzdem noch eine Weile warnen, weil das Zertifikat neu ist und es es noch nicht oft gesehen hat. Manche Virenscanner reagieren womöglich auch auf ein Programm, das Administratorrechte verlangt und einen Netzwerktreiber lädt. Jedes Release veröffentlicht eine SHA-256-Prüfsumme und eine signierte Liste seiner Komponenten, sodass du prüfen kannst, was du heruntergeladen hast, statt einem grünen Häkchen zu vertrauen.</p>
+</section>
+
+<section>
+  <h2>Mein Download ist komplett gestorben, und nichts sagt, warum</h2>
+  <p>Prüfe die maximale Paketgröße. Niedrig genug eingestellt, ist es kein kleineres Paket mehr, sondern ein Black Hole: Das Netzwerk verwirft, was zu groß ist, und meldet es nie. Stell sie zurück, und die Übertragung kommt wieder.</p>
+</section>
+
+<section>
+  <h2>Läuft es unter Linux oder macOS?</h2>
+  <p>Nein, und das wird es auch nicht. Es steht auf einem Windows-Kernel-Treiber. Unter Linux erledigt <code>tc</code> mit <code>netem</code> diese Aufgabe und ist schon installiert.</p>
+</section>
+
+<section>
+  <h2>Ist es wirklich kostenlos? Darf ich es bei der Arbeit nutzen?</h2>
+  <p>Ja. Es ist kostenlos und Open Source unter der GNU GPL v3, auch bei der Arbeit, und der Quellcode steht jedem zum Lesen oder Ändern offen. Der Download ist für alle dieselbe Datei.</p>
+</section>
+
+<section>
+  <h2>Mehr</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

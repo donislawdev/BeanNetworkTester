@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Spiele-Lag und Paketverlust simulieren</h1>
+  <p class="lead">Netcode wird auf einer lokalen Verbindung mit 1 ms Ping geschrieben und von Spielern im Hotel-WLAN getestet. Das hier schließt diese Lücke auf deinem eigenen Rechner, nur für den Spielprozess, während der Rest des Computers nutzbar bleibt.</p>
+</section>
+
+<section>
+  <h2>Hier anfangen</h2>
+  <p>Ziele auf den Spielclient, gib ihm eine realistische schlechte Verbindung und lass es nach fünf Minuten von selbst enden:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Dafür gibt es auch eine fertige Zeitleiste: <code>overloaded-game-server.json</code> im Ordner <code>scenarios</code> führt eine Verbindung in die Überlastung und wieder heraus, sodass du beobachten kannst, wie der Client beide Richtungen der Änderung verkraftet. Siehe <a href="../szenarien-ueber-zeit/">Szenarien über die Zeit</a>.</p>
+</section>
+
+<section>
+  <h2>Warum ein Spiel Verlust zeigt und ein Browser nicht</h2>
+  <p>Der meiste Spieleverkehr ist UDP, und bei UDP gibt es nichts, womit sich Verlust verstecken ließe. Eine Webseite über TCP überträgt still erneut und braucht nur länger. Deshalb kann sich ein Browser bei 5 % Verlust gut anfühlen, während ein Match bei denselben 5 % ruckelt, zurückspringt und aus dem Takt gerät.</p>
+  <p>Das macht ein Spiel zum ehrlichen Ort, um Verlust zu testen: Was du einstellst, ist das, was der Client tatsächlich erlebt.</p>
+</section>
+
+<section>
+  <h2>Was du einstellen solltest und wonach es sucht</h2>
+  <table>
+    <tr><th>Einstellung</th><th>Probiere</th><th>Was es aufdeckt</th></tr>
+    <tr><td>Latenz</td><td>80 bis 250 ms</td><td>Vorhersage und Interpolation. Rutscht deine Spielfigur nach einem Schuss zurück?</td></tr>
+    <tr><td>Jitter</td><td>40 bis 100 ms</td><td>Pufferung. Konstante 200 ms lassen sich leichter verstecken als ein Ping, der sich ständig bewegt.</td></tr>
+    <tr><td>Verlust</td><td>2 bis 10 %</td><td>Fehlende Zustandsupdates und ob sich der Client erholt oder davondriftet.</td></tr>
+    <tr><td>Spitzen</td><td>1 Sekunde, selten</td><td>Der Aussetzer, den eine Funkzellenübergabe verursacht. Meist der hässlichste.</td></tr>
+    <tr><td>Verbindung ein und aus</td><td>10 s Zyklus, 30 % aus</td><td>Wiederverbinden und Wiedereinsteigen.</td></tr>
+  </table>
+  <p>Miss Jitter als Abstand zwischen dem 95. Perzentil und dem Median statt als Durchschnitt: Jitter bewegt einen Durchschnitt kaum, und deshalb kann ein Durchlauf auf dem Papier identisch aussehen und sich doch anders spielen.</p>
+</section>
+
+<section>
+  <h2>Zwei Builds zu vergleichen, braucht einen Seed</h2>
+  <p>Zufälliger Verlust macht zwei Durchläufe verschieden, „der neue Build fühlt sich schlechter an“ ist also kein Beweis. Derselbe Seed spielt denselben Verlust und denselben Jitter ab und macht aus einem Gefühl einen Vergleich:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Was es nicht kann</h2>
+  <p>Es formt den Datenverkehr <em>deines</em> Rechners. Es verlangsamt den Server nicht, ändert nicht dessen Tick-Rate und versetzt keine anderen Spieler in eine schlechte Verbindung, sodass es deinen Client gegen eine schlechte Verbindung testet, nicht deinen Server unter Last. Für die Serverseite brauchst du Lasttests, und für eine Lobby voller schlechter Verbindungen brauchst du mehr als einen Rechner.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

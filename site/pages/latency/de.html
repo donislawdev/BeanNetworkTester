@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Latenz und Jitter für eine App hinzufügen</h1>
+  <p class="lead">Auf einer schnellen lokalen Verbindung funktioniert alles. Gib der App 300 ms Ping, und du findest heraus, welche Bildschirme so geschrieben wurden, als käme die Antwort sofort.</p>
+</section>
+
+<section>
+  <h2>Drei verschiedene Dinge</h2>
+  <table>
+    <tr><th>Einstellung</th><th>Was sie tut</th><th>Woher es im echten Leben kommt</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Fügt jedem Paket dieselbe Verzögerung hinzu, in Millisekunden.</td><td>Entfernung. Ein Server auf einem anderen Kontinent oder ein Satellit.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Fügt obendrauf einen zufälligen Betrag hinzu, sodass sich die Verzögerung ständig ändert.</td><td>Geteiltes WLAN, Mobilfunknetze, alles Überlastete.</td></tr>
+    <tr><td><strong>Latenzspitzen</strong></td><td>Gelegentliche lange Aussetzer, festgelegt durch Häufigkeit und Dauer.</td><td>Eine Übergabe zwischen Funkzellen, ein überlasteter Router.</td></tr>
+  </table>
+  <p>Alle drei sind in Millisekunden angegeben und können zusammen laufen. Beide Verzögerungswerte akzeptieren alles ab 0, sodass du von glaubwürdigen 40 ms bis zu absurden 60 Sekunden gehen kannst.</p>
+</section>
+
+<section>
+  <h2>Über die Befehlszeile</h2>
+  <p>Konstante 200 ms mit 80 ms Jitter, für eine Anwendung:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Stattdessen seltene, lange Aussetzer: Etwa jedes zwanzigste Paket wartet eine Sekunde länger:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Werte, die sich auszuprobieren lohnen</h2>
+  <ul>
+    <li><strong>40 ms</strong>: ein Server im selben Land. Es sollte sich nichts ändern.</li>
+    <li><strong>150 ms</strong>: ein anderer Kontinent. Alles, was viel hin und her schickt, fühlt sich langsam an, weil jede Runde kostet.</li>
+    <li><strong>600 ms und mehr</strong>: geostationärer Satellit oder WLAN im Flugzeug. Hier bleiben Fortschrittsbalken stehen, und die Wiederholungslogik kommt endlich zum Zug.</li>
+  </ul>
+  <p>Die fertigen Profile enthalten gemessene Werte: „{{app.presets.distant}}“, „{{app.presets.leo}}“, „{{app.presets.satellite}}“, „{{app.presets.inflight}}“, „{{app.presets.lte}}“.</p>
+</section>
+
+<section>
+  <h2>Messen: auf den schlechtesten Fall schauen, nicht auf den Durchschnitt</h2>
+  <p>Jitter bewegt einen Durchschnitt kaum, und auch einen Median kaum. Ein Durchlauf mit 30 ms Jitter und einer ohne können fast denselben „typischen“ Ping melden und sich trotzdem völlig unterschiedlich anfühlen.</p>
+  <p>Vergleiche stattdessen das <strong>95. Perzentil mit dem Median</strong>. Der Abstand dazwischen ist der Jitter, und dieser Abstand macht einen Anruf abgehackt oder ein Spiel unspielbar, obwohl der Durchschnitt noch gut aussieht.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

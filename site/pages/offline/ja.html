@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>インターネットなしでアプリをテストする</h1>
+  <p class="lead">ネットワークケーブルを抜いて確かめられるのは、ネットワークのないマシンという1つのことだけです。オフラインのバグの多くはそうではありません。アダプターは有効で、Wi-Fiのアイコンも問題なさそうなのに、アプリが必要とするものにだけ到達できないときに起きます。</p>
+</section>
+
+<section>
+  <h2>3種類の「オフライン」</h2>
+  <table>
+    <tr><th>オンにするもの</th><th>アプリに何が見えるか</th><th>見つかるバグ</th></tr>
+    <tr><td><strong>LANモード</strong></td><td>ローカルネットワークは動きます。その先はどこにも届きません。</td><td>ログインする前のホテルのWi-Fi、切れたアップリンク、外への経路がない社内ネットワーク。</td></tr>
+    <tr><td><strong>アドレスのブロック</strong></td><td>1台のサーバーに到達できません。ほかはすべて動きます。</td><td>アプリ自体は正常なのに依存先が1つ落ちている状態。ヘルスチェックがたいてい見逃すケースです。</td></tr>
+    <tr><td><strong>ポート53のブロック</strong></td><td>名前が解決されなくなりますが、アドレス指定での接続は動き続けます。</td><td>壊れたDNS。ユーザーには「インターネットが落ちた」ように見え、ログには全然別のものに見えます。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>コマンドラインから</h2>
+  <p>1つのアプリだけインターネットを失い、ローカルネットワークはそのままの状態を2分間：</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>1つのサービスが到達不能で、ほかは正常：</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>名前が解決されなくなる：</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>DNSを壊し、自動で元に戻す用意済みタイムラインもあります。プログラムの隣の <code>scenarios</code> フォルダーにある <code>failing-dns.json</code> です。<a href="../jikan-henka-shinario/">時間で変わるシナリオ</a>を参照してください。</p>
+</section>
+
+<section>
+  <h2>実際に確認すること</h2>
+  <ul>
+    <li><strong>メッセージ。</strong>アプリは何が起きたかを伝えますか、それともスピナーを永遠に回し続けますか？</li>
+    <li><strong>再試行。</strong>間隔を空けますか、それとも同じアドレスをループで叩き続けますか？</li>
+    <li><strong>キュー。</strong>オフライン中にユーザーが行った作業は保持されて後で送られますか、それとも失われますか？</li>
+    <li><strong>回復。</strong>{{app.buttons.stop}}でネットワークが戻ります。アプリは自分で気づきますか、それとも再起動が必要ですか？</li>
+  </ul>
+  <p>最後の点にこそ、価値の大半があります。オフラインになるのは、下手に扱いやすく、テストもしやすいものです。戻ってくるときに、状態がおかしくなります。</p>
+</section>
+
+<section>
+  <h2>これではないもの</h2>
+  <p>アダプターは有効なままでマシンはアドレスを保っているため、Windowsに「ネットワークはあるか」とだけ尋ねるアプリは、それでも「はい」という答えを得ます。これは意図的で、よりおもしろいテストです。実際のユーザーが完全に切断されることはまれで、必要なものに届かない何かにつながっているのです。特に「アダプターなし」のケースが欲しいなら、アダプターを無効にしてください。ツールは要りません。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
