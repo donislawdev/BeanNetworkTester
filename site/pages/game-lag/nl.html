@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Gamelag en pakketverlies simuleren</h1>
+  <p class="lead">Netcode wordt geschreven op een lokale verbinding met 1 ms ping en getest door spelers op hotelwifi. Dit dicht dat gat op je eigen machine, alleen op het gameproces, terwijl de rest van de computer bruikbaar blijft.</p>
+</section>
+
+<section>
+  <h2>Begin hier</h2>
+  <p>Richt op de gameclient, geef hem een realistische slechte verbinding en laat hem na vijf minuten vanzelf stoppen:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Hiervoor is ook een kant-en-klare tijdlijn: <code>overloaded-game-server.json</code> in de map <code>scenarios</code> loodst een verbinding naar congestie en weer terug, zodat je kunt zien hoe de client beide richtingen van de verandering aankan. Zie <a href="../scenarios-in-de-tijd/">scenario’s in de tijd</a>.</p>
+</section>
+
+<section>
+  <h2>Waarom een game verlies laat zien als een browser dat niet doet</h2>
+  <p>Het meeste gameverkeer is UDP, en UDP heeft niets om verlies achter te verbergen. Een webpagina over TCP verstuurt stilletjes opnieuw en duurt gewoon langer, daarom kan een browser prima aanvoelen bij 5% verlies terwijl een potje bij diezelfde 5% hapert, teruggetrokken wordt en uit sync raakt.</p>
+  <p>Dat maakt een game de eerlijke plek om verlies te testen: wat je instelt is wat de client daadwerkelijk ervaart.</p>
+</section>
+
+<section>
+  <h2>Wat je instelt en wat het blootlegt</h2>
+  <table>
+    <tr><th>Instelling</th><th>Probeer</th><th>Wat het blootlegt</th></tr>
+    <tr><td>Latentie</td><td>80 tot 250 ms</td><td>Voorspelling en interpolatie. Schuift je personage na een schot terug?</td></tr>
+    <tr><td>Jitter</td><td>40 tot 100 ms</td><td>Buffering. Een constante 200 ms is makkelijker te verbergen dan een ping die blijft bewegen.</td></tr>
+    <tr><td>Verlies</td><td>2 tot 10%</td><td>Ontbrekende statusupdates, en of de client herstelt of afdrijft.</td></tr>
+    <tr><td>Uitschieters</td><td>1 seconde, zelden</td><td>De stilstand die een overdracht tussen masten veroorzaakt. Meestal de lelijkste.</td></tr>
+    <tr><td>Verbinding aan en uit</td><td>cyclus van 10 s, 30% uitval</td><td>Opnieuw verbinden en opnieuw meedoen.</td></tr>
+  </table>
+  <p>Meet jitter als het verschil tussen het 95e percentiel en de mediaan in plaats van als gemiddelde: jitter beweegt een gemiddelde nauwelijks, en daarom kan een run op papier identiek lijken en toch anders spelen.</p>
+</section>
+
+<section>
+  <h2>Twee builds vergelijken heeft een seed nodig</h2>
+  <p>Willekeurig verlies maakt twee runs verschillend, dus “de nieuwe build voelt slechter” is geen bewijs. Dezelfde seed speelt hetzelfde verlies en dezelfde jitter opnieuw af, wat een gevoel in een vergelijking verandert:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Wat het niet kan</h2>
+  <p>Dit vormt het verkeer van <em>jouw</em> machine. Het vertraagt de server niet, verandert zijn tickrate niet en zet geen andere spelers op een slechte verbinding, dus het test jouw client tegen een slechte verbinding, niet je server onder belasting. Voor de serverkant heb je belastingtests nodig, en voor een lobby vol slechte verbindingen heb je meer dan één machine nodig.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

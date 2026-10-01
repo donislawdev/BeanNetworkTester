@@ -109,6 +109,12 @@
       "title": "Întrerupe conexiuni și blochează porturi în Windows",
       "description": "Omoară conexiuni, blochează un port sau o adresă, taie legătura o vreme sau micșorează pachetele până nu mai trece nimic, apoi vezi cum își revine aplicația.",
       "link_text": "Întrerupe conexiuni"
+    },
+    "nl": {
+      "slug": "verbindingen-verbreken",
+      "title": "Verbindingen verbreken en poorten blokkeren op Windows",
+      "description": "Dood verbindingen, blokkeer een poort of adres, kap de verbinding even af of verklein pakketten tot niets meer doorkomt, en zie hoe de app herstelt.",
+      "link_text": "Verbindingen verbreken"
     }
   }
 }

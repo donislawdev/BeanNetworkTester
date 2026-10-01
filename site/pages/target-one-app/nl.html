@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Eén app als doel, niet de machine</h1>
+  <p class="lead">Zonder doel wordt elke verbinding op de computer geraakt, inclusief het bureaublad op afstand dat je gebruikt en de download van de oplossing. Met een doel krijgt één proces het slechte netwerk en gaat al het andere gewoon door.</p>
+</section>
+
+<section>
+  <h2>Op proces</h2>
+  <p>Typ een naam in <strong>{{app.fields.target_process}}</strong>, of geef <code>--target</code> mee. Een kale naam komt overeen als fragment, dus <code>chrome</code> dekt <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Het volgt de procesboom, wat telt voor alles wat kindprocessen start: een browser opent een proces per tabblad, en die worden ook geraakt.</p>
+  <p>Het veld accepteert meer dan één naam, en meer dan één soort ding tegelijk:</p>
+  <table>
+    <tr><th>Wat je typt</th><th>Wat het betekent</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Twee applicaties.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, maar nooit het stuurprogramma. Uitsluitingen winnen.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Alles wat met “my” begint.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Een reguliere expressie, wanneer een jokerteken niet genoeg is.</td></tr>
+    <tr><td><code>4812</code></td><td>Eén enkele proces-id.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Elke proces-id boven 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Op adres of poort</h2>
+  <p>Soms is niet de app maar één server de eenheid van belang. Deze nemen dezelfde syntaxis voor lijst, bereik en uitsluiting en begrijpen CIDR en IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>De tweede is goed om te kennen: alles behalve DNS. <em>Weg</em> van een poort richten is vaak makkelijker dan de poorten opsommen die je wilt.</p>
+</section>
+
+<section>
+  <h2>Een proces op naam als doel overleeft zijn herstart</h2>
+  <p>Herstart de applicatie terwijl een sessie loopt en een doel op <strong>naam</strong> pakt het nieuwe proces weer op. Een doel op <strong>proces-id</strong> kan dat niet, omdat die id bij het afgesloten proces hoorde. Een ander programma dat Windows later dezelfde id geeft, wordt ook niet geraakt. Als je test het geteste ding herstart, richt het dan op naam.</p>
+</section>
+
+<section>
+  <h2>De waarschuwing die je niet moet negeren</h2>
+  <p>Start met de verslechtering aan, zonder iets om op te richten en zonder tijdslimiet, en zowel het venster als de opdrachtregel zeggen het: dit raakt elke verbinding op deze machine. Het is een waarschuwing, geen weigering: soms is dat wat je wilt. Zo niet, stel dan een doel of een <code>--duration</code> in, en {{app.buttons.stop}} zet altijd alles terug.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

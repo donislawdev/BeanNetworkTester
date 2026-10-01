@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Een Clumsy-alternatief voor Windows</h1>
+  <p class="lead">Clumsy is de tool die de meeste mensen als eerste vinden, en het is een goede: gratis, MIT-licentie, interactief en gebouwd op hetzelfde WinDivert-stuurprogramma dat deze tool gebruikt. Als hij doet wat je nodig hebt, gebruik hem dan. Deze pagina gaat over de gevallen waarin hij dat niet doet.</p>
+</section>
+
+<section>
+  <h2>Waar je op moet letten, welke je ook kiest</h2>
+  <table>
+    <tr><th>Vraag</th><th>Waarom het de keuze van de tool bepaalt</th></tr>
+    <tr><td>Kan hij <strong>één applicatie</strong> raken?</td><td>Anders verslechter je de machine waarop je werkt, inclusief de externe sessie en de browser waarin je de documentatie leest.</td></tr>
+    <tr><td>Heeft hij een <strong>opdrachtregel</strong>?</td><td>Een pipeline kan geen selectievakje aanklikken. Zonder opdrachtregel kan een netwerktest nooit deel van de build worden.</td></tr>
+    <tr><td>Is een run <strong>herhaalbaar</strong>?</td><td>Willekeurig verlies dat niet kan worden teruggespeeld levert bugrapporten op die niemand anders kan reproduceren.</td></tr>
+    <tr><td><strong>Stopt hij vanzelf</strong>?</td><td>Een tool die je moet onthouden uit te zetten blijft aan staan.</td></tr>
+    <tr><td>Kun je zien wat hij <strong>echt heeft gedaan</strong>?</td><td>Tellers en een verbindingslijst veranderen “het voelde traag” in getallen.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Wat deze tool toevoegt</h2>
+  <ul>
+    <li><strong>Richten op proces, PID, adres of poort</strong>, met de procesboom mee, zodat een browser met dertig kindprocessen toch één doel blijft.</li>
+    <li><strong>Hetzelfde uitvoerbare bestand is de opdrachtregel</strong>, met een afsluitcode voor elke uitkomst en NDJSON-uitvoer, dus het werkt in CI.</li>
+    <li><strong>Runs met een seed</strong>: dezelfde seed speelt hetzelfde willekeurige verlies en dezelfde jitter opnieuw af.</li>
+    <li><strong>Kant-en-klare profielen</strong>: 3G, LTE, satelliet, een drukke koffiebar, wifi in het vliegtuig, een 56k-modem, zodat je begint met iets geloofwaardigs in plaats van getallen te raden.</li>
+    <li><strong>Sessies met tijdsduur en gescripte scenario’s</strong>, zodat de verstoring vanzelf kan veranderen terwijl je de app bekijkt.</li>
+    <li><strong>Een live weergave</strong>: grafiek, tellers en een verbindingstabel die laat zien welke verbinding is geraakt.</li>
+    <li>Interface in het <strong>Engels, Pools en vereenvoudigd Chinees</strong>, en geen telemetrie van welke aard ook.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Als je van een andere tool komt</h2>
+  <p>Vier namen komen steeds langs als dit besproken wordt, en ze zijn niet uitwisselbaar.</p>
+  <table>
+    <tr><th>Je kent</th><th>Wat het is</th><th>Wat je hier mag verwachten</th></tr>
+    <tr><td><strong>tc met netem</strong></td><td>Het Linux-antwoord, ingebouwd in de kernel en bediend vanaf de opdrachtregel. Vaak wat een zoekopdracht naar WAN-emulatie oplevert.</td><td>Er is geen <code>tc</code> op Windows. Dit is de dichtstbijzijnde in geest: dezelfde soorten verslechtering, een opdrachtregel met afsluitcodes en een stuurprogramma in plaats van een queueing discipline.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Een gratis, interactieve Windows-tool met MIT-licentie op hetzelfde WinDivert-stuurprogramma.</td><td>Pak hem als een venster en een filter genoeg zijn. Kom hier voor richten per proces, runs met een seed en een opdrachtregel die een pipeline kan aanroepen.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Een commercieel Windows-product voor het permanent beheren van bandbreedte per applicatie.</td><td>Een ander werk. Dit is een testinstrument: een tijdje aan, daarna uit, en het verslechtert veel meer dan alleen snelheid.</td></tr>
+    <tr><td><strong>Fiddler of Charles</strong></td><td>Proxy’s die het verkeer dat erdoorheen gaat kunnen inspecteren, herschrijven en afknijpen.</td><td>Ook een ander werk. Een proxy vormt wat hij proxyt en ziet de gegevens. Dit vormt de verbinding zelf, inclusief UDP en alles wat nooit een proxy aanraakt.</td></tr>
+  </table>
+  <p>Kort gezegd: als je een netwerkemulator wilt voor één Windows-applicatie, met een opdrachtregel, is dit het soort tool dat je zoekt. Als je applicatiegegevens wilt lezen en wijzigen, heb je een proxy nodig, en als je op Linux zit heb je netem al.</p>
+</section>
+
+<section>
+  <h2>Wanneer je iets anders gebruikt</h2>
+  <p>Hier eerlijk over zijn is goedkoper dan een teleurgestelde download.</p>
+  <ul>
+    <li><strong>Je zit op Linux of macOS.</strong> Dit is alleen voor Windows en dat blijft zo, want het is gebouwd op een Windows-stuurprogramma. Op Linux is <code>tc</code> met <code>netem</code> het standaardantwoord en dat heeft geen extra software nodig.</li>
+    <li><strong>Je wilt permanent bandbreedtebeheer</strong> voor de hele machine, per applicatie, als productfunctie in plaats van als test. Daar zijn commerciële tools voor verkeersvorming zoals NetLimiter voor. Dit is een testinstrument: het is bedoeld om een tijdje aan en daarna uit te staan.</li>
+    <li><strong>Je kunt geen beheerdersrechten krijgen.</strong> Pakketten onderscheppen vereist ze. Er is geen omweg, en een tool die anders beweert onderschept je verkeer niet.</li>
+    <li><strong>Je moet applicatiegegevens inspecteren en herschrijven</strong> in plaats van de verbinding te verslechteren. Dat is het werk van een proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -109,6 +109,12 @@
       "title": "Țintește o singură aplicație în Windows, nu tot calculatorul",
       "description": "Îndreaptă degradarea spre un proces, PID, adresă sau port, ca testul să strice doar aplicația vizată și restul calculatorului să rămână în pace.",
       "link_text": "Țintește o aplicație"
+    },
+    "nl": {
+      "slug": "een-app-als-doel",
+      "title": "Eén app als doel op Windows, niet de hele computer",
+      "description": "Richt de verstoring op één proces, PID, adres of poort, zodat je test alleen de geteste app breekt en de rest van de computer met rust laat.",
+      "link_text": "Eén app als doel"
     }
   }
 }

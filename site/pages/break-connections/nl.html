@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Verbindingen met opzet verbreken</h1>
+  <p class="lead">Traag is één soort slecht. Weg is een andere soort, en die vindt het codepad dat niemand heeft geschreven: het opnieuw verbinden, het opnieuw proberen, het bericht dat de gebruiker vertelt wat er gebeurde.</p>
+  <p>Zo test je ook een app offline zonder iets los te trekken: de LAN-modus laat het lokale netwerk werken en neemt het internet af, en het blokkeren van één adres maakt één dienst onbereikbaar terwijl de rest van de verbinding in orde is.</p>
+</section>
+
+<section>
+  <h2>Vijf verschillende manieren om weg te zijn</h2>
+  <table>
+    <tr><th>Instelling</th><th>Wat de app ziet</th></tr>
+    <tr><td><strong>Verbindingen resetten</strong></td><td>Verbindingen sterven midden in de overdracht, zoals een firewall of load balancer ze doodt. Je stelt in hoe vaak, in procenten.</td></tr>
+    <tr><td><strong>Verbinding aan en uit</strong></td><td>Het netwerk verdwijnt een tijdje en komt dan terug, steeds opnieuw. Je stelt de cycluslengte in en hoeveel ervan uitvaltijd is.</td></tr>
+    <tr><td><strong>Een poort blokkeren</strong></td><td>Alles naar die poort verdwijnt. Niets anders wordt aangeraakt.</td></tr>
+    <tr><td><strong>Een adres blokkeren</strong></td><td>Eén server wordt onbereikbaar terwijl de rest van het internet werkt.</td></tr>
+    <tr><td><strong>LAN-modus</strong></td><td>Het lokale netwerk blijft werken, het internet niet. Precies de vorm van een captive portal of een dode uplink.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Vanaf de opdrachtregel</h2>
+  <p>Dood ongeveer één op de tien verbindingen, bij één app:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Cycli van tien seconden, waarvan vier seconden uitval, een verbinding die steeds komt en gaat:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Eén server onbereikbaar, al het andere in orde:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Blokkeren raakt alleen wat het noemt</h2>
+  <p>Anders dan verlies of vertraging raakt het blokkeren van een poort of adres <strong>alleen</strong> het verkeer dat ermee overeenkomt. Dat maakt het de veiligste van deze opties om zonder procesdoel uit te voeren, en het is waarom “laat deze ene afhankelijkheid verdwijnen” een opdracht van één regel is.</p>
+</section>
+
+<section>
+  <h2>De valstrik van de dode download</h2>
+  <p>Er is ook een maximale pakketgrootte. Verlaag hem een beetje en grote overdrachten worden trager. Verlaag hem naar een waarde als 576 en downloads stoppen helemaal, voor altijd, zonder foutmelding, want dat is geen kleinere pakketgrootte meer, maar het klassieke zwarte gat waarin het netwerk weggooit wat te groot is en dat nooit meldt.</p>
+  <p>Dat is een echte faalmodus die het waard is om met opzet na te bootsen, en het is echt verwarrend om hem per ongeluk tegen te komen. Als een download stilletjes doodgaat vlak nadat je deze instelling hebt gewijzigd, is dat de reden.</p>
+</section>
+
+<section>
+  <h2>Terug naar normaal</h2>
+  <p>{{app.buttons.stop}} herstelt alles. Het programma sluiten doet dat ook, en een tijdslimiet ook, als je er een hebt ingesteld. Als de tool zelf midden in een sessie zou sterven, stopt een watchdog erin het onderscheppen in plaats van je netwerk in een kapotte staat achter te laten.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

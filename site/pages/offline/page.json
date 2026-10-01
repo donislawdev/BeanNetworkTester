@@ -109,6 +109,12 @@
       "title": "Testează o aplicație fără internet în Windows",
       "description": "Ia internetul unei singure aplicații cât timp rețeaua locală merge, fă un serviciu inaccesibil sau strică DNS-ul, fără să scoți vreun cablu.",
       "link_text": "Fără internet"
+    },
+    "nl": {
+      "slug": "testen-zonder-internet",
+      "title": "Een app testen zonder internet op Windows",
+      "description": "Neem één app het internet af terwijl het lokale netwerk werkt, maak één dienst onbereikbaar of saboteer DNS, zonder een kabel los te trekken.",
+      "link_text": "Zonder internet"
     }
   }
 }

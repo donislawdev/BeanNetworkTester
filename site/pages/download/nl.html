@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Bean Network Tester downloaden</h1>
+  <p class="lead">Een zip die zonder installatie draait, of een installatieprogramma voor iedereen op de computer. In beide gevallen vraagt het programma zelf om beheerdersrechten.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>De feiten op één plek</h2>
+  <ul class="facts">
+    <li><strong>Prijs:</strong> gratis, en vrije software, GNU GPL v3.</li>
+    <li><strong>Draait op:</strong> Windows 10 en Windows 11, 64-bits.</li>
+    <li><strong>Vereist:</strong> beheerdersrechten, omdat verkeer door een stuurprogramma wordt onderschept.</li>
+    <li><strong>Installatie:</strong> niet nodig. Pak de zip ergens uit en start hem. Of gebruik het <code>.msi</code>-installatieprogramma, dat een item in het Startmenu toevoegt en het programma op <code>PATH</code> zet (vereist beheerdersrechten).</li>
+    <li><strong>Verstuurt gegevens:</strong> nergens naartoe. Geen telemetrie, geen updatecontrole, geen netwerkclient.</li>
+    <li><strong>Modi:</strong> een venster, en hetzelfde bestand als opdrachtregeltool.</li>
+    <li><strong>Broncode:</strong> <a href="{{site.repo_url}}">op GitHub</a>, onder dezelfde licentie.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wat er in de release zit</h2>
+  <p>Een release publiceert vijf bestanden. Twee zijn het programma, en de andere drie zijn er zodat je de download niet op goed vertrouwen hoeft aan te nemen:</p>
+  <ul>
+    <li><strong>de zip</strong>: het programma en het stuurprogramma dat het gebruikt, samen in één map;</li>
+    <li><strong>het .msi-installatieprogramma</strong>: hetzelfde programma, geïnstalleerd voor iedereen op de computer, met een Startmenu-item;</li>
+    <li><strong>SHA256SUMS.txt</strong>: de controlesommen van de zip en het installatieprogramma;</li>
+    <li><strong>een SBOM</strong>: een standaardlijst van elk onderdeel erin, met versies en licenties, ondertekend tegen de zip;</li>
+    <li><strong>een .sigstore.json-bestand</strong>: die handtekening als bestand, om te controleren zonder GitHub te vragen.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Controleren of je krijgt wat wij hebben gebouwd</h2>
+  <p>De controlesom beantwoordt “is het ongewijzigd aangekomen”. Vergelijk in PowerShell de uitvoer met de regel in <code>SHA256SUMS.txt</code> (voor het installatieprogramma zet je <code>.msi</code> in plaats van <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>De handtekening beantwoordt een andere vraag, “kwam dit uit die repository”, en heeft de opdrachtregeltool van GitHub nodig:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Typ de naam van de zip die je hebt gedownload als eerste deel: <code>gh</code> accepteert daar geen <code>*</code>. Houd <code>--predicate-type</code> erbij: zonder dat zoekt <code>gh</code> naar een ander soort verklaring en meldt dat het er geen heeft gevonden.</p>
+  <p>Een controlesom die je van dezelfde pagina als de download kopieert bewijst minder dan een handtekening. Beide zijn gepubliceerd, dus beide zijn een momentje waard.</p>
+</section>
+
+<section>
+  <h2>Windows kan je waarschuwen</h2>
+  <p>Het programma en het installatieprogramma zijn ondertekend, dus Windows noemt wie ze heeft ondertekend in plaats van “Onbekende uitgever”. Het certificaat is nieuw, dus SmartScreen kan nog een tijdje waarschuwen, omdat het het nog niet vaak heeft gezien. Dat gaat over het certificaat, niet over het bestand, en met de twee controles hierboven kun je het bestand zelf verifiëren. De <a href="../veelgestelde-vragen/">pagina met vragen</a> behandelt dit en wat het stuurprogramma nodig heeft.</p>
+</section>
+
+<section>
+  <h2>Waar je begint nadat het draait</h2>
+  {{page.guide_links}}
+</section>

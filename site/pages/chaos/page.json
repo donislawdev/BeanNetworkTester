@@ -109,6 +109,12 @@
       "title": "Testare de haos pentru rețea în Windows",
       "description": "Injectează intenționat defecte de rețea, repetă-le exact cu un seed și lasă un pipeline să decidă din codul de ieșire dacă aplicația a rezistat.",
       "link_text": "Testare de haos"
+    },
+    "nl": {
+      "slug": "netwerk-chaostesten",
+      "title": "Netwerk-chaostesten op Windows",
+      "description": "Injecteer netwerkfouten met opzet, herhaal ze exact met een seed en laat een pipeline aan de afsluitcode zien of de applicatie het overleefde.",
+      "link_text": "Chaostesten"
     }
   }
 }

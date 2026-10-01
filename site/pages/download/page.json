@@ -109,6 +109,12 @@
       "title": "Descarcă Bean Network Tester pentru Windows",
       "description": "Descărcare gratuită pentru Windows 10 și 11, ca zip sau instalator. Ce conține versiunea, cum verifici fișierul și ce îți trebuie ca să ruleze.",
       "link_text": "Descărcare"
+    },
+    "nl": {
+      "slug": "downloaden",
+      "title": "Bean Network Tester downloaden voor Windows",
+      "description": "Gratis download voor Windows 10 en 11, als zip of installatieprogramma. Wat erin zit, hoe je controleert dat het ons bestand is en wat je nodig hebt.",
+      "link_text": "Downloaden"
     }
   }
 }

@@ -109,6 +109,12 @@
       "title": "Limitează viteza de descărcare și încărcare în Windows",
       "description": "Limitează o aplicație Windows la un număr de KB pe secundă, în ambele sensuri, și vezi ce îi face un modem de 56k sau wifi-ul din avion.",
       "link_text": "Limitare viteză"
+    },
+    "nl": {
+      "slug": "snelheidslimiet",
+      "title": "Download- en uploadsnelheid beperken op Windows",
+      "description": "Beperk één Windows-app tot een vast aantal KB per seconde, per richting, en zie wat een 56k-modem of vliegtuig-wifi ermee doet.",
+      "link_text": "Snelheidslimiet"
     }
   }
 }

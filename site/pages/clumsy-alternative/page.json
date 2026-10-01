@@ -109,6 +109,12 @@
       "title": "O alternativă la Clumsy pentru Windows, cu linie de comandă",
       "description": "Ce să cauți într-un instrument de degradare a rețelei pentru Windows, ce aduce acesta față de cele doar interactive și când să alegi altceva.",
       "link_text": "Alternativă la Clumsy"
+    },
+    "nl": {
+      "slug": "clumsy-alternatief",
+      "title": "Een Clumsy-alternatief voor Windows met opdrachtregel",
+      "description": "Waar je op let bij een tool die netwerken verslechtert op Windows, wat deze toevoegt aan puur interactieve tools en wanneer je iets anders kiest.",
+      "link_text": "Clumsy-alternatief"
     }
   }
 }

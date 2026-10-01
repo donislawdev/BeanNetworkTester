@@ -112,6 +112,12 @@
       "name": "Română",
       "dir": "ro",
       "og_locale": "ro_RO"
+    },
+    {
+      "code": "nl",
+      "name": "Nederlands",
+      "dir": "nl",
+      "og_locale": "nl_NL"
     }
   ],
   "og_image": "assets/bean.png",

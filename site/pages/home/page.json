@@ -109,6 +109,12 @@
       "title": "Bean Network Tester - simulează o rețea proastă în Windows",
       "description": "Instrument Windows gratuit care adaugă lag, pierdere de pachete și limite de viteză unei aplicații, ca să vezi cum se poartă pe o conexiune proastă.",
       "link_text": "Acasă"
+    },
+    "nl": {
+      "slug": "",
+      "title": "Bean Network Tester - simuleer een slecht netwerk op Windows",
+      "description": "Gratis Windows-tool die lag, pakketverlies en snelheidslimieten aan één app toevoegt, zodat je test hoe die zich gedraagt op een slechte verbinding.",
+      "link_text": "Home"
     }
   },
   "schema": "software_application"

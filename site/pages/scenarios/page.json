@@ -109,6 +109,12 @@
       "title": "Schimbă condițiile rețelei în timp",
       "description": "Un fișier de scenariu e o cronologie: la aceste secunde, aceste setări. Programul vine cu scenarii gata făcute și le repetă cât timp te uiți.",
       "link_text": "Scenarii în timp"
+    },
+    "nl": {
+      "slug": "scenarios-in-de-tijd",
+      "title": "Netwerkomstandigheden laten veranderen in de tijd",
+      "description": "Een scenariobestand is een tijdlijn: op deze seconden deze instellingen. Het programma levert kant-en-klare scenario’s mee en herhaalt ze zolang je kijkt.",
+      "link_text": "Scenario’s in de tijd"
     }
   }
 }

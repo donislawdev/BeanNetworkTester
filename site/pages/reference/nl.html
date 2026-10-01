@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profielen, instellingen en afsluitcodes</h1>
+  <p class="lead">Drie tabellen, geen enkele met de hand getypt. Ze worden gegenereerd uit de eigen registers van het programma wanneer deze pagina wordt gebouwd, dus ze kunnen niets zeggen wat het programma niet zegt.</p>
+</section>
+
+<section>
+  <h2>Kant-en-klare profielen</h2>
+  <p>Kies er een en het formulier vult zichzelf in. Een streepje betekent dat het profiel die instelling met rust laat. Snelheden zijn in kilobytes per seconde, vermenigvuldig met acht om te vergelijken met wat een provider adverteert.</p>
+  {{page.preset_table}}
+  <p>Een profiel kiezen vult alleen de velden in. Er verandert niets op het netwerk totdat je op {{app.buttons.start}} drukt.</p>
+</section>
+
+<section>
+  <h2>Elke instelling, en de vlag die haar instelt</h2>
+  <p>Het venster en de opdrachtregel nemen dezelfde instellingen. Dit is de hele lijst, met de eenheid en het bereik dat elke instelling accepteert.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Afsluitcodes</h2>
+  <p>De opdrachtregel eindigt nooit met een traceback. Elke manier waarop een run kan eindigen heeft een nummer, dus een pipeline kan een falende applicatie onderscheiden van een tool die niet kon starten.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Gerelateerd</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

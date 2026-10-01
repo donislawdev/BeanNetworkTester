@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Netwerkomstandigheden laten veranderen in de tijd</h1>
+  <p class="lead">Een vast verlies van 10% is een laboratoriumomstandigheid. Echte verbindingen worden slechter, herstellen, haperen vier seconden en komen terug, en de bug die je najaagt zit meestal in de verandering, niet in de stabiele toestand.</p>
+</section>
+
+<section>
+  <h2>Een scenario is een tijdlijn</h2>
+  <p>Eén JSON-bestand. Elke stap zegt <em>op deze seconde, deze instellingen</em>, en wat je niet noemt houdt zijn waarde:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Tijden zijn seconden vanaf het begin van de run, niet de tussenruimtes tussen stappen. Met <code>"loop": true</code> begint de tijdlijn opnieuw als hij afloopt, wat je wilt voor een lange duurtest: laat hem draaien en gebruik de app.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Kant-en-klare scenario’s in het programma: {{page.scenario_count}}</h2>
+  <p>In de map <code>scenarios</code> naast het uitvoerbare bestand. Uit die bestanden gelezen, dus dit is wat je echt hebt:</p>
+  {{page.scenario_table}}
+  <p>Het zijn gewone tekstbestanden: open er een, wijzig een getal, sla op. De namen zeggen wat ze nabootsen: een drukke koffiebar, een mobiele verbinding die van LTE naar 3G zakt, een upload die halverwege sterft, een overbelaste server, DNS die niet meer antwoordt.</p>
+</section>
+
+<section>
+  <h2>Twee eenvoudigere manieren om verandering te krijgen</h2>
+  <p>Een scenario is het schrijven waard als de volgorde ertoe doet. Als dat niet zo is, variëren twee instellingen vanzelf:</p>
+  <ul>
+    <li><strong>Verbinding aan en uit</strong>: een cycluslengte en hoeveel ervan uitval is. Cycli van tien seconden, vier seconden uit, eindeloos.</li>
+    <li><strong>Een snelheidsschema</strong>: een reeks snelheden waar de limiet doorheen loopt, zodat de verbinding slechter wordt en herstelt zonder bestand.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Waarom het werkt terwijl de app draait</h2>
+  <p>Elke instelling die een scenario raakt wordt live toegepast op de sessie die al loopt: de app hoeft niet te herstarten en de tool ook niet. Het gebeurtenissenlogboek registreert elke stap terwijl hij gebeurt, dus als er iets breekt zie je welke verandering eraan voorafging. Combineer dat met een seed en de hele reeks, inclusief het willekeurige verlies erin, herhaalt zich exact.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

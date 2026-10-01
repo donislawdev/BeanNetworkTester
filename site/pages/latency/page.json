@@ -109,6 +109,12 @@
       "title": "Adaugă latență și jitter unei aplicații în Windows",
       "description": "Dă unei aplicații Windows pingul unui server îndepărtat sau al unui tunel de tren: întârziere fixă, jitter aleatoriu sau salturi ocazionale.",
       "link_text": "Latență și jitter"
+    },
+    "nl": {
+      "slug": "latentie-en-jitter",
+      "title": "Latentie en jitter toevoegen aan een app op Windows",
+      "description": "Geef één Windows-app de ping van een verre server of een treintunnel: vaste vertraging, willekeurige jitter of af en toe een uitschieter.",
+      "link_text": "Latentie en jitter"
     }
   }
 }

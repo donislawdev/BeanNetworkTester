@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Download- en uploadsnelheid beperken</h1>
+  <p class="lead">Beperk één app tot een vast aantal kilobytes per seconde en meer krijgt hij niet. De twee richtingen staan los van elkaar, dus je kunt hem een snelle download geven en een hopeloze upload, en zo zien de meeste thuis- en mobiele verbindingen er precies uit.</p>
+</section>
+
+<section>
+  <h2>In het venster</h2>
+  <ol class="steps">
+    <li>Zet <strong>{{app.fields.target_process}}</strong> op jouw app.</li>
+    <li>Vul <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> of allebei in, in KB/s. Laat een veld op 0 staan om die richting met rust te laten.</li>
+    <li>Druk op <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Wat de getallen betekenen</h2>
+  <table>
+    <tr><th>KB/s</th><th>Ongeveer</th><th>Wat het is</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Een inbelmodem. Het profiel “{{app.presets.modem56k}}”.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wifi in het vliegtuig, een druk hotel, een slecht mobiel signaal.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Een bescheiden thuislijn. Genoeg voor één videostream.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Een gewone vaste verbinding van tegenwoordig.</td></tr>
+  </table>
+  <p>Het zijn kilobytes, geen kilobits, dus vermenigvuldig met acht om te vergelijken met wat een internetprovider adverteert. Beide richtingen tegelijk beperken is wat een verbinding laat aanvoelen als een slechte hotspot in plaats van slechts een trage download.</p>
+</section>
+
+<section>
+  <h2>De wachtrij telt net zo zwaar als de limiet</h2>
+  <p>Een snelheidslimiet heeft een plek nodig voor pakketten die er nog niet door passen. Dat is de instelling <strong>{{app.fields.buffer}}</strong>, in milliseconden, en ze gedraagt zich als de rij bij de kassa:</p>
+  <ul>
+    <li><strong>Een korte wachtrij</strong> betekent dat pakketten worden weggegooid zodra de lijn vol is. Je app ziet verlies en reageert snel.</li>
+    <li><strong>Een lange wachtrij</strong> betekent dat niets wordt weggegooid, maar alles wacht. Je app ziet de verbinding steeds trager worden in plaats van falen, het effect van een overbelaste thuislijn en de reden dat een videogesprek slechter wordt terwijl een download doorloopt.</li>
+  </ul>
+  <p>Het profiel “{{app.presets.bufferbloat}}” is precies dit: een limiet met een lange wachtrij. Probeer dezelfde snelheid met een korte en een lange wachtrij en zie hoe anders de app zich gedraagt.</p>
+</section>
+
+<section>
+  <h2>Iets om rekening mee te houden</h2>
+  <p>Met een actieve limiet kan de teller voor weggegooide pakketten op nul blijven staan. Dat is geen bug: een limiet laat pakketten eerst wachten en gooit ze pas weg als de wachtrij echt vol is. Geef hem een kleine buffer en de verliezen verschijnen.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

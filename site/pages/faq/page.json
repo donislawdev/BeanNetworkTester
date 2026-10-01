@@ -109,6 +109,12 @@
       "title": "Întrebări frecvente despre Bean Network Tester",
       "description": "Drepturile de administrator, dacă afectează tot calculatorul, cum anulezi totul, avertismentul SmartScreen și ce face programul cu datele tale.",
       "link_text": "Întrebări și răspunsuri"
+    },
+    "nl": {
+      "slug": "veelgestelde-vragen",
+      "title": "Veelgestelde vragen over Bean Network Tester",
+      "description": "Beheerdersrechten, of de hele computer geraakt wordt, hoe je het ongedaan maakt, de SmartScreen-waarschuwing en wat het programma met je gegevens doet.",
+      "link_text": "Vragen en antwoorden"
     }
   }
 }

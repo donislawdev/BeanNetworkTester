@@ -109,6 +109,12 @@
       "title": "Simulează o rețea proastă în CI, în Windows",
       "description": "Același executabil rulează fără fereastră, raportează prin coduri de ieșire și NDJSON și se oprește singur, deci un pipeline poate testa o conexiune proastă.",
       "link_text": "Teste de rețea în CI"
+    },
+    "nl": {
+      "slug": "netwerktests-in-ci",
+      "title": "Een slecht netwerk simuleren in CI op Windows",
+      "description": "Hetzelfde uitvoerbare bestand draait zonder venster, meldt via afsluitcodes en NDJSON en stopt vanzelf, zodat een pipeline een slechte verbinding kan testen.",
+      "link_text": "Netwerktests in CI"
     }
   }
 }

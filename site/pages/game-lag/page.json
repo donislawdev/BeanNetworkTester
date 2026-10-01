@@ -109,6 +109,12 @@
       "title": "Simulează lag și pierdere de pachete în jocuri",
       "description": "Dă clientului unui joc pingul, jitterul și pierderea de pachete ale unei conexiuni proaste, doar pentru acel proces, și reia aceeași rulare cu un seed.",
       "link_text": "Lag în jocuri"
+    },
+    "nl": {
+      "slug": "game-lag-simuleren",
+      "title": "Gamelag en pakketverlies simuleren",
+      "description": "Geef een gameclient de ping, jitter en het pakketverlies van een slechte verbinding, alleen voor dat proces, en herhaal dezelfde run met een seed.",
+      "link_text": "Gamelag"
     }
   }
 }

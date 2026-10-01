@@ -109,6 +109,12 @@
       "title": "Profiluri, setări și coduri de ieșire",
       "description": "Fiecare profil gata făcut cu valorile lui, fiecare setare cu opțiunea, unitatea și intervalul ei și fiecare cod de ieșire al liniei de comandă.",
       "link_text": "Tabele de referință"
+    },
+    "nl": {
+      "slug": "referentietabellen",
+      "title": "Profielen, instellingen en afsluitcodes",
+      "description": "Elk kant-en-klaar profiel met zijn waarden, elke instelling met vlag, eenheid en bereik en elke afsluitcode die de opdrachtregel kan geven.",
+      "link_text": "Referentietabellen"
     }
   }
 }
