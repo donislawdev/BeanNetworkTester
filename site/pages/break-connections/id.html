@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Putuskan koneksi dengan sengaja</h1>
+  <p class="lead">Lambat adalah satu jenis buruk. Hilang adalah jenis lain, dan itulah yang menemukan jalur kode yang tak pernah ditulis siapa pun: sambung ulang, percobaan ulang, pesan yang memberi tahu pengguna apa yang terjadi.</p>
+  <p>Ini juga cara menguji aplikasi secara offline tanpa mencabut apa pun: mode LAN membiarkan jaringan lokal bekerja dan mengambil internet, dan memblokir satu alamat membuat satu layanan tak terjangkau sementara sisa koneksi baik-baik saja.</p>
+</section>
+
+<section>
+  <h2>Lima cara berbeda untuk menghilang</h2>
+  <table>
+    <tr><th>Pengaturan</th><th>Yang dilihat aplikasi</th></tr>
+    <tr><td><strong>Reset koneksi</strong></td><td>Koneksi mati di tengah transfer, seperti saat firewall atau load balancer memutusnya. Anda menetapkan seberapa sering, dalam persen.</td></tr>
+    <tr><td><strong>Tautan hidup dan mati</strong></td><td>Jaringan menghilang sebentar, lalu kembali, berulang-ulang. Anda menetapkan panjang siklus dan berapa bagian darinya yang mati.</td></tr>
+    <tr><td><strong>Blokir port</strong></td><td>Semua yang menuju port itu lenyap. Tidak ada hal lain yang disentuh.</td></tr>
+    <tr><td><strong>Blokir alamat</strong></td><td>Satu server menjadi tak terjangkau sementara sisa internet berfungsi.</td></tr>
+    <tr><td><strong>Mode LAN</strong></td><td>Jaringan lokal tetap berfungsi, internet tidak. Persis bentuk captive portal atau uplink yang mati.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Dari baris perintah</h2>
+  <p>Putuskan kira-kira satu dari sepuluh koneksi, pada satu aplikasi:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Siklus sepuluh detik, empat di antaranya mati: tautan yang terus datang dan pergi:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Satu server tak terjangkau, yang lain baik-baik saja:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Pemblokiran hanya mengenai yang disebutnya</h2>
+  <p>Berbeda dengan kehilangan atau jeda, memblokir port atau alamat memengaruhi <strong>hanya</strong> lalu lintas yang cocok. Itu membuatnya yang paling aman di antara ini untuk dijalankan tanpa target proses, dan itulah mengapa “buat satu dependensi ini lenyap” cukup satu baris perintah.</p>
+</section>
+
+<section>
+  <h2>Jebakan unduhan mati</h2>
+  <p>Ada juga ukuran paket maksimum. Turunkan sedikit dan transfer besar jadi lambat. Turunkan ke nilai seperti 576 dan unduhan berhenti total, selamanya, tanpa galat apa pun, karena itu bukan lagi ukuran paket yang lebih kecil, melainkan lubang hitam klasik tempat jaringan membuang yang terlalu besar dan tak pernah mengatakannya.</p>
+  <p>Itu mode kegagalan nyata yang layak direproduksi dengan sengaja, dan benar-benar membingungkan jika ditemui tanpa sengaja. Jika unduhan mati diam-diam tepat setelah Anda mengubah pengaturan ini, itulah sebabnya.</p>
+</section>
+
+<section>
+  <h2>Kembali ke normal</h2>
+  <p>{{app.buttons.stop}} memulihkan semuanya. Begitu pula menutup program, dan begitu pula batas waktu jika Anda menetapkannya. Jika alatnya sendiri mati di tengah sesi, watchdog di dalamnya menghentikan penangkapan alih-alih membiarkan jaringan Anda dalam keadaan rusak.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

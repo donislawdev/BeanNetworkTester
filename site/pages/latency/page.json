@@ -55,6 +55,18 @@
       "title": "Aggiungi latenza e jitter a un’app su Windows",
       "description": "Dai a un’app Windows il ping di un server lontano o di una galleria: con ritardo costante, jitter casuale o picchi occasionali.",
       "link_text": "Latenza e jitter"
+    },
+    "id": {
+      "slug": "latensi-dan-jitter",
+      "title": "Tambahkan latensi dan jitter ke aplikasi Windows",
+      "description": "Beri aplikasi Windows ping seperti server jauh atau terowongan kereta: dengan jeda tetap, jitter acak, atau lonjakan sesekali.",
+      "link_text": "Latensi dan jitter"
+    },
+    "ru": {
+      "slug": "zaderzhka-i-dzhitter",
+      "title": "Добавьте задержку и джиттер приложению в Windows",
+      "description": "Дайте приложению в Windows пинг далёкого сервера или поезда в туннеле: постоянная задержка, случайный джиттер или редкие всплески.",
+      "link_text": "Задержка и джиттер"
     }
   }
 }

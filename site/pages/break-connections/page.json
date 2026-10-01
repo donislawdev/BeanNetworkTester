@@ -55,6 +55,18 @@
       "title": "Interrompi connessioni e blocca porte su Windows",
       "description": "Azzera le connessioni, blocca una porta o un indirizzo, interrompi il collegamento o riduci i pacchetti finché nulla passa, e guarda come si riprende l’app.",
       "link_text": "Interrompere connessioni"
+    },
+    "id": {
+      "slug": "putuskan-koneksi",
+      "title": "Putuskan koneksi dan blokir port di Windows",
+      "description": "Reset koneksi, blokir port atau alamat, putus-sambungkan tautan, atau perkecil paket sampai tak ada yang lewat, lalu lihat cara aplikasi pulih.",
+      "link_text": "Putuskan koneksi"
+    },
+    "ru": {
+      "slug": "obryv-soedinenij",
+      "title": "Обрыв соединений и блокировка портов в Windows",
+      "description": "Сбрасывайте соединения, блокируйте порт или адрес, обрывайте канал или уменьшайте пакеты, пока ничего не проходит, и смотрите, как приложение восстановится.",
+      "link_text": "Обрыв соединений"
     }
   }
 }

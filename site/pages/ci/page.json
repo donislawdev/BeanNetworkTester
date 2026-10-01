@@ -55,6 +55,18 @@
       "title": "Simula una brutta rete in CI su Windows",
       "description": "Lo stesso eseguibile funziona senza finestra, riporta con codici di uscita e NDJSON e si ferma da solo, così una pipeline può provare una brutta connessione.",
       "link_text": "Test di rete in CI"
+    },
+    "id": {
+      "slug": "uji-jaringan-di-ci",
+      "title": "Simulasikan jaringan buruk di CI pada Windows",
+      "description": "File eksekusi yang sama berjalan tanpa jendela, melapor lewat kode keluar dan NDJSON, dan berhenti sendiri, sehingga pipeline dapat menguji koneksi buruk.",
+      "link_text": "Uji jaringan di CI"
+    },
+    "ru": {
+      "slug": "testy-seti-v-ci",
+      "title": "Имитация плохой сети в CI на Windows",
+      "description": "Тот же файл работает без окна, сообщает кодами завершения и NDJSON и сам останавливается, так что пайплайн может проверить плохое соединение.",
+      "link_text": "Тесты сети в CI"
     }
   }
 }

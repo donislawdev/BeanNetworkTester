@@ -55,6 +55,18 @@
       "title": "Chaos testing di rete su Windows",
       "description": "Inietta guasti di rete di proposito, ripetili esattamente con un seed e lascia che la pipeline decida dal codice di uscita se l’applicazione ha retto.",
       "link_text": "Chaos testing"
+    },
+    "id": {
+      "slug": "uji-chaos-jaringan",
+      "title": "Uji chaos jaringan di Windows",
+      "description": "Suntikkan gangguan jaringan dengan sengaja, ulangi persis dengan seed, dan biarkan pipeline menilai dari kode keluar apakah aplikasi bertahan.",
+      "link_text": "Uji chaos"
+    },
+    "ru": {
+      "slug": "haos-testirovanie-seti",
+      "title": "Хаос-тестирование сети в Windows",
+      "description": "Вносите сетевые сбои намеренно, повторяйте их точно с помощью seed и пусть пайплайн по коду завершения решает, выдержало ли приложение.",
+      "link_text": "Хаос-тестирование"
     }
   }
 }

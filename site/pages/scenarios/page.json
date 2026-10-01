@@ -55,6 +55,18 @@
       "title": "Cambia le condizioni di rete nel tempo",
       "description": "Un file di scenario è una linea temporale: in questi secondi, queste impostazioni. Il programma include scenari pronti e li ripete finché osservi.",
       "link_text": "Scenari nel tempo"
+    },
+    "id": {
+      "slug": "skenario-berbasis-waktu",
+      "title": "Ubah kondisi jaringan seiring waktu",
+      "description": "File skenario adalah lini waktu: pada detik ini, pengaturan ini. Program menyertakan skenario siap pakai dan mengulanginya selama Anda mengamati.",
+      "link_text": "Skenario berbasis waktu"
+    },
+    "ru": {
+      "slug": "scenarii-vo-vremeni",
+      "title": "Меняйте условия сети с течением времени",
+      "description": "Файл сценария задаёт временную шкалу: на этих секундах такие настройки. Готовые сценарии идут с программой и повторяются, пока вы наблюдаете.",
+      "link_text": "Сценарии во времени"
     }
   }
 }

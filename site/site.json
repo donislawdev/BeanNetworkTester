@@ -57,6 +57,18 @@
       "name": "Italiano",
       "dir": "it",
       "og_locale": "it_IT"
+    },
+    {
+      "code": "id",
+      "name": "Bahasa Indonesia",
+      "dir": "id",
+      "og_locale": "id_ID"
+    },
+    {
+      "code": "ru",
+      "name": "Русский",
+      "dir": "ru",
+      "og_locale": "ru_RU"
     }
   ],
   "og_image": "assets/bean.png",

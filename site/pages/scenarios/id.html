@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Ubah kondisi jaringan seiring waktu</h1>
+  <p class="lead">Kehilangan tetap 10% adalah kondisi laboratorium. Koneksi nyata memburuk, pulih, macet empat detik lalu kembali, dan bug yang Anda buru biasanya berada di perubahannya, bukan di keadaan stabil.</p>
+</section>
+
+<section>
+  <h2>Skenario adalah lini waktu</h2>
+  <p>Satu file JSON. Setiap langkah menyatakan <em>pada detik ini, pengaturan ini</em>, dan apa pun yang tidak Anda sebut mempertahankan nilainya:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Waktu adalah detik sejak awal eksekusi, bukan jeda antar langkah. Dengan <code>"loop": true</code> lini waktu mulai lagi saat berakhir, yang Anda inginkan untuk uji rendam yang panjang: biarkan berjalan dan gunakan aplikasinya.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} skenario siap pakai disertakan bersama program</h2>
+  <p>Di folder <code>scenarios</code> di samping file eksekusi. Dibaca dari file-file itu, jadi inilah yang benar-benar Anda miliki:</p>
+  {{page.scenario_table}}
+  <p>Isinya teks biasa: buka satu, ubah satu angka, simpan. Namanya menyebutkan apa yang direproduksi: kafe yang ramai, koneksi seluler yang turun dari LTE ke 3G, unggahan yang mati di tengah jalan, server yang kelebihan beban, DNS yang berhenti menjawab.</p>
+</section>
+
+<section>
+  <h2>Dua cara yang lebih sederhana untuk mendapat perubahan</h2>
+  <p>Skenario layak ditulis bila urutannya penting. Bila tidak, dua pengaturan berubah dengan sendirinya:</p>
+  <ul>
+    <li><strong>Tautan hidup dan mati</strong>: panjang siklus dan berapa bagian darinya yang mati. Siklus sepuluh detik, empat detik mati, selamanya.</li>
+    <li><strong>Jadwal kecepatan</strong>: serangkaian kecepatan yang dilalui batas, sehingga koneksi memburuk dan pulih tanpa file.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Mengapa ini bekerja saat aplikasi berjalan</h2>
+  <p>Setiap pengaturan yang disentuh sebuah skenario diterapkan langsung ke sesi yang sedang berjalan: aplikasi tidak perlu dimulai ulang, begitu pula alatnya. Log peristiwa mencatat setiap langkah saat terjadi, sehingga ketika sesuatu rusak Anda bisa melihat perubahan mana yang mendahuluinya. Padukan dengan seed dan seluruh urutan, termasuk kehilangan acak di dalamnya, berulang persis sama.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

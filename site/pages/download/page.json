@@ -55,6 +55,18 @@
       "title": "Scarica Bean Network Tester per Windows",
       "description": "Download gratuito per Windows 10 e 11, come zip o installer. Cosa contiene la versione, come controllare il file e cosa serve per farlo funzionare.",
       "link_text": "Download"
+    },
+    "id": {
+      "slug": "unduh",
+      "title": "Unduh Bean Network Tester untuk Windows",
+      "description": "Unduhan gratis untuk Windows 10 dan 11, berupa zip atau installer. Isi rilis, cara memeriksa file, dan kebutuhan agar bisa berjalan.",
+      "link_text": "Unduh"
+    },
+    "ru": {
+      "slug": "skachat",
+      "title": "Скачать Bean Network Tester для Windows",
+      "description": "Бесплатная загрузка для Windows 10 и 11: zip или установщик. Что входит в релиз, как проверить файл и что нужно для работы.",
+      "link_text": "Скачать"
     }
   }
 }

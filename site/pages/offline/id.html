@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Uji aplikasi tanpa internet</h1>
+  <p class="lead">Mencabut kabel jaringan hanya menguji satu hal: mesin tanpa jaringan. Kebanyakan bug offline bukan itu. Bug muncul saat adaptor menyala, ikon Wi-Fi tampak baik, dan hal yang dibutuhkan aplikasi sekadar tak terjangkau.</p>
+</section>
+
+<section>
+  <h2>Tiga jenis “offline” yang berbeda</h2>
+  <table>
+    <tr><th>Yang Anda aktifkan</th><th>Yang dilihat aplikasi</th><th>Bug yang ditemukannya</th></tr>
+    <tr><td><strong>Mode LAN</strong></td><td>Jaringan lokal berfungsi. Apa pun di luarnya tidak.</td><td>Wi-Fi hotel sebelum Anda masuk, uplink yang mati, jaringan perusahaan tanpa rute keluar.</td></tr>
+    <tr><td><strong>Blokir alamat</strong></td><td>Satu server tak terjangkau. Yang lain berfungsi.</td><td>Satu dependensi mati sementara aplikasinya sendiri baik-baik saja: kasus yang biasanya terlewat oleh pemeriksaan kesehatan.</td></tr>
+    <tr><td><strong>Blokir port 53</strong></td><td>Nama berhenti diselesaikan, koneksi berdasarkan alamat tetap berfungsi.</td><td>DNS yang rusak, yang bagi pengguna tampak seperti “internet mati” dan di log tampak sama sekali berbeda.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Dari baris perintah</h2>
+  <p>Internet hilang untuk satu aplikasi, jaringan lokal tak tersentuh, selama dua menit:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Satu layanan tak terjangkau, yang lain normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Nama berhenti diselesaikan:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Ada juga lini waktu siap pakai yang merusak DNS lalu memulihkannya sendiri: <code>failing-dns.json</code> di folder <code>scenarios</code> di samping program. Lihat <a href="../skenario-berbasis-waktu/">skenario berbasis waktu</a>.</p>
+</section>
+
+<section>
+  <h2>Apa yang benar-benar perlu diperhatikan</h2>
+  <ul>
+    <li><strong>Pesannya.</strong> Apakah aplikasi menyampaikan apa yang terjadi, atau menampilkan indikator pemuatan selamanya?</li>
+    <li><strong>Percobaan ulangnya.</strong> Apakah ia mundur, atau menghantam alamat yang sama dalam satu putaran?</li>
+    <li><strong>Antreannya.</strong> Apakah pekerjaan yang dilakukan pengguna saat offline disimpan dan dikirim nanti, atau hilang?</li>
+    <li><strong>Pemulihannya.</strong> {{app.buttons.stop}} mengembalikan jaringan. Apakah aplikasi menyadarinya sendiri, atau perlu dimulai ulang?</li>
+  </ul>
+  <p>Hal terakhir itulah tempat sebagian besar nilainya. Menjadi offline mudah ditangani dengan buruk dan mudah diuji. Saat kembali online, di situlah state menjadi salah.</p>
+</section>
+
+<section>
+  <h2>Yang bukan ini</h2>
+  <p>Adaptor tetap menyala dan mesin mempertahankan alamatnya, sehingga aplikasi yang hanya bertanya kepada Windows “apakah ada jaringan” tetap mendapat jawaban ya. Itu disengaja, dan itu pengujian yang lebih menarik: pengguna nyata jarang benar-benar terputus, mereka terhubung ke sesuatu yang tak bisa menjangkau yang mereka butuhkan. Jika Anda secara khusus ingin kasus “tanpa adaptor”, nonaktifkan adaptornya: tidak perlu alat.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

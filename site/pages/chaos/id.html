@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Uji chaos jaringan di Windows</h1>
+  <p class="lead">Uji chaos berarti merusak sesuatu dengan sengaja, selagi Anda mengamati, untuk mengetahui apa yang dilakukan perangkat lunak Anda. Di lapisan jaringan, itulah persis alat ini: cara menyuntikkan gangguan ke satu aplikasi dan melihat apakah ia bertahan.</p>
+</section>
+
+<section>
+  <h2>Gangguan yang dapat Anda suntikkan</h2>
+  <table>
+    <tr><th>Gangguan</th><th>Yang ditiru</th></tr>
+    <tr><td>Kehilangan, kerusakan, duplikasi</td><td>Jalur yang menurun kualitasnya. Paket hilang, tiba dalam keadaan rusak, atau tiba dua kali.</td></tr>
+    <tr><td>Latensi, jitter, lonjakan</td><td>Jalur yang lambat atau tak stabil, termasuk hambatan beberapa detik yang merusak timeout.</td></tr>
+    <tr><td>Reset koneksi</td><td>Firewall atau load balancer yang memutus koneksi di tengah transfer.</td></tr>
+    <tr><td>Tautan terputus</td><td>Jalur yang menghilang dan kembali, dalam siklus.</td></tr>
+    <tr><td>Alamat atau port yang diblokir</td><td>Satu dependensi tak terjangkau sementara yang lain berfungsi.</td></tr>
+    <tr><td>Internet mati, LAN hidup</td><td>Bentuk captive portal: yang lokal berfungsi, dunia luar tidak.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Yang memisahkan chaos dari gangguan acak: keterulangan</h2>
+  <p>Kegagalan acak yang tak bisa diputar ulang menghasilkan cerita, bukan laporan bug. Setiap keputusan acak di sini berasal dari seed, sehingga perintah yang sama mereproduksi eksekusi yang sama: paket yang sama hilang, jitter yang sama, dalam urutan yang sama:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Itulah beda antara “pernah rusak sekali Selasa lalu” dan pengujian gagal yang bisa dijalankan orang lain.</p>
+</section>
+
+<section>
+  <h2>Di dalam pipeline</h2>
+  <p>Baris perintah melapor lewat kode keluar, sehingga build dapat membedakan “aplikasi gagal” dari “alat tidak bisa dimulai”, dan sesinya berakhir sendiri: tidak ada langkah pembersihan yang bisa terlupa:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Rangkaian gangguan, bukan satu gangguan, adalah file skenario, dan itu juga dapat diulang. Lihat <a href="../skenario-berbasis-waktu/">skenario berbasis waktu</a> dan <a href="../uji-jaringan-di-ci/">uji jaringan di CI</a> untuk kode keluar dan runner yang dibutuhkan.</p>
+</section>
+
+<section>
+  <h2>Di mana radius dampak berhenti</h2>
+  <p>Dua batas, dan keduanya disengaja. Gangguan menjangkau satu proses, PID, alamat, atau port saat Anda membidiknya, sehingga mesin tempat Anda bekerja tetap berfungsi. Dan ini satu mesin: ini injeksi gangguan untuk sebuah klien dan koneksinya, bukan untuk klaster. Jika Anda mencari chaos lintas layanan dan node, itu jenis alat yang lain, dan ini adalah bagian yang merusak jaringan di bawah satu aplikasi Windows.</p>
+  <p>Semuanya dapat dibalik seketika. {{app.buttons.stop}} memulihkan jaringan, batas waktu melakukan hal yang sama, dan watchdog di dalam alat mematikan penangkapan jika alatnya sendiri mati: gangguan yang Anda suntikkan tidak boleh hidup lebih lama daripada eksekusi yang menyuntikkannya.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -55,6 +55,18 @@
       "title": "Un’alternativa a Clumsy per Windows con riga di comando",
       "description": "Cosa cercare in uno strumento di degrado di rete per Windows, cosa offre questo in più di uno solo interattivo e quando conviene usarne un altro.",
       "link_text": "Alternativa a Clumsy"
+    },
+    "id": {
+      "slug": "alternatif-clumsy",
+      "title": "Alternatif Clumsy untuk Windows dengan baris perintah",
+      "description": "Apa yang dicari pada alat gangguan jaringan untuk Windows, apa kelebihan alat ini dibanding yang hanya interaktif, dan kapan memakai yang lain.",
+      "link_text": "Alternatif Clumsy"
+    },
+    "ru": {
+      "slug": "alternativa-clumsy",
+      "title": "Альтернатива Clumsy для Windows с командной строкой",
+      "description": "На что смотреть при выборе инструмента для порчи сети в Windows, чем этот лучше чисто интерактивного и когда стоит взять другой.",
+      "link_text": "Альтернатива Clumsy"
     }
   }
 }

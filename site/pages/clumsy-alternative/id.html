@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Alternatif Clumsy untuk Windows</h1>
+  <p class="lead">Clumsy adalah alat yang paling dulu ditemukan kebanyakan orang, dan alat ini bagus: gratis, berlisensi MIT, interaktif, dan dibangun di atas driver WinDivert yang sama dengan yang dipakai alat ini. Jika ia melakukan yang Anda butuhkan, pakailah. Halaman ini membahas kasus ketika ia tidak melakukannya.</p>
+</section>
+
+<section>
+  <h2>Apa yang dicari, mana pun yang Anda pilih</h2>
+  <table>
+    <tr><th>Pertanyaan</th><th>Mengapa ini menentukan alatnya</th></tr>
+    <tr><td>Bisakah ia menyasar <strong>satu aplikasi</strong>?</td><td>Kalau tidak, Anda mengganggu mesin yang sedang Anda pakai bekerja, termasuk sesi jarak jauh dan peramban tempat Anda membaca dokumentasi.</td></tr>
+    <tr><td>Apakah ia punya <strong>baris perintah</strong>?</td><td>Pipeline tidak bisa mengeklik kotak centang. Tanpa baris perintah, uji jaringan tak akan pernah menjadi bagian dari build.</td></tr>
+    <tr><td>Apakah satu eksekusi <strong>dapat diulang</strong>?</td><td>Kehilangan acak yang tak bisa diputar ulang menghasilkan laporan bug yang tak bisa direproduksi orang lain.</td></tr>
+    <tr><td>Apakah ia <strong>berhenti sendiri</strong>?</td><td>Alat yang mengharuskan Anda ingat mematikannya akan berakhir dibiarkan menyala.</td></tr>
+    <tr><td>Bisakah Anda tahu apa yang <strong>sebenarnya dilakukannya</strong>?</td><td>Penghitung dan daftar koneksi mengubah “terasa lambat” menjadi angka.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Yang dibawa alat ini</h2>
+  <ul>
+    <li><strong>Penyasaran berdasarkan proses, PID, alamat, atau port</strong>, mengikuti pohon proses, sehingga peramban dengan tiga puluh proses anak tetap menjadi satu target.</li>
+    <li><strong>File eksekusi yang sama adalah baris perintahnya</strong>, dengan kode keluar untuk setiap hasil dan keluaran NDJSON, sehingga bisa dipakai di CI.</li>
+    <li><strong>Eksekusi dengan seed</strong>: seed yang sama memutar ulang kehilangan acak dan jitter yang sama.</li>
+    <li><strong>Profil siap pakai</strong>: 3G, LTE, satelit, kafe yang ramai, Wi-Fi pesawat, modem dial-up 56k, sehingga Anda mulai dari sesuatu yang masuk akal alih-alih menebak angka.</li>
+    <li><strong>Sesi terjadwal dan skenario berskrip</strong>, sehingga gangguan bisa berubah sendiri selagi Anda mengamati aplikasi.</li>
+    <li><strong>Tampilan langsung</strong>: grafik, penghitung, dan tabel koneksi yang menunjukkan koneksi mana yang terkena.</li>
+    <li>Antarmuka dalam <strong>bahasa Inggris, Polandia, dan Mandarin Sederhana</strong>, serta tanpa telemetri dalam bentuk apa pun.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Jika Anda datang dari alat lain</h2>
+  <p>Empat nama muncul setiap kali hal ini dibahas, dan keempatnya tidak dapat dipertukarkan.</p>
+  <table>
+    <tr><th>Yang Anda kenal</th><th>Apa itu</th><th>Yang bisa diharapkan di sini</th></tr>
+    <tr><td><strong>tc dengan netem</strong></td><td>Jawaban Linux, tertanam di kernel dan dijalankan dari baris perintah. Sering menjadi hasil pencarian emulasi WAN.</td><td>Tidak ada <code>tc</code> di Windows. Ini yang paling dekat secara semangat: jenis gangguan yang sama, baris perintah dengan kode keluar, dan driver sebagai pengganti queueing discipline.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Alat Windows yang gratis, berlisensi MIT, dan interaktif, di atas driver WinDivert yang sama.</td><td>Pakai bila sebuah jendela dan filter sudah cukup. Datanglah ke sini untuk penyasaran per proses, eksekusi dengan seed, dan baris perintah yang bisa dipanggil pipeline.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Produk Windows komersial untuk mengelola bandwidth per aplikasi, secara permanen.</td><td>Pekerjaan yang berbeda. Ini adalah instrumen uji: dinyalakan sebentar lalu dimatikan, dan ia menurunkan jauh lebih banyak daripada kecepatan.</td></tr>
+    <tr><td><strong>Fiddler atau Charles</strong></td><td>Proxy yang dapat memeriksa, menulis ulang, dan membatasi lalu lintas yang melewatinya.</td><td>Juga pekerjaan yang berbeda. Proxy membentuk apa yang diproksinya dan melihat datanya. Alat ini membentuk koneksi itu sendiri, termasuk UDP dan apa pun yang tak pernah menyentuh proxy.</td></tr>
+  </table>
+  <p>Singkatnya: jika Anda ingin emulator jaringan untuk satu aplikasi Windows, dengan baris perintah, inilah bentuk alat yang Anda cari. Jika Anda ingin membaca dan mengubah data aplikasi, Anda butuh proxy, dan jika Anda memakai Linux, Anda sudah punya netem.</p>
+</section>
+
+<section>
+  <h2>Kapan memakai yang lain</h2>
+  <p>Bersikap jujur lebih murah daripada unduhan yang mengecewakan.</p>
+  <ul>
+    <li><strong>Anda memakai Linux atau macOS.</strong> Ini hanya untuk Windows, dan akan selalu begitu, karena dibangun di atas driver Windows. Di Linux, <code>tc</code> dengan <code>netem</code> adalah jawaban standar dan tidak butuh perangkat lunak tambahan.</li>
+    <li><strong>Anda ingin pengelolaan bandwidth permanen</strong> untuk seluruh komputer, per aplikasi, sebagai fitur produk dan bukan pengujian. Untuk itulah alat pembentuk lalu lintas komersial seperti NetLimiter. Alat ini instrumen uji: dimaksudkan untuk dinyalakan sebentar lalu dimatikan.</li>
+    <li><strong>Anda tidak bisa mendapat hak administrator.</strong> Menangkap paket membutuhkannya. Tidak ada jalan pintas, dan alat yang mengaku bisa tidak sedang menangkap lalu lintas Anda.</li>
+    <li><strong>Anda perlu memeriksa dan menulis ulang data aplikasi</strong> alih-alih menurunkan kualitas tautan. Itu pekerjaan proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

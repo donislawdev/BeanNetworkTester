@@ -55,6 +55,18 @@
       "title": "Domande frequenti su Bean Network Tester",
       "description": "Privilegi di amministratore, se tocca tutto il computer, come annullare, l’avviso di SmartScreen e cosa fa il programma con i tuoi dati.",
       "link_text": "Domande e risposte"
+    },
+    "id": {
+      "slug": "pertanyaan-umum",
+      "title": "Pertanyaan umum tentang Bean Network Tester",
+      "description": "Hak administrator, apakah memengaruhi seluruh komputer, cara membatalkan, peringatan SmartScreen, dan apa yang dilakukan program dengan data Anda.",
+      "link_text": "Tanya jawab"
+    },
+    "ru": {
+      "slug": "voprosy-i-otvety",
+      "title": "Частые вопросы о Bean Network Tester",
+      "description": "Права администратора, затрагивает ли программа весь компьютер, как всё отменить, предупреждение SmartScreen и что программа делает с вашими данными.",
+      "link_text": "Вопросы и ответы"
     }
   }
 }

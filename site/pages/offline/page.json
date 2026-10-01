@@ -55,6 +55,18 @@
       "title": "Prova un’app Windows senza internet",
       "description": "Togli internet a un’app mentre la rete locale continua a funzionare, rendi irraggiungibile un servizio o rompi il DNS, senza staccare nulla.",
       "link_text": "Senza internet"
+    },
+    "id": {
+      "slug": "uji-tanpa-internet",
+      "title": "Uji aplikasi Windows tanpa internet",
+      "description": "Putus internet satu aplikasi sementara jaringan lokal tetap jalan, buat satu layanan tak terjangkau, atau rusak DNS, tanpa mencabut apa pun.",
+      "link_text": "Tanpa internet"
+    },
+    "ru": {
+      "slug": "test-bez-interneta",
+      "title": "Проверка приложения в Windows без интернета",
+      "description": "Отключите интернет одному приложению, пока локальная сеть работает, сделайте недоступным один сервис или сломайте DNS, ничего не выдёргивая.",
+      "link_text": "Без интернета"
     }
   }
 }

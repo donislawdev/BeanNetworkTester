@@ -55,6 +55,18 @@
       "title": "Profili, impostazioni e codici di uscita",
       "description": "Ogni profilo pronto con i suoi valori, ogni impostazione con opzione, unità e intervallo, e ogni codice di uscita che la riga di comando può restituire.",
       "link_text": "Tabelle di riferimento"
+    },
+    "id": {
+      "slug": "tabel-referensi",
+      "title": "Profil, pengaturan, dan kode keluar",
+      "description": "Setiap profil siap pakai beserta nilainya, setiap pengaturan dengan opsi, satuan, dan rentangnya, serta setiap kode keluar dari baris perintah.",
+      "link_text": "Tabel referensi"
+    },
+    "ru": {
+      "slug": "tablicy-spravochnik",
+      "title": "Профили, настройки и коды завершения",
+      "description": "Каждый готовый профиль с его значениями, каждая настройка с параметром, единицей и диапазоном и каждый код завершения командной строки.",
+      "link_text": "Справочные таблицы"
     }
   }
 }

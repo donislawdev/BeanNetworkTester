@@ -55,6 +55,18 @@
       "title": "Punta a una sola app su Windows, non a tutto il computer",
       "description": "Indirizza il degrado a un processo, PID, indirizzo o porta, così il test rompe solo l’app in prova e lascia in pace il resto del computer.",
       "link_text": "Puntare a una app"
+    },
+    "id": {
+      "slug": "sasar-satu-aplikasi",
+      "title": "Sasar satu aplikasi di Windows, bukan seluruh komputer",
+      "description": "Arahkan gangguan ke satu proses, PID, alamat, atau port, sehingga pengujian hanya merusak aplikasi yang diuji dan tidak mengganggu sisanya.",
+      "link_text": "Sasar satu aplikasi"
+    },
+    "ru": {
+      "slug": "odno-prilozhenie",
+      "title": "Целимся в одно приложение в Windows, а не во весь компьютер",
+      "description": "Направьте помехи на один процесс, PID, адрес или порт, чтобы тест ломал только проверяемое приложение и не трогал остальной компьютер.",
+      "link_text": "Одно приложение"
     }
   }
 }

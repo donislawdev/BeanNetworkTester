@@ -55,6 +55,18 @@
       "title": "Limita la velocità di download e upload su Windows",
       "description": "Limita un’app Windows a un numero fisso di KB/s, in ciascuna direzione, e scopri cosa le fanno un modem a 56k o il Wi-Fi di un aereo.",
       "link_text": "Limite di velocità"
+    },
+    "id": {
+      "slug": "batas-kecepatan",
+      "title": "Batasi kecepatan unduh dan unggah di Windows",
+      "description": "Batasi satu aplikasi Windows pada sejumlah KB/s tertentu, di tiap arah, dan lihat dampak modem 56k atau Wi-Fi pesawat terhadapnya.",
+      "link_text": "Batas kecepatan"
+    },
+    "ru": {
+      "slug": "ogranichenie-skorosti",
+      "title": "Ограничение скорости загрузки и отдачи в Windows",
+      "description": "Ограничьте приложение в Windows заданным числом КБ/с в каждом направлении и посмотрите, что с ним сделают модем 56k или Wi-Fi в самолёте.",
+      "link_text": "Ограничение скорости"
     }
   }
 }

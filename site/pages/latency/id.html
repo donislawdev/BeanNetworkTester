@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Tambahkan latensi dan jitter ke sebuah aplikasi</h1>
+  <p class="lead">Semuanya berjalan di koneksi lokal yang cepat. Beri aplikasi ping 300 ms dan Anda akan tahu layar mana yang ditulis seolah-olah jawaban datang seketika.</p>
+</section>
+
+<section>
+  <h2>Tiga hal yang berbeda</h2>
+  <table>
+    <tr><th>Pengaturan</th><th>Fungsinya</th><th>Asalnya di kehidupan nyata</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Menambahkan jeda yang sama pada setiap paket, dalam milidetik.</td><td>Jarak. Server di benua lain, atau satelit.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Menambahkan jumlah acak di atasnya, sehingga jeda terus berubah.</td><td>Wi-Fi bersama, jaringan seluler, apa pun yang padat.</td></tr>
+    <tr><td><strong>Lonjakan latensi</strong></td><td>Hambatan panjang sesekali, ditentukan oleh seberapa sering dan seberapa lama.</td><td>Perpindahan antar menara seluler, router yang kewalahan.</td></tr>
+  </table>
+  <p>Ketiganya dalam milidetik dan bisa berjalan bersamaan. Kedua angka jeda menerima nilai berapa pun mulai dari 0, sehingga Anda bisa beralih dari 40 ms yang wajar ke 60 detik yang tak masuk akal.</p>
+</section>
+
+<section>
+  <h2>Dari baris perintah</h2>
+  <p>Jeda stabil 200 ms dengan jitter 80 ms, pada satu aplikasi:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Sebagai gantinya, hambatan yang jarang dan panjang: kira-kira satu dari dua puluh paket menunggu satu detik lebih lama:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Angka yang layak dicoba</h2>
+  <ul>
+    <li><strong>40 ms</strong>: server di negara yang sama. Seharusnya tidak ada yang berubah.</li>
+    <li><strong>150 ms</strong>: benua lain. Segala yang sering bolak-balik mulai terasa lambat, karena setiap perjalanan pulang-pergi ada biayanya.</li>
+    <li><strong>600 ms ke atas</strong>: satelit geostasioner atau Wi-Fi pesawat. Di sinilah bilah kemajuan macet dan logika percobaan ulang akhirnya dijalankan.</li>
+  </ul>
+  <p>Profil siap pakai memuat angka hasil pengukuran: “{{app.presets.distant}}”, “{{app.presets.leo}}”, “{{app.presets.satellite}}”, “{{app.presets.inflight}}”, “{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>Mengukurnya: lihat kasus terburuk, bukan rata-rata</h2>
+  <p>Jitter hampir tidak menggeser rata-rata, dan hampir tidak menggeser median. Eksekusi dengan jitter 30 ms dan tanpa jitter bisa melaporkan ping “tipikal” yang hampir sama padahal terasa sangat berbeda.</p>
+  <p>Bandingkan <strong>persentil ke-95 dengan median</strong>. Selisih di antara keduanya adalah jitter, dan selisih itulah yang membuat panggilan terputus-putus atau game tak bisa dimainkan padahal rata-ratanya masih tampak baik.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

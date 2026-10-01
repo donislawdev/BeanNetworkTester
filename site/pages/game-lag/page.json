@@ -55,6 +55,18 @@
       "title": "Simula lag e perdita di pacchetti nei giochi",
       "description": "Dai a un client di gioco il ping, il jitter e la perdita di pacchetti di una brutta connessione, solo per quel processo, e ripeti l’esecuzione con un seed.",
       "link_text": "Lag nei giochi"
+    },
+    "id": {
+      "slug": "simulator-lag-game",
+      "title": "Simulasikan lag dan kehilangan paket pada game",
+      "description": "Beri klien game ping, jitter, dan kehilangan paket dari koneksi buruk, hanya untuk proses itu, dan ulangi eksekusi yang sama dengan seed.",
+      "link_text": "Lag game"
+    },
+    "ru": {
+      "slug": "simulyator-laga-v-igrah",
+      "title": "Имитация лагов и потери пакетов в играх",
+      "description": "Дайте игровому клиенту пинг, джиттер и потери плохого соединения только для его процесса и повторяйте тот же запуск с помощью seed.",
+      "link_text": "Лаги в играх"
     }
   }
 }

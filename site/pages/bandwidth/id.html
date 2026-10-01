@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Batasi kecepatan unduh dan unggah</h1>
+  <p class="lead">Batasi satu aplikasi pada sejumlah kilobyte per detik dan ia tidak akan mendapat lebih dari itu. Kedua arah terpisah, sehingga Anda bisa memberinya unduhan cepat dan unggahan yang menyedihkan, yang persis seperti kebanyakan koneksi rumah dan seluler.</p>
+</section>
+
+<section>
+  <h2>Di jendela</h2>
+  <ol class="steps">
+    <li>Atur <strong>{{app.fields.target_process}}</strong> ke aplikasi Anda.</li>
+    <li>Isi <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong>, atau keduanya, dalam KB/s. Biarkan satu kolom di 0 agar arah itu tidak disentuh.</li>
+    <li>Tekan <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Apa arti angka-angkanya</h2>
+  <table>
+    <tr><th>KB/s</th><th>Kira-kira</th><th>Apa itu</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Modem dial-up. Profil “{{app.presets.modem56k}}”.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wi-Fi pesawat, hotel yang ramai, sinyal seluler buruk.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Saluran rumah yang sederhana. Cukup untuk satu aliran video.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Koneksi tetap yang normal saat ini.</td></tr>
+  </table>
+  <p>Kilobyte, bukan kilobit, jadi kalikan delapan untuk membandingkannya dengan yang diiklankan penyedia internet. Membatasi kedua arah sekaligus membuat koneksi terasa seperti hotspot buruk, bukan sekadar unduhan yang lambat.</p>
+</section>
+
+<section>
+  <h2>Antrean sama pentingnya dengan batasnya</h2>
+  <p>Batas kecepatan memerlukan tempat untuk menaruh paket yang belum muat. Itulah pengaturan <strong>{{app.fields.buffer}}</strong>, dalam milidetik, dan perilakunya seperti antrean di kasir supermarket:</p>
+  <ul>
+    <li><strong>Antrean pendek</strong> berarti paket dibuang begitu saluran penuh. Aplikasi Anda melihat kehilangan dan bereaksi cepat.</li>
+    <li><strong>Antrean panjang</strong> berarti tidak ada yang dibuang, tetapi semuanya menunggu. Aplikasi Anda melihat koneksi makin lama makin lambat alih-alih gagal, efek dari saluran rumah yang padat dan alasan panggilan video memburuk saat unduhan masih berjalan.</li>
+  </ul>
+  <p>Profil “{{app.presets.bufferbloat}}” persis seperti ini: batas dengan antrean panjang. Coba kecepatan yang sama dengan antrean pendek dan panjang, lalu amati betapa berbedanya perilaku aplikasi.</p>
+</section>
+
+<section>
+  <h2>Yang perlu diperkirakan</h2>
+  <p>Saat batas berjalan, penghitung paket yang dibuang bisa tetap nol. Itu bukan bug: batas lebih dulu membuat paket menunggu, dan baru membuangnya saat antrean benar-benar penuh. Beri buffer kecil dan pembuangan akan muncul.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
