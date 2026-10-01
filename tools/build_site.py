@@ -840,8 +840,15 @@ def language_switcher(page, current_code, registry, label):
                          % (html.escape(_relative_url(here, target), quote=True),
                             html.escape(code, quote=True),
                             html.escape(code, quote=True), name))
-    return Raw('<span class="langs" role="group" aria-label="%s">%s</span>'
-               % (html.escape(label, quote=True), "".join(parts)))
+    # Twenty-odd names in a row would fill the header, so the row folds into a native
+    # <details> menu: no script, keyboard and screen reader behaviour for free, and every
+    # link stays in the markup, where a crawler reads it whether the menu is open or not.
+    current_name = next(l["name"] for l in registry["languages"] if l["code"] == current_code)
+    return Raw('<details class="langmenu"><summary>%s: <span lang="%s">%s</span></summary>'
+               '<span class="langs" role="group" aria-label="%s">%s</span></details>'
+               % (html.escape(label, quote=True), html.escape(current_code, quote=True),
+                  html.escape(current_name, quote=True), html.escape(label, quote=True),
+                  "".join(parts)))
 
 
 def language_homes(registry, home, skip, label, prefix):

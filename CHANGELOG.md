@@ -18,6 +18,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   with `"duration": 0` reset nothing, and a longer one could run on into the next session. A
   scenario file with such a step now stops with code `4`, naming the step.
 
+### Added
+
+- **The website in 20 more languages.** The guides at beannetworktester.donislawdev.com now
+  come in Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish,
+  Brazilian Portuguese, Italian, Dutch, Russian, Ukrainian, Czech, Romanian, Turkish,
+  Vietnamese, Thai, Hindi, Indonesian and Arabic (written right to left), besides English and
+  Polish. Profile and setting names stay as the program shows them: where the program has no
+  translation yet, a page uses the English names. The scenarios page now counts the scenario
+  files that ship instead of stating a number.
+
 ### Fixed
 
 - **A running target with no connection open is no longer called "not running".** The red
