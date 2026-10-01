@@ -12,8 +12,10 @@ These tests pin down the three guarantees:
     always releases the engine when the window closes,
   * no stop waits for the log, which is the caller's code and can block or raise.
 """
+import sys
 import threading
 import time
+import types
 
 import pytest
 
@@ -1580,6 +1582,128 @@ def test_elevation_is_refused_when_the_switch_is_set():
         os.environ.pop("BEAN_NO_ELEVATE", None)
         if previous is not None:
             os.environ["BEAN_NO_ELEVATE"] = previous
+
+
+class _FakeShell32:
+    """Stands in for ``ctypes.windll.shell32``: records the "runas" call, starts nothing."""
+
+    def __init__(self):
+        self.calls = []
+
+    def ShellExecuteW(self, hwnd, verb, program, params, directory, show):   # noqa: N802
+        self.calls.append((verb, program, params))
+        return 42                                   # "> 32" = Windows started it
+
+
+def _relaunched_as(monkeypatch, orig_argv, argv, gui_argv=(), frozen=False):
+    """What ``elevate_self`` would hand to Windows, with nothing real started.
+
+    ``ctypes.windll`` is replaced whole (it does not exist off Windows), so the
+    command line is checked the same way on both CI runners.
+    """
+    import ctypes
+
+    from beantester import winenv
+
+    shell = _FakeShell32()
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(shell32=shell),
+                        raising=False)
+    monkeypatch.setattr(winenv, "is_windows", lambda: True)
+    monkeypatch.setattr(winenv, "is_admin", lambda: False)
+    monkeypatch.setattr(winenv, "is_frozen", lambda: frozen)
+    monkeypatch.delenv("BEAN_NO_ELEVATE", raising=False)
+    monkeypatch.setattr(sys, "orig_argv", list(orig_argv))
+    monkeypatch.setattr(sys, "argv", list(argv))
+    assert winenv.elevate_self(list(gui_argv)) is True
+    assert len(shell.calls) == 1 and shell.calls[0][0] == "runas", shell.calls
+    _, program, params = shell.calls[0]
+    return program, params
+
+
+def test_the_elevated_copy_is_started_the_way_this_one_was(monkeypatch, tmp_path):
+    """External review, P3-38: the copy was started from ``sys.argv[0]``.
+
+    MEASURED 2026-10-01: for ``python -m beantester`` that is
+    ``beantester/__main__.py``, which run as a script dies on its relative import;
+    for the launcher pip writes it is the launcher WITHOUT its ``.exe`` - no such
+    file. The parent had already returned "relaunched", so the user accepted UAC
+    and nothing opened. The shapes below are the measured ``sys.orig_argv``.
+    """
+    from beantester import winenv
+
+    python = sys.executable
+    script = tmp_path / "bean_network_tester.py"
+    script.write_text("", encoding="utf-8")
+    launcher = tmp_path / "Scripts" / "bean-network-tester.exe"
+    launcher.parent.mkdir()
+    launcher.write_bytes(b"MZ")
+    monkeypatch.chdir(tmp_path)
+    mark = winenv.UAC_RELAUNCH
+    cases = [
+        ("a script given by a relative path is passed absolute",
+         [python, "bean_network_tester.py"], ["bean_network_tester.py"], [],
+         [str(script), mark]),
+        ("-m with interpreter options keeps both",
+         [python, "-X", "utf8", "-m", "beantester"],
+         [str(tmp_path / "beantester" / "__main__.py")], [],
+         ["-X", "utf8", "-m", "beantester", mark]),
+        ("the pip launcher is run by its real name",
+         [python, str(launcher)], [str(launcher)[:-len(".exe")]], [],
+         [str(launcher), mark]),
+        ("the program's own arguments are not repeated",
+         [python, "bean_network_tester.py", "--gui"], ["bean_network_tester.py", "--gui"],
+         ["--gui"], [str(script), "--gui", mark]),
+        ("no command line to repeat keeps the old shape",
+         [python], [str(script)], [], [str(script), mark]),
+    ]
+    for label, orig_argv, argv, gui_argv, wanted in cases:
+        program, params = _relaunched_as(monkeypatch, orig_argv, argv, gui_argv)
+        check(f"{label}: the interpreter is started", program == sys.executable,
+              f"(program {program!r})")
+        check(f"{label}: with {wanted}", params == winenv._relaunch_params(wanted),
+              f"(params {params!r})")
+
+    program, params = _relaunched_as(monkeypatch, [python, "x.py"], ["x.py"], ["--gui"],
+                                      frozen=True)
+    check("a frozen build starts itself, with only the program's arguments",
+          (program, params) == (sys.executable, winenv._relaunch_params(["--gui", mark])),
+          f"({program!r}, {params!r})")
+
+
+def test_a_copy_started_for_elevation_never_asks_again(monkeypatch):
+    """External review, P3-39: where "runas" cannot elevate (UAC switched off for a
+    standard user) Windows still starts the copy - without admin rights - and every
+    copy used to ask again, starting the next one.
+
+    Driven through ``cli.main`` with the argument the copy really receives, so the
+    taking-off of the marker is checked too: left in, the GUI copy would reach the
+    CLI parser and stop with exit 2.
+    """
+    from beantester import cli, crashlog, exitcodes, winenv
+
+    asked = []
+    monkeypatch.setattr(winenv, "is_windows", lambda: True)
+    monkeypatch.setattr(winenv, "is_admin", lambda: False)
+    monkeypatch.setattr(winenv, "elevate_self", lambda argv=None: asked.append(argv))
+    monkeypatch.setattr(cli, "is_frozen", lambda: False)
+    # The real install() would hook every thread of this test process and point an
+    # exit handler at the user's own crash folder - main() calls it first thing.
+    monkeypatch.setattr(crashlog, "install", lambda native=True: None)
+    monkeypatch.setattr(crashlog, "arm_native", lambda: None)   # no crashes/ folder here
+    monkeypatch.setitem(sys.modules, "tkinter", None)           # the window stops at "No tkinter"
+
+    for argv in ([winenv.UAC_RELAUNCH], ["--gui", winenv.UAC_RELAUNCH]):
+        asked.clear()
+        code = cli.main(argv)
+        check(f"{argv}: the copy reaches the GUI, not the CLI parser",
+              code == exitcodes.RUNTIME, f"(exit {code})")
+        check(f"{argv}: the copy does not ask for elevation again", asked == [],
+              f"(asked with {asked})")
+
+    asked.clear()
+    cli.main([])
+    check("a first start still asks (the guard is the marker, not a broken path)",
+          asked == [[]], f"(asked with {asked})")
 
 
 def test_a_worker_the_engine_does_not_own_reports_through_the_same_door():

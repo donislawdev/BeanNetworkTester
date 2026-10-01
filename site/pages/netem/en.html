@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem and Network Link Conditioner on Windows</h1>
+  <p class="lead">On Linux there is tc netem, and on a Mac there is Network Link Conditioner. Windows has nothing built in that adds delay and loss. This page maps what you already know onto Bean Network Tester, and points out where the numbers do not carry over.</p>
+</section>
+
+<section>
+  <h2>netem options, one by one</h2>
+  <p>Add <code>--target</code> and <code>--duration</code> to every command here, or it affects the whole computer.</p>
+  <table>
+    <tr><th>netem</th><th>Setting in the window</th><th>Flag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Burst loss.</strong> The correlation value in netem is not a burst length. {{app.fields.loss_burst}} is the average number of packets lost in a row, which is the nearest equivalent.</li>
+    <li><strong>Reordering.</strong> There is no reorder percentage. A spike delays a single packet so the ones sent after it overtake it, and the reordered counter on the {{app.app.tabs.statistics}} page shows whether that really happened.</li>
+    <li><strong>Queue size.</strong> The netem limit counts packets. {{app.fields.buffer}} is a time in milliseconds.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Three differences to know about</h2>
+  <p><strong>Direction.</strong> netem delays what leaves an interface, and the reply comes back untouched. This tool captures both directions, so <code>--latency 100</code> adds about 200 ms to a ping: 100 on the way out and 100 on the way back. To get what netem does, capture outbound traffic only:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Units.</strong> A netem rate is in bits per second. The speed limit fields are in KB/s, with K = 1024. Converting megabits:</p>
+  <table>
+    <tr><th>netem rate</th><th>Speed limit field, in KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Scope.</strong> tc shapes a whole network interface and needs root. This aims at one program with <code>--target</code> and needs administrator rights.</p>
+</section>
+
+<section>
+  <h2>If you know Network Link Conditioner</h2>
+  <p>Apple's tool works from named profiles. The nearest ones here:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Nearest here</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} set to 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>No profile for it. Type the speed limit and latency yourself, then keep them as your own profile with the {{app.buttons.save_as}} button.</td></tr>
+  </table>
+  <p>The numbers are not Apple's, so treat a profile as a starting point. Every value a profile sets is listed on the <a href="../reference/">reference page</a>.</p>
+</section>
+
+<section>
+  <h2>What you get on Windows</h2>
+  <ul>
+    <li><strong>One program, not the whole computer.</strong> <a href="../target-one-app/">Aim the impairment at a single app</a> while the rest of the machine stays normal.</li>
+    <li><strong>A timeline instead of a shell script.</strong> <a href="../scenarios-over-time/">Timed scenarios</a> change the settings at set seconds, which is what a script of <code>tc</code> and <code>sleep</code> does on Linux.</li>
+    <li><strong>A pipeline can run it.</strong> The same executable <a href="../network-tests-in-ci/">runs in CI</a> and reports through exit codes.</li>
+  </ul>
+  <p>On Linux or macOS, use the originals. This tool runs on Windows only.</p>
+</section>
+
+<section>
+  <h2>Next</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

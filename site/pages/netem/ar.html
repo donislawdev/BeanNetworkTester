@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem وNetwork Link Conditioner على Windows</h1>
+  <p class="lead">في Linux توجد أداة tc netem، وفي Mac توجد Network Link Conditioner. أما Windows فلا يملك أداة مدمجة تضيف التأخير والفقد. تنقل هذه الصفحة ما تعرفه إلى Bean Network Tester، وتبيّن أين لا تنتقل الأرقام كما هي.</p>
+</section>
+
+<section>
+  <h2>خيارات netem واحدًا واحدًا</h2>
+  <p>أضف <code>--target</code> و<code>--duration</code> إلى كل أمر هنا، وإلا أثّر على الحاسوب كله.</p>
+  <table>
+    <tr><th>netem</th><th>الإعداد في النافذة</th><th>الراية</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>الفقد المتتابع.</strong> قيمة الارتباط في netem ليست طول سلسلة. {{app.fields.loss_burst}} هو متوسط عدد الحزم المفقودة على التوالي، وهو أقرب مقابل.</li>
+    <li><strong>إعادة الترتيب.</strong> لا توجد نسبة مئوية لإعادة الترتيب. تؤخّر القفزة حزمة واحدة فتتجاوزها الحزم المرسلة بعدها، ويُظهر عدّاد الحزم المعاد ترتيبها في صفحة {{app.app.tabs.statistics}} ما إذا كان ذلك قد حدث فعلًا.</li>
+    <li><strong>حجم الطابور.</strong> قيمة limit في netem تُحسب بالحزم. أما {{app.fields.buffer}} فهو زمن بالمللي ثانية.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ثلاثة فروق تستحق المعرفة</h2>
+  <p><strong>الاتجاه.</strong> يؤخّر netem ما يغادر الواجهة، وتعود الاستجابة كما هي. تلتقط هذه الأداة الاتجاهين، لذا يضيف <code>--latency 100</code> نحو 200 ms إلى الـ ping: 100 في الذهاب و100 في العودة. وللحصول على ما يفعله netem، التقط الحركة الصادرة فقط:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>الوحدات.</strong> معدل netem بالبت في الثانية. أما حقول حد السرعة فبوحدة KB/s حيث K = 1024. تحويل الميغابت:</p>
+  <table>
+    <tr><th>معدل netem</th><th>حقل حد السرعة، بوحدة KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>النطاق.</strong> يشكّل tc واجهة شبكة كاملة ويحتاج إلى root. وتستهدف هذه الأداة برنامجًا واحدًا بـ <code>--target</code> وتحتاج إلى صلاحيات المسؤول.</p>
+</section>
+
+<section>
+  <h2>إن كنت تعرف Network Link Conditioner</h2>
+  <p>تعمل أداة Apple بملفات تعريف مسمّاة. وأقربها هنا:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>الأقرب هنا</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} مضبوط على 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>لا يوجد ملف تعريف مقابل. اكتب حد السرعة والتأخر بنفسك ثم احفظهما كملف تعريف خاص بك بزر {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>الأرقام ليست أرقام Apple، فاعتبر ملف التعريف نقطة بداية. وكل قيمة يضبطها ملف تعريف مذكورة في <a href="../jadawil-marjiya/">صفحة المرجع</a>.</p>
+</section>
+
+<section>
+  <h2>ما تكسبه على Windows</h2>
+  <ul>
+    <li><strong>برنامج واحد لا الحاسوب كله.</strong> <a href="../istihdaf-tatbiq-wahid/">وجّه التدهور إلى تطبيق واحد</a> بينما يبقى باقي الجهاز طبيعيًا.</li>
+    <li><strong>خط زمني بدل سكربت شل.</strong> تغيّر <a href="../sinaryuhat-zamaniya/">السيناريوهات الزمنية</a> الإعدادات عند ثوانٍ محددة، وهو ما يفعله سكربت من <code>tc</code> و<code>sleep</code> في Linux.</li>
+    <li><strong>يمكن لخط أنابيب تشغيله.</strong> يعمل الملف التنفيذي نفسه <a href="../ikhtibar-alshabaka-fi-ci/">في CI</a> ويبلّغ برموز الخروج.</li>
+  </ul>
+  <p>في Linux أو macOS استخدم الأدوات الأصلية. هذه الأداة تعمل على Windows فقط.</p>
+</section>
+
+<section>
+  <h2>التالي</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

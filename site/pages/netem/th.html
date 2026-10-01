@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem และ Network Link Conditioner บน Windows</h1>
+  <p class="lead">บน Linux มี tc netem และบน Mac มี Network Link Conditioner ส่วน Windows ไม่มีเครื่องมือในตัวที่เพิ่มความหน่วงและการสูญหายของแพ็กเก็ต หน้านี้จับคู่สิ่งที่คุณรู้อยู่แล้วเข้ากับ Bean Network Tester และชี้ว่าตัวเลขใดโอนมาใช้ตรง ๆ ไม่ได้</p>
+</section>
+
+<section>
+  <h2>ตัวเลือกของ netem ทีละตัว</h2>
+  <p>เติม <code>--target</code> และ <code>--duration</code> ในทุกคำสั่งที่นี่ มิฉะนั้นคำสั่งจะมีผลกับทั้งคอมพิวเตอร์</p>
+  <table>
+    <tr><th>netem</th><th>การตั้งค่าในหน้าต่าง</th><th>แฟลก</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>การสูญหายเป็นชุด</strong> ค่า correlation ใน netem ไม่ใช่ความยาวของชุด {{app.fields.loss_burst}} คือจำนวนแพ็กเก็ตที่หายติดกันโดยเฉลี่ย ซึ่งเป็นสิ่งที่ใกล้เคียงที่สุด</li>
+    <li><strong>การสลับลำดับ</strong> ไม่มีค่าเปอร์เซ็นต์การสลับลำดับ สไปก์จะหน่วงแพ็กเก็ตเดียวให้แพ็กเก็ตที่ส่งทีหลังแซงไป และตัวนับแพ็กเก็ตที่ถูกสลับลำดับในหน้า {{app.app.tabs.statistics}} จะบอกว่าเกิดขึ้นจริงหรือไม่</li>
+    <li><strong>ขนาดคิว</strong> limit ของ netem นับเป็นแพ็กเก็ต ส่วน {{app.fields.buffer}} เป็นเวลาในหน่วยมิลลิวินาที</li>
+  </ul>
+</section>
+
+<section>
+  <h2>สามความต่างที่ควรรู้</h2>
+  <p><strong>ทิศทาง</strong> netem หน่วงสิ่งที่ออกจากอินเทอร์เฟซ และคำตอบกลับมาโดยไม่ถูกแตะต้อง เครื่องมือนี้จับทั้งสองทิศทาง ดังนั้น <code>--latency 100</code> จึงเพิ่มค่า ping ราว 200 ms คือ 100 ขาไปและ 100 ขากลับ หากต้องการให้ได้อย่างที่ netem ทำ ให้จับเฉพาะทราฟฟิกขาออก:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>หน่วย</strong> อัตราของ netem เป็นบิตต่อวินาที ส่วนช่องจำกัดความเร็วเป็น KB/s โดย K = 1024 การแปลงจากเมกะบิต:</p>
+  <table>
+    <tr><th>อัตราของ netem</th><th>ช่องจำกัดความเร็ว หน่วย KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>ขอบเขต</strong> tc ปรับรูปทั้งอินเทอร์เฟซเครือข่ายและต้องใช้ root เครื่องมือนี้เล็งโปรแกรมเดียวด้วย <code>--target</code> และต้องใช้สิทธิ์ผู้ดูแลระบบ</p>
+</section>
+
+<section>
+  <h2>ถ้าคุณรู้จัก Network Link Conditioner</h2>
+  <p>เครื่องมือของ Apple ทำงานด้วยโปรไฟล์ที่มีชื่อ ตัวที่ใกล้เคียงที่สุดที่นี่:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>ที่ใกล้เคียงที่สุดที่นี่</th></tr>
+    <tr><td>100% Loss</td><td>ตั้ง{{app.fields.loss}}เป็น 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>ไม่มีโปรไฟล์ที่ตรงกัน ให้พิมพ์ขีดจำกัดความเร็วและความหน่วงเอง แล้วเก็บเป็นโปรไฟล์ของคุณด้วยปุ่ม {{app.buttons.save_as}}</td></tr>
+  </table>
+  <p>ตัวเลขไม่ใช่ของ Apple จึงควรถือโปรไฟล์เป็นจุดเริ่มต้น ทุกค่าที่โปรไฟล์ตั้งไว้มีอยู่ใน<a href="../tarang-ang-ing/">หน้าอ้างอิง</a></p>
+</section>
+
+<section>
+  <h2>สิ่งที่คุณได้บน Windows</h2>
+  <ul>
+    <li><strong>โปรแกรมเดียว ไม่ใช่ทั้งคอมพิวเตอร์</strong> <a href="../cho-chong-ap-diao/">เล็งการรบกวนไปที่แอปเดียว</a> ขณะที่ส่วนอื่นของเครื่องยังปกติ</li>
+    <li><strong>ไทม์ไลน์แทนสคริปต์เชลล์</strong> <a href="../senario-tam-wela/">สถานการณ์ตามเวลา</a>เปลี่ยนการตั้งค่าในวินาทีที่กำหนด เหมือนที่สคริปต์ <code>tc</code> กับ <code>sleep</code> ทำบน Linux</li>
+    <li><strong>ไปป์ไลน์รันได้</strong> ไฟล์ปฏิบัติการเดียวกัน<a href="../thotsop-khrueakhai-nai-ci/">รันใน CI</a> และรายงานผลด้วยรหัสออก</li>
+  </ul>
+  <p>บน Linux หรือ macOS ให้ใช้ของต้นฉบับ เครื่องมือนี้ทำงานบน Windows เท่านั้น</p>
+</section>
+
+<section>
+  <h2>ต่อไป</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

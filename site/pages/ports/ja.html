@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>このポートを使っているのはどのプログラム？</h1>
+  <p class="lead">サーバーが8080番ポートで起動しない、あるいはテストが「address already in use」で止まる。原因は、すでにプログラムがそのポートを使っているか、Windowsがそのポートを予約しているかのどちらかで、2つのエラーはよく似ています。見分け方を説明します。</p>
+</section>
+
+<section>
+  <h2>ポートが開けない2つの理由</h2>
+  <table>
+    <tr><th>何が起きたか</th><th>現れ方</th><th>対処</th></tr>
+    <tr><td><strong>プログラムがポートを使っている</strong></td><td>エラーは、アドレスがすでに使用中だと伝えます（EADDRINUSE、またはWindowsのエラー10048）。そのプログラムはソケット一覧に現れます。</td><td>そのプログラムを閉じるか、別のポートを選びます。</td></tr>
+    <tr><td><strong>Windowsがポートを予約している</strong></td><td>待ち受けているものがないのに、アクセスが禁止されていると表示されます（Windowsのエラー10013）。一覧にはプログラムが現れません。</td><td>予約範囲の外のポートを選ぶか、その範囲を解放します。WinNATサービスの再起動で解決することがよくあります。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Windowsに最初からあるもので調べる</h2>
+  <p>ソケット一覧には所有者がプロセスIDで載っています。ポートを探し、次にIDを調べます。</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>PowerShellでも同じことができます（TCPとUDPの両方）。</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>ポートを握っているプログラムがない場合は、Windowsが確保している範囲を調べます。</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>protocol=udp でもう一度実行してください。範囲はプロトコルごとに管理されるため、UDPでは空いていてTCPでは予約されているポートもあります。</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.tools}}タブで調べる</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong>タブなら、コンソールなしで同じことを調べられます。</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong>は、このコンピューター上のすべてのTCP・UDPソケットを <code>netstat -ano</code> のように一覧にします。待ち受け中のもの、接続中のもの、その状態、所有するプログラムが分かります。セッションは不要です。<code>lport:8080</code> や <code>state:listen</code> で検索できます。</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>は、あなたのサーバーが尋ねたことをそのまま調べます。このポートをプログラムは使えるか。8080、<code>80, 443</code> のような一覧、<code>9000-9100</code> のような範囲（最大1000ポート）を入力して <strong>{{app.tools.portcheck.check}}</strong> を押します。各ポートをTCPとUDP、IPv4とIPv6で試し、<strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（プログラムとそのPID付き）、<strong>{{app.tools.portcheck.verdict.reserved}}</strong>のいずれかで示します。</li>
+  </ul>
+  <p>答えが「はい・いいえ」ではなく表になるのはそのためです。Windowsはプロトコルごとに範囲を予約しますし、IPv6で待ち受けるプログラムは、IPv4では空いているポートを握っていることがあります。</p>
+  <p>ネットワークには何も送りません。各ポートについて、このコンピューター自身のループバックアドレスでWindowsにポートを求め、すぐに返します。</p>
+</section>
+
+<section>
+  <h2>持ち主が分かったら</h2>
+  <p>どちらの表でも、行を右クリックすると、そのポートを握っているプログラムを対象に設定できます。入力欄が埋まるだけで、<strong>{{app.buttons.start}}</strong> を押すまで何も変わりません。その先は<a href="../hitotsu-no-apuri/">1つのアプリだけを狙う</a>を参照してください。</p>
+</section>
+
+<section>
+  <h2>できないこと</h2>
+  <p>読み取るだけで、修復はしません。プログラムを閉じることも、予約範囲を解放することもありません。別のアカウントのソケットは、管理者として実行しない限りプログラムが表示されません。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

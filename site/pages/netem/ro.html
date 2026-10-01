@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem și Network Link Conditioner în Windows</h1>
+  <p class="lead">În Linux există tc netem, iar pe Mac există Network Link Conditioner. Windows nu are nimic încorporat care să adauge întârziere și pierderi. Această pagină transpune ce știi deja în Bean Network Tester și arată unde cifrele nu se transferă.</p>
+</section>
+
+<section>
+  <h2>Opțiunile netem, una câte una</h2>
+  <p>Adaugă <code>--target</code> și <code>--duration</code> la fiecare comandă de aici, altfel afectează tot calculatorul.</p>
+  <table>
+    <tr><th>netem</th><th>Setarea din fereastră</th><th>Indicator</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Pierderi în rafale.</strong> Valoarea de corelație din netem nu este o lungime de rafală. {{app.fields.loss_burst}} este numărul mediu de pachete pierdute la rând, cel mai apropiat echivalent.</li>
+    <li><strong>Reordonare.</strong> Nu există un procent de reordonare. Un vârf întârzie un singur pachet, astfel că cele trimise după el îl depășesc, iar contorul de pachete reordonate de pe pagina {{app.app.tabs.statistics}} arată dacă s-a întâmplat cu adevărat.</li>
+    <li><strong>Dimensiunea cozii.</strong> limit din netem numără pachete. {{app.fields.buffer}} este un timp în milisecunde.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Trei deosebiri bune de știut</h2>
+  <p><strong>Direcția.</strong> netem întârzie ce părăsește o interfață, iar răspunsul se întoarce neatins. Acest instrument captează ambele direcții, deci <code>--latency 100</code> adaugă aproximativ 200 ms la un ping: 100 la dus și 100 la întors. Ca să obții ce face netem, captează doar traficul de ieșire:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Unități.</strong> O viteză netem este în biți pe secundă. Câmpurile limitei de viteză sunt în KB/s, cu K = 1024. Conversia megabiților:</p>
+  <table>
+    <tr><th>viteza netem</th><th>Câmpul limitei de viteză, în KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Domeniu.</strong> tc modelează o întreagă interfață de rețea și cere root. Acest instrument țintește un singur program cu <code>--target</code> și cere drepturi de administrator.</p>
+</section>
+
+<section>
+  <h2>Dacă știi Network Link Conditioner</h2>
+  <p>Instrumentul Apple lucrează cu profiluri cu nume. Cele mai apropiate de aici:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Cel mai apropiat de aici</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} setat la 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Nu există un profil echivalent. Scrie tu limita de viteză și latența, apoi păstrează-le ca profil propriu cu butonul {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Cifrele nu sunt ale Apple, deci tratează un profil ca punct de plecare. Fiecare valoare pe care o setează un profil este listată pe <a href="../tabele-de-referinta/">pagina de referință</a>.</p>
+</section>
+
+<section>
+  <h2>Ce câștigi în Windows</h2>
+  <ul>
+    <li><strong>Un program, nu tot calculatorul.</strong> <a href="../tinteste-o-aplicatie/">Țintește degradarea spre o singură aplicație</a>, în timp ce restul mașinii rămâne normal.</li>
+    <li><strong>O axă a timpului în loc de un script shell.</strong> <a href="../scenarii-in-timp/">Scenariile cronometrate</a> schimbă setările la secunde stabilite, ceea ce face în Linux un script din <code>tc</code> și <code>sleep</code>.</li>
+    <li><strong>Un pipeline îl poate rula.</strong> Același executabil <a href="../teste-retea-in-ci/">rulează în CI</a> și raportează prin coduri de ieșire.</li>
+  </ul>
+  <p>În Linux sau macOS folosește originalele. Acest instrument rulează doar în Windows.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

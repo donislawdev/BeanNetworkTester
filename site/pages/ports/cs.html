@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Který program používá tento port?</h1>
+  <p class="lead">Server se nespustí na portu 8080, nebo test skončí hláškou "address already in use". Buď port už drží nějaký program, nebo ho Windows vyhradil, a obě chyby vypadají podobně. Takto je rozlišíte.</p>
+</section>
+
+<section>
+  <h2>Dva důvody, proč se port nedá otevřít</h2>
+  <table>
+    <tr><th>Co se stalo</th><th>Jak to vypadá</th><th>Co dělat</th></tr>
+    <tr><td><strong>Port drží program</strong></td><td>Chyba hlásí, že adresa je už používána (EADDRINUSE nebo chyba Windows 10048). Program je vidět v seznamu soketů.</td><td>Zavřete ten program nebo zvolte jiný port.</td></tr>
+    <tr><td><strong>Windows port vyhradil</strong></td><td>Chyba hlásí zakázaný přístup (chyba Windows 10013), i když nic neposlouchá. V seznamu není žádný program.</td><td>Zvolte port mimo vyhrazený rozsah nebo rozsah uvolněte. Často pomůže restart služby WinNAT.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Tím, co Windows už má</h2>
+  <p>Seznam soketů uvádí vlastníka jako ID procesu. Najděte port a potom ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Totéž v PowerShellu, pro TCP i UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Pokud port nedrží žádný program, zeptejte se, které rozsahy Windows vyhradil:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Spusťte to znovu s protocol=udp. Rozsahy se vedou podle protokolu, takže port může být pro UDP volný a pro TCP vyhrazený.</p>
+</section>
+
+<section>
+  <h2>S kartou {{app.app.tabs.tools}}</h2>
+  <p>Karta <strong>{{app.app.tabs.tools}}</strong> odpoví na stejné otázky bez konzole:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> vypíše každý soket TCP a UDP v počítači, jako <code>netstat -ano</code>: co naslouchá, co je připojeno, v jakém je stavu a který program ho vlastní. Relace není potřeba. Hledat můžete přes <code>lport:8080</code> nebo <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> se ptá na to, na co se ptal váš server: může program tento port použít? Zadejte 8080, seznam jako <code>80, 443</code> nebo rozsah jako <code>9000-9100</code> (až 1000 portů) a stiskněte <strong>{{app.tools.portcheck.check}}</strong>. Každý port se zkouší pro TCP a UDP, v IPv4 a IPv6, a označí se jako <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (s programem a jeho PID) nebo <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Proto je odpovědí tabulka, a ne ano nebo ne: Windows vyhrazuje rozsahy podle protokolu a program naslouchající v IPv6 může držet port, který je v IPv4 volný.</p>
+  <p>Po síti se nic neposílá. Pro každý port nástroj o něj požádá Windows na vlastní zpětné smyčce počítače a hned ho vrátí.</p>
+</section>
+
+<section>
+  <h2>Až budete vědět, kdo ho má</h2>
+  <p>Klikněte pravým tlačítkem na řádek v kterékoli tabulce, a program, který port drží, se stane cílem. Tím se jen vyplní pole cíle a nic se nezmění, dokud nestisknete <strong>{{app.buttons.start}}</strong>. Co dál, najdete v části <a href="../cileni-na-jednu-aplikaci/">cílení na jednu aplikaci</a>.</p>
+</section>
+
+<section>
+  <h2>Co nedělá</h2>
+  <p>Čte, neopravuje: nikdy nezavře program ani neuvolní vyhrazený rozsah. Soket jiného účtu neukáže program, pokud nástroj neběží jako správce.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

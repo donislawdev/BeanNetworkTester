@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>यह पोर्ट कौन सा प्रोग्राम इस्तेमाल कर रहा है?</h1>
+  <p class="lead">सर्वर पोर्ट 8080 पर शुरू नहीं होता, या कोई टेस्ट "address already in use" के साथ रुक जाता है। या तो पोर्ट पर पहले से कोई प्रोग्राम है, या Windows ने उसे अलग रख लिया है, और दोनों त्रुटियाँ एक जैसी दिखती हैं। इन्हें अलग पहचानने का तरीका यह है।</p>
+</section>
+
+<section>
+  <h2>पोर्ट न खुलने के दो कारण</h2>
+  <table>
+    <tr><th>क्या हुआ</th><th>कैसे दिखता है</th><th>क्या करें</th></tr>
+    <tr><td><strong>कोई प्रोग्राम पोर्ट रोके है</strong></td><td>त्रुटि बताती है कि पता पहले से उपयोग में है (EADDRINUSE, या Windows त्रुटि 10048)। प्रोग्राम सॉकेट सूची में दिखता है।</td><td>उस प्रोग्राम को बंद करें, या कोई दूसरा पोर्ट चुनें।</td></tr>
+    <tr><td><strong>Windows ने पोर्ट आरक्षित कर रखा है</strong></td><td>त्रुटि बताती है कि पहुँच वर्जित है (Windows त्रुटि 10013), जबकि कुछ भी सुन नहीं रहा। सूची में कोई प्रोग्राम नहीं दिखता।</td><td>आरक्षित सीमा के बाहर का पोर्ट चुनें, या उस सीमा को मुक्त करें। WinNAT सेवा को फिर से शुरू करना अक्सर काफ़ी होता है।</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>जो Windows में पहले से है, उससे</h2>
+  <p>सॉकेट सूची मालिक को प्रोसेस ID के रूप में दिखाती है। पहले पोर्ट खोजें, फिर ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>यही PowerShell में, TCP और UDP दोनों के लिए:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>अगर कोई प्रोग्राम पोर्ट नहीं रोके है, तो पूछें कि Windows ने कौन सी सीमाएँ अलग रखी हैं:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>इसे protocol=udp के साथ फिर चलाएँ। सीमाएँ हर प्रोटोकॉल के लिए अलग रखी जाती हैं, इसलिए कोई पोर्ट UDP के लिए खाली और TCP के लिए आरक्षित हो सकता है।</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.tools}} टैब से</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong> टैब इन्हीं सवालों के जवाब कंसोल के बिना देता है:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> कंप्यूटर के हर TCP और UDP सॉकेट की सूची देता है, <code>netstat -ano</code> की तरह: क्या सुन रहा है, क्या जुड़ा है, उसकी स्थिति और उसका मालिक प्रोग्राम। इसके लिए सेशन ज़रूरी नहीं। <code>lport:8080</code> या <code>state:listen</code> से खोजें।</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> वही पूछता है जो आपके सर्वर ने पूछा था: क्या कोई प्रोग्राम यह पोर्ट इस्तेमाल कर सकता है? 8080 लिखें, <code>80, 443</code> जैसी सूची या <code>9000-9100</code> जैसी सीमा (अधिकतम 1000 पोर्ट) दें और <strong>{{app.tools.portcheck.check}}</strong> दबाएँ। हर पोर्ट को TCP और UDP के लिए, IPv4 और IPv6 पर आज़माया जाता है और <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (प्रोग्राम और उसके PID के साथ) या <strong>{{app.tools.portcheck.verdict.reserved}}</strong> चिह्नित किया जाता है।</li>
+  </ul>
+  <p>इसीलिए जवाब हाँ या ना नहीं, एक तालिका है: Windows सीमाएँ हर प्रोटोकॉल के लिए अलग आरक्षित करता है, और IPv6 पर सुन रहा प्रोग्राम ऐसा पोर्ट रोके रख सकता है जो IPv4 पर खाली है।</p>
+  <p>नेटवर्क पर कुछ नहीं भेजा जाता। हर पोर्ट के लिए टूल कंप्यूटर के अपने लूपबैक पते पर Windows से उसे माँगता है और तुरंत लौटा देता है।</p>
+</section>
+
+<section>
+  <h2>जब पता चल जाए कि किसके पास है</h2>
+  <p>पोर्ट रोकने वाले प्रोग्राम को लक्ष्य बनाने के लिए किसी भी तालिका की पंक्ति पर राइट-क्लिक करें। इससे केवल लक्ष्य वाला खाना भरता है, और जब तक आप <strong>{{app.buttons.start}}</strong> नहीं दबाते, कुछ नहीं बदलता। आगे का रास्ता <a href="../ek-app-par-nishana/">एक ऐप को निशाना बनाना</a> में है।</p>
+</section>
+
+<section>
+  <h2>यह क्या नहीं करता</h2>
+  <p>यह केवल पढ़ता है, ठीक नहीं करता: न कभी किसी प्रोग्राम को बंद करता है, न आरक्षित सीमा को मुक्त करता है। किसी दूसरे खाते का सॉकेट प्रोग्राम नहीं दिखाता, जब तक टूल एडमिनिस्ट्रेटर के रूप में न चले।</p>
+</section>
+
+<section>
+  <h2>आगे</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

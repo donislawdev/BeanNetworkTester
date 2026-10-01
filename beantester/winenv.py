@@ -56,6 +56,12 @@ def elevation_disabled():
     return str(os.environ.get("BEAN_NO_ELEVATE", "")).strip() not in ("", "0")
 
 
+# The last argument of the copy ``elevate_self`` starts. An ARGUMENT, not an
+# environment variable: what an elevated process inherits from the one that
+# asked is not documented for the "runas" verb, a command line is.
+UAC_RELAUNCH = "--uac-relaunch"
+
+
 # -- window-manager bindings, with FULL prototypes --------------------------- #
 # These live here and not in ``gui/theme.py`` for two reasons: they are Win32,
 # not Tk (this module is where the process-level Windows knobs already are), and
@@ -146,6 +152,8 @@ def user32():
         lib.GetMonitorInfoW.argtypes = [wintypes.HMONITOR,
                                         ctypes.POINTER(monitorinfo_type())]
         lib.GetMonitorInfoW.restype = wintypes.BOOL
+        lib.MessageBoxW.argtypes = [H, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT]
+        lib.MessageBoxW.restype = ctypes.c_int
         # 64-bit Windows has the ...Ptr forms; 32-bit has only the plain ones, and
         # there LONG_PTR is a LONG. Declared for whichever this build actually has,
         # so the guard walks what exists instead of a list somebody wrote down.
@@ -395,6 +403,33 @@ def _relaunch_params(args):
     return subprocess.list2cmdline([str(a) for a in args])
 
 
+def _relaunch_command(argv):
+    """``(program, arguments)`` that start this same program again with ``argv``.
+
+    A frozen build is one executable. From sources the interpreter is started
+    again with what it was started with (``sys.orig_argv``), minus the program's
+    own arguments: the interpreter options, then the script, ``-m <module>`` or
+    the launcher a pip install made. MEASURED 2026-10-01, ``sys.argv[0]`` - what
+    this used - is none of those for two of the three: for ``python -m
+    beantester`` it is ``beantester/__main__.py``, which run as a script fails on
+    its relative import; for the pip launcher it is the launcher's path WITHOUT
+    its ``.exe``, a file that does not exist. The parent had already said
+    "relaunched", so the user accepted UAC and no window ever opened.
+
+    A script given by a relative path is made absolute here rather than left to
+    the working directory ``ShellExecuteW`` passes on. An empty remainder (an
+    embedded interpreter has no command line to repeat) keeps the old shape.
+    """
+    if is_frozen():
+        return sys.executable, list(argv)
+    head = list(sys.orig_argv[1:len(sys.orig_argv) - (len(sys.argv) - 1)])
+    if not head:
+        head = [sys.argv[0]]
+    if os.path.isfile(head[-1]):
+        head[-1] = os.path.abspath(head[-1])
+    return sys.executable, head + list(argv)
+
+
 def elevate_self(argv=None):
     """Relaunch this process elevated (UAC prompt). True = relaunched, exit now.
 
@@ -402,16 +437,18 @@ def elevate_self(argv=None):
     disabled by env, or the user dismissed the UAC prompt. The caller then
     continues unelevated (the GUI keeps working; only starting a real capture
     session will fail, with an explanatory dialog).
+
+    The copy is started with ``UAC_RELAUNCH`` after its arguments, and a copy that
+    carries it never asks again (``cli.main``): on an account where the "runas"
+    verb cannot elevate (UAC switched off for a standard user) the copy started
+    without admin rights too, and each copy used to start the next.
     """
     if not is_windows() or is_admin() or elevation_disabled():
         return False
     argv = list(sys.argv[1:] if argv is None else argv)
     try:
         import ctypes
-        if is_frozen():
-            program, args = sys.executable, argv
-        else:                       # running from sources: elevate the interpreter
-            program, args = sys.executable, [os.path.abspath(sys.argv[0])] + argv
+        program, args = _relaunch_command(argv + [UAC_RELAUNCH])
         params = _relaunch_params(args)
         # ShellExecuteW with the "runas" verb is the only supported way to ask
         # for elevation; a return value <= 32 means it did not start (e.g. 1223
@@ -444,6 +481,28 @@ def detach_console():
     except OSError:
         sys.stdout = sys.stderr = None
     return ok
+
+
+_MB_ICONERROR = 0x10
+_MB_SETFOREGROUND = 0x10000
+
+
+def show_error(title, text):
+    """A native error box, for the one moment nothing else can be seen.
+
+    Only for a GUI that fails before its window exists in the frozen build: the
+    console is already detached there (``detach_console``), so a line on stderr
+    reaches nobody and a double-clicked exe simply vanished. Everywhere else the
+    program has a console or a Tk window of its own. Modal: returns when the
+    user closes it. False when no box could be shown.
+    """
+    lib = user32()
+    if lib is None:
+        return False
+    with crashlog.quiet("winenv.show_error"):
+        return bool(lib.MessageBoxW(None, str(text), str(title),
+                                    _MB_ICONERROR | _MB_SETFOREGROUND))
+    return False
 
 
 # The finest tick the timeBeginPeriod API accepts, and the one the injector wants.

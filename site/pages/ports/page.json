@@ -1,0 +1,138 @@
+{
+  "id": "ports",
+  "order": 78,
+  "languages": {
+    "en": {
+      "slug": "which-program-uses-a-port",
+      "link_text": "Which program uses a port",
+      "title": "Which program is using a port on Windows",
+      "description": "Find the program that holds a port, and tell a port in use from one Windows reserved. Commands for netstat and PowerShell, and a built-in port check."
+    },
+    "pl": {
+      "slug": "ktory-program-uzywa-portu",
+      "link_text": "Który program używa portu",
+      "title": "Który program używa portu w Windows",
+      "description": "Znajdź program, który zajmuje port, i odróżnij port zajęty od zarezerwowanego przez Windows. Polecenia netstat i PowerShell oraz wbudowane sprawdzanie portów."
+    },
+    "zh-Hans": {
+      "slug": "nage-chengxu-zhanyong-duankou",
+      "link_text": "哪个程序占用端口",
+      "title": "在 Windows 上查看哪个程序占用了端口",
+      "description": "找出占用端口的程序，并分清端口是被占用还是被 Windows 保留。含 netstat 和 PowerShell 命令，以及内置的端口检查。"
+    },
+    "ja": {
+      "slug": "pooto-wo-tsukau-puroguramu",
+      "link_text": "ポートを使うプログラム",
+      "title": "Windowsでポートを使っているプログラムを調べる",
+      "description": "ポートを握っているプログラムを見つけ、使用中のポートとWindowsが予約したポートを見分けます。netstatとPowerShellのコマンドと、内蔵のポートチェックを紹介します。"
+    },
+    "de": {
+      "slug": "welches-programm-nutzt-den-port",
+      "link_text": "Welches Programm nutzt einen Port",
+      "title": "Welches Programm nutzt einen Port unter Windows",
+      "description": "Finde das Programm, das einen Port belegt, und erkenne von Windows reservierte Ports. Mit netstat- und PowerShell-Befehlen und einer eingebauten Portprüfung."
+    },
+    "fr": {
+      "slug": "quel-programme-utilise-un-port",
+      "link_text": "Quel programme utilise un port",
+      "title": "Quel programme utilise un port sous Windows",
+      "description": "Trouvez le programme qui tient un port et distinguez un port utilisé d'un port réservé par Windows, avec netstat, PowerShell et une vérification intégrée."
+    },
+    "es": {
+      "slug": "que-programa-usa-un-puerto",
+      "link_text": "Qué programa usa un puerto",
+      "title": "Qué programa usa un puerto en Windows",
+      "description": "Encuentra el programa que ocupa un puerto y distingue uno en uso de uno reservado por Windows, con netstat, PowerShell y una comprobación de puertos integrada."
+    },
+    "pt-BR": {
+      "slug": "qual-programa-usa-uma-porta",
+      "link_text": "Qual programa usa uma porta",
+      "title": "Qual programa usa uma porta no Windows",
+      "description": "Descubra o programa que ocupa uma porta e diferencie uma em uso de uma reservada pelo Windows, com netstat, PowerShell e uma verificação de portas embutida."
+    },
+    "it": {
+      "slug": "quale-programma-usa-una-porta",
+      "link_text": "Quale programma usa una porta",
+      "title": "Quale programma usa una porta su Windows",
+      "description": "Trova il programma che occupa una porta e distingui una in uso da una riservata da Windows, con netstat, PowerShell e un controllo porte integrato."
+    },
+    "id": {
+      "slug": "program-mana-memakai-port",
+      "link_text": "Program mana memakai port",
+      "title": "Program mana yang memakai port di Windows",
+      "description": "Temukan program yang memegang port dan bedakan port terpakai dari yang dicadangkan Windows, dengan netstat, PowerShell, dan pemeriksa port bawaan."
+    },
+    "ru": {
+      "slug": "kakaya-programma-zanimaet-port",
+      "link_text": "Какая программа занимает порт",
+      "title": "Какая программа занимает порт в Windows",
+      "description": "Найдите программу, которая держит порт, и отличите занятый порт от зарезервированного Windows. Команды netstat и PowerShell и встроенная проверка портов."
+    },
+    "tr": {
+      "slug": "hangi-program-portu-kullaniyor",
+      "link_text": "Portu hangi program kullanıyor",
+      "title": "Windows'ta bir portu hangi program kullanıyor",
+      "description": "Bir portu tutan programı bulun ve kullanımdaki portu Windows'un ayırdığı porttan ayırt edin. netstat ve PowerShell komutları ile yerleşik port denetimi."
+    },
+    "cs": {
+      "slug": "ktery-program-pouziva-port",
+      "link_text": "Který program používá port",
+      "title": "Který program používá port ve Windows",
+      "description": "Najděte program, který drží port, a rozlište port v použití od portu rezervovaného Windows. Příkazy netstat a PowerShell a vestavěná kontrola portů."
+    },
+    "vi": {
+      "slug": "chuong-trinh-nao-dung-cong",
+      "link_text": "Chương trình nào dùng cổng",
+      "title": "Chương trình nào đang dùng một cổng trên Windows",
+      "description": "Tìm chương trình đang giữ một cổng và phân biệt cổng đang dùng với cổng Windows đã dành riêng. Lệnh netstat và PowerShell, cùng công cụ kiểm tra cổng tích hợp."
+    },
+    "hi": {
+      "slug": "kaun-sa-program-port-use-kar-raha-hai",
+      "link_text": "कौन सा प्रोग्राम पोर्ट रोके है",
+      "title": "Windows पर कौन सा प्रोग्राम पोर्ट इस्तेमाल कर रहा है",
+      "description": "जानें कौन सा प्रोग्राम पोर्ट रोके है, और इस्तेमाल में आए पोर्ट को Windows के आरक्षित पोर्ट से अलग पहचानें। netstat और PowerShell कमांड, और अंतर्निहित पोर्ट जाँच।"
+    },
+    "ko": {
+      "slug": "eoneu-peurogeuraemi-poteureul-sseuneunga",
+      "link_text": "포트를 쓰는 프로그램",
+      "title": "Windows에서 어떤 프로그램이 포트를 쓰는지 찾기",
+      "description": "포트를 잡고 있는 프로그램을 찾고, 사용 중인 포트와 Windows가 예약한 포트를 구분하세요. netstat와 PowerShell 명령, 내장 포트 확인 도구를 다룹니다."
+    },
+    "ar": {
+      "slug": "ay-barnamaj-yastakhdim-almanfadh",
+      "link_text": "أي برنامج يستخدم المنفذ",
+      "title": "أي برنامج يستخدم المنفذ في Windows",
+      "description": "اعثر على البرنامج الذي يحجز منفذًا، وميّز المنفذ المستخدم عن المنفذ الذي حجزه Windows. أوامر netstat وPowerShell مع أداة فحص منافذ مدمجة."
+    },
+    "ro": {
+      "slug": "ce-program-foloseste-un-port",
+      "link_text": "Ce program folosește un port",
+      "title": "Ce program folosește un port în Windows",
+      "description": "Găsește programul care ține un port și deosebește un port ocupat de unul rezervat de Windows, cu netstat, PowerShell și o verificare încorporată."
+    },
+    "nl": {
+      "slug": "welk-programma-gebruikt-een-poort",
+      "link_text": "Welk programma gebruikt een poort",
+      "title": "Welk programma gebruikt een poort in Windows",
+      "description": "Vind het programma dat een poort vasthoudt en onderscheid een poort in gebruik van een gereserveerde, met netstat, PowerShell en een ingebouwde poortcontrole."
+    },
+    "zh-Hant": {
+      "slug": "nage-chengshi-zhanyong-lianjiekou",
+      "link_text": "哪個程式佔用連接埠",
+      "title": "在 Windows 上查看哪個程式佔用了連接埠",
+      "description": "找出佔用連接埠的程式，並分清連接埠是被使用還是被 Windows 保留。含 netstat 與 PowerShell 指令，以及內建的連接埠檢查。"
+    },
+    "uk": {
+      "slug": "yaka-prohrama-vykorystovuye-port",
+      "link_text": "Яка програма використовує порт",
+      "title": "Яка програма використовує порт у Windows",
+      "description": "Знайдіть програму, яка тримає порт, і відрізніть зайнятий порт від зарезервованого Windows. Команди netstat і PowerShell та вбудована перевірка портів."
+    },
+    "th": {
+      "slug": "program-nai-chai-port",
+      "link_text": "โปรแกรมไหนใช้พอร์ต",
+      "title": "โปรแกรมไหนกำลังใช้พอร์ตบน Windows",
+      "description": "ค้นหาโปรแกรมที่จับพอร์ตอยู่ และแยกพอร์ตที่ถูกใช้ออกจากพอร์ตที่ Windows สงวนไว้ พร้อมคำสั่ง netstat และ PowerShell และตัวตรวจสอบพอร์ตในตัว"
+    }
+  }
+}

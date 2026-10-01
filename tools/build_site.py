@@ -506,8 +506,8 @@ def _root_prefix(registry):
 def asset_source(registry, root, target):
     """The repository file that produces an output asset, or a loud failure.
 
-    ``og_image`` names a path on the SITE (``assets/bean.png``), while the file lives
-    somewhere else in the repository (``bean.png``), and the asset list is what ties
+    ``og_image`` names a path on the SITE (``assets/og-image.png``), while the file lives
+    somewhere else in the repository (``docs/og-image.png``), and the asset list is what ties
     the two together. Looking it up instead of guessing means an ``og:image`` that
     names a file nothing produces fails the build rather than the card: a social
     preview pointing at a 404 is invisible until somebody shares the link.
@@ -570,9 +570,10 @@ def head_meta(page, code, registry, texts, description, root, home):
     lines.append('<link rel="alternate" hreflang="x-default" href="%s">'
                  % html.escape(default_url, quote=True))
 
-    # A square 256 px icon is what the project has. `summary` is the card that fits
-    # it: `summary_large_image` wants roughly 2:1 and would crop or letterbox this.
-    # A dedicated banner is a drawing job, not a build job.
+    # The image is a 1200x630 banner (docs/og-image.png), which is what
+    # `summary_large_image` wants. The card type and the image come as a pair: that
+    # card cropped a square icon, and `summary` shrinks a banner to a thumbnail, so
+    # replacing the image means checking this line (a test compares the two).
     image = "%s/%s" % (base, registry["og_image"].lstrip("/"))
     size = _png_size(asset_source(registry, root, registry["og_image"]))
     lang = _language(registry, code)
@@ -588,7 +589,8 @@ def head_meta(page, code, registry, texts, description, root, home):
     for prop, value in social:
         lines.append('<meta property="%s" content="%s">'
                      % (prop, html.escape(str(value), quote=True)))
-    for name, value in (("twitter:card", "summary"), ("twitter:title", entry["title"]),
+    for name, value in (("twitter:card", "summary_large_image"),
+                        ("twitter:title", entry["title"]),
                         ("twitter:description", description), ("twitter:image", image),
                         ("twitter:image:alt", texts[code]["og.image_alt"])):
         lines.append('<meta name="%s" content="%s">'

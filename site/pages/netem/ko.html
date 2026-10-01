@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Windows의 netem과 Network Link Conditioner</h1>
+  <p class="lead">Linux에는 tc netem이, Mac에는 Network Link Conditioner가 있습니다. Windows에는 지연과 손실을 더하는 기본 도구가 없습니다. 이 페이지는 이미 아는 것을 Bean Network Tester에 대응시키고, 숫자가 그대로 옮겨지지 않는 부분을 짚습니다.</p>
+</section>
+
+<section>
+  <h2>netem 옵션을 하나씩</h2>
+  <p>여기 있는 모든 명령에 <code>--target</code>과 <code>--duration</code>을 붙이세요. 그렇지 않으면 컴퓨터 전체에 영향을 줍니다.</p>
+  <table>
+    <tr><th>netem</th><th>창의 설정</th><th>플래그</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>연속 손실.</strong> netem의 상관 값은 연속 길이가 아닙니다. {{app.fields.loss_burst}}는 연속으로 잃는 패킷 수의 평균이며, 가장 가까운 대응입니다.</li>
+    <li><strong>순서 바꾸기.</strong> 순서를 바꾸는 비율 설정은 없습니다. 스파이크는 패킷 하나를 지연시켜 그 뒤에 보낸 패킷이 앞지르게 하며, {{app.app.tabs.statistics}} 페이지의 순서가 바뀐 패킷 카운터가 실제로 일어났는지 알려 줍니다.</li>
+    <li><strong>큐 크기.</strong> netem의 limit은 패킷 수로 셉니다. {{app.fields.buffer}}는 밀리초 단위의 시간입니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>알아 둘 세 가지 차이</h2>
+  <p><strong>방향.</strong> netem은 인터페이스에서 나가는 것만 지연시키고 응답은 그대로 돌아옵니다. 이 도구는 양방향을 잡으므로 <code>--latency 100</code>은 핑에 약 200ms를 더합니다. 갈 때 100, 올 때 100입니다. netem과 같은 동작을 얻으려면 나가는 트래픽만 잡으세요.</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>단위.</strong> netem의 rate는 초당 비트입니다. 속도 제한 입력란은 KB/s이며 K는 1024입니다. 메가비트 환산은 다음과 같습니다.</p>
+  <table>
+    <tr><th>netem rate</th><th>속도 제한 입력란(KB/s)</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>범위.</strong> tc는 네트워크 인터페이스 전체를 다루고 root가 필요합니다. 이 도구는 <code>--target</code>으로 프로그램 하나만 겨냥하며 관리자 권한이 필요합니다.</p>
+</section>
+
+<section>
+  <h2>Network Link Conditioner에 익숙하다면</h2>
+  <p>Apple의 도구는 이름 붙은 프로필로 동작합니다. 여기서 가장 가까운 것은 다음과 같습니다.</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>여기서 가장 가까운 것</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}}를 100으로 설정</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>대응하는 프로필이 없습니다. 속도 제한과 지연을 직접 입력한 다음 {{app.buttons.save_as}} 버튼으로 나만의 프로필로 저장하세요.</td></tr>
+  </table>
+  <p>숫자는 Apple의 것이 아니므로 프로필을 출발점으로 삼으세요. 프로필이 설정하는 모든 값은 <a href="../chamjo-pyo/">참조 페이지</a>에 나와 있습니다.</p>
+</section>
+
+<section>
+  <h2>Windows에서 얻는 것</h2>
+  <ul>
+    <li><strong>컴퓨터 전체가 아닌 프로그램 하나.</strong> <a href="../hanaui-aep-daesang/">장애를 앱 하나에만 겨냥</a>하면 나머지는 평소처럼 유지됩니다.</li>
+    <li><strong>셸 스크립트 대신 타임라인.</strong> <a href="../sigan-byeol-sinario/">시간별 시나리오</a>는 정해 둔 초에 설정을 바꿉니다. Linux에서 <code>tc</code>와 <code>sleep</code> 스크립트가 하는 일입니다.</li>
+    <li><strong>파이프라인에서 실행할 수 있음.</strong> 같은 실행 파일이 <a href="../ci-neteuwokeu-teseuteu/">CI에서 돌고</a> 종료 코드로 결과를 알립니다.</li>
+  </ul>
+  <p>Linux나 macOS에서는 원래 도구를 쓰세요. 이 도구는 Windows 전용입니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

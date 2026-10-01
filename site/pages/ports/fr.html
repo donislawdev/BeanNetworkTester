@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Quel programme utilise ce port ?</h1>
+  <p class="lead">Un serveur ne démarre pas sur le port 8080, ou un test s'arrête sur « address already in use ». Soit un programme a déjà le port, soit Windows l'a mis de côté, et les deux erreurs se ressemblent. Voici comment les distinguer.</p>
+</section>
+
+<section>
+  <h2>Deux raisons pour lesquelles un port ne s'ouvre pas</h2>
+  <table>
+    <tr><th>Ce qui s'est passé</th><th>Comment cela se présente</th><th>Que faire</th></tr>
+    <tr><td><strong>Un programme a le port</strong></td><td>L'erreur dit que l'adresse est déjà utilisée (EADDRINUSE, ou erreur Windows 10048). Le programme apparaît dans la liste des sockets.</td><td>Fermez ce programme ou choisissez un autre port.</td></tr>
+    <tr><td><strong>Windows a mis le port de côté</strong></td><td>L'erreur dit que l'accès est interdit (erreur Windows 10013) alors que rien n'écoute. Aucun programme n'apparaît dans la liste.</td><td>Choisissez un port hors de la plage réservée, ou libérez la plage. Redémarrer le service WinNAT suffit souvent.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Avec ce que Windows fournit déjà</h2>
+  <p>La liste des sockets donne le propriétaire sous forme d'identifiant de processus. Cherchez le port, puis l'identifiant :</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>La même chose dans PowerShell, pour TCP et pour UDP :</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Si aucun programme ne tient le port, demandez quelles plages Windows a mises de côté :</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Relancez avec protocol=udp. Les plages sont tenues par protocole : un port peut donc être libre pour UDP et réservé pour TCP.</p>
+</section>
+
+<section>
+  <h2>Avec l'onglet {{app.app.tabs.tools}}</h2>
+  <p>L'onglet <strong>{{app.app.tabs.tools}}</strong> répond aux mêmes questions sans console :</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> liste chaque socket TCP et UDP de l'ordinateur, comme <code>netstat -ano</code> : ce qui écoute, ce qui est connecté, son état et le programme qui le possède. Aucune session n'est nécessaire. Cherchez avec <code>lport:8080</code> ou <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> pose la question de votre serveur : un programme peut-il utiliser ce port ? Saisissez 8080, une liste comme <code>80, 443</code> ou une plage comme <code>9000-9100</code> (jusqu'à 1000 ports), puis appuyez sur <strong>{{app.tools.portcheck.check}}</strong>. Chaque port est essayé en TCP et en UDP, en IPv4 et en IPv6, et marqué <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (avec le programme et son PID) ou <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>C'est pourquoi la réponse est un tableau et non un oui ou un non : Windows réserve des plages par protocole, et un programme à l'écoute en IPv6 peut tenir un port libre en IPv4.</p>
+  <p>Rien n'est envoyé sur le réseau. Pour chaque port, l'outil le demande à Windows sur l'adresse de bouclage de l'ordinateur et le rend aussitôt.</p>
+</section>
+
+<section>
+  <h2>Une fois que vous savez qui l'a</h2>
+  <p>Faites un clic droit sur une ligne de l'un ou l'autre tableau pour cibler le programme qui tient le port. Cela ne fait que remplir le champ de cible, et rien ne change avant d'appuyer sur <strong>{{app.buttons.start}}</strong>. La suite est dans <a href="../cibler-une-application/">cibler une application</a>.</p>
+</section>
+
+<section>
+  <h2>Ce qu'il ne fait pas</h2>
+  <p>Il lit, il ne répare pas : il ne ferme jamais un programme et ne libère jamais une plage réservée. Un socket d'un autre compte n'affiche aucun programme, sauf si l'outil s'exécute en administrateur.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

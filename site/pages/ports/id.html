@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Program mana yang memakai port ini?</h1>
+  <p class="lead">Server tidak mau menyala di port 8080, atau tes berhenti dengan "address already in use". Entah sebuah program sudah memegang port itu, entah Windows mencadangkannya, dan kedua galat itu tampak mirip. Begini cara membedakannya.</p>
+</section>
+
+<section>
+  <h2>Dua alasan sebuah port tidak bisa dibuka</h2>
+  <table>
+    <tr><th>Apa yang terjadi</th><th>Bagaimana tampaknya</th><th>Apa yang dilakukan</th></tr>
+    <tr><td><strong>Sebuah program memegang port</strong></td><td>Galat menyebut alamat sudah dipakai (EADDRINUSE, atau galat Windows 10048). Program itu muncul di daftar socket.</td><td>Tutup program itu, atau pilih port lain.</td></tr>
+    <tr><td><strong>Windows mencadangkan port</strong></td><td>Galat menyebut akses dilarang (galat Windows 10013) padahal tidak ada yang mendengarkan. Tidak ada program di daftar.</td><td>Pilih port di luar rentang yang dicadangkan, atau lepaskan rentang itu. Memulai ulang layanan WinNAT sering berhasil.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Dengan yang sudah ada di Windows</h2>
+  <p>Daftar socket menyebut pemiliknya sebagai ID proses. Cari port-nya, lalu cari ID-nya:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Hal yang sama di PowerShell, untuk TCP dan UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Jika tidak ada program yang memegang port, tanyakan rentang mana yang dicadangkan Windows:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Jalankan lagi dengan protocol=udp. Rentang dicatat per protokol, jadi sebuah port bisa bebas untuk UDP dan dicadangkan untuk TCP.</p>
+</section>
+
+<section>
+  <h2>Dengan tab {{app.app.tabs.tools}}</h2>
+  <p>Tab <strong>{{app.app.tabs.tools}}</strong> menjawab pertanyaan yang sama tanpa konsol:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> mendaftar setiap socket TCP dan UDP di komputer, seperti <code>netstat -ano</code>: apa yang mendengarkan, apa yang tersambung, statusnya, dan program pemiliknya. Tidak perlu sesi. Cari dengan <code>lport:8080</code> atau <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> menanyakan hal yang ditanyakan server Anda: bisakah sebuah program memakai port ini? Ketik 8080, daftar seperti <code>80, 443</code>, atau rentang seperti <code>9000-9100</code> (hingga 1000 port), lalu tekan <strong>{{app.tools.portcheck.check}}</strong>. Setiap port dicoba untuk TCP dan UDP, di IPv4 dan IPv6, lalu ditandai <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (dengan program dan PID-nya), atau <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Karena itu jawabannya berupa tabel, bukan ya atau tidak: Windows mencadangkan rentang per protokol, dan program yang mendengarkan di IPv6 bisa memegang port yang bebas di IPv4.</p>
+  <p>Tidak ada yang dikirim lewat jaringan. Untuk setiap port, alat ini memintanya dari Windows pada alamat loopback komputer itu sendiri dan langsung mengembalikannya.</p>
+</section>
+
+<section>
+  <h2>Setelah tahu siapa pemegangnya</h2>
+  <p>Klik kanan sebuah baris di salah satu tabel untuk menjadikan program pemegang port sebagai target. Ini hanya mengisi kolom target, dan tidak ada yang berubah sampai Anda menekan <strong>{{app.buttons.start}}</strong>. Langkah berikutnya ada di <a href="../sasar-satu-aplikasi/">menyasar satu aplikasi</a>.</p>
+</section>
+
+<section>
+  <h2>Yang tidak dilakukannya</h2>
+  <p>Alat ini hanya membaca, tidak memperbaiki: tidak pernah menutup program dan tidak pernah melepaskan rentang yang dicadangkan. Socket milik akun lain tidak menampilkan program, kecuali alat ini dijalankan sebagai administrator.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

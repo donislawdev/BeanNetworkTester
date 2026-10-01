@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Windows版のnetemとNetwork Link Conditioner</h1>
+  <p class="lead">Linuxにはtc netem、MacにはNetwork Link Conditionerがあります。Windowsには、遅延やパケット損失を加える標準機能がありません。このページでは、すでに知っている操作をBean Network Testerに対応づけ、数値がそのままでは通用しない点も示します。</p>
+</section>
+
+<section>
+  <h2>netemのオプションを1つずつ</h2>
+  <p>ここにあるどのコマンドにも <code>--target</code> と <code>--duration</code> を付けてください。付けないとコンピューター全体に影響します。</p>
+  <table>
+    <tr><th>netem</th><th>ウィンドウの設定</th><th>フラグ</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>バースト損失。</strong>netemの相関値はバースト長ではありません。{{app.fields.loss_burst}}は連続して失われるパケット数の平均で、最も近い対応です。</li>
+    <li><strong>順序の入れ替え。</strong>入れ替えの割合を指定する項目はありません。スパイクは1つのパケットだけを遅らせ、あとから送ったパケットに追い越させます。実際に起きたかどうかは{{app.app.tabs.statistics}}ページの入れ替えカウンターで確認できます。</li>
+    <li><strong>キューの大きさ。</strong>netemのlimitはパケット数です。{{app.fields.buffer}}はミリ秒の時間です。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>知っておきたい3つの違い</h2>
+  <p><strong>方向。</strong>netemはインターフェースから出ていくものだけを遅らせ、返事はそのまま戻ります。このツールは双方向を捕捉するので、<code>--latency 100</code> はpingを約200ミリ秒増やします（行きの100と帰りの100）。netemと同じにするには、送信方向だけを捕捉します。</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>単位。</strong>netemのrateはビット毎秒です。速度制限のフィールドはKB/sで、Kは1024です。メガビットの換算は次のとおりです。</p>
+  <table>
+    <tr><th>netemのrate</th><th>速度制限フィールド（KB/s）</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>対象範囲。</strong>tcはネットワークインターフェース全体に作用し、root権限が必要です。このツールは <code>--target</code> で1つのプログラムだけを狙い、管理者権限が必要です。</p>
+</section>
+
+<section>
+  <h2>Network Link Conditionerに慣れている方へ</h2>
+  <p>Appleのツールは名前付きのプロファイルで動きます。こちらで最も近いものは次のとおりです。</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>こちらで最も近いもの</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}}を100にする</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>対応するプロファイルはありません。速度制限と遅延を自分で入力し、{{app.buttons.save_as}}ボタンで自分のプロファイルとして保存します。</td></tr>
+  </table>
+  <p>数値はAppleのものとは異なるため、プロファイルは出発点として使ってください。プロファイルが設定する値はすべて<a href="../rifarensu/">リファレンスページ</a>に載っています。</p>
+</section>
+
+<section>
+  <h2>Windowsで得られるもの</h2>
+  <ul>
+    <li><strong>コンピューター全体ではなく、1つのプログラム。</strong><a href="../hitotsu-no-apuri/">障害を1つのアプリに向けて</a>、ほかの部分は普段どおりに保てます。</li>
+    <li><strong>シェルスクリプトの代わりにタイムライン。</strong><a href="../jikan-henka-shinario/">時間で変わるシナリオ</a>は決めた秒数で設定を変えます。Linuxで <code>tc</code> と <code>sleep</code> のスクリプトがやることと同じです。</li>
+    <li><strong>パイプラインから実行できる。</strong>同じ実行ファイルが<a href="../ci-nettowaku-tesuto/">CIで動き</a>、終了コードで結果を返します。</li>
+  </ul>
+  <p>LinuxやmacOSでは、オリジナルのツールを使ってください。このツールはWindows専用です。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

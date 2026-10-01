@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>¿Qué programa está usando este puerto?</h1>
+  <p class="lead">Un servidor no arranca en el puerto 8080, o una prueba se detiene con «address already in use». O bien un programa ya tiene el puerto, o bien Windows lo ha reservado, y los dos errores se parecen. Así se distinguen.</p>
+</section>
+
+<section>
+  <h2>Dos motivos por los que un puerto no se abre</h2>
+  <table>
+    <tr><th>Qué ocurrió</th><th>Cómo se manifiesta</th><th>Qué hacer</th></tr>
+    <tr><td><strong>Un programa tiene el puerto</strong></td><td>El error dice que la dirección ya está en uso (EADDRINUSE, o el error de Windows 10048). El programa aparece en la lista de sockets.</td><td>Cierra ese programa o elige otro puerto.</td></tr>
+    <tr><td><strong>Windows reservó el puerto</strong></td><td>El error dice que el acceso está prohibido (error de Windows 10013) aunque nada escucha. Ningún programa aparece en la lista.</td><td>Elige un puerto fuera del rango reservado o libera el rango. Reiniciar el servicio WinNAT suele bastar.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Con lo que Windows ya trae</h2>
+  <p>La lista de sockets indica el propietario como un identificador de proceso. Busca el puerto y luego el identificador:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Lo mismo en PowerShell, para TCP y para UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Si ningún programa tiene el puerto, pregunta qué rangos ha reservado Windows:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Vuelve a ejecutarlo con protocol=udp. Los rangos se llevan por protocolo, así que un puerto puede estar libre para UDP y reservado para TCP.</p>
+</section>
+
+<section>
+  <h2>Con la pestaña {{app.app.tabs.tools}}</h2>
+  <p>La pestaña <strong>{{app.app.tabs.tools}}</strong> responde a las mismas preguntas sin consola:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> lista todos los sockets TCP y UDP del equipo, como <code>netstat -ano</code>: qué escucha, qué está conectado, su estado y el programa que lo posee. No necesita sesión. Busca con <code>lport:8080</code> o <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> pregunta lo que preguntó tu servidor: ¿puede un programa usar este puerto? Escribe 8080, una lista como <code>80, 443</code> o un rango como <code>9000-9100</code> (hasta 1000 puertos) y pulsa <strong>{{app.tools.portcheck.check}}</strong>. Cada puerto se prueba en TCP y UDP, en IPv4 e IPv6, y se marca como <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (con el programa y su PID) o <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Por eso la respuesta es una tabla y no un sí o un no: Windows reserva rangos por protocolo, y un programa que escucha en IPv6 puede tener un puerto que está libre en IPv4.</p>
+  <p>No se envía nada por la red. Para cada puerto, la herramienta se lo pide a Windows en la dirección de loopback del propio equipo y lo devuelve al instante.</p>
+</section>
+
+<section>
+  <h2>Cuando ya sabes quién lo tiene</h2>
+  <p>Haz clic con el botón derecho en una fila de cualquiera de las dos tablas para elegir como objetivo el programa que tiene el puerto. Eso solo rellena el campo de objetivo, y nada cambia hasta que pulses <strong>{{app.buttons.start}}</strong>. Lo que sigue está en <a href="../apuntar-a-una-app/">apuntar a una app</a>.</p>
+</section>
+
+<section>
+  <h2>Lo que no hace</h2>
+  <p>Lee, no repara: nunca cierra un programa ni libera un rango reservado. Un socket de otra cuenta no muestra programa, salvo que la herramienta se ejecute como administrador.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

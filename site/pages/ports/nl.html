@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Welk programma gebruikt deze poort?</h1>
+  <p class="lead">Een server start niet op poort 8080, of een test stopt met "address already in use". Of een programma heeft de poort al, of Windows heeft hem gereserveerd, en de twee fouten lijken op elkaar. Zo maak je het onderscheid.</p>
+</section>
+
+<section>
+  <h2>Twee redenen waarom een poort niet opent</h2>
+  <table>
+    <tr><th>Wat er gebeurde</th><th>Hoe het zich toont</th><th>Wat te doen</th></tr>
+    <tr><td><strong>Een programma heeft de poort</strong></td><td>De fout zegt dat het adres al in gebruik is (EADDRINUSE, of Windows-fout 10048). Het programma staat in de lijst met sockets.</td><td>Sluit dat programma of kies een andere poort.</td></tr>
+    <tr><td><strong>Windows heeft de poort gereserveerd</strong></td><td>De fout zegt dat toegang verboden is (Windows-fout 10013), terwijl niets luistert. Er staat geen programma in de lijst.</td><td>Kies een poort buiten het gereserveerde bereik of geef het bereik vrij. Vaak helpt het om de WinNAT-service opnieuw te starten.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Met wat Windows al heeft</h2>
+  <p>De socketlijst noemt de eigenaar als proces-ID. Zoek de poort op en daarna het ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Hetzelfde in PowerShell, voor TCP en voor UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Houdt geen programma de poort vast, vraag dan welke bereiken Windows heeft gereserveerd:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Voer het nog eens uit met protocol=udp. De bereiken worden per protocol bijgehouden, dus een poort kan vrij zijn voor UDP en gereserveerd voor TCP.</p>
+</section>
+
+<section>
+  <h2>Met het tabblad {{app.app.tabs.tools}}</h2>
+  <p>Het tabblad <strong>{{app.app.tabs.tools}}</strong> beantwoordt dezelfde vragen zonder console:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> toont elke TCP- en UDP-socket op de computer, zoals <code>netstat -ano</code>: wat luistert, wat verbonden is, de status en het programma dat hem bezit. Een sessie is niet nodig. Zoek met <code>lport:8080</code> of <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> stelt de vraag die je server stelde: kan een programma deze poort gebruiken? Typ 8080, een lijst zoals <code>80, 443</code> of een bereik zoals <code>9000-9100</code> (maximaal 1000 poorten) en druk op <strong>{{app.tools.portcheck.check}}</strong>. Elke poort wordt geprobeerd voor TCP en UDP, op IPv4 en IPv6, en gemarkeerd als <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (met het programma en zijn PID) of <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Daarom is het antwoord een tabel en geen ja of nee: Windows reserveert bereiken per protocol, en een programma dat op IPv6 luistert kan een poort vasthouden die op IPv4 vrij is.</p>
+  <p>Er wordt niets over het netwerk verstuurd. Voor elke poort vraagt de tool hem aan Windows op het eigen loopback-adres van de computer en geeft hem meteen terug.</p>
+</section>
+
+<section>
+  <h2>Als je weet wie hem heeft</h2>
+  <p>Klik met de rechtermuisknop op een rij in een van beide tabellen om het programma dat de poort vasthoudt als doel te kiezen. Dat vult alleen het doelveld in, en er verandert niets tot je op <strong>{{app.buttons.start}}</strong> drukt. Hoe het verdergaat, staat bij <a href="../een-app-als-doel/">één app als doel</a>.</p>
+</section>
+
+<section>
+  <h2>Wat het niet doet</h2>
+  <p>Het leest, het repareert niet: het sluit nooit een programma en geeft nooit een gereserveerd bereik vrij. Een socket van een ander account toont geen programma, tenzij de tool als beheerder draait.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

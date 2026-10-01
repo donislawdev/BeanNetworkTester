@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem và Network Link Conditioner trên Windows</h1>
+  <p class="lead">Trên Linux có tc netem, còn trên Mac có Network Link Conditioner. Windows không có sẵn thứ gì để thêm độ trễ và mất gói. Trang này đối chiếu những gì bạn đã biết với Bean Network Tester, và chỉ ra chỗ các con số không thể áp dụng nguyên xi.</p>
+</section>
+
+<section>
+  <h2>Các tùy chọn của netem, từng cái một</h2>
+  <p>Hãy thêm <code>--target</code> và <code>--duration</code> vào mọi lệnh ở đây, nếu không nó sẽ tác động lên cả máy tính.</p>
+  <table>
+    <tr><th>netem</th><th>Cài đặt trong cửa sổ</th><th>Cờ</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Mất gói theo chuỗi.</strong> Giá trị tương quan trong netem không phải độ dài chuỗi. {{app.fields.loss_burst}} là số gói mất liên tiếp trung bình, tương đương gần nhất.</li>
+    <li><strong>Đảo thứ tự.</strong> Không có tỷ lệ phần trăm đảo thứ tự. Một xung đột biến làm trễ một gói để các gói gửi sau vượt qua nó, và bộ đếm gói bị đảo thứ tự ở trang {{app.app.tabs.statistics}} cho biết điều đó có thật sự xảy ra không.</li>
+    <li><strong>Kích thước hàng đợi.</strong> limit của netem đếm theo gói. {{app.fields.buffer}} là một khoảng thời gian tính bằng mili giây.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ba điểm khác biệt cần biết</h2>
+  <p><strong>Hướng.</strong> netem làm trễ những gì rời khỏi một giao diện, còn phản hồi quay về nguyên vẹn. Công cụ này bắt cả hai hướng, nên <code>--latency 100</code> cộng thêm khoảng 200 ms vào một lần ping: 100 lúc đi và 100 lúc về. Để có đúng điều netem làm, hãy chỉ bắt lưu lượng đi ra:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Đơn vị.</strong> Tốc độ trong netem tính bằng bit mỗi giây. Các ô giới hạn tốc độ tính bằng KB/s, với K = 1024. Quy đổi megabit:</p>
+  <table>
+    <tr><th>tốc độ netem</th><th>Ô giới hạn tốc độ, tính bằng KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Phạm vi.</strong> tc định hình cả một giao diện mạng và cần root. Công cụ này nhắm vào một chương trình bằng <code>--target</code> và cần quyền quản trị.</p>
+</section>
+
+<section>
+  <h2>Nếu bạn quen Network Link Conditioner</h2>
+  <p>Công cụ của Apple hoạt động theo các hồ sơ có tên. Những hồ sơ gần nhất ở đây:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Gần nhất ở đây</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} đặt thành 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Không có hồ sơ tương ứng. Hãy tự nhập giới hạn tốc độ và độ trễ, rồi lưu thành hồ sơ riêng bằng nút {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Các con số không phải của Apple, vì vậy hãy coi một hồ sơ là điểm xuất phát. Mọi giá trị mà một hồ sơ đặt đều được liệt kê ở <a href="../bang-tra-cuu/">trang tham chiếu</a>.</p>
+</section>
+
+<section>
+  <h2>Bạn được gì trên Windows</h2>
+  <ul>
+    <li><strong>Một chương trình, không phải cả máy tính.</strong> <a href="../nham-vao-mot-ung-dung/">Nhắm sự suy giảm vào một ứng dụng</a> trong khi phần còn lại của máy vẫn bình thường.</li>
+    <li><strong>Một dòng thời gian thay cho script shell.</strong> <a href="../kich-ban-theo-thoi-gian/">Kịch bản theo thời gian</a> đổi cài đặt ở những giây định sẵn, giống một script <code>tc</code> và <code>sleep</code> trên Linux.</li>
+    <li><strong>Một pipeline có thể chạy nó.</strong> Cùng một tệp thực thi <a href="../kiem-thu-mang-trong-ci/">chạy trong CI</a> và báo kết quả qua mã thoát.</li>
+  </ul>
+  <p>Trên Linux hoặc macOS, hãy dùng bản gốc. Công cụ này chỉ chạy trên Windows.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

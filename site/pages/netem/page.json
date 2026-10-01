@@ -1,0 +1,138 @@
+{
+  "id": "netem",
+  "order": 72,
+  "languages": {
+    "en": {
+      "slug": "netem-for-windows",
+      "link_text": "netem for Windows",
+      "title": "netem and Network Link Conditioner for Windows",
+      "description": "What to use on Windows when you know tc netem or Apple's Network Link Conditioner: each option mapped to a setting and a command-line flag."
+    },
+    "pl": {
+      "slug": "netem-dla-windows",
+      "link_text": "netem dla Windows",
+      "title": "netem i Network Link Conditioner dla Windows",
+      "description": "Czego użyć w Windows, gdy znasz tc netem albo Network Link Conditioner Apple'a: każda opcja z odpowiednim ustawieniem i flagą wiersza poleceń."
+    },
+    "zh-Hans": {
+      "slug": "netem-zai-windows-shang",
+      "link_text": "Windows 版 netem",
+      "title": "Windows 上的 netem 与 Network Link Conditioner 替代方案",
+      "description": "熟悉 tc netem 或苹果的 Network Link Conditioner？这里把每个选项对应到 Windows 上的设置和命令行参数。"
+    },
+    "ja": {
+      "slug": "windows-de-netem",
+      "link_text": "Windows版netem",
+      "title": "Windows版netemとNetwork Link Conditioner",
+      "description": "tc netemやAppleのNetwork Link Conditionerに慣れた方へ。各オプションをWindowsでの設定とコマンドラインのフラグに対応づけます。"
+    },
+    "de": {
+      "slug": "netem-fuer-windows",
+      "link_text": "netem für Windows",
+      "title": "netem und Network Link Conditioner für Windows",
+      "description": "Was du unter Windows nutzt, wenn du tc netem oder Apples Network Link Conditioner kennst: jede Option mit Einstellung und Kommandozeilen-Flag."
+    },
+    "fr": {
+      "slug": "netem-pour-windows",
+      "link_text": "netem pour Windows",
+      "title": "netem et Network Link Conditioner pour Windows",
+      "description": "Que choisir sous Windows quand on connaît tc netem ou le Network Link Conditioner d'Apple : chaque option avec son réglage et son option de commande."
+    },
+    "es": {
+      "slug": "netem-para-windows",
+      "link_text": "netem para Windows",
+      "title": "netem y Network Link Conditioner para Windows",
+      "description": "Qué usar en Windows si conoces tc netem o el Network Link Conditioner de Apple: cada opción con su ajuste y su indicador de línea de comandos."
+    },
+    "pt-BR": {
+      "slug": "netem-para-windows",
+      "link_text": "netem para Windows",
+      "title": "netem e Network Link Conditioner para Windows",
+      "description": "O que usar no Windows se você conhece o tc netem ou o Network Link Conditioner da Apple: cada opção com sua configuração e sua flag de linha de comando."
+    },
+    "it": {
+      "slug": "netem-per-windows",
+      "link_text": "netem per Windows",
+      "title": "netem e Network Link Conditioner per Windows",
+      "description": "Cosa usare su Windows se conosci tc netem o il Network Link Conditioner di Apple: ogni opzione con la sua impostazione e il suo flag da riga di comando."
+    },
+    "id": {
+      "slug": "netem-untuk-windows",
+      "link_text": "netem untuk Windows",
+      "title": "netem dan Network Link Conditioner untuk Windows",
+      "description": "Apa yang dipakai di Windows jika Anda mengenal tc netem atau Network Link Conditioner milik Apple: tiap opsi dipetakan ke pengaturan dan flag baris perintah."
+    },
+    "ru": {
+      "slug": "netem-dlya-windows",
+      "link_text": "netem для Windows",
+      "title": "netem и Network Link Conditioner для Windows",
+      "description": "Что использовать в Windows, если вы знаете tc netem или Network Link Conditioner от Apple: каждая опция с соответствующей настройкой и флагом командной строки."
+    },
+    "tr": {
+      "slug": "windows-icin-netem",
+      "link_text": "Windows için netem",
+      "title": "Windows için netem ve Network Link Conditioner",
+      "description": "tc netem veya Apple'ın Network Link Conditioner aracını biliyorsanız Windows'ta ne kullanmalı: her seçenek bir ayara ve bir komut bayrağına eşlenir."
+    },
+    "cs": {
+      "slug": "netem-pro-windows",
+      "link_text": "netem pro Windows",
+      "title": "netem a Network Link Conditioner pro Windows",
+      "description": "Co použít ve Windows, když znáte tc netem nebo Network Link Conditioner od Applu: každá volba s odpovídajícím nastavením a přepínačem příkazové řádky."
+    },
+    "vi": {
+      "slug": "netem-cho-windows",
+      "link_text": "netem cho Windows",
+      "title": "netem và Network Link Conditioner cho Windows",
+      "description": "Dùng gì trên Windows nếu bạn quen tc netem hoặc Network Link Conditioner của Apple: mỗi tùy chọn được đối chiếu với một cài đặt và một cờ dòng lệnh."
+    },
+    "hi": {
+      "slug": "windows-ke-liye-netem",
+      "link_text": "Windows के लिए netem",
+      "title": "Windows के लिए netem और Network Link Conditioner",
+      "description": "अगर आप tc netem या Apple का Network Link Conditioner जानते हैं, तो Windows पर क्या इस्तेमाल करें: हर विकल्प एक सेटिंग और एक कमांड-लाइन फ़्लैग से जुड़ा है।"
+    },
+    "ko": {
+      "slug": "windows-yong-netem",
+      "link_text": "Windows용 netem",
+      "title": "Windows용 netem과 Network Link Conditioner",
+      "description": "tc netem이나 Apple의 Network Link Conditioner에 익숙하다면 Windows에서 무엇을 쓸까요? 각 옵션을 설정과 명령줄 플래그에 대응시켰습니다."
+    },
+    "ar": {
+      "slug": "netem-lil-windows",
+      "link_text": "netem لنظام Windows",
+      "title": "netem وNetwork Link Conditioner لنظام Windows",
+      "description": "ماذا تستخدم في Windows إن كنت تعرف tc netem أو Network Link Conditioner من Apple: كل خيار مقابل إعداد وراية في سطر الأوامر."
+    },
+    "ro": {
+      "slug": "netem-pentru-windows",
+      "link_text": "netem pentru Windows",
+      "title": "netem și Network Link Conditioner pentru Windows",
+      "description": "Ce folosești în Windows dacă știi tc netem sau Network Link Conditioner de la Apple: fiecare opțiune, cu setarea și indicatorul ei din linia de comandă."
+    },
+    "nl": {
+      "slug": "netem-voor-windows",
+      "link_text": "netem voor Windows",
+      "title": "netem en Network Link Conditioner voor Windows",
+      "description": "Wat je onder Windows gebruikt als je tc netem of Apples Network Link Conditioner kent: elke optie gekoppeld aan een instelling en een opdrachtregelvlag."
+    },
+    "zh-Hant": {
+      "slug": "netem-windows-duiying",
+      "link_text": "Windows 版 netem",
+      "title": "Windows 上的 netem 與 Network Link Conditioner 替代方案",
+      "description": "熟悉 tc netem 或蘋果的 Network Link Conditioner？這裡把每個選項對應到 Windows 上的設定與命令列參數。"
+    },
+    "uk": {
+      "slug": "netem-dlya-windows",
+      "link_text": "netem для Windows",
+      "title": "netem і Network Link Conditioner для Windows",
+      "description": "Що використовувати у Windows, якщо ви знаєте tc netem або Network Link Conditioner від Apple: кожна опція з налаштуванням і прапорцем командного рядка."
+    },
+    "th": {
+      "slug": "netem-samrap-windows",
+      "link_text": "netem สำหรับ Windows",
+      "title": "netem และ Network Link Conditioner สำหรับ Windows",
+      "description": "ถ้าคุณรู้จัก tc netem หรือ Network Link Conditioner ของ Apple แล้ว จะใช้อะไรบน Windows: แต่ละตัวเลือกจับคู่กับการตั้งค่าและแฟลกบรรทัดคำสั่ง"
+    }
+  }
+}

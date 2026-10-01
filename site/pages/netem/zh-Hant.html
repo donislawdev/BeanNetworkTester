@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Windows 上的 netem 與 Network Link Conditioner</h1>
+  <p class="lead">Linux 上有 tc netem，Mac 上有 Network Link Conditioner。Windows 沒有任何內建工具能增加延遲和掉包。本頁把你已經熟悉的東西對應到 Bean Network Tester，並指出哪些數字不能照搬。</p>
+</section>
+
+<section>
+  <h2>netem 選項逐項對照</h2>
+  <p>這裡的每條指令都要加上 <code>--target</code> 和 <code>--duration</code>，否則會影響整台電腦。</p>
+  <table>
+    <tr><th>netem</th><th>視窗中的設定</th><th>參數</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>突發掉包。</strong>netem 的相關性數值不是突發長度。{{app.fields.loss_burst}} 是連續遺失封包的平均個數，這是最接近的對應項。</li>
+    <li><strong>亂序。</strong>沒有亂序百分比。一次延遲尖峰會拖慢單一封包，讓之後送出的封包超過它，{{app.app.tabs.statistics}}頁面上的亂序計數會顯示是否真的發生了。</li>
+    <li><strong>佇列大小。</strong>netem 的 limit 以封包個數計。{{app.fields.buffer}} 則是以毫秒計的時間。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>需要注意的三點差異</h2>
+  <p><strong>方向。</strong>netem 延遲的是離開網路卡的資料，回覆則原樣返回。本工具預設擷取雙向流量，所以 <code>--latency 100</code> 會讓 ping 增加約 200 毫秒：去程 100，回程 100。要得到 netem 的效果，只擷取出站流量：</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>單位。</strong>netem 的速率以位元每秒計。速度限制欄位以 KB/s 計，其中 K = 1024。百萬位元的換算如下：</p>
+  <table>
+    <tr><th>netem 速率</th><th>速度限制欄位，單位 KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>範圍。</strong>tc 作用於整個網路介面，並且需要 root 權限。本工具用 <code>--target</code> 只針對一個程式，需要系統管理員權限。</p>
+</section>
+
+<section>
+  <h2>如果你熟悉 Network Link Conditioner</h2>
+  <p>蘋果的工具以命名的設定檔為基礎。這裡最接近的對應項：</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>這裡最接近的</th></tr>
+    <tr><td>100% Loss</td><td>把{{app.fields.loss}}設為 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>沒有對應的設定檔。請自行填寫速度限制與延遲，然後用「{{app.buttons.save_as}}」按鈕儲存為自己的設定檔。</td></tr>
+  </table>
+  <p>這些數值不是蘋果的，所以請把設定檔當作起點。每個設定檔所設定的數值都列在<a href="../cankao-biao/">參考頁</a>上。</p>
+</section>
+
+<section>
+  <h2>在 Windows 上你還能得到什麼</h2>
+  <ul>
+    <li><strong>針對一個程式，而不是整台電腦。</strong><a href="../zhendui-yige-yingyong/">把網路損傷對準單一應用程式</a>，機器上的其他部分保持正常。</li>
+    <li><strong>用時間軸代替 shell 指令碼。</strong><a href="../dingshi-changjing/">定時情境</a>在設定的秒數改變設定，相當於 Linux 上由 <code>tc</code> 和 <code>sleep</code> 組成的指令碼。</li>
+    <li><strong>管線可以執行它。</strong>同一個執行檔可以<a href="../ci-wangluo-ceshi/">在 CI 中執行</a>，並透過結束代碼回報結果。</li>
+  </ul>
+  <p>在 Linux 或 macOS 上，請使用原版工具。本工具只能在 Windows 上執行。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

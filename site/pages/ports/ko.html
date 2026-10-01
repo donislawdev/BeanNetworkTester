@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>어떤 프로그램이 이 포트를 쓰고 있을까요?</h1>
+  <p class="lead">서버가 8080번 포트에서 시작되지 않거나, 테스트가 "address already in use"로 멈춥니다. 이미 어떤 프로그램이 포트를 잡고 있거나 Windows가 그 포트를 예약해 둔 것이고, 두 오류는 비슷해 보입니다. 구분하는 방법은 다음과 같습니다.</p>
+</section>
+
+<section>
+  <h2>포트가 열리지 않는 두 가지 이유</h2>
+  <table>
+    <tr><th>무슨 일이 있었나</th><th>어떻게 나타나나</th><th>어떻게 하나</th></tr>
+    <tr><td><strong>프로그램이 포트를 잡고 있음</strong></td><td>오류가 주소가 이미 사용 중이라고 알립니다(EADDRINUSE 또는 Windows 오류 10048). 해당 프로그램이 소켓 목록에 나타납니다.</td><td>그 프로그램을 닫거나 다른 포트를 고르세요.</td></tr>
+    <tr><td><strong>Windows가 포트를 예약함</strong></td><td>듣고 있는 것이 없는데도 접근이 금지되었다고 알립니다(Windows 오류 10013). 목록에는 프로그램이 나타나지 않습니다.</td><td>예약된 범위 밖의 포트를 고르거나 그 범위를 해제하세요. WinNAT 서비스를 다시 시작하면 해결되는 경우가 많습니다.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Windows에 이미 있는 것으로</h2>
+  <p>소켓 목록은 소유자를 프로세스 ID로 알려 줍니다. 포트를 찾은 다음 ID를 찾으세요.</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>PowerShell에서도 같습니다. TCP와 UDP 모두 확인할 수 있습니다.</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>포트를 잡은 프로그램이 없다면, Windows가 어떤 범위를 예약했는지 물어보세요.</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>protocol=udp로 한 번 더 실행하세요. 범위는 프로토콜별로 관리되므로 UDP에서는 비어 있고 TCP에서는 예약된 포트가 있을 수 있습니다.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.tools}} 탭으로</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong> 탭은 콘솔 없이 같은 질문에 답합니다.</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong>은 컴퓨터의 모든 TCP·UDP 소켓을 <code>netstat -ano</code>처럼 보여 줍니다. 무엇이 듣고 있는지, 무엇이 연결되어 있는지, 상태와 소유 프로그램까지 알 수 있습니다. 세션은 필요 없습니다. <code>lport:8080</code>이나 <code>state:listen</code>으로 검색하세요.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>은 서버가 물었던 것을 그대로 묻습니다. 프로그램이 이 포트를 쓸 수 있는가? 8080, <code>80, 443</code> 같은 목록, 또는 <code>9000-9100</code> 같은 범위(최대 1000개)를 입력하고 <strong>{{app.tools.portcheck.check}}</strong>를 누르세요. 각 포트를 TCP와 UDP, IPv4와 IPv6로 시험해 <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong>(프로그램과 PID 포함), <strong>{{app.tools.portcheck.verdict.reserved}}</strong> 중 하나로 표시합니다.</li>
+  </ul>
+  <p>그래서 답이 예 아니면 아니요가 아니라 표로 나옵니다. Windows는 프로토콜별로 범위를 예약하고, IPv6에서 듣는 프로그램은 IPv4에서는 비어 있는 포트를 잡고 있을 수 있습니다.</p>
+  <p>네트워크로는 아무것도 보내지 않습니다. 각 포트마다 컴퓨터 자신의 루프백 주소에서 Windows에 포트를 요청하고 곧바로 돌려줍니다.</p>
+</section>
+
+<section>
+  <h2>누가 잡고 있는지 알았다면</h2>
+  <p>두 표 중 어느 쪽이든 행을 마우스 오른쪽 버튼으로 눌러 포트를 잡은 프로그램을 대상으로 지정하세요. 대상 입력란만 채워지며, <strong>{{app.buttons.start}}</strong>를 누르기 전에는 아무것도 바뀌지 않습니다. 다음 단계는 <a href="../hanaui-aep-daesang/">하나의 앱만 겨냥하기</a>에 있습니다.</p>
+</section>
+
+<section>
+  <h2>하지 않는 일</h2>
+  <p>읽기만 하고 고치지는 않습니다. 프로그램을 닫지도, 예약된 범위를 해제하지도 않습니다. 다른 계정의 소켓은 도구를 관리자 권한으로 실행하지 않으면 프로그램이 표시되지 않습니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

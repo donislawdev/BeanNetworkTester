@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Welches Programm nutzt diesen Port?</h1>
+  <p class="lead">Ein Server startet nicht auf Port 8080, oder ein Test bricht mit "address already in use" ab. Entweder belegt schon ein Programm den Port, oder Windows hat ihn reserviert, und beide Fehler sehen sich ähnlich. So unterscheidest du sie.</p>
+</section>
+
+<section>
+  <h2>Zwei Gründe, warum sich ein Port nicht öffnen lässt</h2>
+  <table>
+    <tr><th>Was passiert ist</th><th>Woran man es erkennt</th><th>Was zu tun ist</th></tr>
+    <tr><td><strong>Ein Programm belegt den Port</strong></td><td>Der Fehler sagt, die Adresse sei schon in Gebrauch (EADDRINUSE oder Windows-Fehler 10048). Das Programm steht in der Socket-Liste.</td><td>Schließe das Programm oder wähle einen anderen Port.</td></tr>
+    <tr><td><strong>Windows hat den Port reserviert</strong></td><td>Der Fehler sagt, der Zugriff sei verboten (Windows-Fehler 10013), obwohl nichts lauscht. In der Liste steht kein Programm.</td><td>Wähle einen Port außerhalb des reservierten Bereichs oder gib den Bereich frei. Oft hilft ein Neustart des WinNAT-Dienstes.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Mit dem, was Windows schon mitbringt</h2>
+  <p>Die Socket-Liste nennt den Besitzer als Prozess-ID. Suche den Port und dann die ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Dasselbe in PowerShell, für TCP und für UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Hält kein Programm den Port, frage ab, welche Bereiche Windows reserviert hat:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Führe den Befehl noch einmal mit protocol=udp aus. Die Bereiche werden je Protokoll geführt, ein Port kann also für UDP frei und für TCP reserviert sein.</p>
+</section>
+
+<section>
+  <h2>Mit dem Tab {{app.app.tabs.tools}}</h2>
+  <p>Der Tab <strong>{{app.app.tabs.tools}}</strong> beantwortet dieselben Fragen ohne Konsole:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> listet jeden TCP- und UDP-Socket des Computers auf, wie <code>netstat -ano</code>: was lauscht, was verbunden ist, in welchem Zustand und welchem Programm er gehört. Eine Sitzung ist dafür nicht nötig. Gesucht wird mit <code>lport:8080</code> oder <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> fragt, was dein Server gefragt hat: Kann ein Programm diesen Port nutzen? Gib 8080 ein, eine Liste wie <code>80, 443</code> oder einen Bereich wie <code>9000-9100</code> (bis zu 1000 Ports) und drücke <strong>{{app.tools.portcheck.check}}</strong>. Jeder Port wird für TCP und UDP sowie für IPv4 und IPv6 geprüft und als <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (mit Programm und PID) oder <strong>{{app.tools.portcheck.verdict.reserved}}</strong> markiert.</li>
+  </ul>
+  <p>Deshalb ist die Antwort eine Tabelle und kein Ja oder Nein: Windows reserviert Bereiche je Protokoll, und ein Programm, das auf IPv6 lauscht, kann einen Port halten, der unter IPv4 frei ist.</p>
+  <p>Es wird nichts über das Netzwerk gesendet. Für jeden Port fragt das Werkzeug Windows auf der eigenen Loopback-Adresse des Computers danach und gibt ihn sofort zurück.</p>
+</section>
+
+<section>
+  <h2>Wenn du weißt, wer ihn hat</h2>
+  <p>Klicke in einer der beiden Tabellen mit der rechten Maustaste auf eine Zeile, um das Programm als Ziel zu setzen, das den Port hält. Das füllt nur das Zielfeld aus, und es ändert sich nichts, bis du <strong>{{app.buttons.start}}</strong> drückst. Wie es weitergeht, steht unter <a href="../eine-app-anvisieren/">eine App anvisieren</a>.</p>
+</section>
+
+<section>
+  <h2>Was es nicht tut</h2>
+  <p>Es liest nur und repariert nichts: Es schließt nie ein Programm und gibt nie einen reservierten Bereich frei. Ein Socket eines anderen Kontos zeigt kein Programm, außer das Werkzeug läuft als Administrator.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

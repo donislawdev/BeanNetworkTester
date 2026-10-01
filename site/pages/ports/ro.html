@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Ce program folosește acest port?</h1>
+  <p class="lead">Un server nu pornește pe portul 8080 sau un test se oprește cu "address already in use". Fie un program ține deja portul, fie Windows l-a rezervat, iar cele două erori seamănă. Iată cum le deosebești.</p>
+</section>
+
+<section>
+  <h2>Două motive pentru care un port nu se deschide</h2>
+  <table>
+    <tr><th>Ce s-a întâmplat</th><th>Cum se vede</th><th>Ce faci</th></tr>
+    <tr><td><strong>Un program ține portul</strong></td><td>Eroarea spune că adresa este deja în uz (EADDRINUSE sau eroarea Windows 10048). Programul apare în lista de socketuri.</td><td>Închide acel program sau alege alt port.</td></tr>
+    <tr><td><strong>Windows a rezervat portul</strong></td><td>Eroarea spune că accesul este interzis (eroarea Windows 10013), deși nimic nu ascultă. Niciun program nu apare în listă.</td><td>Alege un port din afara intervalului rezervat sau eliberează intervalul. Adesea ajunge repornirea serviciului WinNAT.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Cu ce are Windows deja</h2>
+  <p>Lista de socketuri dă proprietarul ca ID de proces. Caută portul, apoi ID-ul:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Același lucru în PowerShell, pentru TCP și pentru UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Dacă niciun program nu ține portul, întreabă ce intervale a rezervat Windows:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Rulează din nou cu protocol=udp. Intervalele se țin pe protocol, deci un port poate fi liber pentru UDP și rezervat pentru TCP.</p>
+</section>
+
+<section>
+  <h2>Cu fila {{app.app.tabs.tools}}</h2>
+  <p>Fila <strong>{{app.app.tabs.tools}}</strong> răspunde la aceleași întrebări fără consolă:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> listează fiecare socket TCP și UDP din calculator, ca <code>netstat -ano</code>: ce ascultă, ce e conectat, în ce stare se află și ce program îl deține. Nu are nevoie de sesiune. Caută cu <code>lport:8080</code> sau <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> pune întrebarea pe care a pus-o serverul tău: poate un program să folosească acest port? Scrie 8080, o listă ca <code>80, 443</code> sau un interval ca <code>9000-9100</code> (până la 1000 de porturi) și apasă <strong>{{app.tools.portcheck.check}}</strong>. Fiecare port este încercat pentru TCP și UDP, în IPv4 și IPv6, și marcat <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (cu programul și PID-ul lui) sau <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>De aceea răspunsul este un tabel, nu un da sau un nu: Windows rezervă intervale pe protocol, iar un program care ascultă pe IPv6 poate ține un port liber pe IPv4.</p>
+  <p>Nu se trimite nimic prin rețea. Pentru fiecare port, instrumentul îl cere de la Windows pe adresa de loopback a calculatorului însuși și îl dă imediat înapoi.</p>
+</section>
+
+<section>
+  <h2>După ce afli cine îl ține</h2>
+  <p>Fă clic dreapta pe un rând din oricare tabel ca să țintești programul care ține portul. Asta doar completează câmpul țintă, iar nimic nu se schimbă până nu apeși <strong>{{app.buttons.start}}</strong>. Pasul următor este în <a href="../tinteste-o-aplicatie/">țintirea unei singure aplicații</a>.</p>
+</section>
+
+<section>
+  <h2>Ce nu face</h2>
+  <p>Citește, nu repară: nu închide niciodată un program și nu eliberează niciodată un interval rezervat. Un socket al altui cont nu arată niciun program, decât dacă instrumentul rulează ca administrator.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

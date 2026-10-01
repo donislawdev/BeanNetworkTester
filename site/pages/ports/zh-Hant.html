@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>哪個程式正在使用這個連接埠？</h1>
+  <p class="lead">伺服器無法在 8080 連接埠啟動，或測試以 "address already in use" 錯誤結束。不是已有程式佔用了該連接埠，就是 Windows 把它保留了，而這兩種錯誤看起來很像。以下說明如何分辨。</p>
+</section>
+
+<section>
+  <h2>連接埠打不開的兩個原因</h2>
+  <table>
+    <tr><th>發生了什麼</th><th>表現</th><th>怎麼辦</th></tr>
+    <tr><td><strong>有程式佔用連接埠</strong></td><td>錯誤訊息指出位址已被使用（EADDRINUSE，或 Windows 錯誤 10048）。該程式會出現在通訊端清單中。</td><td>關閉該程式，或換一個連接埠。</td></tr>
+    <tr><td><strong>Windows 保留了連接埠</strong></td><td>錯誤訊息指出存取被禁止（Windows 錯誤 10013），但並沒有程式在監聽。清單中沒有任何程式。</td><td>換一個保留範圍之外的連接埠，或釋放該範圍。重新啟動 WinNAT 服務通常有效。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>用 Windows 內建的工具</h2>
+  <p>通訊端清單以處理程序 ID 表示擁有者。先找到連接埠，再查這個 ID：</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>在 PowerShell 中同樣可以查，TCP 與 UDP 都行：</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>如果沒有程式佔用連接埠，就查看 Windows 保留了哪些範圍：</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>再用 protocol=udp 執行一次。保留範圍依通訊協定分別記錄，所以同一個連接埠可能對 UDP 是空閒的，對 TCP 卻被保留。</p>
+</section>
+
+<section>
+  <h2>用 {{app.app.tabs.tools}} 索引標籤</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong> 索引標籤不需要主控台就能回答同樣的問題：</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong>會列出這台電腦上每個 TCP 與 UDP 通訊端，類似 <code>netstat -ano</code>：誰在監聽、誰已連線、狀態如何、屬於哪個程式。它不需要工作階段。可以用 <code>lport:8080</code> 或 <code>state:listen</code> 搜尋。</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>問的正是你的伺服器問過的問題：程式能不能使用這個連接埠？輸入 8080、一個清單（如 <code>80, 443</code>）或一個範圍（如 <code>9000-9100</code>，最多 1000 個連接埠），然後按下 <strong>{{app.tools.portcheck.check}}</strong>。每個連接埠都會針對 TCP 與 UDP、IPv4 與 IPv6 逐一嘗試，並標示為 <strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（附上程式及其 PID）或 <strong>{{app.tools.portcheck.verdict.reserved}}</strong>。</li>
+  </ul>
+  <p>所以結果是一張表，而不是簡單的「是」或「否」：Windows 依通訊協定分別保留範圍，監聽 IPv6 的程式可以佔著一個在 IPv4 上空閒的連接埠。</p>
+  <p>不會透過網路傳送任何內容。對每個連接埠，工具都在本機的迴路位址上向 Windows 申請它，然後立刻歸還。</p>
+</section>
+
+<section>
+  <h2>知道是誰佔用之後</h2>
+  <p>在任一表格中按右鍵點選某一列，即可把佔用該連接埠的程式設為目標。這只會填寫目標欄位，在你按下 <strong>{{app.buttons.start}}</strong> 之前不會有任何改變。接下來怎麼做，見<a href="../zhendui-yige-yingyong/">只針對一個應用程式</a>。</p>
+</section>
+
+<section>
+  <h2>它不做什麼</h2>
+  <p>它只讀取，不修復：從不關閉程式，也從不釋放保留範圍。屬於其他帳戶的通訊端不會顯示程式，除非該工具以系統管理員身分執行。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

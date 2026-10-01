@@ -100,8 +100,9 @@ tooltip explaining what it does.
 Looking for one specific task rather than the full manual below? The
 [guides on the website](https://beannetworktester.donislawdev.com/) walk through packet loss,
 latency, speed limits, aiming at a single app and testing with no internet, each with the numbers
-worth trying and the command that does it. The guides are written in 22 languages, from English and Polish to Arabic and
-Vietnamese.
+worth trying and the command that does it. Two more cover finding which program holds a port, and
+what to use in place of `tc netem` or Network Link Conditioner. The guides are written in 22
+languages, from English and Polish to Arabic and Vietnamese.
 
 ## Language
 

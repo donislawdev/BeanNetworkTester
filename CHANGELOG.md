@@ -28,6 +28,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   translation yet, a page uses the English names. The scenarios page now counts the scenario
   files that ship instead of stating a number.
 
+- **Two new website guides, in all 22 languages.** One shows which program holds a port and
+  how to tell a port in use from one Windows reserved, with the `netstat` and PowerShell
+  commands and the **Sockets** and **Port check** tools. The other maps `tc netem` and Network
+  Link Conditioner onto the program's settings and flags, including the places where the
+  numbers differ. Link previews of the site now show a wide card instead of a small icon, and
+  the demo recording is new.
+
 ### Fixed
 
 - **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
@@ -52,6 +59,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   this computer's own address, so `--lan` cut only outgoing traffic, `--internet-only` only
   incoming, `--dst-ip` and `--block-ip` matched outgoing traffic only, and NAT timeout never
   paired a reply with its request. Both directions now behave as they do on a real connection.
+
+- **The window opens after the administrator prompt however the program was started.**
+  Started with `python -m beantester` or with the `bean-network-tester` command a pip install
+  adds, the program asked for administrator rights and then no window appeared: the copy with
+  the rights was started from a file that does not run. It now starts the same way as the
+  first one, and never asks again. Where Windows starts it without the rights (User Account
+  Control switched off for an account that is not an administrator), it opens without them, as
+  after "No" in the prompt.
+
+- **A window that cannot open now says why.** Any failure before the window appeared was
+  reported as "No tkinter" and kept nowhere, and `BeanNetworkTester.exe` closed without a word.
+  Now only a Python without Tk says "No tkinter". Any other failure names the error and is
+  saved in the `crashes/` folder, and `BeanNetworkTester.exe` shows the same text in a message
+  box.
 
 - **Closing the console window stops a command-line run cleanly.** Closing the window ended
   the program at once: no summary, no `--repro-out` report, and after a real capture the
