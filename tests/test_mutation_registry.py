@@ -3363,6 +3363,22 @@ MUTATIONS = [
         "test": "test_the_connections_totals_are_reserved_before_the_table",
     },
     {
+        # P3-25: Freeze stopped new rebuilds, not the one already on its way.
+        "label": "connections: a rebuild on its way lands in the frozen table",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '        if result is not None and ("frozen" in result or not self.pause_var.get()):\n',
+        "new": "        if result is not None:\n",
+        "test": "test_freeze_holds_back_a_rebuild_already_on_its_way",
+    },
+    {
+        # NOWE-6-3: under Freeze a header click turned the arrow and moved nothing.
+        "label": "connections: a header click under Freeze only turns the arrow",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self.pause_var.get():\n            self._resort_frozen()\n",
+        "new": "        if False:\n            self._resort_frozen()\n",
+        "test": "test_a_header_click_under_freeze_sorts_the_frozen_rows",
+    },
+    {
         # P3-34: Type sorted by its code, Description by its language key.
         "label": "views: events sort by what is stored, not what is shown",
         "file": "beantester/views.py",

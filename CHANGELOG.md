@@ -51,6 +51,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   tables sort by the words they show, the search in the event log finds the type as shown,
   and **Copy row** with no row selected leaves the clipboard as it was.
 
+- **Freeze keeps the Connections table still, and its headers still sort.** A refresh that
+  was already on its way when **Freeze** was ticked still changed the frozen table, and a
+  click on a column header under **Freeze** turned the arrow without moving a row. Now the
+  frozen table changes only when you sort it: a header click puts the rows on screen in the
+  new order, and the count and the totals stay as they were.
+
 - **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
   the second copy of a packet that the driver refused was counted in "Send failed" and in the
   connection's dropped packets, and the warning about failing sends fired for it. A copy still

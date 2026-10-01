@@ -26,8 +26,13 @@ So the rebuild moves off the UI thread:
 * the result is picked up on the next tick and swapped in whole;
 * requests coalesce - a user typing does not start six sorts of a million rows,
   the last request wins;
-* a result that no longer matches what was asked for is DISCARDED, so a slow sort
-  finishing after the user changed column cannot resurrect the old order.
+* the newest request is always the LAST result shown. A build already running
+  when the user asks again still lands first, and that is harmless rather than
+  "stale": it is in the order the table was already showing, and the new request
+  starts the moment it lands. This used to claim such a result was DISCARDED,
+  which the code never did (external review, P3-25) - discarding it would leave
+  the same old order on screen, only older, and a page that asks on a timer
+  faster than a slow build finishes would never see a result at all.
 
 Thread safety: the worker reads the engine's connection dicts while the capture
 thread is still writing to them. That is safe here, and deliberately so - it reads

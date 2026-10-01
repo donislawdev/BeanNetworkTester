@@ -841,3 +841,66 @@ def test_logging_into_a_destroyed_box_is_not_an_error():
         assert any("during the rebuild" in line for line in app._log_lines), \
             app._log_lines[-3:]
     """)
+
+
+# The Connections page with rows the test controls, and a way to wait for the
+# worker: refresh() hands the rebuild to a thread, _drain_model() picks it up.
+_CONNS_SETUP = """
+    import time
+    page = app.pages["connections"]
+
+    def conn(port, packets):
+        return dict(local_port=port, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
+                    packets=packets, bytes=100 * packets, bytes_in=50 * packets,
+                    bytes_out=50 * packets, sent=100 * packets, sent_in=50 * packets,
+                    sent_out=50 * packets, dropped=0, scoped=True, pid=None,
+                    first=1.0, last=9.0, dir="out", proc="app.exe")
+
+    rows = [conn(50001, 2), conn(50002, 3), conn(50003, 1)]
+    app.engine.now_ref = lambda: 10.0
+    app.engine.connections_snapshot = lambda limit=None: list(rows)
+
+    def settle():
+        deadline = time.monotonic() + 5
+        while page._model.busy() and time.monotonic() < deadline:
+            page._drain_model()
+            time.sleep(0.01)
+        assert not page._model.busy(), "the worker never answered"
+
+    page.table.sort.update(col="packets", reverse=True)
+    page.refresh(force=True)
+    settle()
+    assert [c["packets"] for c in page.table.items] == [3, 2, 1], page.table.items
+"""
+
+
+def test_freeze_holds_back_a_rebuild_already_on_its_way():
+    """External review, P3-25: Freeze stopped new rebuilds but not the one already
+    running - it landed through the page's catch-up poll and changed the frozen
+    table."""
+    run_gui(_CONNS_SETUP + """
+    shown = list(page.table.items)
+    rows.append(conn(50004, 9))           # new traffic...
+    page.refresh(force=True)              # ...a rebuild on its way...
+    page.pause_var.set(True)              # ...and then Freeze
+    settle()
+    assert page.table.items == shown, [c["packets"] for c in page.table.items]
+    """)
+
+
+def test_a_header_click_under_freeze_sorts_the_frozen_rows():
+    """External review, NOWE-6-3: under Freeze a header click turned the arrow
+    and moved nothing. It sorts the rows on screen - and only those: no new
+    traffic, the count and the totals as they were."""
+    run_gui(_CONNS_SETUP + """
+    count, totals = page.count.cget("text"), page.totals.cget("text")
+    page.pause_var.set(True)
+    rows.append(conn(50004, 9))           # traffic Freeze must keep out
+    page.table.sort.update(col="packets", reverse=False)
+    page._on_sort(page.table.sort)        # what a header click ends in
+    settle()
+    assert [c["packets"] for c in page.table.items] == [1, 2, 3], \\
+        [c["packets"] for c in page.table.items]
+    assert page.count.cget("text") == count, page.count.cget("text")
+    assert page.totals.cget("text") == totals, page.totals.cget("text")
+    """)
