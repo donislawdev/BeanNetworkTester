@@ -17,7 +17,7 @@ IO = 5            # an artifact could not be written (repro report, saved config
 ASSERTION = 6     # the run finished but a --min-packets / --fail-on-no-traffic check failed
 PERMISSION = 7    # Administrator rights are required and missing
 INTERRUPTED = 130  # Ctrl+C  (128 + SIGINT)
-TERMINATED = 143   # SIGTERM (128 + SIGTERM)
+TERMINATED = 143   # SIGTERM (128 + SIGTERM), and Ctrl+Break
 
 NAMES = {
     OK: "OK",

@@ -14,6 +14,7 @@ loop can be unit-tested in milliseconds instead of wall-clock seconds.
 """
 import argparse
 import json
+import math
 import sys
 import time
 
@@ -60,8 +61,19 @@ class CliError(SystemExit):
         return self.message
 
 
-class _Terminated(Exception):
-    """SIGTERM / console close - the job was cancelled, stop cleanly."""
+class _Terminated(BaseException):
+    """SIGTERM / Ctrl+Break - the job was cancelled, stop cleanly.
+
+    A BaseException, like KeyboardInterrupt and for the same reason (external
+    review P2-24): as an Exception it was caught by every ``except Exception`` on
+    its way. Raised inside ``engine.start`` it became "cannot start the capture: "
+    with exit 1 and the engine left running; inside ``start_scenario``, "scenario
+    error: " with exit 4. ``label`` is what the log calls the signal.
+    """
+
+    def __init__(self, label="SIGTERM"):
+        super().__init__(label)
+        self.label = label
 
 
 def _fail(code, message):
@@ -484,19 +496,92 @@ def _emit_summary(log, record, lines):
             log.info(line)
 
 
-def _install_signal_handlers():
-    """Make SIGTERM (CI cancellation, docker stop) a clean, coded shutdown."""
+# What the log calls each signal. Ctrl+Break arrives as SIGBREAK, and calling it
+# "SIGTERM" sent the reader looking for a job runner that never sent one.
+_SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "Ctrl+Break"}
+
+# Open while a signal may still interrupt the run. A list and not an Event: the
+# handler runs on the main thread between two bytecodes - possibly inside the
+# very code that closes the gate - so it must not take a lock. None while the
+# handlers are being installed: a signal then is held, not dropped.
+_signal_gate = [False]
+# The label of the signal held while the handlers were being installed.
+_signal_held = [None]
+
+
+def _close_signal_gate():
+    """From here a SIGTERM or Ctrl+Break is ignored: the run is already ending."""
+    _signal_gate[0] = False
+
+
+def _open_signal_gate():
+    """From here a SIGTERM or Ctrl+Break ends the run - and so does one that came
+    while the handlers were being installed. That one used to be dropped: the
+    handler was in place, the gate not yet open, and a job cancelled in its first
+    moment went on to run its session. Opened before the held signal is read, so
+    a signal between the two lines finds the gate open and raises by itself."""
+    _signal_gate[0] = True
+    held = _signal_held[0]
+    if held is not None:
+        _signal_gate[0] = False
+        raise _Terminated(held)
+
+
+def _install_signal_handlers(previous):
+    """Make SIGTERM (CI cancellation, docker stop) and Ctrl+Break a clean, coded
+    shutdown. Fills ``previous`` for ``_restore_signal_handlers`` and opens the
+    gate as its last step.
+
+    The handler raises ONCE, and not at all after ``_close_signal_gate``. A
+    second signal during the cleanup - the engine stopping, the summary, the
+    driver unloading - used to cut that cleanup short, and the driver stayed
+    loaded (external review P2-24). The first signal is what the exit code
+    reports. Ctrl+C is not routed here: a second one still forces the matter.
+
+    The caller owns ``previous`` and calls this inside its ``try``, so an
+    installation stopped half way - by a Ctrl+C, say - still has what it replaced
+    put back. Each old handler is recorded BEFORE it is replaced, not taken from
+    what ``signal.signal`` returns: an interruption on the bytecode after that
+    call would have lost it.
+    """
     import signal
 
-    def handler(_signum, _frame):
-        raise _Terminated()
+    labels = {getattr(signal, name): label for name, label in _SIGNAL_LABELS.items()
+              if hasattr(signal, name)}
 
-    for name in ("SIGTERM", "SIGBREAK"):
-        sig = getattr(signal, name, None)
-        if sig is None:
+    def handler(signum, _frame):
+        label = labels.get(signum, "SIGTERM")
+        if _signal_gate[0] is None:          # still installing: held for the gate
+            _signal_held[0] = _signal_held[0] or label
+            return
+        if not _signal_gate[0]:
+            return
+        _signal_gate[0] = False
+        raise _Terminated(label)
+
+    _signal_held[0] = None
+    _signal_gate[0] = None
+    for sig in labels:
+        try:
+            previous[sig] = signal.getsignal(sig)
+            signal.signal(sig, handler)
+        except (ValueError, OSError) as _exc:
+            previous.pop(sig, None)          # not replaced: nothing to put back
+            crashlog.note(_exc, "cli")
+    _open_signal_gate()
+
+
+def _restore_signal_handlers(previous):
+    """Put back the handlers ``_install_signal_handlers`` replaced."""
+    import signal
+    # Left installed, the handler outlived the run with the gate closed, and a
+    # process that ran the CLI in-process (the test suite) ignored SIGTERM.
+    _close_signal_gate()
+    for sig, old in previous.items():
+        if old is None:                      # installed outside Python: leave it
             continue
         try:
-            signal.signal(sig, handler)
+            signal.signal(sig, old)
         except (ValueError, OSError) as _exc:
             crashlog.note(_exc, "cli")
 
@@ -574,12 +659,58 @@ def _targeting_state(engine):
     return bool(targeting.matched), targeting.describe()
 
 
+def _say_target_change(engine, log, verdict):
+    """Say it when the target's verdict changed; returns the verdict as it is now."""
+    state = _targeting_state(engine)
+    if state is not None and verdict is not None and state[0] != verdict[0]:
+        if state[0]:
+            log.info(f"the process target matches again: {state[1]}")
+        else:
+            # "matched" means a matching process OWNS A SOCKET (see
+            # ProcessTargeting.matched): an idle target that is still running
+            # lands here too, and its next connection brings it back above.
+            log.warn("the process target no longer matches any process with a "
+                     "connection open - nothing is being impaired until one opens")
+    return state
+
+
+def _next_tick(t0, interval, now):
+    """The first report time after ``now`` on the grid ``t0 + k * interval``.
+
+    COMPUTED, not stepped. ``next += interval`` until it passed ``now`` never
+    ended when the interval was below the resolution of the clock: 1e-300 added
+    to a monotonic clock near 5e5 is lost to rounding, so the run spun in that
+    loop forever - the engine already stopped by its own deadline, and no summary
+    (external review P3-18). An interval that fine, or a grid too long to step on
+    exactly, reports on every pass instead, and the deadline still ends the run.
+    Ticks missed while a report ran late are skipped, not caught up. The 1e-9 is
+    the report condition's own tolerance: a report taken just before its tick
+    counts as that tick's.
+    """
+    ticks = (now + 1e-9 - t0) / interval
+    if ticks < 2 ** 52:
+        nxt = t0 + (math.floor(ticks) + 1) * interval
+        if nxt > now:
+            return nxt
+    return now
+
+
+# The longest the report loop sleeps at a time. The end of a scenario, the engine
+# stopping itself (a fault, the watchdog) and a Ctrl+Break - whose handler runs
+# only between two bytecodes, and a sleep is one - are all noticed within this,
+# instead of at the next report, up to --interval later (external review P2-21).
+# Measured before: a scenario that ended after 1 s ran to 6.0 s at --interval 6,
+# and Ctrl+Break took 6.1 s at --interval 8.
+POLL_S = 0.25
+
+
 def _report_loop(engine, cfg, log, sleep, clock, t0):
     """Report every ``interval`` and stop exactly at the deadline.
 
     The old loop slept a whole interval and only then looked at the clock, so
     ``--duration 3 --interval 2`` actually ran 4 s and ``--duration 1
-    --interval 5`` ran 5 s. Now the sleep is clipped to whichever comes first.
+    --interval 5`` ran 5 s. Now the sleep is clipped to whichever comes first,
+    and to ``POLL_S``.
     """
     duration, interval = cfg["duration"], cfg["interval"]
     deadline = (t0 + duration) if duration > 0 else None
@@ -593,13 +724,24 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
     # restarting that process, left 5 of 5 fresh connections untouched and the
     # only targeting line in the whole run was the one printed at start.
     # Sampled, not continuous: a verdict that flips and flips back between two
-    # passes is not seen, and that is the honest limit of polling here.
+    # reports is not seen, and that is the honest limit of polling here. Asked at
+    # each REPORT, not at each pass of the loop: the passes became four a second
+    # (POLL_S), and a target that flaps would have filled the log.
     verdict = _targeting_state(engine)
     while True:
         now = clock()
         wake = next_report if deadline is None else min(next_report, deadline)
-        if wake > now:
-            sleep(wake - now)
+        if next_report <= prev_t:
+            # The grid cannot advance (an interval finer than the clock, see
+            # _next_tick), so every pass reports - and still naps for the interval,
+            # which the OS rounds up to its shortest sleep (~0.53 ms on Windows,
+            # the same as for 1e-4). MEASURED 2026-10-01, real capture of ~8 000
+            # packets/s: passes with no nap at all (about 43 000 reports a second)
+            # left 13 000 of 16 000 packets captured, --interval 1e-4 and 1 about
+            # 15 700; sleep(0), which returns at once, did not help.
+            sleep(min(interval, POLL_S))
+        elif wake > now:
+            sleep(min(wake - now, POLL_S))
         now = clock()
         if now >= next_report - 1e-9:
             s = engine.stats_snapshot()
@@ -612,19 +754,8 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
             log.debug(f"queue={s['queue']} peak_queue={s['peak_queue']} "
                       f"overflow={s['drop_overflow']} duplicated={s['duplicated']}")
             prev, prev_t = s, now
-            while next_report <= now:
-                next_report += interval
-        state = _targeting_state(engine)
-        if state is not None and verdict is not None and state[0] != verdict[0]:
-            if state[0]:
-                log.info(f"the process target matches again: {state[1]}")
-            else:
-                # "matched" means a matching process OWNS A SOCKET (see
-                # ProcessTargeting.matched): an idle target that is still running
-                # lands here too, and its next connection brings it back above.
-                log.warn("the process target no longer matches any process with a "
-                         "connection open - nothing is being impaired until one opens")
-        verdict = state
+            next_report = _next_tick(t0, interval, now)
+            verdict = _say_target_change(engine, log, verdict)
         if deadline is not None and now >= deadline - 1e-9:
             return "duration"
         # A scenario's timeline is an ending too, and without --duration it is the
@@ -682,16 +813,33 @@ def _run_session(cfg, log, sleep, clock, engine):
     free), ``_drive_session`` must turn ANY failure into a coded exit because
     the driver is open and the engine has to be stopped, and
     ``_report_session`` can still turn a successful run into a failing one.
+
+    One guard spans the first two phases: whatever leaves them early leaves the
+    engine STOPPED. A signal or a Ctrl+C that landed after ``engine.start``
+    returned and before the loop's own ``finally`` left the engine running when
+    ``run_cli`` unloaded the driver - which fails under our own open handle, so
+    the driver stayed loaded (external review P2-24, NOWE-5b-1). Stopping an
+    engine that never started is free and silent.
     """
-    engine, scen = _open_session(cfg, log, engine)
-    code, stop_reason, t0 = _drive_session(engine, cfg, log, sleep, clock, scen)
+    engine = engine or BeanEngine(log_fn=log.info)
+    try:
+        scen = _open_session(cfg, log, engine)
+        code, stop_reason, t0 = _drive_session(engine, cfg, log, sleep, clock, scen)
+    except BaseException:
+        # A signal can land on the gate close itself (see run_cli), and the
+        # engine is stopped whatever that call raised.
+        try:
+            _close_signal_gate()
+        finally:
+            engine.stop()
+        raise
     return _report_session(engine, cfg, log, clock, code, stop_reason, t0)
 
 
 def _open_session(cfg, log, engine):
     """Everything that can fail BEFORE a single packet is touched.
 
-    Returns ``(engine, scenario)``. The order inside is the point of the phase:
+    Returns the scenario, or None. The order inside is the point of the phase:
     the admin check, the unbounded-impairment warning and the scenario file are
     all knowable without the driver, and each of them used to be discovered
     later - the run opened the divert, said "Start.", impaired live traffic and
@@ -706,7 +854,6 @@ def _open_session(cfg, log, engine):
               "Administrator rights are required to open WinDivert. "
               "Run this from an elevated shell (or use --simulate).")
 
-    engine = engine or BeanEngine(log_fn=log.info)
     seed = cfg["settings"].get("seed", -1)
     seed_val = None if seed in (None, -1, "") else int(seed)
     engine.set_seed(seed_val)
@@ -766,7 +913,21 @@ def _open_session(cfg, log, engine):
                      "expressed as a driver filter (a wildcard or re: pattern, or "
                      "no destination set). Capturing everything, as usual.")
 
-    return engine, scen
+    return scen
+
+
+def _arm_scenario(engine, cfg, log, scen):
+    """Start the scenario on the running session; False (and said) when it fails."""
+    try:
+        scen.loop = scen.loop or cfg["loop"]
+        engine.start_scenario(scen, cfg["settings"], log=log.info)
+        log.debug(f"scenario: {len(scen.steps)} steps, "
+                  f"{scen.duration:.0f}s, loop={scen.loop}")
+        _plan_the_end_of_the_scenario(log, cfg, scen, engine)
+    except Exception as e:                     # a broken scenario is a failed run
+        log.error(f"scenario error: {e}")
+        return False
+    return True
 
 
 def _drive_session(engine, cfg, log, sleep, clock, scen):
@@ -781,54 +942,49 @@ def _drive_session(engine, cfg, log, sleep, clock, scen):
     unforeseen one - that is why the broad handler sits here, where the engine
     is still alive and its counters still readable, rather than at the top of
     ``run_cli`` where the run could only hand back a truncated NDJSON file.
-    """
-    scenario_failed = None
-    cfg["stop_on_scenario"] = False
-    if scen is not None:
-        try:
-            scen.loop = scen.loop or cfg["loop"]
-            engine.start_scenario(scen, cfg["settings"], log=log.info)
-            log.debug(f"scenario: {len(scen.steps)} steps, "
-                      f"{scen.duration:.0f}s, loop={scen.loop}")
-            _plan_the_end_of_the_scenario(log, cfg, scen, engine)
-        except Exception as e:                 # a broken scenario is a failed run
-            scenario_failed = e
-            log.error(f"scenario error: {e}")
 
+    Arming the scenario is INSIDE the try. It stood before it, so a Ctrl+C or a
+    signal while the scenario started left this function with the engine running
+    and no summary (external review NOWE-5b-1); now it is an interrupted run like
+    any other, with its summary.
+    """
+    cfg["stop_on_scenario"] = False
     code = exitcodes.OK
     stop_reason = "user"
     t0 = clock()
-    if scenario_failed is None:
-        limit = f", stopping after {cfg['duration']:g}s" if cfg["duration"] else ""
-        log.info(f"Running{limit}. Ctrl+C to stop.")
-        try:
+    try:
+        armed = scen is None or _arm_scenario(engine, cfg, log, scen)
+        t0 = clock()
+        if armed:
+            limit = f", stopping after {cfg['duration']:g}s" if cfg["duration"] else ""
+            log.info(f"Running{limit}. Ctrl+C to stop.")
             stop_reason = _report_loop(engine, cfg, log, sleep, clock, t0)
-        except KeyboardInterrupt:
-            log.warn("Interrupted (Ctrl+C).")
-            code, stop_reason = exitcodes.INTERRUPTED, "interrupted"
-        except _Terminated:
-            log.warn("Terminated (SIGTERM).")
-            code, stop_reason = exitcodes.TERMINATED, "terminated"
-        except Exception as exc:
-            # Anything unforeseen in the session is STILL a coded exit (the CI
-            # contract, convention 18). It used to escape run_cli outright: a
-            # traceback on stderr, no summary record at all, and CPython's own
-            # exit 1 - the same number as RUNTIME, so a job could not tell an
-            # unhandled bug from a driver that would not open.
-            # Caught HERE and not only at the top of run_cli because at this
-            # point the engine is alive and the counters are readable, so the
-            # run can still hand back a complete summary instead of a truncated
-            # NDJSON file. CliError is a SystemExit and passes straight through
-            # to its own handler, as before.
-            crashlog.record(exc, "cli")
-            log.error(f"unexpected failure in the session: "
-                      f"{type(exc).__name__}: {exc}")
-            code, stop_reason = exitcodes.RUNTIME, "fault"
-        finally:
-            engine.stop()
-    else:
+        else:
+            code, stop_reason = exitcodes.SCENARIO, "scenario_error"
+    except KeyboardInterrupt:
+        log.warn("Interrupted (Ctrl+C).")
+        code, stop_reason = exitcodes.INTERRUPTED, "interrupted"
+    except _Terminated as exc:
+        log.warn(f"Terminated ({exc.label}).")
+        code, stop_reason = exitcodes.TERMINATED, "terminated"
+    except Exception as exc:
+        # Anything unforeseen in the session is STILL a coded exit (the CI
+        # contract, convention 18). It used to escape run_cli outright: a
+        # traceback on stderr, no summary record at all, and CPython's own
+        # exit 1 - the same number as RUNTIME, so a job could not tell an
+        # unhandled bug from a driver that would not open.
+        # Caught HERE and not only at the top of run_cli because at this
+        # point the engine is alive and the counters are readable, so the
+        # run can still hand back a complete summary instead of a truncated
+        # NDJSON file. CliError is a SystemExit and passes straight through
+        # to its own handler, as before.
+        crashlog.record(exc, "cli")
+        log.error(f"unexpected failure in the session: "
+                  f"{type(exc).__name__}: {exc}")
+        code, stop_reason = exitcodes.RUNTIME, "fault"
+    finally:
+        _close_signal_gate()        # the run is ending: see _install_signal_handlers
         engine.stop()
-        code, stop_reason = exitcodes.SCENARIO, "scenario_error"
 
     if engine.fault and code == exitcodes.OK:
         code, stop_reason = exitcodes.RUNTIME, "fault"
@@ -915,6 +1071,80 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     return code
 
 
+def _run_command(args, log, sleep, clock, engine):
+    """Do what the command line asked for; returns the exit code.
+
+    Split out of ``run_cli`` so that one ``try`` there can close the signal gate
+    before ``run_cli`` reports anything. Fails through ``_fail``, like the rest
+    of the CLI.
+    """
+    # --gui reaching the CLI runner means it was combined with something else:
+    # main() sends a bare --gui straight to the GUI. It used to be accepted and
+    # then ignored, so `--gui --loss 30 --duration 600` promised a window and
+    # instead ran a headless ten-minute impairment - no window, no STOP button,
+    # on a tool whose whole job is to break the user's own network.
+    if args.gui:
+        _fail(exitcodes.USAGE,
+              "--gui cannot be combined with other options: it opens the GUI, "
+              "which has its own controls. Launch the GUI with no arguments, or "
+              "drop --gui to run these settings from the command line.")
+    if args.license:
+        return _run_license(log)
+    if args.doctor:
+        return _run_doctor(log)
+    if args.cleanup_driver:
+        return _run_cleanup(log)
+
+    cfg = config_from_args(args)
+
+    if args.print_config:
+        log.data(dict(event="config", settings=cfg["settings"]),
+                 json.dumps(cfg["settings"], indent=2, sort_keys=True))
+        return exitcodes.OK
+    if cfg["save_config"]:
+        try:
+            save_config_file(cfg["save_config"], cfg["settings"])
+        except OSError as e:
+            _fail(exitcodes.IO,
+                  f"cannot save the config file {cfg['save_config']!r}: {e}")
+        log.info(f"Saved settings to {cfg['save_config']}")
+        return exitcodes.OK
+    if args.dry_run:
+        # What this gate checks is the CONFIGURATION: every value, every
+        # expression, the schedule, and the scenario file. What it does NOT
+        # check is the MACHINE - it never asks about Administrator rights or
+        # about pydivert, so on a box without them it answers OK about a
+        # command that will exit PERMISSION(7) or RUNTIME(1). That is on
+        # purpose: validating a config on a build agent and running it on
+        # another machine is a normal thing to do, and widening the check
+        # would break it. The success line names --doctor for the other half,
+        # so the pair answers the question this one alone cannot.
+        #
+        # The scenario is part of the configuration and used to be loaded
+        # only once the session started, so --dry-run reported "Configuration
+        # is valid" about a file it had never opened: a truncated, empty or
+        # non-object scenario passed the check with exit OK and then failed
+        # the real run with SCENARIO(4).
+        if cfg["scenario"]:
+            scen = _read_scenario(cfg["scenario"], log)
+            log.debug(f"scenario: {len(scen.steps)} steps, "
+                      f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
+        _log_effective_settings(log, cfg)
+        # A preview that stays quiet about the dangerous shape is a preview
+        # that misleads: "Configuration is valid" is about each value, and the
+        # warning is about the SHAPE - impairment armed, nothing aimed at,
+        # nothing to end it. This is the cheapest place a user can find that
+        # out, since --dry-run touches neither the driver nor the traffic.
+        if not cfg["simulate"]:
+            warn_if_unbounded(cfg["settings"], log.warn)
+        log.info("Configuration is valid (--dry-run: nothing was started). "
+                 "This checks the settings, not the machine - run --doctor "
+                 "for Administrator rights and the WinDivert driver.")
+        return exitcodes.OK
+
+    return _run_session(cfg, log, sleep, clock, engine)
+
+
 def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             out=None, err=None):
     """Run the CLI. Returns the process exit code (see ``exitcodes``)."""
@@ -926,81 +1156,30 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
     log = CliLog(level=clilog.level_from_args(args.quiet, args.verbose, args.log_level),
                  fmt=args.format, log_file=args.log_file, samples=not args.quiet,
                  out=out, err=err)
-    _install_signal_handlers()
+    previous_signals = {}
     try:
-        # --gui reaching the CLI runner means it was combined with something else:
-        # main() sends a bare --gui straight to the GUI. It used to be accepted and
-        # then ignored, so `--gui --loss 30 --duration 600` promised a window and
-        # instead ran a headless ten-minute impairment - no window, no STOP button,
-        # on a tool whose whole job is to break the user's own network.
-        if args.gui:
-            _fail(exitcodes.USAGE,
-                  "--gui cannot be combined with other options: it opens the GUI, "
-                  "which has its own controls. Launch the GUI with no arguments, or "
-                  "drop --gui to run these settings from the command line.")
-        if args.license:
-            return _run_license(log)
-        if args.doctor:
-            return _run_doctor(log)
-        if args.cleanup_driver:
-            return _run_cleanup(log)
-
-        cfg = config_from_args(args)
-
-        if args.print_config:
-            log.data(dict(event="config", settings=cfg["settings"]),
-                     json.dumps(cfg["settings"], indent=2, sort_keys=True))
-            return exitcodes.OK
-        if cfg["save_config"]:
-            try:
-                save_config_file(cfg["save_config"], cfg["settings"])
-            except OSError as e:
-                _fail(exitcodes.IO,
-                      f"cannot save the config file {cfg['save_config']!r}: {e}")
-            log.info(f"Saved settings to {cfg['save_config']}")
-            return exitcodes.OK
-        if args.dry_run:
-            # What this gate checks is the CONFIGURATION: every value, every
-            # expression, the schedule, and the scenario file. What it does NOT
-            # check is the MACHINE - it never asks about Administrator rights or
-            # about pydivert, so on a box without them it answers OK about a
-            # command that will exit PERMISSION(7) or RUNTIME(1). That is on
-            # purpose: validating a config on a build agent and running it on
-            # another machine is a normal thing to do, and widening the check
-            # would break it. The success line names --doctor for the other half,
-            # so the pair answers the question this one alone cannot.
-            #
-            # The scenario is part of the configuration and used to be loaded
-            # only once the session started, so --dry-run reported "Configuration
-            # is valid" about a file it had never opened: a truncated, empty or
-            # non-object scenario passed the check with exit OK and then failed
-            # the real run with SCENARIO(4).
-            if cfg["scenario"]:
-                scen = _read_scenario(cfg["scenario"], log)
-                log.debug(f"scenario: {len(scen.steps)} steps, "
-                          f"{scen.duration:.0f}s, loop={scen.loop or cfg['loop']}")
-            _log_effective_settings(log, cfg)
-            # A preview that stays quiet about the dangerous shape is a preview
-            # that misleads: "Configuration is valid" is about each value, and the
-            # warning is about the SHAPE - impairment armed, nothing aimed at,
-            # nothing to end it. This is the cheapest place a user can find that
-            # out, since --dry-run touches neither the driver nor the traffic.
-            if not cfg["simulate"]:
-                warn_if_unbounded(cfg["settings"], log.warn)
-            log.info("Configuration is valid (--dry-run: nothing was started). "
-                     "This checks the settings, not the machine - run --doctor "
-                     "for Administrator rights and the WinDivert driver.")
-            return exitcodes.OK
-
-        return _run_session(cfg, log, sleep, clock, engine)
+        try:
+            # Inside the try, and the gate opens last: a signal while the handlers
+            # were installed escaped as a traceback, or was dropped (see above).
+            _install_signal_handlers(previous_signals)
+            return _run_command(args, log, sleep, clock, engine)
+        finally:
+            # Closed HERE, before any handler below reports and before anything
+            # is released. A signal that lands on the way out - CPython runs a
+            # pending handler when a function is entered, this one included - is
+            # then still caught below: 143, with the whole cleanup. Closed only in
+            # the outer finally, it escaped run_cli as a traceback and skipped the
+            # driver release, log.close() and the restore, and an error being
+            # reported could be cut short the same way (review of #237).
+            _close_signal_gate()
     except CliError as e:
         log.error(f"error: {e.message}")
         return e.code
     except KeyboardInterrupt:
         log.warn("Interrupted (Ctrl+C).")
         return exitcodes.INTERRUPTED
-    except _Terminated:
-        log.warn("Terminated (SIGTERM).")
+    except _Terminated as exc:
+        log.warn(f"Terminated ({exc.label}).")
         return exitcodes.TERMINATED
     except Exception as exc:
         # Last resort. The session has its own handler (which can still emit a
@@ -1024,9 +1203,15 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
         # is free where it does not matter; where it does, it is what makes the
         # tool's own directory deletable right after the process exits (the kernel
         # keeps WinDivert64.sys open - and locks the folder - while it is loaded).
-        for line in driver.release_on_exit():
-            log.debug(line)
-        log.close()
+        # No signal can cut this short: the gate closed above.
+        try:
+            for line in driver.release_on_exit():
+                log.debug(line)
+            log.close()
+        finally:
+            # After the unloading, which a restored SIGTERM could cut short again,
+            # and even when a second Ctrl+C did.
+            _restore_signal_handlers(previous_signals)
 
 
 def _run_gui(argv):

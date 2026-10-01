@@ -33,6 +33,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   service, and leaves it loaded if another copy of this program has started a session in
   the meantime. `--cleanup-driver` still cleans up all of them.
 
+- **A command-line run notices the end of its scenario, a fault or Ctrl+Break at once.**
+  It slept until the next report before looking, so a scenario that ended after one
+  second ran on to the next report, up to `--interval` later, and Ctrl+Break took just as
+  long to stop the run. It now looks four times a second. Ctrl+Break is also logged as
+  "Terminated (Ctrl+Break)" instead of "Terminated (SIGTERM)". The exit code stays `143`.
+
+- **A SIGTERM or Ctrl+C while a command-line run starts is handled like one during the
+  run.** SIGTERM just as the capture opened ended with code `1` and "cannot start the
+  capture:", and while the scenario started with code `4` and "scenario error:". Ctrl+C
+  there gave no summary. Each time the capture was left running, so the WinDivert driver
+  could stay loaded after the run. Such a run now stops the capture first and ends with
+  `143` or `130`, and one stopped while its scenario starts still writes its summary. A
+  second SIGTERM or Ctrl+Break no longer interrupts the cleanup.
+
+- **`--interval` finer than the clock no longer hangs the run.** `--interval 1e-300
+  --duration 1` never ended and wrote no summary. Such an interval now reports on every
+  pass until `--duration` or Ctrl+C ends the run.
+
 - **A running target with no connection open is no longer called "not running".** The red
   note under Target process and the log line at START said that no running process
   matched, which was false for a program idle between two connections. They now say that
