@@ -121,6 +121,12 @@
       "title": "下載 Windows 版 Bean Network Tester",
       "description": "免費下載，支援 Windows 10 和 11，提供 zip 壓縮檔和安裝程式。發行套件裡有什麼、如何驗證檔案確實出自我們的建置，以及執行需要什麼。",
       "link_text": "下載"
+    },
+    "uk": {
+      "slug": "zavantazhyty",
+      "title": "Завантажити Bean Network Tester для Windows",
+      "description": "Безкоштовне завантаження для Windows 10 і 11 у вигляді zip або інсталятора. Що входить до випуску, як перевірити файл і що потрібно для запуску.",
+      "link_text": "Завантаження"
     }
   }
 }

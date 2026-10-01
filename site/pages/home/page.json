@@ -121,6 +121,12 @@
       "title": "Bean Network Tester - 在 Windows 上模擬不穩定的網路",
       "description": "免費的 Windows 工具，可為單一應用增加延遲、封包遺失和限速，幫你測試它在糟糕網路下的表現。",
       "link_text": "首頁"
+    },
+    "uk": {
+      "slug": "",
+      "title": "Bean Network Tester - симуляція поганої мережі у Windows",
+      "description": "Безкоштовний інструмент для Windows, що додає лаг, втрату пакетів і обмеження швидкості одному застосунку, щоб перевірити його на поганому з’єднанні.",
+      "link_text": "Головна"
     }
   },
   "schema": "software_application"

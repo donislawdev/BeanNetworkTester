@@ -124,6 +124,12 @@
       "name": "繁體中文",
       "dir": "zh-hant",
       "og_locale": "zh_TW"
+    },
+    {
+      "code": "uk",
+      "name": "Українська",
+      "dir": "uk",
+      "og_locale": "uk_UA"
     }
   ],
   "og_image": "assets/bean.png",
