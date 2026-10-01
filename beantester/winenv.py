@@ -184,10 +184,84 @@ def dwmapi():
     return _DWMAPI[0] or None
 
 
+_CONSOLE = [None]
+# Every console control handler ever registered, and never let go: Windows calls
+# one on a thread of its own, where it may be waiting for the main thread to
+# finish while the process exits. Freeing the callback under it would crash the
+# process in its last seconds.
+_CONSOLE_HANDLERS: list = []
+
+
+def console():
+    """kernel32's console control API with full prototypes, or None off Windows."""
+    if _CONSOLE[0] is not None:
+        return _CONSOLE[0] or None
+    _CONSOLE[0] = False
+    if not is_windows():
+        return None
+    with crashlog.quiet("winenv.console"):  # pragma: no cover - Windows only (ctypes.wintypes)
+        import ctypes
+        from ctypes import wintypes
+
+        lib = ctypes.WinDLL("kernel32", use_last_error=True)
+        # PHANDLER_ROUTINE: BOOL WINAPI HandlerRoutine(DWORD dwCtrlType).
+        lib.HandlerRoutine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+        lib.SetConsoleCtrlHandler.argtypes = [lib.HandlerRoutine, wintypes.BOOL]
+        lib.SetConsoleCtrlHandler.restype = wintypes.BOOL
+        _CONSOLE[0] = lib
+    return _CONSOLE[0] or None  # pragma: no cover - Windows only (see above)
+
+
+def add_console_ctrl_handler(handler):
+    """Put ``handler(ctrl_type) -> bool`` FIRST in this process's list of console
+    control handlers, for good. Returns a token (kept alive here), or None: off
+    Windows, or refused - the caller carries on without it.
+
+    First, because Windows calls the list last-registered first, until one says
+    TRUE: whatever ``handler`` answers False to goes on to the C runtime's own
+    handler, which makes Ctrl+C and Ctrl+Break the SIGINT and SIGBREAK they were.
+    It runs on a thread Windows creates for it, and a fault in it is recorded
+    rather than printed to a console that may be closing.
+
+    There is no "remove" on purpose. MEASURED 2026-10-01: taking a handler off
+    the list while Windows is running one blocks until that one returns, and a
+    handler that holds the process open for the main thread never returns - the
+    two wait for each other until Windows ends the process at its timeout (5 s,
+    exit 0xC000013A). So a caller registers once and makes its handler answer
+    False whenever it has nothing to do.
+    """
+    lib = console()
+    if lib is None:
+        return None
+
+    def call(ctrl_type):
+        with crashlog.quiet("winenv.console_handler"):
+            return bool(handler(ctrl_type))
+        return False
+
+    with crashlog.quiet("winenv.console_handler"):
+        token = lib.HandlerRoutine(call)
+        _CONSOLE_HANDLERS.append(token)          # kept BEFORE Windows can call it
+        if lib.SetConsoleCtrlHandler(token, True):
+            return token
+        # Refused: never on the list, so Windows cannot call it - let it go, or a
+        # caller that asks again every run piles them up (review of #240). And say
+        # so, since the console's close will end the process at once as before.
+        _CONSOLE_HANDLERS.remove(token)
+        crashlog.note(OSError(_last_error(), "SetConsoleCtrlHandler refused the "
+                              "console handler"), "winenv.console_handler")
+    return None
+
+
+def _last_error():
+    import ctypes
+    return ctypes.get_last_error() if hasattr(ctypes, "get_last_error") else 0
+
+
 # What the prototype guard walks. A factory added here without an entry is a
 # factory nothing checks, so the list is the registry and the test reads it -
 # rather than the test naming six function names that drift the day one moves.
-NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi}
+NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi, "console": console}
 
 
 def monitor_work_area(x, y):

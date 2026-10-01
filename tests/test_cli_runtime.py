@@ -11,6 +11,7 @@ timing tests run in microseconds instead of seconds.
 import io
 import json
 import os
+import threading
 import time
 
 from beantester import cli as cli_module
@@ -1133,6 +1134,101 @@ def test_a_signal_on_the_session_guard_still_stops_the_engine(monkeypatch):
           f"(running={running})")
 
 
+def _console_stand_ins(monkeypatch):
+    """The console handler's surroundings, recorded: what it registered, which
+    signal it asked the main thread for, and how long it held the process."""
+    signal, installed = _record_signal_handlers(monkeypatch)
+    registered, asked, held = [], [], []
+    monkeypatch.setattr(cli_module, "_console_token", [None])
+    monkeypatch.setattr(cli_module, "_console_active", [False])
+    monkeypatch.setattr(cli_module, "_console_label", [None])
+    monkeypatch.setattr(cli_module.winenv, "add_console_ctrl_handler",
+                        lambda handler: registered.append(handler) or "token")
+    monkeypatch.setattr(cli_module, "_interrupt_main", asked.append)
+    monkeypatch.setattr(cli_module, "_hold_the_process", held.append)
+    return signal, installed, registered, asked, held
+
+
+def test_closing_the_console_ends_the_run_with_its_cleanup(monkeypatch):
+    """External review P2-20, reproduced by closing a real console (WM_CLOSE):
+    exit 0xC000013A, no summary, no repro report, and after a real capture the
+    WinDivert driver stayed loaded. The C runtime answered CTRL_CLOSE_EVENT with
+    TRUE, and Windows ends the process as soon as a handler returns, so no Python
+    ran at all. The console handler hands the close to the main thread as a
+    SIGBREAK under its own name and holds the process open: the run ends the way a
+    Ctrl+Break ends it, with its cleanup and 143."""
+    from beantester.engine import BeanEngine
+    signal, installed, registered, asked, held = _console_stand_ins(monkeypatch)
+    clock, engine, seen, answers = FakeClock(), BeanEngine(), {}, []
+
+    def release():
+        seen["running"] = engine.is_running()
+        return []
+    monkeypatch.setattr(cli_module.driver, "release_on_exit", release)
+
+    def sleep(seconds):
+        clock.sleep(seconds)
+        if clock.t >= 1.0 and registered and not answers:
+            # Windows calls the handler on a thread of its own...
+            windows = threading.Thread(target=lambda: answers.append(registered[0](2)))
+            windows.start()
+            windows.join()
+            for sig in asked:            # ...and CPython runs the signal on this one
+                installed[sig](sig, None)
+
+    out, err = io.StringIO(), io.StringIO()
+    code = run_cli(["--simulate", "--duration", "5", "--format", "json"], sleep=sleep,
+                   clock=clock, engine=engine, out=out, err=err)
+    summary = [json.loads(line) for line in out.getvalue().splitlines()
+               if '"summary"' in line]
+    check("the handler is registered for the run", len(registered) == 1, f"({registered})")
+    check("it takes the close and holds the process open",
+          answers == [True] and held == [cli_module._CONSOLE_HOLD_S], f"({answers}, {held})")
+    check("as a SIGBREAK for the main thread", asked == [signal.SIGBREAK], f"({asked})")
+    check("the run ends terminated: 143", code == exitcodes.TERMINATED,
+          f"(code={code}, err={err.getvalue()!r})")
+    check("named for what happened", "Terminated (console window closed)." in err.getvalue(),
+          f"({err.getvalue()!r})")
+    check("with its summary", len(summary) == 1
+          and summary[0]["stop_reason"] == "terminated", f"({summary!r})")
+    check("and the engine stopped before the driver was released",
+          seen.get("running") is False, f"({seen})")
+    check("once the run is over, a close goes the way it always went",
+          registered[0](2) is False and asked == [signal.SIGBREAK], f"({asked})")
+
+    def ctrl_break(seconds):
+        clock.sleep(seconds)
+        installed[signal.SIGBREAK](signal.SIGBREAK, None)
+
+    err = io.StringIO()
+    code = run_cli(["--simulate", "--duration", "5"], sleep=ctrl_break, clock=clock,
+                   out=io.StringIO(), err=err)
+    check("the next run keeps the one handler", len(registered) == 1, f"({registered})")
+    check("and its Ctrl+Break is a Ctrl+Break again",
+          code == exitcodes.TERMINATED and "Terminated (Ctrl+Break)." in err.getvalue(),
+          f"(code={code}, {err.getvalue()!r})")
+
+
+def test_the_console_handler_takes_only_a_close_during_a_run(monkeypatch):
+    """The handler stands FIRST in the process's list, before the C runtime's, so
+    whatever it takes never reaches Python's own handling: Ctrl+C and Ctrl+Break
+    must go on, and so must logoff and shutdown (a run under a service must not
+    end because somebody logged off). Outside a run nothing is taken either."""
+    signal, _, _, asked, held = _console_stand_ins(monkeypatch)
+    cli_module._console_active[0] = True
+    for ctrl_type in (0, 1, 5, 6):       # Ctrl+C, Ctrl+Break, logoff, shutdown
+        check(f"event {ctrl_type} goes on", cli_module._on_console_event(ctrl_type) is False)
+    check("and asks nothing of the main thread", asked == [] and held == [],
+          f"({asked}, {held})")
+    check("a close is taken", cli_module._on_console_event(2) is True)
+    check("handed over as SIGBREAK, named, with the process held",
+          asked == [signal.SIGBREAK] and held == [cli_module._CONSOLE_HOLD_S]
+          and cli_module._console_label[0] == "console window closed", f"({asked}, {held})")
+    cli_module._console_active[0] = False
+    check("outside a run a close goes on too", cli_module._on_console_event(2) is False)
+    check("without a word to the main thread", asked == [signal.SIGBREAK], f"({asked})")
+
+
 def test_a_signal_or_ctrl_c_while_the_scenario_starts_is_an_ordinary_interrupted_run(
         monkeypatch, tmp_path):
     """External review P2-24 and NOWE-5b-1, reproduced: a signal while the
@@ -1234,7 +1330,6 @@ def test_a_report_interval_finer_than_the_clock_still_ends_the_run():
     Run on a thread with a timeout, because the regression is a HANG and a test
     that hangs reports nothing; the virtual clock moves on every read, since the
     loop's naps are lost to rounding once the interval is below its resolution."""
-    import threading
     clock, out, result = _MovingClock(), io.StringIO(), {}
 
     def run():

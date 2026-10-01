@@ -12,10 +12,12 @@ Designed to be driven by CI/CD, which means three promises:
 ``run_cli`` takes its clock and its sleep function as arguments so the report
 loop can be unit-tested in milliseconds instead of wall-clock seconds.
 """
+import _thread
 import argparse
 import json
 import math
 import sys
+import threading
 import time
 
 from . import appinfo, clilog, driver, exitcodes, winenv
@@ -62,7 +64,7 @@ class CliError(SystemExit):
 
 
 class _Terminated(BaseException):
-    """SIGTERM / Ctrl+Break - the job was cancelled, stop cleanly.
+    """SIGTERM / Ctrl+Break / console window closed - the job was cancelled, stop cleanly.
 
     A BaseException, like KeyboardInterrupt and for the same reason (external
     review P2-24): as an Exception it was caught by every ``except Exception`` on
@@ -508,6 +510,62 @@ _signal_gate = [False]
 # The label of the signal held while the handlers were being installed.
 _signal_held = [None]
 
+# Closing the console window: Windows sends CTRL_CLOSE_EVENT (wincon.h), and
+# the console handler below hands it to the main thread as a SIGBREAK, named
+# by this label - set on the handler's thread just before, read by the signal
+# handler on the main one. A list, like the gate: one write, one read, no lock.
+_CTRL_CLOSE_EVENT = 2
+_CONSOLE_CLOSED = "console window closed"
+_console_label = [None]
+# The handler is registered once per process and never removed (removing it
+# while it runs blocks - see winenv.add_console_ctrl_handler), so it asks this
+# whether a run is there to end: set by _install_signal_handlers, cleared first
+# thing by _restore_signal_handlers. Outside a run it answers False and the
+# close goes the way it always went.
+_console_active = [False]
+_console_token = [None]
+# How long the console handler holds the process open: longer than Windows
+# waits (SPI_GETHUNGAPPTIMEOUT, 5 s by default). The process then ends by the
+# main thread's own exit, with its exit code, or by Windows at its timeout -
+# never because the handler returned, which ends it on the spot.
+_CONSOLE_HOLD_S = 30.0
+_interrupt_main = _thread.interrupt_main
+
+
+def _hold_the_process(seconds):
+    threading.Event().wait(seconds)
+
+
+def _on_console_event(ctrl_type):
+    """The console control handler, on a thread Windows creates for it.
+
+    Closing the console window ended the run on the spot (external review
+    P2-20, measured): the C runtime turns CTRL_CLOSE_EVENT into SIGBREAK and
+    answers TRUE, and Windows ends the process as soon as a handler returns -
+    so no Python handler and no ``finally`` ran. Exit 0xC000013A, no summary, no
+    repro report, and after a real capture the WinDivert driver stayed loaded.
+    The close goes to the main thread now, as the SIGBREAK it already handles,
+    and this holds the process open while the run ends its normal way: 143.
+
+    It touches neither the gate nor a lock, since the main thread may be
+    anywhere. Everything else goes on to the C runtime: Ctrl+C and Ctrl+Break as
+    before, and logoff and shutdown, which Windows does not send to a process
+    with user32 loaded (this one has it) and which must not end a run under a
+    service if they ever come.
+    """
+    # Accepted race (review of #240): a close that passes this check just as the
+    # run puts its handlers back finds SIGBREAK no longer ours. interrupt_main
+    # then does nothing (or Python notes "Signal ignored due to race condition"),
+    # the hold lasts until the main thread exits with its own code, and the
+    # cleanup has already run by then.
+    if ctrl_type != _CTRL_CLOSE_EVENT or not _console_active[0]:
+        return False
+    import signal
+    _console_label[0] = _CONSOLE_CLOSED
+    _interrupt_main(signal.SIGBREAK)
+    _hold_the_process(_CONSOLE_HOLD_S)
+    return True
+
 
 def _close_signal_gate():
     """From here a SIGTERM or Ctrl+Break is ignored: the run is already ending."""
@@ -528,9 +586,9 @@ def _open_signal_gate():
 
 
 def _install_signal_handlers(previous):
-    """Make SIGTERM (CI cancellation, docker stop) and Ctrl+Break a clean, coded
-    shutdown. Fills ``previous`` for ``_restore_signal_handlers`` and opens the
-    gate as its last step.
+    """Make SIGTERM (CI cancellation, docker stop), Ctrl+Break and closing the
+    console window a clean, coded shutdown. Fills ``previous`` for
+    ``_restore_signal_handlers`` and opens the gate as its last step.
 
     The handler raises ONCE, and not at all after ``_close_signal_gate``. A
     second signal during the cleanup - the engine stopping, the summary, the
@@ -548,9 +606,12 @@ def _install_signal_handlers(previous):
 
     labels = {getattr(signal, name): label for name, label in _SIGNAL_LABELS.items()
               if hasattr(signal, name)}
+    breaks = getattr(signal, "SIGBREAK", None)
 
     def handler(signum, _frame):
         label = labels.get(signum, "SIGTERM")
+        if signum == breaks and _console_label[0]:   # see _on_console_event
+            label = _console_label[0]
         if _signal_gate[0] is None:          # still installing: held for the gate
             _signal_held[0] = _signal_held[0] or label
             return
@@ -559,6 +620,8 @@ def _install_signal_handlers(previous):
         _signal_gate[0] = False
         raise _Terminated(label)
 
+    _console_active[0] = False
+    _console_label[0] = None
     _signal_held[0] = None
     _signal_gate[0] = None
     for sig in labels:
@@ -568,12 +631,20 @@ def _install_signal_handlers(previous):
         except (ValueError, OSError) as _exc:
             previous.pop(sig, None)          # not replaced: nothing to put back
             crashlog.note(_exc, "cli")
+    # A closed console reaches the run as SIGBREAK, so only when that is ours.
+    if breaks in previous:
+        if _console_token[0] is None:
+            _console_token[0] = winenv.add_console_ctrl_handler(_on_console_event)
+        _console_active[0] = True
     _open_signal_gate()
 
 
 def _restore_signal_handlers(previous):
     """Put back the handlers ``_install_signal_handlers`` replaced."""
     import signal
+    # The console's first: a close from here on must not be handed to a
+    # SIGBREAK handler that is about to stop being ours.
+    _console_active[0] = False
     # Left installed, the handler outlived the run with the gate closed, and a
     # process that ran the CLI in-process (the test suite) ignored SIGTERM.
     _close_signal_gate()
