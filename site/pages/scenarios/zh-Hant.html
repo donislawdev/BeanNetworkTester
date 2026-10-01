@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>讓網路狀況隨時間變化</h1>
+  <p class="lead">固定的 10% 封包遺失是實驗室條件。真實的連線會變差、恢復、停滯四秒再恢復，而你正在追查的 bug 通常藏在這些變化裡，而不是穩定狀態裡。</p>
+</section>
+
+<section>
+  <h2>場景就是一條時間軸</h2>
+  <p>一個 JSON 檔案。每一步都寫明<em>在這一秒，使用這些設定</em>，沒有提到的設定保持原值：</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>時間是從執行開始計的秒數，而不是各步驟之間的間隔。設定 <code>"loop": true</code> 後，時間軸結束時會從頭開始，這正是長時間浸泡測試所需要的：讓它一直執行，同時使用應用。</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} 個現成場景隨程式一起提供</h2>
+  <p>位於可執行檔案旁邊的 <code>scenarios</code> 資料夾中。這是從那些檔案裡讀出來的，所以你實際擁有的就是這些：</p>
+  {{page.scenario_table}}
+  <p>它們就是普通文字：開啟一個，改一個數字，儲存。名稱說明了它們重現什麼：擁擠的咖啡館、從 LTE 掉到 3G 的行動連線、傳到一半就中斷的上傳、過載的伺服器，以及不再回應的 DNS。</p>
+</section>
+
+<section>
+  <h2>另外兩種更簡單的變化方式</h2>
+  <p>當順序很重要時，值得寫一個場景。不重要時，有兩項設定會自行變化：</p>
+  <ul>
+    <li><strong>鏈路時通時斷</strong>：設定週期長度，以及其中有多少時間處於中斷。十秒一個週期，每次中斷四秒，一直迴圈。</li>
+    <li><strong>速度計劃</strong>：限速依次經過的一系列速度，讓連線在沒有檔案的情況下變差並恢復。</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>為什麼它能在應用執行時生效</h2>
+  <p>場景改動的每項設定都會即時應用到已經在進行的會話中，應用不需要重啟，工具也不需要。事件記錄會記錄每一步發生的時刻，所以出問題時，你能看到它緊跟在哪一次變化之後。再配合隨機種子，整個序列（包括其中的隨機封包遺失）就會精確重複。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

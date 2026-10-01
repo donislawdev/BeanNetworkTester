@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>故意切斷連線</h1>
+  <p class="lead">慢只是糟糕的一種。消失是另一種，而且它能找到沒人寫過的程式碼路徑：重新連線、重試，以及告訴使用者發生了什麼的那條提示。</p>
+  <p>這也是在不拔任何纜線的情況下測試應用離線的辦法：區域網路模式讓本地網路繼續工作而切斷網際網路，阻斷某一個位址則讓單一服務無法存取，而其餘連線一切正常。</p>
+</section>
+
+<section>
+  <h2>五種不同的「消失」方式</h2>
+  <table>
+    <tr><th>設定</th><th>應用會看到什麼</th></tr>
+    <tr><td><strong>重置連線</strong></td><td>連線在傳輸中途死亡，就像被防火牆或負載均衡器切斷那樣。可以設定發生的頻率，單位為百分比。</td></tr>
+    <tr><td><strong>鏈路時通時斷</strong></td><td>網路消失一段時間，然後恢復，如此反覆。你設定週期長度，以及其中有多少時間處於中斷。</td></tr>
+    <tr><td><strong>阻斷連接埠</strong></td><td>發往該連接埠的一切都會消失，其他任何東西都不受影響。</td></tr>
+    <tr><td><strong>阻斷位址</strong></td><td>一台伺服器無法存取，而網際網路的其餘部分正常。</td></tr>
+    <tr><td><strong>區域網路模式</strong></td><td>本地網路繼續工作，網際網路則不行。這正是強制門戶或上行鏈路中斷時的樣子。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>從命令列執行</h2>
+  <p>對一個應用，大約每十個連線就切斷一個：</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>十秒一個週期，每個週期中斷四秒，一條時通時斷的鏈路：</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>一台伺服器無法存取，其餘一切正常：</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>阻斷只影響它指明的物件</h2>
+  <p>與封包遺失或延遲不同，阻斷某個連接埠或位址<strong>只</strong>影響與之匹配的流量。因此在不指定處理程序目標的情況下執行，它是其中最安全的一種，這也是為什麼「讓這一個依賴消失」只需要一行命令。</p>
+</section>
+
+<section>
+  <h2>下載「死掉」的陷阱</h2>
+  <p>還有一個最大封包大小的設定。稍微調低一點，大檔案傳輸會變慢。調到 576 這樣的值，下載就會永遠徹底停止，而且沒有任何錯誤，因為這已經不是更小的封包，而是經典的黑洞：網路丟棄過大的封包，卻從不告訴你。</p>
+  <p>這是一種值得有意重現的真實故障模式，意外撞上時則令人非常困惑。如果在你改了這個設定之後下載悄無聲息地中斷，原因就在這裡。</p>
+</section>
+
+<section>
+  <h2>恢復正常</h2>
+  <p>按下{{app.buttons.stop}}即可恢復一切。關閉程式也一樣，如果設定了時間限制，到時也一樣。即使工具本身在會話中途崩潰，其內部的看門狗也會停止擷取，而不是讓你的網路停留在損壞的狀態。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

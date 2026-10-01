@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>下載 Bean Network Tester</h1>
+  <p class="lead">一個無需安裝就能執行的 zip 壓縮檔，或者面向電腦上所有使用者的安裝程式。無論哪種方式，程式都會自行請求管理員權限。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>關鍵資訊一覽</h2>
+  <ul class="facts">
+    <li><strong>價格：</strong>免費，並且是自由軟體，採用 GNU GPL v3。</li>
+    <li><strong>執行環境：</strong>Windows 10 和 Windows 11，64 位。</li>
+    <li><strong>需要：</strong>管理員權限，因為流量由驅動程式擷取。</li>
+    <li><strong>安裝：</strong>無需安裝。把 zip 解壓到任意位置即可執行。也可以使用 <code>.msi</code> 安裝程式，它會新增「開始」選單項，並把程式加入 <code>PATH</code>（需要管理員權限）。</li>
+    <li><strong>是否傳送資料：</strong>不傳送。沒有遙測，沒有更新檢查，沒有網路用戶端。</li>
+    <li><strong>模式：</strong>一個視窗，以及同一個檔案作為命令列工具。</li>
+    <li><strong>原始碼：</strong><a href="{{site.repo_url}}">在 GitHub 上</a>，採用相同的授權條款。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>發行套件裡有什麼</h2>
+  <p>每個版本會發布五個檔案。其中兩個是程式本身，另外三個則是為了讓你不必盲目信任這份下載：</p>
+  <ul>
+    <li><strong>zip 壓縮檔</strong>：程式及其使用的驅動程式，放在同一個資料夾裡；</li>
+    <li><strong>.msi 安裝程式</strong>：同一個程式，為電腦上所有使用者安裝，並帶有「開始」選單項；</li>
+    <li><strong>SHA256SUMS.txt</strong>：zip 壓縮檔和安裝程式的檢查碼；</li>
+    <li><strong>SBOM</strong>：一份標準格式的清單，列出內部的每個元件及其版本和授權條款，並針對 zip 壓縮檔簽署；</li>
+    <li><strong>.sigstore.json 檔案</strong>：以檔案形式儲存的該簽章，無需詢問 GitHub 就能檢查。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>確認你拿到的就是我們建置的檔案</h2>
+  <p>檢查碼回答的是「這個檔案在傳輸中有沒有被改動」。在 PowerShell 中，把輸出與 <code>SHA256SUMS.txt</code> 裡對應的那一行比較（對於安裝程式，把 <code>.zip</code> 換成 <code>.msi</code>）：</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>簽章回答的是另一個問題：「這個檔案是不是出自那個儲存庫」，並且需要 GitHub 命令列工具：</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>把你下載的 zip 檔案的名稱寫在第一部分：<code>gh</code> 在這裡不接受 <code>*</code>。請保留 <code>--predicate-type</code>：沒有它，<code>gh</code> 會去找另一種宣告，並報告說什麼都沒找到。</p>
+  <p>從下載所在的同一個頁面複製來的檢查碼，證明力不如簽章。兩者都已公開，所以都值得花一點時間核對。</p>
+</section>
+
+<section>
+  <h2>Windows 可能會發出警告</h2>
+  <p>程式和安裝程式都已簽署，所以 Windows 會顯示簽署者，而不是「不明的發行者」。憑證是新的，所以 SmartScreen 可能仍會警告一段時間，因為它還沒有經常見到這個憑證。這涉及的是憑證，而不是檔案本身，上面的兩種檢查可以讓你自己驗證檔案。<a href="../changjian-wenti/">常見問題頁面</a>對此以及驅動程式所需的條件有說明。</p>
+</section>
+
+<section>
+  <h2>執行起來之後從哪裡開始</h2>
+  {{page.guide_links}}
+</section>

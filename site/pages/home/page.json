@@ -115,6 +115,12 @@
       "title": "Bean Network Tester - simuleer een slecht netwerk op Windows",
       "description": "Gratis Windows-tool die lag, pakketverlies en snelheidslimieten aan één app toevoegt, zodat je test hoe die zich gedraagt op een slechte verbinding.",
       "link_text": "Home"
+    },
+    "zh-Hant": {
+      "slug": "",
+      "title": "Bean Network Tester - 在 Windows 上模擬不穩定的網路",
+      "description": "免費的 Windows 工具，可為單一應用增加延遲、封包遺失和限速，幫你測試它在糟糕網路下的表現。",
+      "link_text": "首頁"
     }
   },
   "schema": "software_application"

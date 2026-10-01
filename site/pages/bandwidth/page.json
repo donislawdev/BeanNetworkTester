@@ -115,6 +115,12 @@
       "title": "Download- en uploadsnelheid beperken op Windows",
       "description": "Beperk één Windows-app tot een vast aantal KB per seconde, per richting, en zie wat een 56k-modem of vliegtuig-wifi ermee doet.",
       "link_text": "Snelheidslimiet"
+    },
+    "zh-Hant": {
+      "slug": "xianzhi-wangsu",
+      "title": "在 Windows 上限制下載和上傳速度",
+      "description": "把單一 Windows 應用限制在指定的每秒 KB 數，上下行可分別設定，看看 56k 數據機或機上 Wi-Fi 會對它造成什麼影響。",
+      "link_text": "限速"
     }
   }
 }

@@ -115,6 +115,12 @@
       "title": "Netwerkomstandigheden laten veranderen in de tijd",
       "description": "Een scenariobestand is een tijdlijn: op deze seconden deze instellingen. Het programma levert kant-en-klare scenario’s mee en herhaalt ze zolang je kijkt.",
       "link_text": "Scenario’s in de tijd"
+    },
+    "zh-Hant": {
+      "slug": "dingshi-changjing",
+      "title": "讓網路狀況隨時間變化",
+      "description": "場景檔案就是一條時間軸：到第幾秒，用哪些設定。程式自帶多個現成場景，可以迴圈重複，直到你看夠為止。",
+      "link_text": "定時場景"
     }
   }
 }

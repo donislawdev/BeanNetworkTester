@@ -115,6 +115,12 @@
       "title": "Netwerk-chaostesten op Windows",
       "description": "Injecteer netwerkfouten met opzet, herhaal ze exact met een seed en laat een pipeline aan de afsluitcode zien of de applicatie het overleefde.",
       "link_text": "Chaostesten"
+    },
+    "zh-Hant": {
+      "slug": "wangluo-hundun-ceshi",
+      "title": "Windows 上的網路混沌測試",
+      "description": "有意注入網路故障，用隨機種子精確重複，並讓管線根據結束代碼判斷應用是否扛住了故障。",
+      "link_text": "混沌測試"
     }
   }
 }

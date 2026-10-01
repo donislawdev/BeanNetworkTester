@@ -118,6 +118,12 @@
       "name": "Nederlands",
       "dir": "nl",
       "og_locale": "nl_NL"
+    },
+    {
+      "code": "zh-Hant",
+      "name": "繁體中文",
+      "dir": "zh-hant",
+      "og_locale": "zh_TW"
     }
   ],
   "og_image": "assets/bean.png",

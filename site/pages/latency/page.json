@@ -115,6 +115,12 @@
       "title": "Latentie en jitter toevoegen aan een app op Windows",
       "description": "Geef één Windows-app de ping van een verre server of een treintunnel: vaste vertraging, willekeurige jitter of af en toe een uitschieter.",
       "link_text": "Latentie en jitter"
+    },
+    "zh-Hant": {
+      "slug": "yanchi-yu-doudong",
+      "title": "為 Windows 應用增加延遲和抖動",
+      "description": "讓單一 Windows 應用擁有遠距離伺服器或火車隧道裡的延遲：固定延遲、隨機抖動，或偶發的延遲尖峰。",
+      "link_text": "延遲與抖動"
     }
   }
 }

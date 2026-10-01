@@ -115,6 +115,12 @@
       "title": "Een Clumsy-alternatief voor Windows met opdrachtregel",
       "description": "Waar je op let bij een tool die netwerken verslechtert op Windows, wat deze toevoegt aan puur interactieve tools en wanneer je iets anders kiest.",
       "link_text": "Clumsy-alternatief"
+    },
+    "zh-Hant": {
+      "slug": "clumsy-tidai-fangan",
+      "title": "帶命令列的 Windows 版 Clumsy 替代方案",
+      "description": "選擇 Windows 網路劣化工具時要看什麼，本工具比僅有圖形介面的工具多出什麼，以及什麼時候該用別的工具。",
+      "link_text": "Clumsy 替代方案"
     }
   }
 }

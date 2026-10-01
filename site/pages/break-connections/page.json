@@ -115,6 +115,12 @@
       "title": "Verbindingen verbreken en poorten blokkeren op Windows",
       "description": "Dood verbindingen, blokkeer een poort of adres, kap de verbinding even af of verklein pakketten tot niets meer doorkomt, en zie hoe de app herstelt.",
       "link_text": "Verbindingen verbreken"
+    },
+    "zh-Hant": {
+      "slug": "duankai-lianjie",
+      "title": "在 Windows 上斷開連線並阻斷連接埠",
+      "description": "重置連線、阻斷連接埠或位址、讓鏈路時斷時續，或把封包縮小到什麼都過不去，看看應用如何恢復。",
+      "link_text": "斷開連線"
     }
   }
 }

@@ -115,6 +115,12 @@
       "title": "Een app testen zonder internet op Windows",
       "description": "Neem één app het internet af terwijl het lokale netwerk werkt, maak één dienst onbereikbaar of saboteer DNS, zonder een kabel los te trekken.",
       "link_text": "Zonder internet"
+    },
+    "zh-Hant": {
+      "slug": "lixian-ceshi",
+      "title": "在 Windows 上測試應用斷網時的表現",
+      "description": "只對一個應用斷開網際網路而保留區域網路，讓某個服務無法存取，或讓 DNS 失效，全程無需拔網路線。",
+      "link_text": "無網路"
     }
   }
 }

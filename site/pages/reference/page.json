@@ -115,6 +115,12 @@
       "title": "Profielen, instellingen en afsluitcodes",
       "description": "Elk kant-en-klaar profiel met zijn waarden, elke instelling met vlag, eenheid en bereik en elke afsluitcode die de opdrachtregel kan geven.",
       "link_text": "Referentietabellen"
+    },
+    "zh-Hant": {
+      "slug": "cankao-biao",
+      "title": "設定檔、設定與結束代碼",
+      "description": "每個現成設定檔的具體數值，每項設定對應的參數、單位和範圍，以及命令列可能傳回的每個結束代碼。",
+      "link_text": "參考表"
     }
   }
 }

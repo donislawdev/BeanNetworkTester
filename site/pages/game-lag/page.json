@@ -115,6 +115,12 @@
       "title": "Gamelag en pakketverlies simuleren",
       "description": "Geef een gameclient de ping, jitter en het pakketverlies van een slechte verbinding, alleen voor dat proces, en herhaal dezelfde run met een seed.",
       "link_text": "Gamelag"
+    },
+    "zh-Hant": {
+      "slug": "youxi-yanchi-moni",
+      "title": "模擬遊戲延遲和封包遺失",
+      "description": "只針對遊戲處理程序，給用戶端加上糟糕連線的延遲、抖動和封包遺失，並用隨機種子重播同一次執行。",
+      "link_text": "遊戲延遲"
     }
   }
 }

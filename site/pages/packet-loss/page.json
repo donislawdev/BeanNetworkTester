@@ -115,6 +115,12 @@
       "title": "Pakketverlies simuleren op Windows voor één app",
       "description": "Laat een vast percentage pakketten van één app op Windows vallen, zie wat er stukgaat en herhaal exact dezelfde run met een seed.",
       "link_text": "Pakketverlies"
+    },
+    "zh-Hant": {
+      "slug": "moni-diubao",
+      "title": "在 Windows 上為單一應用模擬封包遺失",
+      "description": "按設定的百分比丟棄單一 Windows 應用的封包，觀察哪裡會出問題，並用隨機種子重播同一次執行。",
+      "link_text": "封包遺失"
     }
   }
 }

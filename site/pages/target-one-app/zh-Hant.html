@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>只針對一個應用，而不是整台機器</h1>
+  <p class="lead">沒有目標時，電腦上的每個連線都會受影響，包括你正在使用的遠端桌面，以及用來下載修復程式的下載。有了目標，只有一個處理程序會得到糟糕的網路，其他一切照常進行。</p>
+</section>
+
+<section>
+  <h2>按處理程序</h2>
+  <p>在<strong>{{app.fields.target_process}}</strong>中輸入一個名稱，或者傳入 <code>--target</code>。僅寫名稱時按片段匹配，所以 <code>chrome</code> 會匹配 <code>chrome.exe</code>：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>它會跟隨處理程序樹，這對會派生子處理程序的程式很重要：瀏覽器為每個分頁開啟一個處理程序，這些處理程序也會受到影響。</p>
+  <p>這個欄位可以接受不止一個名稱，也可以同時接受不止一種內容：</p>
+  <table>
+    <tr><th>你輸入的內容</th><th>含義</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>兩個應用。</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome，但絕不包括驅動程式。排除優先。</td></tr>
+    <tr><td><code>my*.exe</code></td><td>所有以「my」開頭的程式。</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>正規表示式，用於萬用字元不夠用的情形。</td></tr>
+    <tr><td><code>4812</code></td><td>單一處理程序 ID。</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>所有大於 1000 的處理程序 ID。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>按位址或連接埠</h2>
+  <p>有時關注的單位不是應用，而是某一台伺服器。這些參數接受同樣的列表、範圍和排除語法，並支援 CIDR 和 IPv6：</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>第二條值得了解：除 DNS 之外的所有流量。把目標<em>排除</em>某個連接埠，往往比列出你想要的那些連接埠更容易。</p>
+</section>
+
+<section>
+  <h2>按名稱指定處理程序，在它重啟後依然有效</h2>
+  <p>在會話執行期間重啟應用，按<strong>名稱</strong>指定的目標會重新找到新處理程序。按<strong>處理程序 ID</strong>指定的目標則做不到，因為那個 ID 屬於已經結束的處理程序。Windows 之後把同一個 ID 分配給的另一個程式同樣不會受到影響。如果你的測試會重啟被測物件，請按名稱指定目標。</p>
+</section>
+
+<section>
+  <h2>不應忽視的警告</h2>
+  <p>在開啟影響、沒有可瞄準的目標且沒有時間限制的情況下啟動，視窗和命令列都會提示：這會影響這台機器上的每個連線。這是警告，而不是拒絕，有時這正是你想要的。如果不是，請設定目標或 <code>--duration</code>，而{{app.buttons.stop}}始終會把一切恢復原狀。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

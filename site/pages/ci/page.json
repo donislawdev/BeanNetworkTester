@@ -115,6 +115,12 @@
       "title": "Een slecht netwerk simuleren in CI op Windows",
       "description": "Hetzelfde uitvoerbare bestand draait zonder venster, meldt via afsluitcodes en NDJSON en stopt vanzelf, zodat een pipeline een slechte verbinding kan testen.",
       "link_text": "Netwerktests in CI"
+    },
+    "zh-Hant": {
+      "slug": "ci-wangluo-ceshi",
+      "title": "在 Windows 的 CI 中模擬糟糕的網路",
+      "description": "同一個可執行檔案無需視窗即可執行，透過結束代碼和 NDJSON 報告結果，並會自行停止，讓管線能夠測試糟糕的連線。",
+      "link_text": "CI 中的網路測試"
     }
   }
 }

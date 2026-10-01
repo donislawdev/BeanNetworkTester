@@ -115,6 +115,12 @@
       "title": "Eén app als doel op Windows, niet de hele computer",
       "description": "Richt de verstoring op één proces, PID, adres of poort, zodat je test alleen de geteste app breekt en de rest van de computer met rust laat.",
       "link_text": "Eén app als doel"
+    },
+    "zh-Hant": {
+      "slug": "zhendui-yige-yingyong",
+      "title": "在 Windows 上只針對一個應用，而不是整台電腦",
+      "description": "把網路劣化效果指向某個處理程序、PID、位址或連接埠，讓測試只破壞被測應用，而不影響電腦上的其他程式。",
+      "link_text": "只針對一個應用"
     }
   }
 }

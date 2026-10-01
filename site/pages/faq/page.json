@@ -115,6 +115,12 @@
       "title": "Veelgestelde vragen over Bean Network Tester",
       "description": "Beheerdersrechten, of de hele computer geraakt wordt, hoe je het ongedaan maakt, de SmartScreen-waarschuwing en wat het programma met je gegevens doet.",
       "link_text": "Vragen en antwoorden"
+    },
+    "zh-Hant": {
+      "slug": "changjian-wenti",
+      "title": "關於 Bean Network Tester 的常見問題",
+      "description": "管理員權限、是否影響整台電腦、如何復原、SmartScreen 警告，以及程式會如何處理你的資料。",
+      "link_text": "常見問題"
     }
   }
 }

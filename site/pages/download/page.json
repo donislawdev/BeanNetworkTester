@@ -115,6 +115,12 @@
       "title": "Bean Network Tester downloaden voor Windows",
       "description": "Gratis download voor Windows 10 en 11, als zip of installatieprogramma. Wat erin zit, hoe je controleert dat het ons bestand is en wat je nodig hebt.",
       "link_text": "Downloaden"
+    },
+    "zh-Hant": {
+      "slug": "xiazai",
+      "title": "下載 Windows 版 Bean Network Tester",
+      "description": "免費下載，支援 Windows 10 和 11，提供 zip 壓縮檔和安裝程式。發行套件裡有什麼、如何驗證檔案確實出自我們的建置，以及執行需要什麼。",
+      "link_text": "下載"
     }
   }
 }

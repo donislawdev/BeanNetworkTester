@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>為應用增加延遲和抖動</h1>
+  <p class="lead">在快速的本地連線上一切都正常。給應用 300 ms 的 ping，你就會發現哪些畫面是按「回應瞬間到達」來寫的。</p>
+</section>
+
+<section>
+  <h2>三種不同的東西</h2>
+  <table>
+    <tr><th>設定</th><th>作用</th><th>現實中的來源</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>為每個封包增加相同的延遲，單位為毫秒。</td><td>距離。位於另一個大洲的伺服器，或者衛星。</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>在此基礎上再疊加一個隨機量，讓延遲不斷變化。</td><td>共享 Wi-Fi、行動網路，以及任何壅塞的網路。</td></tr>
+    <tr><td><strong>延遲尖峰</strong></td><td>偶爾出現的長時間停頓，由發生頻率和持續時間決定。</td><td>基站之間的切換，負載過高的路由器。</td></tr>
+  </table>
+  <p>三者的單位都是毫秒，可以同時使用。兩個延遲數值都接受從 0 起的任意值，所以你可以從合理的 40 ms 一路調到離譜的 60 秒。</p>
+</section>
+
+<section>
+  <h2>從命令列執行</h2>
+  <p>對一個應用施加穩定的 200 ms 延遲和 80 ms 抖動：</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>改為罕見但很長的停頓，大約每二十個封包就有一個多等待一秒：</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>值得嘗試的數值</h2>
+  <ul>
+    <li><strong>40 ms</strong>：同一個國家內的伺服器。應該沒有任何變化。</li>
+    <li><strong>150 ms</strong>：另一個大洲。任何頻繁互動的東西都會開始變慢，因為每一次往返都有代價。</li>
+    <li><strong>600 ms 及以上</strong>：地球同步衛星或機上 Wi-Fi。進度條會在這裡停滯，重試邏輯也終於會跑起來。</li>
+  </ul>
+  <p>現成的設定檔帶有實測數值：「{{app.presets.distant}}」、「{{app.presets.leo}}」、「{{app.presets.satellite}}」、「{{app.presets.inflight}}」、「{{app.presets.lte}}」。</p>
+</section>
+
+<section>
+  <h2>測量方法：看最壞情況，而不是平均值</h2>
+  <p>抖動幾乎不會改變平均值，也幾乎不會改變中位數。一次帶 30 ms 抖動的執行和一次沒有抖動的執行，可能報告出幾乎相同的「典型」ping，體驗卻完全不同。</p>
+  <p>改為比較<strong>第 95 百分位和中位數</strong>。兩者之間的差距就是抖動，而正是這個差距讓語音通話斷斷續續、讓遊戲無法遊玩，儘管平均值看起來一切正常。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
