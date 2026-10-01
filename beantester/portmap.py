@@ -530,6 +530,14 @@ def _toolhelp_process_table():
     gap is why targeting ``chrome`` by NAME resolved to nothing while targeting its
     PID worked: PID matching needs no name, name matching does. It gives no start
     time (the recycle check then falls back to the TTL, the unverifiable-env path).
+
+    The WIDE entry points, so a name is the name the file has. The ANSI pair this
+    used to call converts it to the system code page first: a character that page
+    lacks came back as ``?`` (an ``Ω`` under code page 1252), and under the UTF-8
+    code page a long non-ASCII name overran the 260-byte field and came back cut
+    off (measured: 129 characters, 279 bytes, no ``.exe`` left; external review
+    NOWE-4-5). Targeting by name then missed the process, and the snapshot
+    overwrote the right name the handle read had cached (``_snapshot_entries``).
     """
     if not _ALLOW_NATIVE_PROCESSES:
         return None
@@ -537,22 +545,24 @@ def _toolhelp_process_table():
         import ctypes
         from ctypes import wintypes
 
-        class PROCESSENTRY32(ctypes.Structure):
+        class PROCESSENTRY32W(ctypes.Structure):
             _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
                         ("th32ProcessID", wintypes.DWORD),
                         ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
                         ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
                         ("th32ParentProcessID", wintypes.DWORD),
                         ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
-                        ("szExeFile", ctypes.c_char * 260)]
+                        ("szExeFile", ctypes.c_wchar * 260)]
 
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         # restype/argtypes MATTER: the snapshot is a HANDLE (pointer-sized), and the
         # default c_int return truncates it on 64-bit.
         k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
         k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
-        k32.Process32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
-        k32.Process32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+        k32.Process32FirstW.restype = wintypes.BOOL
+        k32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+        k32.Process32NextW.restype = wintypes.BOOL
+        k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
         k32.CloseHandle.argtypes = [wintypes.HANDLE]
 
         snap = k32.CreateToolhelp32Snapshot(0x2, 0)            # TH32CS_SNAPPROCESS
@@ -560,14 +570,14 @@ def _toolhelp_process_table():
             return None
         try:
             out = {}
-            entry = PROCESSENTRY32()
-            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
-            ok = k32.Process32First(snap, ctypes.byref(entry))
+            entry = PROCESSENTRY32W()
+            # The size of the WIDE structure, or the first call fails outright.
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            ok = k32.Process32FirstW(snap, ctypes.byref(entry))
             while ok:
                 out[int(entry.th32ProcessID)] = (
-                    entry.szExeFile.decode("mbcs", "replace"),
-                    int(entry.th32ParentProcessID), None)
-                ok = k32.Process32Next(snap, ctypes.byref(entry))
+                    entry.szExeFile, int(entry.th32ParentProcessID), None)
+                ok = k32.Process32NextW(snap, ctypes.byref(entry))
             return out or None
         finally:
             k32.CloseHandle(snap)

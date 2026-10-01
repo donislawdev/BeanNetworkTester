@@ -44,6 +44,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A process whose name uses letters outside the system code page keeps its name.** Such
+  a name came back with `?` in place of those letters, or cut short when it was long, so
+  targeting the process by name missed it and the Tools tab showed it wrong. The name is
+  now read as it is.
+
 - **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
   the second copy of a packet that the driver refused was counted in "Send failed" and in the
   connection's dropped packets, and the warning about failing sends fired for it. A copy still
