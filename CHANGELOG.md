@@ -57,6 +57,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   frozen table changes only when you sort it: a header click puts the rows on screen in the
   new order, and the count and the totals stay as they were.
 
+- **Deleting the loaded profile no longer relabels its values.** After **Delete**, the
+  profile list read "Perfect network" while the form still held the deleted profile's
+  impairments, and START applied them under that name. Now no profile is shown until you pick
+  or save one. The next start still opens on "Perfect network".
+
+- **Searching the Control page finds Polish words typed without ł, and Sockets keeps its
+  newest view.** "wysylanie" now finds "Wysyłanie" and eight other labels with ł. On
+  **Tools > Sockets**, a computer clock set back (time sync, a resumed virtual machine) no
+  longer brings an older list back to the screen.
+
 - **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
   the second copy of a packet that the driver refused was counted in "Send failed" and in the
   connection's dropped packets, and the warning about failing sends fired for it. A copy still

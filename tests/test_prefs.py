@@ -237,11 +237,13 @@ def test_restore_last_profile_covers_the_users_own_profiles():
         app.delete_profile()
         assert app.ui.get("profile") == "presets.perfect", app.ui.get("profile")
 
-        # a profile that vanished while the app was closed: ignored, and the dead
-        # pointer is dropped rather than kept forever
+        # a profile that vanished while the app was closed: ignored - the current
+        # one stays what it was (none, after the delete above: P3-27) - and the
+        # dead pointer is dropped rather than kept forever
+        before = app._profile_key
         app.ui.set("profile", "gone for good")
         app._restore_last_profile()
-        assert app._profile_key == "presets.perfect", app._profile_key
+        assert app._profile_key == before, app._profile_key
         assert app.ui.get("profile") == "", app.ui.get("profile")
     """)
 

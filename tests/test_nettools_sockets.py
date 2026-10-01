@@ -148,4 +148,17 @@ def test_the_workers_job_reads_only_when_it_has_no_snapshot(machine):
     check("a view of the same read asks nothing", machine == ["table", "names"])
     check("and says what it answers", (again.query, again.sort) == ("proto:udp", ("local_port", True))
           and [s.local_port for s in again.rows] == [5353, 5353, 546], f"({again.rows})")
-    check("the newest view is the newest", again.made_at >= first.made_at)
+    check("the newest view is the newest", again.made > first.made)
+
+
+def test_a_clock_set_back_does_not_bring_an_older_view_back(machine, monkeypatch):
+    """External review, P3-36: the newest view was the one with the latest
+    ``time.time()``, so a clock set back between two views (NTP, a resumed
+    virtual machine) put the OLDER one back on screen."""
+    import itertools
+    clock = itertools.count(2_000_000_000.0, -1_000_000.0)    # going back, every call
+    monkeypatch.setattr(sk.time, "time", lambda: next(clock))
+    first = sk.table(None, "", "local_port", False)
+    again = sk.table(first.snapshot, "proto:udp", "local_port", False)
+    check("the view made second is the newest, whatever the clock said",
+          max((again, first), key=lambda v: v.made) is again)

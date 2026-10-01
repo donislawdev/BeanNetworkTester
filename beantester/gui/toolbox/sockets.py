@@ -237,7 +237,7 @@ class SocketsPanel:
     def _latest(self):
         """The newest view this window has, whichever kind of work made it."""
         views = list(self.job.value.values())
-        return max(views, key=lambda v: v.made_at) if views else None
+        return max(views, key=lambda v: v.made) if views else None
 
     def _on_outcome(self, outcome):
         if outcome.kind == READ:

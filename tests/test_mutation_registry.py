@@ -1473,8 +1473,8 @@ MUTATIONS = [
         # labels carry diacritics and people type without them.
         "label": "search: matching stops ignoring Polish diacritics",
         "file": "beantester/gui/form_search.py",
-        "old": "    decomposed = unicodedata.normalize(\"NFKD\", str(text or \"\"))",
-        "new": "    decomposed = str(text or \"\")",
+        "old": "    decomposed = unicodedata.normalize(\"NFKD\", str(text or \"\").translate(_NO_MARK))",
+        "new": "    decomposed = str(text or \"\").translate(_NO_MARK)",
         "test": "test_an_accented_label_is_reachable_without_its_accents",
     },
     {
@@ -3377,6 +3377,30 @@ MUTATIONS = [
         "old": "        if self.pause_var.get():\n            self._resort_frozen()\n",
         "new": "        if False:\n            self._resort_frozen()\n",
         "test": "test_a_header_click_under_freeze_sorts_the_frozen_rows",
+    },
+    {
+        # P3-27: "Perfect network" over the deleted profile's values, applied by START.
+        "label": "app: a deleted profile's values sit under the fallback's name",
+        "file": "beantester/gui/app.py",
+        "old": '        self._set_profile_key(DEFAULT_PROFILE, current="")\n',
+        "new": "        self._set_profile_key(DEFAULT_PROFILE)\n",
+        "test": "test_deleting_the_loaded_profile_names_no_profile_over_its_values",
+    },
+    {
+        # P3-35: NFKD leaves the l-stroke whole; nine Polish labels unreachable.
+        "label": "form search: the l-stroke is left as it is",
+        "file": "beantester/gui/form_search.py",
+        "old": '    decomposed = unicodedata.normalize("NFKD", str(text or "").translate(_NO_MARK))\n',
+        "new": '    decomposed = unicodedata.normalize("NFKD", str(text or ""))\n',
+        "test": "test_an_accented_label_is_reachable_without_its_accents",
+    },
+    {
+        # P3-36: the newest view was the latest by the wall clock.
+        "label": "sockets: the newest view is the latest by the wall clock",
+        "file": "beantester/nettools/sockets.py",
+        "old": "                (column, reverse), next(_MADE))\n",
+        "new": "                (column, reverse), time.time())\n",
+        "test": "test_a_clock_set_back_does_not_bring_an_older_view_back",
     },
     {
         # P3-34: Type sorted by its code, Description by its language key.
