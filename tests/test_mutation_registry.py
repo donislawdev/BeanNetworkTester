@@ -1207,10 +1207,10 @@ MUTATIONS = [
     {
         "label": "warning: --dry-run previews the values but not the shape",
         "file": "beantester/cli.py",
-        "old": "            if not cfg[\"simulate\"]:\n"
-               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
-        "new": "            if False:\n"
-               "                warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "old": "        if not cfg[\"simulate\"]:\n"
+               "            warn_if_unbounded(cfg[\"settings\"], log.warn)",
+        "new": "        if False:\n"
+               "            warn_if_unbounded(cfg[\"settings\"], log.warn)",
         "test": "test_dry_run_previews_the_shape_and_not_only_the_values",
     },
     {
@@ -3953,6 +3953,170 @@ MUTATIONS = [
         "old": "        log.error(f\"unexpected failure outside the session: \"",
         "new": "        log.error(f\"unexpected failure while finishing the run: \"",
         "test": "test_a_failure_before_the_session_is_not_called_finishing_the_run",
+    },
+    {
+        # P2-24: as an Exception, a signal inside engine.start was a failed start
+        # (exit 1) and left the engine running.
+        "label": "cli: a termination signal is an Exception again",
+        "file": "beantester/cli.py",
+        "old": "class _Terminated(BaseException):\n",
+        "new": "class _Terminated(Exception):\n",
+        "test": "test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes",
+    },
+    {
+        # P2-24: every signal raised, so a second one cut the cleanup short.
+        "label": "cli: a second signal cuts the cleanup short",
+        "file": "beantester/cli.py",
+        "old": "        if not _signal_gate[0]:\n            return\n",
+        "new": "",
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: Ctrl+Break is called SIGTERM",
+        "file": "beantester/cli.py",
+        "old": '_SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "Ctrl+Break"}\n',
+        "new": '_SIGNAL_LABELS = {"SIGTERM": "SIGTERM", "SIGBREAK": "SIGTERM"}\n',
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: restoring the signal handlers restores nothing",
+        "file": "beantester/cli.py",
+        "old": "            signal.signal(sig, old)\n",
+        "new": "            pass\n",
+        "test": "test_one_signal_ends_the_run_and_a_second_cannot_cut_the_cleanup_short",
+    },
+    {
+        "label": "cli: the run leaves its signal handlers installed",
+        "file": "beantester/cli.py",
+        "old": "            _restore_signal_handlers(previous_signals)\n",
+        "new": "            pass\n",
+        "test": "test_a_termination_is_logged_under_the_name_of_its_signal",
+    },
+    {
+        # Review of #237: a signal between the handler and the open gate was lost.
+        "label": "cli: a signal while the handlers are installed is dropped",
+        "file": "beantester/cli.py",
+        "old": "            _signal_held[0] = _signal_held[0] or label\n",
+        "new": "            pass\n",
+        "test": "test_a_signal_while_the_handlers_are_installed_ends_the_run_it_cancelled",
+    },
+    {
+        # Review of #237: installed before the try, a signal or Ctrl+C escaped.
+        "label": "cli: the signal handlers are installed outside the try",
+        "file": "beantester/cli.py",
+        "old": ("    try:\n"
+                "        try:\n"
+                "            # Inside the try, and the gate opens last: a signal while the handlers\n"
+                "            # were installed escaped as a traceback, or was dropped (see above).\n"
+                "            _install_signal_handlers(previous_signals)\n"),
+        "new": "    _install_signal_handlers(previous_signals)\n    try:\n        try:\n",
+        "test": "test_an_installation_cut_short_still_puts_back_what_it_replaced",
+    },
+    {
+        "label": "cli: the old signal handler is known only from signal.signal",
+        "file": "beantester/cli.py",
+        "old": ("            previous[sig] = signal.getsignal(sig)\n"
+                "            signal.signal(sig, handler)\n"),
+        "new": "            previous[sig] = signal.signal(sig, handler)\n",
+        "test": "test_an_installation_cut_short_still_puts_back_what_it_replaced",
+    },
+    {
+        # Review of #237: a second Ctrl+C in the driver release skipped the restore.
+        "label": "cli: an interrupted cleanup leaves the signal handlers installed",
+        "file": "beantester/cli.py",
+        "old": ("        finally:\n"
+                "            # After the unloading, which a restored SIGTERM could cut short again,\n"
+                "            # and even when a second Ctrl+C did.\n"
+                "            _restore_signal_handlers(previous_signals)\n"),
+        "new": ("        except BaseException:\n"
+                "            raise\n"
+                "        _restore_signal_handlers(previous_signals)\n"),
+        "test": "test_a_ctrl_c_during_the_cleanup_still_puts_the_handlers_back",
+    },
+    {
+        "label": "cli: the session log calls every termination SIGTERM",
+        "file": "beantester/cli.py",
+        "old": ('        log.warn(f"Terminated ({exc.label}).")\n'
+                '        code, stop_reason = exitcodes.TERMINATED, "terminated"\n'),
+        "new": ('        log.warn("Terminated (SIGTERM).")\n'
+                '        code, stop_reason = exitcodes.TERMINATED, "terminated"\n'),
+        "test": "test_a_termination_is_logged_under_the_name_of_its_signal",
+    },
+    {
+        # P2-24/NOWE-5b-1: a signal between engine.start and the loop's finally.
+        "label": "cli: the session guard leaves the engine running",
+        "file": "beantester/cli.py",
+        "old": "        finally:\n            engine.stop()\n        raise\n",
+        "new": "        finally:\n            pass\n        raise\n",
+        "test": "test_a_signal_while_the_capture_starts_stops_the_engine_before_the_driver_goes",
+    },
+    {
+        # Review of #237: a signal on the guard's gate close skipped the engine stop.
+        "label": "cli: a signal on the session guard's gate skips the engine stop",
+        "file": "beantester/cli.py",
+        "old": ("        try:\n"
+                "            _close_signal_gate()\n"
+                "        finally:\n"
+                "            engine.stop()\n"
+                "        raise\n"),
+        "new": "        _close_signal_gate()\n        engine.stop()\n        raise\n",
+        "test": "test_a_signal_on_the_session_guard_still_stops_the_engine",
+    },
+    {
+        # Review of #237: closed only in the last finally, a signal on the way out
+        # escaped as a traceback and an error was reported with the gate open.
+        "label": "cli: the gate stays open until run_cli's last finally",
+        "file": "beantester/cli.py",
+        "old": "            _close_signal_gate()\n    except CliError as e:\n",
+        "new": "            pass\n    except CliError as e:\n",
+        "test": "test_a_signal_on_the_way_out_is_still_a_coded_exit_with_its_cleanup",
+    },
+    {
+        # NOWE-5b-1: a Ctrl+C while the scenario starts escapes with no summary.
+        "label": "cli: the scenario is armed outside the session's try",
+        "file": "beantester/cli.py",
+        "old": "    try:\n        armed = scen is None or _arm_scenario(engine, cfg, log, scen)\n",
+        "new": "    armed = scen is None or _arm_scenario(engine, cfg, log, scen)\n    try:\n",
+        "test": "test_a_signal_or_ctrl_c_while_the_scenario_starts_is_an_ordinary_interrupted_run",
+    },
+    {
+        # P2-21: the loop slept to the next report before it looked.
+        "label": "cli: the report loop sleeps until the next report",
+        "file": "beantester/cli.py",
+        "old": "            sleep(min(wake - now, POLL_S))\n",
+        "new": "            sleep(wake - now)\n",
+        "test": "test_the_end_of_a_scenario_is_seen_without_waiting_for_the_next_report",
+    },
+    {
+        # Review of #237: below the clock's resolution no pass napped at all.
+        "label": "cli: a report due at once takes no nap",
+        "file": "beantester/cli.py",
+        "old": "            sleep(min(interval, POLL_S))\n",
+        "new": "            pass\n",
+        "test": "test_a_report_on_every_pass_still_naps_for_the_interval",
+    },
+    {
+        "label": "cli: a report due at once naps for zero seconds",
+        "file": "beantester/cli.py",
+        "old": "            sleep(min(interval, POLL_S))\n",
+        "new": "            sleep(0)\n",
+        "test": "test_a_report_on_every_pass_still_naps_for_the_interval",
+    },
+    {
+        # P3-18: stepping to the next tick never ends below the clock's resolution.
+        "label": "cli: the next report is stepped to instead of computed",
+        "file": "beantester/cli.py",
+        "old": "            next_report = _next_tick(t0, interval, now)\n",
+        "new": ("            while next_report <= now:\n"
+                "                next_report += interval\n"),
+        "test": "test_a_report_interval_finer_than_the_clock_still_ends_the_run",
+    },
+    {
+        "label": "cli: a report a hair before its tick leaves that tick next",
+        "file": "beantester/cli.py",
+        "old": "    ticks = (now + 1e-9 - t0) / interval\n",
+        "new": "    ticks = (now - t0) / interval\n",
+        "test": "test_a_report_taken_a_hair_before_its_tick_is_that_tick_and_not_taken_twice",
     },
     {
         # External review P2-19: Tab to "No", Enter answered "Yes" - on closing
