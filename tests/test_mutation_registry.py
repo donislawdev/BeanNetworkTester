@@ -5820,35 +5820,73 @@ MUTATIONS = [
         # P3-41: every clean exit - a --doctor too - took whatever breadcrumb was there.
         "label": "crashlog: a clean exit takes any breadcrumb, not only its own",
         "file": "beantester/crashlog.py",
-        "old": "    if wrote and _written_here(path):\n",
+        "old": "    if _still_holds(path, mine):\n",
         "new": "    if os.path.exists(path):\n",
         "test": "test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running",
     },
     {
-        # P3-41: pids come back within seconds, so the pid alone is not "ours".
-        "label": "crashlog: a pid handed out again owns a crashed copy's breadcrumb",
+        # P3-41: pids come back within seconds, so a process that wrote nothing
+        # owns nothing, whatever pid the file names.
+        "label": "crashlog: a process that wrote no breadcrumb owns the one on disk",
         "file": "beantester/crashlog.py",
-        "old": "    if wrote and _written_here(path):\n",
-        "new": "    if _written_here(path):\n",
+        "old": "        return False                # this process wrote no breadcrumb\n",
+        "new": "        return os.path.exists(path)\n",
         "test": "test_a_clean_exit_leaves_a_crashed_copys_breadcrumb_that_had_our_pid",
     },
     {
-        # P3-41: one name for every copy, so "ours" is the pid in it.
+        # P3-41: one name for every copy, so "ours" is the text this process wrote.
         "label": "crashlog: any readable breadcrumb counts as this process's own",
         "file": "beantester/crashlog.py",
-        "old": "            return json.load(f).get(\"pid\") == os.getpid()\n",
-        "new": "            return isinstance(json.load(f), dict)\n",
+        "old": "            return f.read(len(text) + 1) == text\n",
+        "new": "            return bool(f.read(len(text) + 1))\n",
         "test": "test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours",
+    },
+    {
+        # CodeRabbit on PR #242: the exit parsed the file, and RecursionError
+        # walked out of the cleanup. This is the pid check it replaced.
+        "label": "crashlog: the exit parses the breadcrumb to see whose it is",
+        "file": "beantester/crashlog.py",
+        "old": "            return f.read(len(text) + 1) == text\n",
+        "new": "            return json.load(f).get(\"pid\") == os.getpid()\n",
+        "test": "test_a_breadcrumb_no_parser_can_read_does_not_stop_the_exit_cleanup",
     },
     {
         # NOWE-5b-2: the state was remembered before the write, so a failed write
         # was never tried again.
         "label": "crashlog: a breadcrumb is remembered before it is written",
         "file": "beantester/crashlog.py",
-        "old": "    if directory is None:\n        return False\n    payload = dict(state)\n",
-        "new": "    _breadcrumb_last = dict(state)\n"
-               "    if directory is None:\n        return False\n    payload = dict(state)\n",
+        "old": "    text = _write_breadcrumb(state)\n",
+        "new": "    _breadcrumb_last = dict(state)\n    text = _write_breadcrumb(state)\n",
         "test": "test_a_breadcrumb_write_that_failed_is_tried_again",
+    },
+    {
+        # CodeRabbit on PR #242: a write that kept failing was tried on every tick.
+        "label": "crashlog: a failed breadcrumb write is tried again on every tick",
+        "file": "beantester/crashlog.py",
+        "old": "    if now < _breadcrumb_retry_at:\n",
+        "new": "    if False:\n",
+        "test": "test_a_breadcrumb_write_that_keeps_failing_waits_longer_each_time",
+    },
+    {
+        "label": "crashlog: the wait after a failed breadcrumb write never grows",
+        "file": "beantester/crashlog.py",
+        "old": "        _breadcrumb_wait = min(_breadcrumb_wait * 2, BREADCRUMB_RETRY_MAX_S)\n",
+        "new": "        _breadcrumb_wait = min(_breadcrumb_wait, BREADCRUMB_RETRY_MAX_S)\n",
+        "test": "test_a_breadcrumb_write_that_keeps_failing_waits_longer_each_time",
+    },
+    {
+        "label": "crashlog: the wait after a failed breadcrumb write has no ceiling",
+        "file": "beantester/crashlog.py",
+        "old": "        _breadcrumb_wait = min(_breadcrumb_wait * 2, BREADCRUMB_RETRY_MAX_S)\n",
+        "new": "        _breadcrumb_wait = _breadcrumb_wait * 2\n",
+        "test": "test_a_breadcrumb_write_that_keeps_failing_waits_longer_each_time",
+    },
+    {
+        "label": "crashlog: a breadcrumb write that works keeps the long wait",
+        "file": "beantester/crashlog.py",
+        "old": "    _breadcrumb_wait = BREADCRUMB_RETRY_S\n    return True\n",
+        "new": "    return True\n",
+        "test": "test_a_breadcrumb_write_that_keeps_failing_waits_longer_each_time",
     },
     {
         # NOWE-5b-2: a write retried every tick must not create a file it cannot fill.

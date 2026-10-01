@@ -89,6 +89,8 @@ MAX_ROTATIONS = 5                   # keep this many old logs
 MAX_RECORDS = 2000                  # distinct fingerprints held in memory
 MAX_LOG_TAIL = 40                   # log lines attached to a record
 STALE_TEMP_S = 60.0                 # a temp breadcrumb this old lost its writer
+BREADCRUMB_RETRY_S = 1.0            # the wait after a failed breadcrumb write...
+BREADCRUMB_RETRY_MAX_S = 60.0       # ...doubled after each further one, up to this
 
 # Severity. "error" is a real failure; "debug" is something quiet() swallowed.
 ERROR = "error"
@@ -486,6 +488,9 @@ _native_path = None
 _arm_wanted = [False]       # native capture was requested at install()
 _armed = [False]            # faulthandler is actually enabled (a file now exists)
 _breadcrumb_last = None     # the state last written, so an unchanged one costs no disk
+_breadcrumb_text = None     # the exact text of that write: what makes the file ours
+_breadcrumb_retry_at = 0.0  # monotonic time before which no write is tried again
+_breadcrumb_wait = BREADCRUMB_RETRY_S   # what the next failed write waits
 
 
 def arm_native():
@@ -574,18 +579,44 @@ def breadcrumb(**state):
     remembered only once it is on disk: remembering it first (as this did until
     2026-10-01) turned a single failed write - a temp file another copy swept, a
     replace that lost to another writer - into "this state is never written",
-    because every later tick compared equal and returned. A write that keeps
-    failing is tried once a tick and costs no disk: the text is built BEFORE any
-    file exists, so a state json cannot hold never creates one.
+    because every later tick compared equal and returned.
+
+    Nor does it try again on every tick. A write that keeps failing waits
+    ``BREADCRUMB_RETRY_S`` before the next try, twice that after the next failure,
+    up to ``BREADCRUMB_RETRY_MAX_S``, and one that works starts the count over.
+    MEASURED 2026-10-01 with a read-only breadcrumb (the replace fails AFTER the
+    temp file is written): every try took about 2 ms of the UI thread and created,
+    wrote and deleted one temp file - 1.4 files a second for the life of the
+    process. The state current when the wait ends is the one written, so a burst of
+    changes during it costs one write, not one each.
     """
-    global _breadcrumb_last
+    global _breadcrumb_last, _breadcrumb_text, _breadcrumb_retry_at, _breadcrumb_wait
     if not _armed[0] or not _enabled:
         return False
     if state == _breadcrumb_last:
         return False
+    now = time.monotonic()
+    if now < _breadcrumb_retry_at:
+        return False
+    text = _write_breadcrumb(state)
+    if text is None:
+        _breadcrumb_retry_at = now + _breadcrumb_wait
+        _breadcrumb_wait = min(_breadcrumb_wait * 2, BREADCRUMB_RETRY_MAX_S)
+        return False
+    _breadcrumb_last, _breadcrumb_text = dict(state), text
+    _breadcrumb_wait = BREADCRUMB_RETRY_S
+    return True
+
+
+def _write_breadcrumb(state):
+    """Put ``state`` on disk. The text written, or None when it is not there.
+
+    The text is built BEFORE any file exists, so a state json cannot hold never
+    creates one.
+    """
     directory = _ensure_dir()
     if directory is None:
-        return False
+        return None
     payload = dict(state)
     payload["written"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     payload["version"] = __version__
@@ -596,7 +627,7 @@ def breadcrumb(**state):
         # the process down on the way to describing a crash.
         text = json.dumps(payload, ensure_ascii=False, indent=2)
     except (TypeError, ValueError):
-        return False
+        return None
     path = os.path.join(directory, BREADCRUMB_NAME)
     # Unique per writer: two copies of the GUI both leave a breadcrumb, and they
     # used to leave it through one `breadcrumb.json.tmp`. See paths.temp_beside -
@@ -614,9 +645,8 @@ def breadcrumb(**state):
                 os.remove(tmp)
         except OSError:
             pass
-        return False
-    _breadcrumb_last = dict(state)
-    return True
+        return None
+    return text
 
 
 def _cleanup_native():
@@ -638,7 +668,7 @@ def _cleanup_native():
     used to delete whatever breadcrumb was there: the one a GUI still running had
     written, which its de-duplication then never wrote again.
     """
-    global _native_stream, _native_path, _breadcrumb_last
+    global _native_stream, _native_path, _breadcrumb_last, _breadcrumb_text
     # Close the diverts BEFORE the handler that would record a hard crash inside
     # one of them goes away. `atexit` is LIFO, `engine.py` registers its own
     # `_stop_live_engines` at IMPORT and `install()` registers this handler later,
@@ -664,10 +694,10 @@ def _cleanup_native():
         faulthandler.disable()
     except Exception:
         pass
-    wrote = _breadcrumb_last is not None
-    _breadcrumb_last = None
+    mine = _breadcrumb_text
+    _breadcrumb_last = _breadcrumb_text = None
     directory = crash_dir()
-    _sweep_breadcrumbs(directory, wrote)
+    _sweep_breadcrumbs(directory, mine)
     stream, path = _native_stream, _native_path
     _native_stream = _native_path = None
     if stream is not None:
@@ -688,16 +718,16 @@ def _cleanup_native():
         pass
 
 
-def _sweep_breadcrumbs(directory, wrote):
+def _sweep_breadcrumbs(directory, mine):
     """Remove this process's breadcrumb and the temp files no writer is using.
 
     The breadcrumb has ONE name for every copy of the program, so it goes only
-    when this process wrote one (``wrote``) AND the file still names its ``pid``.
-    The pid alone is not enough: Windows hands a pid out again within seconds, so
-    a ``--doctor`` given the pid of a GUI that crashed would take that crash's
-    breadcrumb. Reading and then removing leaves a window of microseconds in
-    which another copy can replace it; that copy then loses one breadcrumb until
-    its state changes, which is what used to happen on every exit.
+    when the file still holds exactly ``mine``, the text this process wrote last
+    (None: it wrote none). The pid in it is not enough: Windows hands a pid out
+    again within seconds, so a ``--doctor`` given the pid of a GUI that crashed
+    would take that crash's breadcrumb. Reading and then removing leaves a window
+    of microseconds in which another copy can replace it; that copy then loses one
+    breadcrumb until its state changes, which is what used to happen on every exit.
 
     A temp file is unique per writer (``paths.temp_beside``) and lives for
     milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
@@ -707,7 +737,7 @@ def _sweep_breadcrumbs(directory, wrote):
     an older version (fixed ``breadcrumb.json.tmp``) goes the same way.
     """
     path = os.path.join(directory, BREADCRUMB_NAME)
-    if wrote and _written_here(path):
+    if _still_holds(path, mine):
         try:
             os.remove(path)
         except OSError:
@@ -728,13 +758,23 @@ def _sweep_breadcrumbs(directory, wrote):
             pass
 
 
-def _written_here(path):
-    """True when the breadcrumb at ``path`` was written by this process."""
+def _still_holds(path, text):
+    """True when the file at ``path`` holds exactly ``text``: read, never parsed.
+
+    Compared rather than parsed because this runs at exit, from ``atexit``, on a
+    file any copy of the program - or anything else - may have put there. A json
+    parser answers deep nesting with ``RecursionError`` (see ``jsonfile``), which
+    walked out of the pid check this replaced and left the rest of
+    ``_cleanup_native`` undone; and it read the whole file, whatever its size. A
+    comparison reads one character more than ``text`` and cannot fail that way.
+    """
+    if text is None:
+        return False                # this process wrote no breadcrumb
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f).get("pid") == os.getpid()
-    except (OSError, ValueError, AttributeError):
-        return False                # missing, half-read or not ours to judge
+            return f.read(len(text) + 1) == text
+    except (OSError, ValueError):
+        return False                # missing, unreadable or not text: not ours
 
 
 def install_tk(root):
@@ -770,13 +810,15 @@ def summary():
 
 def reset():
     """Forget everything (tests)."""
-    global _native_stream, _native_path, _breadcrumb_last
+    global _native_stream, _native_path, _breadcrumb_last, _breadcrumb_text
+    global _breadcrumb_retry_at, _breadcrumb_wait
     with _lock:
         _seen.clear()
     _arm_wanted[0] = False
     _armed[0] = False
     _native_stream = _native_path = None
-    _breadcrumb_last = None
+    _breadcrumb_last = _breadcrumb_text = None
+    _breadcrumb_retry_at, _breadcrumb_wait = 0.0, BREADCRUMB_RETRY_S
 
 
 def set_enabled(value):

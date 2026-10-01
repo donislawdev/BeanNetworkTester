@@ -994,6 +994,7 @@ def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
         monkeypatch.setattr(os, "replace", fail_once)
         assert not crashlog.breadcrumb(page="conns", running=False, windows=[])
         assert failures, "the stand-in never ran - this proves nothing"
+        crashlog._breadcrumb_retry_at = 0.0             # the wait after it is over
         assert crashlog.breadcrumb(page="conns", running=False, windows=[]), (
             "the same state after a failed write must be written, not skipped")
         with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
@@ -1003,11 +1004,8 @@ def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
         crashlog._cleanup_native()
 
 
-def test_a_state_json_cannot_hold_never_creates_a_file(isolated, monkeypatch):
-    """A failed write is tried again on the next tick, so one that can never work
-    must cost no disk: the text is built before any temp file exists."""
-    crashlog._arm_wanted[0] = True
-    crashlog.arm_native()
+def _counting_temp_files(monkeypatch):
+    """Every temp file a breadcrumb write creates, in a list."""
     created = []
     real_temp_beside = crashlog.temp_beside
 
@@ -1015,13 +1013,81 @@ def test_a_state_json_cannot_hold_never_creates_a_file(isolated, monkeypatch):
         created.append(path)
         return real_temp_beside(path)
 
+    monkeypatch.setattr(crashlog, "temp_beside", counting)
+    return created
+
+
+def test_a_state_json_cannot_hold_never_creates_a_file(isolated, monkeypatch):
+    """A failed write is tried again once its wait is over, so one that can never
+    work must cost no disk: the text is built before any temp file exists."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    created = _counting_temp_files(monkeypatch)
     try:
-        monkeypatch.setattr(crashlog, "temp_beside", counting)
         for _ in range(3):
+            crashlog._breadcrumb_retry_at = 0.0         # every call really tries
             assert not crashlog.breadcrumb(page=object(), running=False, windows=[])
         assert created == [], f"an unserialisable state created temp files: {created}"
     finally:
         crashlog._cleanup_native()
+
+
+def test_a_breadcrumb_write_that_keeps_failing_waits_longer_each_time(isolated, monkeypatch):
+    """CodeRabbit on PR #242: a failed write was tried again on every tick.
+    MEASURED with a read-only breadcrumb: about 2 ms of the UI thread per try and
+    one temp file created, written and deleted, 1.4 times a second for good."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    created = _counting_temp_files(monkeypatch)
+    real_replace = os.replace
+
+    def refuse(src, dst):
+        raise PermissionError(13, "the breadcrumb is read-only")
+
+    def tick():
+        return crashlog.breadcrumb(page="conns", running=False, windows=[])
+
+    try:
+        monkeypatch.setattr(os, "replace", refuse)
+        for _ in range(20):                             # 14 s of ticks, at once
+            assert not tick()
+        assert len(created) == 1, f"one failure, then {len(created) - 1} more tries at once"
+        waits = []
+        for _ in range(8):
+            crashlog._breadcrumb_retry_at = 0.0         # the wait is over
+            before = time.monotonic()
+            assert not tick()
+            waits.append(round(crashlog._breadcrumb_retry_at - before))
+        assert waits == [2, 4, 8, 16, 32, 60, 60, 60], f"waits after each failure: {waits}"
+
+        monkeypatch.setattr(os, "replace", real_replace)
+        crashlog._breadcrumb_retry_at = 0.0
+        assert tick(), "a write that works again must be written"
+        monkeypatch.setattr(os, "replace", refuse)
+        before = time.monotonic()
+        assert not crashlog.breadcrumb(page="stats", running=False, windows=[])
+        assert round(crashlog._breadcrumb_retry_at - before) == 1, (
+            "a write that worked must start the waits over")
+    finally:
+        monkeypatch.setattr(os, "replace", real_replace)
+        crashlog._cleanup_native()
+
+
+def test_a_breadcrumb_no_parser_can_read_does_not_stop_the_exit_cleanup(isolated):
+    """CodeRabbit on PR #242: the exit read the breadcrumb with ``json.load``, and
+    deep nesting answers that with ``RecursionError`` - past the handler, out of
+    ``_cleanup_native``, with the native-crash file still open."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    assert crashlog.breadcrumb(page="control", running=False, windows=[])
+    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("[" * 100_000)
+
+    crashlog._cleanup_native()
+
+    assert crashlog._native_stream is None, "the exit cleanup stopped before the native file"
+    assert os.path.exists(path), "a file this process did not write was taken"
 
 
 # -- 11) a window that does not open says why (external review, P3-40) ------- #
