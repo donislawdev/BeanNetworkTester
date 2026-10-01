@@ -14,8 +14,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...damage import impairment_loss_pct
-from ...i18n import T, event_kind_label
-from ...views import sort_events
+from ...i18n import T
+from ...views import event_cells, sort_events
 from ..chart import draw_throughput_chart
 from ..clipboard import copy_confirmed
 from ..labels import sync_note, wrapping_label
@@ -595,7 +595,7 @@ class StatsPage:
 
     @staticmethod
     def _render_event(e):
-        return (f"{e[0]:.1f}", e[1], event_kind_label(e[2]), T(e[3]))
+        return event_cells(e)
 
     def _on_event_sort(self, sort):
         self.app.event_sort = sort

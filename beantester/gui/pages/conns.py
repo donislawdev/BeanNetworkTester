@@ -192,6 +192,14 @@ class ConnsPage:
         self._scope_note = note
         self._scope_note_state = state
 
+        # footer: summed traffic over the WHOLE filtered set (not just the rows the
+        # display limit lets through), so the number the cap hides is still visible.
+        # Packed to the bottom BEFORE the table: pack hands out height in call
+        # order, and packed after it the footer got what the table left - nothing
+        # at 1366x768 and 144 DPI (external review, NOWE-6-2).
+        self.totals = ttk.Label(self.frame, text="", style="Muted.TLabel")
+        self.totals.pack(side="bottom", fill="x", padx=scaled(10), pady=(0, scaled(8)))
+
         holder = ttk.Frame(self.frame)
         holder.pack(fill="both", expand=True, padx=scaled(10), pady=(0, scaled(10)))
         # No stretch columns: this table scrolls horizontally, so a width the user
@@ -211,11 +219,6 @@ class ConnsPage:
         if isinstance(saved, list) and saved:
             self.table.set_visible_columns(saved)
         self._build_menu()
-
-        # footer: summed traffic over the WHOLE filtered set (not just the rows the
-        # display limit lets through), so the number the cap hides is still visible
-        self.totals = ttk.Label(self.frame, text="", style="Muted.TLabel")
-        self.totals.pack(fill="x", padx=scaled(10), pady=(0, scaled(8)))
 
     # -- context menu -------------------------------------------------------- #
     TARGET_INDEX = 3           # "Target this process" (after the separator)

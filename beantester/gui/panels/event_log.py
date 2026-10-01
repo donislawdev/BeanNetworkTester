@@ -23,8 +23,8 @@ import tkinter as tk
 from tkinter import ttk
 
 from ... import crashlog
-from ...i18n import T, event_kind_label
-from ...views import sort_events
+from ...i18n import T
+from ...views import event_cells, sort_events
 from ..scaling import scaled
 from ..theme import EVENT_COLORS
 from ..tooltip import add_tooltip
@@ -60,6 +60,19 @@ class EventLogWindow(PanelWindow):
         self._query = ""
         self._search_job = None
         self._last_build = 0.0
+
+        # (5b) The action bar is packed FIRST, to the bottom: pack hands out height
+        #      in call order, so a bar packed after the table got what the table
+        #      left - "Copy" came out cut in half at the default size and vanished
+        #      in a shorter window (external review, P3-33). panels/settings.py
+        #      has the same rule for the same reason.
+        actions = ttk.Frame(body)
+        actions.pack(side="bottom", fill="x", pady=(scaled(8), 0))
+        copy = ttk.Button(actions, text=T("menu.copy_row"),
+                          command=lambda: self.app.copy_to_clipboard(
+                              self.table.copy_text(header=True)))
+        copy.pack(side="left")
+        add_tooltip(copy, "tips.event_copy")
 
         top = ttk.Frame(body)
         top.pack(fill="x", pady=(0, scaled(6)))
@@ -108,14 +121,6 @@ class EventLogWindow(PanelWindow):
             empty_text="tables.no_events_yet",
         )
 
-        actions = ttk.Frame(body)
-        actions.pack(fill="x", pady=(scaled(8), 0))
-        copy = ttk.Button(actions, text=T("menu.copy_row"),
-                          command=lambda: self.app.copy_to_clipboard(
-                              self.table.copy_text(header=True)))
-        copy.pack(side="left")
-        add_tooltip(copy, "tips.event_copy")
-
         self.refresh(force=True)
 
     # -- refresh: runs on every tick; must stay cheap ----------------------- #
@@ -158,12 +163,14 @@ class EventLogWindow(PanelWindow):
     def _render(event):
         """Format ONE row. Called only for the rows on screen - so it may be as
         expensive as it likes, and the model may be enormous."""
-        return (f"{event[0]:.1f}", event[1], event_kind_label(event[2]), T(event[3]))
+        return event_cells(event)
 
     @staticmethod
     def _blob(event):
-        """What the search matches against."""
-        return f"{event[1]} {event[2]} {T(event[3])}".lower()
+        """What the search matches against: the time, type and description AS
+        SHOWN. The type was matched by its code, so in Polish "zmiana" found
+        nothing next to a row reading ZMIANA (external review, NOWE-6-1)."""
+        return " ".join(event_cells(event)[1:]).lower()
 
     def _on_sort(self, _sort):
         self.refresh(force=True)          # a user action never waits for the throttle

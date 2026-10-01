@@ -44,6 +44,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The event log window and the Connections tab show everything they hold.** The
+  **Copy row** button under the **Event log** table came out cut in half and vanished in a
+  shorter window, and the delivered totals under the **Connections** table were not shown on
+  small screens. Both now keep their place. The type and description columns of both event
+  tables sort by the words they show, the search in the event log finds the type as shown,
+  and **Copy row** with no row selected leaves the clipboard as it was.
+
 - **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
   the second copy of a packet that the driver refused was counted in "Send failed" and in the
   connection's dropped packets, and the warning about failing sends fired for it. A copy still

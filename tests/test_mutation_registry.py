@@ -3339,6 +3339,46 @@ MUTATIONS = [
         "test": "test_a_copy_is_confirmed_only_when_the_clipboard_really_has_it",
     },
     {
+        # P3-31: "Copy" with no row selected emptied another program's clipboard.
+        "label": "clipboard: an empty copy empties the clipboard",
+        "file": "beantester/gui/clipboard.py",
+        "old": "    if not text:\n        return False\n    try:\n",
+        "new": "    try:\n",
+        "test": "test_copy_with_nothing_to_copy_leaves_the_clipboard_alone",
+    },
+    {
+        # P3-33: the event log's action bar packed after the table, Copy cut in half.
+        "label": "event log: the action bar takes the height the table left",
+        "file": "beantester/gui/panels/event_log.py",
+        "old": '        actions.pack(side="bottom", fill="x", pady=(scaled(8), 0))\n',
+        "new": '        actions.pack(fill="x", pady=(scaled(8), 0))\n',
+        "test": "test_a_panel_window_reserves_its_footer_before_its_content",
+    },
+    {
+        # NOWE-6-2: the same on the Connections page, the totals line unmapped.
+        "label": "connections: the totals line takes the height the table left",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '        self.totals.pack(side="bottom", fill="x", padx=scaled(10), pady=(0, scaled(8)))\n',
+        "new": '        self.totals.pack(fill="x", padx=scaled(10), pady=(0, scaled(8)))\n',
+        "test": "test_the_connections_totals_are_reserved_before_the_table",
+    },
+    {
+        # P3-34: Type sorted by its code, Description by its language key.
+        "label": "views: events sort by what is stored, not what is shown",
+        "file": "beantester/views.py",
+        "old": "    shown = _SHOWN.get(sort_col, str)\n",
+        "new": "    shown = str\n",
+        "test": "test_events_sort_by_what_their_columns_show",
+    },
+    {
+        # NOWE-6-1: the search matched the type code, not the label on screen.
+        "label": "event log: the search matches the type code again",
+        "file": "beantester/gui/panels/event_log.py",
+        "old": '        return " ".join(event_cells(event)[1:]).lower()\n',
+        "new": '        return f"{event[1]} {event[2]} {T(event[3])}".lower()\n',
+        "test": "test_the_event_log_search_finds_the_type_it_shows",
+    },
+    {
         # A tab filled by a worker measured empty, every label outside the check.
         "label": "render check: a surface is measured before its worker answered",
         "file": "tools/ci_gui_render.py",

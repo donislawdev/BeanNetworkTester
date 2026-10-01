@@ -46,7 +46,7 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import applied, dialogs, session_repro
+from . import applied, clipboard, dialogs, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
@@ -1067,11 +1067,7 @@ class App:
             self.log(f"{T('log.error')}: {e}")
 
     def copy_to_clipboard(self, text):
-        try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(text)
-        except Exception as e:
-            self.log(f"{T('log.not_copied')}: {e}")
+        clipboard.put(self, text)
 
     # -- targeting straight from the connection table ------------------------------ #
     def set_target_expression(self, expression):
