@@ -3358,8 +3358,8 @@ MUTATIONS = [
         # NOWE-6-2: the same on the Connections page, the totals line unmapped.
         "label": "connections: the totals line takes the height the table left",
         "file": "beantester/gui/pages/conns.py",
-        "old": '        self.totals.pack(side="bottom", fill="x", padx=scaled(10), pady=(0, scaled(8)))\n',
-        "new": '        self.totals.pack(fill="x", padx=scaled(10), pady=(0, scaled(8)))\n',
+        "old": '        self.totals.pack(side="bottom", fill="x", padx=space("page"), pady=(0, space("row")))\n',
+        "new": '        self.totals.pack(fill="x", padx=space("page"), pady=(0, space("row")))\n',
         "test": "test_the_connections_totals_are_reserved_before_the_table",
     },
     {

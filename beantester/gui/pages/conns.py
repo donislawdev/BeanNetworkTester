@@ -35,7 +35,7 @@ from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
-from ..theme import CONN_COLORS, set_menu_entry_available, style_menu
+from ..theme import CONN_COLORS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
@@ -198,7 +198,7 @@ class ConnsPage:
         # order, and packed after it the footer got what the table left - nothing
         # at 1366x768 and 144 DPI (external review, NOWE-6-2).
         self.totals = ttk.Label(self.frame, text="", style="Muted.TLabel")
-        self.totals.pack(side="bottom", fill="x", padx=scaled(10), pady=(0, scaled(8)))
+        self.totals.pack(side="bottom", fill="x", padx=space("page"), pady=(0, space("row")))
 
         holder = ttk.Frame(self.frame)
         holder.pack(fill="both", expand=True, padx=scaled(10), pady=(0, scaled(10)))
