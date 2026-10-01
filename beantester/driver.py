@@ -170,6 +170,24 @@ def _create_use_marker():
     return None
 
 
+def _marker_held_elsewhere(api):
+    """Is a handle to the use marker open under EITHER of its names?
+
+    Asked only by a caller that holds no marker of its own (dropped, or never
+    taken), so whatever is found belongs to somebody else. Both names, because
+    ``_create_use_marker`` falls back to the session-local one when the global
+    one is refused, and the two live in separate namespaces: asking for one name
+    only missed an instance that had the other, and the exit path stopped the
+    driver under its session (review of #238).
+    """
+    for name in _USE_MARKER_NAMES:
+        other = api.OpenMutexW(_SYNCHRONIZE, False, name)
+        if other:
+            api.CloseHandle(other)
+            return True
+    return False
+
+
 def _drop_use_marker():
     """Release ours and answer: is ANOTHER process still using the driver?"""
     # Under the claim because two threads can get here - a window's cleanup and the
@@ -184,12 +202,8 @@ def _drop_use_marker():
             api = _kernel32()
             if marker is not None:
                 api.CloseHandle(marker[0])
-            name = marker[1] if marker is not None else _USE_MARKER_NAMES[0]
             # Ours is closed, so anything left belongs to somebody else.
-            other = api.OpenMutexW(_SYNCHRONIZE, False, name)
-            if other:
-                api.CloseHandle(other)
-                return True
+            return _marker_held_elsewhere(api)
         return False
 
 # WinDivert registers itself under a version-dependent service name; pydivert
@@ -425,6 +439,11 @@ def _delete_service(api, handle, stop):
     return f"{stop} (removal failed, Windows error {err})"
 
 
+# How a line says that the STOP did not happen. The cleanup looks for it to add
+# _UNLOADED_AT_RESTART, so the two cannot drift apart.
+_NOT_STOPPED = "NOT stopped"
+
+
 def _stop_service(api, handle):
     """Send STOP and say what it did - read back, never assumed.
 
@@ -444,14 +463,14 @@ def _stop_service(api, handle):
             return "was not running"
         if err != _ERROR_SERVICE_CANNOT_ACCEPT_CTRL:
             why = "access denied" if err == _ERROR_ACCESS_DENIED else f"Windows error {err}"
-            return f"NOT stopped, {why}"
+            return f"{_NOT_STOPPED}, {why}"
     state = int(status.dwCurrentState)
     if state == _SERVICE_STOPPED:
         return "stopped" if err == 0 else "was not running"
     if state == _SERVICE_STOP_PENDING:
         # MEASURED 2026-08-04: what another process's open handle leaves behind.
         return "stop pending, it unloads when the last program using it closes"
-    return f"NOT stopped, the service is {STATE_LABELS.get(state, 'in an unknown state')}"
+    return f"{_NOT_STOPPED}, the service is {STATE_LABELS.get(state, 'in an unknown state')}"
 
 
 def stale_temp_dirs():
@@ -474,16 +493,17 @@ def _another_instance_holds_the_driver():
     if not is_windows() or _USE_MARKER[0] is not None:
         return False
     with crashlog.quiet("driver.use_marker"):
-        api = _kernel32()
-        other = api.OpenMutexW(_SYNCHRONIZE, False, _USE_MARKER_NAMES[0])
-        if other:
-            api.CloseHandle(other)
-            return True
+        return _marker_held_elsewhere(_kernel32())
     return False
 
 
 _STAND_DOWN = ("Another instance is still using the WinDivert driver - "
                "leaving it loaded for them.")
+
+# Added after the lines when a STOP did not happen: the one thing left to do,
+# and true of every such line (review of #238). Not "Run as Administrator": the
+# cleanup refused to run without it. Said in the window too, so no command name.
+_UNLOADED_AT_RESTART = "Restarting Windows unloads a driver that could not be stopped."
 
 
 def cleanup_driver(release_own=False, opens_seen=None, on_exit=False):
@@ -546,8 +566,10 @@ def _cleanup_claimed(release_own, opens_seen, on_exit):
         # that its next start will fail with 433 until this settles.
         lines.append("WARNING: another instance of this tool is using the WinDivert "
                      "driver right now. Unloading it will interrupt that session.")
-    for name in drivers:
-        lines.append(stop_and_remove(name))
+    stops = [stop_and_remove(name) for name in drivers]
+    lines.extend(stops)
+    if any(_NOT_STOPPED in line for line in stops):
+        lines.append(_UNLOADED_AT_RESTART)
     leftovers = stale_temp_dirs()
     if leftovers:
         lines.append("Stale PyInstaller temp directories (safe to delete once no "

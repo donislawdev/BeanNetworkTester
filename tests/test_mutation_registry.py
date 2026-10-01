@@ -3090,6 +3090,24 @@ MUTATIONS = [
         "test": "test_the_last_instance_out_still_unloads_the_driver",
     },
     {
+        # Review of #238: the session-local marker name was never asked about.
+        "label": "driver: only the global marker name is asked about",
+        "file": "beantester/driver.py",
+        "old": ("    for name in _USE_MARKER_NAMES:\n"
+                "        other = api.OpenMutexW(_SYNCHRONIZE, False, name)\n"),
+        "new": ("    for name in _USE_MARKER_NAMES[:1]:\n"
+                "        other = api.OpenMutexW(_SYNCHRONIZE, False, name)\n"),
+        "test": "test_an_instance_on_the_session_local_marker_is_seen_too",
+    },
+    {
+        # Review of #238: "NOT stopped" left the person with nothing to do.
+        "label": "driver: a driver that could not be stopped comes with no next step",
+        "file": "beantester/driver.py",
+        "old": "        lines.append(_UNLOADED_AT_RESTART)\n",
+        "new": "        pass\n",
+        "test": "test_a_driver_that_could_not_be_stopped_comes_with_what_to_do",
+    },
+    {
         "label": "diagnostics: one broken report section takes the report down",
         "file": "beantester/nettools/diagnostics.py",
         "old": '        except Exception as exc:\n            crashlog.note(exc, "nettools.diagnostics")',

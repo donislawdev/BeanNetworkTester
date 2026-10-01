@@ -491,6 +491,93 @@ def test_the_exit_path_stands_down_for_an_instance_that_started_meanwhile(monkey
           driver.driver_used() is False)
 
 
+class _MarkerKernel:
+    """kernel32's mutex calls. ``others`` are the marker names another process
+    holds right now; ``open`` is every handle handed out and not closed yet."""
+
+    def __init__(self):
+        self.others = set()
+        self.open = set()
+        self._next = 100
+
+    def _handle(self):
+        self._next += 1
+        self.open.add(self._next)
+        return self._next
+
+    def CreateMutexW(self, _attributes, _owned, _name):
+        return self._handle()
+
+    def OpenMutexW(self, _access, _inherit, name):
+        return self._handle() if name in self.others else 0
+
+    def CloseHandle(self, handle):
+        self.open.discard(handle)
+        return 1
+
+
+def test_an_instance_on_the_session_local_marker_is_seen_too(monkeypatch):
+    """Review of #238, reproduced: the marker falls back to a session-local name
+    when the global one is refused, and the two live in separate namespaces. The
+    second look on the way out asked for the global name only, so an instance that
+    started in between with the other name had its driver stopped under it, and
+    ``--cleanup-driver`` did not warn about it."""
+    kernel, stopped = _MarkerKernel(), []
+    session_local = driver._USE_MARKER_NAMES[1]
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "_kernel32", lambda: kernel)
+    monkeypatch.setattr(driver, "_USE_MARKER", [None])
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+    monkeypatch.setattr(driver, "stop_and_remove",
+                        lambda name: stopped.append(name) or f"{name}: stopped and removed")
+
+    def another_copy_starts_meanwhile():         # between the first look and the second
+        kernel.others.add(session_local)
+        return {"WinDivert": "running"}
+
+    monkeypatch.setattr(driver, "installed_drivers", another_copy_starts_meanwhile)
+    driver.mark_driver_used()
+    lines = driver.release_on_exit()
+    check("the exit path leaves the new instance its driver", stopped == [], f"({stopped})")
+    check("and says why", lines == [driver._STAND_DOWN], f"({lines})")
+    check("every probe handle is closed again, ours too", kernel.open == set(),
+          f"({kernel.open})")
+
+    lines = driver.cleanup_driver()
+    check("--cleanup-driver warns about it", "WARNING" in lines[0], f"({lines})")
+
+    driver._take_use_marker()
+    check("and the first look sees it as well, whichever name ours has",
+          driver._drop_use_marker() is True)
+    check("still nothing left open", kernel.open == set(), f"({kernel.open})")
+
+
+def test_a_driver_that_could_not_be_stopped_comes_with_what_to_do(monkeypatch):
+    """Review of #238: "NOT stopped, access denied" said what happened and left the
+    person there. One more line says the thing that is left to do and true of
+    every such case. A cleanup where every STOP happened does not get it."""
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    monkeypatch.setattr(driver, "is_admin", lambda: True)
+    monkeypatch.setattr(driver, "_another_instance_holds_the_driver", lambda: False)
+    monkeypatch.setattr(driver, "installed_drivers",
+                        lambda: {"WinDivert": "running", "WinDivert1.4": "stopped"})
+    monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
+    results = {"WinDivert": "WinDivert: NOT stopped, access denied (removal failed, "
+                            "Windows error 5)",
+               "WinDivert1.4": "WinDivert1.4: was not running (removed)"}
+    monkeypatch.setattr(driver, "stop_and_remove", lambda name: results[name])
+    lines = driver.cleanup_driver()
+    check("the lines per service, then what to do",
+          lines == [results["WinDivert"], results["WinDivert1.4"],
+                    driver._UNLOADED_AT_RESTART], f"({lines})")
+
+    results["WinDivert"] = "WinDivert: stopped and removed"
+    lines = driver.cleanup_driver()
+    check("nothing to do when every service stopped",
+          driver._UNLOADED_AT_RESTART not in lines, f"({lines})")
+
+
 def test_cleanup_driver_warns_before_interrupting_another_instance(monkeypatch):
     """`--cleanup-driver` is typed on purpose, so it still runs - but the person
     typing it deserves to know whose session they are about to end."""

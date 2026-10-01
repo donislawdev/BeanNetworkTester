@@ -23,7 +23,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **`--cleanup-driver` and "Clean up the driver" say what really happened.** Every line
   said "stopped", also when Windows refused the stop, for example while another program
   was still using the driver. Each line now says whether the WinDivert service stopped,
-  is still unloading, was not running, or could not be stopped and why. The exit code of
+  is still unloading, was not running, or could not be stopped and why. When one could
+  not be stopped, one more line says that restarting Windows unloads it. The exit code of
   `--cleanup-driver` is still `0` in every case, so read the lines.
 
 - **Closing the program no longer stops another program's WinDivert driver.** On exit it
