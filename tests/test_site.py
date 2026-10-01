@@ -619,7 +619,7 @@ def test_the_card_image_reports_the_size_the_file_really_has(tmp_path):
     registry = build_site.load_registry(ROOT)
     source = build_site.asset_source(registry, ROOT, registry["og_image"])
     width, height = build_site._png_size(source)
-    check("the icon is a PNG with real dimensions", width > 0 and height > 0,
+    check("the card image is a PNG with real dimensions", width > 0 and height > 0,
           f"({width}x{height})")
     for rel in [p for p in written if p.endswith("index.html")]:
         page = _read(os.path.join(out, rel.replace("/", os.sep)))
@@ -627,6 +627,25 @@ def test_the_card_image_reports_the_size_the_file_really_has(tmp_path):
               f'content="{width}"' in page, f"({width})")
         check(f"{rel}: the declared height is the file's height",
               f'content="{height}"' in page, f"({height})")
+
+
+def test_the_card_type_fits_the_shape_of_the_card_image(tmp_path):
+    """A banner needs the large card and a square icon the small one.
+
+    ``summary_large_image`` crops to roughly 2:1 and ``summary`` shows a thumbnail, so a
+    banner under the small card (or an icon under the large one) is shrunk or cropped
+    in somebody else's timeline, where nobody here sees it. The two are chosen
+    together, so this ties them: it fails the day one of them is replaced alone.
+    """
+    out, written = _build(tmp_path, "cardtype")
+    registry = build_site.load_registry(ROOT)
+    width, height = build_site._png_size(
+        build_site.asset_source(registry, ROOT, registry["og_image"]))
+    expected = "summary_large_image" if width >= 1.5 * height else "summary"
+    for rel in [p for p in written if p.endswith("index.html")]:
+        page = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: the card type fits a {width}x{height} image",
+              f'name="twitter:card" content="{expected}"' in page, f"(wanted {expected})")
 
 
 def test_the_browser_chrome_colour_comes_from_the_programs_palette(tmp_path):
