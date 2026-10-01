@@ -1401,6 +1401,23 @@ MUTATIONS = [
         "test": "test_the_stylesheet_pins_nothing_to_the_left_or_the_right",
     },
     {
+        # A banner under the small card is shrunk to a thumbnail in somebody else's
+        # timeline, where nobody here would ever see it.
+        "label": "site: the card type stops fitting the card image",
+        "file": "tools/build_site.py",
+        "old": '("twitter:card", "summary_large_image")',
+        "new": '("twitter:card", "summary")',
+        "test": "test_the_card_type_fits_the_shape_of_the_card_image",
+    },
+    {
+        # A command a reader pastes into a terminal and that fails there.
+        "label": "site: a guide names a flag the program does not have",
+        "file": "site/pages/netem/en.html",
+        "old": "<code>--loss 5 --loss-burst 4</code>",
+        "new": "<code>--loss 5 --loss-bursts 4</code>",
+        "test": "test_every_flag_a_page_names_is_one_the_command_line_has",
+    },
+    {
         # The regression this feature could most easily cause: a search that
         # unfolds the page FOR GOOD. `toggle` runs the accordion's callback, which
         # persists the fold state through App.on_sections_changed; `set_open` does

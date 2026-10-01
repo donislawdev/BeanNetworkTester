@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Który program używa tego portu?</h1>
+  <p class="lead">Serwer nie startuje na porcie 8080 albo test kończy się komunikatem "address already in use". Port zajmuje już jakiś program albo Windows odłożył go na bok, a oba błędy wyglądają podobnie. Oto jak je odróżnić.</p>
+</section>
+
+<section>
+  <h2>Dwa powody, dla których port się nie otwiera</h2>
+  <table>
+    <tr><th>Co się stało</th><th>Jak to wygląda</th><th>Co zrobić</th></tr>
+    <tr><td><strong>Port zajmuje program</strong></td><td>Błąd mówi, że adres jest już używany (EADDRINUSE albo błąd Windows 10048). Program widać na liście gniazd.</td><td>Zamknij ten program albo wybierz inny port.</td></tr>
+    <tr><td><strong>Windows zarezerwował port</strong></td><td>Błąd mówi, że dostęp jest zabroniony (błąd Windows 10013), choć nic nie nasłuchuje. Na liście nie ma żadnego programu.</td><td>Wybierz port spoza zarezerwowanego zakresu albo zwolnij zakres. Często pomaga restart usługi WinNAT.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Tym, co Windows już ma</h2>
+  <p>Lista gniazd podaje właściciela jako identyfikator procesu. Znajdź port, a potem sprawdź identyfikator:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>To samo w PowerShellu, dla TCP i dla UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Jeśli żaden program nie trzyma portu, zapytaj, które zakresy Windows odłożył na bok:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Uruchom to jeszcze raz z protocol=udp. Zakresy są prowadzone osobno dla każdego protokołu, więc port może być wolny dla UDP, a zarezerwowany dla TCP.</p>
+</section>
+
+<section>
+  <h2>Za pomocą zakładki {{app.app.tabs.tools}}</h2>
+  <p>Zakładka <strong>{{app.app.tabs.tools}}</strong> odpowiada na te same pytania bez konsoli:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> wylicza każde gniazdo TCP i UDP na komputerze, jak <code>netstat -ano</code>: co nasłuchuje, co jest połączone, w jakim jest stanie i który program je ma. Nie potrzebuje sesji. Szukaj w niej przez <code>lport:8080</code> albo <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> pyta o to, o co zapytał Twój serwer: czy program może użyć tego portu? Wpisz 8080, listę, np. <code>80, 443</code>, albo zakres, np. <code>9000-9100</code> (do 1000 portów), i naciśnij <strong>{{app.tools.portcheck.check}}</strong>. Każdy port jest sprawdzany dla TCP i UDP, w IPv4 i IPv6, i oznaczany jako <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (z programem i jego PID) albo <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Dlatego odpowiedzią jest tabela, a nie tak lub nie: Windows rezerwuje zakresy osobno dla każdego protokołu, a program nasłuchujący na IPv6 może trzymać port, który w IPv4 jest wolny.</p>
+  <p>Nic nie jest wysyłane przez sieć. Dla każdego portu narzędzie prosi Windows o niego na własnym adresie pętli zwrotnej komputera i od razu go oddaje.</p>
+</section>
+
+<section>
+  <h2>Gdy wiesz, kto go ma</h2>
+  <p>Kliknij wiersz w którejkolwiek tabeli prawym przyciskiem, aby wskazać program, który trzyma port. To tylko wypełnia pole celu, a nic się nie zmienia, dopóki nie naciśniesz <strong>{{app.buttons.start}}</strong>. Co dalej, opisuje <a href="../celowanie-w-jedna-aplikacje/">celowanie w jedną aplikację</a>.</p>
+</section>
+
+<section>
+  <h2>Czego nie robi</h2>
+  <p>Czyta, nie naprawia: nigdy nie zamyka programu ani nie zwalnia zarezerwowanego zakresu. Gniazdo należące do innego konta nie pokazuje programu, chyba że narzędzie działa jako administrator.</p>
+</section>
+
+<section>
+  <h2>Dalej</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -35,6 +35,7 @@ on:
       - "beantester/appinfo.py"
       - "bean.png"
       - "docs/demo.gif"
+      - "docs/og-image.png"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 

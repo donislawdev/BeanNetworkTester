@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Chương trình nào đang dùng cổng này?</h1>
+  <p class="lead">Máy chủ không khởi động được trên cổng 8080, hoặc bài kiểm tra dừng với "address already in use". Hoặc là một chương trình đã giữ cổng, hoặc là Windows đã dành riêng nó, và hai lỗi trông rất giống nhau. Đây là cách phân biệt.</p>
+</section>
+
+<section>
+  <h2>Hai lý do một cổng không mở được</h2>
+  <table>
+    <tr><th>Chuyện gì đã xảy ra</th><th>Biểu hiện</th><th>Nên làm gì</th></tr>
+    <tr><td><strong>Một chương trình đang giữ cổng</strong></td><td>Lỗi báo địa chỉ đã được sử dụng (EADDRINUSE, hoặc lỗi Windows 10048). Chương trình đó xuất hiện trong danh sách socket.</td><td>Đóng chương trình đó hoặc chọn cổng khác.</td></tr>
+    <tr><td><strong>Windows đã dành riêng cổng</strong></td><td>Lỗi báo bị cấm truy cập (lỗi Windows 10013) dù không có gì đang lắng nghe. Không có chương trình nào trong danh sách.</td><td>Chọn cổng ngoài dải đã dành riêng, hoặc giải phóng dải đó. Khởi động lại dịch vụ WinNAT thường là đủ.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Bằng những gì Windows đã có</h2>
+  <p>Danh sách socket cho biết chủ sở hữu dưới dạng ID tiến trình. Hãy tìm cổng, rồi tìm ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Tương tự trong PowerShell, cho cả TCP và UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Nếu không chương trình nào giữ cổng, hãy hỏi những dải nào Windows đã dành riêng:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Chạy lại với protocol=udp. Các dải được lưu theo từng giao thức, nên một cổng có thể trống với UDP mà bị dành riêng với TCP.</p>
+</section>
+
+<section>
+  <h2>Bằng thẻ {{app.app.tabs.tools}}</h2>
+  <p>Thẻ <strong>{{app.app.tabs.tools}}</strong> trả lời cùng những câu hỏi đó mà không cần console:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> liệt kê mọi socket TCP và UDP trên máy, giống <code>netstat -ano</code>: cái gì đang lắng nghe, cái gì đã kết nối, trạng thái ra sao và chương trình nào sở hữu. Không cần phiên chạy. Tìm kiếm bằng <code>lport:8080</code> hoặc <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> hỏi điều mà máy chủ của bạn đã hỏi: một chương trình có dùng được cổng này không? Nhập 8080, một danh sách như <code>80, 443</code> hoặc một dải như <code>9000-9100</code> (tối đa 1000 cổng) rồi nhấn <strong>{{app.tools.portcheck.check}}</strong>. Mỗi cổng được thử cho TCP và UDP, trên IPv4 và IPv6, rồi đánh dấu là <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (kèm chương trình và PID) hoặc <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Vì vậy câu trả lời là một bảng chứ không phải có hoặc không: Windows dành riêng các dải theo từng giao thức, và một chương trình lắng nghe trên IPv6 có thể giữ một cổng đang trống trên IPv4.</p>
+  <p>Không có gì được gửi qua mạng. Với mỗi cổng, công cụ xin Windows cổng đó trên địa chỉ loopback của chính máy rồi trả lại ngay.</p>
+</section>
+
+<section>
+  <h2>Khi đã biết ai đang giữ</h2>
+  <p>Nhấp chuột phải vào một dòng ở một trong hai bảng để nhắm vào chương trình đang giữ cổng. Việc này chỉ điền vào ô mục tiêu, và không có gì thay đổi cho đến khi bạn nhấn <strong>{{app.buttons.start}}</strong>. Bước tiếp theo nằm ở <a href="../nham-vao-mot-ung-dung/">nhắm vào một ứng dụng</a>.</p>
+</section>
+
+<section>
+  <h2>Những gì nó không làm</h2>
+  <p>Nó chỉ đọc, không sửa: không bao giờ đóng chương trình hay giải phóng dải đã dành riêng. Socket của tài khoản khác không hiện chương trình, trừ khi công cụ chạy với quyền quản trị.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -138,7 +138,7 @@
       "og_locale": "th_TH"
     }
   ],
-  "og_image": "assets/bean.png",
+  "og_image": "assets/og-image.png",
   "software": {
     "application_category": "DeveloperApplication",
     "operating_system": "Windows 10, Windows 11",
@@ -166,6 +166,10 @@
     {
       "source": "docs/demo.gif",
       "target": "assets/demo.gif"
+    },
+    {
+      "source": "docs/og-image.png",
+      "target": "assets/og-image.png"
     }
   ],
   "social": [

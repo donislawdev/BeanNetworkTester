@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>أي برنامج يستخدم هذا المنفذ؟</h1>
+  <p class="lead">لا يبدأ الخادم على المنفذ 8080، أو يتوقف اختبار برسالة "address already in use". إما أن برنامجًا يحجز المنفذ بالفعل، وإما أن Windows خصّصه لنفسه، والخطآن متشابهان. إليك طريقة التمييز بينهما.</p>
+</section>
+
+<section>
+  <h2>سببان لعدم فتح المنفذ</h2>
+  <table>
+    <tr><th>ما الذي حدث</th><th>كيف يظهر</th><th>ما العمل</th></tr>
+    <tr><td><strong>برنامج يحجز المنفذ</strong></td><td>يقول الخطأ إن العنوان مستخدم بالفعل (EADDRINUSE أو خطأ Windows رقم 10048). ويظهر البرنامج في قائمة المقابس.</td><td>أغلق ذلك البرنامج أو اختر منفذًا آخر.</td></tr>
+    <tr><td><strong>Windows حجز المنفذ</strong></td><td>يقول الخطأ إن الوصول محظور (خطأ Windows رقم 10013) مع أن شيئًا لا يستمع. ولا يظهر أي برنامج في القائمة.</td><td>اختر منفذًا خارج النطاق المحجوز أو حرّر النطاق. وكثيرًا ما تكفي إعادة تشغيل خدمة WinNAT.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>بما يوفره Windows أصلًا</h2>
+  <p>تذكر قائمة المقابس المالك على هيئة معرّف عملية. ابحث عن المنفذ ثم عن المعرّف:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>الأمر نفسه في PowerShell، لـ TCP ولـ UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>إن لم يحجز أي برنامج المنفذ، فاسأل عن النطاقات التي حجزها Windows:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>شغّله مرة أخرى مع protocol=udp. تُحفظ النطاقات لكل بروتوكول على حدة، فقد يكون المنفذ حرًّا لـ UDP ومحجوزًا لـ TCP.</p>
+</section>
+
+<section>
+  <h2>عبر تبويب {{app.app.tabs.tools}}</h2>
+  <p>يجيب تبويب <strong>{{app.app.tabs.tools}}</strong> عن الأسئلة نفسها بلا وحدة تحكم:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> يسرد كل مقبس TCP وUDP في الحاسوب، مثل <code>netstat -ano</code>: ما يستمع وما هو متصل وحالته والبرنامج الذي يملكه. ولا يحتاج إلى جلسة. ابحث فيه بـ <code>lport:8080</code> أو <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> يسأل ما سأله خادمك: هل يستطيع برنامج استخدام هذا المنفذ؟ اكتب 8080 أو قائمة مثل <code>80, 443</code> أو نطاقًا مثل <code>9000-9100</code> (حتى 1000 منفذ) ثم اضغط <strong>{{app.tools.portcheck.check}}</strong>. يُجرَّب كل منفذ لـ TCP وUDP، على IPv4 وIPv6، ويوسَم بأنه <strong>{{app.tools.portcheck.verdict.free}}</strong> أو <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (مع البرنامج ومعرّفه PID) أو <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>ولهذا يأتي الجواب جدولًا لا «نعم» أو «لا»: فـ Windows يحجز النطاقات لكل بروتوكول، وقد يمسك برنامج يستمع على IPv6 منفذًا حرًّا على IPv4.</p>
+  <p>لا يُرسَل شيء عبر الشبكة. لكل منفذ تطلبه الأداة من Windows على عنوان الاسترجاع (loopback) الخاص بالحاسوب نفسه ثم تعيده فورًا.</p>
+</section>
+
+<section>
+  <h2>بعد أن تعرف من يحجزه</h2>
+  <p>انقر بزر الفأرة الأيمن على صف في أي من الجدولين لاستهداف البرنامج الذي يحجز المنفذ. هذا يملأ حقل الهدف فقط، ولا يتغير شيء حتى تضغط <strong>{{app.buttons.start}}</strong>. والخطوة التالية في <a href="../istihdaf-tatbiq-wahid/">استهداف تطبيق واحد</a>.</p>
+</section>
+
+<section>
+  <h2>ما لا تفعله</h2>
+  <p>تقرأ ولا تصلح: لا تغلق برنامجًا أبدًا ولا تحرر نطاقًا محجوزًا. ومقبس تابع لحساب آخر لا يُظهر برنامجًا ما لم تعمل الأداة بصلاحيات المسؤول.</p>
+</section>
+
+<section>
+  <h2>التالي</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

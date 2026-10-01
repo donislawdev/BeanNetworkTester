@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Windows'ta netem ve Network Link Conditioner</h1>
+  <p class="lead">Linux'ta tc netem, Mac'te Network Link Conditioner var. Windows'ta gecikme ve kayıp ekleyen yerleşik bir şey yok. Bu sayfa bildiklerinizi Bean Network Tester'a eşler ve sayıların nerede aynen aktarılamadığını gösterir.</p>
+</section>
+
+<section>
+  <h2>netem seçenekleri, tek tek</h2>
+  <p>Buradaki her komuta <code>--target</code> ve <code>--duration</code> ekleyin, yoksa komut bilgisayarın tamamını etkiler.</p>
+  <table>
+    <tr><th>netem</th><th>Penceredeki ayar</th><th>Bayrak</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Seri kayıp.</strong> netem'deki korelasyon değeri bir seri uzunluğu değildir. {{app.fields.loss_burst}} art arda kaybolan paketlerin ortalama sayısıdır ve en yakın karşılıktır.</li>
+    <li><strong>Yeniden sıralama.</strong> Yeniden sıralama yüzdesi yoktur. Bir sıçrama tek bir paketi geciktirir, ondan sonra gönderilenler onu geçer ve {{app.app.tabs.statistics}} sayfasındaki yeniden sıralanan paket sayacı bunun gerçekten olup olmadığını gösterir.</li>
+    <li><strong>Kuyruk boyutu.</strong> netem'in limit değeri paket sayar. {{app.fields.buffer}} milisaniye cinsinden bir süredir.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Bilmeye değer üç fark</h2>
+  <p><strong>Yön.</strong> netem bir arayüzden çıkanı geciktirir, yanıt dokunulmadan döner. Bu araç iki yönü de yakalar, bu yüzden <code>--latency 100</code> bir ping'e yaklaşık 200 ms ekler: gidişte 100, dönüşte 100. netem'in yaptığını elde etmek için yalnızca giden trafiği yakalayın:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Birimler.</strong> netem hızı saniyedeki bit cinsindendir. Hız sınırı alanları KB/s cinsindendir ve K = 1024'tür. Megabit dönüşümü:</p>
+  <table>
+    <tr><th>netem hızı</th><th>Hız sınırı alanı, KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Kapsam.</strong> tc tüm bir ağ arayüzünü şekillendirir ve root ister. Bu araç <code>--target</code> ile tek bir programı hedefler ve yönetici hakları ister.</p>
+</section>
+
+<section>
+  <h2>Network Link Conditioner'ı biliyorsanız</h2>
+  <p>Apple'ın aracı adlandırılmış profillerle çalışır. Buradaki en yakınları:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Buradaki en yakını</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} 100'e ayarlı</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Karşılığı olan bir profil yok. Hız sınırını ve gecikmeyi kendiniz yazın, sonra {{app.buttons.save_as}} düğmesiyle kendi profiliniz olarak saklayın.</td></tr>
+  </table>
+  <p>Sayılar Apple'ınki değildir, bu yüzden bir profili başlangıç noktası sayın. Bir profilin belirlediği her değer <a href="../basvuru-tablolari/">başvuru sayfasında</a> listelenir.</p>
+</section>
+
+<section>
+  <h2>Windows'ta ne kazanırsınız</h2>
+  <ul>
+    <li><strong>Bilgisayarın tamamı değil, tek bir program.</strong> <a href="../tek-uygulamayi-hedefle/">Bozulmayı tek bir uygulamaya yöneltin</a>, makinenin geri kalanı normal kalsın.</li>
+    <li><strong>Kabuk betiği yerine zaman çizelgesi.</strong> <a href="../zamana-bagli-senaryolar/">Zamanlı senaryolar</a> ayarları belirlenen saniyelerde değiştirir, Linux'ta <code>tc</code> ve <code>sleep</code> betiğinin yaptığı gibi.</li>
+    <li><strong>Bir ardışık düzen çalıştırabilir.</strong> Aynı çalıştırılabilir dosya <a href="../ci-icinde-ag-testleri/">CI'da çalışır</a> ve çıkış kodlarıyla bildirir.</li>
+  </ul>
+  <p>Linux veya macOS'ta orijinalleri kullanın. Bu araç yalnızca Windows'ta çalışır.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Bu portu hangi program kullanıyor?</h1>
+  <p class="lead">Bir sunucu 8080 portunda başlamıyor ya da bir test "address already in use" ile duruyor. Ya portu zaten bir program tutuyor ya da Windows onu ayırmış, ve iki hata birbirine benziyor. Ayırt etmenin yolu şu.</p>
+</section>
+
+<section>
+  <h2>Bir portun açılmamasının iki nedeni</h2>
+  <table>
+    <tr><th>Ne oldu</th><th>Nasıl görünür</th><th>Ne yapmalı</th></tr>
+    <tr><td><strong>Bir program portu tutuyor</strong></td><td>Hata, adresin zaten kullanımda olduğunu söyler (EADDRINUSE veya Windows hatası 10048). Program soket listesinde görünür.</td><td>O programı kapatın ya da başka bir port seçin.</td></tr>
+    <tr><td><strong>Windows portu ayırmış</strong></td><td>Hata, erişimin yasak olduğunu söyler (Windows hatası 10013), oysa hiçbir şey dinlemiyordur. Listede hiçbir program görünmez.</td><td>Ayrılmış aralığın dışında bir port seçin ya da aralığı serbest bırakın. WinNAT hizmetini yeniden başlatmak çoğu zaman yeter.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Windows'ta zaten olanla</h2>
+  <p>Soket listesi sahibini bir işlem kimliği olarak verir. Önce portu, sonra kimliği arayın:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Aynısı PowerShell'de, TCP ve UDP için:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Portu hiçbir program tutmuyorsa, Windows'un hangi aralıkları ayırdığını sorun:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Komutu protocol=udp ile yeniden çalıştırın. Aralıklar protokol başına tutulur, bu yüzden bir port UDP için boş, TCP için ayrılmış olabilir.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.tools}} sekmesiyle</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong> sekmesi aynı soruları konsol olmadan yanıtlar:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> bilgisayardaki her TCP ve UDP soketini <code>netstat -ano</code> gibi listeler: neyin dinlediğini, neyin bağlı olduğunu, durumunu ve sahibi olan programı. Oturum gerekmez. <code>lport:8080</code> veya <code>state:listen</code> ile arayın.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>, sunucunuzun sorduğunu sorar: bir program bu portu kullanabilir mi? 8080 yazın, <code>80, 443</code> gibi bir liste ya da <code>9000-9100</code> gibi bir aralık girin (en fazla 1000 port) ve <strong>{{app.tools.portcheck.check}}</strong> düğmesine basın. Her port TCP ve UDP için, IPv4 ve IPv6 üzerinde denenir ve <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (program ve PID ile) ya da <strong>{{app.tools.portcheck.verdict.reserved}}</strong> olarak işaretlenir.</li>
+  </ul>
+  <p>Bu yüzden yanıt evet ya da hayır değil, bir tablodur: Windows aralıkları protokol başına ayırır ve IPv6'da dinleyen bir program, IPv4'te boş olan bir portu tutabilir.</p>
+  <p>Ağ üzerinden hiçbir şey gönderilmez. Araç her port için onu bilgisayarın kendi geri döngü adresinde Windows'tan ister ve hemen geri verir.</p>
+</section>
+
+<section>
+  <h2>Kimin tuttuğunu öğrendikten sonra</h2>
+  <p>Portu tutan programı hedef yapmak için iki tablodan birinde bir satıra sağ tıklayın. Bu yalnızca hedef alanını doldurur ve <strong>{{app.buttons.start}}</strong> düğmesine basana kadar hiçbir şey değişmez. Sonrası <a href="../tek-uygulamayi-hedefle/">tek bir uygulamayı hedefle</a> sayfasında.</p>
+</section>
+
+<section>
+  <h2>Ne yapmaz</h2>
+  <p>Okur, onarmaz: hiçbir programı kapatmaz ve ayrılmış bir aralığı serbest bırakmaz. Başka bir hesaba ait bir soket, araç yönetici olarak çalışmadıkça program göstermez.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

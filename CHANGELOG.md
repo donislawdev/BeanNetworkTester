@@ -28,6 +28,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   translation yet, a page uses the English names. The scenarios page now counts the scenario
   files that ship instead of stating a number.
 
+- **Two new website guides, in all 22 languages.** One shows which program holds a port and
+  how to tell a port in use from one Windows reserved, with the `netstat` and PowerShell
+  commands and the **Sockets** and **Port check** tools. The other maps `tc netem` and Network
+  Link Conditioner onto the program's settings and flags, including the places where the
+  numbers differ. Link previews of the site now show a wide card instead of a small icon, and
+  the demo recording is new.
+
 ### Fixed
 
 - **Closing the console window stops a command-line run cleanly.** Closing the window ended
