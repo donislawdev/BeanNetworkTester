@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>โปรแกรมไหนกำลังใช้พอร์ตนี้?</h1>
+  <p class="lead">เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8080 ไม่ได้ หรือการทดสอบหยุดด้วยข้อความ "address already in use" สาเหตุคือมีโปรแกรมจับพอร์ตอยู่แล้ว หรือ Windows สงวนพอร์ตไว้ และข้อผิดพลาดทั้งสองแบบดูคล้ายกันมาก ต่อไปนี้คือวิธีแยกแยะ</p>
+</section>
+
+<section>
+  <h2>สองสาเหตุที่พอร์ตเปิดไม่ได้</h2>
+  <table>
+    <tr><th>เกิดอะไรขึ้น</th><th>ดูเป็นอย่างไร</th><th>ควรทำอย่างไร</th></tr>
+    <tr><td><strong>มีโปรแกรมจับพอร์ตอยู่</strong></td><td>ข้อผิดพลาดบอกว่าแอดเดรสถูกใช้งานอยู่แล้ว (EADDRINUSE หรือข้อผิดพลาด Windows 10048) และโปรแกรมนั้นจะปรากฏในรายการซ็อกเก็ต</td><td>ปิดโปรแกรมนั้น หรือเลือกพอร์ตอื่น</td></tr>
+    <tr><td><strong>Windows สงวนพอร์ตไว้</strong></td><td>ข้อผิดพลาดบอกว่าการเข้าถึงถูกห้าม (ข้อผิดพลาด Windows 10013) ทั้งที่ไม่มีอะไรรับฟังอยู่ และไม่มีโปรแกรมใดปรากฏในรายการ</td><td>เลือกพอร์ตนอกช่วงที่สงวนไว้ หรือปล่อยช่วงนั้น การรีสตาร์ตบริการ WinNAT มักช่วยได้</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>ด้วยสิ่งที่ Windows มีอยู่แล้ว</h2>
+  <p>รายการซ็อกเก็ตระบุเจ้าของเป็น ID ของโพรเซส ให้หาพอร์ตก่อน แล้วค่อยหา ID:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>ทำแบบเดียวกันใน PowerShell ได้ทั้ง TCP และ UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>ถ้าไม่มีโปรแกรมใดจับพอร์ต ให้ถามว่า Windows สงวนช่วงใดไว้บ้าง:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>รันอีกครั้งด้วย protocol=udp ช่วงที่สงวนถูกเก็บแยกตามโปรโตคอล พอร์ตหนึ่งจึงอาจว่างสำหรับ UDP แต่ถูกสงวนสำหรับ TCP</p>
+</section>
+
+<section>
+  <h2>ด้วยแท็บ {{app.app.tabs.tools}}</h2>
+  <p>แท็บ <strong>{{app.app.tabs.tools}}</strong> ตอบคำถามเดียวกันได้โดยไม่ต้องใช้คอนโซล:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> แสดงซ็อกเก็ต TCP และ UDP ทุกตัวในคอมพิวเตอร์ คล้าย <code>netstat -ano</code> ได้แก่ สิ่งที่กำลังรับฟัง สิ่งที่เชื่อมต่ออยู่ สถานะ และโปรแกรมเจ้าของ ไม่ต้องมีเซสชัน ค้นหาได้ด้วย <code>lport:8080</code> หรือ <code>state:listen</code></li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> ถามสิ่งที่เซิร์ฟเวอร์ของคุณถาม คือโปรแกรมใช้พอร์ตนี้ได้หรือไม่ พิมพ์ 8080 รายการอย่าง <code>80, 443</code> หรือช่วงอย่าง <code>9000-9100</code> (สูงสุด 1000 พอร์ต) แล้วกด <strong>{{app.tools.portcheck.check}}</strong> แต่ละพอร์ตจะถูกลองทั้ง TCP และ UDP บน IPv4 และ IPv6 แล้วทำเครื่องหมายเป็น <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (พร้อมโปรแกรมและ PID) หรือ <strong>{{app.tools.portcheck.verdict.reserved}}</strong></li>
+  </ul>
+  <p>ผลจึงเป็นตาราง ไม่ใช่แค่ใช่หรือไม่ใช่ เพราะ Windows สงวนช่วงแยกตามโปรโตคอล และโปรแกรมที่รับฟังบน IPv6 อาจจับพอร์ตที่ว่างอยู่บน IPv4</p>
+  <p>ไม่มีอะไรถูกส่งผ่านเครือข่าย สำหรับแต่ละพอร์ต เครื่องมือจะขอพอร์ตจาก Windows บนแอดเดรสลูปแบ็กของคอมพิวเตอร์เอง แล้วคืนทันที</p>
+</section>
+
+<section>
+  <h2>เมื่อรู้แล้วว่าใครจับอยู่</h2>
+  <p>คลิกขวาที่แถวในตารางใดก็ได้เพื่อเลือกโปรแกรมที่จับพอร์ตเป็นเป้าหมาย การทำเช่นนี้เพียงกรอกช่องเป้าหมาย และไม่มีอะไรเปลี่ยนจนกว่าคุณจะกด <strong>{{app.buttons.start}}</strong> ขั้นตอนต่อไปอยู่ที่ <a href="../cho-chong-ap-diao/">เล็งไปที่แอปเดียว</a></p>
+</section>
+
+<section>
+  <h2>สิ่งที่ไม่ทำ</h2>
+  <p>เครื่องมืออ่านอย่างเดียวและไม่ซ่อมแซม จะไม่ปิดโปรแกรมและไม่ปล่อยช่วงที่สงวนไว้ ซ็อกเก็ตของบัญชีอื่นจะไม่แสดงโปรแกรม เว้นแต่เครื่องมือรันในฐานะผู้ดูแลระบบ</p>
+</section>
+
+<section>
+  <h2>ต่อไป</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

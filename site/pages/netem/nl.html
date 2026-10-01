@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem en Network Link Conditioner onder Windows</h1>
+  <p class="lead">Onder Linux heb je tc netem en op een Mac heb je Network Link Conditioner. Windows heeft niets ingebouwd dat vertraging en verlies toevoegt. Deze pagina zet wat je al kent om naar Bean Network Tester en wijst aan waar de getallen niet overgaan.</p>
+</section>
+
+<section>
+  <h2>De netem-opties, een voor een</h2>
+  <p>Voeg <code>--target</code> en <code>--duration</code> toe aan elk commando hier, anders werkt het op de hele computer.</p>
+  <table>
+    <tr><th>netem</th><th>Instelling in het venster</th><th>Vlag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Verlies in reeksen.</strong> De correlatiewaarde in netem is geen reekslengte. {{app.fields.loss_burst}} is het gemiddelde aantal pakketten dat achter elkaar verloren gaat, het dichtstbijzijnde equivalent.</li>
+    <li><strong>Herordenen.</strong> Er is geen herordeningspercentage. Een piek vertraagt een enkel pakket zodat de pakketten die erna zijn verzonden het inhalen, en de teller voor herordende pakketten op de pagina {{app.app.tabs.statistics}} laat zien of dat echt gebeurde.</li>
+    <li><strong>Wachtrijgrootte.</strong> De limit van netem telt pakketten. {{app.fields.buffer}} is een tijd in milliseconden.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Drie verschillen om te kennen</h2>
+  <p><strong>Richting.</strong> netem vertraagt wat een interface verlaat, en het antwoord komt onaangeroerd terug. Deze tool vangt beide richtingen op, dus <code>--latency 100</code> voegt ongeveer 200 ms toe aan een ping: 100 heen en 100 terug. Om te krijgen wat netem doet, vang je alleen uitgaand verkeer op:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Eenheden.</strong> Een netem-rate is in bits per seconde. De velden voor de snelheidslimiet zijn in KB/s, met K = 1024. Omrekening van megabits:</p>
+  <table>
+    <tr><th>netem-rate</th><th>Veld voor de snelheidslimiet, in KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Bereik.</strong> tc vormt een hele netwerkinterface en heeft root nodig. Deze tool richt zich met <code>--target</code> op een programma en heeft beheerdersrechten nodig.</p>
+</section>
+
+<section>
+  <h2>Als je Network Link Conditioner kent</h2>
+  <p>Het gereedschap van Apple werkt met benoemde profielen. De dichtstbijzijnde hier:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Dichtstbij hier</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} ingesteld op 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Daar is geen profiel voor. Typ de snelheidslimiet en de vertraging zelf in en bewaar ze als eigen profiel met de knop {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>De getallen zijn niet van Apple, zie een profiel dus als beginpunt. Elke waarde die een profiel instelt, staat op de <a href="../referentietabellen/">referentiepagina</a>.</p>
+</section>
+
+<section>
+  <h2>Wat je onder Windows erbij krijgt</h2>
+  <ul>
+    <li><strong>Een programma, niet de hele computer.</strong> <a href="../een-app-als-doel/">Richt de verstoring op een enkele app</a> terwijl de rest van de machine normaal blijft.</li>
+    <li><strong>Een tijdlijn in plaats van een shellscript.</strong> <a href="../scenarios-in-de-tijd/">Scenario's op tijd</a> veranderen de instellingen op vaste seconden, wat onder Linux een script van <code>tc</code> en <code>sleep</code> doet.</li>
+    <li><strong>Een pipeline kan het draaien.</strong> Hetzelfde uitvoerbare bestand <a href="../netwerktests-in-ci/">draait in CI</a> en rapporteert met exitcodes.</li>
+  </ul>
+  <p>Gebruik onder Linux of macOS de originelen. Deze tool draait alleen onder Windows.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Windows पर netem और Network Link Conditioner</h1>
+  <p class="lead">Linux में tc netem है और Mac में Network Link Conditioner। Windows में देरी और पैकेट-हानि जोड़ने वाला कोई अंतर्निहित टूल नहीं है। यह पेज आपके जाने-पहचाने विकल्पों को Bean Network Tester से जोड़ता है और बताता है कि कहाँ संख्याएँ सीधे लागू नहीं होतीं।</p>
+</section>
+
+<section>
+  <h2>netem के विकल्प, एक-एक करके</h2>
+  <p>यहाँ हर कमांड में <code>--target</code> और <code>--duration</code> जोड़ें, वरना वह पूरे कंप्यूटर पर असर डालेगा।</p>
+  <table>
+    <tr><th>netem</th><th>विंडो में सेटिंग</th><th>फ़्लैग</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>बर्स्ट हानि।</strong> netem का correlation मान बर्स्ट की लंबाई नहीं है। {{app.fields.loss_burst}} लगातार खोए पैकेटों की औसत संख्या है, जो सबसे नज़दीकी बराबरी है।</li>
+    <li><strong>क्रम बदलना।</strong> क्रम बदलने का कोई प्रतिशत नहीं है। एक स्पाइक एक अकेले पैकेट को देर कराता है ताकि उसके बाद भेजे गए पैकेट उससे आगे निकल जाएँ, और {{app.app.tabs.statistics}} पेज पर क्रम बदले पैकेटों की गिनती बताती है कि ऐसा सचमुच हुआ या नहीं।</li>
+    <li><strong>कतार का आकार।</strong> netem का limit पैकेट गिनता है। {{app.fields.buffer}} मिलीसेकंड में एक समय है।</li>
+  </ul>
+</section>
+
+<section>
+  <h2>तीन अंतर जो जानना ज़रूरी है</h2>
+  <p><strong>दिशा।</strong> netem उसे देर कराता है जो इंटरफ़ेस से बाहर जाता है, और जवाब बिना छुए लौटता है। यह टूल दोनों दिशाएँ पकड़ता है, इसलिए <code>--latency 100</code> पिंग में लगभग 200 ms जोड़ता है: जाते समय 100 और लौटते समय 100। netem जैसा व्यवहार पाने के लिए सिर्फ़ बाहर जाने वाला ट्रैफ़िक पकड़ें:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>इकाइयाँ।</strong> netem की दर बिट प्रति सेकंड में होती है। गति सीमा के खाने KB/s में हैं, जहाँ K = 1024। मेगाबिट का रूपांतरण:</p>
+  <table>
+    <tr><th>netem दर</th><th>गति सीमा का खाना, KB/s में</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>दायरा।</strong> tc पूरे नेटवर्क इंटरफ़ेस को आकार देता है और root माँगता है। यह टूल <code>--target</code> से एक प्रोग्राम को निशाना बनाता है और एडमिनिस्ट्रेटर अधिकार माँगता है।</p>
+</section>
+
+<section>
+  <h2>अगर आप Network Link Conditioner जानते हैं</h2>
+  <p>Apple का टूल नामित प्रोफ़ाइलों से चलता है। यहाँ सबसे नज़दीकी:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>यहाँ सबसे नज़दीकी</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} को 100 पर सेट करें</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>इसके लिए कोई प्रोफ़ाइल नहीं है। गति सीमा और विलंबता खुद लिखें, फिर {{app.buttons.save_as}} बटन से उन्हें अपनी प्रोफ़ाइल के रूप में सहेजें।</td></tr>
+  </table>
+  <p>ये संख्याएँ Apple की नहीं हैं, इसलिए प्रोफ़ाइल को शुरुआती बिंदु मानें। प्रोफ़ाइल जो भी मान सेट करती है, वह <a href="../sandarbh-talika/">संदर्भ पेज</a> पर सूचीबद्ध है।</p>
+</section>
+
+<section>
+  <h2>Windows पर आपको क्या मिलता है</h2>
+  <ul>
+    <li><strong>एक प्रोग्राम, पूरा कंप्यूटर नहीं।</strong> <a href="../ek-app-par-nishana/">गड़बड़ी को एक ही ऐप पर साधें</a>, जबकि मशीन का बाकी हिस्सा सामान्य रहता है।</li>
+    <li><strong>शेल स्क्रिप्ट की जगह टाइमलाइन।</strong> <a href="../samay-ke-anusar-scenario/">समयबद्ध परिदृश्य</a> तय सेकंडों पर सेटिंग बदलते हैं, जो Linux में <code>tc</code> और <code>sleep</code> की स्क्रिप्ट करती है।</li>
+    <li><strong>पाइपलाइन इसे चला सकती है।</strong> वही एक्ज़ीक्यूटेबल <a href="../ci-mein-network-test/">CI में चलता है</a> और एग्ज़िट कोड से नतीजा बताता है।</li>
+  </ul>
+  <p>Linux या macOS पर मूल टूल इस्तेमाल करें। यह टूल सिर्फ़ Windows पर चलता है।</p>
+</section>
+
+<section>
+  <h2>आगे</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

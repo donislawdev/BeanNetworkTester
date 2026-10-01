@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Яка програма використовує цей порт?</h1>
+  <p class="lead">Сервер не запускається на порту 8080, або тест зупиняється з "address already in use". Або порт уже тримає програма, або його зарезервувала Windows, а помилки виглядають схоже. Ось як їх розрізнити.</p>
+</section>
+
+<section>
+  <h2>Дві причини, чому порт не відкривається</h2>
+  <table>
+    <tr><th>Що сталося</th><th>Як це проявляється</th><th>Що робити</th></tr>
+    <tr><td><strong>Порт тримає програма</strong></td><td>Помилка повідомляє, що адресу вже використовують (EADDRINUSE або помилка Windows 10048). Програма видна в списку сокетів.</td><td>Закрийте цю програму або виберіть інший порт.</td></tr>
+    <tr><td><strong>Порт зарезервувала Windows</strong></td><td>Помилка повідомляє, що доступ заборонено (помилка Windows 10013), хоча ніхто не слухає. У списку немає жодної програми.</td><td>Виберіть порт поза зарезервованим діапазоном або звільніть діапазон. Часто допомагає перезапуск служби WinNAT.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Засобами самої Windows</h2>
+  <p>Список сокетів вказує власника як ідентифікатор процесу. Знайдіть порт, а тоді ідентифікатор:</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>Те саме в PowerShell, для TCP і для UDP:</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>Якщо порт не тримає жодна програма, запитайте, які діапазони Windows відклала:</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>Запустіть ще раз з protocol=udp. Діапазони ведуться окремо для кожного протоколу, тож порт може бути вільним для UDP і зарезервованим для TCP.</p>
+</section>
+
+<section>
+  <h2>У вкладці {{app.app.tabs.tools}}</h2>
+  <p>Вкладка <strong>{{app.app.tabs.tools}}</strong> відповідає на ті самі запитання без консолі:</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong> перелічує всі сокети TCP і UDP на комп'ютері, як <code>netstat -ano</code>: що слухає, що з'єднано, у якому стані і якій програмі належить. Сеанс для цього не потрібен. Шукати можна через <code>lport:8080</code> або <code>state:listen</code>.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong> ставить те саме запитання, що й ваш сервер: чи може програма використати цей порт? Введіть 8080, список на кшталт <code>80, 443</code> або діапазон на кшталт <code>9000-9100</code> (до 1000 портів) і натисніть <strong>{{app.tools.portcheck.check}}</strong>. Кожен порт перевіряється для TCP і UDP, в IPv4 та IPv6, і позначається як <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong> (з програмою та її PID) або <strong>{{app.tools.portcheck.verdict.reserved}}</strong>.</li>
+  </ul>
+  <p>Тому відповідь - таблиця, а не "так" чи "ні": Windows резервує діапазони окремо для кожного протоколу, а програма, що слухає в IPv6, може тримати порт, вільний в IPv4.</p>
+  <p>Нічого не надсилається мережею. Для кожного порту інструмент просить його в Windows на власній адресі зворотної петлі комп'ютера й одразу повертає.</p>
+</section>
+
+<section>
+  <h2>Коли ви знаєте, хто його тримає</h2>
+  <p>Клацніть рядок у будь-якій із таблиць правою кнопкою, щоб вибрати ціллю програму, яка тримає порт. Це лише заповнить поле цілі, і нічого не зміниться, доки ви не натиснете <strong>{{app.buttons.start}}</strong>. Що робити далі, описано в розділі <a href="../tsil-odyn-zastosunok/">одна програма</a>.</p>
+</section>
+
+<section>
+  <h2>Чого вона не робить</h2>
+  <p>Вона читає, а не лагодить: ніколи не закриває програму і не звільняє зарезервований діапазон. Сокет іншого облікового запису не показує програму, якщо інструмент не запущено від імені адміністратора.</p>
+</section>
+
+<section>
+  <h2>Далі</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

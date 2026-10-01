@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem dan Network Link Conditioner di Windows</h1>
+  <p class="lead">Di Linux ada tc netem, dan di Mac ada Network Link Conditioner. Windows tidak punya fitur bawaan yang menambah jeda dan kehilangan paket. Halaman ini memetakan yang sudah Anda kenal ke Bean Network Tester, dan menunjukkan di mana angkanya tidak bisa dipindahkan begitu saja.</p>
+</section>
+
+<section>
+  <h2>Opsi netem, satu per satu</h2>
+  <p>Tambahkan <code>--target</code> dan <code>--duration</code> pada setiap perintah di sini, atau perintah itu memengaruhi seluruh komputer.</p>
+  <table>
+    <tr><th>netem</th><th>Pengaturan di jendela</th><th>Flag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Kehilangan beruntun.</strong> Nilai korelasi di netem bukan panjang rentetan. {{app.fields.loss_burst}} adalah rata-rata jumlah paket yang hilang berturut-turut, padanan terdekat.</li>
+    <li><strong>Pengurutan ulang.</strong> Tidak ada persentase pengurutan ulang. Sebuah lonjakan menunda satu paket sehingga paket yang dikirim sesudahnya mendahuluinya, dan penghitung paket yang tertukar urutannya di halaman {{app.app.tabs.statistics}} menunjukkan apakah itu benar-benar terjadi.</li>
+    <li><strong>Ukuran antrean.</strong> limit di netem menghitung paket. {{app.fields.buffer}} adalah waktu dalam milidetik.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Tiga perbedaan yang perlu diketahui</h2>
+  <p><strong>Arah.</strong> netem menunda apa yang keluar dari sebuah antarmuka, dan balasannya kembali tanpa diubah. Alat ini menangkap kedua arah, jadi <code>--latency 100</code> menambah sekitar 200 ms pada ping: 100 saat pergi dan 100 saat kembali. Untuk mendapatkan perilaku netem, tangkap lalu lintas keluar saja:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Satuan.</strong> Kecepatan di netem dinyatakan dalam bit per detik. Kolom batas kecepatan memakai KB/s, dengan K = 1024. Konversi megabit:</p>
+  <table>
+    <tr><th>kecepatan netem</th><th>Kolom batas kecepatan, dalam KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Cakupan.</strong> tc membentuk seluruh antarmuka jaringan dan butuh root. Alat ini membidik satu program dengan <code>--target</code> dan butuh hak administrator.</p>
+</section>
+
+<section>
+  <h2>Jika Anda mengenal Network Link Conditioner</h2>
+  <p>Alat milik Apple bekerja dengan profil bernama. Yang terdekat di sini:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Terdekat di sini</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} diatur ke 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Tidak ada profil padanannya. Ketik sendiri batas kecepatan dan latensinya, lalu simpan sebagai profil Anda dengan tombol {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Angkanya bukan angka Apple, jadi anggap profil sebagai titik awal. Setiap nilai yang diatur sebuah profil tercantum di <a href="../tabel-referensi/">halaman referensi</a>.</p>
+</section>
+
+<section>
+  <h2>Yang Anda dapat di Windows</h2>
+  <ul>
+    <li><strong>Satu program, bukan seluruh komputer.</strong> <a href="../sasar-satu-aplikasi/">Arahkan gangguan ke satu aplikasi</a> sementara bagian mesin lainnya tetap normal.</li>
+    <li><strong>Lini masa, bukan skrip shell.</strong> <a href="../skenario-berbasis-waktu/">Skenario berjadwal</a> mengubah pengaturan pada detik yang ditentukan, seperti yang dilakukan skrip <code>tc</code> dan <code>sleep</code> di Linux.</li>
+    <li><strong>Pipeline bisa menjalankannya.</strong> Berkas eksekusi yang sama <a href="../uji-jaringan-di-ci/">berjalan di CI</a> dan melapor lewat kode keluar.</li>
+  </ul>
+  <p>Di Linux atau macOS, pakai yang aslinya. Alat ini hanya berjalan di Windows.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

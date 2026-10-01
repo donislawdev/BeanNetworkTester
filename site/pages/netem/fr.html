@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem et Network Link Conditioner sous Windows</h1>
+  <p class="lead">Sous Linux, il y a tc netem, et sur Mac, le Network Link Conditioner. Windows n'a rien d'intégré qui ajoute du délai et des pertes. Cette page transpose ce que vous connaissez dans Bean Network Tester et indique où les chiffres ne se transposent pas.</p>
+</section>
+
+<section>
+  <h2>Les options de netem, une par une</h2>
+  <p>Ajoutez <code>--target</code> et <code>--duration</code> à chaque commande ci-dessous, sinon elle touche tout l'ordinateur.</p>
+  <table>
+    <tr><th>netem</th><th>Réglage dans la fenêtre</th><th>Option</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Pertes en rafale.</strong> La valeur de corrélation de netem n'est pas une longueur de rafale. {{app.fields.loss_burst}} est le nombre moyen de paquets perdus d'affilée, l'équivalent le plus proche.</li>
+    <li><strong>Réordonnancement.</strong> Il n'y a pas de pourcentage de réordonnancement. Un pic retarde un seul paquet, que ceux envoyés après lui dépassent, et le compteur de paquets réordonnés de la page {{app.app.tabs.statistics}} indique si cela s'est vraiment produit.</li>
+    <li><strong>Taille de la file.</strong> La limite de netem compte des paquets. {{app.fields.buffer}} est une durée en millisecondes.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Trois différences à connaître</h2>
+  <p><strong>Sens.</strong> netem retarde ce qui quitte une interface, et la réponse revient intacte. Cet outil capture les deux sens, donc <code>--latency 100</code> ajoute environ 200 ms à un ping : 100 à l'aller et 100 au retour. Pour obtenir ce que fait netem, ne capturez que le trafic sortant :</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Unités.</strong> Un débit netem s'exprime en bits par seconde. Les champs de limite de vitesse sont en KB/s, avec K = 1024. Conversion des mégabits :</p>
+  <table>
+    <tr><th>débit netem</th><th>Champ de limite de vitesse, en KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Portée.</strong> tc façonne toute une interface réseau et exige root. Cet outil vise un seul programme avec <code>--target</code> et exige les droits d'administrateur.</p>
+</section>
+
+<section>
+  <h2>Si vous connaissez Network Link Conditioner</h2>
+  <p>L'outil d'Apple fonctionne avec des profils nommés. Les plus proches ici :</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Le plus proche ici</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} réglé sur 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Pas de profil équivalent. Saisissez vous-même la limite de vitesse et la latence, puis gardez-les comme profil personnel avec le bouton {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Les chiffres ne sont pas ceux d'Apple : prenez un profil comme point de départ. Chaque valeur qu'un profil définit figure sur la <a href="../tableaux-de-reference/">page de référence</a>.</p>
+</section>
+
+<section>
+  <h2>Ce que vous gagnez sous Windows</h2>
+  <ul>
+    <li><strong>Un programme, pas tout l'ordinateur.</strong> <a href="../cibler-une-application/">Visez une seule application</a> avec la dégradation pendant que le reste de la machine reste normal.</li>
+    <li><strong>Une chronologie au lieu d'un script shell.</strong> Les <a href="../scenarios-dans-le-temps/">scénarios chronométrés</a> changent les réglages à des secondes précises, ce que fait sous Linux un script de <code>tc</code> et de <code>sleep</code>.</li>
+    <li><strong>Un pipeline peut le lancer.</strong> Le même exécutable <a href="../tests-reseau-en-ci/">tourne en CI</a> et rend compte par codes de sortie.</li>
+  </ul>
+  <p>Sous Linux ou macOS, utilisez les originaux. Cet outil ne fonctionne que sous Windows.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

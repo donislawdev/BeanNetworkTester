@@ -16,6 +16,7 @@ on the two failure modes that are invisible:
   longer reaches the releases page) - the palette is read out of ``theme.py`` and
   the URLs out of one registry, and these check that it stayed that way.
 """
+import glob
 import os
 import posixpath
 import re
@@ -501,6 +502,35 @@ def test_the_program_strings_really_reach_the_built_pages(tmp_path):
                       strings[key] in text, "(not in the built page)")
                 used += 1
     check("the pages use the program's strings at all", used >= 10, f"({used})")
+
+
+def test_every_flag_a_page_names_is_one_the_command_line_has():
+    """A command in a guide is a promise that it runs when pasted.
+
+    The guides carry commands people copy into a terminal, and a flag that was renamed
+    or never existed fails there, in front of the reader, with nothing on the site to
+    say so. The program's own ``--help`` is the list of record, so this reads the
+    pages (every language, source files, before any templating) and holds each
+    ``--flag`` in them to it. The flags are compared as written: ``--loss-burst`` is
+    not ``--loss`` followed by something.
+    """
+    from beantester import build_arg_parser
+    known = set(re.findall(r"(?<![\w-])--[a-z][a-z0-9-]*", build_arg_parser().format_help()))
+    check("the help lists the command line's flags", len(known) >= 40, f"({len(known)})")
+    # The download page shows how to verify the file with the GitHub CLI, and those two
+    # flags are that tool's. Named per page, so a Bean command on any other page cannot
+    # hide behind them.
+    other_tools = {"download": {"--repo", "--predicate-type"}}
+    seen = 0
+    for path in sorted(glob.glob(os.path.join(SITE, "pages", "*", "*.html"))):
+        rel = os.path.relpath(path, SITE).replace(os.sep, "/")
+        page = rel.split("/")[1]
+        for flag in sorted(set(re.findall(r"(?<![\w-])--[a-z][a-z0-9-]*", _read(path)))):
+            if flag in other_tools.get(page, ()):
+                continue
+            check(f"{rel}: {flag} is a flag the program has", flag in known)
+            seen += 1
+    check("the pages name flags at all", seen >= 100, f"({seen})")
 
 
 def test_the_exit_codes_on_the_page_are_the_programs_exit_codes(tmp_path):

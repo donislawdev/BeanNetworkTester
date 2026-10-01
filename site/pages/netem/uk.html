@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem і Network Link Conditioner у Windows</h1>
+  <p class="lead">У Linux є tc netem, а на Mac є Network Link Conditioner. У Windows немає нічого вбудованого, що додає затримку й втрати. Ця сторінка переносить те, що ви вже знаєте, на Bean Network Tester і показує, де числа не переносяться.</p>
+</section>
+
+<section>
+  <h2>Опції netem по одній</h2>
+  <p>Додавайте <code>--target</code> і <code>--duration</code> до кожної команди тут, інакше вона зачепить увесь комп'ютер.</p>
+  <table>
+    <tr><th>netem</th><th>Налаштування у вікні</th><th>Прапорець</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Втрати серіями.</strong> Значення кореляції в netem - це не довжина серії. {{app.fields.loss_burst}} - середня кількість пакетів, утрачених поспіль, найближчий аналог.</li>
+    <li><strong>Переставлення.</strong> Відсотка переставлення немає. Сплеск затримує один пакет, і надіслані після нього його випереджають, а лічильник переставлених пакетів на сторінці {{app.app.tabs.statistics}} показує, чи це справді сталося.</li>
+    <li><strong>Розмір черги.</strong> Параметр limit у netem рахується в пакетах. {{app.fields.buffer}} - це час у мілісекундах.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Три відмінності, про які варто знати</h2>
+  <p><strong>Напрямок.</strong> netem затримує те, що залишає інтерфейс, а відповідь повертається недоторканою. Цей інструмент захоплює обидва напрямки, тому <code>--latency 100</code> додає до пінгу близько 200 мс: 100 туди й 100 назад. Щоб отримати те, що робить netem, захоплюйте лише вихідний трафік:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Одиниці.</strong> Швидкість у netem задається в бітах за секунду. Поля обмеження швидкості - у KB/s, де K = 1024. Переведення мегабітів:</p>
+  <table>
+    <tr><th>швидкість у netem</th><th>Поле обмеження швидкості, у KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Охоплення.</strong> tc формує весь мережевий інтерфейс і вимагає root. Цей інструмент націлюється на одну програму через <code>--target</code> і вимагає прав адміністратора.</p>
+</section>
+
+<section>
+  <h2>Якщо ви знаєте Network Link Conditioner</h2>
+  <p>Інструмент Apple працює з іменованими профілями. Найближчі з них тут:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Найближче тут</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}}, рівне 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Для нього профілю немає. Введіть обмеження швидкості й затримку самі, а потім збережіть їх як власний профіль кнопкою {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Числа не від Apple, тому сприймайте профіль як відправну точку. Усі значення, які задає профіль, перелічено на <a href="../dovidkovi-tablytsi/">довідковій сторінці</a>.</p>
+</section>
+
+<section>
+  <h2>Що ви отримуєте у Windows</h2>
+  <ul>
+    <li><strong>Одна програма, а не весь комп'ютер.</strong> <a href="../tsil-odyn-zastosunok/">Спрямуйте завади на один застосунок</a>, поки решта машини працює як звичайно.</li>
+    <li><strong>Часова шкала замість shell-скрипту.</strong> <a href="../stsenarii-v-chasi/">Сценарії за часом</a> змінюють налаштування в задані секунди, як у Linux скрипт із <code>tc</code> і <code>sleep</code>.</li>
+    <li><strong>Конвеєр може його запустити.</strong> Той самий виконуваний файл <a href="../testy-merezhi-v-ci/">працює в CI</a> і повідомляє результат кодами завершення.</li>
+  </ul>
+  <p>У Linux або macOS використовуйте оригінали. Цей інструмент працює лише у Windows.</p>
+</section>
+
+<section>
+  <h2>Далі</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

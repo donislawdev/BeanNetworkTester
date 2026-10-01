@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>netem a Network Link Conditioner ve Windows</h1>
+  <p class="lead">V Linuxu je tc netem a na Macu Network Link Conditioner. Windows nemá nic vestavěného, co přidává zpoždění a ztráty. Tato stránka převádí to, co už znáte, na Bean Network Tester a ukazuje, kde se čísla nepřenášejí.</p>
+</section>
+
+<section>
+  <h2>Volby netem, jedna po druhé</h2>
+  <p>Ke každému příkazu zde přidejte <code>--target</code> a <code>--duration</code>, jinak zasáhne celý počítač.</p>
+  <table>
+    <tr><th>netem</th><th>Nastavení v okně</th><th>Přepínač</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Ztráty v dávkách.</strong> Hodnota korelace v netem není délka dávky. {{app.fields.loss_burst}} je průměrný počet paketů ztracených za sebou, tedy nejbližší ekvivalent.</li>
+    <li><strong>Přeuspořádání.</strong> Procento přeuspořádání neexistuje. Špička zpozdí jediný paket, takže ho ty odeslané později předběhnou, a počítadlo přeuspořádaných paketů na stránce {{app.app.tabs.statistics}} ukáže, jestli se to opravdu stalo.</li>
+    <li><strong>Velikost fronty.</strong> Limit v netem počítá pakety. {{app.fields.buffer}} je čas v milisekundách.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Tři rozdíly, které je dobré znát</h2>
+  <p><strong>Směr.</strong> netem zpožďuje to, co opouští rozhraní, a odpověď se vrací nedotčená. Tento nástroj zachytává oba směry, takže <code>--latency 100</code> přidá k pingu asi 200 ms: 100 tam a 100 zpět. Chcete-li dosáhnout toho, co dělá netem, zachytávejte jen odchozí provoz:</p>
+<pre><code>BeanNetworkTester.exe --filter out --latency 100 --jitter 20 --target myapp.exe --duration 120</code></pre>
+  <p><strong>Jednotky.</strong> Rychlost v netem je v bitech za sekundu. Pole omezení rychlosti jsou v KB/s, kde K = 1024. Převod megabitů:</p>
+  <table>
+    <tr><th>rychlost v netem</th><th>Pole omezení rychlosti, v KB/s</th></tr>
+    <tr><td><code>1mbit</code></td><td>122</td></tr>
+    <tr><td><code>5mbit</code></td><td>610</td></tr>
+    <tr><td><code>10mbit</code></td><td>1221</td></tr>
+    <tr><td><code>50mbit</code></td><td>6104</td></tr>
+    <tr><td><code>100mbit</code></td><td>12207</td></tr>
+  </table>
+  <p><strong>Rozsah.</strong> tc tvaruje celé síťové rozhraní a vyžaduje root. Tento nástroj míří na jediný program přes <code>--target</code> a vyžaduje práva správce.</p>
+</section>
+
+<section>
+  <h2>Pokud znáte Network Link Conditioner</h2>
+  <p>Nástroj od Applu pracuje s pojmenovanými profily. Nejbližší zde:</p>
+  <table>
+    <tr><th>Network Link Conditioner</th><th>Nejbližší zde</th></tr>
+    <tr><td>100% Loss</td><td>{{app.fields.loss}} nastavené na 100</td></tr>
+    <tr><td>3G</td><td>{{app.presets.3g}}</td></tr>
+    <tr><td>DSL</td><td>{{app.presets.dsl}}</td></tr>
+    <tr><td>LTE</td><td>{{app.presets.lte}}</td></tr>
+    <tr><td>WiFi</td><td>{{app.presets.good_wifi}}</td></tr>
+    <tr><td>Very Bad Network</td><td>{{app.presets.terrible}}</td></tr>
+    <tr><td>Edge</td><td>Odpovídající profil neexistuje. Zadejte omezení rychlosti a latenci sami a uložte je jako vlastní profil tlačítkem {{app.buttons.save_as}}.</td></tr>
+  </table>
+  <p>Čísla nejsou od Applu, berte proto profil jako výchozí bod. Každá hodnota, kterou profil nastavuje, je uvedena na <a href="../referencni-tabulky/">referenční stránce</a>.</p>
+</section>
+
+<section>
+  <h2>Co získáte ve Windows</h2>
+  <ul>
+    <li><strong>Jeden program, ne celý počítač.</strong> <a href="../cileni-na-jednu-aplikaci/">Zaměřte zhoršení na jedinou aplikaci</a>, zatímco zbytek počítače zůstane v normálu.</li>
+    <li><strong>Časová osa místo shellového skriptu.</strong> <a href="../scenare-v-case/">Časované scénáře</a> mění nastavení v zadaných sekundách, což v Linuxu dělá skript z <code>tc</code> a <code>sleep</code>.</li>
+    <li><strong>Spustí ho i pipeline.</strong> Stejný spustitelný soubor <a href="../sitove-testy-v-ci/">běží v CI</a> a hlásí výsledek přes návratové kódy.</li>
+  </ul>
+  <p>V Linuxu nebo macOS používejte originály. Tento nástroj běží jen ve Windows.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

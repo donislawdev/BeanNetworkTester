@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>哪个程序在使用这个端口？</h1>
+  <p class="lead">服务器无法在 8080 端口启动，或者测试以 "address already in use" 报错结束。要么已有程序占用了该端口，要么 Windows 把它预留了，而这两种错误看起来很像。下面说明如何区分。</p>
+</section>
+
+<section>
+  <h2>端口打不开的两个原因</h2>
+  <table>
+    <tr><th>发生了什么</th><th>表现</th><th>怎么办</th></tr>
+    <tr><td><strong>有程序占用了端口</strong></td><td>错误提示地址已被使用（EADDRINUSE，或 Windows 错误 10048）。该程序会出现在套接字列表中。</td><td>关闭该程序，或换一个端口。</td></tr>
+    <tr><td><strong>Windows 预留了端口</strong></td><td>错误提示访问被禁止（Windows 错误 10013），但并没有程序在监听。列表中没有任何程序。</td><td>换一个预留范围之外的端口，或释放该范围。重启 WinNAT 服务通常有效。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>用 Windows 自带的工具</h2>
+  <p>套接字列表用进程 ID 表示所有者。先找到端口，再查这个 ID：</p>
+<pre><code>netstat -ano | findstr :8080
+tasklist /fi "PID eq 4321"</code></pre>
+  <p>在 PowerShell 中同样可以查，TCP 和 UDP 都行：</p>
+<pre><code>Get-NetTCPConnection -LocalPort 8080 | Select-Object LocalAddress, State, OwningProcess
+Get-NetUDPEndpoint -LocalPort 5353 | Select-Object LocalAddress, OwningProcess
+Get-Process -Id 4321</code></pre>
+  <p>如果没有程序占用端口，就查看 Windows 预留了哪些范围：</p>
+<pre><code>netsh int ipv4 show excludedportrange protocol=tcp</code></pre>
+  <p>再用 protocol=udp 运行一次。预留范围按协议分别记录，所以同一个端口可能对 UDP 是空闲的，对 TCP 却被预留。</p>
+</section>
+
+<section>
+  <h2>用 {{app.app.tabs.tools}} 选项卡</h2>
+  <p><strong>{{app.app.tabs.tools}}</strong> 选项卡无需控制台就能回答同样的问题：</p>
+  <ul>
+    <li><strong>{{app.tools.sockets.tab}}</strong>列出这台电脑上的每个 TCP 和 UDP 套接字，类似 <code>netstat -ano</code>：谁在监听、谁已连接、状态如何、归哪个程序所有。它不需要会话。可以用 <code>lport:8080</code> 或 <code>state:listen</code> 搜索。</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>问的正是你的服务器问过的问题：程序能不能使用这个端口？输入 8080、一个列表（如 <code>80, 443</code>）或一个范围（如 <code>9000-9100</code>，最多 1000 个端口），然后点击 <strong>{{app.tools.portcheck.check}}</strong>。每个端口都会针对 TCP 和 UDP、IPv4 和 IPv6 逐一尝试，并标记为 <strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（附带程序及其 PID）或 <strong>{{app.tools.portcheck.verdict.reserved}}</strong>。</li>
+  </ul>
+  <p>所以结果是一张表，而不是简单的“是”或“否”：Windows 按协议分别预留范围，监听 IPv6 的程序可以占着一个在 IPv4 上空闲的端口。</p>
+  <p>不会通过网络发送任何内容。对每个端口，工具都在本机的环回地址上向 Windows 申请它，然后立刻归还。</p>
+</section>
+
+<section>
+  <h2>知道是谁占用之后</h2>
+  <p>在任一表格中右键点击某一行，即可把占用该端口的程序设为目标。这只会填写目标字段，在你点击 <strong>{{app.buttons.start}}</strong> 之前不会有任何改变。接下来怎么做，见<a href="../zhendui-yige-yingyong/">只针对一个应用</a>。</p>
+</section>
+
+<section>
+  <h2>它不做什么</h2>
+  <p>它只读取，不修复：从不关闭程序，也从不释放预留范围。属于其他账户的套接字不会显示程序，除非该工具以管理员身份运行。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
