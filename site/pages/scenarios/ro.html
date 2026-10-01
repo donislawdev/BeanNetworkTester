@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Schimbă condițiile rețelei în timp</h1>
+  <p class="lead">O pierdere fixă de 10% este o condiție de laborator. Conexiunile reale se înrăutățesc, își revin, se blochează patru secunde și revin, iar eroarea pe care o urmărești de obicei locuiește în schimbare, nu în starea stabilă.</p>
+</section>
+
+<section>
+  <h2>Un scenariu este o cronologie</h2>
+  <p>Un singur fișier JSON. Fiecare pas spune <em>la această secundă, aceste setări</em>, iar ce nu menționezi își păstrează valoarea:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Timpii sunt secunde de la începutul rulării, nu pauze între pași. Cu <code>"loop": true</code> cronologia o ia de la capăt când se termină, ceea ce vrei pentru un test lung de anduranță: lasă-o să ruleze și folosește aplicația.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Scenarii gata făcute în program: {{page.scenario_count}}</h2>
+  <p>În folderul <code>scenarios</code> de lângă executabil. Citite din acele fișiere, deci asta ai de fapt:</p>
+  {{page.scenario_table}}
+  <p>Sunt fișiere text obișnuite: deschide unul, schimbă o cifră, salvează. Numele spun ce reproduc: o cafenea aglomerată, o conexiune mobilă care scade de la LTE la 3G, o încărcare care moare la jumătate, un server supraîncărcat, un DNS care nu mai răspunde.</p>
+</section>
+
+<section>
+  <h2>Două moduri mai simple de a obține schimbare</h2>
+  <p>Merită să scrii un scenariu când secvența contează. Când nu, două setări variază singure:</p>
+  <ul>
+    <li><strong>Legătură pornită și oprită</strong>: o lungime de ciclu și cât din el e pauză. Cicluri de zece secunde, patru secunde pauză, la nesfârșit.</li>
+    <li><strong>O programare a vitezei</strong>: o serie de viteze prin care trece limita, ca să se degradeze și să-și revină conexiunea fără un fișier.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>De ce merge cât timp aplicația rulează</h2>
+  <p>Fiecare setare pe care o atinge un scenariu se aplică în direct, sesiunii deja în curs: aplicația nu trebuie repornită și nici instrumentul. Jurnalul de evenimente înregistrează fiecare pas pe măsură ce se petrece, deci când se strică ceva poți vedea ce schimbare l-a precedat. Împerechează asta cu un seed și toată secvența, inclusiv pierderea aleatorie din ea, se repetă exact.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

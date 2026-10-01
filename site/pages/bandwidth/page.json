@@ -103,6 +103,12 @@
       "title": "تحديد سرعة التنزيل والرفع على Windows",
       "description": "حدّد تطبيقًا على Windows بعدد معين من كيلوبايت في الثانية في كل اتجاه، وانظر ماذا يفعل به مودم 56k أو واي فاي الطائرة.",
       "link_text": "تحديد السرعة"
+    },
+    "ro": {
+      "slug": "limitare-viteza",
+      "title": "Limitează viteza de descărcare și încărcare în Windows",
+      "description": "Limitează o aplicație Windows la un număr de KB pe secundă, în ambele sensuri, și vezi ce îi face un modem de 56k sau wifi-ul din avion.",
+      "link_text": "Limitare viteză"
     }
   }
 }

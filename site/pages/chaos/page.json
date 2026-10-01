@@ -103,6 +103,12 @@
       "title": "اختبار فوضى الشبكة على Windows",
       "description": "احقن أعطال الشبكة عمدًا، وكررها بدقة بفضل seed، ودع pipeline يقرر من رمز الخروج هل صمد التطبيق.",
       "link_text": "اختبار الفوضى"
+    },
+    "ro": {
+      "slug": "testare-haos-retea",
+      "title": "Testare de haos pentru rețea în Windows",
+      "description": "Injectează intenționat defecte de rețea, repetă-le exact cu un seed și lasă un pipeline să decidă din codul de ieșire dacă aplicația a rezistat.",
+      "link_text": "Testare de haos"
     }
   }
 }

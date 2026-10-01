@@ -103,6 +103,12 @@
       "title": "أسئلة شائعة حول Bean Network Tester",
       "description": "صلاحيات المسؤول، وهل يمس الجهاز كله، وكيف تتراجع، وتحذير SmartScreen، وماذا يفعل البرنامج ببياناتك.",
       "link_text": "أسئلة وأجوبة"
+    },
+    "ro": {
+      "slug": "intrebari-frecvente",
+      "title": "Întrebări frecvente despre Bean Network Tester",
+      "description": "Drepturile de administrator, dacă afectează tot calculatorul, cum anulezi totul, avertismentul SmartScreen și ce face programul cu datele tale.",
+      "link_text": "Întrebări și răspunsuri"
     }
   }
 }

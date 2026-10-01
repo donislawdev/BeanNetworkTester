@@ -106,6 +106,12 @@
       "dir": "ar",
       "og_locale": "ar_AR",
       "direction": "rtl"
+    },
+    {
+      "code": "ro",
+      "name": "Română",
+      "dir": "ro",
+      "og_locale": "ro_RO"
     }
   ],
   "og_image": "assets/bean.png",

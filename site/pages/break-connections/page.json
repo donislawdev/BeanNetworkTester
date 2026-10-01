@@ -103,6 +103,12 @@
       "title": "قطع الاتصالات وحظر المنافذ على Windows",
       "description": "اقتل الاتصالات، احظر منفذًا أو عنوانًا، اقطع الوصلة لبعض الوقت أو صغّر الحزم حتى لا يمر شيء، وراقب تعافي التطبيق.",
       "link_text": "قطع الاتصالات"
+    },
+    "ro": {
+      "slug": "intrerupe-conexiuni",
+      "title": "Întrerupe conexiuni și blochează porturi în Windows",
+      "description": "Omoară conexiuni, blochează un port sau o adresă, taie legătura o vreme sau micșorează pachetele până nu mai trece nimic, apoi vezi cum își revine aplicația.",
+      "link_text": "Întrerupe conexiuni"
     }
   }
 }

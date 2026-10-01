@@ -103,6 +103,12 @@
       "title": "محاكاة فقدان الحزم على Windows لتطبيق واحد",
       "description": "أسقط نسبة محددة من حزم تطبيق واحد على Windows، وشاهد ما ينكسر، ثم أعد التشغيل نفسه تمامًا بفضل seed.",
       "link_text": "فقدان الحزم"
+    },
+    "ro": {
+      "slug": "pierdere-pachete",
+      "title": "Simulează pierderea de pachete în Windows pentru o aplicație",
+      "description": "Elimină un procent de pachete ale unei aplicații în Windows, vezi ce se strică și reia exact aceeași rulare cu un seed.",
+      "link_text": "Pierdere de pachete"
     }
   }
 }

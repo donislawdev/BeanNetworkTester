@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Întrerupe conexiuni intenționat</h1>
+  <p class="lead">Încet este un fel de rău. Dispărut este altul, și el găsește calea din cod pe care nu a scris-o nimeni: reconectarea, reîncercarea, mesajul care îi spune utilizatorului ce s-a întâmplat.</p>
+  <p>Așa testezi și o aplicație offline fără să scoți nimic din priză: modul LAN lasă rețeaua locală să meargă și ia internetul, iar blocarea unei adrese face un singur serviciu inaccesibil, în timp ce restul conexiunii e în regulă.</p>
+</section>
+
+<section>
+  <h2>Cinci feluri diferite de a dispărea</h2>
+  <table>
+    <tr><th>Setare</th><th>Ce vede aplicația</th></tr>
+    <tr><td><strong>Resetarea conexiunilor</strong></td><td>Conexiunile mor în mijlocul transferului, așa cum le omoară un firewall sau un load balancer. Stabilești cât de des, în procente.</td></tr>
+    <tr><td><strong>Legătură pornită și oprită</strong></td><td>Rețeaua dispare o vreme, apoi revine, iar și iar. Stabilești lungimea ciclului și cât din el înseamnă pauză.</td></tr>
+    <tr><td><strong>Blocarea unui port</strong></td><td>Tot ce merge spre acel port dispare. Nimic altceva nu e atins.</td></tr>
+    <tr><td><strong>Blocarea unei adrese</strong></td><td>Un server devine inaccesibil în timp ce restul internetului merge.</td></tr>
+    <tr><td><strong>Modul LAN</strong></td><td>Rețeaua locală merge în continuare, internetul nu. Exact forma unui captive portal sau a unui uplink mort.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>De la linia de comandă</h2>
+  <p>Omoară aproximativ o conexiune din zece, la o singură aplicație:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Cicluri de zece secunde, cu patru secunde de pauză, adică o legătură care tot vine și pleacă:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Un server inaccesibil, restul în regulă:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Blocarea afectează doar ce numește</h2>
+  <p>Spre deosebire de pierdere sau întârziere, blocarea unui port sau a unei adrese afectează <strong>doar</strong> traficul care se potrivește cu ele. Asta o face cea mai sigură dintre acestea de rulat fără o țintă de proces și este motivul pentru care „fă să dispară această dependență” e o comandă de o linie.</p>
+</section>
+
+<section>
+  <h2>Capcana descărcării moarte</h2>
+  <p>Există și o dimensiune maximă a pachetului. Scade-o puțin și transferurile mari încetinesc. Scade-o la o valoare ca 576 și descărcările se opresc complet, pentru totdeauna, fără nicio eroare, pentru că aceea nu mai e o dimensiune mai mică de pachet, ci clasica gaură neagră în care rețeaua aruncă ce e prea mare și nu spune niciodată.</p>
+  <p>Este un mod real de defectare care merită reprodus intenționat și chiar derutant de întâlnit din greșeală. Dacă o descărcare moare în tăcere imediat după ce ai schimbat această setare, acesta e motivul.</p>
+</section>
+
+<section>
+  <h2>Revenirea la normal</h2>
+  <p>{{app.buttons.stop}} restaurează totul. La fel face închiderea programului și la fel limita de timp, dacă ai setat una. Dacă instrumentul însuși moare în mijlocul unei sesiuni, un watchdog din interiorul lui oprește captura, în loc să-ți lase rețeaua într-o stare stricată.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

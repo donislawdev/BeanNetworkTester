@@ -103,6 +103,12 @@
       "title": "محاكاة شبكة سيئة في CI على Windows",
       "description": "الملف التنفيذي نفسه يعمل دون نافذة، ويبلغ بالنتيجة عبر رموز الخروج وNDJSON، ويتوقف وحده، فيختبر pipeline اتصالًا سيئًا.",
       "link_text": "اختبارات الشبكة في CI"
+    },
+    "ro": {
+      "slug": "teste-retea-in-ci",
+      "title": "Simulează o rețea proastă în CI, în Windows",
+      "description": "Același executabil rulează fără fereastră, raportează prin coduri de ieșire și NDJSON și se oprește singur, deci un pipeline poate testa o conexiune proastă.",
+      "link_text": "Teste de rețea în CI"
     }
   }
 }

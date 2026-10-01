@@ -103,6 +103,12 @@
       "title": "Bean Network Tester - محاكاة شبكة سيئة على Windows",
       "description": "أداة مجانية لنظام Windows تضيف التأخير وفقدان الحزم وتحديد السرعة إلى تطبيق واحد، لتختبر سلوكه على اتصال سيئ.",
       "link_text": "الرئيسية"
+    },
+    "ro": {
+      "slug": "",
+      "title": "Bean Network Tester - simulează o rețea proastă în Windows",
+      "description": "Instrument Windows gratuit care adaugă lag, pierdere de pachete și limite de viteză unei aplicații, ca să vezi cum se poartă pe o conexiune proastă.",
+      "link_text": "Acasă"
     }
   },
   "schema": "software_application"

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulează pierderea de pachete în Windows</h1>
+  <p class="lead">Pierderea de pachete este defectul pe care utilizatorii îl descriu ca „se blochează pur și simplu”. Setezi un procent, instrumentul aruncă acea parte din pachete, iar aplicația ta trebuie să se descurce.</p>
+</section>
+
+<section>
+  <h2>În fereastră</h2>
+  <ol class="steps">
+    <li>Completează <strong>{{app.fields.target_process}}</strong>, ca să fie afectată doar aplicația ta, nu toată mașina.</li>
+    <li>Setează <strong>{{app.fields.loss}}</strong> la un procent între 0 și 100. Începe de la 5.</li>
+    <li>Apasă <strong>{{app.buttons.start}}</strong> și folosește aplicația.</li>
+  </ol>
+  <p>Bara din partea de sus a ferestrei rezumă ce rulează, iar fila <strong>{{app.app.tabs.statistics}}</strong> numără pachetele aruncate.</p>
+</section>
+
+<section>
+  <h2>De la linia de comandă</h2>
+  <p>Același executabil rulează fără fereastră. Cinci la sută pierdere la un browser, două minute, apoi totul revine singur la normal:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Adaugă <code>--simulate</code> ca să repeți comanda fără să atingi traficul real.</p>
+</section>
+
+<section>
+  <h2>Ce procent să alegi</h2>
+  <table>
+    <tr><th>Pierdere</th><th>Cum se simte</th></tr>
+    <tr><td>1 la sută</td><td>O conexiune bună care are un minut prost. Majoritatea aplicațiilor îl ascund.</td></tr>
+    <tr><td>5 la sută</td><td>Wifi slab. Pagini lente la încărcare, videoul scade în calitate.</td></tr>
+    <tr><td>20 la sută</td><td>Un hotspot de cafenea aglomerată sau un tunel de tren. Încep să apară timeout-uri.</td></tr>
+    <tr><td>60 la sută și peste</td><td>Aproape de nefolosit. Bun pentru a găsi mesajul de eroare pe care nu l-a testat nimeni vreodată.</td></tr>
+  </table>
+  <p>Profilele gata făcute setează asta pentru tine. „{{app.presets.weak_wifi}}”, „{{app.presets.cafe}}” și „{{app.presets.3g}}” poartă toate o valoare de pierdere, alături de întârziere și o limită de viteză.</p>
+</section>
+
+<section>
+  <h2>Două lucruri care surprind oamenii</h2>
+  <p><strong>Pe TCP s-ar putea să nu vezi nimic.</strong> TCP retransmite ce pierde, deci o descărcare peste HTTPS doar devine mai lentă în loc să eșueze. Dacă vrei să vezi pierderea ca pierdere, testează ceva care merge peste UDP: un apel vocal, un joc, un flux video sau DNS.</p>
+  <p><strong>Pierderea e aleatorie, deci două rulări diferă.</strong> Setează un seed și aceeași rulare se repetă exact, ceea ce transformă „s-a stricat o dată” într-un raport de eroare pe care îl poate reproduce altcineva:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  <p>Pierderea singură e rară. Conexiunile cu adevărat proaste pierd pachete <em>și</em> adaugă întârziere <em>și</em> rămân fără viteză, ceea ce reproduc profilele.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

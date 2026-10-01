@@ -103,6 +103,12 @@
       "title": "محاكاة تأخر الألعاب وفقدان الحزم",
       "description": "امنح عميل لعبة ping وجيتر وفقدان حزم اتصال سيئ، لتلك العملية وحدها، وأعد التشغيل نفسه بفضل seed.",
       "link_text": "تأخر الألعاب"
+    },
+    "ro": {
+      "slug": "simulator-lag-jocuri",
+      "title": "Simulează lag și pierdere de pachete în jocuri",
+      "description": "Dă clientului unui joc pingul, jitterul și pierderea de pachete ale unei conexiuni proaste, doar pentru acel proces, și reia aceeași rulare cu un seed.",
+      "link_text": "Lag în jocuri"
     }
   }
 }

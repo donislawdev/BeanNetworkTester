@@ -103,6 +103,12 @@
       "title": "غيّر ظروف الشبكة مع الوقت",
       "description": "ملف السيناريو جدول زمني: في هذه الثواني تُطبَّق هذه الإعدادات. يأتي مع البرنامج عدد من السيناريوهات الجاهزة ويكررها ما دمت تراقب.",
       "link_text": "سيناريوهات زمنية"
+    },
+    "ro": {
+      "slug": "scenarii-in-timp",
+      "title": "Schimbă condițiile rețelei în timp",
+      "description": "Un fișier de scenariu e o cronologie: la aceste secunde, aceste setări. Programul vine cu scenarii gata făcute și le repetă cât timp te uiți.",
+      "link_text": "Scenarii în timp"
     }
   }
 }

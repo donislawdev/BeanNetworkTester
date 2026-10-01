@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulează lag și pierdere de pachete în jocuri</h1>
+  <p class="lead">Netcode-ul se scrie pe o conexiune locală cu 1 ms de ping și este testat de jucători pe wifi de hotel. Asta închide acea prăpastie pe propriul tău calculator, doar pe procesul jocului, în timp ce restul calculatorului rămâne utilizabil.</p>
+</section>
+
+<section>
+  <h2>Începe aici</h2>
+  <p>Țintește clientul jocului, dă-i o conexiune proastă realistă și lasă-l să se oprească singur după cinci minute:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Există și o cronologie gata făcută pentru asta: <code>overloaded-game-server.json</code> din folderul <code>scenarios</code> duce o conexiune în congestie și o scoate înapoi, ca să vezi cum tratează clientul ambele sensuri ale schimbării. Vezi <a href="../scenarii-in-timp/">scenarii în timp</a>.</p>
+</section>
+
+<section>
+  <h2>De ce arată un joc pierderi când un browser nu</h2>
+  <p>Cea mai mare parte a traficului de joc este UDP, iar UDP nu are în spatele cui să ascundă pierderea. O pagină web peste TCP retransmite pe tăcute și doar durează mai mult, de aceea un browser poate părea în regulă la 5% pierderi, în timp ce un meci la aceleași 5% se blochează, aruncă personajul înapoi și se desincronizează.</p>
+  <p>Asta face din joc locul cinstit pentru a testa pierderea: ce setezi este ce experimentează de fapt clientul.</p>
+</section>
+
+<section>
+  <h2>Ce să setezi și ce expune</h2>
+  <table>
+    <tr><th>Setare</th><th>Încearcă</th><th>Ce expune</th></tr>
+    <tr><td>Latență</td><td>80 până la 250 ms</td><td>Predicția și interpolarea. Alunecă personajul tău înapoi după o lovitură?</td></tr>
+    <tr><td>Jitter</td><td>40 până la 100 ms</td><td>Buffering-ul. Un ping stabil de 200 ms se ascunde mai ușor decât unul care tot se schimbă.</td></tr>
+    <tr><td>Pierdere</td><td>2 până la 10%</td><td>Actualizările de stare lipsă și dacă clientul își revine sau derapează.</td></tr>
+    <tr><td>Salturi</td><td>1 secundă, rar</td><td>Blocajul provocat de un transfer între turnuri. De obicei cel mai urât.</td></tr>
+    <tr><td>Legătură pornită și oprită</td><td>ciclu de 10 s, 30% pauză</td><td>Reconectare și reintrare.</td></tr>
+  </table>
+  <p>Măsoară jitterul ca diferența dintre percentila 95 și mediană, nu ca medie: jitterul abia mișcă o medie, de aceea o rulare poate arăta identic pe hârtie și se poate juca diferit.</p>
+</section>
+
+<section>
+  <h2>Compararea a două build-uri cere un seed</h2>
+  <p>Pierderea aleatorie face două rulări diferite, deci „noul build se simte mai rău” nu e o dovadă. Același seed reia aceeași pierdere și același jitter, ceea ce transformă o senzație într-o comparație:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Ce nu poate face</h2>
+  <p>Acesta modelează traficul calculatorului <em>tău</em>. Nu încetinește serverul, nu îi schimbă rata de tick și nu pune alți jucători pe o conexiune proastă, deci testează clientul tău pe o legătură proastă, nu serverul tău sub încărcare. Pentru partea de server ai nevoie de teste de încărcare, iar pentru un lobby plin de conexiuni proaste ai nevoie de mai mult de o mașină.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

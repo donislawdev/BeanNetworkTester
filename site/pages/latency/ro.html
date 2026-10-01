@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Adaugă latență și jitter unei aplicații</h1>
+  <p class="lead">Totul merge pe o conexiune locală rapidă. Dă aplicației un ping de 300 ms și afli ce ecrane au fost scrise ca și cum răspunsul ar veni instantaneu.</p>
+</section>
+
+<section>
+  <h2>Trei lucruri diferite</h2>
+  <table>
+    <tr><th>Setare</th><th>Ce face</th><th>De unde vine în viața reală</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Adaugă aceeași întârziere fiecărui pachet, în milisecunde.</td><td>Distanța. Un server pe alt continent sau un satelit.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Adaugă deasupra o cantitate aleatorie, deci întârzierea tot se schimbă.</td><td>Wifi partajat, rețele mobile, orice e congestionat.</td></tr>
+    <tr><td><strong>Salturi</strong></td><td>Blocaje lungi ocazionale, stabilite după cât de des și cât de lungi.</td><td>Un transfer între turnurile de telefonie, un router sub încărcare.</td></tr>
+  </table>
+  <p>Toate trei sunt în milisecunde și pot rula împreună. Ambele valori de întârziere acceptă orice de la 0 în sus, deci poți merge de la 40 ms credibile la 60 de secunde absurde.</p>
+</section>
+
+<section>
+  <h2>De la linia de comandă</h2>
+  <p>200 ms constante cu 80 ms de jitter, pe o singură aplicație:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>În schimb blocaje rare și lungi: aproximativ un pachet din douăzeci așteaptă o secundă în plus:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Cifre care merită încercate</h2>
+  <ul>
+    <li><strong>40 ms</strong>: un server din aceeași țară. Nimic nu ar trebui să se schimbe.</li>
+    <li><strong>150 ms</strong>: alt continent. Tot ce e vorbăreț începe să pară lent, pentru că fiecare dus-întors costă.</li>
+    <li><strong>600 ms în sus</strong>: satelit geostaționar sau wifi în avion. Aici se blochează barele de progres și logica de reîncercare rulează în sfârșit.</li>
+  </ul>
+  <p>Profilele gata făcute poartă valori măsurate: „{{app.presets.distant}}”, „{{app.presets.leo}}”, „{{app.presets.satellite}}”, „{{app.presets.inflight}}”, „{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>Măsurarea: uită-te la cel mai rău caz, nu la medie</h2>
+  <p>Jitterul abia mișcă o medie și abia mișcă o mediană. O rulare cu 30 ms de jitter și una fără pot raporta aproape același ping „tipic”, deși se simt complet diferit.</p>
+  <p>Compară în schimb <strong>percentila 95 cu mediana</strong>. Diferența dintre ele este jitterul, iar acea diferență face un apel vocal sacadat sau un joc de nejucat, în timp ce media încă arată bine.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

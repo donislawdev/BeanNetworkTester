@@ -103,6 +103,12 @@
       "title": "اختبار تطبيق بلا إنترنت على Windows",
       "description": "اسحب الإنترنت من تطبيق واحد والشبكة المحلية تعمل، أو اجعل خدمة واحدة غير قابلة للوصول، أو عطّل DNS دون فصل أي كابل.",
       "link_text": "بلا إنترنت"
+    },
+    "ro": {
+      "slug": "test-fara-internet",
+      "title": "Testează o aplicație fără internet în Windows",
+      "description": "Ia internetul unei singure aplicații cât timp rețeaua locală merge, fă un serviciu inaccesibil sau strică DNS-ul, fără să scoți vreun cablu.",
+      "link_text": "Fără internet"
     }
   }
 }

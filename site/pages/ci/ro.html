@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simulează o rețea proastă în CI</h1>
+  <p class="lead">Fereastra e opțională. Același executabil rulează ca instrument în linia de comandă, se oprește singur după un timp stabilit și raportează ce s-a întâmplat într-un fel pe care un pipeline îl poate citi.</p>
+</section>
+
+<section>
+  <h2>Forma unui pas</h2>
+  <p>Degradează pe durata testului, apoi lasă-l să se oprească singur. Niciun pas de curățare de uitat:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Într-un job GitHub Actions, pe un runner Windows găzduit de tine (self-hosted):</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Două lucruri despre runner: captura traficului cere drepturi de administrator, iar un runner găzduit nu ți le dă, deci asta aparține unei mașini Windows self-hosted.</p>
+</section>
+
+<section>
+  <h2>Fiecare final are un cod de ieșire</h2>
+  <p>Nimic nu se termină cu un traceback. Fiecare mod în care se poate încheia o rulare are un număr, deci un pipeline poate deosebi „aplicația ta a eșuat” de „instrumentul nu a putut porni”:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Ieșire citibilă de mașini</h2>
+  <p><code>--format json</code> scrie un obiect JSON pe linie, adică eșantioane cât timp rulează și un rezumat la final, ca un pas ulterior să poată verifica pe baza lui:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Liniile de jurnal merg la eroarea standard, iar datele la ieșirea standard, deci redirecționarea datelor nu le amestecă niciodată. <code>--seed</code> face rularea repetabilă, ceea ce are nevoie un test instabil (flaky) înainte să poată discuta cineva despre el.</p>
+</section>
+
+<section>
+  <h2>Rulare de probă care nu atinge nimic</h2>
+  <p>Două flaguri fac sigură conectarea înainte să ai încredere: <code>--dry-run</code> raportează ce ar face setările și iese, iar <code>--simulate</code> rulează tot motorul pe trafic sintetic, fără să încarce driverul și fără să atingă rețeaua. Ambele sunt utile într-un build care nu are voie să degradeze mașina pe care rulează.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

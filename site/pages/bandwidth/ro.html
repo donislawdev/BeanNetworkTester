@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Limitează viteza de descărcare și încărcare</h1>
+  <p class="lead">Limitează o aplicație la un număr fix de kiloocteți pe secundă și nu va primi mai mult. Cele două sensuri sunt separate, așa că îi poți da o descărcare rapidă și o încărcare jalnică, exact cum arată majoritatea conexiunilor de acasă și mobile.</p>
+</section>
+
+<section>
+  <h2>În fereastră</h2>
+  <ol class="steps">
+    <li>Setează <strong>{{app.fields.target_process}}</strong> pe aplicația ta.</li>
+    <li>Completează <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> sau pe amândouă, în KB/s. Lasă un câmp la 0 ca să nu atingi acel sens.</li>
+    <li>Apasă <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Ce înseamnă cifrele</h2>
+  <table>
+    <tr><th>KB/s</th><th>Aproximativ</th><th>Ce este</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Un modem dial-up. Profilul „{{app.presets.modem56k}}”.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wifi în avion, un hotel aglomerat, semnal mobil slab.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>O linie modestă de acasă. Ajunge pentru un singur flux video.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>O conexiune fixă obișnuită azi.</td></tr>
+  </table>
+  <p>Sunt kiloocteți, nu kilobiți, așa că înmulțește cu opt ca să compari cu ce promite furnizorul de internet. Limitarea ambelor sensuri deodată este ceea ce face conexiunea să semene cu un hotspot prost, nu doar cu o descărcare lentă.</p>
+</section>
+
+<section>
+  <h2>Coada contează cât limita</h2>
+  <p>O limită de viteză are nevoie de un loc unde să pună pachetele care nu încap încă. Aceasta este setarea <strong>{{app.fields.buffer}}</strong>, în milisecunde, și se comportă ca o coadă la casă:</p>
+  <ul>
+    <li><strong>O coadă scurtă</strong> înseamnă că pachetele sunt aruncate imediat ce linia e plină. Aplicația vede pierderi și reacționează repede.</li>
+    <li><strong>O coadă lungă</strong> înseamnă că nimic nu se aruncă, dar totul așteaptă. Aplicația vede conexiunea tot mai lentă, în loc să cadă, efect pe care îl are o linie de acasă congestionată și motivul pentru care un apel video se degradează cât timp continuă o descărcare.</li>
+  </ul>
+  <p>Profilul „{{app.presets.bufferbloat}}” este exact asta: o limită cu coadă lungă. Încearcă aceeași viteză cu o coadă scurtă și cu una lungă și vezi cât de diferit se comportă aplicația.</p>
+</section>
+
+<section>
+  <h2>Ceva la care să te aștepți</h2>
+  <p>Cu o limită activă, contorul de pachete aruncate poate rămâne la zero. Nu e o eroare: o limită mai întâi face pachetele să aștepte și le aruncă doar când coada e cu adevărat plină. Dă-i un buffer mic și aruncările apar.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

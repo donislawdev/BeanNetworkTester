@@ -103,6 +103,12 @@
       "title": "إضافة زمن استجابة وجيتر إلى تطبيق على Windows",
       "description": "امنح تطبيقًا على Windows زمن استجابة خادم بعيد أو نفق قطار: تأخير ثابت أو جيتر عشوائي أو قفزات متقطعة.",
       "link_text": "زمن الاستجابة والجيتر"
+    },
+    "ro": {
+      "slug": "latenta-si-jitter",
+      "title": "Adaugă latență și jitter unei aplicații în Windows",
+      "description": "Dă unei aplicații Windows pingul unui server îndepărtat sau al unui tunel de tren: întârziere fixă, jitter aleatoriu sau salturi ocazionale.",
+      "link_text": "Latență și jitter"
     }
   }
 }

@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Descarcă Bean Network Tester</h1>
+  <p class="lead">Un zip care rulează fără instalare sau un instalator pentru toți utilizatorii calculatorului. Oricum, programul cere singur drepturile de administrator.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Faptele, într-un singur loc</h2>
+  <ul class="facts">
+    <li><strong>Preț:</strong> gratuit și software liber, GNU GPL v3.</li>
+    <li><strong>Rulează pe:</strong> Windows 10 și Windows 11, pe 64 de biți.</li>
+    <li><strong>Necesită:</strong> drepturi de administrator, pentru că traficul este capturat de un driver.</li>
+    <li><strong>Instalare:</strong> nu e nevoie. Dezarhivează zip-ul oriunde și rulează-l. Sau folosește instalatorul <code>.msi</code>, care adaugă o intrare în meniul Start și pune programul în <code>PATH</code> (cere drepturi de administrator).</li>
+    <li><strong>Trimite date:</strong> nicăieri. Fără telemetrie, fără verificare de actualizări, fără client de rețea.</li>
+    <li><strong>Moduri:</strong> o fereastră și același fișier ca instrument în linia de comandă.</li>
+    <li><strong>Sursă:</strong> <a href="{{site.repo_url}}">pe GitHub</a>, sub aceeași licență.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ce conține versiunea</h2>
+  <p>O versiune publică cinci fișiere. Două sunt programul, iar celelalte trei sunt acolo ca să nu fii nevoit să iei descărcarea pe încredere:</p>
+  <ul>
+    <li><strong>zip-ul</strong>: programul și driverul pe care îl folosește, împreună într-un singur folder;</li>
+    <li><strong>instalatorul .msi</strong>: același program, instalat pentru toți utilizatorii calculatorului, cu o intrare în meniul Start;</li>
+    <li><strong>SHA256SUMS.txt</strong>: sumele de control ale zip-ului și ale instalatorului;</li>
+    <li><strong>un SBOM</strong>: o listă standard a fiecărei componente din interior, cu versiuni și licențe, semnată față de zip;</li>
+    <li><strong>un fișier .sigstore.json</strong>: acea semnătură ca fișier, pentru a o verifica fără să întrebi GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Verificarea că ai primit ce am construit</h2>
+  <p>Suma de control răspunde la „a ajuns neschimbat”. În PowerShell, compară rezultatul cu linia din <code>SHA256SUMS.txt</code> (pentru instalator, pune <code>.msi</code> în locul lui <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>Semnătura răspunde la altă întrebare, „a ieșit asta din acel depozit”, și cere instrumentul de linie de comandă GitHub:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Scrie numele zip-ului descărcat ca prima parte: <code>gh</code> nu acceptă acolo un <code>*</code>. Păstrează <code>--predicate-type</code>: fără el, <code>gh</code> caută alt fel de afirmație și raportează că nu a găsit niciuna.</p>
+  <p>O sumă de control copiată de pe aceeași pagină cu descărcarea dovedește mai puțin decât o semnătură. Ambele sunt publicate, deci merită un moment amândouă.</p>
+</section>
+
+<section>
+  <h2>Windows te poate avertiza</h2>
+  <p>Programul și instalatorul sunt semnate, deci Windows spune cine le-a semnat, în loc de „Editor necunoscut”. Certificatul este nou, deci SmartScreen poate încă avertiza o vreme, pentru că nu l-a mai văzut des. E vorba despre certificat, nu despre fișier, iar cele două verificări de mai sus îți permit să verifici singur fișierul. <a href="../intrebari-frecvente/">Pagina de întrebări</a> tratează asta și ce are nevoie driverul.</p>
+</section>
+
+<section>
+  <h2>De unde începi după ce rulează</h2>
+  {{page.guide_links}}
+</section>

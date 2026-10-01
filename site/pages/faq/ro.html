@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Întrebările pe care le pun oamenii primele</h1>
+  <p class="lead">Cele care merită răspunse înainte să descarci, nu după.</p>
+</section>
+
+<section>
+  <h2>De ce are nevoie de drepturi de administrator?</h2>
+  <p>Pentru că pachetele sunt interceptate de un driver de nucleu, iar Windows nu încarcă unul pentru un utilizator obișnuit. Programul cere singur drepturile la pornire. De la linia de comandă refuză cu un cod de ieșire anume, în loc să eșueze pe la jumătate.</p>
+</section>
+
+<section>
+  <h2>Îmi strică tot calculatorul sau doar aplicația mea?</h2>
+  <p>Ce îi indici tu. Setează o țintă și doar acea aplicație este afectată. Lasă ținta goală și fiecare conexiune de pe calculator este afectată, lucru despre care programul te avertizează, în fereastră și în linia de comandă, înainte să te întrebi de ce a picat apelul video.</p>
+</section>
+
+<section>
+  <h2>Cum anulez?</h2>
+  <p>{{app.buttons.stop}}. Închiderea programului face același lucru, ca și o limită de timp, dacă ai setat una. Dacă instrumentul însuși moare în mijlocul unei sesiuni, un watchdog din interiorul lui oprește captura, în loc să-ți lase rețeaua degradată: o sesiune nu trebuie să supraviețuiască programului care a pornit-o.</p>
+</section>
+
+<section>
+  <h2>Trimite ceva undeva?</h2>
+  <p>Nu. Nu există analitice, nu există rapoarte de erori către vreun serviciu și nu există verificare de actualizări. Programul nu are deloc client de rețea. Singura conexiune de ieșire pe care o poate face este deschiderea paginii de suport în browser, după ce dai clic. Îți interceptează traficul, deci acel trafic nu trebuie să plece niciodată de pe calculatorul tău, iar pagina pe care o citești nici ea nu încarcă nimic de la alții.</p>
+</section>
+
+<section>
+  <h2>Windows m-a avertizat despre descărcare. De ce?</h2>
+  <p>Programul este semnat, deci avertismentul spune cine l-a semnat, în loc de „Editor necunoscut”. SmartScreen poate încă avertiza o vreme, pentru că certificatul este nou și nu l-a mai văzut des. Unele antivirusuri pot reacționa și la un program care cere drepturi de administrator și încarcă un driver de rețea. Fiecare versiune publică o sumă de control SHA-256 și o listă semnată a componentelor, deci poți verifica ce ai descărcat, în loc să te încrezi într-o bifă verde.</p>
+</section>
+
+<section>
+  <h2>Descărcarea mea a murit complet și nimic nu spune de ce</h2>
+  <p>Verifică dimensiunea maximă a pachetului. Setată destul de jos, nu mai e un pachet mai mic, ci o gaură neagră: rețeaua aruncă ce e prea mare și nu raportează niciodată. Pune-o la loc și transferul revine.</p>
+</section>
+
+<section>
+  <h2>Merge pe Linux sau macOS?</h2>
+  <p>Nu și nu va merge. Se sprijină pe un driver de nucleu Windows. Pe Linux, <code>tc</code> cu <code>netem</code> face treaba asta și e deja instalat.</p>
+</section>
+
+<section>
+  <h2>Chiar este gratuit? Îl pot folosi la serviciu?</h2>
+  <p>Da. Este gratuit și open source sub GNU GPL v3, inclusiv la serviciu, iar codul sursă poate fi citit sau modificat de oricine. Descărcarea este același fișier pentru toți.</p>
+</section>
+
+<section>
+  <h2>Mai multe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

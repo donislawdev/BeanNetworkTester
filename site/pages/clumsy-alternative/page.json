@@ -103,6 +103,12 @@
       "title": "بديل Clumsy لنظام Windows مع سطر أوامر",
       "description": "ما الذي يجب البحث عنه في أداة تدهور الشبكة على Windows، وما تضيفه هذه الأداة على الأدوات التفاعلية فقط، ومتى تختار غيرها.",
       "link_text": "بديل Clumsy"
+    },
+    "ro": {
+      "slug": "alternativa-clumsy",
+      "title": "O alternativă la Clumsy pentru Windows, cu linie de comandă",
+      "description": "Ce să cauți într-un instrument de degradare a rețelei pentru Windows, ce aduce acesta față de cele doar interactive și când să alegi altceva.",
+      "link_text": "Alternativă la Clumsy"
     }
   }
 }

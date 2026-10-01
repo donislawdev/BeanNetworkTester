@@ -103,6 +103,12 @@
       "title": "الإعدادات المسبقة والخيارات ورموز الخروج",
       "description": "كل إعداد مسبق بأرقامه، وكل إعداد مع خياره ووحدته ونطاقه، وكل رمز خروج يمكن لسطر الأوامر إرجاعه.",
       "link_text": "جداول مرجعية"
+    },
+    "ro": {
+      "slug": "tabele-de-referinta",
+      "title": "Profiluri, setări și coduri de ieșire",
+      "description": "Fiecare profil gata făcut cu valorile lui, fiecare setare cu opțiunea, unitatea și intervalul ei și fiecare cod de ieșire al liniei de comandă.",
+      "link_text": "Tabele de referință"
     }
   }
 }

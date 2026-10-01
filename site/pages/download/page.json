@@ -103,6 +103,12 @@
       "title": "تنزيل Bean Network Tester لنظام Windows",
       "description": "تنزيل مجاني لنظامي Windows 10 و11 بصيغة zip أو مثبّت. ما في الإصدار، وكيف تتحقق أنه الملف الذي بنيناه، وما يلزم لتشغيله.",
       "link_text": "التنزيل"
+    },
+    "ro": {
+      "slug": "descarcare",
+      "title": "Descarcă Bean Network Tester pentru Windows",
+      "description": "Descărcare gratuită pentru Windows 10 și 11, ca zip sau instalator. Ce conține versiunea, cum verifici fișierul și ce îți trebuie ca să ruleze.",
+      "link_text": "Descărcare"
     }
   }
 }

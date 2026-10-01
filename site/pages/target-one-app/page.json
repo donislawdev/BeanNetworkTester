@@ -103,6 +103,12 @@
       "title": "استهدف تطبيقًا واحدًا على Windows لا الجهاز كله",
       "description": "وجّه التدهور إلى عملية أو PID أو عنوان أو منفذ واحد، فيكسر الاختبار التطبيق المختبَر فقط ويترك بقية الجهاز.",
       "link_text": "استهداف تطبيق واحد"
+    },
+    "ro": {
+      "slug": "tinteste-o-aplicatie",
+      "title": "Țintește o singură aplicație în Windows, nu tot calculatorul",
+      "description": "Îndreaptă degradarea spre un proces, PID, adresă sau port, ca testul să strice doar aplicația vizată și restul calculatorului să rămână în pace.",
+      "link_text": "Țintește o aplicație"
     }
   }
 }
