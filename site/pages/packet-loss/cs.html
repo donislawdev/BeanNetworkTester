@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulace ztráty paketů ve Windows</h1>
+  <p class="lead">Ztráta paketů je chyba, kterou uživatelé popisují jako „prostě to visí“. Nastavíte procento, nástroj zahodí tento podíl paketů a vaše aplikace se s tím musí vypořádat.</p>
+</section>
+
+<section>
+  <h2>V okně</h2>
+  <ol class="steps">
+    <li>Vyplňte <strong>{{app.fields.target_process}}</strong>, aby byla zasažena jen vaše aplikace, a ne celý počítač.</li>
+    <li>Nastavte <strong>{{app.fields.loss}}</strong> na procento mezi 0 a 100. Začněte na 5.</li>
+    <li>Stiskněte <strong>{{app.buttons.start}}</strong> a používejte aplikaci.</li>
+  </ol>
+  <p>Pruh v horní části okna shrnuje, co běží, a karta <strong>{{app.app.tabs.statistics}}</strong> počítá zahozené pakety.</p>
+</section>
+
+<section>
+  <h2>Z příkazového řádku</h2>
+  <p>Tentýž spustitelný soubor běží i bez okna. Pět procent ztráty u jednoho prohlížeče, dvě minuty, pak se všechno samo vrátí do normálu:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Přidejte <code>--simulate</code>, abyste si příkaz vyzkoušeli bez zásahu do skutečného provozu.</p>
+</section>
+
+<section>
+  <h2>Jaké procento zvolit</h2>
+  <table>
+    <tr><th>Ztráta</th><th>Jaký je to pocit</th></tr>
+    <tr><td>1 procento</td><td>Dobré spojení, které má špatnou minutu. Většina aplikací to skryje.</td></tr>
+    <tr><td>5 procent</td><td>Slabé WiFi. Pomalé načítání stránek, video snižuje kvalitu.</td></tr>
+    <tr><td>20 procent</td><td>Přeplněný hotspot v kavárně nebo vlakový tunel. Začínají se objevovat timeouty.</td></tr>
+    <tr><td>60 procent a víc</td><td>Skoro nepoužitelné. Dobré pro hledání chybové zprávy, kterou nikdo nikdy netestoval.</td></tr>
+  </table>
+  <p>Hotové profily to nastaví za vás. „{{app.presets.weak_wifi}}“, „{{app.presets.cafe}}“ a „{{app.presets.3g}}“ nesou hodnotu ztráty společně se zpožděním a omezením rychlosti.</p>
+</section>
+
+<section>
+  <h2>Dvě věci, které lidi překvapí</h2>
+  <p><strong>Na TCP nemusíte vidět vůbec nic.</strong> TCP znovu odesílá, co ztratí, takže stahování přes HTTPS se jen zpomalí, místo aby selhalo. Pokud chcete vidět ztrátu jako ztrátu, testujte něco, co běží přes UDP: hlasový hovor, hru, video stream nebo DNS.</p>
+  <p><strong>Ztráta je náhodná, takže dva běhy se liší.</strong> Nastavte seed a stejný běh se přesně zopakuje, což mění „jednou to spadlo“ v hlášení chyby, které může reprodukovat někdo jiný:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  <p>Samotná ztráta je vzácná. Skutečně špatná spojení ztrácejí pakety <em>a</em> přidávají zpoždění <em>a</em> dochází jim rychlost, což profily reprodukují.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -73,6 +73,12 @@
       "title": "Windows’ta indirme ve yükleme hızını sınırlayın",
       "description": "Bir Windows uygulamasını her yönde saniyede belirli KB ile sınırlayın ve 56k modemin ya da uçak Wi-Fi’ının ona ne yaptığını görün.",
       "link_text": "Hız sınırı"
+    },
+    "cs": {
+      "slug": "omezeni-rychlosti",
+      "title": "Omezení rychlosti stahování a odesílání ve Windows",
+      "description": "Omezte jednu aplikaci ve Windows na zadaný počet KB za sekundu v obou směrech a zjistěte, co s ní udělá modem 56k nebo WiFi v letadle.",
+      "link_text": "Omezení rychlosti"
     }
   }
 }

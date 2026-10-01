@@ -73,6 +73,12 @@
       "title": "Ağ koşullarını zamanla değiştirin",
       "description": "Senaryo dosyası bir zaman çizelgesidir: şu saniyelerde şu ayarlar. Program hazır senaryolarla gelir ve siz izledikçe onları tekrarlar.",
       "link_text": "Zamana bağlı senaryolar"
+    },
+    "cs": {
+      "slug": "scenare-v-case",
+      "title": "Měňte podmínky sítě v čase",
+      "description": "Soubor scénáře je časová osa: v těchto sekundách tato nastavení. S programem přicházejí hotové scénáře a ten je opakuje, dokud se díváte.",
+      "link_text": "Scénáře v čase"
     }
   }
 }

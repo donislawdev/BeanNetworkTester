@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Alternativa ke Clumsy pro Windows</h1>
+  <p class="lead">Clumsy je nástroj, který většina lidí najde jako první, a je dobrý: zdarma, s licencí MIT, interaktivní a postavený na stejném ovladači WinDivert, který používá tento nástroj. Pokud dělá, co potřebujete, použijte ho. Tato stránka je o případech, kdy to nedělá.</p>
+</section>
+
+<section>
+  <h2>Na co se dívat, ať vyberete cokoli</h2>
+  <table>
+    <tr><th>Otázka</th><th>Proč o výběru nástroje rozhoduje</th></tr>
+    <tr><td>Zvládne zasáhnout <strong>jednu aplikaci</strong>?</td><td>Jinak zhoršíte počítač, na kterém pracujete, včetně vzdálené relace a prohlížeče, ve kterém čtete dokumentaci.</td></tr>
+    <tr><td>Má <strong>příkazový řádek</strong>?</td><td>Pipeline neumí kliknout na zaškrtávací políčko. Bez něj nemůže být síťový test nikdy součástí buildu.</td></tr>
+    <tr><td>Je běh <strong>opakovatelný</strong>?</td><td>Náhodná ztráta, kterou nelze přehrát, vytváří hlášení chyb, které nikdo jiný nedokáže reprodukovat.</td></tr>
+    <tr><td><strong>Zastaví se sám</strong>?</td><td>Nástroj, u kterého si musíte pamatovat, že ho vypnete, zůstane zapnutý.</td></tr>
+    <tr><td>Poznáte, co <strong>skutečně udělal</strong>?</td><td>Čítače a seznam spojení promění „připadalo mi to pomalé“ v čísla.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Co přináší tento nástroj</h2>
+  <ul>
+    <li><strong>Zacílení podle procesu, PID, adresy nebo portu</strong> se sledováním stromu procesů, takže prohlížeč s třiceti podřízenými procesy je pořád jeden cíl.</li>
+    <li><strong>Tentýž spustitelný soubor je příkazový řádek</strong>, s návratovým kódem pro každý výsledek a výstupem NDJSON, takže funguje v CI.</li>
+    <li><strong>Běhy se seedem</strong>: stejný seed přehraje stejnou náhodnou ztrátu a jitter.</li>
+    <li><strong>Hotové profily</strong>: 3G, LTE, satelit, přeplněná kavárna, WiFi v letadle, modem 56k, takže začnete od něčeho uvěřitelného, místo abyste hádali čísla.</li>
+    <li><strong>Časované relace a skriptované scénáře</strong>, takže se zhoršení může samo měnit, zatímco sledujete aplikaci.</li>
+    <li><strong>Živý náhled</strong>: graf, čítače a tabulka spojení ukazující, které spojení bylo zasaženo.</li>
+    <li>Rozhraní v <strong>angličtině, polštině a zjednodušené čínštině</strong> a žádná telemetrie jakéhokoli druhu.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Pokud přicházíte z jiného nástroje</h2>
+  <p>Při řeči o tomto tématu padají čtyři jména a nejsou zaměnitelná.</p>
+  <table>
+    <tr><th>Znáte</th><th>Co to je</th><th>Co čekat tady</th></tr>
+    <tr><td><strong>tc s netem</strong></td><td>Odpověď z Linuxu, zabudovaná v jádře a ovládaná z příkazového řádku. Často to, co vrátí hledání emulace WAN.</td><td>Ve Windows žádné <code>tc</code> není. Tohle je mu duchem nejbližší: stejné druhy zhoršení, příkazový řádek s návratovými kódy a ovladač místo řadicí disciplíny.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Bezplatný interaktivní nástroj pro Windows s licencí MIT na stejném ovladači WinDivert.</td><td>Sáhněte po něm, když stačí okno a filtr. Sem přijďte pro cílení na jednotlivé procesy, běhy se seedem a příkazový řádek, který pipeline umí zavolat.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Komerční produkt pro Windows pro správu šířky pásma po aplikacích, trvale.</td><td>Jiná práce. Tohle je testovací přístroj: zapnete ho na chvíli, pak vypnete, a zhoršuje mnohem víc než jen rychlost.</td></tr>
+    <tr><td><strong>Fiddler nebo Charles</strong></td><td>Proxy, které umějí prohlížet, přepisovat a omezovat provoz, který jimi prochází.</td><td>Také jiná práce. Proxy tvaruje to, co proxyuje, a vidí data. Tohle tvaruje samotné spojení, včetně UDP a všeho, co se proxy nikdy nedotkne.</td></tr>
+  </table>
+  <p>Jednoduše řečeno: pokud chcete síťový emulátor pro jednu aplikaci pro Windows s příkazovým řádkem, tohle je druh nástroje, který hledáte. Pokud chcete číst a měnit data aplikace, chcete proxy, a pokud jste na Linuxu, netem už máte.</p>
+</section>
+
+<section>
+  <h2>Kdy použít něco jiného</h2>
+  <p>Být k tomu upřímný je levnější než zklamané stažení.</p>
+  <ul>
+    <li><strong>Jste na Linuxu nebo macOS.</strong> Tohle je jen pro Windows a vždy bude, protože je postavené na ovladači pro Windows. Na Linuxu je standardní odpovědí <code>tc</code> s <code>netem</code> a nepotřebuje žádný další software.</li>
+    <li><strong>Chcete trvalou správu šířky pásma</strong> pro celý počítač, po aplikacích, jako funkci produktu a ne jako test. K tomu slouží komerční nástroje pro tvarování provozu jako NetLimiter. Tohle je testovací přístroj: je určen k zapnutí na chvíli a pak k vypnutí.</li>
+    <li><strong>Nemůžete získat práva správce.</strong> Zachytávání paketů je vyžaduje. Obejít to nejde a nástroj, který tvrdí opak, váš provoz nezachytává.</li>
+    <li><strong>Potřebujete prohlížet a přepisovat data aplikace</strong>, ne zhoršovat linku. To je práce proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Chaos testování sítě ve Windows</h1>
+  <p class="lead">Chaos testování znamená záměrně něco rozbít, zatímco se díváte, abyste zjistili, co s tím váš software udělá. Na síťové vrstvě je přesně tohle tento nástroj: způsob, jak vložit chybu do jedné aplikace a zjistit, zda ji přežije.</p>
+</section>
+
+<section>
+  <h2>Chyby, které můžete vložit</h2>
+  <table>
+    <tr><th>Chyba</th><th>Co modeluje</th></tr>
+    <tr><td>Ztráta, poškození, duplikace</td><td>Zhoršenou cestu. Pakety mizí, přicházejí poškozené nebo přicházejí dvakrát.</td></tr>
+    <tr><td>Zpoždění, jitter, skoky</td><td>Pomalou nebo nestabilní cestu, včetně zadrhnutí na několik sekund, které rozbíjí timeouty.</td></tr>
+    <tr><td>Resety spojení</td><td>Firewall nebo load balancer, který ukončuje spojení uprostřed přenosu.</td></tr>
+    <tr><td>Výpadky linky</td><td>Cesta, která mizí a vrací se v cyklu.</td></tr>
+    <tr><td>Blokovaná adresa nebo port</td><td>Jedna závislost nedostupná, zatímco všechno ostatní funguje.</td></tr>
+    <tr><td>Internet pryč, LAN žije</td><td>Tvar captive portalu: místní funguje, svět ne.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Co odlišuje chaos od šumu: opakovatelnost</h2>
+  <p>Náhodná chyba, kterou nelze přehrát, vytvoří příběh, ne hlášení chyby. Každé náhodné rozhodnutí tu vychází ze seedu, takže stejný příkaz zopakuje stejný běh: stejné ztracené pakety, stejný jitter, ve stejném pořadí:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>To je rozdíl mezi „minulé úterý to jednou spadlo“ a selhávajícím testem, který může spustit kdokoli jiný.</p>
+</section>
+
+<section>
+  <h2>V pipeline</h2>
+  <p>Příkazový řádek hlásí výsledek přes návratové kódy, takže build rozliší „aplikace selhala“ od „nástroj se nepodařilo spustit“, a relace skončí sama, takže není žádný úklidový krok, na který by se dalo zapomenout:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Posloupnost chyb místo jedné je soubor scénáře a ty jsou také opakovatelné. Návratové kódy a potřebný runner najdete v částech <a href="../scenare-v-case/">scénáře v čase</a> a <a href="../sitove-testy-v-ci/">síťové testy v CI</a>.</p>
+</section>
+
+<section>
+  <h2>Kde zásah končí</h2>
+  <p>Dvě hranice a obě jsou záměrné. Zhoršení zasáhne jeden proces, PID, adresu nebo port, když jej zacílíte, takže počítač, na kterém pracujete, funguje dál. A je to jeden počítač: jde o vkládání chyb pro klienta a jeho spojení, ne pro cluster. Pokud hledáte chaos napříč službami a uzly, je to jiný druh nástroje a tento je ten kus, který rozbíjí síť pod jednou aplikací pro Windows.</p>
+  <p>Všechno je vratné na místě. {{app.buttons.stop}} obnoví síť, časový limit udělá totéž a hlídací proces (watchdog) v nástroji zastaví zachytávání, pokud samotný nástroj spadne: chyba, kterou jste vložili, nesmí nikdy přežít běh, který ji vložil.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -73,6 +73,12 @@
       "title": "Windows’ta CI içinde kötü ağı simüle edin",
       "description": "Aynı çalıştırılabilir dosya penceresiz çalışır, çıkış kodları ve NDJSON ile bildirir, kendiliğinden durur; böylece pipeline kötü bağlantıyı test edebilir.",
       "link_text": "CI içinde ağ testleri"
+    },
+    "cs": {
+      "slug": "sitove-testy-v-ci",
+      "title": "Simulace špatné sítě v CI ve Windows",
+      "description": "Tentýž spustitelný soubor běží bez okna, hlásí výsledek přes návratové kódy a NDJSON a sám skončí, takže pipeline může otestovat špatné spojení.",
+      "link_text": "Síťové testy v CI"
     }
   }
 }

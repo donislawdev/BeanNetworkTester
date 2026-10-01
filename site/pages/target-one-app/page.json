@@ -73,6 +73,12 @@
       "title": "Windows’ta tüm bilgisayarı değil, tek uygulamayı hedefleyin",
       "description": "Bozulmayı bir işleme, PID’ye, adrese veya porta yöneltin; test yalnızca denenen uygulamayı bozsun, bilgisayarın geri kalanına dokunmasın.",
       "link_text": "Tek uygulamayı hedefle"
+    },
+    "cs": {
+      "slug": "cileni-na-jednu-aplikaci",
+      "title": "Zaměřte se ve Windows na jednu aplikaci, ne na počítač",
+      "description": "Zaměřte zhoršení na jeden proces, PID, adresu nebo port, aby test rozbil jen testovanou aplikaci a zbytek počítače nechal na pokoji.",
+      "link_text": "Cílení na jednu aplikaci"
     }
   }
 }

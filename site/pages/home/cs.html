@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Otestujte svou aplikaci na špatné síti</h1>
+  <p class="lead">Bean Network Tester přidává jedné aplikaci pro Windows zpoždění, ztrátu paketů a omezení rychlosti. Uvidíte to, co vaši uživatelé ve vlaku, na hotelovém hotspotu nebo na telefonu s jednou čárkou signálu.</p>
+  <p>Je to síťový emulátor zaměřený na jeden program, ne na celý počítač, takže můžete reprodukovat pomalý internet pro testovanou aplikaci, zatímco všechno ostatní dál funguje.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Živý ping, který při běhu nástroje ztrácí pakety a získává zpoždění">
+  <figcaption>Přidání zpoždění a ztráty paketů do běžícího spojení.</figcaption>
+</figure>
+
+<section>
+  <h2>Co dělá s vaší sítí</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Zpomaluje ji</h3>
+      <p>Přidejte pevné nebo náhodné zpoždění. Zjistěte, co 300 ms pingu udělá s vaším načítacím kolečkem.</p>
+    </article>
+    <article class="card">
+      <h3>Ztrácí pakety</h3>
+      <p>Zahazujte je, duplikujte nebo poškozujte a sledujte, zda se vaše aplikace zotaví, nebo jen zamrzne.</p>
+    </article>
+    <article class="card">
+      <h3>Omezuje rychlost</h3>
+      <p>Držte stahování nebo odesílání na zadaném počtu KB za sekundu, tak jak to dělá slabé mobilní spojení.</p>
+    </article>
+    <article class="card">
+      <h3>Přerušuje linku</h3>
+      <p>Rušte spojení, blokujte port nebo adresu, nebo nechte síť mizet a vracet se.</p>
+    </article>
+    <article class="card">
+      <h3>Míří na jednu aplikaci</h3>
+      <p>Vyberte proces, PID, adresu nebo port. Zbytek počítače funguje dál normálně.</p>
+    </article>
+    <article class="card">
+      <h3>Opakuje přesně</h3>
+      <p>Stejný seed přehraje stejný běh. To je rozdíl mezi hlášením chyby a příběhem.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Spuštění trvá tři kroky</h2>
+  <ol class="steps">
+    <li>Stáhněte zip ze stránky vydání a rozbalte ho kdekoli.</li>
+    <li>Spusťte <code>BeanNetworkTester.exe</code>. Práva správce si vyžádá sám, protože je zachytávání provozu potřebuje.</li>
+    <li>Vyberte hotový profil, například „{{app.presets.3g}}“, stiskněte {{app.buttons.start}} a používejte svou aplikaci.</li>
+  </ol>
+  <p>Ve stejném souboru je textový režim, takže celé to běží i v pipeline. Stačí jediný příkaz, abyste ověřili, že vaše služba přežije 10 % ztrátu paketů:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Po uplynutí času se sám zastaví, takže krok, který se zasekne, za sebou nemůže nechat rozbitou síť. Přidejte <code>--simulate</code>, abyste si příkaz vyzkoušeli bez zásahu do skutečného provozu.</p>
+</section>
+
+<section>
+  <h2>Kdo ho používá</h2>
+  <p>Testeři, kteří musí reprodukovat „u mě to funguje“. Vývojáři, kteří potřebují, aby timeout opravdu nastal. Vývojáři her, kteří zjišťují, co lag dělá jejich netcode. Každý, koho se kdy někdo zeptal, zda aplikace funguje na slabém spojení, a kdo neměl poctivý způsob, jak to zjistit.</p>
+</section>
+
+<section>
+  <h2>Jak udělat konkrétní věc</h2>
+  <p>Krátké návody, každý s čísly, která stojí za vyzkoušení, a příkazem, který to udělá.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

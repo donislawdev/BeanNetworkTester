@@ -75,6 +75,12 @@
       "name": "Türkçe",
       "dir": "tr",
       "og_locale": "tr_TR"
+    },
+    {
+      "code": "cs",
+      "name": "Čeština",
+      "dir": "cs",
+      "og_locale": "cs_CZ"
     }
   ],
   "og_image": "assets/bean.png",

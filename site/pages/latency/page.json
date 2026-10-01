@@ -73,6 +73,12 @@
       "title": "Windows uygulamasına gecikme ve jitter ekleyin",
       "description": "Windows uygulamasına uzak bir sunucunun ya da tünelin pingini verin: sabit gecikme, rastgele jitter veya ara sıra ani sıçramalar.",
       "link_text": "Gecikme ve jitter"
+    },
+    "cs": {
+      "slug": "zpozdeni-a-jitter",
+      "title": "Přidejte aplikaci ve Windows zpoždění a jitter",
+      "description": "Dejte jedné aplikaci ve Windows ping vzdáleného serveru nebo vlakového tunelu: stálé zpoždění, náhodný jitter nebo občasné skoky.",
+      "link_text": "Zpoždění a jitter"
     }
   }
 }

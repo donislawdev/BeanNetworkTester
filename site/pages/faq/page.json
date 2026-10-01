@@ -73,6 +73,12 @@
       "title": "Bean Network Tester hakkında sık sorulan sorular",
       "description": "Yönetici hakları, tüm bilgisayarı etkileyip etkilemediği, nasıl geri alınacağı, SmartScreen uyarısı ve programın verilerinizle ne yaptığı.",
       "link_text": "Sorular ve yanıtlar"
+    },
+    "cs": {
+      "slug": "caste-dotazy",
+      "title": "Časté dotazy k Bean Network Tester",
+      "description": "Práva správce, zda zasahuje celý počítač, jak vše vrátit zpět, varování SmartScreen a co program dělá s vašimi daty.",
+      "link_text": "Otázky a odpovědi"
     }
   }
 }

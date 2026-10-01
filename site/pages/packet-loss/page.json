@@ -73,6 +73,12 @@
       "title": "Windows’ta bir uygulama için paket kaybı simülasyonu",
       "description": "Windows’ta bir uygulamanın paketlerinin belirli bir yüzdesini atın, neyin bozulduğunu görün ve aynı çalıştırmayı seed ile birebir tekrarlayın.",
       "link_text": "Paket kaybı"
+    },
+    "cs": {
+      "slug": "ztrata-paketu",
+      "title": "Simulace ztráty paketů ve Windows pro jednu aplikaci",
+      "description": "Zahoďte zadané procento paketů jedné aplikace ve Windows, sledujte, co se rozbije, a stejný běh přesně zopakujte pomocí seedu.",
+      "link_text": "Ztráta paketů"
     }
   }
 }

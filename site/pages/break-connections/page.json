@@ -73,6 +73,12 @@
       "title": "Windows’ta bağlantıları kesin ve portları engelleyin",
       "description": "Bağlantıları sıfırlayın, bir portu veya adresi engelleyin, bağlantıyı kesin ya da paketleri hiçbir şey geçmeyene dek küçültün; toparlanmayı izleyin.",
       "link_text": "Bağlantıları kes"
+    },
+    "cs": {
+      "slug": "preruseni-spojeni",
+      "title": "Přerušení spojení a blokování portů ve Windows",
+      "description": "Zabíjejte spojení, blokujte port či adresu, na chvíli přerušte linku nebo zmenšete pakety, až nic neprojde, a sledujte, jak se aplikace zotaví.",
+      "link_text": "Přerušení spojení"
     }
   }
 }

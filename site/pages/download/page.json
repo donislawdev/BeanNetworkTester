@@ -73,6 +73,12 @@
       "title": "Bean Network Tester’ı Windows için indirin",
       "description": "Windows 10 ve 11 için ücretsiz indirme, zip veya yükleyici olarak. Sürümde ne var, dosya nasıl doğrulanır ve çalışmak için ne gerekir.",
       "link_text": "İndir"
+    },
+    "cs": {
+      "slug": "stahnout",
+      "title": "Stáhnout Bean Network Tester pro Windows",
+      "description": "Bezplatné stažení pro Windows 10 a 11 jako zip nebo instalátor. Co je ve vydání, jak ověřit, že jde o námi sestavený soubor, a co ke spuštění potřebuje.",
+      "link_text": "Stáhnout"
     }
   }
 }

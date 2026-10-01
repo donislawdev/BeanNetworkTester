@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Stáhnout Bean Network Tester</h1>
+  <p class="lead">Zip, který běží bez instalace, nebo instalátor pro všechny uživatele počítače. V obou případech si program práva správce vyžádá sám.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Fakta na jednom místě</h2>
+  <ul class="facts">
+    <li><strong>Cena:</strong> zdarma a svobodný software, GNU GPL v3.</li>
+    <li><strong>Běží na:</strong> Windows 10 a Windows 11, 64 bitů.</li>
+    <li><strong>Potřebuje:</strong> práva správce, protože provoz zachytává ovladač.</li>
+    <li><strong>Instalace:</strong> není potřeba. Rozbalte zip kdekoli a spusťte. Nebo použijte instalátor <code>.msi</code>, který přidá položku do nabídky Start a dá program na <code>PATH</code> (vyžaduje práva správce).</li>
+    <li><strong>Odesílá data:</strong> nikam. Žádná telemetrie, žádná kontrola aktualizací, žádný síťový klient.</li>
+    <li><strong>Režimy:</strong> okno a tentýž soubor jako nástroj příkazového řádku.</li>
+    <li><strong>Zdroj:</strong> <a href="{{site.repo_url}}">na GitHubu</a>, pod stejnou licencí.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Co je ve vydání</h2>
+  <p>Vydání zveřejňuje pět souborů. Dva jsou program a další tři tu jsou proto, abyste nemuseli stažení brát na slepou víru:</p>
+  <ul>
+    <li><strong>zip</strong>: program a ovladač, který používá, pohromadě v jedné složce;</li>
+    <li><strong>instalátor .msi</strong>: tentýž program nainstalovaný pro všechny uživatele počítače, s položkou v nabídce Start;</li>
+    <li><strong>SHA256SUMS.txt</strong>: kontrolní součty zipu a instalátoru;</li>
+    <li><strong>SBOM</strong>: standardní seznam všech součástí uvnitř, s verzemi a licencemi, podepsaný proti zipu;</li>
+    <li><strong>soubor .sigstore.json</strong>: tentýž podpis jako soubor, aby šel ověřit bez dotazu na GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ověření, že jste dostali, co jsme sestavili</h2>
+  <p>Kontrolní součet odpovídá na otázku „dorazilo to beze změny“. V PowerShellu porovnejte výstup s řádkem v <code>SHA256SUMS.txt</code> (u instalátoru dosaďte <code>.msi</code> místo <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>Podpis odpovídá na jinou otázku, „vzniklo to v tom repozitáři“, a potřebuje nástroj příkazového řádku GitHubu:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Jako první část zadejte název staženého zipu, protože <code>gh</code> tam <code>*</code> nepřijímá. Ponechte <code>--predicate-type</code>: bez něj <code>gh</code> hledá jiný druh prohlášení a oznámí, že žádné nenašel.</p>
+  <p>Kontrolní součet, který zkopírujete ze stejné stránky jako stažení, dokazuje méně než podpis. Zveřejněno je obojí, takže stojí za chvilku obojí.</p>
+</section>
+
+<section>
+  <h2>Windows vás může varovat</h2>
+  <p>Program i instalátor jsou podepsané, takže Windows uvede, kdo je podepsal, místo „Neznámý vydavatel“. Certifikát je nový, takže SmartScreen může ještě nějakou dobu varovat, protože ho zatím neviděl často. Jde o certifikát, ne o soubor, a obě výše uvedené kontroly vám umožní soubor ověřit samotným. Na stránce <a href="../caste-dotazy/">otázek</a> je to popsáno i s tím, co ovladač potřebuje.</p>
+</section>
+
+<section>
+  <h2>Kde začít po spuštění</h2>
+  {{page.guide_links}}
+</section>

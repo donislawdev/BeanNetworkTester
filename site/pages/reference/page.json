@@ -73,6 +73,12 @@
       "title": "Profiller, ayarlar ve çıkış kodları",
       "description": "Hazır her profil değerleriyle, her ayar seçeneği, birimi ve aralığıyla, ayrıca komut satırının döndürebileceği her çıkış kodu.",
       "link_text": "Başvuru tabloları"
+    },
+    "cs": {
+      "slug": "referencni-tabulky",
+      "title": "Profily, nastavení a návratové kódy",
+      "description": "Každý hotový profil s čísly, která nastavuje, každé nastavení s přepínačem, jednotkou a rozsahem a každý návratový kód příkazového řádku.",
+      "link_text": "Referenční tabulky"
     }
   }
 }

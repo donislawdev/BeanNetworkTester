@@ -73,6 +73,12 @@
       "title": "Windows uygulamasını internetsiz test edin",
       "description": "Yerel ağ çalışırken bir uygulamanın internetini alın, tek bir hizmeti erişilemez yapın ya da DNS’i bozun, hiçbir şeyi çekmeden.",
       "link_text": "İnternetsiz"
+    },
+    "cs": {
+      "slug": "test-bez-internetu",
+      "title": "Test aplikace bez internetu ve Windows",
+      "description": "Odeberte jedné aplikaci internet, zatímco místní síť funguje, znepřístupněte jednu službu nebo rozbijte DNS, aniž byste cokoli odpojovali.",
+      "link_text": "Bez internetu"
     }
   }
 }

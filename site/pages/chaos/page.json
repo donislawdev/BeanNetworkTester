@@ -73,6 +73,12 @@
       "title": "Windows’ta ağ kaos testi",
       "description": "Ağ hatalarını bilerek enjekte edin, seed ile birebir tekrarlayın ve uygulamanın dayanıp dayanmadığına pipeline çıkış koduyla karar versin.",
       "link_text": "Kaos testi"
+    },
+    "cs": {
+      "slug": "chaos-testovani-site",
+      "title": "Chaos testování sítě ve Windows",
+      "description": "Záměrně vkládejte síťové chyby, přesně je opakujte pomocí seedu a nechte pipeline podle návratového kódu rozhodnout, zda aplikace přežila.",
+      "link_text": "Chaos testování"
     }
   }
 }

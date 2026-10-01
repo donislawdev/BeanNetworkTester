@@ -73,6 +73,12 @@
       "title": "Bean Network Tester - Windows’ta kötü ağı simüle edin",
       "description": "Bir uygulamaya gecikme, paket kaybı ve hız sınırı ekleyen ücretsiz Windows aracı. Kötü bir bağlantıda nasıl davrandığını test edin.",
       "link_text": "Ana sayfa"
+    },
+    "cs": {
+      "slug": "",
+      "title": "Bean Network Tester - simulace špatné sítě ve Windows",
+      "description": "Bezplatný nástroj pro Windows, který jedné aplikaci přidá zpoždění, ztrátu paketů a omezení rychlosti. Vyzkoušejte její chování na špatném spojení.",
+      "link_text": "Domů"
     }
   },
   "schema": "software_application"

@@ -73,6 +73,12 @@
       "title": "Komut satırlı, Windows için bir Clumsy alternatifi",
       "description": "Windows için bir ağ bozma aracında nelere bakmalı, bu aracın yalnızca etkileşimli olanlara göre artıları ve ne zaman başkasını seçmeli.",
       "link_text": "Clumsy alternatifi"
+    },
+    "cs": {
+      "slug": "alternativa-ke-clumsy",
+      "title": "Alternativa ke Clumsy pro Windows s příkazovým řádkem",
+      "description": "Na co se dívat u nástroje pro zhoršení sítě ve Windows, co tento přidává oproti čistě interaktivním nástrojům a kdy sáhnout po jiném.",
+      "link_text": "Alternativa ke Clumsy"
     }
   }
 }

@@ -73,6 +73,12 @@
       "title": "Oyunlarda lag ve paket kaybı simülasyonu",
       "description": "Bir oyun istemcisine kötü bir bağlantının pingini, jitter’ını ve paket kaybını yalnızca o işlem için verin; aynı çalıştırmayı seed ile tekrarlayın.",
       "link_text": "Oyunlarda lag"
+    },
+    "cs": {
+      "slug": "simulator-lagu-ve-hrach",
+      "title": "Simulace lagu a ztráty paketů ve hrách",
+      "description": "Dejte herního klientovi ping, jitter a ztrátu paketů špatného spojení jen pro tento proces a stejný běh zopakujte pomocí seedu.",
+      "link_text": "Lag ve hrách"
     }
   }
 }

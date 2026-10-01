@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Omezení rychlosti stahování a odesílání</h1>
+  <p class="lead">Omezte jednu aplikaci na zadaný počet kilobajtů za sekundu a víc už nedostane. Oba směry jsou oddělené, takže jí můžete dát rychlé stahování a beznadějné odesílání, což přesně tak vypadá většina domácích a mobilních připojení.</p>
+</section>
+
+<section>
+  <h2>V okně</h2>
+  <ol class="steps">
+    <li>Do pole <strong>{{app.fields.target_process}}</strong> zadejte svou aplikaci.</li>
+    <li>Vyplňte <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> nebo obojí, v KB/s. Pole s hodnotou 0 nechá daný směr být.</li>
+    <li>Stiskněte <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Co čísla znamenají</h2>
+  <table>
+    <tr><th>KB/s</th><th>Přibližně</th><th>Co to je</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Vytáčený modem. Profil „{{app.presets.modem56k}}“.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>WiFi v letadle, přeplněný hotel, slabý mobilní signál.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Skromná domácí linka. Stačí na jeden videostream.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Dnes běžné pevné připojení.</td></tr>
+  </table>
+  <p>Kilobajty, ne kilobity, takže pro srovnání s tím, co uvádí poskytovatel internetu, násobte osmi. Právě omezení obou směrů najednou způsobí, že připojení působí jako špatný hotspot, a ne jen jako pomalé stahování.</p>
+</section>
+
+<section>
+  <h2>Fronta je stejně důležitá jako limit</h2>
+  <p>Omezení rychlosti potřebuje někam odložit pakety, které se zatím nevejdou. To je nastavení <strong>{{app.fields.buffer}}</strong> v milisekundách a chová se jako fronta u pokladny:</p>
+  <ul>
+    <li><strong>Krátká fronta</strong> znamená, že se pakety zahazují, jakmile je linka plná. Aplikace vidí ztrátu a reaguje rychle.</li>
+    <li><strong>Dlouhá fronta</strong> znamená, že se nic nezahazuje, ale všechno čeká. Aplikace vidí, jak je spojení stále pomalejší, místo aby selhalo. Tak se chová přetížená domácí linka a proto se videohovor zhoršuje, zatímco stahování pokračuje.</li>
+  </ul>
+  <p>Profil „{{app.presets.bufferbloat}}“ je přesně tohle: limit s dlouhou frontou. Zkuste stejnou rychlost s krátkou a s dlouhou frontou a sledujte, jak odlišně se aplikace chová.</p>
+</section>
+
+<section>
+  <h2>Na co se připravit</h2>
+  <p>Při běžícím limitu může čítač zahozených paketů zůstat na nule. Není to chyba: limit nejdřív nechá pakety čekat a zahodí je, teprve když je fronta opravdu plná. Dejte mu malý buffer a zahazování se objeví.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
