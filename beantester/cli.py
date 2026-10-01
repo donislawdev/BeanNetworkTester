@@ -1285,12 +1285,13 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             _restore_signal_handlers(previous_signals)
 
 
-def _run_gui(argv):
+def _run_gui(argv, relaunched=False):
     """GUI mode from the same (console-subsystem) binary - see winenv.py."""
-    if winenv.is_windows() and not winenv.is_admin():
+    if winenv.is_windows() and not winenv.is_admin() and not relaunched:
         # capture needs an elevated token; ask for it before Tk exists. If the
         # user says no we keep going: the GUI still opens (and explains why a
-        # session cannot start), it just cannot capture.
+        # session cannot start), it just cannot capture. The copy started by
+        # elevate_self never asks again, admin or not (see winenv.UAC_RELAUNCH).
         if winenv.elevate_self(argv):
             return exitcodes.OK               # the elevated copy took over
     if is_frozen():
@@ -1312,15 +1313,37 @@ def _run_gui(argv):
         import tkinter as tk
 
         from .gui import App
-    except Exception:
-        print(f"No tkinter. Use CLI mode, e.g.:  {command_name()} --simulate --loss 5",
-              file=sys.stderr)
-        return exitcodes.RUNTIME
-    winenv.set_dpi_awareness()                # before the Tk root exists
-    root = tk.Tk()
-    App(root)
+        winenv.set_dpi_awareness()            # before the Tk root exists
+        root = tk.Tk()
+        App(root)
+    except Exception as exc:
+        return _window_did_not_open(exc)
     root.mainloop()
     return exitcodes.OK
+
+
+# The modules whose absence means "this Python has no Tk", not "this program broke".
+_TK_MODULES = ("tkinter", "_tkinter")
+
+
+def _window_did_not_open(exc):
+    """GUI mode ended before its window could be used: say why, where it is seen.
+
+    Only a missing Tk is "No tkinter". Anything else - a bug in the GUI package, a
+    Tk that cannot start - used to be called that as well and recorded nowhere.
+    And in the frozen build the line went to the null sink ``detach_console`` put
+    in place of stderr, so a double-clicked exe just vanished with exit code 1.
+    """
+    if isinstance(exc, ImportError) and exc.name in _TK_MODULES:
+        text = f"No tkinter. Use CLI mode, e.g.:  {command_name()} --simulate --loss 5"
+    else:
+        text = f"The window could not open: {type(exc).__name__}: {exc}"
+        if crashlog.record(exc, source="gui-start") is not None:
+            text += f"\nThe details are in {crashlog.crash_dir()}"
+    print(text, file=sys.stderr)
+    if is_frozen():                           # no console left to print to
+        winenv.show_error(appinfo.APP_NAME, text)
+    return exitcodes.RUNTIME
 
 
 def main(argv=None):
@@ -1331,8 +1354,13 @@ def main(argv=None):
     # kind a user cannot even describe - used to vanish completely.
     crashlog.install()
     argv = sys.argv[1:] if argv is None else argv
+    # The copy winenv.elevate_self started says so with its last argument. It is
+    # taken off before anything reads the arguments: left in, the GUI's copy would
+    # be handed to the CLI parser and stop with "unrecognized arguments".
+    relaunched = winenv.UAC_RELAUNCH in argv
+    argv = [arg for arg in argv if arg != winenv.UAC_RELAUNCH]
     if not argv or (len(argv) == 1 and argv[0] == "--gui"):
-        return _run_gui(argv)
+        return _run_gui(argv, relaunched)
     return run_cli(argv)
 
 

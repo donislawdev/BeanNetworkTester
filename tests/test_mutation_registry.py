@@ -2180,8 +2180,8 @@ MUTATIONS = [
         # nothing, and one orphan keeps `crashes/` alive for ever after.
         "label": "crashlog: the sweep for orphaned temp breadcrumbs stops sweeping",
         "file": "beantester/crashlog.py",
-        "old": "    for name in [BREADCRUMB_NAME, *stale]:",
-        "new": "    for name in [BREADCRUMB_NAME]:",
+        "old": "            if now - os.path.getmtime(temp) > STALE_TEMP_S:\n",
+        "new": "            if False:\n",
         "test": "test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit",
     },
     {
@@ -5807,6 +5807,154 @@ MUTATIONS = [
         "old": "        if failed:\n            error = RuntimeError(\n",
         "new": "        if 0 < len(failed) < 4:\n            error = RuntimeError(\n",
         "test": "test_a_table_that_fails_is_recorded_every_time_and_so_is_none_answering",
+    },
+    {
+        # P3-41: every clean exit took the temp file another copy was writing.
+        "label": "crashlog: a clean exit sweeps temp files of any age",
+        "file": "beantester/crashlog.py",
+        "old": "            if now - os.path.getmtime(temp) > STALE_TEMP_S:\n",
+        "new": "            if True:\n",
+        "test": "test_a_temp_breadcrumb_another_copy_is_writing_survives_a_clean_exit",
+    },
+    {
+        # P3-41: every clean exit - a --doctor too - took whatever breadcrumb was there.
+        "label": "crashlog: a clean exit takes any breadcrumb, not only its own",
+        "file": "beantester/crashlog.py",
+        "old": "    if _written_here(path):\n",
+        "new": "    if os.path.exists(path):\n",
+        "test": "test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running",
+    },
+    {
+        # P3-41: one name for every copy, so "ours" is the pid in it.
+        "label": "crashlog: any readable breadcrumb counts as this process's own",
+        "file": "beantester/crashlog.py",
+        "old": "            return json.load(f).get(\"pid\") == os.getpid()\n",
+        "new": "            return isinstance(json.load(f), dict)\n",
+        "test": "test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours",
+    },
+    {
+        # NOWE-5b-2: the state was remembered before the write, so a failed write
+        # was never tried again.
+        "label": "crashlog: a breadcrumb is remembered before it is written",
+        "file": "beantester/crashlog.py",
+        "old": "    if directory is None:\n        return False\n    payload = dict(state)\n",
+        "new": "    _breadcrumb_last = dict(state)\n"
+               "    if directory is None:\n        return False\n    payload = dict(state)\n",
+        "test": "test_a_breadcrumb_write_that_failed_is_tried_again",
+    },
+    {
+        # NOWE-5b-2: a write retried every tick must not create a file it cannot fill.
+        "label": "crashlog: a temp breadcrumb exists before its text does",
+        "file": "beantester/crashlog.py",
+        "old": "        text = json.dumps(payload, ensure_ascii=False, indent=2)\n",
+        "new": "        temp_beside(os.path.join(directory, BREADCRUMB_NAME))\n"
+               "        text = json.dumps(payload, ensure_ascii=False, indent=2)\n",
+        "test": "test_a_state_json_cannot_hold_never_creates_a_file",
+    },
+    {
+        # P3-40: every failure at the GUI import was "No tkinter".
+        "label": "cli: any failure before the window is called a missing tkinter",
+        "file": "beantester/cli.py",
+        "old": "    if isinstance(exc, ImportError) and exc.name in _TK_MODULES:\n",
+        "new": "    if True:\n",
+        "test": "test_a_broken_gui_package_is_not_called_a_missing_tkinter",
+    },
+    {
+        # P3-40: a Python without Tk is not a crash of this program.
+        "label": "cli: a missing tkinter is recorded as a crash",
+        "file": "beantester/cli.py",
+        "old": "    if isinstance(exc, ImportError) and exc.name in _TK_MODULES:\n",
+        "new": "    if False:\n",
+        "test": "test_a_missing_tkinter_is_not_a_crash",
+    },
+    {
+        # P3-40: the bug reached no crash log.
+        "label": "cli: a window that did not open is not recorded",
+        "file": "beantester/cli.py",
+        "old": "        if crashlog.record(exc, source=\"gui-start\") is not None:\n",
+        "new": "        if False:\n",
+        "test": "test_a_broken_gui_package_is_not_called_a_missing_tkinter",
+    },
+    {
+        # P3-40: the frozen build has no console left - the exe just vanished.
+        "label": "cli: the frozen build stays silent when its window does not open",
+        "file": "beantester/cli.py",
+        "old": "        winenv.show_error(appinfo.APP_NAME, text)\n",
+        "new": "        pass\n",
+        "test": "test_the_frozen_build_shows_why_its_window_did_not_open",
+    },
+    {
+        # P3-40: the Tk root is the same failure as the import - no window.
+        "label": "cli: a Tk that cannot start escapes the window guard",
+        "file": "beantester/cli.py",
+        "old": "        winenv.set_dpi_awareness()            # before the Tk root exists\n"
+               "        root = tk.Tk()\n"
+               "        App(root)\n"
+               "    except Exception as exc:\n"
+               "        return _window_did_not_open(exc)\n",
+        "new": "    except Exception as exc:\n"
+               "        return _window_did_not_open(exc)\n"
+               "    winenv.set_dpi_awareness()\n"
+               "    root = tk.Tk()\n"
+               "    App(root)\n",
+        "test": "test_a_tk_that_cannot_start_is_said_and_recorded",
+    },
+    {
+        # P3-40: the box must say what stderr says, under the program's name.
+        "label": "winenv: the error box swaps its title and its text",
+        "file": "beantester/winenv.py",
+        "old": "        return bool(lib.MessageBoxW(None, str(text), str(title),\n",
+        "new": "        return bool(lib.MessageBoxW(None, str(title), str(text),\n",
+        "test": "test_the_error_box_carries_the_text_under_the_program_name",
+    },
+    {
+        # P3-39: the copy started for elevation asked again - for ever, where
+        # "runas" cannot elevate.
+        "label": "cli: the copy started for elevation asks again",
+        "file": "beantester/cli.py",
+        "old": "    if winenv.is_windows() and not winenv.is_admin() and not relaunched:\n",
+        "new": "    if winenv.is_windows() and not winenv.is_admin():\n",
+        "test": "test_a_copy_started_for_elevation_never_asks_again",
+    },
+    {
+        # P3-39: the marker left in reaches the CLI parser (exit 2, no window).
+        "label": "cli: the elevated copy's marker reaches the CLI parser",
+        "file": "beantester/cli.py",
+        "old": "    argv = [arg for arg in argv if arg != winenv.UAC_RELAUNCH]\n",
+        "new": "",
+        "test": "test_a_copy_started_for_elevation_never_asks_again",
+    },
+    {
+        # P3-39: without the marker the copy cannot know it is the copy.
+        "label": "winenv: the elevated copy is not told it was relaunched",
+        "file": "beantester/winenv.py",
+        "old": "        program, args = _relaunch_command(argv + [UAC_RELAUNCH])\n",
+        "new": "        program, args = _relaunch_command(argv)\n",
+        "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
+    },
+    {
+        # P3-38: the copy is started from sys.argv[0], as it shipped.
+        "label": "winenv: the elevated copy is started from sys.argv[0] again",
+        "file": "beantester/winenv.py",
+        "old": "    head = list(sys.orig_argv[1:len(sys.orig_argv) - (len(sys.argv) - 1)])\n",
+        "new": "    head = [os.path.abspath(sys.argv[0])]\n",
+        "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
+    },
+    {
+        # P3-38: a relative script path is left to the working directory.
+        "label": "winenv: a relative script path is passed on as given",
+        "file": "beantester/winenv.py",
+        "old": "        head[-1] = os.path.abspath(head[-1])\n",
+        "new": "        pass\n",
+        "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
+    },
+    {
+        # P3-38: an interpreter with no command line to repeat starts nothing.
+        "label": "winenv: no command line to repeat starts nothing",
+        "file": "beantester/winenv.py",
+        "old": "        head = [sys.argv[0]]\n",
+        "new": "        pass\n",
+        "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
     },
 ]
 

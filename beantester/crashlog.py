@@ -69,6 +69,7 @@ import os
 import platform
 import sys
 import threading
+import time
 import traceback
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -87,6 +88,7 @@ MAX_LOG_BYTES = 5 * 1024 * 1024     # rotate past this
 MAX_ROTATIONS = 5                   # keep this many old logs
 MAX_RECORDS = 2000                  # distinct fingerprints held in memory
 MAX_LOG_TAIL = 40                   # log lines attached to a record
+STALE_TEMP_S = 60.0                 # a temp breadcrumb this old lost its writer
 
 # Severity. "error" is a real failure; "debug" is something quiet() swallowed.
 ERROR = "error"
@@ -567,13 +569,20 @@ def breadcrumb(**state):
 
     Best-effort by definition: this must never turn a crash into two, so nothing
     here raises and nothing here is required to have worked.
+
+    What it does NOT do is give up on a state after one failed write. The state is
+    remembered only once it is on disk: remembering it first (as this did until
+    2026-10-01) turned a single failed write - a temp file another copy swept, a
+    replace that lost to another writer - into "this state is never written",
+    because every later tick compared equal and returned. A write that keeps
+    failing is tried once a tick and costs no disk: the text is built BEFORE any
+    file exists, so a state json cannot hold never creates one.
     """
     global _breadcrumb_last
     if not _armed[0] or not _enabled:
         return False
     if state == _breadcrumb_last:
         return False
-    _breadcrumb_last = dict(state)
     directory = _ensure_dir()
     if directory is None:
         return False
@@ -582,6 +591,12 @@ def breadcrumb(**state):
     payload["version"] = __version__
     payload["pid"] = os.getpid()
     payload["threads"] = [t.name for t in threading.enumerate()]
+    try:
+        # The state comes from the UI: a value json cannot serialise must not take
+        # the process down on the way to describing a crash.
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    except (TypeError, ValueError):
+        return False
     path = os.path.join(directory, BREADCRUMB_NAME)
     # Unique per writer: two copies of the GUI both leave a breadcrumb, and they
     # used to leave it through one `breadcrumb.json.tmp`. See paths.temp_beside -
@@ -591,19 +606,17 @@ def breadcrumb(**state):
     try:
         tmp = temp_beside(path)
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write(text)
         os.replace(tmp, path)
-        return True
-    except (OSError, TypeError, ValueError):
-        # TypeError/ValueError as well as OSError: the state comes from the UI and
-        # a value json cannot serialise must not take the process down on the way
-        # to describing a crash.
+    except OSError:
         try:
             if tmp and os.path.exists(tmp):
                 os.remove(tmp)
         except OSError:
             pass
         return False
+    _breadcrumb_last = dict(state)
+    return True
 
 
 def _cleanup_native():
@@ -619,14 +632,11 @@ def _cleanup_native():
     keeps its ``crashes.ndjson`` and the directory with it).
 
     The breadcrumb goes the same way and for the same reason: it describes the
-    state a native crash happened IN, so a clean exit means nobody wants it. Its
-    ``.tmp`` is removed too - a process killed mid-write leaves one, and a stray
-    temp file would stop the directory from ever being cleaned up again. That
-    sweep is by PREFIX rather than by one known name, because the temp file is now
-    unique per writer (``paths.temp_beside``): there is no single name left to
-    remove, and an orphan here is exactly the leftover the paragraph above says
-    must not survive. The old fixed name matches the same prefix, so a temp file
-    left behind by a version before this one is still cleaned up.
+    state a native crash happened IN, so a clean exit means nobody wants it - but
+    only THIS process's breadcrumb (see ``_sweep_breadcrumbs``). Every run of the
+    program installs this handler, a ``--doctor`` as much as a second GUI, and each
+    used to delete whatever breadcrumb was there: the one a GUI still running had
+    written, which its de-duplication then never wrote again.
     """
     global _native_stream, _native_path, _breadcrumb_last
     # Close the diverts BEFORE the handler that would record a hard crash inside
@@ -656,16 +666,7 @@ def _cleanup_native():
         pass
     _breadcrumb_last = None
     directory = crash_dir()
-    try:
-        stale = [n for n in os.listdir(directory)
-                 if n.startswith(BREADCRUMB_NAME) and n.endswith(".tmp")]
-    except OSError:
-        stale = []
-    for name in [BREADCRUMB_NAME, *stale]:
-        try:
-            os.remove(os.path.join(directory, name))
-        except OSError:
-            pass
+    _sweep_breadcrumbs(directory)
     stream, path = _native_stream, _native_path
     _native_stream = _native_path = None
     if stream is not None:
@@ -684,6 +685,53 @@ def _cleanup_native():
             os.rmdir(directory)
     except OSError:
         pass
+
+
+def _sweep_breadcrumbs(directory):
+    """Remove this process's breadcrumb and the temp files no writer is using.
+
+    The breadcrumb has ONE name for every copy of the program, so it goes only
+    when it says it is ours (``pid``). Reading and then removing leaves a window
+    of microseconds in which another copy can replace it; that copy then loses
+    one breadcrumb until its state changes, which is what used to happen on
+    every exit.
+
+    A temp file is unique per writer (``paths.temp_beside``) and lives for
+    milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
+    killed mid-write - and an orphan here stops ``crashes/`` from ever being
+    removed. A younger one may be another copy's write in progress: sweeping it
+    made that copy's replace fail. The sweep is by PREFIX, so a temp file left by
+    an older version (fixed ``breadcrumb.json.tmp``) goes the same way.
+    """
+    path = os.path.join(directory, BREADCRUMB_NAME)
+    if _written_here(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return
+    now = time.time()
+    for name in names:
+        if not (name.startswith(BREADCRUMB_NAME) and name.endswith(".tmp")):
+            continue
+        temp = os.path.join(directory, name)
+        try:
+            if now - os.path.getmtime(temp) > STALE_TEMP_S:
+                os.remove(temp)
+        except OSError:
+            pass
+
+
+def _written_here(path):
+    """True when the breadcrumb at ``path`` was written by this process."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("pid") == os.getpid()
+    except (OSError, ValueError, AttributeError):
+        return False                # missing, half-read or not ours to judge
 
 
 def install_tk(root):

@@ -21,6 +21,8 @@ import json
 import os
 import sys
 import threading
+import time
+import types
 
 import pytest
 
@@ -840,14 +842,21 @@ def test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit(isolat
     file would make every healthy run leave a folder behind for ever. Both name
     shapes are swept - the one this version writes and the fixed one a version
     before it could have left.
+
+    Rewritten 2026-10-01 (external review, P3-41): the files are made OLD first.
+    The sweep used to take every temp file at once, including the one another
+    running copy was writing at that moment; a kill's leftover is the old one.
     """
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
     directory = crashlog.crash_dir()
+    long_ago = time.time() - crashlog.STALE_TEMP_S - 5
     for name in (crashlog.BREADCRUMB_NAME + ".tmp",             # pre-2026-09-03
                  crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp"):     # what temp_beside makes
-        with open(os.path.join(directory, name), "w", encoding="utf-8") as f:
+        path = os.path.join(directory, name)
+        with open(path, "w", encoding="utf-8") as f:
             f.write("{half writ")
+        os.utime(path, (long_ago, long_ago))
 
     crashlog._cleanup_native()
 
@@ -899,3 +908,234 @@ def test_a_clean_exit_takes_the_breadcrumb_with_it(isolated):
 
     assert not os.path.exists(path), "the breadcrumb outlived a clean exit"
     assert not os.path.isdir(crashlog.crash_dir()), "the now-empty crashes dir was left"
+
+
+# -- 10) a clean exit takes only what is its own (external review, P3-41) ---- #
+def _breadcrumb_of_another_copy(pid_offset=1):
+    """What a second copy of the program, still running, has on disk."""
+    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"page": "stats", "running": True, "windows": [],
+                   "pid": os.getpid() + pid_offset}, f)
+    return path
+
+
+def test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running(isolated):
+    """Every run installs the exit handler - a ``--doctor``, a ``--version``, a
+    second GUI - and each one deleted whatever breadcrumb was there. The GUI that
+    wrote it never wrote it again (its state had not changed), so its next native
+    crash had no state on disk. Reproduced 2026-10-01 on two real processes."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    path = _breadcrumb_of_another_copy()
+
+    crashlog._cleanup_native()
+
+    assert os.path.exists(path), "a clean exit took another copy's breadcrumb"
+
+
+def test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours(isolated):
+    """One name for every copy: having written one is not owning what is there."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    assert crashlog.breadcrumb(page="control", running=False, windows=[])
+    path = _breadcrumb_of_another_copy()
+
+    crashlog._cleanup_native()
+
+    assert os.path.exists(path), "a clean exit took the breadcrumb another copy wrote last"
+
+
+def test_a_temp_breadcrumb_another_copy_is_writing_survives_a_clean_exit(isolated):
+    """A temp file lives for milliseconds between its create and its replace. The
+    sweep took it anyway, and the other copy's replace then failed."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME + ".x7q2kd.tmp")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("{being writ")
+
+    crashlog._cleanup_native()
+
+    assert os.path.exists(path), "a clean exit swept a temp file another copy was writing"
+
+
+def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
+    """External review, NOWE-5b-2: the state was remembered BEFORE the write, so a
+    write that failed once (a replace that lost to another writer, a temp file
+    swept from under it) compared equal on every later tick and was never tried
+    again."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    real_replace = os.replace
+    failures = []
+
+    def fail_once(src, dst):
+        if not failures:
+            failures.append(src)
+            raise PermissionError(13, "the target is being replaced by another writer")
+        return real_replace(src, dst)
+
+    try:
+        monkeypatch.setattr(os, "replace", fail_once)
+        assert not crashlog.breadcrumb(page="conns", running=False, windows=[])
+        assert failures, "the stand-in never ran - this proves nothing"
+        assert crashlog.breadcrumb(page="conns", running=False, windows=[]), (
+            "the same state after a failed write must be written, not skipped")
+        with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
+                  encoding="utf-8") as f:
+            assert json.load(f)["page"] == "conns"
+    finally:
+        crashlog._cleanup_native()
+
+
+def test_a_state_json_cannot_hold_never_creates_a_file(isolated, monkeypatch):
+    """A failed write is tried again on the next tick, so one that can never work
+    must cost no disk: the text is built before any temp file exists."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    created = []
+    real_temp_beside = crashlog.temp_beside
+
+    def counting(path):
+        created.append(path)
+        return real_temp_beside(path)
+
+    try:
+        monkeypatch.setattr(crashlog, "temp_beside", counting)
+        for _ in range(3):
+            assert not crashlog.breadcrumb(page=object(), running=False, windows=[])
+        assert created == [], f"an unserialisable state created temp files: {created}"
+    finally:
+        crashlog._cleanup_native()
+
+
+# -- 11) a window that does not open says why (external review, P3-40) ------- #
+class _BrokenGui(types.ModuleType):
+    """``beantester.gui`` with a bug in it: any name looked up raises."""
+
+    def __getattr__(self, name):
+        raise NameError(f"name 'undefined_helper' is not defined (while loading {name})")
+
+
+def _gui_start(monkeypatch, frozen=False, gui=None, tkinter=None):
+    """Drive cli._run_gui to the point the window would open, with nothing real.
+
+    The real tkinter is replaced either way, so the test asserts the same thing
+    on a runner without Tk as on this machine. ``detach_console`` is ALWAYS
+    replaced: the real one would cut this test process off its console.
+    """
+    from beantester import cli, winenv
+
+    shown = []
+    monkeypatch.setattr(winenv, "is_windows", lambda: False)   # skip the elevation dance
+    monkeypatch.setattr(winenv, "detach_console", lambda: True)
+    monkeypatch.setattr(winenv, "show_error", lambda title, text: shown.append((title, text)))
+    monkeypatch.setattr(cli, "is_frozen", lambda: frozen)
+    monkeypatch.setitem(sys.modules, "tkinter", tkinter)
+    if gui is not None:
+        monkeypatch.setitem(sys.modules, "beantester.gui", gui)
+    return cli, shown
+
+
+def _sources(entries):
+    return [e["source"] for e in entries]
+
+
+def test_a_broken_gui_package_is_not_called_a_missing_tkinter(isolated, monkeypatch, capsys):
+    """Any exception at the import used to read "No tkinter" and reach no crash
+    log - a bug in the GUI package looked like a Python without Tk."""
+    from beantester import exitcodes
+
+    cli, shown = _gui_start(monkeypatch, tkinter=types.ModuleType("tkinter"),
+                            gui=_BrokenGui("beantester.gui"))
+    try:
+        code = cli._run_gui([])
+    finally:
+        crashlog._cleanup_native()
+    err = capsys.readouterr().err
+
+    assert code == exitcodes.RUNTIME
+    assert "No tkinter" not in err, f"a bug was called a missing tkinter: {err!r}"
+    assert "could not open" in err and "NameError" in err, err
+    assert _sources(_entries(isolated)) == ["gui-start"], (
+        f"the bug must be in the crash log (got {_entries(isolated)})")
+    assert shown == [], "a run from sources has a console - no box"
+
+
+def test_a_tk_that_cannot_start_is_said_and_recorded(isolated, monkeypatch, capsys):
+    """The root window is the same kind of failure as the import: no window. It
+    left a traceback on a stderr the frozen build had already thrown away."""
+    from beantester import exitcodes
+
+    def no_display():
+        raise RuntimeError("no display name and no $DISPLAY environment variable")
+
+    fake_tk = types.ModuleType("tkinter")
+    fake_tk.Tk = no_display                     # type: ignore[attr-defined]
+    fake_gui = types.ModuleType("beantester.gui")
+    fake_gui.App = lambda root: None            # type: ignore[attr-defined]
+    cli, _ = _gui_start(monkeypatch, tkinter=fake_tk, gui=fake_gui)
+    try:
+        code = cli._run_gui([])
+    finally:
+        crashlog._cleanup_native()
+
+    assert code == exitcodes.RUNTIME
+    assert "RuntimeError" in capsys.readouterr().err
+    assert _sources(_entries(isolated)) == ["gui-start"]
+
+
+def test_the_frozen_build_shows_why_its_window_did_not_open(isolated, monkeypatch, capsys):
+    """The exe has no console once the GUI starts (``detach_console``): the line on
+    stderr reached a null sink and a double-clicked exe vanished with exit 1."""
+    from beantester import appinfo
+
+    cli, shown = _gui_start(monkeypatch, frozen=True, tkinter=types.ModuleType("tkinter"),
+                            gui=_BrokenGui("beantester.gui"))
+    try:
+        cli._run_gui([])
+    finally:
+        crashlog._cleanup_native()
+
+    assert len(shown) == 1, f"the frozen build must show one box (showed {shown})"
+    title, text = shown[0]
+    assert title == appinfo.APP_NAME
+    assert "could not open" in text and "NameError" in text, text
+    assert text in capsys.readouterr().err, "the box and stderr say the same thing"
+
+
+def test_the_error_box_carries_the_text_under_the_program_name(monkeypatch):
+    """``winenv.show_error`` against a stand-in user32: the real box is modal and
+    would wait for a click that never comes."""
+    from beantester import winenv
+
+    calls = []
+
+    class FakeUser32:
+        @staticmethod
+        def MessageBoxW(hwnd, text, caption, flags):   # noqa: N802 - the Windows name
+            calls.append((hwnd, text, caption, flags))
+            return 1                                    # IDOK
+
+    monkeypatch.setattr(winenv, "user32", lambda: FakeUser32)
+    assert winenv.show_error("Bean Network Tester", "The window could not open") is True
+    assert calls == [(None, "The window could not open", "Bean Network Tester",
+                      winenv._MB_ICONERROR | winenv._MB_SETFOREGROUND)], calls
+
+    monkeypatch.setattr(winenv, "user32", lambda: None)  # off Windows
+    assert winenv.show_error("t", "x") is False
+
+
+def test_a_missing_tkinter_is_not_a_crash(isolated, monkeypatch, capsys):
+    """The one failure that IS "No tkinter": a Python without Tk is the machine's
+    business, not a bug to record - and the frozen build still shows it."""
+    cli, shown = _gui_start(monkeypatch, frozen=True, tkinter=None)
+    try:
+        cli._run_gui([])
+    finally:
+        crashlog._cleanup_native()
+
+    assert "No tkinter" in capsys.readouterr().err
+    assert _entries(isolated) == [], "a missing tkinter was recorded as a crash"
+    assert len(shown) == 1 and "No tkinter" in shown[0][1], shown
