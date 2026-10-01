@@ -275,6 +275,13 @@ for testing communication between local processes). Every filter covers **IPv4 a
 IPv6**. (If ping "does not react", it is almost always because the chosen filter does not include
 ICMP.)
 
+**Loopback traffic counts as upload.** Windows hands over both directions of a conversation
+between two programs on this computer as outgoing, whichever filter is chosen. For that traffic
+**Download**, the download column of the schedule and **NAT timeout** have no effect, and neither
+do the main values when upload has separate values. The **Upload** limit applies to both
+directions together, and a target process is affected only in what it sends. With the loopback
+filter the program says so when such settings are applied.
+
 > **Note:** port presets ("DNS/HTTP/HTTPS only") do not exist - to narrow by port use the **Port**
 > field in "Target destination", which understands lists, ranges and exclusions (`80,443,8000-8100`,
 > `!53`). Two places deciding about ports, with different semantics, would only confuse.

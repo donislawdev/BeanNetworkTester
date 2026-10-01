@@ -928,3 +928,33 @@ def test_a_one_way_filter_under_asymmetry_is_said_out_loud():
     # perfectly ordinary run.
     check("a protocol filter is not a one-way filter",
           warning not in lines_for(asym=True, filter="tcp", latency_up=20))
+
+
+def test_the_loopback_filter_says_that_everything_is_upload():
+    """External review, P2-13: the driver hands over both directions of a loopback
+    conversation as outbound, so with the loopback filter Download, NAT timeout and
+    the download side of asymmetry did nothing, Upload held both directions to one
+    budget, and a target process was affected only in what it sent - in silence.
+
+    Said only when something that depends on direction is set: loss or latency
+    with no separate upload values acts on both packets, and warning there would
+    be noise on the one run this filter is meant for.
+    """
+    from beantester import DEFAULT_SETTINGS, apply_settings
+    from beantester.i18n import T
+
+    warning = T("log.loopback_all_upload")
+
+    def lines_for(**overrides):
+        said = []
+        apply_settings(BeanEngine(), dict(DEFAULT_SETTINGS, **overrides), said.append)
+        return said
+
+    for name, value in (("down", 100), ("up", 100), ("asym", True), ("nat_timeout", 5),
+                        ("rate_schedule", "1:100:0"), ("target", "app.exe")):
+        check(f"loopback with {name} set says so",
+              warning in lines_for(filter="loopback", **{name: value}))
+    check("loopback with direction-free values is silent",
+          warning not in lines_for(filter="loopback", loss=10, latency=200))
+    check("a download limit on the default filter is silent",
+          warning not in lines_for(down=100))
