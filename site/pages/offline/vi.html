@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Kiểm tra ứng dụng khi không có internet</h1>
+  <p class="lead">Rút dây mạng chỉ kiểm tra một điều: máy không có mạng. Phần lớn lỗi offline không phải như vậy. Chúng xảy ra khi bộ điều hợp vẫn bật, biểu tượng wifi trông bình thường, và thứ ứng dụng cần đơn giản là không với tới được.</p>
+</section>
+
+<section>
+  <h2>Ba kiểu “offline” khác nhau</h2>
+  <table>
+    <tr><th>Bạn bật gì</th><th>Ứng dụng thấy gì</th><th>Lỗi nó tìm ra</th></tr>
+    <tr><td><strong>Chế độ LAN</strong></td><td>Mạng nội bộ chạy. Mọi thứ bên ngoài thì không.</td><td>Wifi khách sạn trước khi đăng nhập, một đường lên mạng đã chết, mạng công ty không có đường ra ngoài.</td></tr>
+    <tr><td><strong>Chặn một địa chỉ</strong></td><td>Một máy chủ không với tới được. Mọi thứ khác vẫn chạy.</td><td>Một phụ thuộc ngừng hoạt động trong khi chính ứng dụng vẫn ổn: trường hợp mà kiểm tra sức khỏe (health check) thường bỏ sót.</td></tr>
+    <tr><td><strong>Chặn cổng 53</strong></td><td>Tên không còn phân giải được, kết nối theo địa chỉ vẫn chạy.</td><td>DNS hỏng, với người dùng trông như “internet sập” còn trong nhật ký lại trông như một chuyện hoàn toàn khác.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Từ dòng lệnh</h2>
+  <p>Mất internet cho một ứng dụng, mạng nội bộ không đụng đến, trong hai phút:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Một dịch vụ không với tới được, mọi thứ khác bình thường:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Tên không còn phân giải được:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Cũng có sẵn một dòng thời gian làm hỏng DNS rồi tự khôi phục: <code>failing-dns.json</code> trong thư mục <code>scenarios</code> cạnh chương trình. Xem <a href="../kich-ban-theo-thoi-gian/">kịch bản theo thời gian</a>.</p>
+</section>
+
+<section>
+  <h2>Thực sự cần để ý điều gì</h2>
+  <ul>
+    <li><strong>Thông báo.</strong> Ứng dụng có nói chuyện gì đã xảy ra, hay hiện vòng xoay mãi mãi?</li>
+    <li><strong>Thử lại.</strong> Nó có giãn khoảng cách các lần thử, hay đập liên tục vào cùng một địa chỉ trong vòng lặp?</li>
+    <li><strong>Hàng đợi.</strong> Việc người dùng làm lúc offline có được giữ và gửi sau, hay bị mất?</li>
+    <li><strong>Phục hồi.</strong> {{app.buttons.stop}} đưa mạng trở lại. Ứng dụng tự nhận ra, hay cần khởi động lại?</li>
+  </ul>
+  <p>Điều cuối cùng đó là nơi có nhiều giá trị nhất. Mất mạng dễ xử lý tồi và dễ kiểm tra. Có lại mạng mới là chỗ trạng thái trở nên sai.</p>
+</section>
+
+<section>
+  <h2>Đây không phải là gì</h2>
+  <p>Bộ điều hợp vẫn bật và máy giữ địa chỉ, nên một ứng dụng chỉ hỏi Windows “có mạng không” vẫn nhận được câu trả lời có. Điều này có chủ ý, và là bài kiểm tra thú vị hơn: người dùng thật hiếm khi bị ngắt hoàn toàn, họ kết nối với thứ không với tới được cái họ cần. Nếu bạn muốn đúng trường hợp “không có bộ điều hợp”, hãy tắt bộ điều hợp, không cần công cụ.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -79,6 +79,12 @@
       "title": "Bean Network Tester - simulace špatné sítě ve Windows",
       "description": "Bezplatný nástroj pro Windows, který jedné aplikaci přidá zpoždění, ztrátu paketů a omezení rychlosti. Vyzkoušejte její chování na špatném spojení.",
       "link_text": "Domů"
+    },
+    "vi": {
+      "slug": "",
+      "title": "Bean Network Tester - mô phỏng mạng kém trên Windows",
+      "description": "Công cụ Windows miễn phí thêm độ trễ, mất gói tin và giới hạn tốc độ cho một ứng dụng, để bạn thử xem nó chạy ra sao trên kết nối kém.",
+      "link_text": "Trang chủ"
     }
   },
   "schema": "software_application"

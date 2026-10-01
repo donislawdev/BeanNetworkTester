@@ -79,6 +79,12 @@
       "title": "Zaměřte se ve Windows na jednu aplikaci, ne na počítač",
       "description": "Zaměřte zhoršení na jeden proces, PID, adresu nebo port, aby test rozbil jen testovanou aplikaci a zbytek počítače nechal na pokoji.",
       "link_text": "Cílení na jednu aplikaci"
+    },
+    "vi": {
+      "slug": "nham-vao-mot-ung-dung",
+      "title": "Nhắm vào một ứng dụng trên Windows, không phải cả máy",
+      "description": "Nhắm sự suy giảm vào một tiến trình, PID, địa chỉ hoặc cổng, để bài kiểm tra chỉ làm hỏng ứng dụng đang thử, còn máy vẫn yên.",
+      "link_text": "Nhắm vào một ứng dụng"
     }
   }
 }

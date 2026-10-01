@@ -79,6 +79,12 @@
       "title": "Profily, nastavení a návratové kódy",
       "description": "Každý hotový profil s čísly, která nastavuje, každé nastavení s přepínačem, jednotkou a rozsahem a každý návratový kód příkazového řádku.",
       "link_text": "Referenční tabulky"
+    },
+    "vi": {
+      "slug": "bang-tra-cuu",
+      "title": "Cấu hình mẫu, thiết lập và mã thoát",
+      "description": "Mọi cấu hình mẫu cùng số liệu nó đặt, mọi thiết lập với cờ, đơn vị và phạm vi, và mọi mã thoát mà dòng lệnh có thể trả về.",
+      "link_text": "Bảng tra cứu"
     }
   }
 }

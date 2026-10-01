@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Kiểm tra ứng dụng của bạn trên mạng kém</h1>
+  <p class="lead">Bean Network Tester thêm lag, mất gói tin và giới hạn tốc độ cho một ứng dụng Windows. Bạn thấy được điều người dùng của mình thấy trên tàu, trên điểm phát wifi khách sạn, hay trên điện thoại chỉ còn một vạch sóng.</p>
+  <p>Đó là bộ giả lập mạng nhắm vào một chương trình thay vì cả máy, nên bạn có thể tái hiện internet chậm cho ứng dụng đang thử trong khi mọi thứ khác vẫn chạy.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Một ping trực tiếp mất gói và tăng độ trễ khi công cụ đang chạy">
+  <figcaption>Thêm độ trễ và mất gói vào một kết nối đang chạy.</figcaption>
+</figure>
+
+<section>
+  <h2>Nó làm gì với mạng của bạn</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Làm chậm</h3>
+      <p>Thêm độ trễ cố định hoặc ngẫu nhiên. Tìm hiểu 300 ms ping làm gì với vòng quay chờ tải của bạn.</p>
+    </article>
+    <article class="card">
+      <h3>Làm mất gói</h3>
+      <p>Bỏ, nhân đôi hoặc làm hỏng gói tin, rồi xem ứng dụng của bạn phục hồi hay chỉ treo.</p>
+    </article>
+    <article class="card">
+      <h3>Giới hạn tốc độ</h3>
+      <p>Giữ tải xuống hoặc tải lên ở số KB mỗi giây nhất định, như một kết nối di động yếu.</p>
+    </article>
+    <article class="card">
+      <h3>Cắt đường truyền</h3>
+      <p>Kéo sập kết nối, chặn một cổng hay địa chỉ, hoặc làm mạng lúc có lúc không.</p>
+    </article>
+    <article class="card">
+      <h3>Nhắm vào một ứng dụng</h3>
+      <p>Chọn một tiến trình, một PID, một địa chỉ hoặc một cổng. Phần còn lại của máy vẫn chạy bình thường.</p>
+    </article>
+    <article class="card">
+      <h3>Lặp lại chính xác</h3>
+      <p>Cùng một seed phát lại cùng một lần chạy. Đó là khác biệt giữa một báo cáo lỗi và một câu chuyện.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Chạy nó chỉ cần ba bước</h2>
+  <ol class="steps">
+    <li>Tải tệp zip từ trang phát hành và giải nén ở bất kỳ đâu.</li>
+    <li>Khởi động <code>BeanNetworkTester.exe</code>. Nó tự xin quyền quản trị, vì việc bắt lưu lượng cần quyền đó.</li>
+    <li>Chọn một cấu hình mẫu như “{{app.presets.3g}}”, nhấn {{app.buttons.start}} và dùng ứng dụng của bạn.</li>
+  </ol>
+  <p>Có chế độ văn bản trong cùng tệp, nên cả thứ này cũng chạy được trong pipeline. Một lệnh là đủ để kiểm tra dịch vụ của bạn có chịu nổi mất 10 % gói tin không:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Nó tự dừng khi hết thời gian, nên một bước bị treo không thể để lại sau lưng một mạng hỏng. Thêm <code>--simulate</code> để chạy thử một lệnh mà không đụng đến lưu lượng thật.</p>
+</section>
+
+<section>
+  <h2>Ai dùng nó</h2>
+  <p>Tester phải tái hiện “trên máy tôi thì chạy”. Lập trình viên cần một timeout thật sự xảy ra. Lập trình viên game kiểm tra lag làm gì với netcode của họ. Bất kỳ ai từng được hỏi ứng dụng có chạy trên kết nối yếu không mà không có cách trung thực nào để biết.</p>
+</section>
+
+<section>
+  <h2>Cách làm một việc cụ thể</h2>
+  <p>Các hướng dẫn ngắn, mỗi cái kèm những con số đáng thử và lệnh để làm việc đó.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Mô phỏng mạng kém trong CI</h1>
+  <p class="lead">Cửa sổ là tùy chọn. Cùng tệp thực thi chạy như một công cụ dòng lệnh, tự kết thúc sau một khoảng thời gian đặt trước và báo những gì đã xảy ra theo cách pipeline đọc được.</p>
+</section>
+
+<section>
+  <h2>Hình dạng của một bước</h2>
+  <p>Làm suy giảm trong suốt bài kiểm tra, rồi để nó tự dừng. Không có bước dọn dẹp nào để quên:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Trong một job GitHub Actions, trên runner Windows tự lưu trữ (self-hosted):</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Hai điều về runner: bắt lưu lượng cần quyền quản trị, và runner được lưu trữ sẵn sẽ không cấp cho bạn quyền đó, nên việc này thuộc về một máy Windows tự lưu trữ.</p>
+</section>
+
+<section>
+  <h2>Mỗi kết thúc đều có mã thoát</h2>
+  <p>Không có gì kết thúc bằng một traceback. Mỗi cách một lần chạy có thể kết thúc đều có một con số, nên pipeline phân biệt được “ứng dụng của bạn thất bại” với “công cụ không khởi động được”:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Đầu ra máy đọc được</h2>
+  <p><code>--format json</code> ghi một đối tượng JSON mỗi dòng, gồm các mẫu trong lúc chạy và bản tóm tắt ở cuối, để bước sau có thể kiểm tra khẳng định trên đó:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Dòng nhật ký đi tới lỗi chuẩn và dữ liệu đi tới đầu ra chuẩn, nên chuyển hướng dữ liệu không bao giờ trộn lẫn hai thứ. <code>--seed</code> khiến lần chạy lặp lại được, điều một bài kiểm tra chập chờn (flaky) cần trước khi ai đó có thể tranh luận về nó.</p>
+</section>
+
+<section>
+  <h2>Chạy thử không đụng đến gì</h2>
+  <p>Hai cờ giúp nối nó vào an toàn trước khi bạn tin nó: <code>--dry-run</code> báo các thiết lập sẽ làm gì rồi thoát, và <code>--simulate</code> chạy toàn bộ bộ máy trên lưu lượng giả lập, không nạp trình điều khiển và không đụng đến mạng. Cả hai đều hữu ích trong một bản build không được phép làm suy giảm máy đang chạy nó.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

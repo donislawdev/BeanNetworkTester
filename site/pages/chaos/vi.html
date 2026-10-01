@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Kiểm thử hỗn loạn mạng trên Windows</h1>
+  <p class="lead">Kiểm thử hỗn loạn nghĩa là cố ý làm hỏng một thứ, trong lúc bạn theo dõi, để biết phần mềm của bạn làm gì khi đó. Ở tầng mạng, đó chính xác là công cụ này: cách chèn một lỗi vào một ứng dụng và xem nó có sống sót không.</p>
+</section>
+
+<section>
+  <h2>Những lỗi bạn có thể chèn</h2>
+  <table>
+    <tr><th>Lỗi</th><th>Nó mô phỏng gì</th></tr>
+    <tr><td>Mất, hỏng, nhân đôi</td><td>Một đường truyền suy giảm. Gói tin biến mất, đến nơi bị hỏng hoặc đến hai lần.</td></tr>
+    <tr><td>Độ trễ, jitter, cú giật</td><td>Một đường truyền chậm hoặc bất ổn, kể cả cú khựng nhiều giây làm hỏng các timeout.</td></tr>
+    <tr><td>Đặt lại kết nối</td><td>Một tường lửa hay bộ cân bằng tải giết kết nối giữa chừng khi đang truyền.</td></tr>
+    <tr><td>Mất đường truyền</td><td>Đường truyền biến mất rồi quay lại, theo chu kỳ.</td></tr>
+    <tr><td>Chặn địa chỉ hoặc cổng</td><td>Một phụ thuộc không với tới được trong khi mọi thứ khác vẫn chạy.</td></tr>
+    <tr><td>Mất internet, LAN vẫn sống</td><td>Hình dạng của captive portal: mạng nội bộ chạy, thế giới bên ngoài thì không.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Điều phân biệt hỗn loạn với nhiễu: khả năng lặp lại</h2>
+  <p>Một lỗi ngẫu nhiên không thể phát lại chỉ tạo ra một câu chuyện, không phải một báo cáo lỗi. Mọi quyết định ngẫu nhiên ở đây đều đến từ một seed, nên cùng một lệnh tái hiện cùng một lần chạy: cùng những gói bị mất, cùng jitter, theo cùng thứ tự:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Đó là khác biệt giữa “thứ Ba tuần trước nó sập một lần” và một bài kiểm tra thất bại mà người khác chạy lại được.</p>
+</section>
+
+<section>
+  <h2>Trong pipeline</h2>
+  <p>Dòng lệnh báo kết quả qua mã thoát, nên một bản build phân biệt được “ứng dụng thất bại” với “công cụ không khởi động được”, và phiên tự kết thúc, nên không có bước dọn dẹp nào để quên:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Một chuỗi lỗi thay vì một lỗi là một tệp kịch bản, và những tệp đó cũng lặp lại được. Xem <a href="../kich-ban-theo-thoi-gian/">kịch bản theo thời gian</a> và <a href="../kiem-thu-mang-trong-ci/">kiểm thử mạng trong CI</a> để biết mã thoát và runner cần dùng.</p>
+</section>
+
+<section>
+  <h2>Phạm vi ảnh hưởng dừng ở đâu</h2>
+  <p>Hai giới hạn, và cả hai đều có chủ ý. Sự suy giảm chỉ đến được một tiến trình, PID, địa chỉ hoặc cổng khi bạn nhắm vào đó, nên máy bạn đang làm việc vẫn chạy. Và nó chỉ là một máy: đây là chèn lỗi cho một ứng dụng khách và kết nối của nó, không phải cho một cụm máy. Nếu bạn cần hỗn loạn xuyên các dịch vụ và nút, đó là một loại công cụ khác, còn công cụ này là phần làm hỏng mạng dưới một ứng dụng Windows đơn lẻ.</p>
+  <p>Mọi thứ đều hoàn tác được ngay. {{app.buttons.stop}} khôi phục mạng, giới hạn thời gian cũng làm vậy, và một watchdog bên trong công cụ sẽ tắt việc bắt gói nếu chính công cụ chết: một lỗi bạn đã chèn không bao giờ được sống lâu hơn lần chạy đã chèn nó.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

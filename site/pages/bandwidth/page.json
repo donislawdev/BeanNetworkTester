@@ -79,6 +79,12 @@
       "title": "Omezení rychlosti stahování a odesílání ve Windows",
       "description": "Omezte jednu aplikaci ve Windows na zadaný počet KB za sekundu v obou směrech a zjistěte, co s ní udělá modem 56k nebo WiFi v letadle.",
       "link_text": "Omezení rychlosti"
+    },
+    "vi": {
+      "slug": "gioi-han-toc-do",
+      "title": "Giới hạn tốc độ tải xuống và tải lên trên Windows",
+      "description": "Giới hạn một ứng dụng Windows ở số KB mỗi giây nhất định theo từng chiều, và xem modem 56k hay wifi trên máy bay làm gì với nó.",
+      "link_text": "Giới hạn tốc độ"
     }
   }
 }

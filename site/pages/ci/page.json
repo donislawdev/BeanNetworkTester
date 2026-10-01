@@ -79,6 +79,12 @@
       "title": "Simulace špatné sítě v CI ve Windows",
       "description": "Tentýž spustitelný soubor běží bez okna, hlásí výsledek přes návratové kódy a NDJSON a sám skončí, takže pipeline může otestovat špatné spojení.",
       "link_text": "Síťové testy v CI"
+    },
+    "vi": {
+      "slug": "kiem-thu-mang-trong-ci",
+      "title": "Mô phỏng mạng kém trong CI trên Windows",
+      "description": "Cùng một tệp thực thi chạy không cần cửa sổ, báo kết quả qua mã thoát và NDJSON rồi tự dừng, nên pipeline có thể thử kết nối kém.",
+      "link_text": "Kiểm thử mạng trong CI"
     }
   }
 }

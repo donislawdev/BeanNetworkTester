@@ -79,6 +79,12 @@
       "title": "Časté dotazy k Bean Network Tester",
       "description": "Práva správce, zda zasahuje celý počítač, jak vše vrátit zpět, varování SmartScreen a co program dělá s vašimi daty.",
       "link_text": "Otázky a odpovědi"
+    },
+    "vi": {
+      "slug": "cau-hoi-thuong-gap",
+      "title": "Câu hỏi thường gặp về Bean Network Tester",
+      "description": "Quyền quản trị, có ảnh hưởng cả máy không, cách hoàn tác, cảnh báo SmartScreen và chương trình làm gì với dữ liệu của bạn.",
+      "link_text": "Hỏi và đáp"
     }
   }
 }

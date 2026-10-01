@@ -79,6 +79,12 @@
       "title": "Měňte podmínky sítě v čase",
       "description": "Soubor scénáře je časová osa: v těchto sekundách tato nastavení. S programem přicházejí hotové scénáře a ten je opakuje, dokud se díváte.",
       "link_text": "Scénáře v čase"
+    },
+    "vi": {
+      "slug": "kich-ban-theo-thoi-gian",
+      "title": "Thay đổi điều kiện mạng theo thời gian",
+      "description": "Tệp kịch bản là một dòng thời gian: ở những giây này, dùng những thiết lập này. Chương trình có sẵn các kịch bản và lặp lại chúng khi bạn theo dõi.",
+      "link_text": "Kịch bản theo thời gian"
     }
   }
 }

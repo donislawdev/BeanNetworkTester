@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Những câu hỏi mọi người hỏi đầu tiên</h1>
+  <p class="lead">Những câu đáng được trả lời trước khi bạn tải, chứ không phải sau.</p>
+</section>
+
+<section>
+  <h2>Vì sao cần quyền quản trị?</h2>
+  <p>Vì gói tin bị chặn bắt bởi một trình điều khiển nhân, và Windows không nạp trình điều khiển như vậy cho người dùng thường. Chương trình tự xin quyền khi khởi động. Từ dòng lệnh, nó từ chối bằng một mã thoát cụ thể thay vì hỏng giữa chừng.</p>
+</section>
+
+<section>
+  <h2>Nó sẽ làm hỏng cả máy hay chỉ ứng dụng của tôi?</h2>
+  <p>Bất cứ thứ gì bạn nhắm vào. Đặt một mục tiêu và chỉ ứng dụng đó bị ảnh hưởng. Để trống mục tiêu thì mọi kết nối trên máy đều bị, điều mà chương trình cảnh báo bạn, trong cửa sổ và trên dòng lệnh, trước khi bạn kịp tự hỏi vì sao cuộc gọi video rớt.</p>
+</section>
+
+<section>
+  <h2>Làm sao để hoàn tác?</h2>
+  <p>{{app.buttons.stop}}. Đóng chương trình cũng vậy, và giới hạn thời gian cũng vậy nếu bạn đặt. Nếu chính công cụ chết giữa phiên, một watchdog bên trong sẽ tắt việc bắt gói thay vì để mạng của bạn bị suy giảm: một phiên không bao giờ được sống lâu hơn chương trình đã khởi động nó.</p>
+</section>
+
+<section>
+  <h2>Nó có gửi gì đi đâu không?</h2>
+  <p>Không. Không có phân tích, không báo cáo sự cố cho dịch vụ nào và không kiểm tra cập nhật. Chương trình hoàn toàn không có máy khách mạng. Kết nối đi ra duy nhất nó có thể tạo là mở trang hỗ trợ trong trình duyệt, sau khi bạn bấm vào. Nó bắt lưu lượng của bạn, nên lưu lượng đó không bao giờ được rời khỏi máy, và trang bạn đang đọc cũng không tải gì từ ai khác.</p>
+</section>
+
+<section>
+  <h2>Windows cảnh báo tôi về bản tải. Vì sao?</h2>
+  <p>Chương trình được ký, nên cảnh báo nêu tên người ký thay vì ghi “Nhà phát hành không xác định”. SmartScreen vẫn có thể cảnh báo một thời gian, vì chứng chỉ còn mới và nó chưa gặp nhiều. Một số phần mềm diệt virus cũng có thể phản ứng với chương trình xin quyền quản trị và nạp một trình điều khiển mạng. Mỗi bản phát hành đều công bố tổng kiểm tra SHA-256 và danh sách thành phần có ký, nên bạn có thể xác minh thứ mình tải thay vì tin vào dấu tích xanh.</p>
+</section>
+
+<section>
+  <h2>Bản tải của tôi chết hẳn và không có gì nói lý do</h2>
+  <p>Hãy kiểm tra kích thước gói tối đa. Đặt đủ thấp, đó không còn là gói nhỏ hơn mà là một cái hố đen: mạng bỏ những gì quá lớn và không bao giờ báo. Đặt lại và việc truyền sẽ trở lại.</p>
+</section>
+
+<section>
+  <h2>Nó có chạy trên Linux hay macOS không?</h2>
+  <p>Không, và sẽ không. Nó dựa trên một trình điều khiển nhân Windows. Trên Linux, <code>tc</code> với <code>netem</code> làm việc này và đã được cài sẵn.</p>
+</section>
+
+<section>
+  <h2>Nó có thật sự miễn phí không? Tôi dùng ở chỗ làm được không?</h2>
+  <p>Có. Nó miễn phí và mã nguồn mở theo GNU GPL v3, kể cả khi dùng ở chỗ làm, với mã nguồn mở cho bất kỳ ai đọc hoặc sửa. Bản tải là cùng một tệp cho mọi người.</p>
+</section>
+
+<section>
+  <h2>Thêm</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

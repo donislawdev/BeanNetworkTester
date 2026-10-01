@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Thêm độ trễ và jitter cho một ứng dụng</h1>
+  <p class="lead">Mọi thứ đều chạy tốt trên kết nối cục bộ nhanh. Cho ứng dụng 300 ms ping và bạn sẽ biết màn hình nào được viết như thể câu trả lời đến ngay lập tức.</p>
+</section>
+
+<section>
+  <h2>Ba thứ khác nhau</h2>
+  <table>
+    <tr><th>Thiết lập</th><th>Nó làm gì</th><th>Nó đến từ đâu ngoài đời thật</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Thêm cùng một độ trễ cho mọi gói tin, tính bằng mili giây.</td><td>Khoảng cách. Một máy chủ ở lục địa khác, hoặc một vệ tinh.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Thêm một lượng ngẫu nhiên lên trên, nên độ trễ cứ thay đổi.</td><td>Wifi dùng chung, mạng di động, mọi thứ bị nghẽn.</td></tr>
+    <tr><td><strong>Cú giật</strong></td><td>Những lần khựng dài thỉnh thoảng, đặt theo tần suất và độ dài.</td><td>Chuyển giao giữa các trạm phát sóng, một bộ định tuyến đang quá tải.</td></tr>
+  </table>
+  <p>Cả ba đều tính bằng mili giây và có thể chạy cùng nhau. Cả hai số liệu độ trễ nhận mọi giá trị từ 0 trở lên, nên bạn có thể đi từ 40 ms hợp lý đến 60 giây vô lý.</p>
+</section>
+
+<section>
+  <h2>Từ dòng lệnh</h2>
+  <p>Độ trễ đều 200 ms kèm 80 ms jitter, trên một ứng dụng:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Thay vào đó là những lần khựng dài hiếm hoi: cứ khoảng hai mươi gói thì một gói chờ thêm một giây:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Những con số đáng thử</h2>
+  <ul>
+    <li><strong>40 ms</strong>: máy chủ cùng quốc gia. Không có gì nên thay đổi.</li>
+    <li><strong>150 ms</strong>: lục địa khác. Mọi thứ nói chuyện nhiều bắt đầu thấy chậm, vì mỗi vòng đi về đều tốn thời gian.</li>
+    <li><strong>600 ms trở lên</strong>: vệ tinh địa tĩnh hoặc wifi trên máy bay. Đây là lúc thanh tiến trình khựng lại và logic thử lại cuối cùng cũng chạy.</li>
+  </ul>
+  <p>Các cấu hình mẫu có sẵn mang số liệu đã đo: “{{app.presets.distant}}”, “{{app.presets.leo}}”, “{{app.presets.satellite}}”, “{{app.presets.inflight}}”, “{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>Đo lường: hãy nhìn trường hợp xấu nhất, không phải trung bình</h2>
+  <p>Jitter hầu như không làm nhúc nhích giá trị trung bình, và cũng hầu như không làm nhúc nhích trung vị. Một lần chạy có 30 ms jitter và một lần không có có thể báo ping “điển hình” gần như nhau trong khi cảm giác hoàn toàn khác.</p>
+  <p>Hãy so <strong>phân vị 95 với trung vị</strong>. Khoảng cách giữa chúng chính là jitter, và khoảng cách đó làm cuộc gọi thoại bị đứt quãng hay game không chơi nổi trong khi giá trị trung bình vẫn trông ổn.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

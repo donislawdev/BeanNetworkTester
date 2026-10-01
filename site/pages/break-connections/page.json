@@ -79,6 +79,12 @@
       "title": "Přerušení spojení a blokování portů ve Windows",
       "description": "Zabíjejte spojení, blokujte port či adresu, na chvíli přerušte linku nebo zmenšete pakety, až nic neprojde, a sledujte, jak se aplikace zotaví.",
       "link_text": "Přerušení spojení"
+    },
+    "vi": {
+      "slug": "ngat-ket-noi",
+      "title": "Ngắt kết nối và chặn cổng trên Windows",
+      "description": "Giết kết nối, chặn một cổng hay địa chỉ, ngắt đường truyền một lúc hoặc thu nhỏ gói tin đến khi không gì qua được, rồi xem ứng dụng phục hồi.",
+      "link_text": "Ngắt kết nối"
     }
   }
 }

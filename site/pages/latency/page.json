@@ -79,6 +79,12 @@
       "title": "Přidejte aplikaci ve Windows zpoždění a jitter",
       "description": "Dejte jedné aplikaci ve Windows ping vzdáleného serveru nebo vlakového tunelu: stálé zpoždění, náhodný jitter nebo občasné skoky.",
       "link_text": "Zpoždění a jitter"
+    },
+    "vi": {
+      "slug": "do-tre-va-jitter",
+      "title": "Thêm độ trễ và jitter cho ứng dụng trên Windows",
+      "description": "Cho một ứng dụng Windows độ trễ như máy chủ ở xa hay đường hầm tàu: độ trễ cố định, jitter ngẫu nhiên hoặc những cú giật thỉnh thoảng.",
+      "link_text": "Độ trễ và jitter"
     }
   }
 }

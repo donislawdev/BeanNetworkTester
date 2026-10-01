@@ -79,6 +79,12 @@
       "title": "Test aplikace bez internetu ve Windows",
       "description": "Odeberte jedné aplikaci internet, zatímco místní síť funguje, znepřístupněte jednu službu nebo rozbijte DNS, aniž byste cokoli odpojovali.",
       "link_text": "Bez internetu"
+    },
+    "vi": {
+      "slug": "kiem-tra-khong-internet",
+      "title": "Kiểm tra ứng dụng khi không có internet trên Windows",
+      "description": "Lấy đi internet của một ứng dụng trong khi mạng nội bộ vẫn chạy, làm một dịch vụ không truy cập được hoặc làm hỏng DNS mà không rút dây nào.",
+      "link_text": "Không có internet"
     }
   }
 }

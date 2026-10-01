@@ -79,6 +79,12 @@
       "title": "Simulace lagu a ztráty paketů ve hrách",
       "description": "Dejte herního klientovi ping, jitter a ztrátu paketů špatného spojení jen pro tento proces a stejný běh zopakujte pomocí seedu.",
       "link_text": "Lag ve hrách"
+    },
+    "vi": {
+      "slug": "mo-phong-lag-game",
+      "title": "Mô phỏng lag game và mất gói tin",
+      "description": "Cho một ứng dụng khách game ping, jitter và mất gói tin của kết nối kém, chỉ nhắm vào tiến trình đó, và chạy lại đúng lần ấy nhờ seed.",
+      "link_text": "Lag trong game"
     }
   }
 }

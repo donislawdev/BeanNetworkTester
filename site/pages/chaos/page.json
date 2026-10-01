@@ -79,6 +79,12 @@
       "title": "Chaos testování sítě ve Windows",
       "description": "Záměrně vkládejte síťové chyby, přesně je opakujte pomocí seedu a nechte pipeline podle návratového kódu rozhodnout, zda aplikace přežila.",
       "link_text": "Chaos testování"
+    },
+    "vi": {
+      "slug": "kiem-thu-hon-loan-mang",
+      "title": "Kiểm thử hỗn loạn mạng trên Windows",
+      "description": "Cố ý chèn lỗi mạng, lặp lại chính xác bằng seed và để pipeline dựa vào mã thoát quyết định ứng dụng có trụ được hay không.",
+      "link_text": "Kiểm thử hỗn loạn"
     }
   }
 }

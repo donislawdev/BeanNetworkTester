@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Cấu hình mẫu, thiết lập và mã thoát</h1>
+  <p class="lead">Ba bảng, không bảng nào gõ tay. Chúng được sinh từ các sổ đăng ký của chính chương trình khi trang này được build, nên không thể nói điều chương trình không nói.</p>
+</section>
+
+<section>
+  <h2>Cấu hình mẫu có sẵn</h2>
+  <p>Chọn một trong số này và biểu mẫu tự điền. Dấu gạch nghĩa là cấu hình mẫu để thiết lập đó yên. Tốc độ tính bằng kilobyte mỗi giây, nhân với tám để so với con số nhà mạng quảng cáo.</p>
+  {{page.preset_table}}
+  <p>Chọn một cấu hình mẫu chỉ điền vào các trường. Không có gì trên mạng thay đổi cho đến khi bạn nhấn {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Mọi thiết lập, và cờ đặt nó</h2>
+  <p>Cửa sổ và dòng lệnh dùng cùng các thiết lập. Đây là toàn bộ danh sách, kèm đơn vị và phạm vi mỗi thiết lập chấp nhận.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Mã thoát</h2>
+  <p>Dòng lệnh không bao giờ kết thúc bằng một traceback. Mỗi cách một lần chạy có thể kết thúc đều có một con số, nên pipeline phân biệt được ứng dụng thất bại với công cụ không khởi động được.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Liên quan</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

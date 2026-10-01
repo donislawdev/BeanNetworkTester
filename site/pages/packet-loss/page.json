@@ -79,6 +79,12 @@
       "title": "Simulace ztráty paketů ve Windows pro jednu aplikaci",
       "description": "Zahoďte zadané procento paketů jedné aplikace ve Windows, sledujte, co se rozbije, a stejný běh přesně zopakujte pomocí seedu.",
       "link_text": "Ztráta paketů"
+    },
+    "vi": {
+      "slug": "mat-goi-tin",
+      "title": "Mô phỏng mất gói tin trên Windows cho một ứng dụng",
+      "description": "Loại bỏ một tỷ lệ phần trăm gói tin của một ứng dụng trên Windows, xem điều gì hỏng, rồi chạy lại đúng lần đó nhờ seed.",
+      "link_text": "Mất gói tin"
     }
   }
 }

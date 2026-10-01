@@ -79,6 +79,12 @@
       "title": "Stáhnout Bean Network Tester pro Windows",
       "description": "Bezplatné stažení pro Windows 10 a 11 jako zip nebo instalátor. Co je ve vydání, jak ověřit, že jde o námi sestavený soubor, a co ke spuštění potřebuje.",
       "link_text": "Stáhnout"
+    },
+    "vi": {
+      "slug": "tai-ve",
+      "title": "Tải Bean Network Tester cho Windows",
+      "description": "Tải miễn phí cho Windows 10 và 11, dạng zip hoặc trình cài đặt. Bản phát hành gồm gì, cách xác minh đúng tệp chúng tôi build và cần gì để chạy.",
+      "link_text": "Tải về"
     }
   }
 }

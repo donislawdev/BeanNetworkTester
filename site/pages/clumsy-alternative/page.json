@@ -79,6 +79,12 @@
       "title": "Alternativa ke Clumsy pro Windows s příkazovým řádkem",
       "description": "Na co se dívat u nástroje pro zhoršení sítě ve Windows, co tento přidává oproti čistě interaktivním nástrojům a kdy sáhnout po jiném.",
       "link_text": "Alternativa ke Clumsy"
+    },
+    "vi": {
+      "slug": "thay-the-clumsy",
+      "title": "Lựa chọn thay thế Clumsy cho Windows, có dòng lệnh",
+      "description": "Cần chú ý gì ở một công cụ làm suy giảm mạng trên Windows, công cụ này có gì hơn loại chỉ tương tác, và khi nào nên chọn công cụ khác.",
+      "link_text": "Lựa chọn thay thế Clumsy"
     }
   }
 }

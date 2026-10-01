@@ -81,6 +81,12 @@
       "name": "Čeština",
       "dir": "cs",
       "og_locale": "cs_CZ"
+    },
+    {
+      "code": "vi",
+      "name": "Tiếng Việt",
+      "dir": "vi",
+      "og_locale": "vi_VN"
     }
   ],
   "og_image": "assets/bean.png",
