@@ -35,6 +35,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   numbers differ. Link previews of the site now show a wide card instead of a small icon, and
   the demo recording is new.
 
+- **The loopback filter says what it cannot do.** Windows hands over both directions of
+  loopback traffic as outgoing. With the loopback filter, **Download**, the download column of
+  the schedule, **NAT timeout** and the main values next to separate upload values have no
+  effect, the **Upload** limit slows both directions together, and a target process is affected
+  only in what it sends. Applying such settings with this filter now says so in the log, and
+  the README explains it.
+
 ### Fixed
 
 - **The window opens after the administrator prompt however the program was started.**

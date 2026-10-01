@@ -311,6 +311,7 @@
   "log.layout_reset": "窗口布局已重置。",
   "log.loaded_profile": "已加载配置方案",
   "log.loop": "循环",
+  "log.loopback_all_upload": "使用环回过滤器时，每个数据包都算作上传。下载、计划中的下载列和 NAT 超时都不会生效。上传使用单独的数值时，主数值也不会生效。上传会同时限制两个方向，而目标进程只有它自己发送的流量会受到影响。",
   "log.loss_burst_clamped": "在每串 {burst} 个数据包的情况下，丢包率无法达到 {asked}%，因此本次会话将丢失 {delivered}%。",
   "log.loss_burst_clamped_up": "在每串 {burst} 个数据包的情况下，上传丢包率无法达到 {asked}%，因此本次会话的上传将丢失 {delivered}%。",
   "log.loss_burst_gap": "丢包将以每串约 {burst} 个数据包的方式出现，大约每 {gap} 个数据包出现一串。",

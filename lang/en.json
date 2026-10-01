@@ -311,6 +311,7 @@
   "log.layout_reset": "Window layout reset.",
   "log.loaded_profile": "Loaded profile",
   "log.loop": "loop",
+  "log.loopback_all_upload": "With the loopback filter every packet counts as upload. Download, the download column of the schedule and NAT timeout have no effect, and neither do the main values when upload has separate values. The upload limit applies to both directions together, and a target process is affected only in what it sends.",
   "log.loss_burst_clamped": "Loss cannot reach {asked}% in runs of {burst} packets, so this session will lose {delivered}%.",
   "log.loss_burst_clamped_up": "Upload loss cannot reach {asked}% in runs of {burst} packets, so uploads in this session will lose {delivered}%.",
   "log.loss_burst_gap": "Loss will arrive in runs of about {burst} packets, roughly one run every {gap} packets.",

@@ -2409,6 +2409,37 @@ MUTATIONS = [
         "test": "test_both_lan_switches_at_once_are_allowed_and_said_out_loud",
     },
     {
+        # P2-13: every loopback packet is outbound, and nothing said so.
+        "label": "settings: the loopback filter stops saying everything is upload",
+        "file": "beantester/settings.py",
+        "old": '    if g("filter") == "loopback" and _depends_on_direction(g):\n',
+        "new": "    if False:\n",
+        "test": "test_the_loopback_filter_says_that_everything_is_upload",
+    },
+    {
+        "label": "settings: the loopback warning comes with the default filter too",
+        "file": "beantester/settings.py",
+        "old": '    if g("filter") == "loopback" and _depends_on_direction(g):\n',
+        "new": '    if g("filter") in ("loopback", "both") and _depends_on_direction(g):\n',
+        "test": "test_the_loopback_filter_says_that_everything_is_upload",
+    },
+    {
+        "label": "settings: the loopback warning comes on every loopback run",
+        "file": "beantester/settings.py",
+        "old": '    return bool(g("down") or g("up") or g("asym") or g("nat_timeout")\n',
+        "new": '    return True or bool(g("down") or g("up") or g("asym") or g("nat_timeout")\n',
+        "test": "test_the_loopback_filter_says_that_everything_is_upload",
+    },
+    {
+        # The subtlest of the six: a target is not a value with a direction, but
+        # with loopback only its own sends carry its port as the local one.
+        "label": "settings: a target process does not count for the loopback warning",
+        "file": "beantester/settings.py",
+        "old": '                or str(g("target") or "").strip())\n',
+        "new": "                )\n",
+        "test": "test_the_loopback_filter_says_that_everything_is_upload",
+    },
+    {
         # The hand-written list falling behind the registry: the command then
         # reproduces a DIFFERENT run, with nothing red to say so. That is how
         # --narrow-filter went missing for weeks.

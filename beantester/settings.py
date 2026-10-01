@@ -579,6 +579,23 @@ _BURST_LINES_DOWN = ("log.loss_burst_clamped", "log.loss_burst_gap")
 _BURST_LINES_UP = ("log.loss_burst_clamped_up", "log.loss_burst_gap_up")
 
 
+def _depends_on_direction(g):
+    """True when a setting acts on one direction, or on whose side a packet is.
+
+    What changes when every packet is upload, MEASURED on the core (2026-10-01,
+    a loopback request and its reply, both outbound): Download and the download
+    column of the schedule delay nothing; NAT timeout drops only what comes in;
+    with separate values for upload, the main ones touch neither packet; Upload
+    holds both to one budget (the reply waited twice as long as the request); and
+    a target process is affected only in what it sends, because a reply carries
+    the OTHER program's port as its local one. Loss, latency and the rest with no
+    separate upload values act on both packets, so they alone say nothing.
+    """
+    return bool(g("down") or g("up") or g("asym") or g("nat_timeout")
+                or str(g("rate_schedule") or "").strip()
+                or str(g("target") or "").strip())
+
+
 def _say_what_the_burst_loss_will_do(g, log):
     """Two things a person cannot read off the two fields in front of them.
 
@@ -725,6 +742,11 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
     # screen would look like the tool ignoring its own form.
     if g("asym") and g("filter") in ("out", "in"):
         log(T("log.asym_one_way_filter"))
+    # The same trap from the other side (external review, P2-13): the driver hands
+    # over BOTH directions of a loopback conversation as outbound - measured, see
+    # the RST builder in core.py - so with the loopback filter nothing is download.
+    if g("filter") == "loopback" and _depends_on_direction(g):
+        log(T("log.loopback_all_upload"))
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     block = None                                # None = leave the block alone

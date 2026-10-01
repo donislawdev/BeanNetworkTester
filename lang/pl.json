@@ -311,6 +311,7 @@
   "log.layout_reset": "Układ okna zresetowany.",
   "log.loaded_profile": "Wczytano profil",
   "log.loop": "pętla",
+  "log.loopback_all_upload": "Przy filtrze loopback każdy pakiet liczy się jako wysyłanie. Pobieranie, kolumna pobierania w harmonogramie i NAT timeout nie działają, podobnie jak główne wartości, gdy wysyłanie ma osobne wartości. Limit wysyłania obejmuje oba kierunki razem, a proces docelowy jest zakłócany tylko w tym, co sam wysyła.",
   "log.loss_burst_clamped": "Strata nie osiągnie {asked}% przy seriach po {burst} pakietów, więc ta sesja zgubi {delivered}%.",
   "log.loss_burst_clamped_up": "Strata przy wysyłaniu nie osiągnie {asked}% w seriach po {burst} pakietów, więc wysyłanie w tej sesji zgubi {delivered}%.",
   "log.loss_burst_gap": "Strata będzie przychodzić seriami po około {burst} pakietów, mniej więcej jedna seria na {gap} pakietów.",
