@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>일부러 연결 끊기</h1>
+  <p class="lead">느린 것은 나쁜 상황의 한 종류입니다. 아예 사라지는 것은 또 다른 종류이며, 아무도 작성하지 않은 코드 경로를 찾아내는 쪽은 이쪽입니다. 재연결, 재시도, 무슨 일이 일어났는지 사용자에게 알리는 메시지가 그것입니다.</p>
+  <p>케이블을 뽑지 않고도 앱을 오프라인으로 테스트하는 방법이기도 합니다. LAN 모드는 로컬 네트워크는 두고 인터넷만 없애고, 주소 하나를 차단하면 나머지 연결은 정상인 채 서비스 하나만 닿지 않게 됩니다.</p>
+</section>
+
+<section>
+  <h2>사라지는 다섯 가지 방법</h2>
+  <table>
+    <tr><th>설정</th><th>앱에 보이는 모습</th></tr>
+    <tr><td><strong>연결 재설정</strong></td><td>방화벽이나 로드 밸런서가 끊는 것처럼 전송 도중에 연결이 죽습니다. 빈도를 퍼센트로 정합니다.</td></tr>
+    <tr><td><strong>링크 켜기와 끄기</strong></td><td>네트워크가 잠시 사라졌다가 돌아오기를 반복합니다. 주기 길이와 그중 끊어져 있는 비율을 정합니다.</td></tr>
+    <tr><td><strong>포트 차단</strong></td><td>그 포트로 가는 모든 것이 사라집니다. 다른 것은 건드리지 않습니다.</td></tr>
+    <tr><td><strong>주소 차단</strong></td><td>나머지 인터넷은 정상인 채 서버 하나에 닿을 수 없게 됩니다.</td></tr>
+    <tr><td><strong>LAN 모드</strong></td><td>로컬 네트워크는 동작하고 인터넷은 안 됩니다. 캡티브 포털이나 죽은 업링크의 전형적인 모습입니다.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>명령줄에서</h2>
+  <p>앱 하나에서 연결 열 개 중 약 한 개를 끊습니다:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>10초 주기 중 4초 동안 끊깁니다. 계속 오락가락하는 링크입니다:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>서버 하나에 닿을 수 없고 나머지는 정상입니다:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>차단은 지정한 대상에만 영향을 줍니다</h2>
+  <p>손실이나 지연과 달리, 포트나 주소 차단은 그것과 일치하는 트래픽<strong>에만</strong> 영향을 줍니다. 그래서 이 중에서 프로세스를 지정하지 않고 실행하기에 가장 안전하며, “이 의존성 하나만 사라지게 해 줘”가 한 줄 명령이 되는 이유이기도 합니다.</p>
+</section>
+
+<section>
+  <h2>죽은 다운로드의 함정</h2>
+  <p>최대 패킷 크기도 있습니다. 조금 낮추면 큰 전송이 느려집니다. 576 같은 값까지 낮추면 오류 없이 다운로드가 영원히 완전히 멈춥니다. 더 이상 작은 패킷 크기가 아니라, 네트워크가 너무 큰 것을 버리고도 알리지 않는 전형적인 블랙홀이기 때문입니다.</p>
+  <p>실제로 존재하는 장애 방식이라 일부러 재현해 볼 가치가 있고, 우연히 만나면 정말 혼란스럽습니다. 이 설정을 바꾼 직후 다운로드가 조용히 죽었다면 그 때문입니다.</p>
+</section>
+
+<section>
+  <h2>정상으로 되돌리기</h2>
+  <p>{{app.buttons.stop}} 버튼을 누르면 모든 것이 복원됩니다. 프로그램을 닫아도, 시간 제한을 설정했다면 그 시간이 지나도 마찬가지입니다. 세션 도중 도구 자체가 죽더라도 내장 워치독이 캡처를 중단하므로 네트워크가 망가진 채로 남지 않습니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -46,6 +46,7 @@ import re
 import shutil
 import struct
 import sys
+import unicodedata
 from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -61,11 +62,23 @@ THEME_FILE = os.path.join("beantester", "gui", "theme.py")
 # 160. These are the bounds a page has to live inside to be shown whole, and they
 # are checked rather than trusted, because "the description got cut in half" is
 # invisible from the source.
+#
+# They are measured in DISPLAY WIDTH (see ``display_width``), not in characters:
+# the truncation is by pixels, and a Chinese or Japanese character is as wide as
+# two Latin ones. Counting characters would let a Chinese description of 160
+# characters through, which a result page shows as barely half of itself. For a
+# Latin-script text the two numbers are the same, so nothing else changes.
 TITLE_LEN = (15, 65)
 DESC_LEN = (50, 160)
 # A nav label, not a title: long enough to say what the page is, short enough that
 # nine of them fit in a footer without wrapping into a wall.
 LINK_LEN = (4, 42)
+
+# A description may say how many scenarios ship. A number typed into prose is a number
+# that stops being true the day a file is added - the pages said "seven" while the
+# folder held eight - so the count is read from the folder, here and in the page bodies
+# (``{{page.scenario_count}}``).
+SCENARIO_COUNT_MARKER = "{scenario_count}"
 
 SLUG_RE = re.compile(r"^$|^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$")
 PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}\}")
@@ -73,6 +86,24 @@ PLACEHOLDER_RE = re.compile(r"\{\{([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)\}\}")
 
 class SiteError(Exception):
     """A source file is wrong in a way that would publish a broken page."""
+
+
+def display_width(text):
+    """How many Latin-letter columns ``text`` takes up.
+
+    A full-width character (Chinese, Japanese, Korean) is two, and a combining mark or
+    a joiner (the vowel signs of Hindi, the zero-width joiners of Arabic and Hindi) is
+    none, because it is drawn on top of the letter before it. The unit the title and
+    description bounds are really about. Unicode already classifies every character for
+    exactly this purpose (East Asian Width, general category), so nothing here is a list
+    somebody has to keep up to date.
+    """
+    width = 0
+    for ch in text:
+        if unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
 
 
 class Raw(str):
@@ -131,6 +162,14 @@ def load_registry(root):
         raise SiteError("site.json: duplicate language code in %s" % codes)
     if len(set(dirs)) != len(dirs):
         raise SiteError("site.json: two languages share one directory in %s" % dirs)
+    for lang in reg["languages"]:
+        if lang.get("direction", "ltr") not in ("ltr", "rtl"):
+            raise SiteError("site.json: language %r has direction %r (ltr or rtl)"
+                            % (lang["code"], lang.get("direction")))
+        declared = lang.get("app_language", "")
+        if not isinstance(declared, str) or not re.fullmatch(r"[a-z]*", declared):
+            raise SiteError("site.json: language %r has app_language %r, which is not a "
+                            "lang/<code>.json name" % (lang["code"], declared))
     if reg["default_language"] not in codes:
         raise SiteError("site.json: default_language %r is not one of %s"
                         % (reg["default_language"], codes))
@@ -141,6 +180,59 @@ def load_registry(root):
 
 def language_codes(registry):
     return [lang["code"] for lang in registry["languages"]]
+
+
+def _program_file(root, name):
+    return os.path.join(root, "lang", "%s.json" % name)
+
+
+def program_language(root, registry, code):
+    """Which of the PROGRAM's language files names things on this language's pages.
+
+    A page says "pick the profile X" and "fill in the field Y", and the reader has to
+    find X and Y on screen, so the names come from the language the program itself
+    would show that reader. That is ``lang/<code>.json``, except that
+
+    * a site language may name its program file (``app_language`` in ``site.json``),
+      because the two codes need not match: this site says ``zh-Hans`` for Simplified
+      Chinese while the program's file is ``lang/zh.json``;
+    * a language the program has no file for yet is answered in the default language,
+      exactly as the program answers it at runtime ("English is the fallback"). Until
+      ``lang/de.json`` exists, a German reader really does see an English window, and a
+      German page that quoted German names would send them looking for words that are
+      not there. The day the file is added the pages follow with no edit - which is why
+      ``pages.yml`` watches ``lang/**``.
+
+    A DECLARED ``app_language`` whose file is missing is an error, not a fallback: that
+    is a typo, and a typo that silently publishes English names is the quiet failure
+    this builder exists to refuse.
+    """
+    declared = _language(registry, code).get("app_language")
+    if declared:
+        if not os.path.isfile(_program_file(root, declared)):
+            raise SiteError("site.json: language %r takes its program strings from "
+                            "lang/%s.json, which is not there" % (code, declared))
+        return declared
+    if os.path.isfile(_program_file(root, code)):
+        return code
+    default = registry["default_language"]
+    return _language(registry, default).get("app_language") or default
+
+
+def program_string_notes(root, registry):
+    """One line per language whose pages quote the program in another language.
+
+    The fallback above is deliberate, but a build that did it without a word would be
+    the quiet success the rest of this file refuses, so the command line says it.
+    """
+    default = registry["default_language"]
+    notes = []
+    for code in language_codes(registry):
+        used = program_language(root, registry, code)
+        if code != default and used == program_language(root, registry, default):
+            notes.append("%s: no lang/%s.json yet, so its pages name the program's profiles "
+                         "and settings as the %s window does" % (code, code, default))
+    return notes
 
 
 def palette(root, mapping):
@@ -298,21 +390,25 @@ def load_pages(root, registry):
             slug = entry.get("slug", None)
             title = (entry.get("title") or "").strip()
             description = (entry.get("description") or "").strip()
+            if SCENARIO_COUNT_MARKER in description:
+                description = description.replace(SCENARIO_COUNT_MARKER,
+                                                  str(len(scenario_files(root))))
             link_text = (entry.get("link_text") or "").strip()
             if slug is None or not SLUG_RE.match(slug):
                 raise SiteError("pages/%s [%s]: %r is not a valid slug "
                                 "(lower case, digits and '-', '/' between segments)"
                                 % (page_id, code, slug))
-            if not TITLE_LEN[0] <= len(title) <= TITLE_LEN[1]:
-                raise SiteError("pages/%s [%s]: the title is %d characters, allowed %d..%d"
-                                % (page_id, code, len(title), *TITLE_LEN))
-            if not DESC_LEN[0] <= len(description) <= DESC_LEN[1]:
-                raise SiteError("pages/%s [%s]: the description is %d characters, allowed %d..%d"
-                                % (page_id, code, len(description), *DESC_LEN))
-            if not LINK_LEN[0] <= len(link_text) <= LINK_LEN[1]:
-                raise SiteError("pages/%s [%s]: link_text is %d characters, allowed %d..%d "
+            if not TITLE_LEN[0] <= display_width(title) <= TITLE_LEN[1]:
+                raise SiteError("pages/%s [%s]: the title is %d columns wide, allowed %d..%d"
+                                % (page_id, code, display_width(title), *TITLE_LEN))
+            if not DESC_LEN[0] <= display_width(description) <= DESC_LEN[1]:
+                raise SiteError("pages/%s [%s]: the description is %d columns wide, "
+                                "allowed %d..%d"
+                                % (page_id, code, display_width(description), *DESC_LEN))
+            if not LINK_LEN[0] <= display_width(link_text) <= LINK_LEN[1]:
+                raise SiteError("pages/%s [%s]: link_text is %d columns wide, allowed %d..%d "
                                 "(it is a nav label, not a title)"
-                                % (page_id, code, len(link_text), *LINK_LEN))
+                                % (page_id, code, display_width(link_text), *LINK_LEN))
 
             lang = _language(registry, code)
             if page["output"]:
@@ -744,6 +840,41 @@ def language_switcher(page, current_code, registry, label):
                          % (html.escape(_relative_url(here, target), quote=True),
                             html.escape(code, quote=True),
                             html.escape(code, quote=True), name))
+    # Twenty-odd names in a row would fill the header, so the row folds into a native
+    # <details> menu: no script, keyboard and screen reader behaviour for free, and every
+    # link stays in the markup, where a crawler reads it whether the menu is open or not.
+    current_name = next(l["name"] for l in registry["languages"] if l["code"] == current_code)
+    return Raw('<details class="langmenu"><summary>%s: <span lang="%s">%s</span></summary>'
+               '<span class="langs" role="group" aria-label="%s">%s</span></details>'
+               % (html.escape(label, quote=True), html.escape(current_code, quote=True),
+                  html.escape(current_name, quote=True), html.escape(label, quote=True),
+                  "".join(parts)))
+
+
+def language_homes(registry, home, skip, label, prefix):
+    """The home page of every language except ``skip``, as a row of links.
+
+    For the one page that has no language row of its own: the error document is written
+    once, in the default language, so a reader who followed a dead link from a German or
+    a Japanese page lands on English text with nothing to say where the rest of the site
+    is. Every one of these addresses exists (they are the home pages), so it is not the
+    link to a miss that ``language_switcher`` refuses to offer.
+
+    ``prefix`` is the site root and not a relative path, for the reason ``page_links``
+    gives: this document is served at whatever address missed.
+    """
+    parts = []
+    for lang in registry["languages"]:
+        code = lang["code"]
+        if code == skip:
+            continue
+        dir_path = home["languages"][code]["dir_path"]
+        parts.append('<a href="%s" hreflang="%s" lang="%s">%s</a>'
+                     % (html.escape(prefix + (dir_path + "/" if dir_path else ""), quote=True),
+                        html.escape(code, quote=True), html.escape(code, quote=True),
+                        html.escape(lang["name"], quote=True)))
+    if not parts:
+        return Raw("")
     return Raw('<span class="langs" role="group" aria-label="%s">%s</span>'
                % (html.escape(label, quote=True), "".join(parts)))
 
@@ -832,6 +963,17 @@ def exit_code_table(texts):
     return Raw("<table>%s</table>" % "".join(rows))
 
 
+def scenario_files(root):
+    """The scenario files that ship, sorted: the one list the table and the count read."""
+    folder = os.path.join(root, "scenarios")
+    files = sorted(f for f in os.listdir(folder) if f.endswith(".json")) \
+        if os.path.isdir(folder) else []
+    if not files:
+        raise SiteError("no scenario files in %s (the table would be empty and the page "
+                        "would claim the program ships none)" % folder)
+    return files
+
+
 def scenario_table(root, texts):
     """The scenario files that ship next to the program, read from ``scenarios/``.
 
@@ -846,11 +988,7 @@ def scenario_table(root, texts):
     like a page nobody edited.
     """
     folder = os.path.join(root, "scenarios")
-    files = sorted(f for f in os.listdir(folder) if f.endswith(".json")) \
-        if os.path.isdir(folder) else []
-    if not files:
-        raise SiteError("no scenario files in %s (the table would be empty and the page "
-                        "would claim the program ships none)" % folder)
+    files = scenario_files(root)
     heads = [texts["table.scenario"], texts["table.steps"], texts["table.length"],
              texts["table.repeats"]]
     rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
@@ -908,7 +1046,8 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
     _language(registry, code)          # raises on a code site.json does not know
     repo = registry["repo_url"].rstrip("/")
     context = dict(texts[code])
-    _merge(context, load_app_strings(root, code), "program strings [%s]" % code)
+    app = load_app_strings(root, program_language(root, registry, code))
+    _merge(context, app, "program strings [%s]" % code)
     _merge(context, {
         "site.base_url": registry["base_url"],
         "site.repo_url": repo,
@@ -928,10 +1067,15 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
                                              home["languages"][code]["dir_path"])),
         "page.language_switcher": language_switcher(page, code, registry,
                                                     texts[code]["nav.language"]),
-        "page.preset_table": preset_table(load_app_strings(root, code), texts[code]),
-        "page.settings_table": settings_table(load_app_strings(root, code), texts[code]),
+        "page.language_homes": language_homes(registry, home, code,
+                                              texts[code]["nav.language"],
+                                              _root_prefix(registry)),
+        "page.preset_table": preset_table(app, texts[code]),
+        "page.settings_table": settings_table(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
+        "page.scenario_count": len(scenario_files(root)),
+        "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),
         "page.source_glyph": Raw(SOURCE_GLYPH),
         "page.nav_links": page_links(pages, page, code, "foot-nav",
@@ -1060,6 +1204,8 @@ def main(argv=None):
         print("site build failed: %s" % exc, file=sys.stderr)
         return 1
     print("wrote %d files to %s" % (len(written), args.out or DEFAULT_OUT))
+    for note in program_string_notes(ROOT, load_registry(ROOT)):
+        print("note: %s" % note)
     for path in written:
         print("  %s" % path)
     return 0

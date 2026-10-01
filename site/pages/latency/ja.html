@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>アプリに遅延とジッターを加える</h1>
+  <p class="lead">高速なローカル接続なら、すべてが問題なく動きます。アプリに300 msのpingを与えると、応答が一瞬で返る前提で書かれた画面がどれかわかります。</p>
+</section>
+
+<section>
+  <h2>3つの異なるもの</h2>
+  <table>
+    <tr><th>設定</th><th>何をするか</th><th>現実での原因</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>すべてのパケットに同じ遅延を加えます。単位はミリ秒です。</td><td>距離。別の大陸にあるサーバーや、衛星。</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>さらにランダムな量を上乗せし、遅延が絶えず変化するようにします。</td><td>共有Wi-Fi、モバイル回線、混雑したあらゆる回線。</td></tr>
+    <tr><td><strong>遅延スパイク</strong></td><td>ときどき起きる長い停止。発生頻度と長さで指定します。</td><td>基地局間のハンドオーバー、負荷のかかったルーター。</td></tr>
+  </table>
+  <p>3つとも単位はミリ秒で、同時に使えます。2つの遅延の値はどちらも0以上なら何でも受け付けるので、現実的な40 msから、あり得ない60秒まで設定できます。</p>
+</section>
+
+<section>
+  <h2>コマンドラインから</h2>
+  <p>1つのアプリに、一定の200 msの遅延と80 msのジッターを加える例：</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>代わりに、まれに起きる長い停止を再現します。およそ20パケットに1つが、1秒余分に待たされます：</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>試す価値のある数値</h2>
+  <ul>
+    <li><strong>40 ms</strong>：同じ国内のサーバー。何も変わらないはずです。</li>
+    <li><strong>150 ms</strong>：別の大陸。やり取りの多い処理は、往復のたびにコストがかかるため遅く感じ始めます。</li>
+    <li><strong>600 ms以上</strong>：静止衛星や機内Wi-Fi。プログレスバーが止まり、再試行ロジックがようやく動く領域です。</li>
+  </ul>
+  <p>用意済みのプロファイルには実測値が入っています：「{{app.presets.distant}}」「{{app.presets.leo}}」「{{app.presets.satellite}}」「{{app.presets.inflight}}」「{{app.presets.lte}}」。</p>
+</section>
+
+<section>
+  <h2>測り方：平均ではなく、最悪のケースを見る</h2>
+  <p>ジッターは平均値をほとんど動かさず、中央値もほとんど動かしません。ジッターが30 msある実行とない実行で、「典型的な」pingがほぼ同じに見えても、体感はまったく違うことがあります。</p>
+  <p>代わりに、<strong>95パーセンタイルと中央値</strong>を比べてください。両者の差がジッターであり、平均が問題なく見えるのに通話が途切れたりゲームが遊べなくなったりするのは、その差が原因です。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

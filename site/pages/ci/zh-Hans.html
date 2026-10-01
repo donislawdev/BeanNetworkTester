@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>在 CI 中模拟糟糕的网络</h1>
+  <p class="lead">窗口是可选的。同一个可执行文件可以作为命令行工具运行，在设定时间后自行结束，并以流水线能读取的方式报告发生了什么。</p>
+</section>
+
+<section>
+  <h2>一个步骤的样子</h2>
+  <p>在测试期间施加影响，然后让它自行停止。没有需要记得执行的清理步骤：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>在 GitHub Actions 作业中，使用自托管的 Windows 运行器：</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>关于运行器有两点：捕获流量需要管理员权限，而托管运行器不会给你这些权限，所以这应该放在自托管的 Windows 机器上。</p>
+</section>
+
+<section>
+  <h2>每一种结束方式都有退出码</h2>
+  <p>没有任何一种结束方式会以一大段堆栈信息收场。一次运行的每种结束方式都有一个编号，所以流水线能区分“你的应用失败了”和“工具无法启动”：</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>机器可读的输出</h2>
+  <p><code>--format json</code> 每行输出一个 JSON 对象，运行期间是采样数据，结束时是汇总，这样后续步骤可以对它做断言：</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>日志行写入标准错误，数据写入标准输出，所以重定向数据时两者永远不会混在一起。<code>--seed</code> 让运行可重复，这正是一个不稳定的测试在任何人开始争论之前所需要的。</p>
+</section>
+
+<section>
+  <h2>什么都不碰的试运行</h2>
+  <p>有两个参数让你在信任它之前就可以放心地接入：<code>--dry-run</code> 报告这些设置会做什么然后退出，<code>--simulate</code> 则让整个引擎针对合成流量运行，既不加载驱动，也不触碰网络。两者都适用于不得影响所运行机器的构建。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

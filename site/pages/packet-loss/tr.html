@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Windows’ta paket kaybı simülasyonu</h1>
+  <p class="lead">Paket kaybı, kullanıcıların “sadece donuyor” diye anlattığı arızadır. Bir yüzde belirlersiniz, araç paketlerin o kadarını atar ve uygulamanız bununla başa çıkmak zorunda kalır.</p>
+</section>
+
+<section>
+  <h2>Pencerede</h2>
+  <ol class="steps">
+    <li>Yalnızca uygulamanız etkilensin, tüm bilgisayar değil diye <strong>{{app.fields.target_process}}</strong> alanını doldurun.</li>
+    <li><strong>{{app.fields.loss}}</strong> değerini 0 ile 100 arasında bir yüzdeye ayarlayın. 5 ile başlayın.</li>
+    <li><strong>{{app.buttons.start}}</strong> düğmesine basın ve uygulamayı kullanın.</li>
+  </ol>
+  <p>Pencerenin üstündeki çubuk neyin çalıştığını özetler, <strong>{{app.app.tabs.statistics}}</strong> sekmesi ise atılan paketleri sayar.</p>
+</section>
+
+<section>
+  <h2>Komut satırından</h2>
+  <p>Aynı çalıştırılabilir dosya pencere olmadan da çalışır. Bir tarayıcıda iki dakika boyunca yüzde beş kayıp, ardından her şey kendiliğinden normale döner:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Gerçek trafiğe dokunmadan komutu denemek için <code>--simulate</code> ekleyin.</p>
+</section>
+
+<section>
+  <h2>Hangi yüzdeyi seçmeli</h2>
+  <table>
+    <tr><th>Kayıp</th><th>Nasıl hissettirir</th></tr>
+    <tr><td>%1</td><td>Kötü bir dakika geçiren iyi bir bağlantı. Çoğu uygulama bunu gizler.</td></tr>
+    <tr><td>%5</td><td>Zayıf Wi-Fi. Sayfalar yavaş yüklenir, video kalitesi düşer.</td></tr>
+    <tr><td>%20</td><td>Kalabalık bir kafenin hotspot’u ya da trenin tüneli. Zaman aşımları görünmeye başlar.</td></tr>
+    <tr><td>%60 ve üzeri</td><td>Neredeyse kullanılamaz. Kimsenin hiç denemediği hata mesajını bulmak için iyidir.</td></tr>
+  </table>
+  <p>Hazır profiller bunu sizin yerinize ayarlar. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}” ve “{{app.presets.3g}}” profillerinin hepsi gecikme ve hız sınırının yanında bir kayıp değeri de taşır.</p>
+</section>
+
+<section>
+  <h2>İnsanları şaşırtan iki şey</h2>
+  <p><strong>TCP’de hiçbir şey görmeyebilirsiniz.</strong> TCP kaybettiğini yeniden gönderir; bu yüzden HTTPS üzerinden bir indirme başarısız olmak yerine sadece yavaşlar. Kaybı kayıp olarak görmek istiyorsanız UDP üzerinden çalışan bir şeyi test edin: sesli arama, oyun, video akışı ya da DNS.</p>
+  <p><strong>Kayıp rastgeledir, bu yüzden iki çalıştırma birbirinden farklıdır.</strong> Bir seed belirleyin; aynı çalıştırma birebir tekrarlanır ve “bir kez bozuldu” sözü, başkasının yeniden üretebileceği bir hata raporuna dönüşür:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  <p>Tek başına kayıp nadirdir. Gerçek kötü bağlantılar paket kaybeder, <em>ve</em> gecikme ekler, <em>ve</em> hızı tüketir; profiller de bunu yeniden üretir.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

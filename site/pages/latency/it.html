@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Aggiungere latenza e jitter a un’app</h1>
+  <p class="lead">Su una connessione locale veloce tutto funziona. Dai all’app 300 ms di ping e scoprirai quali schermate sono state scritte come se la risposta arrivasse all’istante.</p>
+</section>
+
+<section>
+  <h2>Tre cose diverse</h2>
+  <table>
+    <tr><th>Impostazione</th><th>Cosa fa</th><th>Da dove viene nella vita reale</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Aggiunge lo stesso ritardo a ogni pacchetto, in millisecondi.</td><td>La distanza. Un server su un altro continente, o un satellite.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Aggiunge sopra una quantità casuale, così il ritardo cambia di continuo.</td><td>Wi-Fi condiviso, reti mobili, tutto ciò che è congestionato.</td></tr>
+    <tr><td><strong>Picchi di latenza</strong></td><td>Blocchi lunghi occasionali, definiti da quanto spesso e quanto a lungo.</td><td>Un passaggio tra celle radio, un router sotto carico.</td></tr>
+  </table>
+  <p>Tutti e tre sono in millisecondi e possono funzionare insieme. Entrambi i valori di ritardo accettano qualsiasi cifra da 0 in su, quindi puoi passare da 40 ms credibili a 60 secondi assurdi.</p>
+</section>
+
+<section>
+  <h2>Dalla riga di comando</h2>
+  <p>Un ritardo costante di 200 ms con 80 ms di jitter, su un’applicazione:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Invece blocchi rari e lunghi: circa un pacchetto su venti aspetta un secondo in più:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Valori che vale la pena provare</h2>
+  <ul>
+    <li><strong>40 ms</strong>: un server nello stesso paese. Non dovrebbe cambiare nulla.</li>
+    <li><strong>150 ms</strong>: un altro continente. Tutto ciò che scambia molti messaggi inizia a sembrare lento, perché ogni andata e ritorno costa.</li>
+    <li><strong>600 ms e oltre</strong>: satellite geostazionario o Wi-Fi in volo. Qui le barre di avanzamento si bloccano e la logica dei nuovi tentativi finalmente entra in gioco.</li>
+  </ul>
+  <p>I profili pronti contengono valori misurati: «{{app.presets.distant}}», «{{app.presets.leo}}», «{{app.presets.satellite}}», «{{app.presets.inflight}}», «{{app.presets.lte}}».</p>
+</section>
+
+<section>
+  <h2>Misurare: guarda il caso peggiore, non la media</h2>
+  <p>Il jitter sposta appena una media, e sposta appena una mediana. Un’esecuzione con 30 ms di jitter e una senza possono riportare quasi lo stesso ping «tipico» pur dando una sensazione completamente diversa.</p>
+  <p>Confronta invece il <strong>95º percentile con la mediana</strong>. La distanza tra i due è il jitter, ed è quella distanza che rende una chiamata a scatti o un gioco ingiocabile mentre la media sembra ancora buona.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

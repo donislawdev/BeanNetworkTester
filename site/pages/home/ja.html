@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>悪いネットワークでアプリをテストする</h1>
+  <p class="lead">Bean Network Tester は、1つのWindowsアプリケーションに遅延、パケットロス、速度制限を加えます。電車の中、ホテルのホットスポット、電波が1本しかないスマートフォンで、ユーザーが体験する状況を自分の目で確かめられます。</p>
+  <p>マシン全体ではなく1つのプログラムだけを対象にしたネットワークエミュレーターなので、テスト対象のアプリには遅いインターネットを再現しつつ、ほかのものは普通に動かし続けられます。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="ツールの実行中に、ライブのpingでパケットが失われ遅延が増えていく様子">
+  <figcaption>動作中の接続に遅延とパケットロスを加えているところ。</figcaption>
+</figure>
+
+<section>
+  <h2>ネットワークに何をするのか</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>遅くする</h3>
+      <p>固定またはランダムの遅延を加えます。300 msのpingが読み込み中のスピナーに何をもたらすか確かめましょう。</p>
+    </article>
+    <article class="card">
+      <h3>パケットを失わせる</h3>
+      <p>パケットを破棄、重複、破損させて、アプリが回復するのか、ただ固まるのかを観察します。</p>
+    </article>
+    <article class="card">
+      <h3>速度を抑える</h3>
+      <p>電波の弱いモバイル回線のように、ダウンロードやアップロードを毎秒のKB数で頭打ちにします。</p>
+    </article>
+    <article class="card">
+      <h3>回線を切る</h3>
+      <p>接続を切断し、ポートやアドレスをブロックし、ネットワークを断続的に落とします。</p>
+    </article>
+    <article class="card">
+      <h3>1つのアプリに絞る</h3>
+      <p>プロセス、PID、アドレス、ポートのいずれかを指定します。マシンのほかの部分は普段どおり動きます。</p>
+    </article>
+    <article class="card">
+      <h3>正確に繰り返す</h3>
+      <p>同じシードなら同じ実行が再現されます。バグ報告と思い出話の違いはそこにあります。</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>実行までは3ステップ</h2>
+  <ol class="steps">
+    <li>リリースページからzipをダウンロードし、好きな場所に展開します。</li>
+    <li><code>BeanNetworkTester.exe</code> を起動します。通信の取得には管理者権限が必要なため、自動で権限を求めます。</li>
+    <li>「{{app.presets.3g}}」のような用意済みのプロファイルを選び、{{app.buttons.start}} を押して、アプリを使います。</li>
+  </ol>
+  <p>同じファイルにテキストモードもあるので、すべてパイプラインでも動かせます。サービスが10%のパケットロスに耐えられるかどうかは、1つのコマンドで確認できます：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>時間が来ると自動的に停止するため、止まってしまったステップが壊れたネットワークを残すことはありません。<code>--simulate</code> を付ければ、実際の通信に触れずにコマンドを試せます。</p>
+</section>
+
+<section>
+  <h2>誰が使うのか</h2>
+  <p>「自分の環境では動く」を再現しなければならないテスター。タイムアウトを本当に起こしたい開発者。ラグがネットコードに何をするかを確かめるゲーム開発者。回線の弱い環境でアプリが動くかと聞かれ、誠実に確かめる手段がなかったすべての人。</p>
+</section>
+
+<section>
+  <h2>具体的な作業の進め方</h2>
+  <p>短いガイドです。それぞれ、試す価値のある数値と、それを実行するコマンドを載せています。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Teste um aplicativo sem internet</h1>
+  <p class="lead">Puxar o cabo de rede testa uma coisa só: uma máquina sem rede. A maioria dos bugs offline não é isso. Eles acontecem quando o adaptador está ativo, o ícone do Wi-Fi parece normal e aquilo de que o aplicativo precisa simplesmente não está acessível.</p>
+</section>
+
+<section>
+  <h2>Três tipos diferentes de “offline”</h2>
+  <table>
+    <tr><th>O que você liga</th><th>O que o aplicativo vê</th><th>O bug que ele encontra</th></tr>
+    <tr><td><strong>Modo LAN</strong></td><td>A rede local funciona. Nada além dela funciona.</td><td>O Wi-Fi do hotel antes de você entrar, um uplink morto, uma rede corporativa sem rota para fora.</td></tr>
+    <tr><td><strong>Bloquear um endereço</strong></td><td>Um servidor está inacessível. Todo o resto funciona.</td><td>Uma dependência fora do ar enquanto o aplicativo em si está bem: o caso que uma verificação de saúde costuma deixar passar.</td></tr>
+    <tr><td><strong>Bloquear a porta 53</strong></td><td>Os nomes deixam de ser resolvidos, as conexões por endereço continuam funcionando.</td><td>DNS quebrado, que para o usuário parece “a internet caiu” e nos logs parece algo totalmente diferente.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Pela linha de comando</h2>
+  <p>Internet fora para um aplicativo, rede local intacta, por dois minutos:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Um serviço inacessível, todo o resto normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Os nomes deixam de ser resolvidos:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Também há uma linha do tempo pronta que quebra o DNS e o devolve sozinha: <code>failing-dns.json</code>, na pasta <code>scenarios</code> ao lado do programa. Veja <a href="../cenarios-ao-longo-do-tempo/">cenários no tempo</a>.</p>
+</section>
+
+<section>
+  <h2>O que observar de verdade</h2>
+  <ul>
+    <li><strong>A mensagem.</strong> O aplicativo diz o que aconteceu, ou mostra um indicador de carregamento para sempre?</li>
+    <li><strong>A nova tentativa.</strong> Ele espera cada vez mais, ou martela o mesmo endereço em um laço?</li>
+    <li><strong>A fila.</strong> O trabalho que o usuário fez offline é guardado e enviado depois, ou é perdido?</li>
+    <li><strong>A recuperação.</strong> {{app.buttons.stop}} devolve a rede. O aplicativo percebe sozinho, ou precisa reiniciar?</li>
+  </ul>
+  <p>Esse último ponto é onde está a maior parte do valor. Ficar offline é fácil de tratar mal e fácil de testar. É na volta que o estado fica errado.</p>
+</section>
+
+<section>
+  <h2>O que isto não é</h2>
+  <p>O adaptador continua ativo e a máquina mantém o endereço, então um aplicativo que só pergunta ao Windows “existe uma rede” continua recebendo sim. É deliberado, e é o teste mais interessante: usuários reais raramente ficam desconectados, eles estão conectados a algo que não alcança o que precisam. Se você quer especificamente o caso “sem adaptador”, desative o adaptador: não precisa de ferramenta.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

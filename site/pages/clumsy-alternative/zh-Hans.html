@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>适用于 Windows 的 Clumsy 替代方案</h1>
+  <p class="lead">Clumsy 是大多数人最先找到的工具，而且它很好用：免费、MIT 许可、交互式，并且和本工具使用同一个 WinDivert 驱动。如果它能满足你的需要，就用它。本页讲的是它满足不了的那些情况。</p>
+</section>
+
+<section>
+  <h2>无论选哪个，都该看什么</h2>
+  <table>
+    <tr><th>问题</th><th>为什么它能决定选哪个工具</th></tr>
+    <tr><td>它能只针对<strong>一个应用</strong>吗？</td><td>否则你会影响正在工作的这台机器，包括远程会话，以及你正用来阅读文档的浏览器。</td></tr>
+    <tr><td>它有<strong>命令行</strong>吗？</td><td>流水线没法去点复选框。没有命令行，网络测试就永远无法成为构建的一部分。</td></tr>
+    <tr><td>一次运行<strong>可重复</strong>吗？</td><td>无法重放的随机丢包，只会产生别人无法复现的 bug 报告。</td></tr>
+    <tr><td>它会<strong>自行停止</strong>吗？</td><td>需要你记得手动关闭的工具，最后一定会被一直开着。</td></tr>
+    <tr><td>你能看出它<strong>实际做了什么</strong>吗？</td><td>计数器和连接列表能把“感觉很慢”变成具体的数字。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>这个工具带来什么</h2>
+  <ul>
+    <li><strong>按进程、PID、地址或端口定位</strong>，并跟随进程树，所以拥有三十个子进程的浏览器仍然只是一个目标。</li>
+    <li><strong>同一个可执行文件就是命令行</strong>，每种结果都有退出码，并支持 NDJSON 输出，因此可用于 CI。</li>
+    <li><strong>带随机种子的运行</strong>：同一个随机种子会重放同样的随机丢包和抖动。</li>
+    <li><strong>现成的配置方案</strong>：3G、LTE、卫星、拥挤的咖啡馆、机上 Wi-Fi、56k 拨号调制解调器，让你从可信的起点出发，而不是瞎猜数值。</li>
+    <li><strong>定时会话和脚本化场景</strong>，让影响在你观察应用的同时自行变化。</li>
+    <li><strong>实时视图</strong>：图表、计数器，以及显示哪个连接受到影响的连接表。</li>
+    <li><strong>英语、波兰语和简体中文</strong>界面，没有任何形式的遥测。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>如果你是从别的工具转过来的</h2>
+  <p>每次讨论这件事都会出现四个名字，它们并不能互相替代。</p>
+  <table>
+    <tr><th>你熟悉的</th><th>它是什么</th><th>在这里可以期待什么</th></tr>
+    <tr><td><strong>tc 配合 netem</strong></td><td>Linux 上的方案，内置于内核，通过命令行操作。搜索 WAN 仿真时往往出现的就是它。</td><td>Windows 上没有 <code>tc</code>。这是精神上最接近的东西：同样种类的网络损伤，带退出码的命令行，并且用驱动代替了排队规则。</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>一款免费、MIT 许可、交互式的 Windows 工具，使用同一个 WinDivert 驱动。</td><td>只需要一个窗口和一个过滤器时，就用它。需要按进程定位、带随机种子的运行，以及流水线可以调用的命令行时，请来这里。</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>一款商业 Windows 产品，用于长期按应用管理带宽。</td><td>这是另一类工作。本工具是测试仪器：开启一段时间，然后关闭，而且它能降低的远不止速度。</td></tr>
+    <tr><td><strong>Fiddler 或 Charles</strong></td><td>可以检查、改写并限制经过它们的流量的代理。</td><td>同样是另一类工作。代理塑造的是它所代理的流量，并且能看到数据。本工具塑造的是连接本身，包括 UDP，以及任何根本不经过代理的流量。</td></tr>
+  </table>
+  <p>说白了：如果你想要一个面向单个 Windows 应用、带命令行的网络模拟器，你要找的就是这种工具。如果你想读取和修改应用数据，你需要的是代理；如果你用的是 Linux，那你已经有 netem 了。</p>
+</section>
+
+<section>
+  <h2>什么时候该用别的工具</h2>
+  <p>坦诚相告，比让人白下载一次更划算。</p>
+  <ul>
+    <li><strong>你用的是 Linux 或 macOS。</strong>本工具只支持 Windows，而且将来也是如此，因为它建立在 Windows 驱动之上。在 Linux 上，<code>tc</code> 配合 <code>netem</code> 是标准答案，而且不需要额外软件。</li>
+    <li><strong>你想要的是长期的带宽管理</strong>：对整台机器、按应用，并且是作为产品功能而不是测试。这正是 NetLimiter 这类商业流量整形工具的用途。本工具是测试仪器：打算开启一段时间，然后关闭。</li>
+    <li><strong>你拿不到管理员权限。</strong>捕获数据包需要这些权限，没有办法绕过，声称可以绕过的工具并没有真正捕获你的流量。</li>
+    <li><strong>你需要检查并改写应用数据</strong>，而不是让链路变差。那是代理的工作。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

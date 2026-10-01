@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Latentie en jitter toevoegen aan een app</h1>
+  <p class="lead">Alles werkt op een snelle lokale verbinding. Geef de app 300 ms ping en je ontdekt welke schermen zijn geschreven alsof het antwoord direct komt.</p>
+</section>
+
+<section>
+  <h2>Drie verschillende dingen</h2>
+  <table>
+    <tr><th>Instelling</th><th>Wat het doet</th><th>Waar het in het echt vandaan komt</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Voegt dezelfde vertraging toe aan elk pakket, in milliseconden.</td><td>Afstand. Een server op een ander continent, of een satelliet.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Voegt er een willekeurige hoeveelheid bovenop toe, zodat de vertraging blijft veranderen.</td><td>Gedeelde wifi, mobiele netwerken, alles wat overbelast is.</td></tr>
+    <tr><td><strong>Uitschieters</strong></td><td>Af en toe lange stilstanden, ingesteld op hoe vaak en hoe lang.</td><td>Een overdracht tussen zendmasten, een router onder belasting.</td></tr>
+  </table>
+  <p>Alle drie zijn in milliseconden en kunnen samen draaien. Beide vertragingswaarden accepteren alles vanaf 0, dus je kunt van een geloofwaardige 40 ms naar een absurde 60 seconden gaan.</p>
+</section>
+
+<section>
+  <h2>Vanaf de opdrachtregel</h2>
+  <p>Een constante 200 ms met 80 ms jitter, op één applicatie:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>In plaats daarvan zeldzame, lange stilstanden: ongeveer één pakket op de twintig wacht een extra seconde:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Getallen die het proberen waard zijn</h2>
+  <ul>
+    <li><strong>40 ms</strong>: een server in hetzelfde land. Er zou niets moeten veranderen.</li>
+    <li><strong>150 ms</strong>: een ander continent. Alles wat veel heen en weer praat gaat traag aanvoelen, omdat elke rondreis iets kost.</li>
+    <li><strong>600 ms en hoger</strong>: geostationaire satelliet of wifi in het vliegtuig. Hier lopen voortgangsbalken vast en draait de logica voor opnieuw proberen eindelijk.</li>
+  </ul>
+  <p>De kant-en-klare profielen bevatten gemeten waarden: “{{app.presets.distant}}”, “{{app.presets.leo}}”, “{{app.presets.satellite}}”, “{{app.presets.inflight}}”, “{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>Meten: kijk naar het slechtste geval, niet naar het gemiddelde</h2>
+  <p>Jitter beweegt een gemiddelde nauwelijks, en ook een mediaan nauwelijks. Een run met 30 ms jitter en een run zonder kunnen bijna dezelfde “typische” ping melden terwijl ze compleet anders aanvoelen.</p>
+  <p>Vergelijk in plaats daarvan het <strong>95e percentiel met de mediaan</strong>. Het verschil ertussen is de jitter, en dat verschil maakt een spraakgesprek hakkelig of een game onspeelbaar terwijl het gemiddelde nog prima lijkt.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

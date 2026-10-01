@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Thay đổi điều kiện mạng theo thời gian</h1>
+  <p class="lead">Mất gói cố định 10 % là điều kiện phòng thí nghiệm. Kết nối thật xấu đi, hồi phục, khựng bốn giây rồi quay lại, và lỗi bạn đang tìm thường nằm ở sự thay đổi, không phải ở trạng thái ổn định.</p>
+</section>
+
+<section>
+  <h2>Kịch bản là một dòng thời gian</h2>
+  <p>Một tệp JSON. Mỗi bước nói <em>ở giây này, các thiết lập này</em>, và thứ bạn không nhắc đến giữ nguyên giá trị:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Thời gian tính bằng giây kể từ lúc bắt đầu chạy, không phải khoảng cách giữa các bước. Với <code>"loop": true</code>, dòng thời gian bắt đầu lại khi hết, điều bạn cần cho một bài chạy dài: để nó chạy và dùng ứng dụng.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Số kịch bản có sẵn trong chương trình: {{page.scenario_count}}</h2>
+  <p>Trong thư mục <code>scenarios</code> cạnh tệp thực thi. Được đọc từ chính các tệp đó, nên đây là những gì bạn thực sự có:</p>
+  {{page.scenario_table}}
+  <p>Chúng là tệp văn bản thường: mở một tệp, đổi một con số, lưu. Tên cho biết chúng tái hiện gì: một quán cà phê đông người, kết nối di động tụt từ LTE xuống 3G, một lần tải lên chết giữa chừng, một máy chủ bị quá tải, DNS không còn trả lời.</p>
+</section>
+
+<section>
+  <h2>Hai cách đơn giản hơn để có thay đổi</h2>
+  <p>Viết kịch bản đáng giá khi thứ tự quan trọng. Khi không, hai thiết lập tự biến đổi:</p>
+  <ul>
+    <li><strong>Bật tắt đường truyền</strong>: độ dài chu kỳ và phần nào của nó là thời gian mất mạng. Chu kỳ mười giây, bốn giây mất mạng, mãi mãi.</li>
+    <li><strong>Lịch tốc độ</strong>: một chuỗi tốc độ mà giới hạn đi qua, để kết nối xấu đi rồi hồi phục mà không cần tệp.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Vì sao nó chạy được khi ứng dụng đang chạy</h2>
+  <p>Mọi thiết lập mà một kịch bản chạm tới đều được áp dụng trực tiếp lên phiên đang diễn ra: không cần khởi động lại ứng dụng, công cụ cũng vậy. Nhật ký sự kiện ghi lại từng bước khi nó xảy ra, nên khi có gì hỏng, bạn thấy nó theo sau thay đổi nào. Kết hợp với một seed và toàn bộ chuỗi, kể cả sự mất gói ngẫu nhiên bên trong, lặp lại chính xác.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

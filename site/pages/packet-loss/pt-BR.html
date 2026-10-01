@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simule perda de pacotes no Windows</h1>
+  <p class="lead">Perda de pacotes é a falha que os usuários descrevem como “simplesmente trava”. Você define uma porcentagem, a ferramenta descarta essa parcela dos pacotes, e o seu aplicativo precisa lidar com isso.</p>
+</section>
+
+<section>
+  <h2>Na janela</h2>
+  <ol class="steps">
+    <li>Preencha <strong>{{app.fields.target_process}}</strong> para que só o seu aplicativo seja afetado, e não o computador inteiro.</li>
+    <li>Defina <strong>{{app.fields.loss}}</strong> como uma porcentagem entre 0 e 100. Comece em 5.</li>
+    <li>Pressione <strong>{{app.buttons.start}}</strong> e use o aplicativo.</li>
+  </ol>
+  <p>A barra no alto da janela resume o que está em execução, e a aba <strong>{{app.app.tabs.statistics}}</strong> conta os pacotes descartados.</p>
+</section>
+
+<section>
+  <h2>Pela linha de comando</h2>
+  <p>O mesmo executável roda sem a janela. Cinco por cento de perda em um navegador, por dois minutos, e depois tudo volta ao normal sozinho:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Adicione <code>--simulate</code> para ensaiar o comando sem tocar no tráfego real.</p>
+</section>
+
+<section>
+  <h2>Que porcentagem escolher</h2>
+  <table>
+    <tr><th>Perda</th><th>Como é a sensação</th></tr>
+    <tr><td>1%</td><td>Uma boa conexão tendo um minuto ruim. A maioria dos aplicativos disfarça.</td></tr>
+    <tr><td>5%</td><td>Wi-Fi fraco. Páginas carregam devagar, o vídeo perde qualidade.</td></tr>
+    <tr><td>20%</td><td>O hotspot de uma cafeteria lotada ou um túnel de trem. Os timeouts começam a aparecer.</td></tr>
+    <tr><td>60% ou mais</td><td>Quase inutilizável. Bom para encontrar a mensagem de erro que ninguém nunca testou.</td></tr>
+  </table>
+  <p>Os perfis prontos definem isso para você. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}” e “{{app.presets.3g}}” trazem todos um valor de perda, além de atraso e um limite de velocidade.</p>
+</section>
+
+<section>
+  <h2>Duas coisas que surpreendem</h2>
+  <p><strong>No TCP você pode não ver nada.</strong> O TCP retransmite o que perde, então um download por HTTPS só fica mais lento em vez de falhar. Se quiser ver a perda como perda, teste algo que rode sobre UDP: uma chamada de voz, um jogo, uma transmissão de vídeo ou o DNS.</p>
+  <p><strong>A perda é aleatória, então duas execuções diferem.</strong> Defina uma semente e a mesma execução se repete exatamente, o que transforma “quebrou uma vez” em um relatório de bug que outra pessoa consegue reproduzir:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  <p>Perda isolada é raro. As conexões ruins de verdade perdem pacotes <em>e</em> adicionam atraso <em>e</em> ficam sem velocidade, que é o que os perfis reproduzem.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Een slecht netwerk simuleren in CI</h1>
+  <p class="lead">Het venster is optioneel. Hetzelfde uitvoerbare bestand draait als opdrachtregeltool, eindigt vanzelf na een ingestelde tijd en meldt wat er gebeurde op een manier die een pipeline kan lezen.</p>
+</section>
+
+<section>
+  <h2>De vorm van een stap</h2>
+  <p>Verslechter voor de duur van de test en laat het dan vanzelf stoppen. Geen opruimstap om te vergeten:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>In een GitHub Actions-job, op een zelf gehoste Windows-runner:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Twee dingen over de runner: het onderscheppen van verkeer vereist beheerdersrechten, en een gehoste runner geeft je die niet, dus dit hoort op een zelf gehoste Windows-machine.</p>
+</section>
+
+<section>
+  <h2>Elk einde heeft een afsluitcode</h2>
+  <p>Niets eindigt met een traceback. Elke manier waarop een run kan eindigen heeft een nummer, dus een pipeline kan “je app faalde” onderscheiden van “de tool kon niet starten”:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Machineleesbare uitvoer</h2>
+  <p><code>--format json</code> schrijft één JSON-object per regel, samples terwijl de run bezig is en een samenvatting aan het eind, zodat een latere stap erop kan toetsen:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Logregels gaan naar standaardfout en gegevens naar standaarduitvoer, dus het omleiden van de gegevens mengt de twee nooit. <code>--seed</code> maakt de run herhaalbaar, en dat heeft een onbetrouwbare (flaky) test nodig voordat iemand erover kan discussiëren.</p>
+</section>
+
+<section>
+  <h2>Een proefrun die niets aanraakt</h2>
+  <p>Twee vlaggen maken het veilig om dit aan te sluiten voordat je het vertrouwt: <code>--dry-run</code> meldt wat de instellingen zouden doen en sluit af, en <code>--simulate</code> draait de hele engine tegen synthetisch verkeer, zonder het stuurprogramma te laden en zonder het netwerk aan te raken. Beide zijn handig in een build die de machine waarop hij draait niet mag verslechteren.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

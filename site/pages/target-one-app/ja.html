@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>マシンではなく、1つのアプリを狙う</h1>
+  <p class="lead">ターゲットがなければ、コンピューター上のすべての接続が影響を受けます。使っているリモートデスクトップも、修正のダウンロードもです。ターゲットがあれば、悪いネットワークが当たるのは1つのプロセスだけで、ほかはそのまま動き続けます。</p>
+</section>
+
+<section>
+  <h2>プロセスで指定する</h2>
+  <p><strong>{{app.fields.target_process}}</strong>に名前を入力するか、<code>--target</code> を渡します。名前だけなら断片として一致するので、<code>chrome</code> は <code>chrome.exe</code> も対象になります：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>プロセスツリーをたどるので、子プロセスを生成するものでは重要です。ブラウザはタブごとにプロセスを開き、それらにも当たります。</p>
+  <p>フィールドには複数の名前も、複数の種類のものを同時に入れることもできます：</p>
+  <table>
+    <tr><th>入力するもの</th><th>意味</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>2つのアプリケーション。</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome。ただしドライバーは除く。除外が優先されます。</td></tr>
+    <tr><td><code>my*.exe</code></td><td>「my」で始まるすべてのもの。</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>ワイルドカードでは足りないときの正規表現。</td></tr>
+    <tr><td><code>4812</code></td><td>1つのプロセスID。</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>1000より大きいすべてのプロセスID。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>アドレスやポートで指定する</h2>
+  <p>関心の単位がアプリではなく、1台のサーバーのときもあります。これらも同じリスト、範囲、除外の書き方を受け付け、CIDRとIPv6にも対応します：</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>2つ目は覚えておく価値があります。DNS以外のすべて。ポートから<em>外す</em>ように狙うほうが、欲しいものを並べるより簡単なことがよくあります。</p>
+</section>
+
+<section>
+  <h2>名前で指定したプロセスは、再起動後も追従する</h2>
+  <p>セッション実行中にアプリケーションを再起動しても、<strong>名前</strong>で指定したターゲットは新しいプロセスを拾い直します。<strong>プロセスID</strong>で指定したターゲットにはできません。そのIDは終了したプロセスのものだったからです。Windowsがあとから同じIDを割り当てた別のプログラムも、影響を受けません。テストがテスト対象を再起動するなら、名前で指定してください。</p>
+</section>
+
+<section>
+  <h2>無視してはいけない警告</h2>
+  <p>劣化をオンにして、狙う対象も時間制限もないまま開始すると、ウィンドウもコマンドラインも、このマシン上のすべての接続に影響する、とそう伝えます。これは拒否ではなく警告で、それが望みのこともあります。そうでなければ、ターゲットか <code>--duration</code> を設定してください。{{app.buttons.stop}}ならいつでもすべてが元に戻ります。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

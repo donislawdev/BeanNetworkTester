@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Mô phỏng lag game và mất gói tin</h1>
+  <p class="lead">Netcode được viết trên kết nối cục bộ với ping 1 ms và được người chơi thử trên wifi khách sạn. Thứ này thu hẹp khoảng cách đó ngay trên máy bạn, chỉ trên tiến trình game, trong khi phần còn lại của máy vẫn dùng được.</p>
+</section>
+
+<section>
+  <h2>Bắt đầu từ đây</h2>
+  <p>Nhắm vào ứng dụng khách của game, cho nó một kết nối tệ thực tế, và để nó tự dừng sau năm phút:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Cũng có sẵn một dòng thời gian cho việc này: <code>overloaded-game-server.json</code> trong thư mục <code>scenarios</code> đưa kết nối vào tình trạng nghẽn rồi ra lại, để bạn xem ứng dụng khách xử lý cả hai chiều thay đổi. Xem <a href="../kich-ban-theo-thoi-gian/">kịch bản theo thời gian</a>.</p>
+</section>
+
+<section>
+  <h2>Vì sao game thấy mất gói còn trình duyệt thì không</h2>
+  <p>Phần lớn lưu lượng game là UDP, và UDP không có gì để giấu sự mất gói. Một trang web qua TCP lặng lẽ gửi lại và chỉ mất nhiều thời gian hơn, nên trình duyệt có thể thấy ổn ở mức mất 5 % trong khi một trận đấu cùng mức 5 % đó giật, kéo nhân vật về và mất đồng bộ.</p>
+  <p>Nhờ vậy game là nơi trung thực để thử mất gói: bạn đặt gì thì ứng dụng khách trải nghiệm đúng thế.</p>
+</section>
+
+<section>
+  <h2>Đặt gì, và nó phơi bày điều gì</h2>
+  <table>
+    <tr><th>Thiết lập</th><th>Thử</th><th>Nó phơi bày gì</th></tr>
+    <tr><td>Độ trễ</td><td>80 đến 250 ms</td><td>Dự đoán và nội suy. Nhân vật của bạn có bị kéo lùi sau một phát bắn không?</td></tr>
+    <tr><td>Jitter</td><td>40 đến 100 ms</td><td>Bộ đệm. Một mức 200 ms đều đặn dễ che giấu hơn một ping cứ thay đổi.</td></tr>
+    <tr><td>Mất gói</td><td>2 đến 10 %</td><td>Các bản cập nhật trạng thái bị thiếu, và việc ứng dụng khách phục hồi hay lệch dần.</td></tr>
+    <tr><td>Cú giật</td><td>1 giây, hiếm khi</td><td>Cú khựng do chuyển giao giữa các trạm phát. Thường là thứ xấu xí nhất.</td></tr>
+    <tr><td>Bật tắt đường truyền</td><td>chu kỳ 10 s, mất mạng 30 %</td><td>Kết nối lại và vào lại.</td></tr>
+  </table>
+  <p>Hãy đo jitter bằng khoảng cách giữa phân vị 95 và trung vị chứ không phải bằng trung bình: jitter hầu như không làm trung bình nhúc nhích, vì thế một lần chạy có thể trên giấy giống hệt nhưng chơi thì khác.</p>
+</section>
+
+<section>
+  <h2>So hai bản build cần có seed</h2>
+  <p>Mất gói ngẫu nhiên khiến hai lần chạy khác nhau, nên “bản build mới tệ hơn” không phải bằng chứng. Cùng seed phát lại cùng sự mất gói và cùng jitter, biến cảm giác thành phép so sánh:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Nó không làm được gì</h2>
+  <p>Công cụ này định hình lưu lượng của máy <em>của bạn</em>. Nó không làm máy chủ chậm đi, không đổi tick rate của máy chủ, và không đặt những người chơi khác vào kết nối tệ, nên nó kiểm tra ứng dụng khách của bạn trước một đường truyền kém, không phải máy chủ của bạn dưới tải. Với phía máy chủ bạn cần kiểm thử tải, và với một sảnh đầy kết nối tệ bạn cần hơn một máy.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

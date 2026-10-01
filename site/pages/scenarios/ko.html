@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>시간에 따라 네트워크 조건 바꾸기</h1>
+  <p class="lead">고정된 10% 손실은 실험실 조건입니다. 실제 연결은 나빠지고, 회복하고, 4초 동안 멈췄다가 돌아오며, 찾고 있는 버그는 대개 정상 상태가 아니라 그 변화 속에 있습니다.</p>
+</section>
+
+<section>
+  <h2>시나리오는 타임라인입니다</h2>
+  <p>JSON 파일 하나입니다. 각 단계는 <em>이 초에는 이 설정</em>을 의미하며, 언급하지 않은 것은 값을 유지합니다:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>시간은 실행 시작부터의 초이며 단계 사이의 간격이 아닙니다. <code>"loop": true</code>를 쓰면 타임라인이 끝났을 때 처음부터 다시 시작하므로, 오래 돌리는 소크 테스트에 알맞습니다. 그냥 켜 두고 앱을 사용하세요.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>프로그램에 포함된 준비된 시나리오 수: {{page.scenario_count}}</h2>
+  <p>실행 파일 옆 <code>scenarios</code> 폴더에 있습니다. 그 파일들에서 읽은 것이므로 실제로 가진 것은 이것입니다:</p>
+  {{page.scenario_table}}
+  <p>평범한 텍스트 파일이므로 하나를 열고, 숫자를 바꾸고, 저장하면 됩니다. 이름이 무엇을 재현하는지 말해 줍니다. 붐비는 카페, LTE에서 3G로 떨어지는 모바일 연결, 도중에 죽는 업로드, 과부하가 걸린 서버, 응답을 멈추는 DNS입니다.</p>
+</section>
+
+<section>
+  <h2>변화를 얻는 더 간단한 두 가지 방법</h2>
+  <p>순서가 중요할 때는 시나리오를 작성할 만합니다. 그렇지 않다면 두 가지 설정이 스스로 변합니다:</p>
+  <ul>
+    <li><strong>링크 켜기와 끄기</strong>: 주기 길이와 그중 끊겨 있는 비율. 10초 주기에 4초 끊김을 영원히 반복합니다.</li>
+    <li><strong>속도 스케줄</strong>: 제한이 차례로 지나가는 속도의 연속이며, 파일 없이도 연결이 나빠졌다가 회복됩니다.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>앱이 실행 중일 때도 동작하는 이유</h2>
+  <p>시나리오가 건드리는 모든 설정은 이미 진행 중인 세션에 실시간으로 적용됩니다. 앱도 도구도 재시작할 필요가 없습니다. 이벤트 로그가 각 단계를 일어나는 대로 기록하므로 무언가 깨졌을 때 어떤 변경 뒤였는지 알 수 있습니다. 시드와 함께 쓰면 그 안의 무작위 손실을 포함한 전체 순서가 정확히 반복됩니다.</p>
+</section>
+
+<section>
+  <h2>다음</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

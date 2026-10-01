@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Descargar Bean Network Tester</h1>
+  <p class="lead">Un zip que funciona sin instalar nada, o un instalador para todos los usuarios del sistema. En ambos casos, el programa pide por sí mismo permisos de administrador.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Los datos, en un solo lugar</h2>
+  <ul class="facts">
+    <li><strong>Precio:</strong> gratis, y software libre: GNU GPL v3.</li>
+    <li><strong>Funciona en:</strong> Windows 10 y Windows 11, de 64 bits.</li>
+    <li><strong>Necesita:</strong> permisos de administrador, porque el tráfico lo captura un controlador.</li>
+    <li><strong>Instalación:</strong> no hace falta. Descomprime el zip donde quieras y ejecútalo. O usa el instalador <code>.msi</code>, que añade una entrada al menú Inicio y pone el programa en el <code>PATH</code> (necesita permisos de administrador).</li>
+    <li><strong>Envía datos:</strong> a ninguna parte. Sin telemetría, sin comprobación de actualizaciones, sin cliente de red.</li>
+    <li><strong>Modos:</strong> una ventana, y el mismo archivo como herramienta de línea de comandos.</li>
+    <li><strong>Código fuente:</strong> <a href="{{site.repo_url}}">en GitHub</a>, con la misma licencia.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Qué incluye la versión</h2>
+  <p>Cada versión publica cinco archivos. Dos son el programa, y los otros tres están para que no tengas que fiarte de la descarga a ciegas:</p>
+  <ul>
+    <li><strong>el zip</strong>: el programa y el controlador que usa, juntos en una carpeta;</li>
+    <li><strong>el instalador .msi</strong>: el mismo programa, instalado para todos los usuarios del sistema, con una entrada en el menú Inicio;</li>
+    <li><strong>SHA256SUMS.txt</strong>: las sumas de comprobación del zip y del instalador;</li>
+    <li><strong>un SBOM</strong>: una lista estándar de todos los componentes que contiene, con versiones y licencias, firmada respecto al zip;</li>
+    <li><strong>un archivo .sigstore.json</strong>: esa firma como archivo, para comprobarla sin preguntar a GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Comprobar que recibiste lo que compilamos</h2>
+  <p>La suma de comprobación responde a «¿llegó sin cambios?». En PowerShell, compara la salida con la línea de <code>SHA256SUMS.txt</code> (para el instalador, pon <code>.msi</code> en lugar de <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>La firma responde a otra pregunta, «¿salió esto de ese repositorio?», y necesita la herramienta de línea de comandos de GitHub:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Escribe como primera parte el nombre del zip que descargaste: <code>gh</code> no acepta un <code>*</code> ahí. Conserva <code>--predicate-type</code>: sin él, <code>gh</code> busca otro tipo de declaración y comunica que no encontró ninguna.</p>
+  <p>Una suma de comprobación que copias de la misma página que la descarga demuestra menos que una firma. Ambas están publicadas, así que las dos merecen un momento.</p>
+</section>
+
+<section>
+  <h2>Es posible que Windows te avise</h2>
+  <p>El programa y el instalador están firmados, así que Windows indica quién los firmó en lugar de decir «Editor desconocido». El certificado es nuevo, por lo que SmartScreen aún puede avisar durante un tiempo: todavía no lo ha visto muchas veces. Eso tiene que ver con el certificado, no con el archivo, y las dos comprobaciones de arriba te permiten verificar el archivo tú mismo. La <a href="../preguntas-frecuentes/">página de preguntas</a> trata esto y lo que necesita el controlador.</p>
+</section>
+
+<section>
+  <h2>Por dónde empezar cuando ya funciona</h2>
+  {{page.guide_links}}
+</section>

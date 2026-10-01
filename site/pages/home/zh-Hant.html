@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>在糟糕的網路上測試你的應用</h1>
+  <p class="lead">Bean Network Tester 可以為單一 Windows 應用增加延遲、封包遺失和限速。你會親眼看到使用者在火車上、飯店熱點裡，或者手機只有一格訊號時遇到的情況。</p>
+  <p>它是針對單一程式而不是整台電腦的網路模擬器，所以你可以為被測應用重現緩慢的網路，同時讓其他一切照常工作。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="工具執行時，一次即時 ping 出現封包遺失並增加了延遲">
+  <figcaption>為一個正在執行的連線增加延遲和封包遺失。</figcaption>
+</figure>
+
+<section>
+  <h2>它會對你的網路做什麼</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>讓網路變慢</h3>
+      <p>增加固定或隨機的延遲。看看 300 ms 的 ping 會對你的載入動畫造成什麼影響。</p>
+    </article>
+    <article class="card">
+      <h3>丟棄封包</h3>
+      <p>丟棄、重複或損壞封包，然後觀察你的應用是能恢復，還是直接當機。</p>
+    </article>
+    <article class="card">
+      <h3>限制速度</h3>
+      <p>把下載或上傳限制在設定的每秒 KB 數，就像訊號不好的行動網路那樣。</p>
+    </article>
+    <article class="card">
+      <h3>切斷鏈路</h3>
+      <p>斷開連線，阻斷某個連接埠或位址，或者讓網路時有時無。</p>
+    </article>
+    <article class="card">
+      <h3>只針對一個應用</h3>
+      <p>選擇一個處理程序、PID、位址或連接埠。電腦的其餘部分照常工作。</p>
+    </article>
+    <article class="card">
+      <h3>精確重複</h3>
+      <p>同一個隨機種子會重播同一次執行。這就是一份 bug 報告和一個故事之間的區別。</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>三步即可執行</h2>
+  <ol class="steps">
+    <li>從發行頁面下載 zip 壓縮檔，解壓到任意位置。</li>
+    <li>啟動 <code>BeanNetworkTester.exe</code>。它會自行請求管理員權限，因為擷取流量需要這些權限。</li>
+    <li>選擇一個現成的設定檔，例如「{{app.presets.3g}}」，點選 {{app.buttons.start}}，然後使用你的應用。</li>
+  </ol>
+  <p>同一個檔案裡還有文字模式，所以整個流程也能在管線中執行。只需一條命令，就能檢查你的服務能否扛住 10% 的封包遺失：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>時間一到它會自行停止，因此卡住的步驟不會留下一個被破壞的網路。加上 <code>--simulate</code> 可以演練命令，而不觸碰真實流量。</p>
+</section>
+
+<section>
+  <h2>誰在使用</h2>
+  <p>需要重現「在我機器上是好的」的測試人員。需要讓逾時真正發生的開發者。想知道延遲會對網路程式碼造成什麼影響的遊戲開發者。以及所有被問過「應用在網路不佳時能用嗎」，卻沒有可靠方法去驗證的人。</p>
+</section>
+
+<section>
+  <h2>如何完成某件具體的事</h2>
+  <p>簡短的指南，每篇都給出值得嘗試的數值和對應的命令。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

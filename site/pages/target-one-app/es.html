@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Apunta a una app, no al sistema</h1>
+  <p class="lead">Sin un objetivo, se ve afectada toda conexión del sistema, incluido el escritorio remoto que estás usando y la descarga de la corrección. Con un objetivo, un proceso recibe la mala red y todo lo demás sigue.</p>
+</section>
+
+<section>
+  <h2>Por proceso</h2>
+  <p>Escribe un nombre en <strong>{{app.fields.target_process}}</strong>, o pasa <code>--target</code>. Un nombre solo coincide como fragmento, así que <code>chrome</code> cubre <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Sigue el árbol de procesos, algo que importa para todo lo que lanza procesos hijos: un navegador abre un proceso por pestaña, y esos también se ven afectados.</p>
+  <p>El campo admite más de un nombre, y más de un tipo de cosa a la vez:</p>
+  <table>
+    <tr><th>Lo que escribes</th><th>Qué significa</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Dos aplicaciones.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, pero nunca el controlador. Las exclusiones tienen prioridad.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Todo lo que empiece por «my».</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Una expresión regular, cuando un comodín no basta.</td></tr>
+    <tr><td><code>4812</code></td><td>Un único identificador de proceso.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Todos los identificadores de proceso por encima de 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Por dirección o puerto</h2>
+  <p>A veces la unidad de interés no es la aplicación, sino un servidor. Estas opciones admiten la misma sintaxis de lista, rango y exclusión, y entienden CIDR e IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Conviene conocer la segunda: todo excepto DNS. Apuntar <em>lejos</em> de un puerto suele ser más fácil que enumerar los que quieres.</p>
+</section>
+
+<section>
+  <h2>Apuntar a un proceso por nombre sobrevive a su reinicio</h2>
+  <p>Reinicia la aplicación mientras hay una sesión en marcha y un objetivo por <strong>nombre</strong> vuelve a encontrar el proceso nuevo. Un objetivo por <strong>identificador de proceso</strong> no puede: el identificador pertenecía al proceso que terminó. Otro programa al que Windows asigne más tarde el mismo identificador tampoco se ve afectado. Si tu prueba reinicia lo que se está probando, apúntalo por nombre.</p>
+</section>
+
+<section>
+  <h2>La advertencia que no debes ignorar</h2>
+  <p>Empieza con el deterioro activado, sin nada a lo que apuntar y sin límite de tiempo, y tanto la ventana como la línea de comandos lo dicen: esto afecta a todas las conexiones de esta máquina. Es una advertencia, no una negativa: a veces es justo lo que quieres. Si no lo es, fija un objetivo o un <code>--duration</code>, y {{app.buttons.stop}} siempre lo deja todo como estaba.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

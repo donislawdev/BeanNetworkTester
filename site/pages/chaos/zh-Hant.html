@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Windows 上的網路混沌測試</h1>
+  <p class="lead">混沌測試，就是在你的注視下故意破壞某樣東西，看看你的軟體會如何應對。在網路層面，這個工具正是如此：向單一應用注入故障，看它能否存活。</p>
+</section>
+
+<section>
+  <h2>你可以注入的故障</h2>
+  <table>
+    <tr><th>故障</th><th>它模擬什麼</th></tr>
+    <tr><td>封包遺失、資料損壞、重複封包</td><td>品質下降的鏈路。封包消失、到達時已損壞，或者到達兩次。</td></tr>
+    <tr><td>延遲、抖動、尖峰</td><td>緩慢或不穩定的鏈路，包括足以讓逾時失效的數秒停頓。</td></tr>
+    <tr><td>連線重置</td><td>防火牆或負載均衡器在傳輸中途切斷連線。</td></tr>
+    <tr><td>鏈路中斷</td><td>鏈路按週期消失又恢復。</td></tr>
+    <tr><td>被阻斷的位址或連接埠</td><td>某一個依賴無法存取，而其餘一切正常。</td></tr>
+    <tr><td>網際網路斷開，區域網路正常</td><td>強制門戶的典型形態：本地可用，外部世界不可用。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>混沌與噪聲的區別：可重複性</h2>
+  <p>無法重播的隨機故障只會產生一個故事，而不是一份 bug 報告。這裡每一個隨機決定都來自一個隨機種子，所以同一條命令會重現同一次執行：丟的是同樣的封包，抖動也是同樣的，順序也相同：</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>這就是「上週二它崩了一次」和「別人也能執行的失敗測試」之間的區別。</p>
+</section>
+
+<section>
+  <h2>在管線中</h2>
+  <p>命令列透過結束代碼報告結果，所以建置可以區分「應用失敗了」和「工具無法啟動」，而且會話會自行結束，沒有需要記得執行的清理步驟：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>由一連串故障而不是單一故障組成的是場景檔案，它們同樣可以重複。關於結束代碼和所需的執行器，請參見<a href="../dingshi-changjing/">定時場景</a>和<a href="../ci-wangluo-ceshi/">CI 中的網路測試</a>。</p>
+</section>
+
+<section>
+  <h2>爆炸半徑到哪裡為止</h2>
+  <p>有兩個限制，而且都是刻意設計的。你瞄準時，影響只會到達一個處理程序、PID、位址或連接埠，所以你正在工作的這台機器能繼續工作。其次它只針對一台機器：這是對用戶端及其連線的故障注入，而不是針對叢集。如果你要找的是跨服務和節點的混沌工程，那是另一類工具，而這一個是能在單一 Windows 應用之下破壞網路的那一塊。</p>
+  <p>一切都能當場恢復。按下{{app.buttons.stop}}會恢復網路，時間限制同樣可以，而且如果工具本身崩潰，其內部的看門狗會關閉擷取，你注入的故障絕不能比注入它的那次執行活得更久。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

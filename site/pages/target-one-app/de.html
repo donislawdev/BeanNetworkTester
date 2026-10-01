@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Eine App anvisieren, nicht den Rechner</h1>
+  <p class="lead">Ohne Ziel ist jede Verbindung auf dem Rechner betroffen, auch die Remote-Desktop-Sitzung, die du gerade nutzt, und der Download des Fixes. Mit einem Ziel bekommt ein Prozess das schlechte Netzwerk, und alles andere läuft weiter.</p>
+</section>
+
+<section>
+  <h2>Nach Prozess</h2>
+  <p>Tippe einen Namen in <strong>{{app.fields.target_process}}</strong> oder übergib <code>--target</code>. Ein bloßer Name passt als Fragment, sodass <code>chrome</code> auch <code>chrome.exe</code> abdeckt:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Es folgt dem Prozessbaum, was bei allem wichtig ist, das Kindprozesse startet: Ein Browser öffnet einen Prozess pro Tab, und auch diese werden getroffen.</p>
+  <p>Das Feld nimmt mehr als einen Namen und mehr als eine Art von Angabe zugleich:</p>
+  <table>
+    <tr><th>Was du eintippst</th><th>Was es bedeutet</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Zwei Anwendungen.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, aber nie den Treiber. Ausschlüsse haben Vorrang.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Alles, was mit „my“ beginnt.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Ein regulärer Ausdruck, wenn ein Platzhalter nicht reicht.</td></tr>
+    <tr><td><code>4812</code></td><td>Eine einzelne Prozess-ID.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Jede Prozess-ID über 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Nach Adresse oder Port</h2>
+  <p>Manchmal ist nicht die App die interessante Einheit, sondern ein Server. Diese Optionen nehmen dieselbe Listen-, Bereichs- und Ausschlusssyntax und verstehen CIDR und IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Das zweite Beispiel solltest du kennen: alles außer DNS. Sich <em>von</em> einem Port abzuwenden, ist oft einfacher, als die gewünschten aufzulisten.</p>
+</section>
+
+<section>
+  <h2>Ein Prozess, der per Name anvisiert wird, übersteht seinen Neustart</h2>
+  <p>Starte die Anwendung während einer laufenden Sitzung neu, und ein Ziel per <strong>Name</strong> findet den neuen Prozess wieder. Ein Ziel per <strong>Prozess-ID</strong> kann das nicht: Die ID gehörte dem beendeten Prozess. Ein anderes Programm, dem Windows später dieselbe ID gibt, ist ebenfalls nicht betroffen. Wenn dein Test das Testobjekt neu startet, visiere es per Name an.</p>
+</section>
+
+<section>
+  <h2>Die Warnung, die du nicht ignorieren solltest</h2>
+  <p>Starte mit eingeschalteter Störung, ohne Ziel und ohne Zeitlimit, und sowohl das Fenster als auch die Befehlszeile sagen es dir: Das betrifft jede Verbindung auf diesem Rechner. Es ist eine Warnung, keine Weigerung, denn manchmal ist genau das gewollt. Wenn nicht, setze ein Ziel oder ein <code>--duration</code>, und {{app.buttons.stop}} stellt immer alles wieder her.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

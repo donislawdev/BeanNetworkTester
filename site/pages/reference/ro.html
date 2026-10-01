@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profiluri, setări și coduri de ieșire</h1>
+  <p class="lead">Trei tabele, niciunul scris de mână. Sunt generate din registrele programului însuși când se construiește această pagină, deci nu pot spune ceva ce programul nu spune.</p>
+</section>
+
+<section>
+  <h2>Profile gata făcute</h2>
+  <p>Alege unul dintre acestea și formularul se completează singur. O liniuță înseamnă că profilul lasă acea setare în pace. Vitezele sunt în kiloocteți pe secundă, înmulțește cu opt ca să compari cu ce promite un furnizor.</p>
+  {{page.preset_table}}
+  <p>Selectarea unui profil doar completează câmpurile. Nimic nu se schimbă în rețea până nu apeși {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Fiecare setare și opțiunea care o stabilește</h2>
+  <p>Fereastra și linia de comandă iau aceleași setări. Aceasta este lista întreagă, cu unitatea și intervalul pe care îl acceptă fiecare.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Coduri de ieșire</h2>
+  <p>Linia de comandă nu se termină niciodată cu un traceback. Fiecare mod în care se poate încheia o rulare are un număr, deci un pipeline poate deosebi o aplicație care eșuează de un instrument care nu a putut porni.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Pagini înrudite</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

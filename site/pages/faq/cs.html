@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Otázky, které lidé kladou jako první</h1>
+  <p class="lead">Ty, na které stojí za to odpovědět před stažením, a ne po něm.</p>
+</section>
+
+<section>
+  <h2>Proč potřebuje práva správce?</h2>
+  <p>Protože pakety zachytává ovladač jádra a Windows ho pro běžného uživatele nenačte. Program si práva vyžádá sám při spuštění. Z příkazového řádku odmítne běh s konkrétním návratovým kódem, místo aby selhal v půlce.</p>
+</section>
+
+<section>
+  <h2>Rozbije celý počítač, nebo jen mou aplikaci?</h2>
+  <p>Cokoli zacílíte. Nastavte cíl a zasažena je jen ta aplikace. Nechte cíl prázdný a zasažené je každé spojení v počítači, před čímž vás program varuje v okně i na příkazovém řádku, dřív než se stihnete divit, proč spadl videohovor.</p>
+</section>
+
+<section>
+  <h2>Jak to vrátit zpět?</h2>
+  <p>{{app.buttons.stop}}. Totéž udělá zavření programu a stejně tak časový limit, pokud jste nějaký nastavili. Pokud samotný nástroj uprostřed relace spadne, hlídací proces (watchdog) v něm zachytávání vypne, místo aby nechal vaši síť zhoršenou: relace nesmí nikdy přežít program, který ji spustil.</p>
+</section>
+
+<section>
+  <h2>Posílá něco někam?</h2>
+  <p>Ne. Není tu žádná analytika, žádné hlášení pádů službě a žádná kontrola aktualizací. Program nemá vůbec žádného síťového klienta. Jediné odchozí spojení, které může vytvořit, je otevření stránky podpory v prohlížeči poté, co na ni kliknete. Zachytává váš provoz, takže ten nesmí nikdy opustit váš počítač, a tato stránka, kterou čtete, také nic nenačítá od nikoho jiného.</p>
+</section>
+
+<section>
+  <h2>Windows mě varoval před stažením. Proč?</h2>
+  <p>Program je podepsaný, takže varování uvádí, kdo ho podepsal, místo „Neznámý vydavatel“. SmartScreen může ještě nějakou dobu varovat, protože je certifikát nový a zatím ho často neviděl. Některé antiviry také mohou reagovat na program, který žádá práva správce a načítá síťový ovladač. Každé vydání zveřejňuje kontrolní součet SHA-256 a podepsaný seznam svých součástí, takže můžete ověřit, co jste stáhli, místo abyste věřili zelené fajfce.</p>
+</section>
+
+<section>
+  <h2>Stahování úplně zemřelo a nic neříká proč</h2>
+  <p>Zkontrolujte maximální velikost paketu. Při dost nízké hodnotě to není menší paket, ale černá díra: síť zahazuje, co je příliš velké, a nikdy to nehlásí. Nastavte ji zpět a přenos se vrátí.</p>
+</section>
+
+<section>
+  <h2>Funguje to na Linuxu nebo macOS?</h2>
+  <p>Ne a nebude. Stojí na ovladači jádra Windows. Na Linuxu tuto práci dělá <code>tc</code> s <code>netem</code> a je už nainstalované.</p>
+</section>
+
+<section>
+  <h2>Je to opravdu zdarma? Mohu to používat v práci?</h2>
+  <p>Ano. Je to zdarma a s otevřeným kódem pod GNU GPL v3, včetně použití v práci, a zdrojový kód si může kdokoli přečíst nebo změnit. Stažení je pro všechny stejný soubor.</p>
+</section>
+
+<section>
+  <h2>Více</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

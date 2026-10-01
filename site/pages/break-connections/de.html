@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Verbindungen absichtlich kappen</h1>
+  <p class="lead">Langsam ist eine Art von schlecht. Weg ist eine andere, und sie findet den Codepfad, den niemand geschrieben hat: die Wiederverbindung, den erneuten Versuch, die Meldung, die dem Nutzer sagt, was passiert ist.</p>
+  <p>So testest du auch eine Anwendung offline, ohne etwas abzustecken: Der LAN-Modus lässt das lokale Netzwerk laufen und nimmt das Internet weg, und das Sperren einer Adresse macht einen einzelnen Dienst unerreichbar, während der Rest der Verbindung in Ordnung bleibt.</p>
+</section>
+
+<section>
+  <h2>Fünf verschiedene Arten, weg zu sein</h2>
+  <table>
+    <tr><th>Einstellung</th><th>Was die App sieht</th></tr>
+    <tr><td><strong>Verbindungen zurücksetzen</strong></td><td>Verbindungen sterben mitten in der Übertragung, so wie eine Firewall oder ein Load Balancer sie beendet. Du legst fest, wie oft, in Prozent.</td></tr>
+    <tr><td><strong>Verbindung ein und aus</strong></td><td>Das Netzwerk verschwindet für eine Weile und kommt dann wieder, immer wieder. Du legst die Zykluslänge fest und wie viel davon Ausfallzeit ist.</td></tr>
+    <tr><td><strong>Einen Port sperren</strong></td><td>Alles an diesen Port verschwindet. Nichts sonst wird berührt.</td></tr>
+    <tr><td><strong>Eine Adresse sperren</strong></td><td>Ein Server wird unerreichbar, während der Rest des Internets funktioniert.</td></tr>
+    <tr><td><strong>LAN-Modus</strong></td><td>Das lokale Netzwerk funktioniert weiter, das Internet nicht. Genau die Form eines Captive Portals oder einer toten Uplink-Verbindung.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Über die Befehlszeile</h2>
+  <p>Grob jede zehnte Verbindung beenden, für eine App:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Zyklen von zehn Sekunden, davon vier Sekunden unten: eine Verbindung, die ständig kommt und geht:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Ein Server unerreichbar, alles andere in Ordnung:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Das Sperren trifft nur, was es nennt</h2>
+  <p>Anders als Verlust oder Verzögerung betrifft das Sperren eines Ports oder einer Adresse <strong>nur</strong> den passenden Datenverkehr. Damit ist es das sicherste dieser Werkzeuge, wenn man es ohne Prozessziel ausführt, und deshalb ist „diese eine Abhängigkeit verschwinden lassen“ ein Einzeiler.</p>
+</section>
+
+<section>
+  <h2>Die Falle des toten Downloads</h2>
+  <p>Es gibt auch eine maximale Paketgröße. Senkst du sie ein wenig, werden große Übertragungen langsamer. Senkst du sie auf einen Wert wie 576, hören Downloads vollständig auf, für immer und ohne Fehlermeldung. Denn das ist keine kleinere Paketgröße mehr, sondern das klassische Black Hole, in dem das Netzwerk verwirft, was zu groß ist, und es nie meldet.</p>
+  <p>Das ist ein echter Fehlermodus, den es sich lohnt, absichtlich nachzustellen, und ihm zufällig zu begegnen, ist wirklich verwirrend. Wenn ein Download direkt nach dieser Einstellung stillschweigend stirbt, liegt es daran.</p>
+</section>
+
+<section>
+  <h2>Zurück zum Normalzustand</h2>
+  <p>{{app.buttons.stop}} stellt alles wieder her. Das Schließen des Programms ebenfalls, und auch das Zeitlimit, falls du eines gesetzt hast. Sollte das Tool selbst mitten in der Sitzung sterben, stoppt ein Watchdog darin die Erfassung, statt dein Netzwerk in einem kaputten Zustand zu lassen.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

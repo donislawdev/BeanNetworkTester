@@ -13,6 +13,126 @@
       "link_text": "Bez internetu",
       "title": "Test aplikacji bez internetu na Windows",
       "description": "Zabierz internet jednej aplikacji, zostawiając sieć lokalną, uczyń jedną usługę nieosiągalną albo zepsuj DNS - bez wyciągania żadnej wtyczki."
+    },
+    "zh-Hans": {
+      "slug": "lixian-ceshi",
+      "title": "在 Windows 上测试应用断网时的表现",
+      "description": "只对一个应用断开互联网而保留局域网，让某个服务无法访问，或让 DNS 失效，全程无需拔网线。",
+      "link_text": "无网络"
+    },
+    "ja": {
+      "slug": "netto-nashi-tesuto",
+      "title": "Windowsでインターネットなしのアプリ動作をテスト",
+      "description": "ローカルネットワークはそのままに、1つのアプリからインターネットだけを奪います。特定のサービスを到達不能にしたり、DNSを壊したりも、ケーブルを抜かずに可能です。",
+      "link_text": "ネットなし"
+    },
+    "de": {
+      "slug": "test-ohne-internet",
+      "title": "Eine Windows-App ohne Internet testen",
+      "description": "Nimm einer App das Internet weg, während das lokale Netz weiterläuft, mache einen Dienst unerreichbar oder lege DNS lahm, ohne ein Kabel zu ziehen.",
+      "link_text": "Ohne Internet"
+    },
+    "fr": {
+      "slug": "test-sans-internet",
+      "title": "Tester une application Windows sans internet",
+      "description": "Coupez internet pour une application tandis que le réseau local continue de fonctionner, rendez un service injoignable ou cassez le DNS, sans rien débrancher.",
+      "link_text": "Sans internet"
+    },
+    "es": {
+      "slug": "probar-sin-internet",
+      "title": "Prueba una aplicación de Windows sin internet",
+      "description": "Quita internet a una aplicación mientras la red local sigue funcionando, deja inalcanzable un servicio o rompe el DNS, sin desenchufar nada.",
+      "link_text": "Sin internet"
+    },
+    "pt-BR": {
+      "slug": "testar-sem-internet",
+      "title": "Teste um aplicativo do Windows sem internet",
+      "description": "Tire a internet de um aplicativo enquanto a rede local continua funcionando, deixe um serviço inacessível ou quebre o DNS, sem desconectar nada.",
+      "link_text": "Sem internet"
+    },
+    "it": {
+      "slug": "test-senza-internet",
+      "title": "Prova un’app Windows senza internet",
+      "description": "Togli internet a un’app mentre la rete locale continua a funzionare, rendi irraggiungibile un servizio o rompi il DNS, senza staccare nulla.",
+      "link_text": "Senza internet"
+    },
+    "id": {
+      "slug": "uji-tanpa-internet",
+      "title": "Uji aplikasi Windows tanpa internet",
+      "description": "Putus internet satu aplikasi sementara jaringan lokal tetap jalan, buat satu layanan tak terjangkau, atau rusak DNS, tanpa mencabut apa pun.",
+      "link_text": "Tanpa internet"
+    },
+    "ru": {
+      "slug": "test-bez-interneta",
+      "title": "Проверка приложения в Windows без интернета",
+      "description": "Отключите интернет одному приложению, пока локальная сеть работает, сделайте недоступным один сервис или сломайте DNS, ничего не выдёргивая.",
+      "link_text": "Без интернета"
+    },
+    "tr": {
+      "slug": "internetsiz-test",
+      "title": "Windows uygulamasını internetsiz test edin",
+      "description": "Yerel ağ çalışırken bir uygulamanın internetini alın, tek bir hizmeti erişilemez yapın ya da DNS’i bozun, hiçbir şeyi çekmeden.",
+      "link_text": "İnternetsiz"
+    },
+    "cs": {
+      "slug": "test-bez-internetu",
+      "title": "Test aplikace bez internetu ve Windows",
+      "description": "Odeberte jedné aplikaci internet, zatímco místní síť funguje, znepřístupněte jednu službu nebo rozbijte DNS, aniž byste cokoli odpojovali.",
+      "link_text": "Bez internetu"
+    },
+    "vi": {
+      "slug": "kiem-tra-khong-internet",
+      "title": "Kiểm tra ứng dụng khi không có internet trên Windows",
+      "description": "Lấy đi internet của một ứng dụng trong khi mạng nội bộ vẫn chạy, làm một dịch vụ không truy cập được hoặc làm hỏng DNS mà không rút dây nào.",
+      "link_text": "Không có internet"
+    },
+    "hi": {
+      "slug": "bina-internet-test",
+      "title": "Windows पर बिना इंटरनेट के ऐप का टेस्ट",
+      "description": "लोकल नेटवर्क चालू रखकर किसी ऐप से इंटरनेट छीनें, एक सेवा को पहुँच से बाहर करें या DNS बिगाड़ें, कुछ भी अनप्लग किए बिना।",
+      "link_text": "बिना इंटरनेट"
+    },
+    "ko": {
+      "slug": "inteonet-eopsi-teseuteu",
+      "title": "Windows에서 인터넷 없이 앱 테스트",
+      "description": "로컬 네트워크는 유지한 채 앱의 인터넷만 끊거나, 서비스 하나만 닿지 않게 하거나 DNS를 망가뜨리세요. 케이블은 그대로입니다.",
+      "link_text": "인터넷 없이"
+    },
+    "ar": {
+      "slug": "ikhtibar-bidun-internet",
+      "title": "اختبار تطبيق بلا إنترنت على Windows",
+      "description": "اسحب الإنترنت من تطبيق واحد والشبكة المحلية تعمل، أو اجعل خدمة واحدة غير قابلة للوصول، أو عطّل DNS دون فصل أي كابل.",
+      "link_text": "بلا إنترنت"
+    },
+    "ro": {
+      "slug": "test-fara-internet",
+      "title": "Testează o aplicație fără internet în Windows",
+      "description": "Ia internetul unei singure aplicații cât timp rețeaua locală merge, fă un serviciu inaccesibil sau strică DNS-ul, fără să scoți vreun cablu.",
+      "link_text": "Fără internet"
+    },
+    "nl": {
+      "slug": "testen-zonder-internet",
+      "title": "Een app testen zonder internet op Windows",
+      "description": "Neem één app het internet af terwijl het lokale netwerk werkt, maak één dienst onbereikbaar of saboteer DNS, zonder een kabel los te trekken.",
+      "link_text": "Zonder internet"
+    },
+    "zh-Hant": {
+      "slug": "lixian-ceshi",
+      "title": "在 Windows 上測試應用斷網時的表現",
+      "description": "只對一個應用斷開網際網路而保留區域網路，讓某個服務無法存取，或讓 DNS 失效，全程無需拔網路線。",
+      "link_text": "無網路"
+    },
+    "uk": {
+      "slug": "test-bez-internetu",
+      "title": "Тест застосунку без інтернету у Windows",
+      "description": "Заберіть інтернет в одного застосунку, поки локальна мережа працює, зробіть недоступною одну службу або зламайте DNS, нічого не відключаючи.",
+      "link_text": "Без інтернету"
+    },
+    "th": {
+      "slug": "thotsop-mai-mi-internet",
+      "title": "ทดสอบแอปแบบไม่มีอินเทอร์เน็ตบน Windows",
+      "description": "ตัดอินเทอร์เน็ตของแอปเดียวขณะที่เครือข่ายในบ้านยังใช้ได้ ทำให้บริการเดียวเข้าถึงไม่ได้ หรือทำ DNS พัง โดยไม่ต้องถอดสายใดเลย",
+      "link_text": "ไม่มีอินเทอร์เน็ต"
     }
   }
 }

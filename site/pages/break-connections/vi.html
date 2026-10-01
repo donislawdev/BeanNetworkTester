@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Cố ý ngắt kết nối</h1>
+  <p class="lead">Chậm là một kiểu tệ. Mất hẳn là kiểu khác, và chính nó tìm ra đường đi trong mã mà không ai viết: kết nối lại, thử lại, thông báo cho người dùng biết chuyện gì đã xảy ra.</p>
+  <p>Đây cũng là cách kiểm tra ứng dụng khi offline mà không phải rút gì cả: chế độ LAN giữ mạng nội bộ chạy và lấy đi internet, còn chặn một địa chỉ làm một dịch vụ không với tới được trong khi phần còn lại của kết nối vẫn ổn.</p>
+</section>
+
+<section>
+  <h2>Năm cách khác nhau để biến mất</h2>
+  <table>
+    <tr><th>Thiết lập</th><th>Ứng dụng thấy gì</th></tr>
+    <tr><td><strong>Đặt lại kết nối</strong></td><td>Kết nối chết giữa chừng khi đang truyền, như khi tường lửa hoặc bộ cân bằng tải giết chúng. Bạn đặt tần suất, tính bằng phần trăm.</td></tr>
+    <tr><td><strong>Bật tắt đường truyền</strong></td><td>Mạng biến mất một lúc rồi quay lại, lặp đi lặp lại. Bạn đặt độ dài chu kỳ và phần nào của nó là thời gian mất mạng.</td></tr>
+    <tr><td><strong>Chặn một cổng</strong></td><td>Mọi thứ đi tới cổng đó biến mất. Không đụng đến gì khác.</td></tr>
+    <tr><td><strong>Chặn một địa chỉ</strong></td><td>Một máy chủ trở nên không với tới được trong khi phần còn lại của internet vẫn chạy.</td></tr>
+    <tr><td><strong>Chế độ LAN</strong></td><td>Mạng nội bộ vẫn chạy, internet thì không. Đúng hình dạng của một captive portal hay một đường lên mạng đã chết.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Từ dòng lệnh</h2>
+  <p>Giết khoảng một trong mười kết nối, trên một ứng dụng:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Chu kỳ mười giây, mất mạng bốn giây trong đó, một đường truyền cứ lúc đến lúc đi:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Một máy chủ không với tới được, mọi thứ khác ổn:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Việc chặn chỉ ảnh hưởng đến thứ nó nêu tên</h2>
+  <p>Khác với mất gói hay độ trễ, chặn một cổng hoặc một địa chỉ chỉ ảnh hưởng đến lưu lượng <strong>khớp</strong> với nó. Nhờ vậy đây là cách an toàn nhất trong số này để chạy mà không cần đích là một tiến trình, và cũng là lý do “làm cho phụ thuộc này biến mất” chỉ là một lệnh một dòng.</p>
+</section>
+
+<section>
+  <h2>Cái bẫy tải xuống chết</h2>
+  <p>Còn có kích thước gói tối đa. Hạ nó một chút thì các lần truyền lớn chậm đi. Hạ xuống một giá trị như 576 thì việc tải xuống dừng hẳn, mãi mãi, không có lỗi, vì đó không còn là kích thước gói nhỏ hơn, mà là cái hố đen kinh điển, nơi mạng bỏ những gì quá lớn và không bao giờ báo.</p>
+  <p>Đó là một kiểu hỏng có thật, đáng để cố ý tái hiện, và cực kỳ khó hiểu nếu tình cờ gặp. Nếu một lần tải chết lặng lẽ ngay sau khi bạn đổi thiết lập này, thì đó là lý do.</p>
+</section>
+
+<section>
+  <h2>Trở lại bình thường</h2>
+  <p>{{app.buttons.stop}} khôi phục mọi thứ. Đóng chương trình cũng vậy, và giới hạn thời gian cũng vậy nếu bạn đặt. Nếu chính công cụ chết giữa phiên, một watchdog bên trong sẽ dừng việc bắt gói chứ không để mạng của bạn ở trạng thái hỏng.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

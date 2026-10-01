@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profily, nastavení a návratové kódy</h1>
+  <p class="lead">Tři tabulky, žádná není psána ručně. Generují se z vlastních registrů programu při sestavení této stránky, takže nemohou říct něco, co program neříká.</p>
+</section>
+
+<section>
+  <h2>Hotové profily</h2>
+  <p>Vyberte jeden z nich a formulář se vyplní sám. Pomlčka znamená, že profil dané nastavení nechává být. Rychlosti jsou v kilobajtech za sekundu; pro srovnání s tím, co uvádí poskytovatel, násobte osmi.</p>
+  {{page.preset_table}}
+  <p>Výběr profilu pouze vyplní pole. Na síti se nic nezmění, dokud nestisknete {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Každé nastavení a přepínač, který ho nastavuje</h2>
+  <p>Okno a příkazový řádek berou stejná nastavení. Tohle je celý seznam s jednotkou a rozsahem, který každé přijímá.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Návratové kódy</h2>
+  <p>Příkazový řádek nikdy nekončí výpisem chyby (traceback). Každý způsob, jak běh může skončit, má číslo, takže pipeline rozliší selhávající aplikaci od nástroje, který se nepodařilo spustit.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Související</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>在没有互联网的情况下测试应用</h1>
+  <p class="lead">拔掉网线只测试了一件事：一台没有网络的机器。大多数离线 bug 并不是这样的。它们出现在网卡是启用的、Wi-Fi 图标看起来正常，而应用需要的东西就是访问不到的时候。</p>
+</section>
+
+<section>
+  <h2>三种不同的“离线”</h2>
+  <table>
+    <tr><th>你开启的是什么</th><th>应用会看到什么</th><th>它能发现的 bug</th></tr>
+    <tr><td><strong>局域网模式</strong></td><td>本地网络正常，超出本地网络的一切都不通。</td><td>登录之前的酒店 Wi-Fi、断掉的上行链路、没有出口路由的公司网络。</td></tr>
+    <tr><td><strong>阻断地址</strong></td><td>某一台服务器无法访问，其余一切正常。</td><td>一个依赖挂了而应用本身一切正常，这是健康检查通常会漏掉的情况。</td></tr>
+    <tr><td><strong>阻断 53 端口</strong></td><td>域名无法解析，但按地址连接仍然可用。</td><td>DNS 故障，在用户看来是“互联网断了”，在日志里看起来却完全是另一回事。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>从命令行运行</h2>
+  <p>对一个应用断开互联网，本地网络不受影响，持续两分钟：</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>一个服务无法访问，其余一切正常：</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>域名无法解析：</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>还有一条现成的时间线，会破坏 DNS 并自行恢复，就是程序旁边 <code>scenarios</code> 文件夹里的 <code>failing-dns.json</code>。参见<a href="../dingshi-changjing/">定时场景</a>。</p>
+</section>
+
+<section>
+  <h2>该实际观察什么</h2>
+  <ul>
+    <li><strong>提示信息。</strong>应用有没有说明发生了什么，还是只会一直转圈？</li>
+    <li><strong>重试。</strong>它会退避，还是在一个循环里反复冲击同一个地址？</li>
+    <li><strong>队列。</strong>用户在离线期间做的工作，是被保留并稍后发送，还是丢失了？</li>
+    <li><strong>恢复。</strong>按下{{app.buttons.stop}}会把网络恢复。应用能自己发现，还是需要重启？</li>
+  </ul>
+  <p>最后一点正是价值最大的地方。离线很容易处理不好，也很容易测试。恢复联网时，状态才最容易出错。</p>
+</section>
+
+<section>
+  <h2>这不是什么</h2>
+  <p>网卡保持启用，机器保留着自己的地址，所以只向 Windows 询问“有没有网络”的应用仍会得到“有”。这是刻意为之，也是更有意思的测试：真实用户很少是完全断开的，他们是连接到了某个够不到所需资源的网络上。如果你特别想要“没有网卡”的情形，禁用网卡即可，不需要任何工具。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

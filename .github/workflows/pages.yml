@@ -26,6 +26,12 @@ on:
       # page, so editing a scenario changes the site. Without this line the page would
       # keep serving the previous list and look like a page nobody edited.
       - "scenarios/**"
+      # The pages name the program's profiles, fields and buttons through
+      # `{{app.*}}`, and those words live in the program's own language files. A
+      # translation landing in `lang/` therefore changes the site, in every language
+      # that reads that file, and the build prints which languages still fall back to
+      # the default one.
+      - "lang/**"
       - "beantester/appinfo.py"
       - "bean.png"
       - "docs/demo.gif"

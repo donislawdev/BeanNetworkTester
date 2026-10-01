@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Ajouter de la latence et de la gigue à une application</h1>
+  <p class="lead">Tout fonctionne sur une connexion locale rapide. Donnez 300 ms de ping à l’application et vous découvrirez quels écrans ont été écrits comme si la réponse arrivait instantanément.</p>
+</section>
+
+<section>
+  <h2>Trois choses différentes</h2>
+  <table>
+    <tr><th>Réglage</th><th>Ce qu’il fait</th><th>D’où cela vient dans la vraie vie</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Ajoute le même délai à chaque paquet, en millisecondes.</td><td>La distance. Un serveur sur un autre continent, ou un satellite.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Ajoute une part aléatoire par-dessus, de sorte que le délai change sans cesse.</td><td>Wi-Fi partagé, réseaux mobiles, tout ce qui est congestionné.</td></tr>
+    <tr><td><strong>Pics de latence</strong></td><td>De longs blocages occasionnels, définis par leur fréquence et leur durée.</td><td>Un transfert entre antennes-relais, un routeur surchargé.</td></tr>
+  </table>
+  <p>Les trois sont exprimés en millisecondes et peuvent s’utiliser ensemble. Les deux valeurs de délai acceptent tout à partir de 0, vous pouvez donc passer de 40 ms, plausibles, à 60 secondes, absurdes.</p>
+</section>
+
+<section>
+  <h2>En ligne de commande</h2>
+  <p>Un délai régulier de 200 ms avec 80 ms de gigue, sur une application :</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Plutôt de rares et longs blocages : environ un paquet sur vingt attend une seconde de plus :</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Des valeurs à essayer</h2>
+  <ul>
+    <li><strong>40 ms</strong> : un serveur dans le même pays. Rien ne devrait changer.</li>
+    <li><strong>150 ms</strong> : un autre continent. Tout ce qui multiplie les échanges commence à sembler lent, car chaque aller-retour coûte.</li>
+    <li><strong>600 ms et plus</strong> : satellite géostationnaire ou Wi-Fi en avion. C’est là que les barres de progression se figent et que la logique de nouvelle tentative s’exécute enfin.</li>
+  </ul>
+  <p>Les profils prêts à l’emploi contiennent des valeurs mesurées : « {{app.presets.distant}} », « {{app.presets.leo}} », « {{app.presets.satellite}} », « {{app.presets.inflight}} », « {{app.presets.lte}} ».</p>
+</section>
+
+<section>
+  <h2>Mesurer : regarder le pire cas, pas la moyenne</h2>
+  <p>La gigue modifie à peine une moyenne, et à peine une médiane. Une exécution avec 30 ms de gigue et une sans peuvent afficher presque le même ping « typique » tout en donnant une sensation complètement différente.</p>
+  <p>Comparez plutôt le <strong>95e centile à la médiane</strong>. L’écart entre les deux, c’est la gigue, et c’est cet écart qui rend un appel haché ou un jeu injouable alors que la moyenne a l’air correcte.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

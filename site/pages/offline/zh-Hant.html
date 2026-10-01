@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>在沒有網際網路的情況下測試應用</h1>
+  <p class="lead">拔掉網路線只測試了一件事：一台沒有網路的機器。大多數離線 bug 並不是這樣的。它們出現在網路卡是啟用的、Wi-Fi 圖示看起來正常，而應用需要的東西就是存取不到的時候。</p>
+</section>
+
+<section>
+  <h2>三種不同的「離線」</h2>
+  <table>
+    <tr><th>你開啟的是什麼</th><th>應用會看到什麼</th><th>它能發現的 bug</th></tr>
+    <tr><td><strong>區域網路模式</strong></td><td>本地網路正常，超出本地網路的一切都不通。</td><td>登入之前的飯店 Wi-Fi、斷掉的上行鏈路、沒有出口路由的公司網路。</td></tr>
+    <tr><td><strong>阻斷位址</strong></td><td>某一台伺服器無法存取，其餘一切正常。</td><td>一個依賴掛了而應用本身一切正常，這是健康檢查通常會漏掉的情況。</td></tr>
+    <tr><td><strong>阻斷 53 連接埠</strong></td><td>網域名稱無法解析，但按位址連線仍然可用。</td><td>DNS 故障，在使用者看來是「網際網路斷了」，在記錄裡看起來卻完全是另一回事。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>從命令列執行</h2>
+  <p>對一個應用斷開網際網路，本地網路不受影響，持續兩分鐘：</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>一個服務無法存取，其餘一切正常：</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>網域名稱無法解析：</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>還有一條現成的時間軸，會破壞 DNS 並自行恢復，就是程式旁邊 <code>scenarios</code> 資料夾裡的 <code>failing-dns.json</code>。參見<a href="../dingshi-changjing/">定時場景</a>。</p>
+</section>
+
+<section>
+  <h2>該實際觀察什麼</h2>
+  <ul>
+    <li><strong>提示資訊。</strong>應用有沒有說明發生了什麼，還是只會一直轉圈？</li>
+    <li><strong>重試。</strong>它會退避，還是在一個迴圈裡反覆衝擊同一個位址？</li>
+    <li><strong>佇列。</strong>使用者在離線期間做的工作，是被保留並稍後傳送，還是丟失了？</li>
+    <li><strong>恢復。</strong>按下{{app.buttons.stop}}會把網路恢復。應用能自己發現，還是需要重啟？</li>
+  </ul>
+  <p>最後一點正是價值最大的地方。離線很容易處理不好，也很容易測試。恢復聯網時，狀態才最容易出錯。</p>
+</section>
+
+<section>
+  <h2>這不是什麼</h2>
+  <p>網路卡保持啟用，機器保留著自己的位址，所以只向 Windows 詢問「有沒有網路」的應用仍會得到「有」。這是刻意為之，也是更有意思的測試：真實使用者很少是完全斷開的，他們是連線到了某個夠不到所需資源的網路上。如果你特別想要「沒有網路卡」的情形，禁用網路卡即可，不需要任何工具。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Bean Network Tester 다운로드</h1>
+  <p class="lead">설치 없이 실행되는 zip 또는 컴퓨터의 모든 사용자를 위한 설치 프로그램. 어느 쪽이든 프로그램이 관리자 권한을 직접 요청합니다.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>한눈에 보는 정보</h2>
+  <ul class="facts">
+    <li><strong>가격:</strong> 무료이며 자유 소프트웨어(GNU GPL v3)입니다.</li>
+    <li><strong>실행 환경:</strong> Windows 10 및 Windows 11, 64비트.</li>
+    <li><strong>필요한 것:</strong> 드라이버가 트래픽을 캡처하므로 관리자 권한.</li>
+    <li><strong>설치:</strong> 필요 없습니다. zip을 아무 데나 풀어 실행하세요. 또는 시작 메뉴 항목을 추가하고 프로그램을 <code>PATH</code>에 등록하는 <code>.msi</code> 설치 프로그램을 사용하세요(관리자 권한 필요).</li>
+    <li><strong>데이터 전송:</strong> 어디로도 보내지 않습니다. 텔레메트리, 업데이트 확인, 네트워크 클라이언트가 없습니다.</li>
+    <li><strong>모드:</strong> 창, 그리고 같은 파일이 명령줄 도구로도 동작합니다.</li>
+    <li><strong>소스:</strong> 같은 라이선스로 <a href="{{site.repo_url}}">GitHub에</a> 있습니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>릴리스에 들어 있는 것</h2>
+  <p>릴리스에는 다섯 개의 파일이 게시됩니다. 둘은 프로그램이고, 나머지 셋은 다운로드를 무작정 믿지 않아도 되도록 있는 것입니다:</p>
+  <ul>
+    <li><strong>zip</strong>: 프로그램과 그것이 사용하는 드라이버를 한 폴더에 담았습니다.</li>
+    <li><strong>.msi 설치 프로그램</strong>: 같은 프로그램을 컴퓨터의 모든 사용자용으로 설치하며 시작 메뉴 항목이 생깁니다.</li>
+    <li><strong>SHA256SUMS.txt</strong>: zip과 설치 프로그램의 체크섬입니다.</li>
+    <li><strong>SBOM</strong>: 내부의 모든 구성 요소를 버전과 라이선스와 함께 나열한 표준 목록이며 zip에 대해 서명되어 있습니다.</li>
+    <li><strong>.sigstore.json 파일</strong>: GitHub에 묻지 않고 확인할 수 있도록 그 서명을 파일로 만든 것입니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>우리가 빌드한 파일이 맞는지 확인하기</h2>
+  <p>체크섬은 “변경 없이 도착했는가”에 답합니다. PowerShell에서 출력을 <code>SHA256SUMS.txt</code>의 해당 줄과 비교하세요(설치 프로그램은 <code>.zip</code> 대신 <code>.msi</code>를 넣으세요):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>서명은 다른 질문, “그 저장소에서 나온 것인가”에 답하며 GitHub 명령줄 도구가 필요합니다:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>첫 번째 부분에는 내려받은 zip의 이름을 입력하세요. <code>gh</code>는 거기에 <code>*</code>를 허용하지 않습니다. <code>--predicate-type</code>은 유지하세요. 없으면 <code>gh</code>가 다른 종류의 진술을 찾아 아무것도 찾지 못했다고 보고합니다.</p>
+  <p>다운로드와 같은 페이지에서 복사한 체크섬은 서명보다 증명하는 바가 적습니다. 둘 다 게시되므로 둘 다 잠시 확인해 볼 만합니다.</p>
+</section>
+
+<section>
+  <h2>Windows가 경고할 수 있습니다</h2>
+  <p>프로그램과 설치 프로그램은 서명되어 있으므로 Windows는 “알 수 없는 게시자” 대신 서명한 주체를 표시합니다. 인증서가 새것이라 SmartScreen이 아직 자주 보지 못해 한동안 경고할 수 있습니다. 이것은 파일이 아니라 인증서에 관한 것이며, 위의 두 가지 확인으로 파일을 직접 검증할 수 있습니다. <a href="../jaju-mutneun-jilmun/">질문 페이지</a>에서 이 내용과 드라이버에 필요한 것을 다룹니다.</p>
+</section>
+
+<section>
+  <h2>실행한 뒤 어디서 시작할까</h2>
+  {{page.guide_links}}
+</section>

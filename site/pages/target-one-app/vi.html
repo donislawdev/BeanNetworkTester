@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Nhắm vào một ứng dụng, không phải cả máy</h1>
+  <p class="lead">Không có mục tiêu, mọi kết nối trên máy đều bị ảnh hưởng, kể cả máy tính từ xa bạn đang dùng và bản tải của bản vá. Có mục tiêu, một tiến trình nhận mạng tệ và mọi thứ khác vẫn chạy.</p>
+</section>
+
+<section>
+  <h2>Theo tiến trình</h2>
+  <p>Gõ một tên vào <strong>{{app.fields.target_process}}</strong>, hoặc truyền <code>--target</code>. Tên trần khớp như một đoạn, nên <code>chrome</code> bao gồm <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Nó đi theo cây tiến trình, điều quan trọng với thứ sinh ra tiến trình con: một trình duyệt mở một tiến trình cho mỗi thẻ, và những tiến trình đó cũng bị tác động.</p>
+  <p>Trường này nhận nhiều hơn một tên, và nhiều hơn một loại thứ cùng lúc:</p>
+  <table>
+    <tr><th>Bạn gõ gì</th><th>Nghĩa là gì</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Hai ứng dụng.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, nhưng không bao giờ là trình điều khiển. Loại trừ luôn thắng.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Mọi thứ bắt đầu bằng “my”.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Một biểu thức chính quy, khi ký tự đại diện chưa đủ.</td></tr>
+    <tr><td><code>4812</code></td><td>Một ID tiến trình duy nhất.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Mọi ID tiến trình trên 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Theo địa chỉ hoặc cổng</h2>
+  <p>Đôi khi đơn vị đáng quan tâm không phải ứng dụng mà là một máy chủ. Những mục này dùng cùng cú pháp danh sách, dải và loại trừ, và hiểu CIDR và IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Cái thứ hai đáng để biết: mọi thứ trừ DNS. Nhắm <em>tránh khỏi</em> một cổng thường dễ hơn liệt kê những cổng bạn muốn.</p>
+</section>
+
+<section>
+  <h2>Nhắm tiến trình theo tên sống sót qua việc khởi động lại nó</h2>
+  <p>Khởi động lại ứng dụng khi một phiên đang chạy và mục tiêu theo <strong>tên</strong> sẽ nhận lại tiến trình mới. Mục tiêu theo <strong>ID tiến trình</strong> thì không thể, vì ID thuộc về tiến trình đã thoát. Một chương trình khác mà Windows về sau cấp cùng ID cũng không bị tác động. Nếu bài kiểm tra của bạn khởi động lại thứ đang thử, hãy nhắm nó theo tên.</p>
+</section>
+
+<section>
+  <h2>Cảnh báo bạn không nên bỏ qua</h2>
+  <p>Bắt đầu với sự suy giảm bật, không có gì để nhắm và không có giới hạn thời gian, thì cả cửa sổ lẫn dòng lệnh đều nói rõ: việc này ảnh hưởng đến mọi kết nối trên máy này. Đó là một cảnh báo, không phải từ chối: đôi khi đó đúng là điều bạn muốn. Nếu không, hãy đặt một mục tiêu hoặc <code>--duration</code>, và {{app.buttons.stop}} luôn đưa mọi thứ trở lại.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

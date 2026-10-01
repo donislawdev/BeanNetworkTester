@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Test je app op een slecht netwerk</h1>
+  <p class="lead">Bean Network Tester voegt lag, pakketverlies en snelheidslimieten toe aan één Windows-applicatie. Je ziet wat je gebruikers zien in de trein, op een hotelhotspot of op een telefoon met één streepje bereik.</p>
+  <p>Het is een netwerkemulator die op één programma is gericht in plaats van op de hele machine, dus je kunt traag internet nabootsen voor de app die je test terwijl al het andere gewoon blijft werken.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Een live ping die pakketten verliest en vertraging oploopt terwijl de tool draait">
+  <figcaption>Vertraging en pakketverlies toevoegen aan een lopende verbinding.</figcaption>
+</figure>
+
+<section>
+  <h2>Wat het met je netwerk doet</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Maakt het trager</h3>
+      <p>Voeg een vaste of willekeurige vertraging toe. Ontdek wat 300 ms ping doet met je laadspinner.</p>
+    </article>
+    <article class="card">
+      <h3>Verliest pakketten</h3>
+      <p>Laat ze vallen, dupliceer of beschadig ze, en kijk dan of je app herstelt of gewoon vastloopt.</p>
+    </article>
+    <article class="card">
+      <h3>Begrenst de snelheid</h3>
+      <p>Houd download of upload op een vast aantal KB per seconde, zoals een zwakke mobiele verbinding dat doet.</p>
+    </article>
+    <article class="card">
+      <h3>Verbreekt de verbinding</h3>
+      <p>Sloop verbindingen, blokkeer een poort of adres, of laat het netwerk komen en gaan.</p>
+    </article>
+    <article class="card">
+      <h3>Richt op één app</h3>
+      <p>Kies een proces, een PID, een adres of een poort. De rest van de machine blijft gewoon werken.</p>
+    </article>
+    <article class="card">
+      <h3>Herhaalt exact</h3>
+      <p>Dezelfde seed speelt dezelfde run opnieuw af. Dat is het verschil tussen een bugrapport en een verhaal.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Gebruiken kost drie stappen</h2>
+  <ol class="steps">
+    <li>Download de zip van de releasepagina en pak hem ergens uit.</li>
+    <li>Start <code>BeanNetworkTester.exe</code>. Hij vraagt zelf om beheerdersrechten, omdat het onderscheppen van verkeer ze nodig heeft.</li>
+    <li>Kies een kant-en-klaar profiel zoals “{{app.presets.3g}}”, druk op {{app.buttons.start}} en gebruik je app.</li>
+  </ol>
+  <p>Er is een tekstmodus in hetzelfde bestand, dus het geheel draait ook in een pipeline. Eén opdracht is genoeg om te controleren of je dienst 10% pakketverlies overleeft:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Het stopt vanzelf als de tijd om is, dus een stap die blijft hangen kan geen kapot netwerk achterlaten. Voeg <code>--simulate</code> toe om een opdracht te oefenen zonder echt verkeer aan te raken.</p>
+</section>
+
+<section>
+  <h2>Wie het gebruikt</h2>
+  <p>Testers die “bij mij werkt het” moeten reproduceren. Ontwikkelaars die een timeout echt moeten laten gebeuren. Gameontwikkelaars die controleren wat lag met hun netcode doet. Iedereen die ooit is gevraagd of de app werkt op een zwakke verbinding en geen eerlijke manier had om daar achter te komen.</p>
+</section>
+
+<section>
+  <h2>Hoe je iets specifieks doet</h2>
+  <p>Korte handleidingen, elk met de getallen die het proberen waard zijn en de opdracht die het doet.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

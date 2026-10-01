@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Eine App ohne Internet testen</h1>
+  <p class="lead">Das Netzwerkkabel zu ziehen, testet nur eines: einen Rechner ohne Netzwerk. Die meisten Offline-Fehler sind nicht das. Sie treten auf, wenn der Adapter aktiv ist, das WLAN-Symbol in Ordnung aussieht und das, was die App braucht, schlicht nicht erreichbar ist.</p>
+</section>
+
+<section>
+  <h2>Drei verschiedene Arten von „offline“</h2>
+  <table>
+    <tr><th>Was du einschaltest</th><th>Was die App sieht</th><th>Der Fehler, den es findet</th></tr>
+    <tr><td><strong>LAN-Modus</strong></td><td>Das lokale Netzwerk funktioniert. Alles darüber hinaus nicht.</td><td>Hotel-WLAN, bevor du dich anmeldest, ein toter Uplink, ein Firmennetzwerk ohne Route nach draußen.</td></tr>
+    <tr><td><strong>Eine Adresse sperren</strong></td><td>Ein Server ist unerreichbar. Alles andere funktioniert.</td><td>Eine Abhängigkeit ist ausgefallen, während die App selbst in Ordnung ist: der Fall, den ein Health-Check meist übersieht.</td></tr>
+    <tr><td><strong>Port 53 sperren</strong></td><td>Namen werden nicht mehr aufgelöst, Verbindungen über die Adresse funktionieren weiter.</td><td>Kaputtes DNS, das für einen Nutzer nach „das Internet ist down“ aussieht und in den Logs nach etwas ganz anderem.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Über die Befehlszeile</h2>
+  <p>Internet weg für eine Anwendung, lokales Netzwerk unberührt, für zwei Minuten:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Ein Dienst unerreichbar, alles andere normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Namen werden nicht mehr aufgelöst:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Es gibt auch eine fertige Zeitleiste, die DNS kaputtmacht und von selbst wieder herstellt: <code>failing-dns.json</code> im Ordner <code>scenarios</code> neben dem Programm. Siehe <a href="../szenarien-ueber-zeit/">Szenarien über die Zeit</a>.</p>
+</section>
+
+<section>
+  <h2>Worauf du wirklich achten solltest</h2>
+  <ul>
+    <li><strong>Die Meldung.</strong> Sagt die App, was passiert ist, oder zeigt sie ewig einen Spinner?</li>
+    <li><strong>Der erneute Versuch.</strong> Hält sie Abstand, oder hämmert sie in einer Schleife auf dieselbe Adresse?</li>
+    <li><strong>Die Warteschlange.</strong> Wird Arbeit, die der Nutzer offline erledigt hat, behalten und später gesendet, oder geht sie verloren?</li>
+    <li><strong>Die Wiederherstellung.</strong> {{app.buttons.stop}} bringt das Netzwerk zurück. Bemerkt die App das von selbst, oder braucht sie einen Neustart?</li>
+  </ul>
+  <p>Der letzte Punkt ist der, an dem der meiste Nutzen liegt. Offline zu gehen, lässt sich leicht schlecht behandeln und leicht testen. Beim Zurückkommen gerät der Zustand durcheinander.</p>
+</section>
+
+<section>
+  <h2>Was das nicht ist</h2>
+  <p>Der Adapter bleibt aktiv und der Rechner behält seine Adresse, sodass eine Anwendung, die Windows nur fragt „gibt es ein Netzwerk“, weiterhin „ja“ bekommt. Das ist Absicht und der interessantere Test: Echte Nutzer sind selten getrennt, sie sind mit etwas verbunden, das nicht erreichen kann, was sie brauchen. Willst du ausdrücklich den Fall „kein Adapter“, deaktiviere den Adapter. Dafür braucht es kein Tool.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

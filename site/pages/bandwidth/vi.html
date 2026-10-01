@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Giới hạn tốc độ tải xuống và tải lên</h1>
+  <p class="lead">Hạn chế một ứng dụng ở số kilobyte mỗi giây nhất định và nó sẽ không nhận được hơn thế. Hai chiều tách biệt nhau, nên bạn có thể cho nó tải xuống nhanh nhưng tải lên tệ hại, đúng như hầu hết kết nối gia đình và di động.</p>
+</section>
+
+<section>
+  <h2>Trong cửa sổ</h2>
+  <ol class="steps">
+    <li>Đặt <strong>{{app.fields.target_process}}</strong> thành ứng dụng của bạn.</li>
+    <li>Điền <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> hoặc cả hai, tính bằng KB/s. Để trường ở mức 0 thì chiều đó không bị đụng đến.</li>
+    <li>Nhấn <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Các con số có nghĩa gì</h2>
+  <table>
+    <tr><th>KB/s</th><th>Khoảng</th><th>Đó là gì</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Modem quay số. Cấu hình mẫu “{{app.presets.modem56k}}”.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wifi trên máy bay, khách sạn đông người, sóng di động yếu.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Đường truyền gia đình khiêm tốn. Đủ cho một luồng video.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Kết nối cố định bình thường ngày nay.</td></tr>
+  </table>
+  <p>Đơn vị là kilobyte, không phải kilobit, nên nhân với tám để so với con số nhà mạng quảng cáo. Giới hạn cả hai chiều cùng lúc mới khiến kết nối giống một điểm phát wifi tồi, chứ không chỉ là một lần tải chậm.</p>
+</section>
+
+<section>
+  <h2>Hàng đợi quan trọng ngang giới hạn</h2>
+  <p>Giới hạn tốc độ cần một chỗ để chứa những gói tin chưa lọt vào được. Đó là thiết lập <strong>{{app.fields.buffer}}</strong>, tính bằng mili giây, và nó hoạt động như hàng chờ ở quầy thanh toán:</p>
+  <ul>
+    <li><strong>Hàng đợi ngắn</strong> nghĩa là gói tin bị vứt ngay khi đường truyền đầy. Ứng dụng thấy mất gói và phản ứng nhanh.</li>
+    <li><strong>Hàng đợi dài</strong> nghĩa là không gói nào bị vứt nhưng mọi thứ đều phải chờ. Ứng dụng thấy kết nối chậm dần thay vì thất bại, đúng hiệu ứng của một đường truyền gia đình bị nghẽn, và là lý do cuộc gọi video xấu đi trong khi một lần tải vẫn tiếp tục.</li>
+  </ul>
+  <p>Cấu hình mẫu “{{app.presets.bufferbloat}}” chính là thế này: giới hạn với hàng đợi dài. Hãy thử cùng một tốc độ với hàng đợi ngắn rồi dài, và xem ứng dụng cư xử khác nhau thế nào.</p>
+</section>
+
+<section>
+  <h2>Một điều cần biết trước</h2>
+  <p>Khi giới hạn đang chạy, bộ đếm gói bị bỏ có thể vẫn bằng không. Đó không phải lỗi: giới hạn trước hết bắt gói tin chờ, và chỉ bỏ chúng khi hàng đợi thực sự đầy. Cho nó một bộ đệm nhỏ thì các gói bị bỏ sẽ xuất hiện.</p>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

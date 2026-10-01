@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Limiter la vitesse de téléchargement et d’envoi</h1>
+  <p class="lead">Bridez une application à un nombre fixe de kilo-octets par seconde et elle n’obtiendra pas plus. Les deux sens sont séparés : vous pouvez donc lui donner un téléchargement rapide et un envoi désespérant, ce qui ressemble exactement à la plupart des connexions domestiques et mobiles.</p>
+</section>
+
+<section>
+  <h2>Dans la fenêtre</h2>
+  <ol class="steps">
+    <li>Réglez <strong>{{app.fields.target_process}}</strong> sur votre application.</li>
+    <li>Renseignez <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> ou les deux, en KB/s. Laissez un champ à 0 pour ne pas toucher à ce sens.</li>
+    <li>Appuyez sur <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Ce que signifient les chiffres</h2>
+  <table>
+    <tr><th>KB/s</th><th>Environ</th><th>Ce que c’est</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Un modem à connexion par ligne commutée. Le profil « {{app.presets.modem56k}} ».</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wi-Fi en avion, un hôtel bondé, un mauvais signal mobile.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Une ligne domestique modeste. Suffisante pour un seul flux vidéo.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Une connexion fixe normale aujourd’hui.</td></tr>
+  </table>
+  <p>Des kilo-octets, pas des kilobits : multipliez donc par huit pour comparer avec ce qu’annonce un fournisseur d’accès. Brider les deux sens à la fois, c’est ce qui donne à une connexion l’allure d’un mauvais hotspot plutôt que d’un simple téléchargement lent.</p>
+</section>
+
+<section>
+  <h2>La file d’attente compte autant que la limite</h2>
+  <p>Une limite de débit a besoin d’un endroit où mettre les paquets qui ne passent pas encore. C’est le réglage <strong>{{app.fields.buffer}}</strong>, en millisecondes, et il se comporte comme la file d’attente d’une caisse de supermarché :</p>
+  <ul>
+    <li><strong>Une file courte</strong> signifie que les paquets sont jetés dès que la ligne est pleine. Votre application voit de la perte et réagit vite.</li>
+    <li><strong>Une file longue</strong> signifie que rien n’est jeté, mais que tout attend. Votre application voit la connexion devenir de plus en plus lente au lieu d’échouer : c’est l’effet d’une ligne domestique congestionnée et la raison pour laquelle un appel vidéo se dégrade pendant qu’un téléchargement continue.</li>
+  </ul>
+  <p>Le profil « {{app.presets.bufferbloat}} » est exactement cela : une limite avec une file longue. Essayez la même vitesse avec une file courte puis longue, et observez à quel point l’application se comporte différemment.</p>
+</section>
+
+<section>
+  <h2>À quoi s’attendre</h2>
+  <p>Quand une limite est active, le compteur de paquets abandonnés peut rester à zéro. Ce n’est pas un bug : une limite fait d’abord attendre les paquets, et ne les abandonne que lorsque la file est vraiment pleine. Donnez-lui un petit tampon et les pertes apparaissent.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

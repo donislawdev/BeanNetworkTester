@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Perguntas que as pessoas fazem primeiro</h1>
+  <p class="lead">As que vale a pena responder antes do download, e não depois.</p>
+</section>
+
+<section>
+  <h2>Por que precisa de permissões de administrador?</h2>
+  <p>Porque os pacotes são interceptados por um driver de kernel, e o Windows não carrega um para um usuário comum. O programa pede as permissões sozinho ao iniciar. Pela linha de comando, ele se recusa com um código de saída específico em vez de falhar no meio do caminho.</p>
+</section>
+
+<section>
+  <h2>Vai quebrar o computador inteiro ou só o meu aplicativo?</h2>
+  <p>O que você apontar. Defina um alvo e só aquele aplicativo é afetado. Deixe o alvo vazio e toda conexão do computador é afetada, o que o programa avisa, na janela e na linha de comando, antes que você se pergunte por que a chamada de vídeo caiu.</p>
+</section>
+
+<section>
+  <h2>Como desfaço?</h2>
+  <p>{{app.buttons.stop}}. Fechar o programa faz o mesmo, e um limite de tempo também, se você definiu um. Se a própria ferramenta morrer no meio da sessão, um watchdog dentro dela desliga a captura em vez de deixar a sua rede degradada: uma sessão nunca pode sobreviver ao programa que a iniciou.</p>
+</section>
+
+<section>
+  <h2>Ele envia algo para algum lugar?</h2>
+  <p>Não. Não há análises, nem relatórios de falha para um serviço, nem verificação de atualizações. O programa não tem nenhum cliente de rede. A única conexão de saída que ele pode fazer é abrir a página de apoio no seu navegador, depois que você clica. Ele intercepta o seu tráfego, então esse tráfego nunca pode sair da sua máquina, e esta página que você está lendo também não carrega nada de ninguém.</p>
+</section>
+
+<section>
+  <h2>O Windows me avisou sobre o download. Por quê?</h2>
+  <p>O programa é assinado, então o aviso mostra quem o assinou em vez de dizer “Editor desconhecido”. O SmartScreen ainda pode avisar por um tempo, porque o certificado é novo e ele ainda não o viu muitas vezes. Alguns antivírus também podem reagir a um programa que pede permissões de administrador e carrega um driver de rede. Cada versão publica uma soma de verificação SHA-256 e uma lista assinada de seus componentes, para que você possa conferir o que baixou em vez de confiar em um sinal verde.</p>
+</section>
+
+<section>
+  <h2>Meu download morreu por completo e nada diz por quê</h2>
+  <p>Verifique o tamanho máximo de pacote. Se definido baixo o bastante, não é um pacote menor, é um buraco negro: a rede descarta o que é grande demais e nunca informa. Volte ao valor anterior e a transferência retorna.</p>
+</section>
+
+<section>
+  <h2>Funciona no Linux ou no macOS?</h2>
+  <p>Não, e não vai funcionar. Ele se apoia em um driver de kernel do Windows. No Linux, <code>tc</code> com <code>netem</code> faz esse trabalho e já vem instalado.</p>
+</section>
+
+<section>
+  <h2>É mesmo grátis? Posso usar no trabalho?</h2>
+  <p>Sim. É gratuito e de código aberto sob a GNU GPL v3, inclusive no trabalho, com o código-fonte disponível para qualquer pessoa ler ou alterar. O download é o mesmo arquivo para todo mundo.</p>
+</section>
+
+<section>
+  <h2>Mais</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

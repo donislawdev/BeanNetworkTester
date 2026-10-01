@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>CI में खराब नेटवर्क का सिमुलेशन</h1>
+  <p class="lead">विंडो वैकल्पिक है। वही एक्ज़ीक्यूटेबल कमांड-लाइन टूल की तरह चलता है, तय समय बाद खुद खत्म हो जाता है, और जो हुआ उसे ऐसे ढंग से बताता है जिसे पाइपलाइन पढ़ सके।</p>
+</section>
+
+<section>
+  <h2>एक चरण का रूप</h2>
+  <p>टेस्ट की अवधि भर बिगाड़ें, फिर उसे अपने आप रुकने दें। सफ़ाई का कोई चरण नहीं जिसे भूला जा सके:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>GitHub Actions जॉब में, सेल्फ़-होस्टेड Windows रनर पर:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>रनर के बारे में दो बातें: ट्रैफ़िक कैप्चर करने के लिए एडमिनिस्ट्रेटर अधिकार चाहिए, और होस्टेड रनर वे नहीं देगा, इसलिए यह सेल्फ़-होस्टेड Windows मशीन का काम है।</p>
+</section>
+
+<section>
+  <h2>हर अंत का एक एग्ज़िट कोड है</h2>
+  <p>कोई भी अंत ट्रेसबैक के साथ नहीं होता। रन खत्म होने के हर तरीके का एक नंबर है, इसलिए पाइपलाइन “आपका ऐप विफल हुआ” को “टूल शुरू नहीं हो सका” से अलग पहचान सकती है:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>मशीन के पढ़ने लायक आउटपुट</h2>
+  <p><code>--format json</code> हर पंक्ति में एक JSON ऑब्जेक्ट लिखता है, यानी रन के दौरान सैंपल और अंत में सारांश, ताकि बाद का कोई चरण उस पर जाँच कर सके:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>लॉग की पंक्तियाँ स्टैंडर्ड एरर पर और डेटा स्टैंडर्ड आउटपुट पर जाता है, इसलिए डेटा को रीडायरेक्ट करने से दोनों कभी नहीं मिलते। <code>--seed</code> रन को दोहराने लायक बनाता है, जो किसी अस्थिर (flaky) टेस्ट को चाहिए, इससे पहले कि कोई उस पर बहस कर सके।</p>
+</section>
+
+<section>
+  <h2>ऐसा ड्राई रन जो कुछ नहीं छूता</h2>
+  <p>दो फ़्लैग इसे भरोसा करने से पहले सुरक्षित रूप से जोड़ने देते हैं: <code>--dry-run</code> बताता है कि सेटिंग क्या करेंगी और बाहर निकल जाता है, और <code>--simulate</code> पूरा इंजन नकली ट्रैफ़िक पर चलाता है, बिना ड्राइवर लोड किए और बिना नेटवर्क को छुए। दोनों उस बिल्ड में काम आते हैं जो अपनी ही मशीन को नहीं बिगाड़ सकता।</p>
+</section>
+
+<section>
+  <h2>आगे</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

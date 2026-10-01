@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>模擬遊戲延遲和封包遺失</h1>
+  <p class="lead">網路程式碼是在 ping 只有 1 ms 的本地連線上寫的，卻由飯店 Wi-Fi 上的玩家來測試。本工具在你自己的機器上彌合這一差距，只針對遊戲處理程序，電腦的其餘部分仍可正常使用。</p>
+</section>
+
+<section>
+  <h2>從這裡開始</h2>
+  <p>瞄準遊戲用戶端，給它一個真實的糟糕連線，並讓它在五分鐘後自行停止：</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>這方面也有現成的時間軸：<code>scenarios</code> 資料夾裡的 <code>overloaded-game-server.json</code> 會讓連線陷入壅塞再恢復，你可以看到用戶端如何應對這兩個方向的變化。參見<a href="../dingshi-changjing/">定時場景</a>。</p>
+</section>
+
+<section>
+  <h2>為什麼遊戲會出現封包遺失，而瀏覽器不會</h2>
+  <p>大多數遊戲流量是 UDP，而 UDP 沒有任何東西可以用來掩蓋封包遺失。透過 TCP 載入網頁時會悄悄重傳，只是花的時間更長，這就是為什麼 5% 封包遺失時瀏覽器可能感覺還行，而同樣 5% 的一局遊戲卻會卡頓、回拉並且失去同步。</p>
+  <p>這使遊戲成為測試封包遺失最誠實的地方：你設定的，就是用戶端實際經歷的。</p>
+</section>
+
+<section>
+  <h2>該設定什麼，它能檢驗什麼</h2>
+  <table>
+    <tr><th>設定</th><th>建議值</th><th>它暴露什麼問題</th></tr>
+    <tr><td>延遲</td><td>80 到 250 ms</td><td>預測與插值。開槍之後你的角色會被拉回去嗎？</td></tr>
+    <tr><td>抖動</td><td>40 到 100 ms</td><td>緩衝。穩定的 200 ms 比不斷變化的 ping 更容易掩蓋。</td></tr>
+    <tr><td>封包遺失</td><td>2% 到 10%</td><td>缺失的狀態更新，以及用戶端是能恢復還是會逐漸偏離。</td></tr>
+    <tr><td>尖峰</td><td>偶爾出現的 1 秒</td><td>基站切換造成的停頓。通常是最難看的一種。</td></tr>
+    <tr><td>鏈路時通時斷</td><td>10 秒週期，30% 時間中斷</td><td>重新連線與重新加入。</td></tr>
+  </table>
+  <p>衡量抖動時，請看第 95 百分位與中位數之間的差距，而不是平均值：抖動幾乎不會改變平均值，這就是為什麼一次執行在紙面上看起來相同，玩起來卻不一樣。</p>
+</section>
+
+<section>
+  <h2>比較兩個版本需要隨機種子</h2>
+  <p>隨機封包遺失會讓兩次執行不同，所以「新版本感覺更差」並不是證據。同一個隨機種子會重播同樣的封包遺失和同樣的抖動，把一種感覺變成一次對比：</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>它做不到什麼</h2>
+  <p>它塑造的是<em>你的</em>機器的流量。它不會讓伺服器變慢，不會改變伺服器的 tick 速率，也不會讓其他玩家處於糟糕的連線中，所以它測試的是你的用戶端面對糟糕鏈路的表現，而不是你的伺服器在負載下的表現。伺服器端需要的是負載測試，而要讓整個大廳都是糟糕的連線，你需要不止一台機器。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

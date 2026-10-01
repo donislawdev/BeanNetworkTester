@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>나쁜 네트워크에서 앱을 테스트하세요</h1>
+  <p class="lead">Bean Network Tester는 Windows 애플리케이션 하나에 랙, 패킷 손실, 속도 제한을 더합니다. 사용자가 기차에서, 호텔 핫스팟에서, 신호가 한 칸뿐인 휴대폰에서 겪는 상황을 그대로 볼 수 있습니다.</p>
+  <p>컴퓨터 전체가 아니라 프로그램 하나를 겨냥하는 네트워크 에뮬레이터이므로, 테스트 중인 앱에만 느린 인터넷을 재현하고 나머지는 모두 정상적으로 동작합니다.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="도구가 실행되는 동안 라이브 핑이 패킷을 잃고 지연이 늘어나는 모습">
+  <figcaption>동작 중인 연결에 지연과 패킷 손실을 더하는 모습.</figcaption>
+</figure>
+
+<section>
+  <h2>네트워크에 하는 일</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>느리게 합니다</h3>
+      <p>고정 또는 무작위 지연을 더합니다. 핑 300 ms가 로딩 스피너에 어떤 영향을 주는지 알아보세요.</p>
+    </article>
+    <article class="card">
+      <h3>패킷을 잃게 합니다</h3>
+      <p>패킷을 버리거나, 복제하거나, 손상시킨 뒤 앱이 복구하는지 그냥 멈추는지 지켜보세요.</p>
+    </article>
+    <article class="card">
+      <h3>속도를 제한합니다</h3>
+      <p>약한 모바일 링크처럼 다운로드나 업로드를 초당 정해진 KB로 묶어 둡니다.</p>
+    </article>
+    <article class="card">
+      <h3>연결을 끊습니다</h3>
+      <p>연결을 끊고, 포트나 주소를 차단하고, 네트워크가 끊겼다 돌아오게 합니다.</p>
+    </article>
+    <article class="card">
+      <h3>앱 하나를 겨냥합니다</h3>
+      <p>프로세스, PID, 주소 또는 포트를 고르세요. 나머지 컴퓨터는 정상적으로 동작합니다.</p>
+    </article>
+    <article class="card">
+      <h3>똑같이 반복합니다</h3>
+      <p>같은 시드는 같은 실행을 재생합니다. 버그 리포트와 이야기를 가르는 차이가 바로 이것입니다.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>실행은 세 단계면 됩니다</h2>
+  <ol class="steps">
+    <li>릴리스 페이지에서 zip을 내려받아 아무 곳에나 푸세요.</li>
+    <li><code>BeanNetworkTester.exe</code>를 실행하세요. 트래픽 캡처에 필요하므로 관리자 권한을 스스로 요청합니다.</li>
+    <li>“{{app.presets.3g}}” 같은 준비된 프로필을 고르고, {{app.buttons.start}} 버튼을 누른 뒤 앱을 사용하세요.</li>
+  </ol>
+  <p>같은 파일에 텍스트 모드도 있어 전체를 파이프라인에서도 실행할 수 있습니다. 명령 하나면 서비스가 10% 패킷 손실을 견디는지 확인할 수 있습니다:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>시간이 다 되면 스스로 멈추므로 멈춘 단계가 망가진 네트워크를 남길 수 없습니다. 실제 트래픽을 건드리지 않고 명령을 미리 시험하려면 <code>--simulate</code>를 추가하세요.</p>
+</section>
+
+<section>
+  <h2>누가 쓰나요</h2>
+  <p>“내 컴퓨터에서는 되는데”를 재현해야 하는 테스터. 타임아웃이 실제로 일어나야 하는 개발자. 랙이 넷코드에 어떤 영향을 주는지 확인하는 게임 개발자. 약한 연결에서 앱이 동작하느냐는 질문을 받고도 정직하게 알아낼 방법이 없었던 모든 사람.</p>
+</section>
+
+<section>
+  <h2>특정한 작업을 하는 방법</h2>
+  <p>짧은 가이드이며, 각각 시도해 볼 만한 숫자와 그것을 실행하는 명령이 들어 있습니다.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

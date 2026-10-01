@@ -13,6 +13,126 @@
       "link_text": "Alternatywa dla Clumsy",
       "title": "Alternatywa dla Clumsy na Windows z CLI",
       "description": "Na co patrzeć w narzędziu do psucia sieci na Windows, co to daje ponad narzędzie tylko z okienkiem, i kiedy wybrać coś innego."
+    },
+    "zh-Hans": {
+      "slug": "clumsy-tidai-fangan",
+      "title": "带命令行的 Windows 版 Clumsy 替代方案",
+      "description": "选择 Windows 网络损伤工具时要看什么，本工具比仅有图形界面的工具多出什么，以及什么时候该用别的工具。",
+      "link_text": "Clumsy 替代方案"
+    },
+    "ja": {
+      "slug": "clumsy-daitai",
+      "title": "コマンドラインを備えたWindows向けClumsy代替ツール",
+      "description": "Windows向けネットワーク劣化ツールを選ぶ際の観点、操作画面だけのツールにはない機能、そして別のツールを選ぶべき場面を紹介します。",
+      "link_text": "Clumsyの代替"
+    },
+    "de": {
+      "slug": "alternative-zu-clumsy",
+      "title": "Eine Clumsy-Alternative für Windows mit Befehlszeile",
+      "description": "Worauf es bei einem Netzwerkstörungs-Tool für Windows ankommt, was dieses gegenüber rein interaktiven Programmen bietet und wann etwas anderes besser passt.",
+      "link_text": "Alternative zu Clumsy"
+    },
+    "fr": {
+      "slug": "alternative-a-clumsy",
+      "title": "Une alternative à Clumsy pour Windows, avec ligne de commande",
+      "description": "Quoi chercher dans un outil de dégradation réseau pour Windows, ce que celui-ci apporte face à un outil uniquement interactif, et quand en choisir un autre.",
+      "link_text": "Alternative à Clumsy"
+    },
+    "es": {
+      "slug": "alternativa-a-clumsy",
+      "title": "Una alternativa a Clumsy para Windows con línea de comandos",
+      "description": "Qué buscar en una herramienta de deterioro de red para Windows, qué aporta esta frente a una solo interactiva y cuándo conviene usar otra.",
+      "link_text": "Alternativa a Clumsy"
+    },
+    "pt-BR": {
+      "slug": "alternativa-ao-clumsy",
+      "title": "Uma alternativa ao Clumsy para Windows com linha de comando",
+      "description": "O que procurar em uma ferramenta de degradação de rede para Windows, o que esta traz a mais que uma só interativa e quando usar outra.",
+      "link_text": "Alternativa ao Clumsy"
+    },
+    "it": {
+      "slug": "alternativa-a-clumsy",
+      "title": "Un’alternativa a Clumsy per Windows con riga di comando",
+      "description": "Cosa cercare in uno strumento di degrado di rete per Windows, cosa offre questo in più di uno solo interattivo e quando conviene usarne un altro.",
+      "link_text": "Alternativa a Clumsy"
+    },
+    "id": {
+      "slug": "alternatif-clumsy",
+      "title": "Alternatif Clumsy untuk Windows dengan baris perintah",
+      "description": "Apa yang dicari pada alat gangguan jaringan untuk Windows, apa kelebihan alat ini dibanding yang hanya interaktif, dan kapan memakai yang lain.",
+      "link_text": "Alternatif Clumsy"
+    },
+    "ru": {
+      "slug": "alternativa-clumsy",
+      "title": "Альтернатива Clumsy для Windows с командной строкой",
+      "description": "На что смотреть при выборе инструмента для порчи сети в Windows, чем этот лучше чисто интерактивного и когда стоит взять другой.",
+      "link_text": "Альтернатива Clumsy"
+    },
+    "tr": {
+      "slug": "clumsy-alternatifi",
+      "title": "Komut satırlı, Windows için bir Clumsy alternatifi",
+      "description": "Windows için bir ağ bozma aracında nelere bakmalı, bu aracın yalnızca etkileşimli olanlara göre artıları ve ne zaman başkasını seçmeli.",
+      "link_text": "Clumsy alternatifi"
+    },
+    "cs": {
+      "slug": "alternativa-ke-clumsy",
+      "title": "Alternativa ke Clumsy pro Windows s příkazovým řádkem",
+      "description": "Na co se dívat u nástroje pro zhoršení sítě ve Windows, co tento přidává oproti čistě interaktivním nástrojům a kdy sáhnout po jiném.",
+      "link_text": "Alternativa ke Clumsy"
+    },
+    "vi": {
+      "slug": "thay-the-clumsy",
+      "title": "Lựa chọn thay thế Clumsy cho Windows, có dòng lệnh",
+      "description": "Cần chú ý gì ở một công cụ làm suy giảm mạng trên Windows, công cụ này có gì hơn loại chỉ tương tác, và khi nào nên chọn công cụ khác.",
+      "link_text": "Lựa chọn thay thế Clumsy"
+    },
+    "hi": {
+      "slug": "clumsy-vikalp",
+      "title": "Windows के लिए Clumsy का विकल्प, कमांड लाइन के साथ",
+      "description": "Windows के नेटवर्क बिगाड़ने वाले टूल में क्या देखें, यह टूल केवल इंटरैक्टिव टूल से क्या ज़्यादा देता है, और कब कुछ और चुनें।",
+      "link_text": "Clumsy का विकल्प"
+    },
+    "ko": {
+      "slug": "clumsy-daeche",
+      "title": "명령줄을 지원하는 Windows용 Clumsy 대안",
+      "description": "Windows 네트워크 열화 도구에서 무엇을 봐야 하는지, 대화형 도구만 있는 경우보다 이 도구가 더하는 점, 다른 도구가 나은 경우.",
+      "link_text": "Clumsy 대안"
+    },
+    "ar": {
+      "slug": "badil-clumsy",
+      "title": "بديل Clumsy لنظام Windows مع سطر أوامر",
+      "description": "ما الذي يجب البحث عنه في أداة تدهور الشبكة على Windows، وما تضيفه هذه الأداة على الأدوات التفاعلية فقط، ومتى تختار غيرها.",
+      "link_text": "بديل Clumsy"
+    },
+    "ro": {
+      "slug": "alternativa-clumsy",
+      "title": "O alternativă la Clumsy pentru Windows, cu linie de comandă",
+      "description": "Ce să cauți într-un instrument de degradare a rețelei pentru Windows, ce aduce acesta față de cele doar interactive și când să alegi altceva.",
+      "link_text": "Alternativă la Clumsy"
+    },
+    "nl": {
+      "slug": "clumsy-alternatief",
+      "title": "Een Clumsy-alternatief voor Windows met opdrachtregel",
+      "description": "Waar je op let bij een tool die netwerken verslechtert op Windows, wat deze toevoegt aan puur interactieve tools en wanneer je iets anders kiest.",
+      "link_text": "Clumsy-alternatief"
+    },
+    "zh-Hant": {
+      "slug": "clumsy-tidai-fangan",
+      "title": "帶命令列的 Windows 版 Clumsy 替代方案",
+      "description": "選擇 Windows 網路劣化工具時要看什麼，本工具比僅有圖形介面的工具多出什麼，以及什麼時候該用別的工具。",
+      "link_text": "Clumsy 替代方案"
+    },
+    "uk": {
+      "slug": "alternatyva-clumsy",
+      "title": "Альтернатива Clumsy для Windows із командним рядком",
+      "description": "На що дивитися в інструменті погіршення мережі для Windows, що цей додає порівняно з суто інтерактивними і коли варто обрати інший.",
+      "link_text": "Альтернатива Clumsy"
+    },
+    "th": {
+      "slug": "thang-lueak-thaen-clumsy",
+      "title": "ทางเลือกแทน Clumsy บน Windows ที่มีบรรทัดคำสั่ง",
+      "description": "สิ่งที่ควรดูในเครื่องมือทำให้เครือข่ายแย่บน Windows สิ่งที่เครื่องมือนี้เพิ่มจากแบบโต้ตอบอย่างเดียว และเมื่อไรควรเลือกอย่างอื่น",
+      "link_text": "ทางเลือกแทน Clumsy"
     }
   }
 }

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Testează o aplicație fără internet</h1>
+  <p class="lead">Scoaterea cablului de rețea testează un singur lucru: o mașină fără rețea. Majoritatea erorilor offline nu sunt de acest fel. Apar când adaptorul e pornit, pictograma wifi arată bine, iar ce are nevoie aplicația pur și simplu nu poate fi atins.</p>
+</section>
+
+<section>
+  <h2>Trei feluri diferite de „offline”</h2>
+  <table>
+    <tr><th>Ce pornești</th><th>Ce vede aplicația</th><th>Eroarea pe care o găsește</th></tr>
+    <tr><td><strong>Modul LAN</strong></td><td>Rețeaua locală merge. Orice dincolo de ea, nu.</td><td>Wifi de hotel înainte de autentificare, un uplink mort, o rețea de companie fără cale spre exterior.</td></tr>
+    <tr><td><strong>Blocarea unei adrese</strong></td><td>Un server este inaccesibil. Restul merge.</td><td>O dependență căzută în timp ce aplicația însăși e în regulă, cazul pe care un health check îl ratează de obicei.</td></tr>
+    <tr><td><strong>Blocarea portului 53</strong></td><td>Numele nu se mai rezolvă, conexiunile după adresă merg în continuare.</td><td>DNS stricat, care arată ca „internetul a picat” pentru utilizator și ca altceva complet în jurnale.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>De la linia de comandă</h2>
+  <p>Internet dispărut pentru o aplicație, rețeaua locală neatinsă, două minute:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Un serviciu inaccesibil, restul normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Numele nu se mai rezolvă:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Există și o cronologie gata făcută care strică DNS-ul și îl pune la loc singură: <code>failing-dns.json</code> în folderul <code>scenarios</code> de lângă program. Vezi <a href="../scenarii-in-timp/">scenarii în timp</a>.</p>
+</section>
+
+<section>
+  <h2>La ce să te uiți de fapt</h2>
+  <ul>
+    <li><strong>Mesajul.</strong> Spune aplicația ce s-a întâmplat sau arată o rotiță la nesfârșit?</li>
+    <li><strong>Reîncercarea.</strong> Își mărește pauzele sau lovește aceeași adresă într-o buclă?</li>
+    <li><strong>Coada.</strong> Munca făcută de utilizator cât timp era offline se păstrează și se trimite mai târziu sau se pierde?</li>
+    <li><strong>Revenirea.</strong> {{app.buttons.stop}} readuce rețeaua. Observă aplicația singură sau are nevoie de o repornire?</li>
+  </ul>
+  <p>Ultimul punct este unde e cea mai mare valoare. Să rămâi offline este ușor de gestionat prost și ușor de testat. Revenirea este locul unde starea o ia razna.</p>
+</section>
+
+<section>
+  <h2>Ce nu este</h2>
+  <p>Adaptorul rămâne pornit și mașina își păstrează adresa, deci o aplicație care doar întreabă Windows „există rețea” primește tot da. Este deliberat și este testul mai interesant: utilizatorii reali sunt rar deconectați complet, sunt conectați la ceva care nu poate ajunge la ce le trebuie. Dacă vrei anume cazul „fără adaptor”, dezactivează adaptorul, nu trebuie un instrument.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

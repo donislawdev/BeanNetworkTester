@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulasikan kehilangan paket di Windows</h1>
+  <p class="lead">Kehilangan paket adalah gangguan yang oleh pengguna disebut “pokoknya macet”. Anda menetapkan persentase, alat ini membuang sebagian paket sebesar itu, dan aplikasi Anda harus menghadapinya.</p>
+</section>
+
+<section>
+  <h2>Di jendela</h2>
+  <ol class="steps">
+    <li>Isi <strong>{{app.fields.target_process}}</strong> agar hanya aplikasi Anda yang terpengaruh, bukan seluruh komputer.</li>
+    <li>Atur <strong>{{app.fields.loss}}</strong> ke persentase antara 0 dan 100. Mulailah dari 5.</li>
+    <li>Tekan <strong>{{app.buttons.start}}</strong> dan gunakan aplikasinya.</li>
+  </ol>
+  <p>Bilah di bagian atas jendela merangkum apa yang sedang berjalan, dan tab <strong>{{app.app.tabs.statistics}}</strong> menghitung paket yang dibuang.</p>
+</section>
+
+<section>
+  <h2>Dari baris perintah</h2>
+  <p>File eksekusi yang sama berjalan tanpa jendela. Kehilangan lima persen pada satu peramban selama dua menit, lalu semuanya kembali normal dengan sendirinya:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Tambahkan <code>--simulate</code> untuk melatih perintah tanpa menyentuh lalu lintas sungguhan.</p>
+</section>
+
+<section>
+  <h2>Persentase mana yang dipilih</h2>
+  <table>
+    <tr><th>Kehilangan</th><th>Rasanya seperti apa</th></tr>
+    <tr><td>1%</td><td>Koneksi bagus yang sedang mengalami menit buruk. Kebanyakan aplikasi menyembunyikannya.</td></tr>
+    <tr><td>5%</td><td>Wi-Fi lemah. Halaman dimuat lambat, kualitas video turun.</td></tr>
+    <tr><td>20%</td><td>Hotspot kafe yang penuh atau terowongan kereta. Timeout mulai bermunculan.</td></tr>
+    <tr><td>60% ke atas</td><td>Nyaris tak bisa dipakai. Bagus untuk menemukan pesan galat yang tak pernah diuji siapa pun.</td></tr>
+  </table>
+  <p>Profil siap pakai mengaturnya untuk Anda. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}”, dan “{{app.presets.3g}}” semuanya memuat nilai kehilangan, ditambah jeda dan batas kecepatan.</p>
+</section>
+
+<section>
+  <h2>Dua hal yang mengejutkan orang</h2>
+  <p><strong>Pada TCP Anda mungkin tidak melihat apa-apa.</strong> TCP mengirim ulang apa yang hilang, sehingga unduhan lewat HTTPS hanya jadi lebih lambat, bukan gagal. Jika ingin melihat kehilangan sebagai kehilangan, uji sesuatu yang berjalan di UDP: panggilan suara, game, siaran video, atau DNS.</p>
+  <p><strong>Kehilangan itu acak, jadi dua eksekusi berbeda.</strong> Tetapkan seed dan eksekusi yang sama berulang persis, dan itulah yang mengubah “pernah rusak sekali” menjadi laporan bug yang bisa direproduksi orang lain:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  <p>Kehilangan saja jarang terjadi. Koneksi buruk yang nyata kehilangan paket <em>dan</em> menambah jeda <em>dan</em> kehabisan kecepatan, dan itulah yang direproduksi oleh profil.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -13,6 +13,126 @@
       "link_text": "Opóźnienie i jitter",
       "title": "Dodawanie opóźnienia i jittera na Windows",
       "description": "Nadaj jednej aplikacji na Windows ping odległego serwera albo tunelu w pociągu: stałe opóźnienie, losowy jitter lub skoki."
+    },
+    "zh-Hans": {
+      "slug": "yanchi-yu-doudong",
+      "title": "为 Windows 应用增加延迟和抖动",
+      "description": "让单个 Windows 应用拥有远距离服务器或火车隧道里的延迟：固定延迟、随机抖动，或偶发的延迟尖峰。",
+      "link_text": "延迟与抖动"
+    },
+    "ja": {
+      "slug": "chien-to-jitta",
+      "title": "Windowsのアプリに遅延とジッターを加える",
+      "description": "遠くのサーバーやトンネル内の列車のような遅延を、Windowsの1つのアプリに与えます。一定の遅延、ランダムなジッター、まれなスパイクに対応。",
+      "link_text": "遅延とジッター"
+    },
+    "de": {
+      "slug": "latenz-und-jitter",
+      "title": "Latenz und Jitter für eine Windows-App hinzufügen",
+      "description": "Gib einer Windows-App den Ping eines weit entfernten Servers oder eines Tunnels: mit konstanter Verzögerung, zufälligem Jitter oder gelegentlichen Spitzen.",
+      "link_text": "Latenz und Jitter"
+    },
+    "fr": {
+      "slug": "latence-et-gigue",
+      "title": "Ajouter de la latence et de la gigue à une application Windows",
+      "description": "Donnez à une application Windows le ping d’un serveur lointain ou d’un tunnel de train : délai constant, gigue aléatoire ou pics occasionnels.",
+      "link_text": "Latence et gigue"
+    },
+    "es": {
+      "slug": "latencia-y-jitter",
+      "title": "Añade latencia y jitter a una aplicación de Windows",
+      "description": "Dale a una aplicación de Windows el ping de un servidor lejano o de un túnel: con retardo constante, jitter aleatorio o picos ocasionales.",
+      "link_text": "Latencia y jitter"
+    },
+    "pt-BR": {
+      "slug": "latencia-e-jitter",
+      "title": "Adicione latência e jitter a um aplicativo no Windows",
+      "description": "Dê a um aplicativo do Windows o ping de um servidor distante ou de um túnel: com atraso constante, jitter aleatório ou picos ocasionais.",
+      "link_text": "Latência e jitter"
+    },
+    "it": {
+      "slug": "latenza-e-jitter",
+      "title": "Aggiungi latenza e jitter a un’app su Windows",
+      "description": "Dai a un’app Windows il ping di un server lontano o di una galleria: con ritardo costante, jitter casuale o picchi occasionali.",
+      "link_text": "Latenza e jitter"
+    },
+    "id": {
+      "slug": "latensi-dan-jitter",
+      "title": "Tambahkan latensi dan jitter ke aplikasi Windows",
+      "description": "Beri aplikasi Windows ping seperti server jauh atau terowongan kereta: dengan jeda tetap, jitter acak, atau lonjakan sesekali.",
+      "link_text": "Latensi dan jitter"
+    },
+    "ru": {
+      "slug": "zaderzhka-i-dzhitter",
+      "title": "Добавьте задержку и джиттер приложению в Windows",
+      "description": "Дайте приложению в Windows пинг далёкого сервера или поезда в туннеле: постоянная задержка, случайный джиттер или редкие всплески.",
+      "link_text": "Задержка и джиттер"
+    },
+    "tr": {
+      "slug": "gecikme-ve-jitter",
+      "title": "Windows uygulamasına gecikme ve jitter ekleyin",
+      "description": "Windows uygulamasına uzak bir sunucunun ya da tünelin pingini verin: sabit gecikme, rastgele jitter veya ara sıra ani sıçramalar.",
+      "link_text": "Gecikme ve jitter"
+    },
+    "cs": {
+      "slug": "zpozdeni-a-jitter",
+      "title": "Přidejte aplikaci ve Windows zpoždění a jitter",
+      "description": "Dejte jedné aplikaci ve Windows ping vzdáleného serveru nebo vlakového tunelu: stálé zpoždění, náhodný jitter nebo občasné skoky.",
+      "link_text": "Zpoždění a jitter"
+    },
+    "vi": {
+      "slug": "do-tre-va-jitter",
+      "title": "Thêm độ trễ và jitter cho ứng dụng trên Windows",
+      "description": "Cho một ứng dụng Windows độ trễ như máy chủ ở xa hay đường hầm tàu: độ trễ cố định, jitter ngẫu nhiên hoặc những cú giật thỉnh thoảng.",
+      "link_text": "Độ trễ và jitter"
+    },
+    "hi": {
+      "slug": "letensi-aur-jitar",
+      "title": "Windows ऐप में लेटेंसी और जिटर जोड़ें",
+      "description": "किसी Windows ऐप को दूर के सर्वर या ट्रेन की सुरंग जैसी पिंग दें: स्थिर देरी, यादृच्छिक जिटर या कभी-कभार के झटके।",
+      "link_text": "लेटेंसी और जिटर"
+    },
+    "ko": {
+      "slug": "jiyeon-sigan-jiteo",
+      "title": "Windows 앱에 지연과 지터 추가하기",
+      "description": "먼 서버나 열차 터널 같은 핑을 Windows 앱 하나에 주세요. 일정한 지연, 무작위 지터, 가끔 튀는 스파이크를 지원합니다.",
+      "link_text": "지연과 지터"
+    },
+    "ar": {
+      "slug": "zaman-alistijaba-waljitar",
+      "title": "إضافة زمن استجابة وجيتر إلى تطبيق على Windows",
+      "description": "امنح تطبيقًا على Windows زمن استجابة خادم بعيد أو نفق قطار: تأخير ثابت أو جيتر عشوائي أو قفزات متقطعة.",
+      "link_text": "زمن الاستجابة والجيتر"
+    },
+    "ro": {
+      "slug": "latenta-si-jitter",
+      "title": "Adaugă latență și jitter unei aplicații în Windows",
+      "description": "Dă unei aplicații Windows pingul unui server îndepărtat sau al unui tunel de tren: întârziere fixă, jitter aleatoriu sau salturi ocazionale.",
+      "link_text": "Latență și jitter"
+    },
+    "nl": {
+      "slug": "latentie-en-jitter",
+      "title": "Latentie en jitter toevoegen aan een app op Windows",
+      "description": "Geef één Windows-app de ping van een verre server of een treintunnel: vaste vertraging, willekeurige jitter of af en toe een uitschieter.",
+      "link_text": "Latentie en jitter"
+    },
+    "zh-Hant": {
+      "slug": "yanchi-yu-doudong",
+      "title": "為 Windows 應用增加延遲和抖動",
+      "description": "讓單一 Windows 應用擁有遠距離伺服器或火車隧道裡的延遲：固定延遲、隨機抖動，或偶發的延遲尖峰。",
+      "link_text": "延遲與抖動"
+    },
+    "uk": {
+      "slug": "zatrymka-ta-dzhyter",
+      "title": "Додайте затримку й джитер застосунку у Windows",
+      "description": "Дайте застосунку у Windows пінг далекого сервера чи залізничного тунелю: постійну затримку, випадковий джитер або епізодичні стрибки.",
+      "link_text": "Затримка та джитер"
+    },
+    "th": {
+      "slug": "khwam-nuan-jitter",
+      "title": "เพิ่มความหน่วงและจิตเตอร์ให้แอปบน Windows",
+      "description": "ให้แอปบน Windows มีค่า ping เหมือนเซิร์ฟเวอร์ไกลหรืออุโมงค์รถไฟ ทั้งหน่วงคงที่ จิตเตอร์สุ่ม หรือสไปก์เป็นครั้งคราว",
+      "link_text": "ความหน่วงและจิตเตอร์"
     }
   }
 }

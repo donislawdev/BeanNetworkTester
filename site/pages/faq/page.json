@@ -13,6 +13,126 @@
       "link_text": "Pytania i odpowiedzi",
       "title": "Częste pytania o Bean Network Tester",
       "description": "Prawa administratora, czy rusza cały komputer, jak to cofnąć, ostrzeżenie SmartScreen i co program robi z Twoimi danymi."
+    },
+    "zh-Hans": {
+      "slug": "changjian-wenti",
+      "title": "关于 Bean Network Tester 的常见问题",
+      "description": "管理员权限、是否影响整台电脑、如何撤销、SmartScreen 警告，以及程序会如何处理你的数据。",
+      "link_text": "常见问题"
+    },
+    "ja": {
+      "slug": "yokuaru-shitsumon",
+      "title": "Bean Network Testerのよくある質問",
+      "description": "管理者権限、マシン全体に影響するのか、元に戻す方法、SmartScreenの警告、そしてデータの扱いについて。",
+      "link_text": "よくある質問"
+    },
+    "de": {
+      "slug": "haeufige-fragen",
+      "title": "Häufige Fragen zu Bean Network Tester",
+      "description": "Administratorrechte, ob der ganze Rechner betroffen ist, wie du alles rückgängig machst, die SmartScreen-Warnung und was das Programm mit deinen Daten macht.",
+      "link_text": "Fragen und Antworten"
+    },
+    "fr": {
+      "slug": "questions-frequentes",
+      "title": "Questions fréquentes sur Bean Network Tester",
+      "description": "Droits d’administrateur, impact sur toute la machine, comment tout annuler, avertissement SmartScreen et ce que le programme fait de vos données.",
+      "link_text": "Questions fréquentes"
+    },
+    "es": {
+      "slug": "preguntas-frecuentes",
+      "title": "Preguntas frecuentes sobre Bean Network Tester",
+      "description": "Permisos de administrador, si afecta a todo el sistema, cómo deshacerlo, el aviso de SmartScreen y qué hace el programa con tus datos.",
+      "link_text": "Preguntas y respuestas"
+    },
+    "pt-BR": {
+      "slug": "perguntas-frequentes",
+      "title": "Perguntas frequentes sobre o Bean Network Tester",
+      "description": "Permissões de administrador, se afeta o computador todo, como desfazer, o aviso do SmartScreen e o que o programa faz com os seus dados.",
+      "link_text": "Perguntas e respostas"
+    },
+    "it": {
+      "slug": "domande-frequenti",
+      "title": "Domande frequenti su Bean Network Tester",
+      "description": "Privilegi di amministratore, se tocca tutto il computer, come annullare, l’avviso di SmartScreen e cosa fa il programma con i tuoi dati.",
+      "link_text": "Domande e risposte"
+    },
+    "id": {
+      "slug": "pertanyaan-umum",
+      "title": "Pertanyaan umum tentang Bean Network Tester",
+      "description": "Hak administrator, apakah memengaruhi seluruh komputer, cara membatalkan, peringatan SmartScreen, dan apa yang dilakukan program dengan data Anda.",
+      "link_text": "Tanya jawab"
+    },
+    "ru": {
+      "slug": "voprosy-i-otvety",
+      "title": "Частые вопросы о Bean Network Tester",
+      "description": "Права администратора, затрагивает ли программа весь компьютер, как всё отменить, предупреждение SmartScreen и что программа делает с вашими данными.",
+      "link_text": "Вопросы и ответы"
+    },
+    "tr": {
+      "slug": "sik-sorulan-sorular",
+      "title": "Bean Network Tester hakkında sık sorulan sorular",
+      "description": "Yönetici hakları, tüm bilgisayarı etkileyip etkilemediği, nasıl geri alınacağı, SmartScreen uyarısı ve programın verilerinizle ne yaptığı.",
+      "link_text": "Sorular ve yanıtlar"
+    },
+    "cs": {
+      "slug": "caste-dotazy",
+      "title": "Časté dotazy k Bean Network Tester",
+      "description": "Práva správce, zda zasahuje celý počítač, jak vše vrátit zpět, varování SmartScreen a co program dělá s vašimi daty.",
+      "link_text": "Otázky a odpovědi"
+    },
+    "vi": {
+      "slug": "cau-hoi-thuong-gap",
+      "title": "Câu hỏi thường gặp về Bean Network Tester",
+      "description": "Quyền quản trị, có ảnh hưởng cả máy không, cách hoàn tác, cảnh báo SmartScreen và chương trình làm gì với dữ liệu của bạn.",
+      "link_text": "Hỏi và đáp"
+    },
+    "hi": {
+      "slug": "aksar-puche-jane-wale-sawal",
+      "title": "Bean Network Tester के बारे में आम सवाल",
+      "description": "एडमिनिस्ट्रेटर अधिकार, क्या यह पूरी मशीन को छूता है, इसे कैसे पलटें, SmartScreen की चेतावनी, और यह आपके डेटा का क्या करता है।",
+      "link_text": "सवाल और जवाब"
+    },
+    "ko": {
+      "slug": "jaju-mutneun-jilmun",
+      "title": "Bean Network Tester 자주 묻는 질문",
+      "description": "관리자 권한, 컴퓨터 전체에 영향을 주는지, 되돌리는 방법, SmartScreen 경고, 프로그램이 데이터를 어떻게 다루는지 설명합니다.",
+      "link_text": "질문과 답변"
+    },
+    "ar": {
+      "slug": "asila-shaiea",
+      "title": "أسئلة شائعة حول Bean Network Tester",
+      "description": "صلاحيات المسؤول، وهل يمس الجهاز كله، وكيف تتراجع، وتحذير SmartScreen، وماذا يفعل البرنامج ببياناتك.",
+      "link_text": "أسئلة وأجوبة"
+    },
+    "ro": {
+      "slug": "intrebari-frecvente",
+      "title": "Întrebări frecvente despre Bean Network Tester",
+      "description": "Drepturile de administrator, dacă afectează tot calculatorul, cum anulezi totul, avertismentul SmartScreen și ce face programul cu datele tale.",
+      "link_text": "Întrebări și răspunsuri"
+    },
+    "nl": {
+      "slug": "veelgestelde-vragen",
+      "title": "Veelgestelde vragen over Bean Network Tester",
+      "description": "Beheerdersrechten, of de hele computer geraakt wordt, hoe je het ongedaan maakt, de SmartScreen-waarschuwing en wat het programma met je gegevens doet.",
+      "link_text": "Vragen en antwoorden"
+    },
+    "zh-Hant": {
+      "slug": "changjian-wenti",
+      "title": "關於 Bean Network Tester 的常見問題",
+      "description": "管理員權限、是否影響整台電腦、如何復原、SmartScreen 警告，以及程式會如何處理你的資料。",
+      "link_text": "常見問題"
+    },
+    "uk": {
+      "slug": "chasti-pytannya",
+      "title": "Поширені запитання про Bean Network Tester",
+      "description": "Права адміністратора, чи зачіпає це весь комп’ютер, як усе скасувати, попередження SmartScreen і що програма робить із вашими даними.",
+      "link_text": "Запитання й відповіді"
+    },
+    "th": {
+      "slug": "kham-tham-thi-phop-boi",
+      "title": "คำถามที่พบบ่อยเกี่ยวกับ Bean Network Tester",
+      "description": "สิทธิ์ผู้ดูแลระบบ กระทบทั้งเครื่องหรือไม่ ย้อนกลับอย่างไร คำเตือน SmartScreen และโปรแกรมทำอะไรกับข้อมูลของคุณ",
+      "link_text": "ถามและตอบ"
     }
   }
 }

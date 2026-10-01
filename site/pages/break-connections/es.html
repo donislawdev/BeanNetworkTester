@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Cortar conexiones a propósito</h1>
+  <p class="lead">Lento es una forma de ir mal. Desaparecido es otra, y es la que encuentra el camino de código que nadie escribió: la reconexión, el reintento, el mensaje que le dice al usuario qué ha pasado.</p>
+  <p>Así también se prueba una aplicación sin conexión sin desenchufar nada: el modo LAN deja funcionando la red local y quita internet, y bloquear una dirección deja inaccesible un único servicio mientras el resto de la conexión va bien.</p>
+</section>
+
+<section>
+  <h2>Cinco formas distintas de desaparecer</h2>
+  <table>
+    <tr><th>Ajuste</th><th>Qué ve la aplicación</th></tr>
+    <tr><td><strong>Restablecer conexiones</strong></td><td>Las conexiones mueren en plena transferencia, como las cortaría un firewall o un balanceador de carga. Tú fijas con qué frecuencia, en porcentaje.</td></tr>
+    <tr><td><strong>Enlace que va y viene</strong></td><td>La red desaparece un rato y luego vuelve, una y otra vez. Tú fijas la duración del ciclo y qué parte de él está caída.</td></tr>
+    <tr><td><strong>Bloquear un puerto</strong></td><td>Todo lo que va a ese puerto desaparece. No se toca nada más.</td></tr>
+    <tr><td><strong>Bloquear una dirección</strong></td><td>Un servidor queda inaccesible mientras el resto de internet funciona.</td></tr>
+    <tr><td><strong>Modo LAN</strong></td><td>La red local sigue funcionando, internet no. Exactamente la forma de un portal cautivo o de un enlace de subida caído.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Desde la línea de comandos</h2>
+  <p>Matar aproximadamente una de cada diez conexiones, en una aplicación:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Ciclos de diez segundos, caídos cuatro de ellos: un enlace que va y viene sin parar:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Un servidor inaccesible, todo lo demás bien:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>El bloqueo solo afecta a lo que nombra</h2>
+  <p>A diferencia de la pérdida o el retardo, bloquear un puerto o una dirección afecta <strong>solo</strong> al tráfico que coincide. Eso lo convierte en lo más seguro de todo esto para ejecutar sin un proceso objetivo, y es la razón de que «haz que desaparezca esta dependencia» sea un comando de una línea.</p>
+</section>
+
+<section>
+  <h2>La trampa de la descarga muerta</h2>
+  <p>También hay un tamaño máximo de paquete. Bájalo un poco y las transferencias grandes se ralentizan. Bájalo a un valor como 576 y las descargas se detienen por completo, para siempre y sin ningún error, porque eso ya no es un tamaño de paquete más pequeño: es el clásico agujero negro donde la red descarta lo que es demasiado grande y nunca lo dice.</p>
+  <p>Es un modo de fallo real que merece la pena reproducir a propósito, y es genuinamente desconcertante encontrarlo por casualidad. Si una descarga muere en silencio justo después de cambiar este ajuste, es por esto.</p>
+</section>
+
+<section>
+  <h2>Volver a la normalidad</h2>
+  <p>{{app.buttons.stop}} lo restaura todo. También lo hace cerrar el programa, y también el límite de tiempo si pusiste uno. Si la herramienta misma muriera en mitad de una sesión, un watchdog interno detiene la captura en lugar de dejar tu red en mal estado.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

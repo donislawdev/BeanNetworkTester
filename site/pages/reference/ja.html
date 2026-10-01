@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>プロファイル、設定、終了コード</h1>
+  <p class="lead">3つの表は、どれも手書きではありません。このページのビルド時に、プログラム自身のレジストリから生成されるため、プログラムにないことを書くことはありえません。</p>
+</section>
+
+<section>
+  <h2>用意済みのプロファイル</h2>
+  <p>どれか1つを選ぶと、フォームが自動で埋まります。ダッシュは、そのプロファイルがその設定に手を加えないことを意味します。速度は毎秒キロバイトです。プロバイダーが宣伝する値と比べるには8倍してください。</p>
+  {{page.preset_table}}
+  <p>プロファイルを選んでも、フィールドが埋まるだけです。{{app.buttons.start}}を押すまで、ネットワークには何も起きません。</p>
+</section>
+
+<section>
+  <h2>すべての設定と、それを指定するフラグ</h2>
+  <p>ウィンドウとコマンドラインは同じ設定を受け付けます。これが全一覧で、それぞれが受け付ける単位と範囲も載せています。</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>終了コード</h2>
+  <p>コマンドラインがスタックトレースで終わることはありません。実行が終わるあらゆるパターンに番号があるので、パイプラインは、アプリの失敗と、起動できなかったツールを区別できます。</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>関連ページ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Le domande che si fanno per prime</h1>
+  <p class="lead">Quelle a cui conviene rispondere prima del download e non dopo.</p>
+</section>
+
+<section>
+  <h2>Perché servono i privilegi di amministratore?</h2>
+  <p>Perché i pacchetti sono intercettati da un driver del kernel, e Windows non ne carica uno per un utente normale. Il programma chiede i privilegi da solo all’avvio. Dalla riga di comando rifiuta con uno specifico codice di uscita invece di fallire a metà strada.</p>
+</section>
+
+<section>
+  <h2>Rompe tutto il computer o solo la mia app?</h2>
+  <p>Ciò a cui lo punti. Imposta un bersaglio e viene colpita solo quell’applicazione. Lascia il bersaglio vuoto e viene colpita ogni connessione del computer: il programma te lo segnala, nella finestra e sulla riga di comando, prima che tu ti chieda perché la videochiamata è caduta.</p>
+</section>
+
+<section>
+  <h2>Come lo annullo?</h2>
+  <p>{{app.buttons.stop}}. Chiudere il programma fa lo stesso, e lo fa anche un limite di tempo se ne hai impostato uno. Se lo strumento stesso muore a metà sessione, un watchdog al suo interno chiude la cattura invece di lasciare la tua rete degradata: una sessione non deve mai sopravvivere al programma che l’ha avviata.</p>
+</section>
+
+<section>
+  <h2>Invia qualcosa da qualche parte?</h2>
+  <p>No. Non ci sono analytics, né segnalazioni di crash a un servizio, né controllo degli aggiornamenti. Il programma non ha alcun client di rete. L’unica connessione in uscita che può fare è aprire la pagina di supporto nel tuo browser, dopo che l’hai cliccata. Intercetta il tuo traffico, quindi quel traffico non deve mai lasciare la tua macchina, e anche questa pagina che stai leggendo non carica nulla da altri.</p>
+</section>
+
+<section>
+  <h2>Windows mi ha avvisato sul download. Perché?</h2>
+  <p>Il programma è firmato, quindi l’avviso indica chi lo ha firmato invece di dire «Autore sconosciuto». SmartScreen può comunque avvisare per un po’, perché il certificato è nuovo e non lo ha ancora visto spesso. Alcuni antivirus possono anche reagire a un programma che richiede privilegi di amministratore e carica un driver di rete. Ogni versione pubblica un checksum SHA-256 e un elenco firmato dei suoi componenti, così puoi verificare ciò che hai scaricato invece di fidarti di una spunta verde.</p>
+</section>
+
+<section>
+  <h2>Il mio download è morto del tutto e nulla dice perché</h2>
+  <p>Controlla la dimensione massima del pacchetto. Impostata abbastanza bassa, non è un pacchetto più piccolo, è un buco nero: la rete scarta ciò che è troppo grande e non lo segnala mai. Rimettila com’era e il trasferimento torna.</p>
+</section>
+
+<section>
+  <h2>Funziona su Linux o macOS?</h2>
+  <p>No, e non lo farà. Poggia su un driver del kernel di Windows. Su Linux, <code>tc</code> con <code>netem</code> fa questo lavoro ed è già installato.</p>
+</section>
+
+<section>
+  <h2>È davvero gratuito? Posso usarlo al lavoro?</h2>
+  <p>Sì. È gratuito e open source con licenza GNU GPL v3, anche al lavoro, con il codice sorgente a disposizione di chiunque voglia leggerlo o modificarlo. Il download è lo stesso file per tutti.</p>
+</section>
+
+<section>
+  <h2>Altro</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simulace špatné sítě v CI</h1>
+  <p class="lead">Okno je volitelné. Tentýž spustitelný soubor běží jako nástroj příkazového řádku, po zadané době sám skončí a hlásí, co se stalo, způsobem, který pipeline přečte.</p>
+</section>
+
+<section>
+  <h2>Podoba kroku</h2>
+  <p>Zhoršujte po dobu testu a pak nechte nástroj skončit samotný. Žádný úklidový krok, na který by se dalo zapomenout:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>V úloze GitHub Actions na vlastním (self-hosted) runneru s Windows:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Dvě věci o runneru: zachytávání provozu vyžaduje práva správce a hostovaný runner vám je nedá, takže tohle patří na vlastní počítač s Windows.</p>
+</section>
+
+<section>
+  <h2>Každý konec má návratový kód</h2>
+  <p>Nic nekončí výpisem chyby (traceback). Každý způsob, jak běh může skončit, má číslo, takže pipeline rozliší „vaše aplikace selhala“ od „nástroj se nepodařilo spustit“:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Výstup čitelný strojem</h2>
+  <p><code>--format json</code> zapisuje jeden objekt JSON na řádek, tedy vzorky za běhu a souhrn na konci, takže na něj může navazující krok klást asserty:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Řádky logu jdou na standardní chybový výstup a data na standardní výstup, takže přesměrování dat nikdy neprolne obojí. <code>--seed</code> dělá běh opakovatelným, což nestabilní (flaky) test potřebuje dřív, než o něm někdo začne diskutovat.</p>
+</section>
+
+<section>
+  <h2>Zkušební běh, který se ničeho nedotkne</h2>
+  <p>Dva přepínače umožňují tohle bezpečně zapojit, než mu uvěříte: <code>--dry-run</code> ohlásí, co by nastavení udělala, a skončí, a <code>--simulate</code> pustí celý engine proti syntetickému provozu, bez načtení ovladače a bez zásahu do sítě. Oba se hodí v buildu, který nesmí zhoršit počítač, na němž běží.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

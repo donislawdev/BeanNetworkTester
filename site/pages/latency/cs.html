@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Přidání zpoždění a jitteru aplikaci</h1>
+  <p class="lead">Na rychlém lokálním spojení všechno funguje. Dejte aplikaci 300 ms pingu a zjistíte, které obrazovky byly napsány, jako by odpověď přišla okamžitě.</p>
+</section>
+
+<section>
+  <h2>Tři různé věci</h2>
+  <table>
+    <tr><th>Nastavení</th><th>Co dělá</th><th>Odkud se to bere v reálném životě</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Přidá každému paketu stejné zpoždění v milisekundách.</td><td>Vzdálenost. Server na jiném kontinentu nebo družice.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Přidá navíc náhodnou hodnotu, takže se zpoždění pořád mění.</td><td>Sdílené WiFi, mobilní sítě, cokoli přetíženého.</td></tr>
+    <tr><td><strong>Skoky</strong></td><td>Občasná dlouhá zadrhnutí, daná tím, jak často a jak dlouho.</td><td>Předání mezi základnovými stanicemi, přetížený router.</td></tr>
+  </table>
+  <p>Všechny tři jsou v milisekundách a mohou běžet společně. Obě hodnoty zpoždění přijímají cokoli od 0 výše, takže se dostanete od uvěřitelných 40 ms k absurdním 60 sekundám.</p>
+</section>
+
+<section>
+  <h2>Z příkazového řádku</h2>
+  <p>Stálých 200 ms s 80 ms jitteru, u jedné aplikace:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Místo toho vzácná dlouhá zadrhnutí: zhruba jeden paket z dvaceti čeká o sekundu navíc:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Čísla, která stojí za vyzkoušení</h2>
+  <ul>
+    <li><strong>40 ms</strong>: server ve stejné zemi. Nic by se nemělo změnit.</li>
+    <li><strong>150 ms</strong>: jiný kontinent. Všechno upovídané začne působit pomalu, protože každá okružní cesta něco stojí.</li>
+    <li><strong>600 ms a víc</strong>: geostacionární družice nebo WiFi v letadle. Tady se zasekávají ukazatele průběhu a konečně se spustí logika opakování.</li>
+  </ul>
+  <p>Hotové profily nesou naměřené hodnoty: „{{app.presets.distant}}“, „{{app.presets.leo}}“, „{{app.presets.satellite}}“, „{{app.presets.inflight}}“, „{{app.presets.lte}}“.</p>
+</section>
+
+<section>
+  <h2>Měření: dívejte se na nejhorší případ, ne na průměr</h2>
+  <p>Jitter průměr sotva pohne a medián také. Běh s 30 ms jitteru a běh bez něj mohou hlásit skoro stejný „typický“ ping, a přitom působit úplně jinak.</p>
+  <p>Porovnávejte raději <strong>95. percentil s mediánem</strong>. Rozdíl mezi nimi je jitter a právě ten dělá hlasový hovor sekaným a hru nehratelnou, zatímco průměr pořád vypadá v pořádku.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

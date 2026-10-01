@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Couper des connexions volontairement</h1>
+  <p class="lead">Lent n’est qu’une façon d’aller mal. Disparu en est une autre, et c’est elle qui trouve le chemin de code que personne n’a écrit : la reconnexion, la nouvelle tentative, le message qui dit à l’utilisateur ce qui s’est passé.</p>
+  <p>C’est aussi ainsi que vous testez une application hors ligne sans rien débrancher : le mode LAN laisse le réseau local fonctionner et supprime Internet, et bloquer une adresse rend un seul service injoignable alors que le reste de la connexion va bien.</p>
+</section>
+
+<section>
+  <h2>Cinq façons différentes de disparaître</h2>
+  <table>
+    <tr><th>Réglage</th><th>Ce que voit l’application</th></tr>
+    <tr><td><strong>Réinitialiser les connexions</strong></td><td>Les connexions meurent en plein transfert, comme lorsqu’un pare-feu ou un répartiteur de charge les coupe. Vous fixez la fréquence, en pourcentage.</td></tr>
+    <tr><td><strong>Liaison coupée puis rétablie</strong></td><td>Le réseau disparaît un moment, puis revient, encore et encore. Vous fixez la durée du cycle et la part de ce cycle passée hors service.</td></tr>
+    <tr><td><strong>Bloquer un port</strong></td><td>Tout ce qui va vers ce port disparaît. Rien d’autre n’est touché.</td></tr>
+    <tr><td><strong>Bloquer une adresse</strong></td><td>Un serveur devient injoignable alors que le reste d’Internet fonctionne.</td></tr>
+    <tr><td><strong>Mode LAN</strong></td><td>Le réseau local continue de fonctionner, Internet non. Exactement la forme d’un portail captif ou d’une liaison montante morte.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>En ligne de commande</h2>
+  <p>Tuer environ une connexion sur dix, pour une application :</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Des cycles de dix secondes, dont quatre hors service : une liaison qui va et vient sans cesse :</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Un serveur injoignable, tout le reste en bon état :</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Le blocage ne touche que ce qu’il nomme</h2>
+  <p>Contrairement à la perte ou au délai, bloquer un port ou une adresse n’affecte <strong>que</strong> le trafic correspondant. C’est ce qui en fait le plus sûr de ces réglages à lancer sans cible de processus, et c’est pourquoi « faire disparaître cette dépendance » tient en une seule ligne de commande.</p>
+</section>
+
+<section>
+  <h2>Le piège du téléchargement mort</h2>
+  <p>Il existe aussi une taille de paquet maximale. Baissez-la un peu et les gros transferts ralentissent. Baissez-la jusqu’à une valeur comme 576 et les téléchargements s’arrêtent complètement, pour toujours, sans aucune erreur, car ce n’est plus une taille de paquet plus petite, c’est le classique trou noir où le réseau jette ce qui est trop gros sans jamais le dire.</p>
+  <p>C’est un vrai mode de panne qu’il vaut la peine de reproduire exprès, et qui est franchement déroutant à rencontrer par hasard. Si un téléchargement meurt en silence juste après que vous avez modifié ce réglage, c’est pour cette raison.</p>
+</section>
+
+<section>
+  <h2>Revenir à la normale</h2>
+  <p>{{app.buttons.stop}} rétablit tout. Fermer le programme aussi, tout comme la limite de durée si vous en avez fixé une. Si l’outil lui-même devait mourir en pleine session, un chien de garde intégré arrête la capture au lieu de laisser votre réseau dans un état cassé.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

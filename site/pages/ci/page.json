@@ -13,6 +13,126 @@
       "link_text": "Testy sieciowe w CI",
       "title": "Symulacja słabej sieci w CI na Windows",
       "description": "Ten sam plik działa bez okna, raportuje kodami wyjścia i NDJSON, i zatrzymuje się sam, więc pipeline może testować słabe połączenie."
+    },
+    "zh-Hans": {
+      "slug": "ci-wangluo-ceshi",
+      "title": "在 Windows 的 CI 中模拟糟糕的网络",
+      "description": "同一个可执行文件无需窗口即可运行，通过退出码和 NDJSON 报告结果，并会自行停止，让流水线能够测试糟糕的连接。",
+      "link_text": "CI 中的网络测试"
+    },
+    "ja": {
+      "slug": "ci-nettowaku-tesuto",
+      "title": "WindowsのCIで悪いネットワークを再現する",
+      "description": "同じ実行ファイルがウィンドウなしで動き、終了コードとNDJSONで結果を報告し、自動で停止します。パイプラインで悪い回線をテストできます。",
+      "link_text": "CIでのネットワークテスト"
+    },
+    "de": {
+      "slug": "netzwerktests-in-ci",
+      "title": "Ein schlechtes Netzwerk in der CI unter Windows simulieren",
+      "description": "Dieselbe Datei läuft ohne Fenster, meldet per Exit-Code und NDJSON und endet von selbst, sodass eine Pipeline eine schlechte Verbindung testen kann.",
+      "link_text": "Netzwerktests in CI"
+    },
+    "fr": {
+      "slug": "tests-reseau-en-ci",
+      "title": "Simuler un mauvais réseau en CI sous Windows",
+      "description": "Le même exécutable fonctionne sans fenêtre, rend compte par codes de sortie et NDJSON et s’arrête seul : un pipeline peut tester une mauvaise connexion.",
+      "link_text": "Tests réseau en CI"
+    },
+    "es": {
+      "slug": "pruebas-de-red-en-ci",
+      "title": "Simula una mala red en CI con Windows",
+      "description": "El mismo ejecutable funciona sin ventana, informa con códigos de salida y NDJSON y se detiene solo, así que un pipeline puede probar una mala conexión.",
+      "link_text": "Pruebas de red en CI"
+    },
+    "pt-BR": {
+      "slug": "testes-de-rede-no-ci",
+      "title": "Simule uma rede ruim no CI com Windows",
+      "description": "O mesmo executável roda sem janela, informa por códigos de saída e NDJSON e para sozinho, então um pipeline pode testar uma conexão ruim.",
+      "link_text": "Testes de rede no CI"
+    },
+    "it": {
+      "slug": "test-di-rete-in-ci",
+      "title": "Simula una brutta rete in CI su Windows",
+      "description": "Lo stesso eseguibile funziona senza finestra, riporta con codici di uscita e NDJSON e si ferma da solo, così una pipeline può provare una brutta connessione.",
+      "link_text": "Test di rete in CI"
+    },
+    "id": {
+      "slug": "uji-jaringan-di-ci",
+      "title": "Simulasikan jaringan buruk di CI pada Windows",
+      "description": "File eksekusi yang sama berjalan tanpa jendela, melapor lewat kode keluar dan NDJSON, dan berhenti sendiri, sehingga pipeline dapat menguji koneksi buruk.",
+      "link_text": "Uji jaringan di CI"
+    },
+    "ru": {
+      "slug": "testy-seti-v-ci",
+      "title": "Имитация плохой сети в CI на Windows",
+      "description": "Тот же файл работает без окна, сообщает кодами завершения и NDJSON и сам останавливается, так что пайплайн может проверить плохое соединение.",
+      "link_text": "Тесты сети в CI"
+    },
+    "tr": {
+      "slug": "ci-icinde-ag-testleri",
+      "title": "Windows’ta CI içinde kötü ağı simüle edin",
+      "description": "Aynı çalıştırılabilir dosya penceresiz çalışır, çıkış kodları ve NDJSON ile bildirir, kendiliğinden durur; böylece pipeline kötü bağlantıyı test edebilir.",
+      "link_text": "CI içinde ağ testleri"
+    },
+    "cs": {
+      "slug": "sitove-testy-v-ci",
+      "title": "Simulace špatné sítě v CI ve Windows",
+      "description": "Tentýž spustitelný soubor běží bez okna, hlásí výsledek přes návratové kódy a NDJSON a sám skončí, takže pipeline může otestovat špatné spojení.",
+      "link_text": "Síťové testy v CI"
+    },
+    "vi": {
+      "slug": "kiem-thu-mang-trong-ci",
+      "title": "Mô phỏng mạng kém trong CI trên Windows",
+      "description": "Cùng một tệp thực thi chạy không cần cửa sổ, báo kết quả qua mã thoát và NDJSON rồi tự dừng, nên pipeline có thể thử kết nối kém.",
+      "link_text": "Kiểm thử mạng trong CI"
+    },
+    "hi": {
+      "slug": "ci-mein-network-test",
+      "title": "CI में Windows पर खराब नेटवर्क का सिमुलेशन",
+      "description": "वही एक्ज़ीक्यूटेबल बिना विंडो के चलता है, एग्ज़िट कोड और NDJSON से नतीजा बताता है और खुद रुकता है, इसलिए पाइपलाइन खराब कनेक्शन परख सकती है।",
+      "link_text": "CI में नेटवर्क टेस्ट"
+    },
+    "ko": {
+      "slug": "ci-neteuwokeu-teseuteu",
+      "title": "CI에서 Windows 나쁜 네트워크 시뮬레이션",
+      "description": "같은 실행 파일이 창 없이 실행되어 종료 코드와 NDJSON으로 결과를 알리고 스스로 멈추므로 파이프라인에서 나쁜 연결을 테스트할 수 있습니다.",
+      "link_text": "CI 네트워크 테스트"
+    },
+    "ar": {
+      "slug": "ikhtibar-alshabaka-fi-ci",
+      "title": "محاكاة شبكة سيئة في CI على Windows",
+      "description": "الملف التنفيذي نفسه يعمل دون نافذة، ويبلغ بالنتيجة عبر رموز الخروج وNDJSON، ويتوقف وحده، فيختبر pipeline اتصالًا سيئًا.",
+      "link_text": "اختبارات الشبكة في CI"
+    },
+    "ro": {
+      "slug": "teste-retea-in-ci",
+      "title": "Simulează o rețea proastă în CI, în Windows",
+      "description": "Același executabil rulează fără fereastră, raportează prin coduri de ieșire și NDJSON și se oprește singur, deci un pipeline poate testa o conexiune proastă.",
+      "link_text": "Teste de rețea în CI"
+    },
+    "nl": {
+      "slug": "netwerktests-in-ci",
+      "title": "Een slecht netwerk simuleren in CI op Windows",
+      "description": "Hetzelfde uitvoerbare bestand draait zonder venster, meldt via afsluitcodes en NDJSON en stopt vanzelf, zodat een pipeline een slechte verbinding kan testen.",
+      "link_text": "Netwerktests in CI"
+    },
+    "zh-Hant": {
+      "slug": "ci-wangluo-ceshi",
+      "title": "在 Windows 的 CI 中模擬糟糕的網路",
+      "description": "同一個可執行檔案無需視窗即可執行，透過結束代碼和 NDJSON 報告結果，並會自行停止，讓管線能夠測試糟糕的連線。",
+      "link_text": "CI 中的網路測試"
+    },
+    "uk": {
+      "slug": "testy-merezhi-v-ci",
+      "title": "Симуляція поганої мережі в CI у Windows",
+      "description": "Той самий виконуваний файл працює без вікна, повідомляє результат кодами завершення й NDJSON і сам зупиняється, тож pipeline може тестувати погане з’єднання.",
+      "link_text": "Тести мережі в CI"
+    },
+    "th": {
+      "slug": "thotsop-khrueakhai-nai-ci",
+      "title": "จำลองเครือข่ายแย่ใน CI บน Windows",
+      "description": "ไฟล์ปฏิบัติการเดียวกันรันได้โดยไม่มีหน้าต่าง รายงานผลด้วยรหัสออกและ NDJSON และหยุดเอง ไปป์ไลน์จึงทดสอบการเชื่อมต่อที่แย่ได้",
+      "link_text": "ทดสอบเครือข่ายใน CI"
     }
   }
 }

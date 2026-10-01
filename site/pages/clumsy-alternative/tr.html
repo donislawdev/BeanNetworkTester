@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Windows için bir Clumsy alternatifi</h1>
+  <p class="lead">Clumsy çoğu insanın ilk bulduğu araçtır ve iyidir: ücretsiz, MIT lisanslı, etkileşimli ve bu aracın kullandığı WinDivert sürücüsü üzerine kurulu. İhtiyacınız olanı yapıyorsa onu kullanın. Bu sayfa, yapmadığı durumlarla ilgili.</p>
+</section>
+
+<section>
+  <h2>Hangisini seçerseniz seçin nelere bakmalı</h2>
+  <table>
+    <tr><th>Soru</th><th>Neden aracı belirler</th></tr>
+    <tr><td><strong>Tek bir uygulamayı</strong> hedefleyebilir mi?</td><td>Aksi hâlde üzerinde çalıştığınız makineyi, uzak oturumu ve belgeleri okuduğunuz tarayıcıyı da bozarsınız.</td></tr>
+    <tr><td>Bir <strong>komut satırı</strong> var mı?</td><td>Bir pipeline bir onay kutusuna tıklayamaz. Komut satırı olmadan bir ağ testi asla derlemenin parçası olamaz.</td></tr>
+    <tr><td>Bir çalıştırma <strong>tekrarlanabilir</strong> mi?</td><td>Yeniden oynatılamayan rastgele kayıp, başkasının yeniden üretemediği hata raporları doğurur.</td></tr>
+    <tr><td><strong>Kendiliğinden durur</strong> mu?</td><td>Kapatmayı hatırlamanızı gerektiren bir araç açık unutulur.</td></tr>
+    <tr><td><strong>Gerçekte ne yaptığını</strong> söyleyebilir misiniz?</td><td>Sayaçlar ve bir bağlantı listesi “yavaş hissettirdi”yi sayılara çevirir.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Bu aracın getirdikleri</h2>
+  <ul>
+    <li><strong>İşlem, PID, adres veya port ile hedefleme</strong>, işlem ağacını izleyerek; böylece otuz alt işlemli bir tarayıcı hâlâ tek bir hedeftir.</li>
+    <li><strong>Aynı çalıştırılabilir dosya komut satırıdır</strong>; her sonuç için bir çıkış kodu ve NDJSON çıktısı vardır, bu yüzden CI’da çalışır.</li>
+    <li><strong>Seed’li çalıştırmalar</strong>: aynı seed aynı rastgele kaybı ve jitter’ı yeniden oynatır.</li>
+    <li><strong>Hazır profiller</strong>: 3G, LTE, uydu, kalabalık bir kafe, uçak Wi-Fi’ı, 56k çevirmeli modem; böylece sayıları tahmin etmek yerine inandırıcı bir noktadan başlarsınız.</li>
+    <li><strong>Zamanlı oturumlar ve betikli senaryolar</strong>; uygulamayı izlerken bozulma kendiliğinden değişebilir.</li>
+    <li><strong>Canlı bir görünüm</strong>: grafik, sayaçlar ve hangi bağlantının vurulduğunu gösteren bir bağlantı tablosu.</li>
+    <li><strong>İngilizce, Lehçe ve Basitleştirilmiş Çince</strong> arayüz ve hiçbir türden telemetri yok.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Başka bir araçtan geliyorsanız</h2>
+  <p>Bu konu konuşulduğunda dört isim hep ortaya çıkar ve bunlar birbirinin yerine geçmez.</p>
+  <table>
+    <tr><th>Bildiğiniz</th><th>Nedir</th><th>Burada ne beklemeli</th></tr>
+    <tr><td><strong>netem ile tc</strong></td><td>Linux’un yanıtı; çekirdeğe gömülü ve komut satırından yönetilir. Çoğu zaman WAN emülasyonu araması bunu döndürür.</td><td>Windows’ta <code>tc</code> yoktur. Ruh olarak en yakını budur: aynı türden bozulmalar, çıkış kodlu bir komut satırı ve bir kuyruk disiplini yerine bir sürücü.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Aynı WinDivert sürücüsü üzerinde ücretsiz, MIT lisanslı, etkileşimli bir Windows aracı.</td><td>Bir pencere ve bir filtre yeterliyse ona başvurun. İşlem bazlı hedefleme, seed’li çalıştırmalar ve bir pipeline’ın çağırabileceği bir komut satırı için buraya gelin.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Uygulama başına bant genişliğini kalıcı olarak yönetmek için ticari bir Windows ürünü.</td><td>Başka bir iş. Bu bir test cihazıdır: bir süre açılır, sonra kapatılır ve hızdan çok daha fazlasını bozar.</td></tr>
+    <tr><td><strong>Fiddler veya Charles</strong></td><td>Üzerinden geçen trafiği inceleyebilen, yeniden yazabilen ve kısabilen proxy’ler.</td><td>Bu da başka bir iş. Bir proxy aracılık ettiği şeyi biçimlendirir ve veriyi görür. Bu araç bağlantının kendisini biçimlendirir; UDP’yi ve hiçbir proxy’ye uğramayan her şeyi de.</td></tr>
+  </table>
+  <p>Açıkça söylemek gerekirse: komut satırlı, tek bir Windows uygulaması için bir ağ emülatörü istiyorsanız aradığınız araç biçimi budur. Uygulama verisini okumak ve değiştirmek istiyorsanız bir proxy gerekir; Linux’taysanız zaten netem var.</p>
+</section>
+
+<section>
+  <h2>Ne zaman başkasını kullanmalı</h2>
+  <p>Bu konuda dürüst olmak, hayal kırıklığı yaratan bir indirmeden daha ucuzdur.</p>
+  <ul>
+    <li><strong>Linux ya da macOS kullanıyorsunuz.</strong> Bu yalnızca Windows içindir ve hep öyle kalacak; çünkü bir Windows sürücüsü üzerine kurulu. Linux’ta <code>netem</code> ile <code>tc</code> standart yanıttır ve ek yazılım gerektirmez.</li>
+    <li><strong>Tüm bilgisayar için kalıcı bant genişliği yönetimi istiyorsunuz</strong>; uygulama başına, bir test olarak değil bir ürün özelliği olarak. NetLimiter gibi ticari trafik şekillendirme araçları bunun içindir. Bu bir test cihazıdır: bir süre açılıp sonra kapatılmak üzere tasarlanmıştır.</li>
+    <li><strong>Yönetici hakları alamıyorsunuz.</strong> Paket yakalamak bunları gerektirir. Bunun etrafından dolaşmanın yolu yok ve aksini iddia eden bir araç trafiğinizi yakalamıyordur.</li>
+    <li><strong>Bağlantıyı bozmak yerine uygulama verisini incelemeniz ve yeniden yazmanız gerekiyor.</strong> Bu bir proxy’nin işidir.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

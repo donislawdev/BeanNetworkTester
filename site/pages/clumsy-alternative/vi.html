@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Lựa chọn thay thế Clumsy cho Windows</h1>
+  <p class="lead">Clumsy là công cụ hầu hết mọi người tìm thấy đầu tiên, và nó tốt: miễn phí, giấy phép MIT, có giao diện tương tác và xây trên cùng trình điều khiển WinDivert mà công cụ này dùng. Nếu nó làm được điều bạn cần, hãy dùng nó. Trang này nói về những trường hợp nó không làm được.</p>
+</section>
+
+<section>
+  <h2>Cần tìm gì, dù bạn chọn công cụ nào</h2>
+  <table>
+    <tr><th>Câu hỏi</th><th>Vì sao nó quyết định việc chọn công cụ</th></tr>
+    <tr><td>Có nhắm được vào <strong>một ứng dụng</strong> không?</td><td>Nếu không, bạn làm suy giảm cả máy đang làm việc, gồm phiên từ xa và trình duyệt bạn đang đọc tài liệu.</td></tr>
+    <tr><td>Có <strong>dòng lệnh</strong> không?</td><td>Pipeline không bấm được vào ô đánh dấu. Không có dòng lệnh thì một bài kiểm tra mạng không bao giờ thành một phần của bản build.</td></tr>
+    <tr><td>Một lần chạy có <strong>lặp lại được</strong> không?</td><td>Mất gói ngẫu nhiên không phát lại được tạo ra những báo cáo lỗi mà không ai khác tái hiện nổi.</td></tr>
+    <tr><td>Nó có <strong>tự dừng</strong> không?</td><td>Một công cụ cần bạn nhớ tắt sẽ bị để chạy mãi.</td></tr>
+    <tr><td>Bạn có biết nó <strong>thực sự đã làm gì</strong> không?</td><td>Bộ đếm và danh sách kết nối biến “có cảm giác chậm” thành con số.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Công cụ này mang lại gì</h2>
+  <ul>
+    <li><strong>Nhắm theo tiến trình, PID, địa chỉ hoặc cổng</strong>, theo dõi cả cây tiến trình, nên một trình duyệt với ba mươi tiến trình con vẫn chỉ là một mục tiêu.</li>
+    <li><strong>Cùng một tệp thực thi chính là dòng lệnh</strong>, với mã thoát cho mọi kết quả và đầu ra NDJSON, nên chạy được trong CI.</li>
+    <li><strong>Lần chạy có seed</strong>: cùng seed phát lại cùng sự mất gói và jitter ngẫu nhiên.</li>
+    <li><strong>Cấu hình mẫu có sẵn</strong>: 3G, LTE, vệ tinh, quán cà phê đông người, wifi trên máy bay, modem 56k, nên bạn bắt đầu từ thứ đáng tin thay vì đoán số.</li>
+    <li><strong>Phiên theo thời gian và kịch bản có sẵn</strong>, để sự suy giảm tự thay đổi trong khi bạn theo dõi ứng dụng.</li>
+    <li><strong>Chế độ xem trực tiếp</strong>: biểu đồ, bộ đếm và bảng kết nối cho thấy kết nối nào đã bị tác động.</li>
+    <li>Giao diện bằng <strong>tiếng Anh, tiếng Ba Lan và tiếng Trung giản thể</strong>, và không có telemetry dưới bất kỳ hình thức nào.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Nếu bạn đến từ công cụ khác</h2>
+  <p>Bốn cái tên luôn xuất hiện khi bàn về chủ đề này, và chúng không thay thế được cho nhau.</p>
+  <table>
+    <tr><th>Bạn biết</th><th>Nó là gì</th><th>Nên mong đợi gì ở đây</th></tr>
+    <tr><td><strong>tc với netem</strong></td><td>Câu trả lời của Linux, có sẵn trong nhân và điều khiển từ dòng lệnh. Thường là kết quả khi tìm kiếm mô phỏng WAN.</td><td>Windows không có <code>tc</code>. Đây là thứ gần nhất về tinh thần: cùng loại suy giảm, dòng lệnh có mã thoát, và một trình điều khiển thay cho bộ lập lịch hàng đợi.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Một công cụ Windows miễn phí, giấy phép MIT, có giao diện tương tác, trên cùng trình điều khiển WinDivert.</td><td>Hãy chọn nó khi chỉ cần một cửa sổ và một bộ lọc. Đến đây khi cần nhắm theo từng tiến trình, lần chạy có seed và dòng lệnh mà pipeline gọi được.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Một sản phẩm Windows thương mại để quản lý băng thông theo từng ứng dụng, lâu dài.</td><td>Một việc khác. Đây là dụng cụ kiểm thử: bật một lúc rồi tắt, và nó làm suy giảm nhiều hơn tốc độ rất nhiều.</td></tr>
+    <tr><td><strong>Fiddler hoặc Charles</strong></td><td>Các proxy có thể xem, viết lại và điều tiết lưu lượng đi qua chúng.</td><td>Cũng là việc khác. Một proxy định hình thứ nó làm proxy và thấy dữ liệu. Công cụ này định hình chính kết nối, kể cả UDP và mọi thứ không bao giờ đi qua proxy.</td></tr>
+  </table>
+  <p>Nói thẳng ra: nếu bạn cần một bộ giả lập mạng cho một ứng dụng Windows, có dòng lệnh, đây là loại công cụ bạn đang tìm. Nếu muốn đọc và sửa dữ liệu ứng dụng, bạn cần một proxy, và nếu dùng Linux thì bạn đã có netem.</p>
+</section>
+
+<section>
+  <h2>Khi nào nên dùng thứ khác</h2>
+  <p>Thành thật về việc này rẻ hơn một lần tải làm người ta thất vọng.</p>
+  <ul>
+    <li><strong>Bạn dùng Linux hoặc macOS.</strong> Đây chỉ dành cho Windows và sẽ luôn như vậy, vì nó xây trên một trình điều khiển Windows. Trên Linux, <code>tc</code> với <code>netem</code> là câu trả lời chuẩn và không cần phần mềm bổ sung.</li>
+    <li><strong>Bạn muốn quản lý băng thông lâu dài</strong> cho cả máy, theo từng ứng dụng, như một tính năng sản phẩm chứ không phải một bài kiểm tra. Đó là việc của các công cụ định hình lưu lượng thương mại như NetLimiter. Công cụ này là dụng cụ kiểm thử: nó nhằm được bật một lúc rồi tắt.</li>
+    <li><strong>Bạn không có được quyền quản trị.</strong> Bắt gói tin cần nó. Không có cách nào vòng qua, và công cụ nào nói khác thì không bắt lưu lượng của bạn.</li>
+    <li><strong>Bạn cần xem và viết lại dữ liệu ứng dụng</strong> thay vì làm suy giảm đường truyền. Đó là việc của proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

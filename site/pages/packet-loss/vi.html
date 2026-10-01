@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Mô phỏng mất gói tin trên Windows</h1>
+  <p class="lead">Mất gói tin là lỗi mà người dùng mô tả là “nó cứ treo”. Bạn đặt một tỷ lệ phần trăm, công cụ vứt bỏ phần gói tin đó, và ứng dụng của bạn phải xử lý.</p>
+</section>
+
+<section>
+  <h2>Trong cửa sổ</h2>
+  <ol class="steps">
+    <li>Điền <strong>{{app.fields.target_process}}</strong> để chỉ ứng dụng của bạn bị ảnh hưởng, không phải cả máy.</li>
+    <li>Đặt <strong>{{app.fields.loss}}</strong> thành một tỷ lệ phần trăm từ 0 đến 100. Bắt đầu từ 5.</li>
+    <li>Nhấn <strong>{{app.buttons.start}}</strong> và dùng ứng dụng.</li>
+  </ol>
+  <p>Thanh ở đầu cửa sổ tóm tắt những gì đang chạy, và thẻ <strong>{{app.app.tabs.statistics}}</strong> đếm các gói tin bị bỏ.</p>
+</section>
+
+<section>
+  <h2>Từ dòng lệnh</h2>
+  <p>Cùng tệp thực thi chạy không cần cửa sổ. Mất gói năm phần trăm trên một trình duyệt, trong hai phút, rồi mọi thứ tự trở lại bình thường:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Thêm <code>--simulate</code> để chạy thử lệnh mà không đụng đến lưu lượng thật.</p>
+</section>
+
+<section>
+  <h2>Nên chọn bao nhiêu phần trăm</h2>
+  <table>
+    <tr><th>Mất gói</th><th>Cảm giác ra sao</th></tr>
+    <tr><td>1 phần trăm</td><td>Một kết nối tốt đang có một phút tệ. Hầu hết ứng dụng che được.</td></tr>
+    <tr><td>5 phần trăm</td><td>Wifi yếu. Trang tải chậm, video giảm chất lượng.</td></tr>
+    <tr><td>20 phần trăm</td><td>Điểm phát wifi quán cà phê đông người hoặc đường hầm tàu hỏa. Timeout bắt đầu xuất hiện.</td></tr>
+    <tr><td>60 phần trăm trở lên</td><td>Gần như không dùng được. Tốt để tìm thông báo lỗi chưa từng ai kiểm tra.</td></tr>
+  </table>
+  <p>Các cấu hình mẫu có sẵn đặt giá trị này cho bạn. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}” và “{{app.presets.3g}}” đều mang một con số mất gói cùng với độ trễ và giới hạn tốc độ.</p>
+</section>
+
+<section>
+  <h2>Hai điều làm người ta ngạc nhiên</h2>
+  <p><strong>Với TCP, bạn có thể chẳng thấy gì cả.</strong> TCP gửi lại những gì nó mất, nên một lần tải qua HTTPS chỉ chậm đi thay vì thất bại. Nếu muốn thấy mất gói đúng là mất gói, hãy thử thứ chạy trên UDP: cuộc gọi thoại, game, luồng video hoặc DNS.</p>
+  <p><strong>Mất gói là ngẫu nhiên, nên hai lần chạy khác nhau.</strong> Đặt một seed và cùng một lần chạy lặp lại chính xác, điều biến “nó hỏng một lần” thành một báo cáo lỗi mà người khác tái hiện được:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Tiếp theo</h2>
+  <p>Chỉ riêng mất gói thì hiếm. Kết nối tệ thật sự mất gói <em>và</em> thêm độ trễ <em>và</em> hết tốc độ, đó là điều các cấu hình mẫu tái hiện.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Limite a velocidade de download e upload</h1>
+  <p class="lead">Limite um aplicativo a um número fixo de quilobytes por segundo e ele não passa disso. Os dois sentidos são separados, então você pode dar a ele um download rápido e um upload sem esperança, que é exatamente a cara da maioria das conexões domésticas e móveis.</p>
+</section>
+
+<section>
+  <h2>Na janela</h2>
+  <ol class="steps">
+    <li>Defina <strong>{{app.fields.target_process}}</strong> como o seu aplicativo.</li>
+    <li>Preencha <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> ou os dois, em KB/s. Deixe um campo em 0 para não mexer naquele sentido.</li>
+    <li>Pressione <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>O que os números significam</h2>
+  <table>
+    <tr><th>KB/s</th><th>Aproximadamente</th><th>O que é</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Um modem discado. O perfil “{{app.presets.modem56k}}”.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wi-Fi de avião, um hotel cheio, um sinal móvel ruim.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Uma linha doméstica modesta. Suficiente para uma transmissão de vídeo.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Uma conexão fixa normal hoje em dia.</td></tr>
+  </table>
+  <p>Quilobytes, não quilobits: multiplique por oito para comparar com o que o provedor anuncia. Limitar os dois sentidos ao mesmo tempo é o que faz uma conexão parecer um hotspot ruim, e não apenas um download lento.</p>
+</section>
+
+<section>
+  <h2>A fila importa tanto quanto o limite</h2>
+  <p>Um limite de velocidade precisa de um lugar para pôr os pacotes que ainda não cabem. Essa é a configuração <strong>{{app.fields.buffer}}</strong>, em milissegundos, e ela se comporta como a fila do caixa do supermercado:</p>
+  <ul>
+    <li><strong>Uma fila curta</strong> significa que os pacotes são jogados fora assim que a linha enche. O seu aplicativo vê perda e reage rápido.</li>
+    <li><strong>Uma fila longa</strong> significa que nada é jogado fora, mas tudo espera. O seu aplicativo vê a conexão ficando cada vez mais lenta em vez de falhar, o efeito de uma linha doméstica congestionada e o motivo de uma chamada de vídeo piorar enquanto um download continua.</li>
+  </ul>
+  <p>O perfil “{{app.presets.bufferbloat}}” é exatamente isso: um limite com uma fila longa. Teste a mesma velocidade com uma fila curta e uma longa e observe como o aplicativo se comporta de forma diferente.</p>
+</section>
+
+<section>
+  <h2>O que esperar</h2>
+  <p>Com um limite em execução, o contador de pacotes descartados pode ficar em zero. Isso não é um bug: um limite primeiro faz os pacotes esperarem e só os descarta quando a fila está realmente cheia. Dê a ele um buffer pequeno e os descartes aparecem.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

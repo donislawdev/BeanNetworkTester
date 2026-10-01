@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Testare de haos pentru rețea în Windows</h1>
+  <p class="lead">Testarea de haos înseamnă să strici ceva intenționat, în timp ce te uiți, ca să afli ce face software-ul tău în privința asta. La nivelul rețelei, exact asta este acest instrument: un mod de a injecta un defect într-o aplicație și de a vedea dacă rezistă.</p>
+</section>
+
+<section>
+  <h2>Defectele pe care le poți injecta</h2>
+  <table>
+    <tr><th>Defect</th><th>Ce modelează</th></tr>
+    <tr><td>Pierdere, corupere, duplicare</td><td>O cale degradată. Pachetele dispar, ajung deteriorate sau ajung de două ori.</td></tr>
+    <tr><td>Latență, jitter, salturi</td><td>O cale lentă sau instabilă, inclusiv blocajul de câteva secunde care strică timeout-urile.</td></tr>
+    <tr><td>Resetări de conexiuni</td><td>Un firewall sau un load balancer care omoară conexiunile în mijlocul transferului.</td></tr>
+    <tr><td>Întreruperi de legătură</td><td>Calea care dispare și revine, într-un ciclu.</td></tr>
+    <tr><td>Adresă sau port blocat</td><td>O dependență inaccesibilă, în timp ce restul merge.</td></tr>
+    <tr><td>Internet dispărut, LAN viu</td><td>Forma unui captive portal: local merge, lumea nu.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ce separă haosul de zgomot: repetabilitatea</h2>
+  <p>O defecțiune aleatorie care nu poate fi reluată produce o poveste, nu un raport de eroare. Fiecare decizie aleatorie de aici vine dintr-un seed, deci aceeași comandă reproduce aceeași rulare: aceleași pachete pierdute, același jitter, în aceeași ordine:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Asta e diferența dintre „a picat o dată marțea trecută” și un test care eșuează și pe care îl poate rula altcineva.</p>
+</section>
+
+<section>
+  <h2>Într-un pipeline</h2>
+  <p>Linia de comandă raportează prin coduri de ieșire, deci un build poate deosebi „aplicația a eșuat” de „instrumentul nu a putut porni”, iar sesiunea se încheie singură, deci nu există niciun pas de curățare de uitat:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>O secvență de defecte în loc de unul singur este un fișier de scenariu, iar și acestea sunt repetabile. Vezi <a href="../scenarii-in-timp/">scenarii în timp</a> și <a href="../teste-retea-in-ci/">teste de rețea în CI</a> pentru codurile de ieșire și pentru runner-ul necesar.</p>
+</section>
+
+<section>
+  <h2>Unde se oprește raza de acțiune</h2>
+  <p>Două limite, ambele deliberate. Degradarea ajunge la un proces, PID, adresă sau port când o îndrepți, deci calculatorul pe care lucrezi continuă să meargă. Și este o singură mașină: aceasta este injectare de defecte pentru un client și conexiunea lui, nu pentru un cluster. Dacă cauți haos între servicii și noduri, este un alt fel de instrument, iar acesta este piesa care strică rețeaua sub o singură aplicație Windows.</p>
+  <p>Totul este reversibil pe loc. {{app.buttons.stop}} restaurează rețeaua, o limită de timp face la fel, iar un watchdog din instrument oprește captura dacă instrumentul însuși moare: un defect pe care l-ai injectat nu trebuie să supraviețuiască rulării care l-a injectat.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

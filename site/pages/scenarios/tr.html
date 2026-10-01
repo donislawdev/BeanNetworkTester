@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Ağ koşullarını zamanla değiştirin</h1>
+  <p class="lead">Sabit %10 kayıp bir laboratuvar koşuludur. Gerçek bağlantılar kötüleşir, toparlanır, dört saniye takılır ve geri gelir; peşinde olduğunuz hata da genellikle kararlı durumda değil, değişimde yaşar.</p>
+</section>
+
+<section>
+  <h2>Senaryo bir zaman çizelgesidir</h2>
+  <p>Tek bir JSON dosyası. Her adım <em>şu saniyede şu ayarlar</em> der ve bahsetmediğiniz her şey değerini korur:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Süreler, adımlar arasındaki boşluklar değil, çalıştırmanın başından itibaren saniyedir. <code>"loop": true</code> ile zaman çizelgesi bittiğinde baştan başlar; uzun bir dayanıklılık testi için istediğiniz budur: çalışır bırakın ve uygulamayı kullanın.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} hazır senaryo programla birlikte gelir</h2>
+  <p>Çalıştırılabilir dosyanın yanındaki <code>scenarios</code> klasöründe. Bu dosyalardan okunur, yani gerçekten elinizde olan budur:</p>
+  {{page.scenario_table}}
+  <p>Bunlar sıradan metindir: birini açın, bir sayıyı değiştirin, kaydedin. Adları neyi yeniden ürettiklerini söyler: kalabalık bir kafe, LTE’den 3G’ye düşen bir mobil bağlantı, yarı yolda ölen bir yükleme, aşırı yüklenen bir sunucu, yanıt vermeyi bırakan DNS.</p>
+</section>
+
+<section>
+  <h2>Değişim elde etmenin iki daha basit yolu</h2>
+  <p>Sıra önemli olduğunda bir senaryo yazmaya değer. Önemli olmadığında iki ayar kendiliğinden değişir:</p>
+  <ul>
+    <li><strong>Bağlantı açılıp kapanır</strong>: bir döngü uzunluğu ve bunun ne kadarının kesinti olduğu. On saniyelik döngüler, dört saniye kesinti, sonsuza dek.</li>
+    <li><strong>Bir hız çizelgesi</strong>: sınırın üzerinden geçtiği bir dizi hız; böylece bağlantı dosyasız kötüleşir ve toparlanır.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Uygulama çalışırken neden işe yarar</h2>
+  <p>Bir senaryonun dokunduğu her ayar, zaten süren oturuma canlı uygulanır: uygulamanın yeniden başlatılması gerekmez, aracın da. Olay günlüğü her adımı gerçekleştiği anda kaydeder; böylece bir şey bozulduğunda hangi değişikliğin ardından olduğunu görebilirsiniz. Bunu bir seed ile birleştirin, içindeki rastgele kayıp dahil tüm dizi birebir tekrarlanır.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

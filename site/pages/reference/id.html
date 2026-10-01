@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profil, pengaturan, dan kode keluar</h1>
+  <p class="lead">Tiga tabel, tak satu pun diketik manual. Tabel dibuat dari registri milik program sendiri saat halaman ini dibangun, sehingga tidak mungkin mengatakan sesuatu yang tidak dikatakan program.</p>
+</section>
+
+<section>
+  <h2>Profil siap pakai</h2>
+  <p>Pilih salah satu dan formulir terisi sendiri. Tanda strip berarti profil membiarkan pengaturan itu apa adanya. Kecepatan dalam kilobyte per detik: kalikan delapan untuk membandingkannya dengan yang diiklankan penyedia.</p>
+  {{page.preset_table}}
+  <p>Memilih profil hanya mengisi kolom. Tidak ada yang berubah di jaringan sampai Anda menekan {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Setiap pengaturan, dan opsi yang menetapkannya</h2>
+  <p>Jendela dan baris perintah menerima pengaturan yang sama. Ini daftar lengkapnya, dengan satuan dan rentang yang diterima masing-masing.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Kode keluar</h2>
+  <p>Baris perintah tidak pernah berakhir dengan traceback. Setiap cara sebuah eksekusi bisa selesai punya nomor, sehingga pipeline dapat membedakan aplikasi yang gagal dari alat yang tidak bisa dimulai.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Terkait</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

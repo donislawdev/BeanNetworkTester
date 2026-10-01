@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulace lagu a ztráty paketů ve hrách</h1>
+  <p class="lead">Netcode se píše na lokálním spojení s pingem 1 ms a testují ho hráči na hotelovém WiFi. Tohle tu propast zavírá na vašem vlastním počítači, jen na procesu hry, zatímco zbytek počítače zůstává použitelný.</p>
+</section>
+
+<section>
+  <h2>Začněte tady</h2>
+  <p>Zaměřte se na herního klienta, dejte mu realistické špatné spojení a nechte ho po pěti minutách zastavit samotného:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>K tomu existuje i hotová časová osa: <code>overloaded-game-server.json</code> ve složce <code>scenarios</code> provede spojení přetížením a zase zpět, takže uvidíte, jak klient zvládá oba směry změny. Viz <a href="../scenare-v-case/">scénáře v čase</a>.</p>
+</section>
+
+<section>
+  <h2>Proč hra ukazuje ztrátu, když prohlížeč ne</h2>
+  <p>Většina herního provozu je UDP a UDP nemá, za čím ztrátu schovat. Webová stránka přes TCP tiše odesílá znovu a jen trvá déle, proto se prohlížeč může při 5 % ztrát zdát v pořádku, zatímco zápas při stejných 5 % sekne, vrací postavy a desynchronizuje se.</p>
+  <p>Díky tomu je hra poctivým místem pro test ztráty: co nastavíte, to klient skutečně zažije.</p>
+</section>
+
+<section>
+  <h2>Co nastavit a co to odhalí</h2>
+  <table>
+    <tr><th>Nastavení</th><th>Zkuste</th><th>Co to odhalí</th></tr>
+    <tr><td>Zpoždění</td><td>80 až 250 ms</td><td>Predikci a interpolaci. Sklouzne vaše postava po výstřelu zpět?</td></tr>
+    <tr><td>Jitter</td><td>40 až 100 ms</td><td>Vyrovnávání. Stálých 200 ms se schovává snáz než ping, který se pořád mění.</td></tr>
+    <tr><td>Ztráta</td><td>2 až 10 %</td><td>Chybějící aktualizace stavu a to, zda se klient zotaví, nebo se rozejde.</td></tr>
+    <tr><td>Skoky</td><td>1 sekunda, zřídka</td><td>Zadrhnutí, které způsobí předání mezi věžemi (základnovými stanicemi). Obvykle to nejhorší.</td></tr>
+    <tr><td>Zapínání a vypínání linky</td><td>cyklus 10 s, 30 % výpadek</td><td>Opětovné připojení a návrat do hry.</td></tr>
+  </table>
+  <p>Jitter měřte jako rozdíl mezi 95. percentilem a mediánem, a ne jako průměr: jitter průměr sotva pohne, a proto může běh na papíře vypadat stejně a hrát se jinak.</p>
+</section>
+
+<section>
+  <h2>Porovnání dvou buildů potřebuje seed</h2>
+  <p>Náhodná ztráta dělá dva běhy různými, takže „nový build je horší“ není důkaz. Stejný seed přehraje stejnou ztrátu a stejný jitter, čímž se pocit mění v porovnání:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Co to neumí</h2>
+  <p>Tohle tvaruje provoz <em>vašeho</em> počítače. Nezpomalí server, nezmění jeho tick rate a nedá ostatní hráče na špatné spojení, takže testuje vašeho klienta proti špatné lince, ne váš server pod zátěží. Pro stranu serveru potřebujete zátěžové testování a pro lobby plné špatných spojení více než jeden počítač.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

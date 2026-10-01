@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Testează-ți aplicația pe o rețea proastă</h1>
+  <p class="lead">Bean Network Tester adaugă lag, pierdere de pachete și limite de viteză unei singure aplicații Windows. Vezi ce văd utilizatorii tăi în tren, pe un hotspot de hotel sau pe un telefon cu o singură liniuță de semnal.</p>
+  <p>Este un emulator de rețea îndreptat spre un singur program, nu spre toată mașina, deci poți reproduce internetul lent pentru aplicația pe care o testezi, în timp ce restul continuă să meargă.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Un ping în direct pierde pachete și capătă întârziere cât timp rulează instrumentul">
+  <figcaption>Adăugarea de întârziere și pierdere de pachete la o conexiune în funcțiune.</figcaption>
+</figure>
+
+<section>
+  <h2>Ce face rețelei tale</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>O încetinește</h3>
+      <p>Adaugă o întârziere fixă sau aleatorie. Află ce face un ping de 300 ms animației tale de încărcare.</p>
+    </article>
+    <article class="card">
+      <h3>Pierde pachete</h3>
+      <p>Aruncă-le, dublează-le sau corupe-le, apoi vezi dacă aplicația ta își revine sau doar se blochează.</p>
+    </article>
+    <article class="card">
+      <h3>Limitează viteza</h3>
+      <p>Ține descărcarea sau încărcarea la un număr fix de KB pe secundă, cum face o legătură mobilă slabă.</p>
+    </article>
+    <article class="card">
+      <h3>Rupe legătura</h3>
+      <p>Dărâmă conexiuni, blochează un port sau o adresă ori fă rețeaua să vină și să plece.</p>
+    </article>
+    <article class="card">
+      <h3>Țintește o singură aplicație</h3>
+      <p>Alege un proces, un PID, o adresă sau un port. Restul calculatorului merge normal în continuare.</p>
+    </article>
+    <article class="card">
+      <h3>Se repetă exact</h3>
+      <p>Același seed reia aceeași rulare. Asta e diferența dintre un raport de eroare și o poveste.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Pornirea durează trei pași</h2>
+  <ol class="steps">
+    <li>Descarcă zip-ul de pe pagina de versiuni și dezarhivează-l oriunde.</li>
+    <li>Pornește <code>BeanNetworkTester.exe</code>. Cere singur drepturile de administrator, pentru că captura traficului are nevoie de ele.</li>
+    <li>Alege un profil gata făcut, precum „{{app.presets.3g}}”, apasă {{app.buttons.start}} și folosește-ți aplicația.</li>
+  </ol>
+  <p>Există un mod text în același fișier, deci totul merge și într-un pipeline. O singură comandă ajunge ca să verifici dacă serviciul tău rezistă la 10% pierdere de pachete:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Se oprește singur când se scurge timpul, deci un pas care se blochează nu poate lăsa în urmă o rețea stricată. Adaugă <code>--simulate</code> ca să repeți o comandă fără să atingi traficul real.</p>
+</section>
+
+<section>
+  <h2>Cine îl folosește</h2>
+  <p>Testeri care trebuie să reproducă „la mine merge”. Dezvoltatori care au nevoie ca un timeout să se petreacă cu adevărat. Dezvoltatori de jocuri care verifică ce face lagul netcode-ului lor. Oricine a fost vreodată întrebat dacă aplicația merge pe o conexiune slabă și nu a avut un mod cinstit de a afla.</p>
+</section>
+
+<section>
+  <h2>Cum faci un lucru anume</h2>
+  <p>Ghiduri scurte, fiecare cu cifrele care merită încercate și comanda care le aplică.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

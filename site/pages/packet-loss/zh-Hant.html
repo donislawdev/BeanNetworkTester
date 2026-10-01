@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>在 Windows 上模擬封包遺失</h1>
+  <p class="lead">封包遺失就是使用者口中的「它就是卡住了」。你設定一個百分比，工具就會丟棄相應比例的封包，而你的應用必須自己應對。</p>
+</section>
+
+<section>
+  <h2>在視窗中</h2>
+  <ol class="steps">
+    <li>填寫<strong>{{app.fields.target_process}}</strong>，讓受影響的只是你的應用，而不是整台電腦。</li>
+    <li>把<strong>{{app.fields.loss}}</strong>設為 0 到 100 之間的百分比。建議從 5 開始。</li>
+    <li>點選<strong>{{app.buttons.start}}</strong>，然後使用你的應用。</li>
+  </ol>
+  <p>視窗頂部的狀態列會概括當前正在執行的內容，<strong>{{app.app.tabs.statistics}}</strong>分頁會統計被丟棄的封包。</p>
+</section>
+
+<section>
+  <h2>從命令列執行</h2>
+  <p>同一個可執行檔案無需視窗也能執行。對一個瀏覽器施加 5% 的封包遺失，持續兩分鐘，之後一切自動恢復正常：</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>加上 <code>--simulate</code> 可以演練這條命令，而不觸碰真實流量。</p>
+</section>
+
+<section>
+  <h2>該選多大的百分比</h2>
+  <table>
+    <tr><th>封包遺失率</th><th>實際感覺</th></tr>
+    <tr><td>1%</td><td>一條良好的連線遇到了糟糕的一分鐘。大多數應用都能掩蓋它。</td></tr>
+    <tr><td>5%</td><td>弱 Wi-Fi。頁面載入變慢，影片畫質下降。</td></tr>
+    <tr><td>20%</td><td>擁擠的咖啡館熱點或火車隧道。開始出現逾時。</td></tr>
+    <tr><td>60% 及以上</td><td>幾乎無法使用。適合找出那條從沒人測試過的錯誤提示。</td></tr>
+  </table>
+  <p>現成的設定檔會替你設定這一項。「{{app.presets.weak_wifi}}」、「{{app.presets.cafe}}」和「{{app.presets.3g}}」除了延遲和限速之外，都帶有封包遺失數值。</p>
+</section>
+
+<section>
+  <h2>兩件讓人意外的事</h2>
+  <p><strong>在 TCP 上你可能什麼都看不到。</strong>TCP 會重傳丟失的資料，所以透過 HTTPS 下載只會變慢，而不會失敗。如果想把封包遺失看作封包遺失，請測試基於 UDP 的東西：語音通話、遊戲、影片串流，或者 DNS。</p>
+  <p><strong>封包遺失是隨機的，所以兩次執行會不同。</strong>設定一個隨機種子，同一次執行就會精確重複，這正是把「出過一次問題」變成別人也能復現的 bug 報告的辦法：</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  <p>單獨的封包遺失很少見。真實的糟糕連線會封包遺失，<em>並且</em>增加延遲，<em>並且</em>速度不足，設定檔重現的就是這種組合。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

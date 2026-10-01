@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Punta a un’app, non alla macchina</h1>
+  <p class="lead">Senza un bersaglio viene colpita ogni connessione del computer, compreso il desktop remoto che stai usando e il download della correzione. Con un bersaglio, un processo riceve la brutta rete e tutto il resto va avanti.</p>
+</section>
+
+<section>
+  <h2>Per processo</h2>
+  <p>Scrivi un nome in <strong>{{app.fields.target_process}}</strong>, oppure passa <code>--target</code>. Un nome semplice corrisponde come frammento, quindi <code>chrome</code> copre <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Segue l’albero dei processi, cosa che conta per tutto ciò che genera processi figli: un browser apre un processo per scheda, e anche quelli vengono colpiti.</p>
+  <p>Il campo accetta più di un nome, e più di un tipo di cosa alla volta:</p>
+  <table>
+    <tr><th>Cosa scrivi</th><th>Cosa significa</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Due applicazioni.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, ma mai il driver. Le esclusioni vincono.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Tutto ciò che inizia con «my».</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Un’espressione regolare, quando un carattere jolly non basta.</td></tr>
+    <tr><td><code>4812</code></td><td>Un singolo ID di processo.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Ogni ID di processo sopra 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Per indirizzo o porta</h2>
+  <p>A volte l’unità di interesse non è l’app ma un server. Queste opzioni accettano la stessa sintassi di elenco, intervallo ed esclusione, e capiscono CIDR e IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>La seconda vale la pena conoscerla: tutto tranne il DNS. Puntare <em>lontano</em> da una porta è spesso più facile che elencare quelle che vuoi.</p>
+</section>
+
+<section>
+  <h2>Puntare a un processo per nome sopravvive al suo riavvio</h2>
+  <p>Riavvia l’applicazione mentre una sessione è in corso e un bersaglio per <strong>nome</strong> ritrova il nuovo processo. Un bersaglio per <strong>ID di processo</strong> non può: l’ID apparteneva al processo che è uscito. Neppure un altro programma a cui Windows assegna poi lo stesso ID viene colpito. Se il tuo test riavvia ciò che è in prova, puntalo per nome.</p>
+</section>
+
+<section>
+  <h2>L’avviso che non devi ignorare</h2>
+  <p>Avvia con il degrado attivo, senza nulla da puntare e senza limite di tempo, e sia la finestra sia la riga di comando lo dicono: questo riguarda ogni connessione di questa macchina. È un avviso, non un rifiuto: a volte è esattamente ciò che vuoi. Se non lo è, imposta un bersaglio o un <code>--duration</code>, e {{app.buttons.stop}} rimette sempre tutto a posto.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

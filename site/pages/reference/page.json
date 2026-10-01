@@ -13,6 +13,126 @@
       "link_text": "Tabele referencyjne",
       "title": "Profile, ustawienia i kody wyjścia",
       "description": "Każdy gotowy profil z wartościami, które ustawia, każde ustawienie z flagą, jednostką i zakresem, oraz każdy kod wyjścia linii komend."
+    },
+    "zh-Hans": {
+      "slug": "cankao-biao",
+      "title": "配置方案、设置与退出码",
+      "description": "每个现成配置方案的具体数值，每项设置对应的参数、单位和范围，以及命令行可能返回的每个退出码。",
+      "link_text": "参考表"
+    },
+    "ja": {
+      "slug": "rifarensu",
+      "title": "プロファイル・設定・終了コード一覧",
+      "description": "すべてのプロファイルの設定値、すべての設定のフラグ・単位・範囲、コマンドラインが返すすべての終了コードをまとめています。",
+      "link_text": "リファレンス表"
+    },
+    "de": {
+      "slug": "referenztabellen",
+      "title": "Profile, Einstellungen und Exit-Codes",
+      "description": "Jedes fertige Profil mit seinen Werten, jede Einstellung mit Option, Einheit und Bereich und jeder Exit-Code, den die Befehlszeile zurückgeben kann.",
+      "link_text": "Referenztabellen"
+    },
+    "fr": {
+      "slug": "tableaux-de-reference",
+      "title": "Profils, réglages et codes de sortie",
+      "description": "Chaque profil prêt à l’emploi avec ses valeurs, chaque réglage avec son option, son unité et sa plage, et chaque code de sortie de la ligne de commande.",
+      "link_text": "Tableaux de référence"
+    },
+    "es": {
+      "slug": "tablas-de-referencia",
+      "title": "Perfiles, ajustes y códigos de salida",
+      "description": "Cada perfil listo con sus valores, cada ajuste con su opción, unidad y rango, y cada código de salida que puede devolver la línea de comandos.",
+      "link_text": "Tablas de referencia"
+    },
+    "pt-BR": {
+      "slug": "tabelas-de-referencia",
+      "title": "Perfis, configurações e códigos de saída",
+      "description": "Cada perfil pronto com seus valores, cada configuração com sua opção, unidade e faixa, e cada código de saída que a linha de comando pode retornar.",
+      "link_text": "Tabelas de referência"
+    },
+    "it": {
+      "slug": "tabelle-di-riferimento",
+      "title": "Profili, impostazioni e codici di uscita",
+      "description": "Ogni profilo pronto con i suoi valori, ogni impostazione con opzione, unità e intervallo, e ogni codice di uscita che la riga di comando può restituire.",
+      "link_text": "Tabelle di riferimento"
+    },
+    "id": {
+      "slug": "tabel-referensi",
+      "title": "Profil, pengaturan, dan kode keluar",
+      "description": "Setiap profil siap pakai beserta nilainya, setiap pengaturan dengan opsi, satuan, dan rentangnya, serta setiap kode keluar dari baris perintah.",
+      "link_text": "Tabel referensi"
+    },
+    "ru": {
+      "slug": "tablicy-spravochnik",
+      "title": "Профили, настройки и коды завершения",
+      "description": "Каждый готовый профиль с его значениями, каждая настройка с параметром, единицей и диапазоном и каждый код завершения командной строки.",
+      "link_text": "Справочные таблицы"
+    },
+    "tr": {
+      "slug": "basvuru-tablolari",
+      "title": "Profiller, ayarlar ve çıkış kodları",
+      "description": "Hazır her profil değerleriyle, her ayar seçeneği, birimi ve aralığıyla, ayrıca komut satırının döndürebileceği her çıkış kodu.",
+      "link_text": "Başvuru tabloları"
+    },
+    "cs": {
+      "slug": "referencni-tabulky",
+      "title": "Profily, nastavení a návratové kódy",
+      "description": "Každý hotový profil s čísly, která nastavuje, každé nastavení s přepínačem, jednotkou a rozsahem a každý návratový kód příkazového řádku.",
+      "link_text": "Referenční tabulky"
+    },
+    "vi": {
+      "slug": "bang-tra-cuu",
+      "title": "Cấu hình mẫu, thiết lập và mã thoát",
+      "description": "Mọi cấu hình mẫu cùng số liệu nó đặt, mọi thiết lập với cờ, đơn vị và phạm vi, và mọi mã thoát mà dòng lệnh có thể trả về.",
+      "link_text": "Bảng tra cứu"
+    },
+    "hi": {
+      "slug": "sandarbh-talika",
+      "title": "प्रोफ़ाइल, सेटिंग और एग्ज़िट कोड",
+      "description": "हर तैयार प्रोफ़ाइल अपने तय आँकड़ों के साथ, हर सेटिंग अपने फ़्लैग, इकाई और सीमा के साथ, और कमांड लाइन के हर संभावित एग्ज़िट कोड।",
+      "link_text": "संदर्भ तालिकाएँ"
+    },
+    "ko": {
+      "slug": "chamjo-pyo",
+      "title": "프로필, 설정, 종료 코드",
+      "description": "준비된 프로필과 설정값, 설정별 플래그, 단위, 범위, 명령줄이 반환할 수 있는 모든 종료 코드를 정리했습니다.",
+      "link_text": "참조 표"
+    },
+    "ar": {
+      "slug": "jadawil-marjiya",
+      "title": "الإعدادات المسبقة والخيارات ورموز الخروج",
+      "description": "كل إعداد مسبق بأرقامه، وكل إعداد مع خياره ووحدته ونطاقه، وكل رمز خروج يمكن لسطر الأوامر إرجاعه.",
+      "link_text": "جداول مرجعية"
+    },
+    "ro": {
+      "slug": "tabele-de-referinta",
+      "title": "Profiluri, setări și coduri de ieșire",
+      "description": "Fiecare profil gata făcut cu valorile lui, fiecare setare cu opțiunea, unitatea și intervalul ei și fiecare cod de ieșire al liniei de comandă.",
+      "link_text": "Tabele de referință"
+    },
+    "nl": {
+      "slug": "referentietabellen",
+      "title": "Profielen, instellingen en afsluitcodes",
+      "description": "Elk kant-en-klaar profiel met zijn waarden, elke instelling met vlag, eenheid en bereik en elke afsluitcode die de opdrachtregel kan geven.",
+      "link_text": "Referentietabellen"
+    },
+    "zh-Hant": {
+      "slug": "cankao-biao",
+      "title": "設定檔、設定與結束代碼",
+      "description": "每個現成設定檔的具體數值，每項設定對應的參數、單位和範圍，以及命令列可能傳回的每個結束代碼。",
+      "link_text": "參考表"
+    },
+    "uk": {
+      "slug": "dovidkovi-tablytsi",
+      "title": "Профілі, налаштування та коди завершення",
+      "description": "Кожен готовий профіль із його значеннями, кожне налаштування з прапорцем, одиницею й діапазоном і кожен код завершення, який може повернути командний рядок.",
+      "link_text": "Довідкові таблиці"
+    },
+    "th": {
+      "slug": "tarang-ang-ing",
+      "title": "โปรไฟล์ การตั้งค่า และรหัสออก",
+      "description": "โปรไฟล์สำเร็จรูปทุกตัวพร้อมค่าที่ตั้ง การตั้งค่าทุกข้อพร้อมตัวเลือก หน่วย และช่วงค่า และรหัสออกทุกค่าที่บรรทัดคำสั่งส่งกลับได้",
+      "link_text": "ตารางอ้างอิง"
     }
   }
 }

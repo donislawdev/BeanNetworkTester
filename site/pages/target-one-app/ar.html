@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>استهدف تطبيقًا واحدًا لا الجهاز</h1>
+  <p class="lead">بلا هدف يتأثر كل اتصال في الحاسوب، بما في ذلك سطح المكتب البعيد الذي تستخدمه وتنزيل الإصلاح. ومع هدف تحصل عملية واحدة على الشبكة السيئة ويستمر كل شيء آخر.</p>
+</section>
+
+<section>
+  <h2>بحسب العملية</h2>
+  <p>اكتب اسمًا في <strong>{{app.fields.target_process}}</strong>، أو مرّر <code>--target</code>. الاسم المجرد يطابق كجزء، فيغطي <code>chrome</code> الملف <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>ويتبع شجرة العمليات، وهذا مهم لكل ما يُنشئ عمليات فرعية: فالمتصفح يفتح عملية لكل تبويب، وتتأثر هذه أيضًا.</p>
+  <p>يقبل الحقل أكثر من اسم، وأكثر من نوع من الأشياء في وقت واحد:</p>
+  <table>
+    <tr><th>ما تكتبه</th><th>ماذا يعني</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>تطبيقان.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome، لكن ليس برنامج التشغيل أبدًا. الاستثناءات تغلب.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>كل ما يبدأ بـ «my».</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>تعبير نمطي (regular expression)، حين لا يكفي حرف البدل.</td></tr>
+    <tr><td><code>4812</code></td><td>معرّف عملية واحد.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>كل معرّف عملية فوق 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>بحسب العنوان أو المنفذ</h2>
+  <p>أحيانًا لا تكون الوحدة المهمة هي التطبيق بل خادمًا واحدًا. وهذه تقبل صيغة القائمة والنطاق والاستثناء نفسها، وتفهم CIDR وIPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>الثاني يستحق أن تعرفه: كل شيء ما عدا DNS. والاستهداف <em>بعيدًا</em> عن منفذ أسهل غالبًا من سرد المنافذ التي تريدها.</p>
+</section>
+
+<section>
+  <h2>استهداف عملية بالاسم يصمد أمام إعادة تشغيلها</h2>
+  <p>أعد تشغيل التطبيق أثناء جلسة جارية فيلتقط الهدف المحدد <strong>بالاسم</strong> العملية الجديدة من جديد. أما الهدف المحدد <strong>بمعرّف العملية</strong> فلا يستطيع، لأن المعرّف كان للعملية التي انتهت. كما أن برنامجًا آخر يمنحه Windows لاحقًا المعرّف نفسه لا يتأثر. وإذا كان اختبارك يعيد تشغيل ما تختبره فاستهدفه بالاسم.</p>
+</section>
+
+<section>
+  <h2>التحذير الذي لا ينبغي تجاهله</h2>
+  <p>ابدأ والتدهور مفعّل ولا شيء تستهدفه ولا حد زمني، فتقول النافذة وسطر الأوامر كلاهما ذلك: هذا يؤثر في كل اتصال على هذا الجهاز. إنه تحذير لا رفض، فأحيانًا يكون هذا ما تريده. وإن لم يكن، فحدّد هدفًا أو <code>--duration</code>، ويعيد الزر {{app.buttons.stop}} كل شيء دائمًا.</p>
+</section>
+
+<section>
+  <h2>التالي</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

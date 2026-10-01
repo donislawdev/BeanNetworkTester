@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simulasikan lag dan kehilangan paket pada game</h1>
+  <p class="lead">Netcode ditulis di koneksi lokal dengan ping 1 ms dan diuji oleh pemain di Wi-Fi hotel. Ini menutup kesenjangan itu di mesin Anda sendiri, hanya pada proses game, sementara sisa komputer tetap bisa dipakai.</p>
+</section>
+
+<section>
+  <h2>Mulai dari sini</h2>
+  <p>Bidik klien game, beri koneksi buruk yang realistis, dan biarkan berhenti sendiri setelah lima menit:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Ada juga lini waktu siap pakai untuk ini: <code>overloaded-game-server.json</code> di folder <code>scenarios</code> membawa koneksi ke kemacetan lalu kembali lagi, sehingga Anda dapat melihat bagaimana klien menangani kedua arah perubahan. Lihat <a href="../skenario-berbasis-waktu/">skenario berbasis waktu</a>.</p>
+</section>
+
+<section>
+  <h2>Mengapa game memperlihatkan kehilangan sedangkan peramban tidak</h2>
+  <p>Kebanyakan lalu lintas game adalah UDP, dan UDP tidak punya apa pun untuk menyembunyikan kehilangan. Halaman web di atas TCP diam-diam mengirim ulang dan hanya butuh waktu lebih lama, itulah sebabnya peramban bisa terasa baik pada kehilangan 5% sementara sebuah pertandingan dengan 5% yang sama tersendat, tertarik mundur, dan tidak sinkron.</p>
+  <p>Itu menjadikan game tempat yang jujur untuk menguji kehilangan: apa yang Anda atur adalah yang benar-benar dialami klien.</p>
+</section>
+
+<section>
+  <h2>Apa yang diatur, dan apa yang dicari</h2>
+  <table>
+    <tr><th>Pengaturan</th><th>Coba</th><th>Yang diungkapkannya</th></tr>
+    <tr><td>Latensi</td><td>80 sampai 250 ms</td><td>Prediksi dan interpolasi. Apakah karakter Anda tergelincir mundur setelah menembak?</td></tr>
+    <tr><td>Jitter</td><td>40 sampai 100 ms</td><td>Buffering. 200 ms yang stabil lebih mudah disembunyikan daripada ping yang terus bergerak.</td></tr>
+    <tr><td>Kehilangan</td><td>2 sampai 10%</td><td>Pembaruan status yang hilang, dan apakah klien pulih atau menyimpang.</td></tr>
+    <tr><td>Lonjakan</td><td>1 detik, jarang</td><td>Hambatan yang ditimbulkan perpindahan antar menara. Biasanya yang paling jelek.</td></tr>
+    <tr><td>Tautan hidup dan mati</td><td>siklus 10 s, 30% mati</td><td>Sambung ulang dan bergabung kembali.</td></tr>
+  </table>
+  <p>Ukur jitter sebagai selisih antara persentil ke-95 dan median, bukan sebagai rata-rata: jitter hampir tidak menggeser rata-rata, itulah sebabnya satu eksekusi bisa tampak identik di atas kertas tetapi terasa berbeda saat dimainkan.</p>
+</section>
+
+<section>
+  <h2>Membandingkan dua build butuh seed</h2>
+  <p>Kehilangan acak membuat dua eksekusi berbeda, sehingga “build baru terasa lebih buruk” bukan bukti. Seed yang sama memutar ulang kehilangan dan jitter yang sama, yang mengubah perasaan menjadi perbandingan:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Yang tidak bisa dilakukannya</h2>
+  <p>Alat ini membentuk lalu lintas mesin <em>Anda</em>. Ia tidak memperlambat server, tidak mengubah tick rate-nya, dan tidak menempatkan pemain lain di koneksi buruk, sehingga ia menguji klien Anda terhadap tautan buruk, bukan server Anda di bawah beban. Untuk sisi server, Anda butuh uji beban, dan untuk lobi yang penuh koneksi buruk, Anda butuh lebih dari satu mesin.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>故意切断连接</h1>
+  <p class="lead">慢只是糟糕的一种。消失是另一种，而且它能找到没人写过的代码路径：重连、重试，以及告诉用户发生了什么的那条提示。</p>
+  <p>这也是在不拔任何线缆的情况下测试应用离线的办法：局域网模式让本地网络继续工作而切断互联网，阻断某一个地址则让单个服务无法访问，而其余连接一切正常。</p>
+</section>
+
+<section>
+  <h2>五种不同的“消失”方式</h2>
+  <table>
+    <tr><th>设置</th><th>应用会看到什么</th></tr>
+    <tr><td><strong>重置连接</strong></td><td>连接在传输中途死亡，就像被防火墙或负载均衡器切断那样。可以设置发生的频率，单位为百分比。</td></tr>
+    <tr><td><strong>链路时通时断</strong></td><td>网络消失一段时间，然后恢复，如此反复。你设置周期长度，以及其中有多少时间处于中断。</td></tr>
+    <tr><td><strong>阻断端口</strong></td><td>发往该端口的一切都会消失，其他任何东西都不受影响。</td></tr>
+    <tr><td><strong>阻断地址</strong></td><td>一台服务器无法访问，而互联网的其余部分正常。</td></tr>
+    <tr><td><strong>局域网模式</strong></td><td>本地网络继续工作，互联网则不行。这正是强制门户或上行链路中断时的样子。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>从命令行运行</h2>
+  <p>对一个应用，大约每十个连接就切断一个：</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>十秒一个周期，每个周期中断四秒，一条时通时断的链路：</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>一台服务器无法访问，其余一切正常：</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>阻断只影响它指明的对象</h2>
+  <p>与丢包或延迟不同，阻断某个端口或地址<strong>只</strong>影响与之匹配的流量。因此在不指定进程目标的情况下运行，它是其中最安全的一种，这也是为什么“让这一个依赖消失”只需要一行命令。</p>
+</section>
+
+<section>
+  <h2>下载“死掉”的陷阱</h2>
+  <p>还有一个最大数据包大小的设置。稍微调低一点，大文件传输会变慢。调到 576 这样的值，下载就会永远彻底停止，而且没有任何错误，因为这已经不是更小的数据包，而是经典的黑洞：网络丢弃过大的数据包，却从不告诉你。</p>
+  <p>这是一种值得有意重现的真实故障模式，意外撞上时则令人非常困惑。如果在你改了这个设置之后下载悄无声息地中断，原因就在这里。</p>
+</section>
+
+<section>
+  <h2>恢复正常</h2>
+  <p>按下{{app.buttons.stop}}即可恢复一切。关闭程序也一样，如果设置了时间限制，到时也一样。即使工具本身在会话中途崩溃，其内部的看门狗也会停止捕获，而不是让你的网络停留在损坏的状态。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -13,6 +13,126 @@
       "link_text": "Lagi w grach",
       "title": "Symulator lagów i utraty pakietów w grach",
       "description": "Daj klientowi gry ping, jitter i utratę pakietów słabego łącza, celując tylko w ten proces, i powtórz ten sam przebieg z ziarnem."
+    },
+    "zh-Hans": {
+      "slug": "youxi-yanchi-moni",
+      "title": "模拟游戏延迟和丢包",
+      "description": "只针对游戏进程，给客户端加上糟糕连接的延迟、抖动和丢包，并用随机种子重放同一次运行。",
+      "link_text": "游戏延迟"
+    },
+    "ja": {
+      "slug": "gemu-ragu-shimyureta",
+      "title": "ゲームのラグとパケットロスを再現する",
+      "description": "ゲームのクライアントだけに、悪い回線のpingとジッターとパケットロスを与えます。シードを使えば同じ実行を再現できます。",
+      "link_text": "ゲームのラグ"
+    },
+    "de": {
+      "slug": "spiele-lag-simulator",
+      "title": "Spiele-Lag und Paketverlust simulieren",
+      "description": "Gib einem Spielclient Ping, Jitter und Paketverlust einer schlechten Verbindung, nur für diesen Prozess, und wiederhole den Durchlauf mit einem Seed.",
+      "link_text": "Lag in Spielen"
+    },
+    "fr": {
+      "slug": "simulateur-de-lag-jeux",
+      "title": "Simuler le lag et la perte de paquets d’un jeu",
+      "description": "Donnez à un client de jeu le ping, la gigue et les pertes d’une mauvaise connexion, pour ce seul processus, et rejouez l’exécution avec une graine.",
+      "link_text": "Lag dans les jeux"
+    },
+    "es": {
+      "slug": "simulador-de-lag-en-juegos",
+      "title": "Simula lag y pérdida de paquetes en juegos",
+      "description": "Dale a un cliente de juego el ping, el jitter y la pérdida de paquetes de una mala conexión, solo para ese proceso, y repite la ejecución con una semilla.",
+      "link_text": "Lag en juegos"
+    },
+    "pt-BR": {
+      "slug": "simulador-de-lag-em-jogos",
+      "title": "Simule lag e perda de pacotes em jogos",
+      "description": "Dê a um cliente de jogo o ping, o jitter e a perda de pacotes de uma conexão ruim, só para esse processo, e repita a execução com uma semente.",
+      "link_text": "Lag em jogos"
+    },
+    "it": {
+      "slug": "simulatore-di-lag-nei-giochi",
+      "title": "Simula lag e perdita di pacchetti nei giochi",
+      "description": "Dai a un client di gioco il ping, il jitter e la perdita di pacchetti di una brutta connessione, solo per quel processo, e ripeti l’esecuzione con un seed.",
+      "link_text": "Lag nei giochi"
+    },
+    "id": {
+      "slug": "simulator-lag-game",
+      "title": "Simulasikan lag dan kehilangan paket pada game",
+      "description": "Beri klien game ping, jitter, dan kehilangan paket dari koneksi buruk, hanya untuk proses itu, dan ulangi eksekusi yang sama dengan seed.",
+      "link_text": "Lag game"
+    },
+    "ru": {
+      "slug": "simulyator-laga-v-igrah",
+      "title": "Имитация лагов и потери пакетов в играх",
+      "description": "Дайте игровому клиенту пинг, джиттер и потери плохого соединения только для его процесса и повторяйте тот же запуск с помощью seed.",
+      "link_text": "Лаги в играх"
+    },
+    "tr": {
+      "slug": "oyun-lag-simulatoru",
+      "title": "Oyunlarda lag ve paket kaybı simülasyonu",
+      "description": "Bir oyun istemcisine kötü bir bağlantının pingini, jitter’ını ve paket kaybını yalnızca o işlem için verin; aynı çalıştırmayı seed ile tekrarlayın.",
+      "link_text": "Oyunlarda lag"
+    },
+    "cs": {
+      "slug": "simulator-lagu-ve-hrach",
+      "title": "Simulace lagu a ztráty paketů ve hrách",
+      "description": "Dejte herního klientovi ping, jitter a ztrátu paketů špatného spojení jen pro tento proces a stejný běh zopakujte pomocí seedu.",
+      "link_text": "Lag ve hrách"
+    },
+    "vi": {
+      "slug": "mo-phong-lag-game",
+      "title": "Mô phỏng lag game và mất gói tin",
+      "description": "Cho một ứng dụng khách game ping, jitter và mất gói tin của kết nối kém, chỉ nhắm vào tiến trình đó, và chạy lại đúng lần ấy nhờ seed.",
+      "link_text": "Lag trong game"
+    },
+    "hi": {
+      "slug": "game-lag-simuleshan",
+      "title": "गेम लैग और पैकेट लॉस का सिमुलेशन",
+      "description": "गेम क्लाइंट को खराब कनेक्शन जैसी पिंग, जिटर और पैकेट लॉस दें, सिर्फ़ उसी प्रोसेस पर, और उसी रन को seed से दोहराएँ।",
+      "link_text": "गेम लैग"
+    },
+    "ko": {
+      "slug": "geim-raegeu-simyulreisyeon",
+      "title": "게임 랙과 패킷 손실 시뮬레이션",
+      "description": "게임 클라이언트 프로세스에만 나쁜 연결의 핑, 지터, 패킷 손실을 주고, 같은 실행을 시드로 그대로 재현하세요.",
+      "link_text": "게임 랙"
+    },
+    "ar": {
+      "slug": "muhakat-lag-alalab",
+      "title": "محاكاة تأخر الألعاب وفقدان الحزم",
+      "description": "امنح عميل لعبة ping وجيتر وفقدان حزم اتصال سيئ، لتلك العملية وحدها، وأعد التشغيل نفسه بفضل seed.",
+      "link_text": "تأخر الألعاب"
+    },
+    "ro": {
+      "slug": "simulator-lag-jocuri",
+      "title": "Simulează lag și pierdere de pachete în jocuri",
+      "description": "Dă clientului unui joc pingul, jitterul și pierderea de pachete ale unei conexiuni proaste, doar pentru acel proces, și reia aceeași rulare cu un seed.",
+      "link_text": "Lag în jocuri"
+    },
+    "nl": {
+      "slug": "game-lag-simuleren",
+      "title": "Gamelag en pakketverlies simuleren",
+      "description": "Geef een gameclient de ping, jitter en het pakketverlies van een slechte verbinding, alleen voor dat proces, en herhaal dezelfde run met een seed.",
+      "link_text": "Gamelag"
+    },
+    "zh-Hant": {
+      "slug": "youxi-yanchi-moni",
+      "title": "模擬遊戲延遲和封包遺失",
+      "description": "只針對遊戲處理程序，給用戶端加上糟糕連線的延遲、抖動和封包遺失，並用隨機種子重播同一次執行。",
+      "link_text": "遊戲延遲"
+    },
+    "uk": {
+      "slug": "symulyator-lahiv-u-hrakh",
+      "title": "Симуляція лагів в іграх і втрати пакетів",
+      "description": "Дайте клієнту гри пінг, джитер і втрату пакетів поганого з’єднання лише для цього процесу й відтворіть той самий запуск за допомогою seed.",
+      "link_text": "Лаги в іграх"
+    },
+    "th": {
+      "slug": "jamlong-lag-nai-game",
+      "title": "จำลองเกมแล็กและแพ็กเก็ตสูญหาย",
+      "description": "ให้ไคลเอนต์เกมมีค่า ping จิตเตอร์ และแพ็กเก็ตสูญหายแบบการเชื่อมต่อที่แย่ เฉพาะโปรเซสนั้น แล้วรันซ้ำให้เหมือนเดิมด้วย seed",
+      "link_text": "เกมแล็ก"
     }
   }
 }

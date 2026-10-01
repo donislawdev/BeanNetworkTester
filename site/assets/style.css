@@ -19,7 +19,58 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   font-size: 17px;
   line-height: 1.6;
+  /* A long German compound or a long path must wrap rather than push the page wider
+     than a phone. */
+  overflow-wrap: break-word;
 }
+
+/* -- scripts that need their own stack ------------------------------------ */
+/* The pages say which language they are in (<html lang>), and a browser usually picks
+   a fitting CJK font from that. These stacks make it a choice instead of a guess: every
+   system ships one of these, named after the script so a Japanese page never falls into
+   a Chinese design of the same character. Nothing is loaded - they are local fonts. */
+:lang(ja) body {
+  font-family: "Segoe UI", "Yu Gothic UI", "Meiryo UI", "Hiragino Sans",
+               "Noto Sans CJK JP", "Noto Sans JP", system-ui, sans-serif;
+}
+:lang(zh) body {
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+               "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+}
+/* Traditional Chinese is a different set of letterforms, not a different font size:
+   a page for Taiwan must not fall into the Simplified design of the same character. */
+:lang(zh-Hant) body {
+  font-family: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC",
+               "Noto Sans CJK TC", "Noto Sans TC", system-ui, sans-serif;
+}
+:lang(ko) body {
+  font-family: "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR",
+               "Noto Sans KR", system-ui, sans-serif;
+  /* Korean puts spaces between words, so a line may break there and nowhere inside a
+     word, which is not true of Han or kana. */
+  word-break: keep-all;
+}
+:lang(hi) body {
+  font-family: "Segoe UI", "Nirmala UI", "Mangal", "Kohinoor Devanagari",
+               "Noto Sans Devanagari", system-ui, sans-serif;
+}
+:lang(ar) body {
+  font-family: "Segoe UI", Tahoma, "Geeza Pro", "Noto Sans Arabic", system-ui, sans-serif;
+}
+:lang(th) body {
+  font-family: "Segoe UI", "Leelawadee UI", Thonburi, "Noto Sans Thai", Tahoma,
+               system-ui, sans-serif;
+}
+/* Han, kana and Hangul at full width, and Devanagari, Arabic and Thai with their marks
+   above and below the line, read best with more air between the lines. A measure
+   counted in `ch` (the width of a "0") is half of what it means in Latin for the
+   full-width scripts: the same 62ch holds about 31 characters. */
+:lang(ja) body, :lang(zh) body, :lang(ko) body { line-height: 1.8; }
+:lang(hi) body, :lang(ar) body, :lang(th) body { line-height: 1.85; }
+:lang(ja) :is(.lead, .note, .steps), :lang(zh) :is(.lead, .note, .steps),
+:lang(ko) :is(.lead, .note, .steps) { max-width: 42em; }
+/* Hyphenation is what keeps a narrow card of German or Dutch from ragged, one-word lines. */
+:lang(de) body, :lang(nl) body { hyphens: auto; }
 
 /* Keyboard users must be able to see where they are. The program follows the same
    rule: hover is the fill, focus is the ring. */
@@ -29,12 +80,15 @@ body {
   border-radius: 4px;
 }
 
+/* Logical properties from here on, so that a right-to-left page mirrors itself:
+   `left: -9999px` would, in a right-to-left document, push the link into the area the
+   page scrolls into, and give a phone a sideways scrollbar. */
 .skip {
   position: absolute;
-  left: -9999px;
+  inset-inline-start: -9999px;
 }
 .skip:focus {
-  left: 1rem;
+  inset-inline-start: 1rem;
   top: 1rem;
   z-index: 10;
   padding: .6rem 1rem;
@@ -90,6 +144,7 @@ code {
 
 .langs {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: .35rem;
   align-items: center;
 }
@@ -104,6 +159,44 @@ code {
   border: 1px solid var(--border);
   color: var(--muted);
 }
+
+/* The language menu: a <details> element, so it needs no script. The panel is laid
+   over the page under the bar rather than inside the header, which keeps it inside the
+   viewport at every width and in both directions. */
+.bar { position: relative; }
+.langmenu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: .15rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  font-size: .92rem;
+}
+.langmenu summary::-webkit-details-marker { display: none; }
+.langmenu summary::after {
+  content: "";
+  display: inline-block;
+  margin-inline-start: .5em;
+  vertical-align: middle;
+  border: .3em solid transparent;
+  border-top-color: currentColor;
+  border-bottom-width: 0;
+}
+.langmenu[open] .langs {
+  position: absolute;
+  inset-inline: 1.25rem;
+  top: 100%;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: .25rem;
+  padding: .6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.langmenu .langs a, .langmenu .langs span { text-align: center; }
 
 /* -- page body ----------------------------------------------------------- */
 main {
@@ -194,7 +287,7 @@ h3 {
 
 .steps {
   margin: 0;
-  padding-left: 1.4rem;
+  padding-inline-start: 1.4rem;
   max-width: 70ch;
 }
 .steps li { margin-bottom: .6rem; }
@@ -288,6 +381,10 @@ pre {
   line-height: 1.5;
 }
 pre code { background: none; border: 0; padding: 0; font-size: 1em; }
+/* A command is the same text in every language: it reads left to right and its
+   punctuation must not wander to the other end of a right-to-left sentence. */
+code, pre { direction: ltr; unicode-bidi: isolate; }
+pre { text-align: left; }
 
 table {
   border-collapse: collapse;
@@ -298,7 +395,7 @@ table {
 th, td {
   border: 1px solid var(--border);
   padding: .5rem .7rem;
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 th { background: var(--bg-card); }
@@ -309,7 +406,7 @@ th { background: var(--bg-card); }
    repository carries none of them (convention 35). */
 .glyph {
   vertical-align: -2px;
-  margin-right: .4rem;
+  margin-inline-end: .4rem;
 }
 
 .social-label {

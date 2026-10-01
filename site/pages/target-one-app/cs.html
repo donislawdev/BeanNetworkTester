@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Zaměřte se na jednu aplikaci, ne na počítač</h1>
+  <p class="lead">Bez cíle je zasaženo každé spojení v počítači, včetně vzdálené plochy, kterou používáte, a stažení opravy. S cílem dostane špatnou síť jeden proces a všechno ostatní jede dál.</p>
+</section>
+
+<section>
+  <h2>Podle procesu</h2>
+  <p>Zadejte název do <strong>{{app.fields.target_process}}</strong> nebo předejte <code>--target</code>. Holý název se shoduje jako fragment, takže <code>chrome</code> pokryje <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Sleduje strom procesů, což je důležité u všeho, co spouští podřízené procesy: prohlížeč otevírá proces na každou kartu a ty jsou zasaženy také.</p>
+  <p>Pole přijímá více než jeden název a více než jeden druh věcí najednou:</p>
+  <table>
+    <tr><th>Co zadáte</th><th>Co to znamená</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Dvě aplikace.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, ale nikdy ovladač. Vyloučení vyhrávají.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Všechno, co začíná na „my“.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Regulární výraz, když zástupný znak nestačí.</td></tr>
+    <tr><td><code>4812</code></td><td>Jedno ID procesu.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Každé ID procesu nad 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Podle adresy nebo portu</h2>
+  <p>Někdy není zajímavou jednotkou aplikace, ale jeden server. Tyto přijímají stejnou syntaxi seznamu, rozsahu a vyloučení a rozumějí CIDR a IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Ten druhý stojí za povšimnutí: všechno kromě DNS. Zaměřit se <em>pryč</em> od portu je často snazší než vypisovat ty, které chcete.</p>
+</section>
+
+<section>
+  <h2>Cílení na proces podle názvu přežije jeho restart</h2>
+  <p>Restartujte aplikaci za běhu relace a cíl podle <strong>názvu</strong> nový proces zase převezme. Cíl podle <strong>ID procesu</strong> to nedokáže, protože ID patřilo procesu, který skončil. Ani jiný program, kterému Windows později přidělí stejné ID, není zasažen. Pokud váš test restartuje testovanou věc, zaměřte ji podle názvu.</p>
+</section>
+
+<section>
+  <h2>Varování, které byste neměli ignorovat</h2>
+  <p>Spusťte se zapnutým zhoršením, bez cíle a bez časového limitu a okno i příkazový řádek to řeknou: tohle ovlivňuje každé spojení v tomto počítači. Je to varování, ne odmítnutí, někdy je to přesně to, co chcete. Pokud ne, nastavte cíl nebo <code>--duration</code> a {{app.buttons.stop}} vždy vrátí všechno zpátky.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>O alternativă la Clumsy pentru Windows</h1>
+  <p class="lead">Clumsy este instrumentul pe care îl găsesc primul majoritatea oamenilor și este unul bun: gratuit, cu licență MIT, interactiv și construit pe același driver WinDivert pe care îl folosește acest instrument. Dacă face ce ai nevoie, folosește-l. Această pagină este despre cazurile în care nu face.</p>
+</section>
+
+<section>
+  <h2>Ce să cauți, oricare ai alege</h2>
+  <table>
+    <tr><th>Întrebare</th><th>De ce decide alegerea instrumentului</th></tr>
+    <tr><td>Poate ținti <strong>o singură aplicație</strong>?</td><td>Altfel degradezi mașina pe care lucrezi, inclusiv sesiunea la distanță și browserul în care citești documentația.</td></tr>
+    <tr><td>Are <strong>linie de comandă</strong>?</td><td>Un pipeline nu poate bifa o casetă. Fără una, un test de rețea nu poate face niciodată parte din build.</td></tr>
+    <tr><td>Este o rulare <strong>repetabilă</strong>?</td><td>Pierderea aleatorie care nu poate fi reluată produce rapoarte de eroare pe care nimeni altcineva nu le poate reproduce.</td></tr>
+    <tr><td>Se <strong>oprește singur</strong>?</td><td>Un instrument pe care trebuie să-ți amintești să-l oprești va fi lăsat pornit.</td></tr>
+    <tr><td>Poți afla ce a <strong>făcut de fapt</strong>?</td><td>Contoarele și o listă de conexiuni transformă „mi s-a părut lent” în cifre.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ce aduce acesta</h2>
+  <ul>
+    <li><strong>Țintire după proces, PID, adresă sau port</strong>, urmărind arborele de procese, deci un browser cu treizeci de procese copil rămâne o singură țintă.</li>
+    <li><strong>Același executabil este linia de comandă</strong>, cu un cod de ieșire pentru fiecare rezultat și ieșire NDJSON, deci merge în CI.</li>
+    <li><strong>Rulări cu seed</strong>: același seed reia aceeași pierdere aleatorie și același jitter.</li>
+    <li><strong>Profile gata făcute</strong>: 3G, LTE, satelit, o cafenea aglomerată, wifi în avion, un modem de 56k, ca să pornești de la ceva credibil în loc să ghicești cifre.</li>
+    <li><strong>Sesiuni cu timp și scenarii scriptate</strong>, ca degradarea să se schimbe singură cât te uiți la aplicație.</li>
+    <li><strong>Vedere în direct</strong>: grafic, contoare și un tabel de conexiuni care arată ce conexiune a fost lovită.</li>
+    <li>Interfață în <strong>engleză, poloneză și chineză simplificată</strong> și nicio telemetrie de niciun fel.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Dacă vii de la alt instrument</h2>
+  <p>Patru nume apar ori de câte ori se discută despre asta și nu sunt interschimbabile.</p>
+  <table>
+    <tr><th>Cunoști</th><th>Ce este</th><th>La ce să te aștepți aici</th></tr>
+    <tr><td><strong>tc cu netem</strong></td><td>Răspunsul Linux, încorporat în nucleu și comandat din linia de comandă. Adesea este ce returnează o căutare despre emularea WAN.</td><td>Pe Windows nu există <code>tc</code>. Acesta este cel mai apropiat ca spirit: aceleași feluri de degradare, o linie de comandă cu coduri de ieșire și un driver în loc de o disciplină de cozi.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Un instrument Windows gratuit, cu licență MIT, interactiv, pe același driver WinDivert.</td><td>Alege-l când îți ajung o fereastră și un filtru. Vino aici pentru țintire pe procese, rulări cu seed și o linie de comandă pe care o poate apela un pipeline.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Un produs Windows comercial pentru gestionarea permanentă a lățimii de bandă pe aplicație.</td><td>O altă treabă. Acesta este un instrument de testare: pornit o vreme, apoi oprit, și degradează mult mai mult decât viteza.</td></tr>
+    <tr><td><strong>Fiddler sau Charles</strong></td><td>Proxy-uri care pot inspecta, rescrie și limita traficul ce trece prin ele.</td><td>Tot o altă treabă. Un proxy modelează ce proxează și vede datele. Acesta modelează conexiunea însăși, inclusiv UDP și tot ce nu trece niciodată printr-un proxy.</td></tr>
+  </table>
+  <p>Pe scurt: dacă vrei un emulator de rețea pentru o singură aplicație Windows, cu linie de comandă, acesta este genul de instrument pe care îl cauți. Dacă vrei să citești și să modifici datele aplicației, ai nevoie de un proxy, iar dacă ești pe Linux ai deja netem.</p>
+</section>
+
+<section>
+  <h2>Când să folosești altceva</h2>
+  <p>A fi sincer în privința asta costă mai puțin decât o descărcare dezamăgitoare.</p>
+  <ul>
+    <li><strong>Ești pe Linux sau macOS.</strong> Acesta este doar pentru Windows și va rămâne așa, pentru că e construit pe un driver Windows. Pe Linux, <code>tc</code> cu <code>netem</code> este răspunsul standard și nu are nevoie de software suplimentar.</li>
+    <li><strong>Vrei gestionare permanentă a lățimii de bandă</strong> pentru toată mașina, pe aplicație, ca o funcție de produs, nu ca un test. Pentru asta sunt instrumentele comerciale de modelare a traficului, precum NetLimiter. Acesta este un instrument de testare: e făcut să fie pornit o vreme, apoi oprit.</li>
+    <li><strong>Nu poți obține drepturi de administrator.</strong> Captura de pachete le cere. Nu există cale ocolitoare, iar un instrument care pretinde altceva nu îți capturează traficul.</li>
+    <li><strong>Trebuie să inspectezi și să rescrii datele aplicației</strong>, nu să degradezi legătura. Asta e treaba unui proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

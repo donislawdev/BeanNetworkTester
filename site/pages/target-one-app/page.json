@@ -13,6 +13,126 @@
       "link_text": "Celowanie w aplikację",
       "title": "Celuj w jedną aplikację, nie w cały komputer",
       "description": "Skieruj zaburzenie na jeden proces, PID, adres albo port, żeby test psuł badaną aplikację, a resztę komputera zostawił w spokoju."
+    },
+    "zh-Hans": {
+      "slug": "zhendui-yige-yingyong",
+      "title": "在 Windows 上只针对一个应用，而不是整台电脑",
+      "description": "把弱网影响指向某个进程、PID、地址或端口，让测试只破坏被测应用，而不影响电脑上的其他程序。",
+      "link_text": "只针对一个应用"
+    },
+    "ja": {
+      "slug": "hitotsu-no-apuri",
+      "title": "マシン全体ではなく、1つのアプリだけを対象にする",
+      "description": "劣化の対象をプロセス、PID、アドレス、ポートのいずれかに絞れます。テスト対象のアプリだけを壊し、ほかの通信には影響しません。",
+      "link_text": "1つのアプリに絞る"
+    },
+    "de": {
+      "slug": "eine-app-anvisieren",
+      "title": "Unter Windows eine App anvisieren, nicht den ganzen Rechner",
+      "description": "Richte die Störung auf einen Prozess, eine PID, eine Adresse oder einen Port, damit dein Test nur die getestete App trifft und den Rest in Ruhe lässt.",
+      "link_text": "Eine App anvisieren"
+    },
+    "fr": {
+      "slug": "cibler-une-application",
+      "title": "Cibler une seule application sous Windows, pas la machine",
+      "description": "Dirigez la dégradation vers un processus, un PID, une adresse ou un port : votre test casse l’application visée et laisse le reste de la machine tranquille.",
+      "link_text": "Cibler une application"
+    },
+    "es": {
+      "slug": "apuntar-a-una-app",
+      "title": "Apunta a una sola aplicación en Windows, no a todo el sistema",
+      "description": "Dirige el deterioro a un proceso, un PID, una dirección o un puerto, para que tu prueba rompa solo la aplicación que estás probando y deje en paz el resto.",
+      "link_text": "Apuntar a una app"
+    },
+    "pt-BR": {
+      "slug": "mirar-em-um-app",
+      "title": "Mire em um aplicativo no Windows, não no computador todo",
+      "description": "Direcione a degradação a um processo, PID, endereço ou porta, para que o teste quebre só o aplicativo testado e deixe o resto do computador em paz.",
+      "link_text": "Mirar em um app"
+    },
+    "it": {
+      "slug": "puntare-a-una-app",
+      "title": "Punta a una sola app su Windows, non a tutto il computer",
+      "description": "Indirizza il degrado a un processo, PID, indirizzo o porta, così il test rompe solo l’app in prova e lascia in pace il resto del computer.",
+      "link_text": "Puntare a una app"
+    },
+    "id": {
+      "slug": "sasar-satu-aplikasi",
+      "title": "Sasar satu aplikasi di Windows, bukan seluruh komputer",
+      "description": "Arahkan gangguan ke satu proses, PID, alamat, atau port, sehingga pengujian hanya merusak aplikasi yang diuji dan tidak mengganggu sisanya.",
+      "link_text": "Sasar satu aplikasi"
+    },
+    "ru": {
+      "slug": "odno-prilozhenie",
+      "title": "Целимся в одно приложение в Windows, а не во весь компьютер",
+      "description": "Направьте помехи на один процесс, PID, адрес или порт, чтобы тест ломал только проверяемое приложение и не трогал остальной компьютер.",
+      "link_text": "Одно приложение"
+    },
+    "tr": {
+      "slug": "tek-uygulamayi-hedefle",
+      "title": "Windows’ta tüm bilgisayarı değil, tek uygulamayı hedefleyin",
+      "description": "Bozulmayı bir işleme, PID’ye, adrese veya porta yöneltin; test yalnızca denenen uygulamayı bozsun, bilgisayarın geri kalanına dokunmasın.",
+      "link_text": "Tek uygulamayı hedefle"
+    },
+    "cs": {
+      "slug": "cileni-na-jednu-aplikaci",
+      "title": "Zaměřte se ve Windows na jednu aplikaci, ne na počítač",
+      "description": "Zaměřte zhoršení na jeden proces, PID, adresu nebo port, aby test rozbil jen testovanou aplikaci a zbytek počítače nechal na pokoji.",
+      "link_text": "Cílení na jednu aplikaci"
+    },
+    "vi": {
+      "slug": "nham-vao-mot-ung-dung",
+      "title": "Nhắm vào một ứng dụng trên Windows, không phải cả máy",
+      "description": "Nhắm sự suy giảm vào một tiến trình, PID, địa chỉ hoặc cổng, để bài kiểm tra chỉ làm hỏng ứng dụng đang thử, còn máy vẫn yên.",
+      "link_text": "Nhắm vào một ứng dụng"
+    },
+    "hi": {
+      "slug": "ek-app-par-nishana",
+      "title": "Windows पर पूरी मशीन नहीं, सिर्फ़ एक ऐप को टारगेट करें",
+      "description": "बिगाड़ को एक प्रोसेस, PID, पते या पोर्ट पर लगाएँ, ताकि टेस्ट सिर्फ़ जाँचे जा रहे ऐप को तोड़े और बाकी मशीन अछूती रहे।",
+      "link_text": "एक ऐप को टारगेट करें"
+    },
+    "ko": {
+      "slug": "hanaui-aep-daesang",
+      "title": "컴퓨터 전체가 아닌 Windows 앱 하나만 지정",
+      "description": "열화를 프로세스, PID, 주소, 포트 하나에만 적용해 테스트 대상 앱만 망가뜨리고 나머지 컴퓨터는 그대로 두세요.",
+      "link_text": "앱 하나만 지정"
+    },
+    "ar": {
+      "slug": "istihdaf-tatbiq-wahid",
+      "title": "استهدف تطبيقًا واحدًا على Windows لا الجهاز كله",
+      "description": "وجّه التدهور إلى عملية أو PID أو عنوان أو منفذ واحد، فيكسر الاختبار التطبيق المختبَر فقط ويترك بقية الجهاز.",
+      "link_text": "استهداف تطبيق واحد"
+    },
+    "ro": {
+      "slug": "tinteste-o-aplicatie",
+      "title": "Țintește o singură aplicație în Windows, nu tot calculatorul",
+      "description": "Îndreaptă degradarea spre un proces, PID, adresă sau port, ca testul să strice doar aplicația vizată și restul calculatorului să rămână în pace.",
+      "link_text": "Țintește o aplicație"
+    },
+    "nl": {
+      "slug": "een-app-als-doel",
+      "title": "Eén app als doel op Windows, niet de hele computer",
+      "description": "Richt de verstoring op één proces, PID, adres of poort, zodat je test alleen de geteste app breekt en de rest van de computer met rust laat.",
+      "link_text": "Eén app als doel"
+    },
+    "zh-Hant": {
+      "slug": "zhendui-yige-yingyong",
+      "title": "在 Windows 上只針對一個應用，而不是整台電腦",
+      "description": "把網路劣化效果指向某個處理程序、PID、位址或連接埠，讓測試只破壞被測應用，而不影響電腦上的其他程式。",
+      "link_text": "只針對一個應用"
+    },
+    "uk": {
+      "slug": "tsil-odyn-zastosunok",
+      "title": "Один застосунок у Windows як ціль, а не весь комп’ютер",
+      "description": "Спрямуйте погіршення на один процес, PID, адресу чи порт, щоб тест ламав лише досліджуваний застосунок, а решту комп’ютера не чіпав.",
+      "link_text": "Ціль: один застосунок"
+    },
+    "th": {
+      "slug": "cho-chong-ap-diao",
+      "title": "เจาะจงแอปเดียวบน Windows ไม่ใช่ทั้งเครื่อง",
+      "description": "ชี้การทำให้เครือข่ายแย่ไปที่โปรเซส PID ที่อยู่ หรือพอร์ตเดียว ให้การทดสอบทำพังเฉพาะแอปที่ทดสอบ ส่วนที่เหลือของเครื่องไม่ถูกแตะ",
+      "link_text": "เจาะจงแอปเดียว"
     }
   }
 }

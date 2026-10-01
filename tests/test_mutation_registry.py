@@ -1306,6 +1306,101 @@ MUTATIONS = [
         "test": "test_the_palette_is_read_out_of_the_theme_module",
     },
     {
+        # A title bound counted in characters lets a Chinese title through at twice the
+        # width a result shows, and cuts a Thai one that is perfectly short.
+        "label": "site: a wide character is counted as one column again",
+        "file": "tools/build_site.py",
+        "old": '        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1',
+        "new": "        width += 1",
+        "test": "test_the_width_of_a_text_counts_columns_not_characters",
+    },
+    {
+        "label": "site: a combining mark is counted as a column again",
+        "file": "tools/build_site.py",
+        "old": '        if unicodedata.category(ch) in ("Mn", "Me", "Cf"):\n            continue\n',
+        "new": "        if False:\n            continue\n",
+        "test": "test_the_width_of_a_text_counts_columns_not_characters",
+    },
+    {
+        # The pages would quote words the reader's window does not contain, in a
+        # language the program has no file for yet.
+        "label": "site: a language the program lacks quotes its own missing words",
+        "file": "tools/build_site.py",
+        "old": '    default = registry["default_language"]\n'
+               '    return _language(registry, default).get("app_language") or default',
+        "new": "    return code",
+        "test": "test_the_pages_quote_the_program_in_the_language_the_program_would_show",
+    },
+    {
+        "label": "site: a declared program file that is missing is quietly replaced",
+        "file": "tools/build_site.py",
+        "old": "        if not os.path.isfile(_program_file(root, declared)):\n"
+               "            raise SiteError(",
+        "new": "        if False:\n            raise SiteError(",
+        "test": "test_the_pages_quote_the_program_in_the_language_the_program_would_show",
+    },
+    {
+        # The page said seven for as long as nobody counted.
+        "label": "site: the scenario count on the page is typed in again",
+        "file": "tools/build_site.py",
+        "old": '        "page.scenario_count": len(scenario_files(root)),',
+        "new": '        "page.scenario_count": 7,',
+        "test": "test_the_scenario_count_is_the_number_of_files_that_ship",
+    },
+    {
+        "label": "site: the scenario count in a description is typed in again",
+        "file": "tools/build_site.py",
+        "old": "                description = description.replace(SCENARIO_COUNT_MARKER,\n"
+               "                                                  str(len(scenario_files(root))))",
+        "new": '                description = description.replace(SCENARIO_COUNT_MARKER, "7")',
+        "test": "test_the_scenario_count_is_the_number_of_files_that_ship",
+    },
+    {
+        # Arabic rendered left to right reads as noise with full stops in the wrong place.
+        "label": "site: every page is written left to right",
+        "file": "tools/build_site.py",
+        "old": '        "page.direction": _language(registry, code).get("direction", "ltr"),',
+        "new": '        "page.direction": "ltr",',
+        "test": "test_a_language_says_which_way_it_is_written",
+    },
+    {
+        "label": "site: a direction that is neither ltr nor rtl is accepted",
+        "file": "tools/build_site.py",
+        "old": '        if lang.get("direction", "ltr") not in ("ltr", "rtl"):',
+        "new": "        if False:",
+        "test": "test_a_language_says_which_way_it_is_written",
+    },
+    {
+        "label": "site: the language menu stops being a menu",
+        "file": "tools/build_site.py",
+        "old": """    return Raw('<details class="langmenu"><summary>%s: <span lang="%s">%s</span></summary>'""",
+        "new": """    return Raw('<div class="langmenu"><summary>%s: <span lang="%s">%s</span></summary>'""",
+        "test": "test_the_language_menu_holds_every_language_and_marks_the_current_one",
+    },
+    {
+        "label": "site: the error page offers no language to a reader who is lost",
+        "file": "tools/build_site.py",
+        "old": "        if code == skip:\n            continue\n        dir_path = home",
+        "new": "        if True:\n            continue\n        dir_path = home",
+        "test": "test_the_error_page_points_to_the_home_page_of_every_language",
+    },
+    {
+        # A translation merged into lang/ would change the pages and never redeploy.
+        "label": "site: the workflow stops watching the program's language files",
+        "file": ".github/workflows/pages.yml",
+        "old": '      - "lang/**"\n      - "beantester/appinfo.py"',
+        "new": '      - "beantester/appinfo.py"',
+        "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
+    },
+    {
+        # The wrong side of a list in Arabic, and a skip link that makes the page scroll.
+        "label": "site: a list indents from the left again",
+        "file": "site/assets/style.css",
+        "old": "  padding-inline-start: 1.4rem;\n  max-width: 70ch;",
+        "new": "  padding-left: 1.4rem;\n  max-width: 70ch;",
+        "test": "test_the_stylesheet_pins_nothing_to_the_left_or_the_right",
+    },
+    {
         # The regression this feature could most easily cause: a search that
         # unfolds the page FOR GOOD. `toggle` runs the accordion's callback, which
         # persists the fold state through App.on_sections_changed; `set_open` does

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Windowsでパケットロスを再現する</h1>
+  <p class="lead">パケットロスは、ユーザーが「固まった」と表現する障害です。割合を指定すると、ツールがその分のパケットを捨て、アプリはそれに対処しなければなりません。</p>
+</section>
+
+<section>
+  <h2>ウィンドウでの手順</h2>
+  <ol class="steps">
+    <li><strong>{{app.fields.target_process}}</strong>にアプリを指定して、マシン全体ではなくそのアプリだけに影響が出るようにします。</li>
+    <li><strong>{{app.fields.loss}}</strong>を0から100までの割合に設定します。まずは5から始めましょう。</li>
+    <li><strong>{{app.buttons.start}}</strong>を押して、アプリを使います。</li>
+  </ol>
+  <p>ウィンドウ上部のバーには実行中の内容が要約され、<strong>{{app.app.tabs.statistics}}</strong>タブには破棄されたパケットの数が表示されます。</p>
+</section>
+
+<section>
+  <h2>コマンドラインから</h2>
+  <p>同じ実行ファイルは、ウィンドウなしでも動きます。1つのブラウザに5%のパケットロスを2分間かけ、その後は自動的にすべて元に戻ります：</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p><code>--simulate</code> を付けると、実際の通信に触れずにコマンドを試せます。</p>
+</section>
+
+<section>
+  <h2>どの割合を選ぶか</h2>
+  <table>
+    <tr><th>パケットロス</th><th>体感</th></tr>
+    <tr><td>1%</td><td>良好な回線の、運が悪い1分間。ほとんどのアプリは気づかせません。</td></tr>
+    <tr><td>5%</td><td>弱いWi-Fi。ページの読み込みが遅くなり、動画の画質が下がります。</td></tr>
+    <tr><td>20%</td><td>混雑したカフェのホットスポットや電車のトンネル。タイムアウトが出始めます。</td></tr>
+    <tr><td>60%以上</td><td>ほぼ使えません。誰もテストしなかったエラーメッセージを見つけるのに向いています。</td></tr>
+  </table>
+  <p>用意済みのプロファイルがこれを設定してくれます。「{{app.presets.weak_wifi}}」「{{app.presets.cafe}}」「{{app.presets.3g}}」はどれも、遅延や速度制限とともにパケットロスの値を持っています。</p>
+</section>
+
+<section>
+  <h2>意外に思われる2つのこと</h2>
+  <p><strong>TCPでは何も見えないかもしれません。</strong>TCPは失われた分を再送するため、HTTPSのダウンロードは失敗せず、ただ遅くなります。パケットロスをパケットロスとして見たいなら、UDPで動くもの（音声通話、ゲーム、動画ストリーム、DNS）をテストしてください。</p>
+  <p><strong>パケットロスはランダムなので、2回の実行は異なります。</strong>シードを設定すれば同じ実行が正確に繰り返されます。「一度だけ壊れた」が、他の人も再現できるバグ報告に変わるのはそのためです：</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  <p>パケットロスだけが起きることはまれです。実際の悪い回線は、パケットを失い、<em>さらに</em>遅延を加え、<em>さらに</em>速度も足りなくなります。プロファイルが再現するのはそれです。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

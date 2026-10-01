@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simulasikan jaringan buruk di CI</h1>
+  <p class="lead">Jendelanya opsional. File eksekusi yang sama berjalan sebagai alat baris perintah, berakhir sendiri setelah waktu yang ditetapkan, dan melaporkan apa yang terjadi dengan cara yang bisa dibaca pipeline.</p>
+</section>
+
+<section>
+  <h2>Bentuk sebuah langkah</h2>
+  <p>Ganggu selama pengujian, lalu biarkan berhenti sendiri. Tidak ada langkah pembersihan yang bisa terlupa:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Dalam job GitHub Actions, di runner Windows yang di-host sendiri:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Dua hal tentang runner: menangkap lalu lintas butuh hak administrator, dan runner hosted tidak akan memberikannya, jadi ini cocok di mesin Windows yang di-host sendiri.</p>
+</section>
+
+<section>
+  <h2>Setiap akhir punya kode keluar</h2>
+  <p>Tidak ada yang berakhir dengan traceback. Setiap cara sebuah eksekusi bisa selesai punya nomor, sehingga pipeline dapat membedakan “aplikasi Anda gagal” dari “alat tidak bisa dimulai”:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Keluaran yang dapat dibaca mesin</h2>
+  <p><code>--format json</code> menulis satu objek JSON per baris, sampel selama eksekusi dan ringkasan di akhir, sehingga langkah berikutnya dapat membuat asersi atasnya:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Baris log masuk ke standard error dan data ke standard output, sehingga mengalihkan data tak pernah mencampur keduanya. <code>--seed</code> membuat eksekusi dapat diulang, yang dibutuhkan pengujian yang tidak stabil sebelum siapa pun bisa berdebat.</p>
+</section>
+
+<section>
+  <h2>Uji coba yang tidak menyentuh apa pun</h2>
+  <p>Dua opsi membuatnya aman dipasang sebelum Anda mempercayainya: <code>--dry-run</code> melaporkan apa yang akan dilakukan pengaturan lalu keluar, dan <code>--simulate</code> menjalankan seluruh mesin terhadap lalu lintas sintetis, tanpa memuat driver dan tanpa menyentuh jaringan. Keduanya berguna di build yang tidak boleh mengganggu mesin tempatnya berjalan.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

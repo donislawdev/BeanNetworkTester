@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>適用於 Windows 的 Clumsy 替代方案</h1>
+  <p class="lead">Clumsy 是大多數人最先找到的工具，而且它很好用：免費、MIT 授權、互動式，並且和本工具使用同一個 WinDivert 驅動程式。如果它能滿足你的需要，就用它。本頁講的是它滿足不了的那些情況。</p>
+</section>
+
+<section>
+  <h2>無論選哪個，都該看什麼</h2>
+  <table>
+    <tr><th>問題</th><th>為什麼它能決定選哪個工具</th></tr>
+    <tr><td>它能只針對<strong>一個應用</strong>嗎？</td><td>否則你會影響正在工作的這台機器，包括遠端會話，以及你正用來閱讀文件的瀏覽器。</td></tr>
+    <tr><td>它有<strong>命令列</strong>嗎？</td><td>管線沒法去點核取方塊。沒有命令列，網路測試就永遠無法成為建置的一部分。</td></tr>
+    <tr><td>一次執行<strong>可重複</strong>嗎？</td><td>無法重播的隨機封包遺失，只會產生別人無法復現的 bug 報告。</td></tr>
+    <tr><td>它會<strong>自行停止</strong>嗎？</td><td>需要你記得手動關閉的工具，最後一定會被一直開著。</td></tr>
+    <tr><td>你能看出它<strong>實際做了什麼</strong>嗎？</td><td>計數器和連線列表能把「感覺很慢」變成具體的數字。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>這個工具帶來什麼</h2>
+  <ul>
+    <li><strong>按處理程序、PID、位址或連接埠定位</strong>，並跟隨處理程序樹，所以擁有三十個子處理程序的瀏覽器仍然只是一個目標。</li>
+    <li><strong>同一個可執行檔案就是命令列</strong>，每種結果都有結束代碼，並支援 NDJSON 輸出，因此可用於 CI。</li>
+    <li><strong>帶隨機種子的執行</strong>：同一個隨機種子會重播同樣的隨機封包遺失和抖動。</li>
+    <li><strong>現成的設定檔</strong>：3G、LTE、衛星、擁擠的咖啡館、機上 Wi-Fi、56k 撥號數據機，讓你從可信的起點出發，而不是瞎猜數值。</li>
+    <li><strong>定時會話和指令碼化場景</strong>，讓影響在你觀察應用的同時自行變化。</li>
+    <li><strong>即時檢視</strong>：圖表、計數器，以及顯示哪個連線受到影響的連線表。</li>
+    <li><strong>英語、波蘭語和簡體中文</strong>介面，沒有任何形式的遙測。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>如果你是從別的工具轉過來的</h2>
+  <p>每次討論這件事都會出現四個名字，它們並不能互相替代。</p>
+  <table>
+    <tr><th>你熟悉的</th><th>它是什麼</th><th>在這裡可以期待什麼</th></tr>
+    <tr><td><strong>tc 配合 netem</strong></td><td>Linux 上的方案，內建於核心，透過命令列操作。搜尋 WAN 模擬時往往出現的就是它。</td><td>Windows 上沒有 <code>tc</code>。這是精神上最接近的東西：同樣種類的網路劣化，帶結束代碼的命令列，並且用驅動程式代替了排隊規則。</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>一款免費、MIT 授權、互動式的 Windows 工具，使用同一個 WinDivert 驅動程式。</td><td>只需要一個視窗和一個過濾器時，就用它。需要按處理程序定位、帶隨機種子的執行，以及管線可以呼叫的命令列時，請來這裡。</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>一款商業 Windows 產品，用於長期按應用管理頻寬。</td><td>這是另一類工作。本工具是測試儀器：開啟一段時間，然後關閉，而且它能降低的遠不止速度。</td></tr>
+    <tr><td><strong>Fiddler 或 Charles</strong></td><td>可以檢查、改寫並限制經過它們的流量的代理伺服器。</td><td>同樣是另一類工作。代理伺服器塑造的是它所代理的流量，並且能看到資料。本工具塑造的是連線本身，包括 UDP，以及任何根本不經過代理伺服器的流量。</td></tr>
+  </table>
+  <p>說白了：如果你想要一個面向單一 Windows 應用、帶命令列的網路模擬器，你要找的就是這種工具。如果你想讀取和修改應用資料，你需要的是代理伺服器；如果你用的是 Linux，那你已經有 netem 了。</p>
+</section>
+
+<section>
+  <h2>什麼時候該用別的工具</h2>
+  <p>坦誠相告，比讓人白下載一次更划算。</p>
+  <ul>
+    <li><strong>你用的是 Linux 或 macOS。</strong>本工具只支援 Windows，而且將來也是如此，因為它建立在 Windows 驅動程式之上。在 Linux 上，<code>tc</code> 配合 <code>netem</code> 是標準答案，而且不需要額外軟體。</li>
+    <li><strong>你想要的是長期的頻寬管理</strong>：對整台機器、按應用，並且是作為產品功能而不是測試。這正是 NetLimiter 這類商業流量整形工具的用途。本工具是測試儀器：打算開啟一段時間，然後關閉。</li>
+    <li><strong>你拿不到管理員權限。</strong>擷取封包需要這些權限，沒有辦法繞過，聲稱可以繞過的工具並沒有真正擷取你的流量。</li>
+    <li><strong>你需要檢查並改寫應用資料</strong>，而不是讓鏈路變差。那是代理伺服器的工作。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

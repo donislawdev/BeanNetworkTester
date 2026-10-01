@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Een app testen zonder internet</h1>
+  <p class="lead">Het netwerkkabeltje eruit trekken test één ding: een machine zonder netwerk. De meeste offlinebugs zijn dat niet. Ze gebeuren als de adapter aan staat, het wifi-icoon er goed uitziet, en wat de app nodig heeft gewoon niet bereikbaar is.</p>
+</section>
+
+<section>
+  <h2>Drie verschillende soorten “offline”</h2>
+  <table>
+    <tr><th>Wat je aanzet</th><th>Wat de app ziet</th><th>De bug die het vindt</th></tr>
+    <tr><td><strong>LAN-modus</strong></td><td>Het lokale netwerk werkt. Alles daarbuiten niet.</td><td>Hotelwifi voordat je inlogt, een dode uplink, een bedrijfsnetwerk zonder route naar buiten.</td></tr>
+    <tr><td><strong>Een adres blokkeren</strong></td><td>Eén server is onbereikbaar. Al het andere werkt.</td><td>Eén afhankelijkheid ligt eruit terwijl de app zelf in orde is, het geval dat een healthcheck meestal mist.</td></tr>
+    <tr><td><strong>Poort 53 blokkeren</strong></td><td>Namen worden niet meer omgezet, verbindingen op adres werken nog.</td><td>Kapotte DNS, wat voor een gebruiker eruitziet als “het internet ligt eruit” en in de logs als iets heel anders.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Vanaf de opdrachtregel</h2>
+  <p>Internet weg voor één applicatie, lokaal netwerk ongemoeid, twee minuten lang:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Eén dienst onbereikbaar, al het andere normaal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Namen worden niet meer omgezet:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Er is ook een kant-en-klare tijdlijn die DNS kapotmaakt en het vanzelf terugzet: <code>failing-dns.json</code> in de map <code>scenarios</code> naast het programma. Zie <a href="../scenarios-in-de-tijd/">scenario’s in de tijd</a>.</p>
+</section>
+
+<section>
+  <h2>Waar je echt op moet letten</h2>
+  <ul>
+    <li><strong>Het bericht.</strong> Zegt de app wat er gebeurde, of toont hij eindeloos een spinner?</li>
+    <li><strong>Het opnieuw proberen.</strong> Neemt hij steeds meer tijd, of hamert hij in een lus op hetzelfde adres?</li>
+    <li><strong>De wachtrij.</strong> Wordt werk dat de gebruiker offline deed bewaard en later verstuurd, of gaat het verloren?</li>
+    <li><strong>Het herstel.</strong> {{app.buttons.stop}} zet het netwerk terug. Merkt de app dat zelf, of heeft hij een herstart nodig?</li>
+  </ul>
+  <p>Dat laatste is waar de meeste waarde zit. Offline gaan is makkelijk slecht af te handelen en makkelijk te testen. Terugkomen is waar de status misgaat.</p>
+</section>
+
+<section>
+  <h2>Wat dit niet is</h2>
+  <p>De adapter blijft aan en de machine houdt haar adres, dus een applicatie die Windows alleen vraagt “is er een netwerk” krijgt nog steeds ja. Dat is bewust, en het is de interessantere test: echte gebruikers zijn zelden volledig losgekoppeld, ze zijn verbonden met iets dat niet kan bereiken wat ze nodig hebben. Wil je specifiek het geval “geen adapter”, schakel dan de adapter uit, daar heb je geen tool voor nodig.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>在糟糕的网络上测试你的应用</h1>
+  <p class="lead">Bean Network Tester 可以为单个 Windows 应用增加延迟、丢包和限速。你会亲眼看到用户在火车上、酒店热点里，或者手机只有一格信号时遇到的情况。</p>
+  <p>它是针对单个程序而不是整台电脑的网络模拟器，所以你可以为被测应用重现缓慢的网络，同时让其他一切照常工作。</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="工具运行时，一次实时 ping 出现丢包并增加了延迟">
+  <figcaption>为一个正在运行的连接增加延迟和丢包。</figcaption>
+</figure>
+
+<section>
+  <h2>它会对你的网络做什么</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>让网络变慢</h3>
+      <p>增加固定或随机的延迟。看看 300 ms 的 ping 会对你的加载动画造成什么影响。</p>
+    </article>
+    <article class="card">
+      <h3>丢弃数据包</h3>
+      <p>丢弃、重复或损坏数据包，然后观察你的应用是能恢复，还是直接卡死。</p>
+    </article>
+    <article class="card">
+      <h3>限制速度</h3>
+      <p>把下载或上传限制在设定的每秒 KB 数，就像信号不好的移动网络那样。</p>
+    </article>
+    <article class="card">
+      <h3>切断链路</h3>
+      <p>断开连接，阻断某个端口或地址，或者让网络时有时无。</p>
+    </article>
+    <article class="card">
+      <h3>只针对一个应用</h3>
+      <p>选择一个进程、PID、地址或端口。电脑的其余部分照常工作。</p>
+    </article>
+    <article class="card">
+      <h3>精确重复</h3>
+      <p>同一个随机种子会重放同一次运行。这就是一份 bug 报告和一个故事之间的区别。</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>三步即可运行</h2>
+  <ol class="steps">
+    <li>从发布页面下载 zip 压缩包，解压到任意位置。</li>
+    <li>启动 <code>BeanNetworkTester.exe</code>。它会自行请求管理员权限，因为捕获流量需要这些权限。</li>
+    <li>选择一个现成的配置方案，例如“{{app.presets.3g}}”，点击 {{app.buttons.start}}，然后使用你的应用。</li>
+  </ol>
+  <p>同一个文件里还有文本模式，所以整个流程也能在流水线中运行。只需一条命令，就能检查你的服务能否扛住 10% 的丢包：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>时间一到它会自行停止，因此卡住的步骤不会留下一个被破坏的网络。加上 <code>--simulate</code> 可以演练命令，而不触碰真实流量。</p>
+</section>
+
+<section>
+  <h2>谁在使用</h2>
+  <p>需要重现“在我机器上是好的”的测试人员。需要让超时真正发生的开发者。想知道延迟会对网络代码造成什么影响的游戏开发者。以及所有被问过“应用在弱网下能用吗”，却没有可靠方法去验证的人。</p>
+</section>
+
+<section>
+  <h2>如何完成某件具体的事</h2>
+  <p>简短的指南，每篇都给出值得尝试的数值和对应的命令。</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

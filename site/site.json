@@ -14,6 +14,128 @@
       "name": "Polski",
       "dir": "pl",
       "og_locale": "pl_PL"
+    },
+    {
+      "code": "zh-Hans",
+      "name": "简体中文",
+      "dir": "zh-hans",
+      "og_locale": "zh_CN",
+      "app_language": "zh"
+    },
+    {
+      "code": "ja",
+      "name": "日本語",
+      "dir": "ja",
+      "og_locale": "ja_JP"
+    },
+    {
+      "code": "de",
+      "name": "Deutsch",
+      "dir": "de",
+      "og_locale": "de_DE"
+    },
+    {
+      "code": "fr",
+      "name": "Français",
+      "dir": "fr",
+      "og_locale": "fr_FR"
+    },
+    {
+      "code": "es",
+      "name": "Español",
+      "dir": "es",
+      "og_locale": "es_ES"
+    },
+    {
+      "code": "pt-BR",
+      "name": "Português (Brasil)",
+      "dir": "pt-br",
+      "og_locale": "pt_BR"
+    },
+    {
+      "code": "it",
+      "name": "Italiano",
+      "dir": "it",
+      "og_locale": "it_IT"
+    },
+    {
+      "code": "id",
+      "name": "Bahasa Indonesia",
+      "dir": "id",
+      "og_locale": "id_ID"
+    },
+    {
+      "code": "ru",
+      "name": "Русский",
+      "dir": "ru",
+      "og_locale": "ru_RU"
+    },
+    {
+      "code": "tr",
+      "name": "Türkçe",
+      "dir": "tr",
+      "og_locale": "tr_TR"
+    },
+    {
+      "code": "cs",
+      "name": "Čeština",
+      "dir": "cs",
+      "og_locale": "cs_CZ"
+    },
+    {
+      "code": "vi",
+      "name": "Tiếng Việt",
+      "dir": "vi",
+      "og_locale": "vi_VN"
+    },
+    {
+      "code": "hi",
+      "name": "हिन्दी",
+      "dir": "hi",
+      "og_locale": "hi_IN"
+    },
+    {
+      "code": "ko",
+      "name": "한국어",
+      "dir": "ko",
+      "og_locale": "ko_KR"
+    },
+    {
+      "code": "ar",
+      "name": "العربية",
+      "dir": "ar",
+      "og_locale": "ar_AR",
+      "direction": "rtl"
+    },
+    {
+      "code": "ro",
+      "name": "Română",
+      "dir": "ro",
+      "og_locale": "ro_RO"
+    },
+    {
+      "code": "nl",
+      "name": "Nederlands",
+      "dir": "nl",
+      "og_locale": "nl_NL"
+    },
+    {
+      "code": "zh-Hant",
+      "name": "繁體中文",
+      "dir": "zh-hant",
+      "og_locale": "zh_TW"
+    },
+    {
+      "code": "uk",
+      "name": "Українська",
+      "dir": "uk",
+      "og_locale": "uk_UA"
+    },
+    {
+      "code": "th",
+      "name": "ไทย",
+      "dir": "th",
+      "og_locale": "th_TH"
     }
   ],
   "og_image": "assets/bean.png",

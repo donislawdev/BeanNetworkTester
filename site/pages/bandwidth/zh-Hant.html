@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>限制下載和上傳速度</h1>
+  <p class="lead">把一個應用限制在每秒若干 KB，它就不會超過這個速度。上下兩個方向是分開設定的，所以你可以給它飛快的下載和糟糕的上傳，這正是大多數家庭和行動網路的真實樣子。</p>
+</section>
+
+<section>
+  <h2>在視窗中</h2>
+  <ol class="steps">
+    <li>把<strong>{{app.fields.target_process}}</strong>設為你的應用。</li>
+    <li>填寫<strong>{{app.fields.download}}</strong>、<strong>{{app.fields.upload}}</strong>或兩者，單位為 KB/s。某個欄位保持為 0，就表示不限制該方向。</li>
+    <li>點選<strong>{{app.buttons.start}}</strong>。</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>這些數字意味著什麼</h2>
+  <table>
+    <tr><th>KB/s</th><th>約合</th><th>它是什麼</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>撥號數據機。即「{{app.presets.modem56k}}」設定檔。</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>機上 Wi-Fi、擁擠的飯店、訊號差的行動網路。</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>普通的家庭寬頻。夠看一路影片串流。</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>如今的一條普通固定寬頻。</td></tr>
+  </table>
+  <p>是千位元組，不是千位元，所以要乘以八，才能與網路業者宣傳的數字比較。同時限制兩個方向，才會讓連線像一個糟糕的熱點，而不只是下載慢。</p>
+</section>
+
+<section>
+  <h2>佇列和限速同樣重要</h2>
+  <p>限速需要一個地方來存放暫時放不下的封包。這就是<strong>{{app.fields.buffer}}</strong>設定，單位為毫秒，它的行為就像超市收銀台前的隊伍：</p>
+  <ul>
+    <li><strong>短佇列</strong>意味著線路一滿，封包就被丟掉。你的應用會看到封包遺失，並迅速作出反應。</li>
+    <li><strong>長佇列</strong>意味著什麼都不會丟，但一切都要等待。你的應用看到的是連線越來越慢，而不是失敗，這正是壅塞的家庭網路的效果，也是下載進行時視訊通話會變差的原因。</li>
+  </ul>
+  <p>「{{app.presets.bufferbloat}}」設定檔正是如此：限速加上長佇列。試試同樣的速度配短佇列和長佇列，觀察應用的表現有多大差別。</p>
+</section>
+
+<section>
+  <h2>需要預期的一點</h2>
+  <p>限速執行時，被丟棄封包的計數可能一直為零。這不是 bug：限速首先是讓封包等待，只有佇列真的滿了才會丟棄。把緩衝區設小一點，封包遺失就會出現。</p>
+</section>
+
+<section>
+  <h2>接下來</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

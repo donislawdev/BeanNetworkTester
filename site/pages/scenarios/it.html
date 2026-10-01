@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Cambia le condizioni di rete nel tempo</h1>
+  <p class="lead">Una perdita fissa del 10% è una condizione da laboratorio. Le connessioni reali peggiorano, si riprendono, si bloccano per quattro secondi e tornano, e il bug che insegui di solito sta nel cambiamento, non nello stato stabile.</p>
+</section>
+
+<section>
+  <h2>Uno scenario è una linea temporale</h2>
+  <p>Un file JSON. Ogni passo dice <em>a questo secondo, queste impostazioni</em>, e tutto ciò che non menzioni mantiene il suo valore:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>I tempi sono secondi dall’inizio dell’esecuzione, non intervalli tra i passi. Con <code>"loop": true</code> la linea temporale ricomincia quando finisce, ed è ciò che vuoi per un lungo test di resistenza: lasciala andare e usa l’app.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} scenari pronti sono inclusi nel programma</h2>
+  <p>Nella cartella <code>scenarios</code> accanto all’eseguibile. Letti da quei file, quindi questo è ciò che hai davvero:</p>
+  {{page.scenario_table}}
+  <p>Sono testo semplice: ne apri uno, cambi un numero, salvi. I nomi dicono cosa riproducono: un bar affollato, una connessione mobile che passa da LTE a 3G, un upload che muore a metà, un server che si sovraccarica, un DNS che smette di rispondere.</p>
+</section>
+
+<section>
+  <h2>Due modi più semplici per ottenere cambiamento</h2>
+  <p>Vale la pena scrivere uno scenario quando la sequenza conta. Quando non conta, due impostazioni variano da sole:</p>
+  <ul>
+    <li><strong>Collegamento che va e viene</strong>: una durata del ciclo e quanta parte è di inattività. Cicli di dieci secondi, quattro di inattività, per sempre.</li>
+    <li><strong>Un piano di velocità</strong>: una serie di velocità che il limite attraversa, così la connessione peggiora e si riprende senza un file.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Perché funziona mentre l’app è in esecuzione</h2>
+  <p>Ogni impostazione toccata da uno scenario viene applicata dal vivo alla sessione già in corso: l’app non deve essere riavviata, e nemmeno lo strumento. Il registro degli eventi annota ogni passo mentre accade, quindi quando qualcosa si rompe puoi vedere a quale cambiamento ha fatto seguito. Abbinalo a un seed e l’intera sequenza, compresa la perdita casuale al suo interno, si ripete esattamente.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

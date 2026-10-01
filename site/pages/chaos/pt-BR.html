@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Testes de caos de rede no Windows</h1>
+  <p class="lead">Teste de caos significa quebrar algo de propósito, enquanto você observa, para descobrir o que o seu software faz a respeito. Na camada de rede, é exatamente isso que esta ferramenta é: uma forma de injetar uma falha em um aplicativo e ver se ele sobrevive.</p>
+</section>
+
+<section>
+  <h2>As falhas que você pode injetar</h2>
+  <table>
+    <tr><th>Falha</th><th>O que ela modela</th></tr>
+    <tr><td>Perda, corrupção, duplicação</td><td>Um caminho degradado. Pacotes somem, chegam danificados ou chegam duas vezes.</td></tr>
+    <tr><td>Latência, jitter, picos</td><td>Um caminho lento ou instável, incluindo a travada de vários segundos que quebra timeouts.</td></tr>
+    <tr><td>Redefinições de conexão</td><td>Um firewall ou um balanceador de carga derrubando conexões no meio da transferência.</td></tr>
+    <tr><td>Quedas do link</td><td>O caminho some e volta, em um ciclo.</td></tr>
+    <tr><td>Endereço ou porta bloqueada</td><td>Uma dependência inacessível enquanto todo o resto funciona.</td></tr>
+    <tr><td>Internet fora, LAN viva</td><td>A forma do portal cativo: o local funciona, o mundo não.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>O que separa caos de ruído: repetibilidade</h2>
+  <p>Uma falha aleatória que não pode ser repetida produz uma história, não um relatório de bug. Toda decisão aleatória aqui vem de uma semente, então o mesmo comando reproduz a mesma execução: os mesmos pacotes perdidos, o mesmo jitter, na mesma ordem:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Essa é a diferença entre “caiu uma vez na terça passada” e um teste que falha e que outra pessoa pode rodar.</p>
+</section>
+
+<section>
+  <h2>Em um pipeline</h2>
+  <p>A linha de comando informa por códigos de saída, então um build consegue distinguir “o aplicativo falhou” de “a ferramenta não conseguiu iniciar”, e a sessão termina sozinha: não há etapa de limpeza para esquecer:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Uma sequência de falhas em vez de uma só é um arquivo de cenário, e esses também são repetíveis. Veja <a href="../cenarios-ao-longo-do-tempo/">cenários no tempo</a> e <a href="../testes-de-rede-no-ci/">testes de rede no CI</a> para os códigos de saída e o runner de que ele precisa.</p>
+</section>
+
+<section>
+  <h2>Onde o raio de impacto termina</h2>
+  <p>Dois limites, e ambos são deliberados. A degradação alcança um processo, PID, endereço ou porta quando você mira, então a máquina em que você trabalha continua funcionando. E é uma única máquina: isto é injeção de falhas para um cliente e a sua conexão, não para um cluster. Se você procura caos entre serviços e nós, é outro tipo de ferramenta, e esta é a peça que quebra a rede sob um único aplicativo do Windows.</p>
+  <p>Tudo é reversível na hora. {{app.buttons.stop}} restaura a rede, um limite de tempo faz o mesmo, e um watchdog dentro da ferramenta desliga a captura se a própria ferramenta morrer: uma falha que você injetou nunca pode sobreviver à execução que a injetou.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -6,13 +6,133 @@
       "slug": "scenarios-over-time",
       "link_text": "Timed scenarios",
       "title": "Change network conditions over time",
-      "description": "A scenario file is a timeline: at these seconds, these settings. Seven ready ones ship with the program, and it repeats them for as long as you watch."
+      "description": "A scenario file is a timeline: at these seconds, these settings. {scenario_count} ready ones ship with the program, and it repeats them for as long as you watch."
     },
     "pl": {
       "slug": "scenariusze-w-czasie",
       "link_text": "Scenariusze w czasie",
       "title": "Zmieniaj warunki sieci w czasie",
-      "description": "Plik scenariusza to linia czasu: w tych sekundach takie ustawienia. Siedem gotowych jest z programem, a on powtarza je tak długo, jak patrzysz."
+      "description": "Plik scenariusza to linia czasu: w tych sekundach takie ustawienia. Z programem jest {scenario_count} gotowych, a on powtarza je tak długo, jak patrzysz."
+    },
+    "zh-Hans": {
+      "slug": "dingshi-changjing",
+      "title": "让网络状况随时间变化",
+      "description": "场景文件就是一条时间线：到第几秒，用哪些设置。程序自带多个现成场景，可以循环重复，直到你看够为止。",
+      "link_text": "定时场景"
+    },
+    "ja": {
+      "slug": "jikan-henka-shinario",
+      "title": "ネットワークの状態を時間とともに変化させる",
+      "description": "シナリオファイルは時系列です。何秒目にどの設定にするかを書くだけ。すぐ使えるシナリオが付属し、見ている間ずっと繰り返せます。",
+      "link_text": "時間で変わるシナリオ"
+    },
+    "de": {
+      "slug": "szenarien-ueber-zeit",
+      "title": "Netzwerkbedingungen im Zeitverlauf ändern",
+      "description": "Eine Szenario-Datei ist ein Zeitplan: zu diesen Sekunden diese Einstellungen. Fertige Szenarien liegen dem Programm bei und laufen so lange, wie du zusiehst.",
+      "link_text": "Szenarien über die Zeit"
+    },
+    "fr": {
+      "slug": "scenarios-dans-le-temps",
+      "title": "Faire évoluer les conditions réseau au fil du temps",
+      "description": "Un fichier de scénario est une chronologie : à telle seconde, tels réglages. Des scénarios prêts à l’emploi sont fournis et peuvent boucler.",
+      "link_text": "Scénarios temporels"
+    },
+    "es": {
+      "slug": "escenarios-en-el-tiempo",
+      "title": "Cambia las condiciones de red con el tiempo",
+      "description": "Un archivo de escenario es una línea de tiempo: en estos segundos, estos ajustes. El programa incluye escenarios listos y los repite mientras tú observas.",
+      "link_text": "Escenarios temporales"
+    },
+    "pt-BR": {
+      "slug": "cenarios-ao-longo-do-tempo",
+      "title": "Mude as condições de rede ao longo do tempo",
+      "description": "Um arquivo de cenário é uma linha do tempo: nestes segundos, estas configurações. O programa traz cenários prontos e os repete enquanto você observa.",
+      "link_text": "Cenários no tempo"
+    },
+    "it": {
+      "slug": "scenari-nel-tempo",
+      "title": "Cambia le condizioni di rete nel tempo",
+      "description": "Un file di scenario è una linea temporale: in questi secondi, queste impostazioni. Il programma include scenari pronti e li ripete finché osservi.",
+      "link_text": "Scenari nel tempo"
+    },
+    "id": {
+      "slug": "skenario-berbasis-waktu",
+      "title": "Ubah kondisi jaringan seiring waktu",
+      "description": "File skenario adalah lini waktu: pada detik ini, pengaturan ini. Program menyertakan skenario siap pakai dan mengulanginya selama Anda mengamati.",
+      "link_text": "Skenario berbasis waktu"
+    },
+    "ru": {
+      "slug": "scenarii-vo-vremeni",
+      "title": "Меняйте условия сети с течением времени",
+      "description": "Файл сценария задаёт временную шкалу: на этих секундах такие настройки. Готовые сценарии идут с программой и повторяются, пока вы наблюдаете.",
+      "link_text": "Сценарии во времени"
+    },
+    "tr": {
+      "slug": "zamana-bagli-senaryolar",
+      "title": "Ağ koşullarını zamanla değiştirin",
+      "description": "Senaryo dosyası bir zaman çizelgesidir: şu saniyelerde şu ayarlar. Program hazır senaryolarla gelir ve siz izledikçe onları tekrarlar.",
+      "link_text": "Zamana bağlı senaryolar"
+    },
+    "cs": {
+      "slug": "scenare-v-case",
+      "title": "Měňte podmínky sítě v čase",
+      "description": "Soubor scénáře je časová osa: v těchto sekundách tato nastavení. S programem přicházejí hotové scénáře a ten je opakuje, dokud se díváte.",
+      "link_text": "Scénáře v čase"
+    },
+    "vi": {
+      "slug": "kich-ban-theo-thoi-gian",
+      "title": "Thay đổi điều kiện mạng theo thời gian",
+      "description": "Tệp kịch bản là một dòng thời gian: ở những giây này, dùng những thiết lập này. Chương trình có sẵn các kịch bản và lặp lại chúng khi bạn theo dõi.",
+      "link_text": "Kịch bản theo thời gian"
+    },
+    "hi": {
+      "slug": "samay-ke-anusar-scenario",
+      "title": "समय के साथ नेटवर्क की स्थितियाँ बदलें",
+      "description": "सिनेरियो फ़ाइल एक टाइमलाइन है: इन सेकंड पर ये सेटिंग। प्रोग्राम के साथ तैयार सिनेरियो आते हैं और आप देखते रहें तो वह उन्हें दोहराता है।",
+      "link_text": "समय आधारित सिनेरियो"
+    },
+    "ko": {
+      "slug": "sigan-byeol-sinario",
+      "title": "시간에 따라 네트워크 조건 바꾸기",
+      "description": "시나리오 파일은 타임라인입니다. 이 초에는 이 설정을 적용합니다. 프로그램에 준비된 시나리오가 포함되며 지켜보는 동안 반복합니다.",
+      "link_text": "시간별 시나리오"
+    },
+    "ar": {
+      "slug": "sinaryuhat-zamaniya",
+      "title": "غيّر ظروف الشبكة مع الوقت",
+      "description": "ملف السيناريو جدول زمني: في هذه الثواني تُطبَّق هذه الإعدادات. يأتي مع البرنامج عدد من السيناريوهات الجاهزة ويكررها ما دمت تراقب.",
+      "link_text": "سيناريوهات زمنية"
+    },
+    "ro": {
+      "slug": "scenarii-in-timp",
+      "title": "Schimbă condițiile rețelei în timp",
+      "description": "Un fișier de scenariu e o cronologie: la aceste secunde, aceste setări. Programul vine cu scenarii gata făcute și le repetă cât timp te uiți.",
+      "link_text": "Scenarii în timp"
+    },
+    "nl": {
+      "slug": "scenarios-in-de-tijd",
+      "title": "Netwerkomstandigheden laten veranderen in de tijd",
+      "description": "Een scenariobestand is een tijdlijn: op deze seconden deze instellingen. Het programma levert kant-en-klare scenario’s mee en herhaalt ze zolang je kijkt.",
+      "link_text": "Scenario’s in de tijd"
+    },
+    "zh-Hant": {
+      "slug": "dingshi-changjing",
+      "title": "讓網路狀況隨時間變化",
+      "description": "場景檔案就是一條時間軸：到第幾秒，用哪些設定。程式自帶多個現成場景，可以迴圈重複，直到你看夠為止。",
+      "link_text": "定時場景"
+    },
+    "uk": {
+      "slug": "stsenarii-v-chasi",
+      "title": "Змінюйте умови мережі з часом",
+      "description": "Файл сценарію є часовою шкалою: на цих секундах такі налаштування. Програма постачається з готовими сценаріями й повторює їх, поки ви дивитеся.",
+      "link_text": "Сценарії в часі"
+    },
+    "th": {
+      "slug": "senario-tam-wela",
+      "title": "เปลี่ยนสภาพเครือข่ายตามเวลา",
+      "description": "ไฟล์สถานการณ์จำลองคือไทม์ไลน์: ในวินาทีเหล่านี้ใช้การตั้งค่าเหล่านี้ โปรแกรมมีสถานการณ์สำเร็จรูปมาให้และวนซ้ำให้ตราบที่คุณดูอยู่",
+      "link_text": "สถานการณ์ตามเวลา"
     }
   }
 }

@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>CI içinde kötü ağı simüle edin</h1>
+  <p class="lead">Pencere isteğe bağlıdır. Aynı çalıştırılabilir dosya bir komut satırı aracı olarak çalışır, belirlenen süreden sonra kendiliğinden biter ve olanı bir pipeline’ın okuyabileceği biçimde bildirir.</p>
+</section>
+
+<section>
+  <h2>Bir adımın biçimi</h2>
+  <p>Testin süresi boyunca bozun, sonra kendiliğinden durmasına izin verin. Unutulacak bir temizlik adımı yok:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Bir GitHub Actions işinde, kendi barındırdığınız bir Windows runner üzerinde:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Runner hakkında iki şey: trafiği yakalamak yönetici hakları gerektirir ve barındırılan bir runner bunları vermez; bu yüzden bu, kendi barındırdığınız bir Windows makinesine aittir.</p>
+</section>
+
+<section>
+  <h2>Her sonun bir çıkış kodu var</h2>
+  <p>Hiçbir şey bir traceback ile bitmez. Bir çalıştırmanın bitebileceği her yolun bir numarası vardır; böylece bir pipeline “uygulamanız başarısız oldu” ile “araç başlatılamadı” arasındaki farkı ayırt edebilir:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Makinenin okuyabileceği çıktı</h2>
+  <p><code>--format json</code> satır başına bir JSON nesnesi yazar: çalışırken örnekler, sonunda bir özet; böylece sonraki bir adım bunun üzerinde doğrulama yapabilir:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Günlük satırları standart hataya, veriler standart çıktıya gider; bu yüzden veriyi yönlendirmek ikisini asla karıştırmaz. <code>--seed</code> çalıştırmayı tekrarlanabilir yapar; kararsız bir testin, kimse tartışmaya başlamadan önce ihtiyaç duyduğu şey budur.</p>
+</section>
+
+<section>
+  <h2>Hiçbir şeye dokunmayan bir deneme çalıştırması</h2>
+  <p>İki bayrak, güvenmeden önce bağlamayı güvenli kılar: <code>--dry-run</code> ayarların ne yapacağını bildirir ve çıkar, <code>--simulate</code> ise sürücüyü yüklemeden ve ağa dokunmadan tüm motoru sentetik trafiğe karşı çalıştırır. İkisi de çalıştığı makineyi bozmaması gereken bir derlemede işe yarar.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

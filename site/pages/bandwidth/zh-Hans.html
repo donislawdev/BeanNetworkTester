@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>限制下载和上传速度</h1>
+  <p class="lead">把一个应用限制在每秒若干 KB，它就不会超过这个速度。上下两个方向是分开设置的，所以你可以给它飞快的下载和糟糕的上传，这正是大多数家庭和移动网络的真实样子。</p>
+</section>
+
+<section>
+  <h2>在窗口中</h2>
+  <ol class="steps">
+    <li>把<strong>{{app.fields.target_process}}</strong>设为你的应用。</li>
+    <li>填写<strong>{{app.fields.download}}</strong>、<strong>{{app.fields.upload}}</strong>或两者，单位为 KB/s。某个字段保持为 0，就表示不限制该方向。</li>
+    <li>点击<strong>{{app.buttons.start}}</strong>。</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>这些数字意味着什么</h2>
+  <table>
+    <tr><th>KB/s</th><th>约合</th><th>它是什么</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>拨号调制解调器。即“{{app.presets.modem56k}}”配置方案。</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>机上 Wi-Fi、拥挤的酒店、信号差的移动网络。</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>普通的家庭宽带。够看一路视频流。</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>如今的一条普通固定宽带。</td></tr>
+  </table>
+  <p>是千字节，不是千比特，所以要乘以八，才能与网络服务商宣传的数字比较。同时限制两个方向，才会让连接像一个糟糕的热点，而不只是下载慢。</p>
+</section>
+
+<section>
+  <h2>队列和限速同样重要</h2>
+  <p>限速需要一个地方来存放暂时放不下的数据包。这就是<strong>{{app.fields.buffer}}</strong>设置，单位为毫秒，它的行为就像超市收银台前的队伍：</p>
+  <ul>
+    <li><strong>短队列</strong>意味着线路一满，数据包就被丢掉。你的应用会看到丢包，并迅速作出反应。</li>
+    <li><strong>长队列</strong>意味着什么都不会丢，但一切都要等待。你的应用看到的是连接越来越慢，而不是失败，这正是拥塞的家庭网络的效果，也是下载进行时视频通话会变差的原因。</li>
+  </ul>
+  <p>“{{app.presets.bufferbloat}}”配置方案正是如此：限速加上长队列。试试同样的速度配短队列和长队列，观察应用的表现有多大差别。</p>
+</section>
+
+<section>
+  <h2>需要预期的一点</h2>
+  <p>限速运行时，被丢弃数据包的计数可能一直为零。这不是 bug：限速首先是让数据包等待，只有队列真的满了才会丢弃。把缓冲区设小一点，丢包就会出现。</p>
+</section>
+
+<section>
+  <h2>接下来</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

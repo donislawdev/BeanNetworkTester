@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Netzwerkbedingungen im Zeitverlauf ändern</h1>
+  <p class="lead">Ein fester Verlust von 10 % ist eine Laborbedingung. Echte Verbindungen werden schlechter, erholen sich, setzen vier Sekunden aus und kommen zurück, und der Fehler, dem du nachjagst, steckt meist in der Veränderung, nicht im stabilen Zustand.</p>
+</section>
+
+<section>
+  <h2>Ein Szenario ist eine Zeitleiste</h2>
+  <p>Eine JSON-Datei. Jeder Schritt sagt <em>in dieser Sekunde diese Einstellungen</em>, und alles, was du nicht erwähnst, behält seinen Wert:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Die Zeiten sind Sekunden ab Beginn des Durchlaufs, nicht Abstände zwischen den Schritten. Mit <code>"loop": true</code> beginnt die Zeitleiste von vorn, wenn sie endet, und das ist, was du für einen langen Dauertest willst: Lass es laufen und benutze die App.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} fertige Szenarien werden mit dem Programm mitgeliefert</h2>
+  <p>Im Ordner <code>scenarios</code> neben der ausführbaren Datei. Aus diesen Dateien gelesen, also ist das, was du tatsächlich hast:</p>
+  {{page.scenario_table}}
+  <p>Sie sind gewöhnlicher Text: eines öffnen, eine Zahl ändern, speichern. Die Namen sagen, was sie nachbilden: ein überfülltes Café, eine Mobilfunkverbindung, die von LTE auf 3G fällt, einen Upload, der auf halbem Weg stirbt, einen überlasteten Server, DNS, das nicht mehr antwortet.</p>
+</section>
+
+<section>
+  <h2>Zwei einfachere Wege zu Veränderung</h2>
+  <p>Ein Szenario lohnt sich, wenn die Abfolge zählt. Wenn nicht, ändern sich zwei Einstellungen von selbst:</p>
+  <ul>
+    <li><strong>Verbindung ein und aus</strong>: eine Zykluslänge und wie viel davon Ausfallzeit ist. Zehn-Sekunden-Zyklen, vier Sekunden aus, für immer.</li>
+    <li><strong>Ein Geschwindigkeitsplan</strong>: eine Reihe von Geschwindigkeiten, die das Limit durchläuft, sodass die Verbindung ohne Datei schlechter wird und sich erholt.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Warum es funktioniert, während die App läuft</h2>
+  <p>Jede Einstellung, die ein Szenario berührt, wird live auf die bereits laufende Sitzung angewendet: Die App muss nicht neu gestartet werden, das Tool auch nicht. Das Ereignisprotokoll hält jeden Schritt fest, sobald er passiert, sodass du bei einem Fehler sehen kannst, welcher Änderung er folgte. Kombiniere das mit einem Seed, und die ganze Abfolge, einschließlich des zufälligen Verlusts darin, wiederholt sich exakt.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>اختبر تطبيقك على شبكة سيئة</h1>
+  <p class="lead">يضيف Bean Network Tester التأخر وفقدان الحزم وحدود السرعة إلى تطبيق Windows واحد. فترى ما يراه مستخدموك في القطار أو على نقطة اتصال فندق أو على هاتف بخط إشارة واحد.</p>
+  <p>إنه محاكي شبكات موجّه إلى برنامج واحد لا إلى الجهاز كله، فتعيد إنتاج الإنترنت البطيء للتطبيق الذي تختبره بينما يستمر كل شيء آخر في العمل.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="ping مباشر يفقد الحزم ويكتسب تأخيرًا أثناء عمل الأداة">
+  <figcaption>إضافة التأخير وفقدان الحزم إلى اتصال قيد التشغيل.</figcaption>
+</figure>
+
+<section>
+  <h2>ماذا يفعل بشبكتك</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>يبطّئها</h3>
+      <p>أضف تأخيرًا ثابتًا أو عشوائيًا. اكتشف ما يفعله ping قدره 300 ms بمؤشر التحميل لديك.</p>
+    </article>
+    <article class="card">
+      <h3>يفقد الحزم</h3>
+      <p>أسقطها أو كرّرها أو أفسدها، ثم راقب هل يتعافى تطبيقك أم يتجمد فحسب.</p>
+    </article>
+    <article class="card">
+      <h3>يحدّ السرعة</h3>
+      <p>ثبّت التنزيل أو الرفع عند عدد معين من KB في الثانية، كما يفعل اتصال جوال ضعيف.</p>
+    </article>
+    <article class="card">
+      <h3>يقطع الوصلة</h3>
+      <p>اقطع الاتصالات، واحظر منفذًا أو عنوانًا، أو اجعل الشبكة تذهب وتجيء.</p>
+    </article>
+    <article class="card">
+      <h3>يستهدف تطبيقًا واحدًا</h3>
+      <p>اختر عملية أو PID أو عنوانًا أو منفذًا. ويبقى بقية الجهاز يعمل بشكل طبيعي.</p>
+    </article>
+    <article class="card">
+      <h3>يكرر نفسه بدقة</h3>
+      <p>يعيد seed نفسه التشغيل نفسه. وهذا هو الفرق بين تقرير خطأ وحكاية.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>يستغرق تشغيله ثلاث خطوات</h2>
+  <ol class="steps">
+    <li>نزّل ملف zip من صفحة الإصدارات وفُكّ ضغطه في أي مكان.</li>
+    <li>شغّل <code>BeanNetworkTester.exe</code>. يطلب صلاحيات المسؤول بنفسه، لأن التقاط الحركة يحتاج إليها.</li>
+    <li>اختر إعدادًا مسبقًا جاهزًا مثل «{{app.presets.3g}}»، واضغط الزر {{app.buttons.start}}، واستخدم تطبيقك.</li>
+  </ol>
+  <p>هناك وضع نصي في الملف نفسه، فيعمل كل شيء أيضًا في pipeline. يكفي أمر واحد للتحقق من أن خدمتك تصمد أمام فقدان 10% من الحزم:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>يتوقف وحده حين ينتهي الوقت، فلا تستطيع خطوة عالقة أن تترك وراءها شبكة معطلة. أضف <code>--simulate</code> لتجربة أمر دون المساس بالحركة الحقيقية.</p>
+</section>
+
+<section>
+  <h2>من يستخدمه</h2>
+  <p>مختبِرون عليهم إعادة إنتاج «يعمل على جهازي». ومطورون يحتاجون أن تحدث مهلة فعلًا. ومطورو ألعاب يتحققون مما يفعله التأخر بشيفرة الشبكة لديهم. وكل من سُئل يومًا هل يعمل التطبيق على اتصال ضعيف ولم تكن عنده طريقة صادقة ليعرف.</p>
+</section>
+
+<section>
+  <h2>كيف تنجز أمرًا محددًا</h2>
+  <p>أدلة قصيرة، لكل منها الأرقام التي تستحق التجربة والأمر الذي ينفذها.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

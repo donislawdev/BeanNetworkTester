@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Windows’ta ağ kaos testi</h1>
+  <p class="lead">Kaos testi, yazılımınızın ne yaptığını öğrenmek için siz izlerken bilerek bir şeyi bozmak demektir. Ağ katmanında bu araç tam olarak budur: tek bir uygulamaya hata enjekte edip hayatta kalıp kalmadığını görmenin bir yolu.</p>
+</section>
+
+<section>
+  <h2>Enjekte edebileceğiniz hatalar</h2>
+  <table>
+    <tr><th>Hata</th><th>Neyi modeller</th></tr>
+    <tr><td>Kayıp, bozulma, çoğaltma</td><td>Bozulmuş bir yol. Paketler yok olur, hasarlı gelir ya da iki kez gelir.</td></tr>
+    <tr><td>Gecikme, jitter, sıçramalar</td><td>Yavaş ya da kararsız bir yol; zaman aşımlarını bozan çok saniyelik takılma dahil.</td></tr>
+    <tr><td>Bağlantı sıfırlamaları</td><td>Bir güvenlik duvarının ya da yük dengeleyicinin bağlantıları aktarımın ortasında öldürmesi.</td></tr>
+    <tr><td>Bağlantı kesintileri</td><td>Yolun kaybolup bir döngüyle geri gelmesi.</td></tr>
+    <tr><td>Engellenmiş adres veya port</td><td>Her şey çalışırken tek bir bağımlılığın erişilemez olması.</td></tr>
+    <tr><td>İnternet yok, LAN canlı</td><td>Captive portal biçimi: yerel çalışır, dünya çalışmaz.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Kaosu gürültüden ayıran şey: tekrarlanabilirlik</h2>
+  <p>Yeniden oynatılamayan rastgele bir hata hata raporu değil, hikâye üretir. Buradaki her rastgele karar bir seed’den gelir; böylece aynı komut aynı çalıştırmayı yeniden üretir: aynı kaybolan paketler, aynı jitter, aynı sırayla:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>“Geçen salı bir kez çöktü” ile başkasının çalıştırabileceği başarısız bir test arasındaki fark budur.</p>
+</section>
+
+<section>
+  <h2>Bir pipeline içinde</h2>
+  <p>Komut satırı çıkış kodlarıyla bildirim yapar; böylece bir derleme “uygulama başarısız oldu” ile “araç başlatılamadı” arasındaki farkı ayırt edebilir ve oturum kendiliğinden biter: unutulacak bir temizlik adımı yoktur:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Tek bir hata yerine bir hata dizisi bir senaryo dosyasıdır ve bunlar da tekrarlanabilir. Çıkış kodları ve gereken runner için <a href="../zamana-bagli-senaryolar/">zamana bağlı senaryolar</a> ve <a href="../ci-icinde-ag-testleri/">CI içinde ağ testleri</a> sayfalarına bakın.</p>
+</section>
+
+<section>
+  <h2>Etki alanının durduğu yer</h2>
+  <p>İki sınır var ve ikisi de bilinçli. Bozulma, hedeflediğinizde tek bir işleme, PID’ye, adrese veya porta ulaşır; böylece üzerinde çalıştığınız makine çalışmaya devam eder. Ve bu tek bir makinedir: bu, bir küme için değil, bir istemci ve bağlantısı için hata enjeksiyonudur. Hizmetler ve düğümler arasında kaos arıyorsanız bu başka türden bir araçtır; bu ise tek bir Windows uygulamasının altındaki ağı bozan parçadır.</p>
+  <p>Her şey yerinde geri alınabilir. {{app.buttons.stop}} ağı geri yükler, süre sınırı da aynısını yapar, aracın kendisi ölürse araç içindeki watchdog yakalamayı kapatır: enjekte ettiğiniz bir hata, onu enjekte eden çalıştırmadan uzun yaşamamalıdır.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

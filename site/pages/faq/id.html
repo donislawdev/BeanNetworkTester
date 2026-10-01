@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Pertanyaan yang paling dulu diajukan</h1>
+  <p class="lead">Yang lebih baik dijawab sebelum mengunduh, bukan sesudahnya.</p>
+</section>
+
+<section>
+  <h2>Mengapa membutuhkan hak administrator?</h2>
+  <p>Karena paket dicegat oleh driver kernel, dan Windows tidak memuat driver untuk pengguna biasa. Program meminta hak itu sendiri saat dimulai. Dari baris perintah, program menolak dengan kode keluar khusus alih-alih gagal di tengah jalan.</p>
+</section>
+
+<section>
+  <h2>Apakah ini akan merusak seluruh komputer atau hanya aplikasi saya?</h2>
+  <p>Apa pun yang Anda arahkan. Tetapkan target dan hanya aplikasi itu yang terpengaruh. Biarkan target kosong dan setiap koneksi di komputer terpengaruh, dan program memperingatkan Anda tentang itu, di jendela maupun di baris perintah, sebelum Anda sempat bertanya mengapa panggilan video terputus.</p>
+</section>
+
+<section>
+  <h2>Bagaimana cara membatalkannya?</h2>
+  <p>{{app.buttons.stop}}. Menutup program melakukan hal yang sama, begitu pula batas waktu jika Anda menetapkannya. Jika alatnya sendiri mati di tengah sesi, watchdog di dalamnya mematikan penangkapan alih-alih membiarkan jaringan Anda terganggu: sebuah sesi tidak boleh hidup lebih lama daripada program yang memulainya.</p>
+</section>
+
+<section>
+  <h2>Apakah ini mengirim sesuatu ke suatu tempat?</h2>
+  <p>Tidak. Tidak ada analitik, tidak ada laporan crash ke layanan mana pun, dan tidak ada pengecekan pembaruan. Program ini sama sekali tidak punya klien jaringan. Satu-satunya koneksi keluar yang bisa dibuatnya adalah membuka halaman dukungan di peramban Anda, setelah Anda mengekliknya. Ia mencegat lalu lintas Anda, jadi lalu lintas itu tidak boleh meninggalkan mesin Anda, dan halaman yang sedang Anda baca ini juga tidak memuat apa pun dari pihak lain.</p>
+</section>
+
+<section>
+  <h2>Windows memperingatkan saya soal unduhan ini. Kenapa?</h2>
+  <p>Program ini ditandatangani, sehingga peringatan menyebut siapa yang menandatanganinya alih-alih “Publisher tidak dikenal”. SmartScreen mungkin masih memperingatkan untuk sementara, karena sertifikatnya baru dan belum sering dilihatnya. Beberapa antivirus juga bisa bereaksi terhadap program yang meminta hak administrator dan memuat driver jaringan. Setiap rilis menerbitkan checksum SHA-256 dan daftar komponen yang ditandatangani, sehingga Anda dapat memverifikasi apa yang Anda unduh alih-alih memercayai centang hijau.</p>
+</section>
+
+<section>
+  <h2>Unduhan saya mati total dan tidak ada yang menjelaskan kenapa</h2>
+  <p>Periksa ukuran paket maksimum. Jika diatur cukup rendah, itu bukan paket yang lebih kecil, itu lubang hitam: jaringan membuang yang terlalu besar dan tak pernah melaporkannya. Kembalikan, dan transfer akan pulih.</p>
+</section>
+
+<section>
+  <h2>Apakah berjalan di Linux atau macOS?</h2>
+  <p>Tidak, dan tidak akan. Program ini bertumpu pada driver kernel Windows. Di Linux, <code>tc</code> dengan <code>netem</code> mengerjakan tugas ini dan sudah terpasang.</p>
+</section>
+
+<section>
+  <h2>Benarkah gratis? Bolehkah saya memakainya di tempat kerja?</h2>
+  <p>Ya. Gratis dan sumber terbuka di bawah GNU GPL v3, termasuk di tempat kerja, dengan kode sumber yang dapat dibaca atau diubah siapa pun. Unduhannya adalah file yang sama untuk semua orang.</p>
+</section>
+
+<section>
+  <h2>Lainnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

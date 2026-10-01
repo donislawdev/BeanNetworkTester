@@ -13,6 +13,126 @@
       "title": "Bean Network Tester - symulator słabego internetu (Windows)",
       "description": "Darmowe narzędzie dla Windows. Dodaje opóźnienie, utratę pakietów i limit prędkości wybranej aplikacji, żeby sprawdzić, jak działa przy słabym połączeniu.",
       "link_text": "Strona główna"
+    },
+    "zh-Hans": {
+      "slug": "",
+      "title": "Bean Network Tester - 在 Windows 上模拟弱网环境",
+      "description": "免费的 Windows 工具，可为单个应用增加延迟、丢包和限速，帮你测试它在糟糕网络下的表现。",
+      "link_text": "首页"
+    },
+    "ja": {
+      "slug": "",
+      "title": "Bean Network Tester - Windowsで悪いネットワークを再現",
+      "description": "1つのアプリに遅延・パケットロス・速度制限を加える無料のWindowsツール。回線が悪いときの挙動をテストできます。",
+      "link_text": "ホーム"
+    },
+    "de": {
+      "slug": "",
+      "title": "Bean Network Tester - Netzwerkprobleme unter Windows simulieren",
+      "description": "Kostenloses Windows-Tool, das einer App Verzögerung, Paketverlust und Tempolimits hinzufügt, um zu testen, wie sie bei schlechter Verbindung reagiert.",
+      "link_text": "Startseite"
+    },
+    "fr": {
+      "slug": "",
+      "title": "Bean Network Tester - simuler un mauvais réseau sous Windows",
+      "description": "Outil Windows gratuit qui ajoute latence, perte de paquets et limites de débit à une application, pour tester son comportement sur une mauvaise connexion.",
+      "link_text": "Accueil"
+    },
+    "es": {
+      "slug": "",
+      "title": "Bean Network Tester - simula una mala red en Windows",
+      "description": "Herramienta gratuita para Windows que añade lag, pérdida de paquetes y límites de velocidad a una aplicación, para probar cómo responde con una mala conexión.",
+      "link_text": "Inicio"
+    },
+    "pt-BR": {
+      "slug": "",
+      "title": "Bean Network Tester - simule uma rede ruim no Windows",
+      "description": "Ferramenta gratuita para Windows que adiciona lag, perda de pacotes e limites de velocidade a um app, para testar como ele se comporta com uma conexão ruim.",
+      "link_text": "Início"
+    },
+    "it": {
+      "slug": "",
+      "title": "Bean Network Tester - simula una brutta rete su Windows",
+      "description": "Strumento gratuito per Windows che aggiunge lag, perdita di pacchetti e limiti di velocità a un’app, per provare come si comporta con una brutta connessione.",
+      "link_text": "Home"
+    },
+    "id": {
+      "slug": "",
+      "title": "Bean Network Tester - simulasi jaringan buruk di Windows",
+      "description": "Alat Windows gratis yang menambahkan lag, kehilangan paket, dan batas kecepatan ke satu aplikasi, untuk menguji perilakunya saat koneksi buruk.",
+      "link_text": "Beranda"
+    },
+    "ru": {
+      "slug": "",
+      "title": "Bean Network Tester: имитация плохой сети в Windows",
+      "description": "Бесплатная программа для Windows: добавляет задержку, потерю пакетов и ограничение скорости одному приложению, чтобы проверить его на плохом соединении.",
+      "link_text": "Главная"
+    },
+    "tr": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows’ta kötü ağı simüle edin",
+      "description": "Bir uygulamaya gecikme, paket kaybı ve hız sınırı ekleyen ücretsiz Windows aracı. Kötü bir bağlantıda nasıl davrandığını test edin.",
+      "link_text": "Ana sayfa"
+    },
+    "cs": {
+      "slug": "",
+      "title": "Bean Network Tester - simulace špatné sítě ve Windows",
+      "description": "Bezplatný nástroj pro Windows, který jedné aplikaci přidá zpoždění, ztrátu paketů a omezení rychlosti. Vyzkoušejte její chování na špatném spojení.",
+      "link_text": "Domů"
+    },
+    "vi": {
+      "slug": "",
+      "title": "Bean Network Tester - mô phỏng mạng kém trên Windows",
+      "description": "Công cụ Windows miễn phí thêm độ trễ, mất gói tin và giới hạn tốc độ cho một ứng dụng, để bạn thử xem nó chạy ra sao trên kết nối kém.",
+      "link_text": "Trang chủ"
+    },
+    "hi": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows पर खराब नेटवर्क का सिमुलेशन",
+      "description": "एक ऐप में लेटेंसी, पैकेट लॉस और स्पीड सीमा जोड़ने वाला मुफ़्त Windows टूल, ताकि आप खराब कनेक्शन पर उसका व्यवहार परख सकें।",
+      "link_text": "मुखपृष्ठ"
+    },
+    "ko": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows에서 나쁜 네트워크 시뮬레이션",
+      "description": "앱 하나에 지연, 패킷 손실, 속도 제한을 더하는 무료 Windows 도구입니다. 나쁜 연결에서 앱이 어떻게 동작하는지 확인하세요.",
+      "link_text": "홈페이지"
+    },
+    "ar": {
+      "slug": "",
+      "title": "Bean Network Tester - محاكاة شبكة سيئة على Windows",
+      "description": "أداة مجانية لنظام Windows تضيف التأخير وفقدان الحزم وتحديد السرعة إلى تطبيق واحد، لتختبر سلوكه على اتصال سيئ.",
+      "link_text": "الرئيسية"
+    },
+    "ro": {
+      "slug": "",
+      "title": "Bean Network Tester - simulează o rețea proastă în Windows",
+      "description": "Instrument Windows gratuit care adaugă lag, pierdere de pachete și limite de viteză unei aplicații, ca să vezi cum se poartă pe o conexiune proastă.",
+      "link_text": "Acasă"
+    },
+    "nl": {
+      "slug": "",
+      "title": "Bean Network Tester - simuleer een slecht netwerk op Windows",
+      "description": "Gratis Windows-tool die lag, pakketverlies en snelheidslimieten aan één app toevoegt, zodat je test hoe die zich gedraagt op een slechte verbinding.",
+      "link_text": "Home"
+    },
+    "zh-Hant": {
+      "slug": "",
+      "title": "Bean Network Tester - 在 Windows 上模擬不穩定的網路",
+      "description": "免費的 Windows 工具，可為單一應用增加延遲、封包遺失和限速，幫你測試它在糟糕網路下的表現。",
+      "link_text": "首頁"
+    },
+    "uk": {
+      "slug": "",
+      "title": "Bean Network Tester - симуляція поганої мережі у Windows",
+      "description": "Безкоштовний інструмент для Windows, що додає лаг, втрату пакетів і обмеження швидкості одному застосунку, щоб перевірити його на поганому з’єднанні.",
+      "link_text": "Головна"
+    },
+    "th": {
+      "slug": "",
+      "title": "Bean Network Tester - จำลองเครือข่ายแย่บน Windows",
+      "description": "เครื่องมือฟรีบน Windows ที่เพิ่มความหน่วง แพ็กเก็ตสูญหาย และจำกัดความเร็วให้แอปเดียว เพื่อทดสอบว่าแอปทำงานอย่างไรบนการเชื่อมต่อที่แย่",
+      "link_text": "หน้าแรก"
     }
   },
   "schema": "software_application"

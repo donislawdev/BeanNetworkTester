@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Sasar satu aplikasi, bukan mesinnya</h1>
+  <p class="lead">Tanpa target, setiap koneksi di komputer terpengaruh, termasuk desktop jarak jauh yang Anda pakai dan unduhan perbaikannya. Dengan target, satu proses mendapat jaringan buruk dan yang lain berjalan seperti biasa.</p>
+</section>
+
+<section>
+  <h2>Berdasarkan proses</h2>
+  <p>Ketik nama ke <strong>{{app.fields.target_process}}</strong>, atau berikan <code>--target</code>. Nama saja cocok sebagai potongan, sehingga <code>chrome</code> mencakup <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Ia mengikuti pohon proses, yang penting untuk apa pun yang melahirkan proses anak: peramban membuka satu proses per tab, dan itu juga terkena.</p>
+  <p>Kolom ini menerima lebih dari satu nama, dan lebih dari satu jenis sekaligus:</p>
+  <table>
+    <tr><th>Yang Anda ketik</th><th>Artinya</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Dua aplikasi.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, tetapi tidak pernah drivernya. Pengecualian menang.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Semua yang diawali “my”.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Ekspresi reguler, saat wildcard tidak cukup.</td></tr>
+    <tr><td><code>4812</code></td><td>Satu ID proses.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Setiap ID proses di atas 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Berdasarkan alamat atau port</h2>
+  <p>Kadang yang menarik bukan aplikasinya, melainkan satu server. Opsi ini menerima sintaks daftar, rentang, dan pengecualian yang sama, serta memahami CIDR dan IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Yang kedua perlu diketahui: semuanya kecuali DNS. Membidik <em>menjauh</em> dari sebuah port sering kali lebih mudah daripada mendaftar yang Anda inginkan.</p>
+</section>
+
+<section>
+  <h2>Menyasar proses berdasarkan nama tetap bertahan saat ia dimulai ulang</h2>
+  <p>Mulai ulang aplikasi saat sesi berjalan dan target berdasarkan <strong>nama</strong> menemukan proses baru lagi. Target berdasarkan <strong>ID proses</strong> tidak bisa: ID itu milik proses yang telah keluar. Program lain yang kelak diberi ID yang sama oleh Windows juga tidak terkena. Jika pengujian Anda memulai ulang yang sedang diuji, sasar berdasarkan nama.</p>
+</section>
+
+<section>
+  <h2>Peringatan yang tidak boleh diabaikan</h2>
+  <p>Mulai dengan gangguan menyala, tanpa sasaran, dan tanpa batas waktu, dan jendela maupun baris perintah akan mengatakannya: ini memengaruhi setiap koneksi di mesin ini. Ini peringatan, bukan penolakan: kadang itu persis yang Anda inginkan. Jika bukan, tetapkan target atau <code>--duration</code>, dan {{app.buttons.stop}} selalu mengembalikan semuanya.</p>
+</section>
+
+<section>
+  <h2>Selanjutnya</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

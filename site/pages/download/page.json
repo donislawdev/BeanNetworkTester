@@ -13,6 +13,126 @@
       "link_text": "Pobieranie",
       "title": "Pobierz Bean Network Tester na Windows",
       "description": "Darmowe pobranie na Windows 10 i 11, jako zip albo instalator. Co jest w wydaniu, jak sprawdzić, że to nasz plik, i czego program potrzebuje."
+    },
+    "zh-Hans": {
+      "slug": "xiazai",
+      "title": "下载 Windows 版 Bean Network Tester",
+      "description": "免费下载，支持 Windows 10 和 11，提供 zip 压缩包和安装程序。发行包里有什么、如何验证文件确实出自我们的构建，以及运行需要什么。",
+      "link_text": "下载"
+    },
+    "ja": {
+      "slug": "daunrodo",
+      "title": "Windows向けBean Network Testerのダウンロード",
+      "description": "Windows 10 / 11向けの無料ダウンロード。zipまたはインストーラー。リリースの内容、ビルドしたファイルかどうかの確認方法、動作要件を説明します。",
+      "link_text": "ダウンロード"
+    },
+    "de": {
+      "slug": "herunterladen",
+      "title": "Bean Network Tester für Windows herunterladen",
+      "description": "Kostenloser Download für Windows 10 und 11 als Zip oder Installer. Was im Release steckt, wie du die Datei prüfst und was zum Laufen nötig ist.",
+      "link_text": "Download"
+    },
+    "fr": {
+      "slug": "telechargement",
+      "title": "Télécharger Bean Network Tester pour Windows",
+      "description": "Téléchargement gratuit pour Windows 10 et 11, en zip ou en installeur. Contenu de la version, vérification du fichier que nous avons construit, et prérequis.",
+      "link_text": "Téléchargement"
+    },
+    "es": {
+      "slug": "descarga",
+      "title": "Descargar Bean Network Tester para Windows",
+      "description": "Descarga gratuita para Windows 10 y 11, en zip o instalador. Qué incluye la versión, cómo comprobar el archivo y qué necesita para funcionar.",
+      "link_text": "Descarga"
+    },
+    "pt-BR": {
+      "slug": "baixar",
+      "title": "Baixar o Bean Network Tester para Windows",
+      "description": "Download gratuito para Windows 10 e 11, em zip ou instalador. O que vem na versão, como conferir o arquivo e o que ele precisa para funcionar.",
+      "link_text": "Download"
+    },
+    "it": {
+      "slug": "scarica",
+      "title": "Scarica Bean Network Tester per Windows",
+      "description": "Download gratuito per Windows 10 e 11, come zip o installer. Cosa contiene la versione, come controllare il file e cosa serve per farlo funzionare.",
+      "link_text": "Download"
+    },
+    "id": {
+      "slug": "unduh",
+      "title": "Unduh Bean Network Tester untuk Windows",
+      "description": "Unduhan gratis untuk Windows 10 dan 11, berupa zip atau installer. Isi rilis, cara memeriksa file, dan kebutuhan agar bisa berjalan.",
+      "link_text": "Unduh"
+    },
+    "ru": {
+      "slug": "skachat",
+      "title": "Скачать Bean Network Tester для Windows",
+      "description": "Бесплатная загрузка для Windows 10 и 11: zip или установщик. Что входит в релиз, как проверить файл и что нужно для работы.",
+      "link_text": "Скачать"
+    },
+    "tr": {
+      "slug": "indir",
+      "title": "Bean Network Tester’ı Windows için indirin",
+      "description": "Windows 10 ve 11 için ücretsiz indirme, zip veya yükleyici olarak. Sürümde ne var, dosya nasıl doğrulanır ve çalışmak için ne gerekir.",
+      "link_text": "İndir"
+    },
+    "cs": {
+      "slug": "stahnout",
+      "title": "Stáhnout Bean Network Tester pro Windows",
+      "description": "Bezplatné stažení pro Windows 10 a 11 jako zip nebo instalátor. Co je ve vydání, jak ověřit, že jde o námi sestavený soubor, a co ke spuštění potřebuje.",
+      "link_text": "Stáhnout"
+    },
+    "vi": {
+      "slug": "tai-ve",
+      "title": "Tải Bean Network Tester cho Windows",
+      "description": "Tải miễn phí cho Windows 10 và 11, dạng zip hoặc trình cài đặt. Bản phát hành gồm gì, cách xác minh đúng tệp chúng tôi build và cần gì để chạy.",
+      "link_text": "Tải về"
+    },
+    "hi": {
+      "slug": "download-karein",
+      "title": "Windows के लिए Bean Network Tester डाउनलोड करें",
+      "description": "Windows 10 और 11 के लिए मुफ़्त डाउनलोड, zip या इंस्टॉलर में। रिलीज़ में क्या है, फ़ाइल हमारी बनाई है यह कैसे जाँचें, और चलाने के लिए क्या चाहिए।",
+      "link_text": "डाउनलोड"
+    },
+    "ko": {
+      "slug": "dauninrodeu",
+      "title": "Windows용 Bean Network Tester 다운로드",
+      "description": "Windows 10과 11용 무료 다운로드(zip 또는 설치 프로그램). 릴리스 구성, 직접 빌드한 파일인지 확인하는 법, 실행 요건을 안내합니다.",
+      "link_text": "다운로드"
+    },
+    "ar": {
+      "slug": "tahmil",
+      "title": "تنزيل Bean Network Tester لنظام Windows",
+      "description": "تنزيل مجاني لنظامي Windows 10 و11 بصيغة zip أو مثبّت. ما في الإصدار، وكيف تتحقق أنه الملف الذي بنيناه، وما يلزم لتشغيله.",
+      "link_text": "التنزيل"
+    },
+    "ro": {
+      "slug": "descarcare",
+      "title": "Descarcă Bean Network Tester pentru Windows",
+      "description": "Descărcare gratuită pentru Windows 10 și 11, ca zip sau instalator. Ce conține versiunea, cum verifici fișierul și ce îți trebuie ca să ruleze.",
+      "link_text": "Descărcare"
+    },
+    "nl": {
+      "slug": "downloaden",
+      "title": "Bean Network Tester downloaden voor Windows",
+      "description": "Gratis download voor Windows 10 en 11, als zip of installatieprogramma. Wat erin zit, hoe je controleert dat het ons bestand is en wat je nodig hebt.",
+      "link_text": "Downloaden"
+    },
+    "zh-Hant": {
+      "slug": "xiazai",
+      "title": "下載 Windows 版 Bean Network Tester",
+      "description": "免費下載，支援 Windows 10 和 11，提供 zip 壓縮檔和安裝程式。發行套件裡有什麼、如何驗證檔案確實出自我們的建置，以及執行需要什麼。",
+      "link_text": "下載"
+    },
+    "uk": {
+      "slug": "zavantazhyty",
+      "title": "Завантажити Bean Network Tester для Windows",
+      "description": "Безкоштовне завантаження для Windows 10 і 11 у вигляді zip або інсталятора. Що входить до випуску, як перевірити файл і що потрібно для запуску.",
+      "link_text": "Завантаження"
+    },
+    "th": {
+      "slug": "daonlot",
+      "title": "ดาวน์โหลด Bean Network Tester สำหรับ Windows",
+      "description": "ดาวน์โหลดฟรีสำหรับ Windows 10 และ 11 แบบ zip หรือตัวติดตั้ง มีอะไรในรุ่นที่ปล่อย ตรวจว่าเป็นไฟล์ที่เราสร้างอย่างไร และต้องมีอะไรจึงรันได้",
+      "link_text": "ดาวน์โหลด"
     }
   }
 }

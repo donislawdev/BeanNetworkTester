@@ -122,10 +122,15 @@ def test_every_page_carries_a_title_and_a_description_search_engines_can_show(tm
         desc = re.search(r'<meta name="description" content="(.*?)">', html, re.S)
         check(f"{rel}: has a title", title and title.group(1).strip())
         check(f"{rel}: has a description", desc and desc.group(1).strip())
-        check(f"{rel}: the title fits in {build_site.TITLE_LEN[1]} characters",
-              len(title.group(1)) <= build_site.TITLE_LEN[1], f"({len(title.group(1))})")
-        check(f"{rel}: the description fits in {build_site.DESC_LEN[1]} characters",
-              len(desc.group(1)) <= build_site.DESC_LEN[1], f"({len(desc.group(1))})")
+        # Measured in display width, as the builder does: a full-width character is as
+        # wide as two Latin ones in a result page, so counting characters would pass a
+        # Chinese description that a search engine shows half of.
+        check(f"{rel}: the title fits in {build_site.TITLE_LEN[1]} columns",
+              build_site.display_width(title.group(1)) <= build_site.TITLE_LEN[1],
+              f"({build_site.display_width(title.group(1))})")
+        check(f"{rel}: the description fits in {build_site.DESC_LEN[1]} columns",
+              build_site.display_width(desc.group(1)) <= build_site.DESC_LEN[1],
+              f"({build_site.display_width(desc.group(1))})")
 
 
 def test_the_download_button_points_at_the_release_page(tmp_path):
@@ -320,12 +325,14 @@ def test_no_two_pages_claim_the_same_title_or_description(tmp_path):
                   f"({duplicates})")
 
 
-def test_the_polish_pages_have_polish_addresses(tmp_path):
+def test_every_translated_page_has_a_translated_address(tmp_path):
     """A localised page with an English address is a half-translated page.
 
     Not cosmetic: the words in a URL are read by both a person deciding whether to
     click and a search engine deciding what the page is about. The home page is
-    exempt - its slug is empty in every language by design.
+    exempt - its slug is empty in every language by design. Scripts that a URL cannot
+    carry unescaped (Chinese, Japanese, Korean, Hindi, Arabic, Russian) are written in
+    Latin letters, which is still a translated address and not a copied one.
     """
     registry = build_site.load_registry(ROOT)
     pages = build_site.load_pages(ROOT, registry)
@@ -394,7 +401,10 @@ def test_the_pages_never_write_a_name_from_the_program_by_hand(tmp_path):
     from beantester import presets
     registry = build_site.load_registry(ROOT)
     for code in build_site.language_codes(registry):
-        strings = jsonlib.load(open(os.path.join(ROOT, "lang", "%s.json" % code),
+        # The names a page quotes are the ones of the program language it reads, which
+        # is the default language's while the program has no file for this one.
+        program = build_site.program_language(ROOT, registry, code)
+        strings = jsonlib.load(open(os.path.join(ROOT, "lang", "%s.json" % program),
                                     encoding="utf-8"))
         names = [strings[key] for key in presets.PRESETS if key in strings]
         check(f"{code}: there are preset names to look for", len(names) > 10, f"({len(names)})")
@@ -424,7 +434,32 @@ def test_the_pages_never_call_a_signed_program_unsigned():
     from beantester import legal
     check("a signing certificate is pinned", bool(legal.CODESIGN_SHA256),
           "(if signing stopped, rewrite this test together with the pages)")
-    denial = re.compile(r"\bunsigned\b|\bnot signed\b|niepodpisan|nie jest podpisan", re.I)
+    # One alternative per language, each the plain way to say "not signed". A language
+    # that is missing from this list is a language where the old claim could return
+    # unseen, so adding a site language means adding its phrase here.
+    denial = re.compile("|".join([
+        r"\bunsigned\b", r"\bnot signed\b",                             # English
+        r"niepodpisan", r"nie jest podpisan",                              # Polish
+        r"未签名", r"没有签名", r"未簽章", r"未簽署", r"沒有簽章", r"沒有簽署",    # Chinese
+        r"未署名", r"署名されていません",                                    # Japanese
+        r"unsigniert", r"nicht signiert",                                  # German
+        r"non sign[eé]", r"pas sign[eé]",                                  # French
+        r"sin firmar", r"no est[aá] firmad",                               # Spanish
+        r"n[aã]o (?:est[aá] )?assinad",                                    # Portuguese
+        r"non firmat", r"non [eè] firmat",                                 # Italian
+        r"tidak (?:ditandatangani|bertanda tangan)", r"belum ditandatangani",  # Indonesian
+        r"не подписан", r"без подписи",                                    # Russian
+        r"не підписан", r"непідписан",                                     # Ukrainian
+        r"imzas[ıi]z", r"imzalanmam[ıi]ş", r"imzal[ıi] de[gğ]il",          # Turkish
+        r"nepodeps", r"není podeps",                                       # Czech
+        r"chưa (?:được )?ký", r"không được ký",                            # Vietnamese
+        r"हस्ताक्षरित नहीं", r"बिना हस्ताक्षर", r"अहस्ताक्षरित",                # Hindi
+        r"서명되지 않", r"서명이 없",                                         # Korean
+        r"غير موقّع", r"غير موقَّع", r"غير موقع",                           # Arabic
+        r"nesemnat", r"nu este semnat",                                    # Romanian
+        r"niet ondertekend", r"niet gesigneerd",                           # Dutch
+        r"ไม่ได้ลงนาม", r"ยังไม่ลงนาม", r"ไม่มีลายเซ็น",                      # Thai
+    ]), re.I)
     registry = build_site.load_registry(ROOT)
     seen = 0
     for code in build_site.language_codes(registry):
@@ -447,7 +482,8 @@ def test_the_program_strings_really_reach_the_built_pages(tmp_path):
     pages = build_site.load_pages(ROOT, registry)
     used = 0
     for code in build_site.language_codes(registry):
-        strings = build_site.load_app_strings(ROOT, code)
+        strings = build_site.load_app_strings(
+            ROOT, build_site.program_language(ROOT, registry, code))
         for page in pages:
             if code not in page["languages"]:
                 continue
@@ -459,8 +495,8 @@ def test_the_program_strings_really_reach_the_built_pages(tmp_path):
             target = page["output"] or rel
             text = _read(os.path.join(out, target.replace("/", os.sep)))
             for key in keys:
-                check(f"{target}: {key} is a real key in lang/{code}.json", key in strings,
-                      "(missing)")
+                check(f"{target}: {key} is a real key in the program's language file",
+                      key in strings, "(missing)")
                 check(f"{target}: the page shows {strings[key]!r} for {key}",
                       strings[key] in text, "(not in the built page)")
                 used += 1
@@ -778,7 +814,8 @@ def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
     registry = build_site.load_registry(ROOT)
     ref = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "reference")
     for code in ref["codes"]:
-        app = build_site.load_app_strings(ROOT, code)
+        app = build_site.load_app_strings(
+            ROOT, build_site.program_language(ROOT, registry, code))
         rel = posixpath.join(ref["languages"][code]["dir_path"], "index.html").lstrip("/")
         text = _read(os.path.join(out, rel.replace("/", os.sep)))
         for key in presets.PRESETS:
@@ -830,7 +867,7 @@ def test_no_page_writes_its_own_table_of_exit_codes(tmp_path):
     codes = sorted(str(value) for name, value in vars(exitcodes).items()
                    if name.isupper() and isinstance(value, int))
     offenders = []
-    for path in glob.glob(os.path.join(SITE, "pages", "*", "??.html")):
+    for path in glob.glob(os.path.join(SITE, "pages", "*", "*.html")):
         text = _read(path)
         rows = re.findall(r"<td>(\d+)</td>", text)
         if len([c for c in rows if c in codes]) >= 3:
@@ -963,6 +1000,184 @@ def test_the_error_page_is_a_file_pages_serves_and_asks_not_to_be_indexed(tmp_pa
     check(".nojekyll is written", ".nojekyll" in written)
 
 
+# -- what the added languages needed: widths, directions, counts ---------------- #
+
+def test_the_width_of_a_text_counts_columns_not_characters():
+    """The bound on a title is about what a result shows, and scripts differ in that.
+
+    Fifty characters of Latin and fifty of Chinese are not the same line: the second
+    is twice as wide. A vowel sign of Thai or Hindi is drawn on the letter before it
+    and takes no room at all. The bounds are in columns for exactly this reason.
+    """
+    width = build_site.display_width
+    check("Latin letters are one column each", width("Windows 11") == 10)
+    check("a Han character is two columns", width("\u7f51\u7edc") == 4)
+    check("katakana is two columns", width("\u30cd\u30c3\u30c8\u30ef\u30fc\u30af") == 12)
+    check("Hangul is two columns", width("\ud55c\uad6d\uc5b4") == 6)
+    check("Thai vowel and tone marks take none", width("\u0e17\u0e35\u0e48") == 1)
+    check("a Devanagari virama takes none", width("\u0928\u094d") == 1)
+    check("a zero-width joiner takes none", width("a\u200db") == 2)
+    check("nothing is nothing", width("") == 0)
+
+
+def test_the_pages_quote_the_program_in_the_language_the_program_would_show(tmp_path):
+    """A page that names a profile has to name the one the reader will find on screen.
+
+    The program answers a language it has no file for in English, so until a German
+    ``lang/de.json`` exists a German reader sees an English window. Quoting German names
+    on the page would send them looking for words that are not there. Written against
+    a made-up registry and folder, so the day a real translation lands in ``lang/`` this
+    test does not change its mind.
+    """
+    import json
+    root = str(tmp_path)
+    os.makedirs(os.path.join(root, "lang"))
+    for name in ("en", "pl", "zh"):
+        with open(os.path.join(root, "lang", "%s.json" % name), "w", encoding="utf-8") as handle:
+            json.dump({}, handle)
+    registry = {"default_language": "en", "languages": [
+        {"code": "en", "name": "English", "dir": ""},
+        {"code": "pl", "name": "Polski", "dir": "pl"},
+        {"code": "zh-Hans", "name": "Chinese", "dir": "zh-hans", "app_language": "zh"},
+        {"code": "de", "name": "Deutsch", "dir": "de"},
+    ]}
+    program = build_site.program_language
+    check("the default language reads its own file", program(root, registry, "en") == "en")
+    check("a language with a file of its own reads it", program(root, registry, "pl") == "pl")
+    check("a declared program file wins over the site code",
+          program(root, registry, "zh-Hans") == "zh")
+    check("a language the program lacks is answered in the default",
+          program(root, registry, "de") == "en")
+    notes = build_site.program_string_notes(root, registry)
+    check("only the language that falls back is reported",
+          len(notes) == 1 and notes[0].startswith("de:"), f"({notes})")
+    registry["languages"].append(
+        {"code": "fr", "name": "Francais", "dir": "fr", "app_language": "fr"})
+    try:
+        program(root, registry, "fr")
+    except build_site.SiteError:
+        pass
+    else:
+        check("a declared program file that is missing is an error, not a fallback", False)
+
+
+def test_the_scenario_count_is_the_number_of_files_that_ship(tmp_path):
+    """The page said "Seven" for a while after the eighth scenario shipped.
+
+    A number written into prose is a number nobody updates, so the page and the
+    description take it from the folder. Both directions: every page in every language
+    carries no unresolved token, and adding a file changes what the page says.
+    """
+    import glob
+    shipped = len(glob.glob(os.path.join(ROOT, "scenarios", "*.json")))
+    out, _ = _build(tmp_path, "count")
+    registry = build_site.load_registry(ROOT)
+    page = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "scenarios")
+    for code in page["codes"]:
+        rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        check(f"{rel}: no count token is left unresolved",
+              "{{page.scenario_count}}" not in text and "{scenario_count}" not in text)
+    en = _read(os.path.join(out, "scenarios-over-time", "index.html"))
+    check("the English heading states the number that ship",
+          f"{shipped} ready-made scenarios ship with the program" in en)
+    check("the English description states it too", f"{shipped} ready ones ship" in en)
+
+    root = _sandbox(tmp_path / "one_more")
+    shutil.copyfile(os.path.join(root, "scenarios", "cafe-wifi.json"),
+                    os.path.join(root, "scenarios", "zzz-one-more.json"))
+    out = str(tmp_path / "one-more-out")
+    build_site.build(root, out)
+    en = _read(os.path.join(out, "scenarios-over-time", "index.html"))
+    check("a new scenario file changes the count on the page",
+          f"{shipped + 1} ready-made scenarios ship with the program" in en)
+
+
+def test_a_language_says_which_way_it_is_written(tmp_path):
+    """``dir`` is on the root element, and it comes from the registry.
+
+    A right-to-left language rendered left to right is a page that reads as noise
+    punctuated by misplaced full stops. And a registry typo must not slip through as
+    "left to right by default".
+    """
+    out, _ = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    directions = {}
+    for lang in registry["languages"]:
+        expected = lang.get("direction", "ltr")
+        directions[lang["code"]] = expected
+        rel = os.path.join(lang["dir"], "index.html") if lang["dir"] else "index.html"
+        html = _read(os.path.join(out, rel))
+        check(f"{lang['code']}: the root element carries lang and dir",
+              f'<html lang="{lang["code"]}" dir="{expected}">' in html,
+              f"({re.findall('<html[^>]*>', html)})")
+    check("Arabic is written right to left", directions.get("ar") == "rtl", f"({directions})")
+    check("English is written left to right", directions.get("en") == "ltr")
+
+    root = _sandbox(tmp_path / "sideways")
+    _edit_json(os.path.join(root, "site", "site.json"),
+               lambda d: d["languages"][1].update({"direction": "sideways"}))
+    _fails(root, str(tmp_path / "sideways-out"), "a language has a direction that is not ltr or rtl")
+
+
+def test_the_language_menu_holds_every_language_and_marks_the_current_one(tmp_path):
+    """Twenty-odd names fold into one native menu, and none of them stops being a link.
+
+    A <details> element needs no script, so the page keeps its rule of loading and
+    running nothing of anyone's. The links stay in the markup whether the menu is open
+    or not, which is what a crawler reads.
+    """
+    out, _ = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    for lang in registry["languages"]:
+        rel = os.path.join(lang["dir"], "index.html") if lang["dir"] else "index.html"
+        html = _read(os.path.join(out, rel))
+        check(f"{lang['code']}: the languages sit inside the menu",
+              re.search(r'<details class="langmenu"><summary>.*?</summary>'
+                        r'<span class="langs".*?</span></details>', html, re.S))
+        summary = re.search(r"<summary>(.*?)</summary>", html, re.S).group(1)
+        check(f"{lang['code']}: the closed menu names the current language",
+              lang["name"] in summary, f"({summary})")
+
+
+def test_the_error_page_points_to_the_home_page_of_every_language(tmp_path):
+    """The error page is written once, in English, and a reader may have come from any.
+
+    Every one of these addresses exists, because they are the home pages, and each is
+    absolute because the document is served at whatever address missed.
+    """
+    out, _ = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    prefix = build_site._root_prefix(registry)
+    page = _read(os.path.join(out, "404.html"))
+    for lang in registry["languages"]:
+        if lang["code"] == registry["default_language"]:
+            continue
+        check(f"404.html links to the {lang['code']} home page",
+              f'href="{prefix}{lang["dir"]}/" hreflang="{lang["code"]}"' in page,
+              f"({lang['dir']})")
+
+
+def test_the_stylesheet_pins_nothing_to_the_left_or_the_right():
+    """A page that mirrors itself needs rules that speak of start and end.
+
+    ``padding-left`` on a list is the wrong side in Arabic, and ``left: -9999px`` on
+    the skip link makes a right-to-left page scroll sideways. Logical properties do the
+    right thing in both directions, so the physical ones are not allowed back. The one
+    exception is a command block, which reads left to right in every language.
+    """
+    css = _read(os.path.join(SITE, "assets", "style.css"))
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    physical = re.compile(r"(?<![\w-])(?:margin|padding|border)-(?:left|right)\b"
+                          r"|(?<![\w-])(?:left|right)\s*:")
+    check("no physical margin, padding, border or offset", not physical.search(css),
+          f"({physical.findall(css)})")
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        if re.search(r"text-align\s*:\s*(?:left|right)\b", body):
+            check(f"only a command block may align text to a side ({selector.strip()})",
+                  selector.strip() == "pre")
+
+
 # -- the workflow that publishes it --------------------------------------------- #
 # Read as text, not through a YAML library: PyYAML is not in requirements-dev.txt, so
 # importing it would make these tests an error on a fresh checkout. Every scan below
@@ -1037,8 +1252,13 @@ def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
     # the table on the scenarios page - then editing a scenario changes the site, so the
     # filter has to fire on it. Without this the page would keep serving the previous
     # list and look like a page nobody edited.
-    if "scenarios" in _read(os.path.join(ROOT, "tools", "build_site.py")):
+    builder_text = _read(os.path.join(ROOT, "tools", "build_site.py"))
+    if "scenarios" in builder_text:
         needed.append("scenarios/**")
+    # The same rule for the program's language files: the pages quote the program's own
+    # words from them, so a translation merged into `lang/` changes the published pages.
+    if '"lang"' in builder_text:
+        needed.append("lang/**")
     for path in needed:
         check(f"the paths filter covers {path}", f'"{path}"' in text, "(missing)")
 

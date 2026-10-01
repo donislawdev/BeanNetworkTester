@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Limitar la velocidad de descarga y subida</h1>
+  <p class="lead">Limita una aplicación a un número fijo de kilobytes por segundo y no recibirá más que eso. Los dos sentidos son independientes, así que puedes darle una descarga rápida y una subida desesperante, que es exactamente lo que parecen la mayoría de las conexiones domésticas y móviles.</p>
+</section>
+
+<section>
+  <h2>En la ventana</h2>
+  <ol class="steps">
+    <li>Pon <strong>{{app.fields.target_process}}</strong> en tu aplicación.</li>
+    <li>Rellena <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> o ambos, en KB/s. Deja un campo en 0 para no tocar ese sentido.</li>
+    <li>Pulsa <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Qué significan los números</h2>
+  <table>
+    <tr><th>KB/s</th><th>Aproximadamente</th><th>Qué es</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Un módem de acceso telefónico. El perfil «{{app.presets.modem56k}}».</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wi-Fi en un avión, un hotel saturado, una mala señal móvil.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Una línea doméstica modesta. Suficiente para una transmisión de vídeo.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Una conexión fija normal hoy en día.</td></tr>
+  </table>
+  <p>Kilobytes, no kilobits: multiplica por ocho para compararlo con lo que anuncia un proveedor de internet. Limitar los dos sentidos a la vez es lo que hace que una conexión parezca un mal hotspot y no solo una descarga lenta.</p>
+</section>
+
+<section>
+  <h2>La cola importa tanto como el límite</h2>
+  <p>Un límite de velocidad necesita un lugar donde poner los paquetes que todavía no caben. Eso es el ajuste <strong>{{app.fields.buffer}}</strong>, en milisegundos, y se comporta como la cola de una caja de supermercado:</p>
+  <ul>
+    <li><strong>Una cola corta</strong> significa que los paquetes se tiran en cuanto la línea se llena. Tu aplicación ve pérdida y reacciona rápido.</li>
+    <li><strong>Una cola larga</strong> significa que no se tira nada, pero todo espera. Tu aplicación ve que la conexión se vuelve cada vez más lenta en lugar de fallar, el efecto de una línea doméstica congestionada y la razón por la que una videollamada se degrada mientras sigue una descarga.</li>
+  </ul>
+  <p>El perfil «{{app.presets.bufferbloat}}» es justo esto: un límite con una cola larga. Prueba la misma velocidad con una cola corta y una larga, y observa cuánto cambia el comportamiento de la aplicación.</p>
+</section>
+
+<section>
+  <h2>Qué esperar</h2>
+  <p>Con un límite en marcha, el contador de paquetes descartados puede quedarse en cero. No es un error: un límite primero hace esperar a los paquetes y solo los descarta cuando la cola está realmente llena. Dale un búfer pequeño y aparecerán los descartes.</p>
+</section>
+
+<section>
+  <h2>Siguiente</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

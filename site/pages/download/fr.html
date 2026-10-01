@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Télécharger Bean Network Tester</h1>
+  <p class="lead">Un zip qui fonctionne sans rien installer, ou un installeur pour tous les utilisateurs de l’ordinateur. Dans les deux cas, le programme demande lui-même les droits d’administrateur.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Les faits, au même endroit</h2>
+  <ul class="facts">
+    <li><strong>Prix :</strong> gratuit, et logiciel libre, GNU GPL v3.</li>
+    <li><strong>Fonctionne sur :</strong> Windows 10 et Windows 11, 64 bits.</li>
+    <li><strong>Nécessite :</strong> des droits d’administrateur, car le trafic est capturé par un pilote.</li>
+    <li><strong>Installation :</strong> inutile. Décompressez le zip où vous voulez et lancez-le. Ou utilisez l’installeur <code>.msi</code>, qui ajoute une entrée dans le menu Démarrer et place le programme dans le <code>PATH</code> (il demande des droits d’administrateur).</li>
+    <li><strong>Envoie des données :</strong> nulle part. Pas de télémétrie, pas de vérification de mises à jour, pas de client réseau.</li>
+    <li><strong>Modes :</strong> une fenêtre, et le même fichier comme outil en ligne de commande.</li>
+    <li><strong>Source :</strong> <a href="{{site.repo_url}}">sur GitHub</a>, sous la même licence.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ce que contient une version</h2>
+  <p>Une version publie cinq fichiers. Deux sont le programme, et les trois autres sont là pour que vous n’ayez pas à croire le téléchargement sur parole :</p>
+  <ul>
+    <li><strong>le zip</strong> : le programme et le pilote qu’il utilise, réunis dans un seul dossier ;</li>
+    <li><strong>l’installeur .msi</strong> : le même programme, installé pour tous les utilisateurs de l’ordinateur, avec une entrée dans le menu Démarrer ;</li>
+    <li><strong>SHA256SUMS.txt</strong> : les sommes de contrôle du zip et de l’installeur ;</li>
+    <li><strong>un SBOM</strong> : une liste standard de chaque composant embarqué, avec versions et licences, signée par rapport au zip ;</li>
+    <li><strong>un fichier .sigstore.json</strong> : cette signature sous forme de fichier, pour la vérifier sans interroger GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Vérifier que vous avez reçu ce que nous avons construit</h2>
+  <p>La somme de contrôle répond à « est-ce arrivé inchangé ». Dans PowerShell, comparez la sortie avec la ligne de <code>SHA256SUMS.txt</code> (pour l’installeur, mettez <code>.msi</code> à la place de <code>.zip</code>) :</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>La signature répond à une autre question, « est-ce sorti de ce dépôt », et nécessite l’outil en ligne de commande de GitHub :</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Tapez le nom du zip que vous avez téléchargé comme première partie : <code>gh</code> n’accepte pas de <code>*</code> à cet endroit. Gardez <code>--predicate-type</code> : sans lui, <code>gh</code> cherche un autre type de déclaration et signale qu’il n’en a trouvé aucune.</p>
+  <p>Une somme de contrôle que vous copiez depuis la même page que le téléchargement prouve moins qu’une signature. Les deux sont publiées, donc les deux méritent un instant.</p>
+</section>
+
+<section>
+  <h2>Windows peut vous avertir</h2>
+  <p>Le programme et l’installeur sont signés, si bien que Windows indique qui les a signés au lieu d’afficher « Éditeur inconnu ». Le certificat est récent, donc SmartScreen peut encore avertir un certain temps, car il ne l’a pas souvent rencontré. Cela concerne le certificat, pas le fichier, et les deux vérifications ci-dessus vous permettent de contrôler le fichier vous-même. La <a href="../questions-frequentes/">page de questions</a> traite de cela et de ce dont le pilote a besoin.</p>
+</section>
+
+<section>
+  <h2>Par où commencer une fois qu’il fonctionne</h2>
+  {{page.guide_links}}
+</section>

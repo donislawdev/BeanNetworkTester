@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Tải Bean Network Tester</h1>
+  <p class="lead">Một tệp zip chạy mà không cần cài đặt, hoặc một trình cài đặt cho mọi người dùng trên máy. Dù chọn cách nào, chương trình tự xin quyền quản trị.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>Các thông tin chính, ở một chỗ</h2>
+  <ul class="facts">
+    <li><strong>Giá:</strong> miễn phí, và là phần mềm tự do, GNU GPL v3.</li>
+    <li><strong>Chạy trên:</strong> Windows 10 và Windows 11, 64 bit.</li>
+    <li><strong>Cần:</strong> quyền quản trị, vì lưu lượng được bắt bởi một trình điều khiển.</li>
+    <li><strong>Cài đặt:</strong> không cần. Giải nén zip ở bất kỳ đâu và chạy. Hoặc dùng trình cài đặt <code>.msi</code>, thêm một mục vào Start Menu và đưa chương trình vào <code>PATH</code> (cần quyền quản trị).</li>
+    <li><strong>Gửi dữ liệu:</strong> không đi đâu cả. Không telemetry, không kiểm tra cập nhật, không có máy khách mạng.</li>
+    <li><strong>Chế độ:</strong> một cửa sổ, và cùng tệp đó như một công cụ dòng lệnh.</li>
+    <li><strong>Mã nguồn:</strong> <a href="{{site.repo_url}}">trên GitHub</a>, cùng giấy phép.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Bản phát hành gồm những gì</h2>
+  <p>Một bản phát hành công bố năm tệp. Hai là chương trình, ba còn lại có mặt để bạn không phải tin lời mà tải về:</p>
+  <ul>
+    <li><strong>tệp zip</strong>: chương trình và trình điều khiển nó dùng, cùng trong một thư mục;</li>
+    <li><strong>trình cài đặt .msi</strong>: cùng chương trình đó, cài cho mọi người dùng trên máy, có mục trong Start Menu;</li>
+    <li><strong>SHA256SUMS.txt</strong>: tổng kiểm tra của tệp zip và trình cài đặt;</li>
+    <li><strong>một SBOM</strong>: danh sách chuẩn mọi thành phần bên trong, kèm phiên bản và giấy phép, được ký đối với tệp zip;</li>
+    <li><strong>một tệp .sigstore.json</strong>: chữ ký đó dưới dạng tệp, để kiểm tra mà không cần hỏi GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Kiểm tra rằng bạn nhận đúng thứ chúng tôi build</h2>
+  <p>Tổng kiểm tra trả lời câu “nó có đến nơi nguyên vẹn không”. Trong PowerShell, so đầu ra với dòng trong <code>SHA256SUMS.txt</code> (với trình cài đặt, đặt <code>.msi</code> vào chỗ <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>Chữ ký trả lời một câu hỏi khác, “nó có ra từ kho mã đó không”, và cần công cụ dòng lệnh của GitHub:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Gõ tên tệp zip bạn đã tải làm phần đầu tiên, vì <code>gh</code> không chấp nhận <code>*</code> ở đó. Giữ <code>--predicate-type</code>: thiếu nó, <code>gh</code> tìm một loại phát biểu khác và báo là không thấy gì.</p>
+  <p>Một tổng kiểm tra bạn chép từ cùng trang với bản tải chứng minh ít hơn một chữ ký. Cả hai đều được công bố, nên cả hai đều đáng một lát thời gian.</p>
+</section>
+
+<section>
+  <h2>Windows có thể cảnh báo bạn</h2>
+  <p>Chương trình và trình cài đặt đều được ký, nên Windows nêu tên người ký thay vì ghi “Nhà phát hành không xác định”. Chứng chỉ còn mới, nên SmartScreen vẫn có thể cảnh báo một thời gian, vì nó chưa gặp chứng chỉ này nhiều. Đó là chuyện của chứng chỉ, không phải của tệp, và hai cách kiểm tra ở trên cho phép bạn tự xác minh tệp. <a href="../cau-hoi-thuong-gap/">Trang hỏi đáp</a> nói về điều này và về những gì trình điều khiển cần.</p>
+</section>
+
+<section>
+  <h2>Bắt đầu từ đâu sau khi chạy được</h2>
+  {{page.guide_links}}
+</section>

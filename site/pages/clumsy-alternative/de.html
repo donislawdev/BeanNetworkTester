@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Eine Clumsy-Alternative für Windows</h1>
+  <p class="lead">Clumsy ist das Tool, das die meisten zuerst finden, und es ist ein gutes: kostenlos, MIT-lizenziert, interaktiv und auf demselben WinDivert-Treiber aufgebaut, den auch dieses Tool nutzt. Wenn es das tut, was du brauchst, nimm es. Diese Seite handelt von den Fällen, in denen es das nicht tut.</p>
+</section>
+
+<section>
+  <h2>Worauf du achten solltest, egal für welches du dich entscheidest</h2>
+  <table>
+    <tr><th>Frage</th><th>Warum sie über das Tool entscheidet</th></tr>
+    <tr><td>Kann es <strong>eine einzelne Anwendung</strong> treffen?</td><td>Sonst störst du den Rechner, an dem du arbeitest, einschließlich der Remote-Sitzung und des Browsers, in dem du die Doku liest.</td></tr>
+    <tr><td>Hat es eine <strong>Befehlszeile</strong>?</td><td>Eine Pipeline kann keine Checkbox anklicken. Ohne Befehlszeile kann ein Netzwerktest nie Teil des Builds werden.</td></tr>
+    <tr><td>Ist ein Durchlauf <strong>wiederholbar</strong>?</td><td>Zufälliger Verlust, der sich nicht wiederholen lässt, erzeugt Fehlerberichte, die niemand sonst nachstellen kann.</td></tr>
+    <tr><td><strong>Hört es von selbst auf</strong>?</td><td>Ein Tool, bei dem du daran denken musst, es auszuschalten, bleibt irgendwann eingeschaltet.</td></tr>
+    <tr><td>Kannst du erkennen, was es <strong>tatsächlich getan hat</strong>?</td><td>Zähler und eine Verbindungsliste machen aus „es fühlte sich langsam an“ Zahlen.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Was dieses Tool mitbringt</h2>
+  <ul>
+    <li><strong>Zielen nach Prozess, PID, Adresse oder Port</strong>, mit Verfolgung des Prozessbaums, sodass ein Browser mit dreißig Kindprozessen weiterhin ein einziges Ziel ist.</li>
+    <li><strong>Dieselbe ausführbare Datei ist die Befehlszeile</strong>, mit einem Exit-Code für jedes Ergebnis und NDJSON-Ausgabe, sodass es in CI funktioniert.</li>
+    <li><strong>Durchläufe mit Seed</strong>: Derselbe Seed spielt denselben zufälligen Verlust und denselben Jitter ab.</li>
+    <li><strong>Fertige Profile</strong>: 3G, LTE, Satellit, ein überfülltes Café, WLAN im Flugzeug, ein 56k-Einwahlmodem, damit du mit etwas Glaubwürdigem startest, statt Zahlen zu raten.</li>
+    <li><strong>Zeitgesteuerte Sitzungen und skriptbare Szenarien</strong>, sodass sich die Störung von selbst ändern kann, während du die App beobachtest.</li>
+    <li><strong>Eine Live-Ansicht</strong>: Diagramm, Zähler und eine Verbindungstabelle, die zeigt, welche Verbindung getroffen wurde.</li>
+    <li><strong>Englische, polnische und vereinfacht chinesische</strong> Oberfläche und keinerlei Telemetrie.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wenn du von einem anderen Tool kommst</h2>
+  <p>Vier Namen fallen, sobald darüber gesprochen wird, und sie sind nicht austauschbar.</p>
+  <table>
+    <tr><th>Du kennst</th><th>Was es ist</th><th>Was dich hier erwartet</th></tr>
+    <tr><td><strong>tc mit netem</strong></td><td>Die Linux-Antwort, in den Kernel eingebaut und über die Befehlszeile bedient. Oft das, was eine Suche nach WAN-Emulation liefert.</td><td>Unter Windows gibt es kein <code>tc</code>. Dies ist das, was ihm im Geist am nächsten kommt: dieselben Arten von Störungen, eine Befehlszeile mit Exit-Codes und ein Treiber statt einer Queueing Discipline.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Ein kostenloses, MIT-lizenziertes, interaktives Windows-Tool auf demselben WinDivert-Treiber.</td><td>Greif dazu, wenn dir ein Fenster und ein Filter genügen. Komm hierher für Prozess-Targeting, Durchläufe mit Seed und eine Befehlszeile, die eine Pipeline aufrufen kann.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Ein kommerzielles Windows-Produkt, das dauerhaft die Bandbreite pro Anwendung verwaltet.</td><td>Eine andere Aufgabe. Dies hier ist ein Prüfinstrument: eine Weile eingeschaltet, dann aus, und es verschlechtert weit mehr als nur das Tempo.</td></tr>
+    <tr><td><strong>Fiddler oder Charles</strong></td><td>Proxys, die den Datenverkehr, der durch sie läuft, untersuchen, umschreiben und drosseln können.</td><td>Ebenfalls eine andere Aufgabe. Ein Proxy formt, was er weiterleitet, und sieht die Daten. Dieses Tool formt die Verbindung selbst, einschließlich UDP und allem, was nie einen Proxy berührt.</td></tr>
+  </table>
+  <p>Klar gesagt: Wenn du einen Netzwerk-Emulator für eine Windows-Anwendung mit Befehlszeile willst, ist das die Art von Werkzeug, die du suchst. Wenn du Anwendungsdaten lesen und ändern willst, brauchst du einen Proxy, und wenn du unter Linux arbeitest, hast du netem schon.</p>
+</section>
+
+<section>
+  <h2>Wann du etwas anderes nehmen solltest</h2>
+  <p>Ehrlich zu sein ist billiger als ein enttäuschender Download.</p>
+  <ul>
+    <li><strong>Du nutzt Linux oder macOS.</strong> Dieses Tool gibt es nur für Windows, und das wird so bleiben, denn es baut auf einem Windows-Treiber auf. Unter Linux ist <code>tc</code> mit <code>netem</code> die Standardantwort und braucht keine zusätzliche Software.</li>
+    <li><strong>Du willst dauerhaftes Bandbreitenmanagement</strong> für den ganzen Rechner, pro Anwendung, als Produktfunktion statt als Test. Dafür sind kommerzielle Traffic-Shaping-Tools wie NetLimiter da. Dieses hier ist ein Prüfinstrument: Es soll eine Weile ein- und dann ausgeschaltet werden.</li>
+    <li><strong>Du bekommst keine Administratorrechte.</strong> Das Erfassen von Paketen braucht sie. Daran führt kein Weg vorbei, und ein Tool, das etwas anderes behauptet, erfasst deinen Datenverkehr nicht.</li>
+    <li><strong>Du musst Anwendungsdaten untersuchen und umschreiben</strong>, statt die Verbindung zu verschlechtern. Das ist die Aufgabe eines Proxys.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

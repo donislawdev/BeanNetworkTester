@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Simule lag e perda de pacotes em jogos</h1>
+  <p class="lead">O netcode é escrito em uma conexão local com 1 ms de ping e testado por jogadores no Wi-Fi de um hotel. Isto fecha essa lacuna na sua própria máquina, só no processo do jogo, enquanto o resto do computador continua utilizável.</p>
+</section>
+
+<section>
+  <h2>Comece aqui</h2>
+  <p>Mire no cliente do jogo, dê a ele uma conexão ruim realista e deixe parar sozinho depois de cinco minutos:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Também há uma linha do tempo pronta para isso: <code>overloaded-game-server.json</code>, na pasta <code>scenarios</code>, leva uma conexão à congestão e de volta, para você ver como o cliente lida com os dois sentidos da mudança. Veja <a href="../cenarios-ao-longo-do-tempo/">cenários no tempo</a>.</p>
+</section>
+
+<section>
+  <h2>Por que um jogo mostra perda e um navegador não</h2>
+  <p>A maior parte do tráfego de jogos é UDP, e o UDP não tem nada para esconder a perda. Uma página web sobre TCP retransmite em silêncio e só demora mais, e por isso um navegador pode parecer bem com 5% de perda enquanto uma partida com os mesmos 5% engasga, volta no tempo e perde a sincronia.</p>
+  <p>Isso faz de um jogo o lugar honesto para testar perda: o que você define é o que o cliente realmente vive.</p>
+</section>
+
+<section>
+  <h2>O que definir e o que isso procura</h2>
+  <table>
+    <tr><th>Configuração</th><th>Teste</th><th>O que expõe</th></tr>
+    <tr><td>Latência</td><td>80 a 250 ms</td><td>Predição e interpolação. O seu personagem volta para trás depois de um tiro?</td></tr>
+    <tr><td>Jitter</td><td>40 a 100 ms</td><td>Buffering. Constantes 200 ms são mais fáceis de esconder que um ping que não para de mexer.</td></tr>
+    <tr><td>Perda</td><td>2 a 10%</td><td>Atualizações de estado ausentes, e se o cliente se recupera ou se desvia.</td></tr>
+    <tr><td>Picos</td><td>1 segundo, raramente</td><td>A travada que uma troca de torre causa. Geralmente a mais feia.</td></tr>
+    <tr><td>Link liga e desliga</td><td>ciclo de 10 s, 30% fora do ar</td><td>Reconexão e reentrada.</td></tr>
+  </table>
+  <p>Meça o jitter como a diferença entre o percentil 95 e a mediana, e não como uma média: o jitter mal mexe em uma média, e é por isso que uma execução pode parecer idêntica no papel e jogar diferente.</p>
+</section>
+
+<section>
+  <h2>Comparar dois builds exige uma semente</h2>
+  <p>A perda aleatória torna duas execuções diferentes, então “o build novo parece pior” não é evidência. A mesma semente reproduz a mesma perda e o mesmo jitter, o que transforma uma sensação em uma comparação:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>O que ele não consegue fazer</h2>
+  <p>Isto molda o tráfego da <em>sua</em> máquina. Não deixa o servidor lento, não muda o tick rate dele e não põe outros jogadores em uma conexão ruim, então testa o seu cliente contra um link ruim, não o seu servidor sob carga. Para o lado do servidor, você quer teste de carga, e para um lobby cheio de conexões ruins você quer mais de uma máquina.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Download- und Upload-Tempo begrenzen</h1>
+  <p class="lead">Drossle eine Anwendung auf eine feste Zahl Kilobyte pro Sekunde, und sie bekommt nicht mehr. Die beiden Richtungen sind getrennt, du kannst ihr also einen schnellen Download und einen hoffnungslosen Upload geben, und genau so sehen die meisten Heim- und Mobilfunkverbindungen aus.</p>
+</section>
+
+<section>
+  <h2>Im Fenster</h2>
+  <ol class="steps">
+    <li>Setze <strong>{{app.fields.target_process}}</strong> auf deine Anwendung.</li>
+    <li>Fülle <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> oder beides aus, in KB/s. Lass ein Feld auf 0, um diese Richtung in Ruhe zu lassen.</li>
+    <li>Drücke <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Was die Zahlen bedeuten</h2>
+  <table>
+    <tr><th>KB/s</th><th>Ungefähr</th><th>Was das ist</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Ein Einwahlmodem. Das Profil „{{app.presets.modem56k}}“.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>WLAN im Flugzeug, ein volles Hotel, schlechter Mobilfunkempfang.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Ein bescheidener Heimanschluss. Reicht für einen Videostream.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Ein heute normaler Festnetzanschluss.</td></tr>
+  </table>
+  <p>Kilobyte, nicht Kilobit: Multipliziere also mit acht, um es mit dem zu vergleichen, was ein Provider bewirbt. Beide Richtungen gleichzeitig zu drosseln, lässt eine Verbindung wie einen schlechten Hotspot wirken und nicht nur wie einen langsamen Download.</p>
+</section>
+
+<section>
+  <h2>Die Warteschlange ist so wichtig wie das Limit</h2>
+  <p>Ein Tempolimit braucht einen Ort für die Pakete, die noch nicht passen. Das ist die Einstellung <strong>{{app.fields.buffer}}</strong>, in Millisekunden, und sie verhält sich wie die Schlange an der Supermarktkasse:</p>
+  <ul>
+    <li><strong>Eine kurze Schlange</strong> bedeutet, dass Pakete verworfen werden, sobald die Leitung voll ist. Deine App sieht Verlust und reagiert schnell.</li>
+    <li><strong>Eine lange Schlange</strong> bedeutet, dass nichts verworfen wird, aber alles wartet. Deine App sieht, wie die Verbindung immer langsamer wird, statt auszufallen. Das ist der Effekt einer überlasteten Heimleitung und der Grund, warum ein Videoanruf schlechter wird, während ein Download weiterläuft.</li>
+  </ul>
+  <p>Das Profil „{{app.presets.bufferbloat}}“ ist genau das: ein Limit mit langer Schlange. Probiere dasselbe Tempo mit einer kurzen und einer langen Schlange aus und beobachte, wie unterschiedlich sich die App verhält.</p>
+</section>
+
+<section>
+  <h2>Womit du rechnen solltest</h2>
+  <p>Bei laufendem Limit kann der Zähler für verworfene Pakete bei null bleiben. Das ist kein Fehler: Ein Limit lässt Pakete zuerst warten und verwirft sie erst, wenn die Schlange wirklich voll ist. Gib ihm einen kleinen Puffer, und die Verluste erscheinen.</p>
+</section>
+
+<section>
+  <h2>Weiter</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

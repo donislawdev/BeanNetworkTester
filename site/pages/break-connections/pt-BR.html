@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Corte conexões de propósito</h1>
+  <p class="lead">Lento é um tipo de ruim. Sumir é outro, e é o que encontra o caminho de código que ninguém escreveu: a reconexão, a nova tentativa, a mensagem que diz ao usuário o que aconteceu.</p>
+  <p>Essa também é a forma de testar um aplicativo offline sem desconectar nada: o modo LAN mantém a rede local funcionando e tira a internet, e bloquear um endereço deixa um único serviço inacessível enquanto o resto da conexão vai bem.</p>
+</section>
+
+<section>
+  <h2>Cinco jeitos diferentes de sumir</h2>
+  <table>
+    <tr><th>Configuração</th><th>O que o aplicativo vê</th></tr>
+    <tr><td><strong>Redefinir conexões</strong></td><td>As conexões morrem no meio da transferência, do jeito que um firewall ou um balanceador de carga as derruba. Você define com que frequência, em porcentagem.</td></tr>
+    <tr><td><strong>Link liga e desliga</strong></td><td>A rede some por um tempo e depois volta, de novo e de novo. Você define a duração do ciclo e quanto dele fica fora do ar.</td></tr>
+    <tr><td><strong>Bloquear uma porta</strong></td><td>Tudo que vai para essa porta some. Nada mais é tocado.</td></tr>
+    <tr><td><strong>Bloquear um endereço</strong></td><td>Um servidor fica inacessível enquanto o resto da internet funciona.</td></tr>
+    <tr><td><strong>Modo LAN</strong></td><td>A rede local continua funcionando, a internet não. Exatamente a forma de um portal cativo ou de um uplink morto.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Pela linha de comando</h2>
+  <p>Derrubar mais ou menos uma conexão em dez, em um aplicativo:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Ciclos de dez segundos, quatro deles fora do ar: um link que não para de ir e vir:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Um servidor inacessível, todo o resto bem:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>O bloqueio só atinge o que nomeia</h2>
+  <p>Ao contrário de perda ou atraso, bloquear uma porta ou um endereço afeta <strong>só</strong> o tráfego correspondente. Isso o torna o mais seguro entre esses para rodar sem um processo de destino, e é por isso que “faça essa dependência sumir” é um comando de uma linha.</p>
+</section>
+
+<section>
+  <h2>A armadilha do download morto</h2>
+  <p>Também existe um tamanho máximo de pacote. Reduza um pouco e as transferências grandes ficam lentas. Reduza para um valor como 576 e os downloads param por completo, para sempre, sem nenhum erro, porque isso já não é um tamanho de pacote menor: é o clássico buraco negro em que a rede descarta o que é grande demais e nunca avisa.</p>
+  <p>É um modo de falha real que vale a pena reproduzir de propósito, e é genuinamente confuso encontrá-lo por acaso. Se um download morre em silêncio logo depois de você mudar essa configuração, é por isso.</p>
+</section>
+
+<section>
+  <h2>Voltando ao normal</h2>
+  <p>{{app.buttons.stop}} restaura tudo. Fechar o programa também, e o limite de tempo também, se você definiu um. Se a própria ferramenta morresse no meio da sessão, um watchdog dentro dela interrompe a captura em vez de deixar a sua rede em um estado quebrado.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

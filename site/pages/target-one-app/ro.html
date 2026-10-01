@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Țintește o aplicație, nu toată mașina</h1>
+  <p class="lead">Fără țintă, fiecare conexiune de pe calculator este afectată, inclusiv desktopul la distanță pe care îl folosești și descărcarea remedierii. Cu țintă, un proces primește rețeaua proastă și totul rămâne neatins.</p>
+</section>
+
+<section>
+  <h2>După proces</h2>
+  <p>Scrie un nume în <strong>{{app.fields.target_process}}</strong> sau transmite <code>--target</code>. Un nume simplu se potrivește ca fragment, deci <code>chrome</code> acoperă <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Urmărește arborele de procese, ceea ce contează pentru orice generează procese copil: un browser deschide un proces pe filă, iar și acelea sunt lovite.</p>
+  <p>Câmpul acceptă mai mult de un nume și mai mult de un fel de lucruri deodată:</p>
+  <table>
+    <tr><th>Ce scrii</th><th>Ce înseamnă</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Două aplicații.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, dar niciodată driverul. Excluderile câștigă.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Tot ce începe cu „my”.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>O expresie regulată, când un wildcard nu ajunge.</td></tr>
+    <tr><td><code>4812</code></td><td>Un singur id de proces.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Fiecare id de proces peste 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>După adresă sau port</h2>
+  <p>Uneori unitatea de interes nu e aplicația, ci un server. Acestea iau aceeași sintaxă de listă, interval și excludere și înțeleg CIDR și IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>Al doilea merită știut: totul în afară de DNS. A ținti <em>departe</em> de un port e adesea mai ușor decât a enumera porturile pe care le vrei.</p>
+</section>
+
+<section>
+  <h2>Țintirea unui proces după nume supraviețuiește repornirii lui</h2>
+  <p>Repornește aplicația în timp ce o sesiune rulează, iar o țintă după <strong>nume</strong> preia din nou procesul nou. O țintă după <strong>id de proces</strong> nu poate, pentru că id-ul aparținea procesului care s-a încheiat. Nici un alt program căruia Windows îi dă mai târziu același id nu este afectat. Dacă testul tău repornește ce testează, țintește-l după nume.</p>
+</section>
+
+<section>
+  <h2>Avertismentul pe care nu trebuie să-l ignori</h2>
+  <p>Pornește cu degradarea activă, fără nimic de țintit și fără limită de timp, iar fereastra și linia de comandă o spun: asta afectează fiecare conexiune de pe această mașină. Este un avertisment, nu un refuz: uneori asta vrei. Dacă nu, setează o țintă sau un <code>--duration</code>, iar {{app.buttons.stop}} pune mereu totul la loc.</p>
+</section>
+
+<section>
+  <h2>Mai departe</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Záměrné přerušování spojení</h1>
+  <p class="lead">Pomalé je jeden druh špatného. Žádné je jiný a právě ten odhalí cestu kódem, kterou nikdo nenapsal: opětovné připojení, opakování pokusu, zprávu, která uživateli řekne, co se stalo.</p>
+  <p>Takto také otestujete aplikaci offline, aniž byste cokoli odpojovali: režim LAN nechá místní síť fungovat a odebere internet a zablokování jedné adresy znepřístupní jedinou službu, zatímco zbytek spojení funguje.</p>
+</section>
+
+<section>
+  <h2>Pět různých způsobů, jak zmizet</h2>
+  <table>
+    <tr><th>Nastavení</th><th>Co aplikace vidí</th></tr>
+    <tr><td><strong>Reset spojení</strong></td><td>Spojení umírají uprostřed přenosu, tak jako když je ukončí firewall nebo load balancer. Nastavíte, jak často, v procentech.</td></tr>
+    <tr><td><strong>Zapínání a vypínání linky</strong></td><td>Síť na chvíli zmizí a zase se vrátí, pořád dokola. Nastavíte délku cyklu a kolik z něj tvoří výpadek.</td></tr>
+    <tr><td><strong>Blokování portu</strong></td><td>Všechno na ten port zmizí. Nic dalšího se nedotkne.</td></tr>
+    <tr><td><strong>Blokování adresy</strong></td><td>Jeden server se stane nedostupným, zatímco zbytek internetu funguje.</td></tr>
+    <tr><td><strong>Režim LAN</strong></td><td>Místní síť funguje, internet ne. Přesně tak vypadá captive portal nebo mrtvý uplink.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Z příkazového řádku</h2>
+  <p>Zabijte zhruba každé desáté spojení u jedné aplikace:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Desetisekundové cykly, z toho čtyři sekundy výpadek, tedy linka, která stále mizí a vrací se:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Jeden server nedostupný, všechno ostatní v pořádku:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Blokování zasáhne jen to, co pojmenuje</h2>
+  <p>Na rozdíl od ztráty nebo zpoždění ovlivní blokování portu nebo adresy <strong>pouze</strong> provoz, který se s nimi shoduje. Díky tomu je to nejbezpečnější z těchto nastavení, které lze spustit bez cíle v podobě procesu, a také proto je „ať tahle jedna závislost zmizí“ příkaz na jeden řádek.</p>
+</section>
+
+<section>
+  <h2>Past mrtvého stahování</h2>
+  <p>Existuje také maximální velikost paketu. Trochu ji snižte a velké přenosy se zpomalí. Snižte ji na hodnotu jako 576 a stahování se úplně zastaví, navždy a bez chyby, protože to už není menší velikost paketu, ale klasická černá díra, kde síť zahazuje, co je příliš velké, a nikdy to neřekne.</p>
+  <p>To je skutečný způsob selhání, který stojí za to záměrně reprodukovat, a je opravdu matoucí, když na něj narazíte náhodou. Pokud stahování po změně tohoto nastavení tiše zemře, je to tím.</p>
+</section>
+
+<section>
+  <h2>Návrat k normálu</h2>
+  <p>{{app.buttons.stop}} vše obnoví. Stejně tak zavření programu a stejně tak časový limit, pokud jste nějaký nastavili. Kdyby samotný nástroj uprostřed relace spadl, hlídací proces (watchdog) v něm zastaví zachytávání, místo aby vaši síť nechal v rozbitém stavu.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

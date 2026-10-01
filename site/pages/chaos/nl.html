@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Netwerk-chaostesten op Windows</h1>
+  <p class="lead">Chaostesten betekent iets met opzet kapotmaken, terwijl je toekijkt, om te ontdekken wat je software eraan doet. Op netwerkniveau is dat precies wat deze tool is: een manier om een storing in één applicatie te injecteren en te zien of die het overleeft.</p>
+</section>
+
+<section>
+  <h2>De fouten die je kunt injecteren</h2>
+  <table>
+    <tr><th>Fout</th><th>Wat het nabootst</th></tr>
+    <tr><td>Verlies, beschadiging, duplicatie</td><td>Een verslechterd pad. Pakketten verdwijnen, komen beschadigd aan of komen twee keer aan.</td></tr>
+    <tr><td>Latentie, jitter, uitschieters</td><td>Een traag of instabiel pad, inclusief de stilstand van enkele seconden die timeouts breekt.</td></tr>
+    <tr><td>Verbindingsresets</td><td>Een firewall of load balancer die verbindingen midden in de overdracht doodt.</td></tr>
+    <tr><td>Uitval van de verbinding</td><td>Het pad dat verdwijnt en terugkomt, in een cyclus.</td></tr>
+    <tr><td>Geblokkeerd adres of poort</td><td>Eén afhankelijkheid onbereikbaar terwijl al het andere werkt.</td></tr>
+    <tr><td>Internet weg, LAN in leven</td><td>De vorm van een captive portal: lokaal werkt, de wereld niet.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Wat chaos van ruis scheidt: herhaalbaarheid</h2>
+  <p>Een willekeurige fout die niet kan worden teruggespeeld levert een verhaal op, geen bugrapport. Elke willekeurige beslissing hier komt uit een seed, dus dezelfde opdracht reproduceert dezelfde run: dezelfde verloren pakketten, dezelfde jitter, in dezelfde volgorde:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>Dat is het verschil tussen “vorige dinsdag ging het één keer mis” en een falende test die iemand anders kan draaien.</p>
+</section>
+
+<section>
+  <h2>In een pipeline</h2>
+  <p>De opdrachtregel meldt via afsluitcodes, dus een build kan “de applicatie faalde” onderscheiden van “de tool kon niet starten”, en de sessie eindigt vanzelf, dus er is geen opruimstap om te vergeten:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Een reeks fouten in plaats van één is een scenariobestand, en die zijn ook herhaalbaar. Zie <a href="../scenarios-in-de-tijd/">scenario’s in de tijd</a> en <a href="../netwerktests-in-ci/">netwerktests in CI</a> voor de afsluitcodes en de runner die ervoor nodig is.</p>
+</section>
+
+<section>
+  <h2>Waar het effect ophoudt</h2>
+  <p>Twee grenzen, en beide zijn bewust. De verstoring bereikt één proces, PID, adres of poort als je erop richt, dus de computer waarop je werkt blijft werken. En het is één machine: dit is foutinjectie voor een client en zijn verbinding, niet voor een cluster. Als je chaos zoekt over diensten en nodes heen, is dat een ander soort tool, en deze is het onderdeel dat het netwerk onder één Windows-applicatie breekt.</p>
+  <p>Alles is ter plekke terug te draaien. {{app.buttons.stop}} herstelt het netwerk, een tijdslimiet doet hetzelfde, en een watchdog in de tool zet het onderscheppen stop als de tool zelf sterft: een fout die je hebt geïnjecteerd mag nooit langer leven dan de run die haar injecteerde.</p>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -13,6 +13,126 @@
       "link_text": "Zrywanie połączeń",
       "title": "Zrywanie połączeń i blokowanie portów",
       "description": "Zabijaj połączenia, blokuj port albo adres, wyłączaj łącze na chwilę lub zmniejsz pakiety tak, że nic nie przechodzi, i patrz, jak aplikacja wraca."
+    },
+    "zh-Hans": {
+      "slug": "duankai-lianjie",
+      "title": "在 Windows 上断开连接并阻断端口",
+      "description": "重置连接、阻断端口或地址、让链路时断时续，或把数据包缩小到什么都过不去，看看应用如何恢复。",
+      "link_text": "断开连接"
+    },
+    "ja": {
+      "slug": "setsuzoku-setsudan",
+      "title": "Windowsで接続を切断し、ポートをブロックする",
+      "description": "接続のリセット、ポートやアドレスのブロック、回線の断続、パケットを小さくして通信を止める操作まで。アプリが回復できるかを確認します。",
+      "link_text": "接続の切断"
+    },
+    "de": {
+      "slug": "verbindungen-trennen",
+      "title": "Unter Windows Verbindungen trennen und Ports sperren",
+      "description": "Verbindungen zurücksetzen, Ports oder Adressen sperren, die Leitung unterbrechen oder Pakete verkleinern, bis nichts durchkommt: sieh, wie sich die App erholt.",
+      "link_text": "Verbindungen trennen"
+    },
+    "fr": {
+      "slug": "couper-les-connexions",
+      "title": "Couper des connexions et bloquer des ports sous Windows",
+      "description": "Réinitialisez des connexions, bloquez un port ou une adresse, coupez la liaison ou réduisez les paquets jusqu’à tout bloquer, et observez la reprise.",
+      "link_text": "Couper les connexions"
+    },
+    "es": {
+      "slug": "cortar-conexiones",
+      "title": "Corta conexiones y bloquea puertos en Windows",
+      "description": "Restablece conexiones, bloquea un puerto o una dirección, corta el enlace por ratos o reduce los paquetes hasta que nada pase, y mira cómo se recupera la app.",
+      "link_text": "Cortar conexiones"
+    },
+    "pt-BR": {
+      "slug": "cortar-conexoes",
+      "title": "Corte conexões e bloqueie portas no Windows",
+      "description": "Redefina conexões, bloqueie uma porta ou um endereço, derrube o link por períodos ou reduza os pacotes até nada passar, e veja como o app se recupera.",
+      "link_text": "Cortar conexões"
+    },
+    "it": {
+      "slug": "interrompere-le-connessioni",
+      "title": "Interrompi connessioni e blocca porte su Windows",
+      "description": "Azzera le connessioni, blocca una porta o un indirizzo, interrompi il collegamento o riduci i pacchetti finché nulla passa, e guarda come si riprende l’app.",
+      "link_text": "Interrompere connessioni"
+    },
+    "id": {
+      "slug": "putuskan-koneksi",
+      "title": "Putuskan koneksi dan blokir port di Windows",
+      "description": "Reset koneksi, blokir port atau alamat, putus-sambungkan tautan, atau perkecil paket sampai tak ada yang lewat, lalu lihat cara aplikasi pulih.",
+      "link_text": "Putuskan koneksi"
+    },
+    "ru": {
+      "slug": "obryv-soedinenij",
+      "title": "Обрыв соединений и блокировка портов в Windows",
+      "description": "Сбрасывайте соединения, блокируйте порт или адрес, обрывайте канал или уменьшайте пакеты, пока ничего не проходит, и смотрите, как приложение восстановится.",
+      "link_text": "Обрыв соединений"
+    },
+    "tr": {
+      "slug": "baglantilari-kes",
+      "title": "Windows’ta bağlantıları kesin ve portları engelleyin",
+      "description": "Bağlantıları sıfırlayın, bir portu veya adresi engelleyin, bağlantıyı kesin ya da paketleri hiçbir şey geçmeyene dek küçültün; toparlanmayı izleyin.",
+      "link_text": "Bağlantıları kes"
+    },
+    "cs": {
+      "slug": "preruseni-spojeni",
+      "title": "Přerušení spojení a blokování portů ve Windows",
+      "description": "Zabíjejte spojení, blokujte port či adresu, na chvíli přerušte linku nebo zmenšete pakety, až nic neprojde, a sledujte, jak se aplikace zotaví.",
+      "link_text": "Přerušení spojení"
+    },
+    "vi": {
+      "slug": "ngat-ket-noi",
+      "title": "Ngắt kết nối và chặn cổng trên Windows",
+      "description": "Giết kết nối, chặn một cổng hay địa chỉ, ngắt đường truyền một lúc hoặc thu nhỏ gói tin đến khi không gì qua được, rồi xem ứng dụng phục hồi.",
+      "link_text": "Ngắt kết nối"
+    },
+    "hi": {
+      "slug": "connection-todna",
+      "title": "Windows पर कनेक्शन तोड़ें और पोर्ट ब्लॉक करें",
+      "description": "कनेक्शन मारें, कोई पोर्ट या पता ब्लॉक करें, लिंक कुछ देर काटें या पैकेट इतने छोटे करें कि कुछ न निकले, फिर देखें ऐप कैसे सँभलता है।",
+      "link_text": "कनेक्शन तोड़ें"
+    },
+    "ko": {
+      "slug": "yeongyeol-kkeunki",
+      "title": "Windows에서 연결 끊기와 포트 차단",
+      "description": "연결을 끊고, 포트나 주소를 차단하고, 링크를 잠시 끊거나 패킷을 줄여 아무것도 못 지나가게 한 뒤 앱의 복구를 지켜보세요.",
+      "link_text": "연결 끊기"
+    },
+    "ar": {
+      "slug": "qat-alittisalat",
+      "title": "قطع الاتصالات وحظر المنافذ على Windows",
+      "description": "اقتل الاتصالات، احظر منفذًا أو عنوانًا، اقطع الوصلة لبعض الوقت أو صغّر الحزم حتى لا يمر شيء، وراقب تعافي التطبيق.",
+      "link_text": "قطع الاتصالات"
+    },
+    "ro": {
+      "slug": "intrerupe-conexiuni",
+      "title": "Întrerupe conexiuni și blochează porturi în Windows",
+      "description": "Omoară conexiuni, blochează un port sau o adresă, taie legătura o vreme sau micșorează pachetele până nu mai trece nimic, apoi vezi cum își revine aplicația.",
+      "link_text": "Întrerupe conexiuni"
+    },
+    "nl": {
+      "slug": "verbindingen-verbreken",
+      "title": "Verbindingen verbreken en poorten blokkeren op Windows",
+      "description": "Dood verbindingen, blokkeer een poort of adres, kap de verbinding even af of verklein pakketten tot niets meer doorkomt, en zie hoe de app herstelt.",
+      "link_text": "Verbindingen verbreken"
+    },
+    "zh-Hant": {
+      "slug": "duankai-lianjie",
+      "title": "在 Windows 上斷開連線並阻斷連接埠",
+      "description": "重置連線、阻斷連接埠或位址、讓鏈路時斷時續，或把封包縮小到什麼都過不去，看看應用如何恢復。",
+      "link_text": "斷開連線"
+    },
+    "uk": {
+      "slug": "rozryv-zyednan",
+      "title": "Розрив з’єднань і блокування портів у Windows",
+      "description": "Обривайте з’єднання, блокуйте порт чи адресу, на час вимикайте канал або зменшуйте пакети, поки нічого не проходить, і дивіться, як застосунок відновлюється.",
+      "link_text": "Розрив з’єднань"
+    },
+    "th": {
+      "slug": "tat-kan-chueamto",
+      "title": "ตัดการเชื่อมต่อและบล็อกพอร์ตบน Windows",
+      "description": "ฆ่าการเชื่อมต่อ บล็อกพอร์ตหรือที่อยู่ ตัดลิงก์ชั่วคราว หรือลดขนาดแพ็กเก็ตจนไม่มีอะไรผ่านได้ แล้วดูว่าแอปฟื้นตัวอย่างไร",
+      "link_text": "ตัดการเชื่อมต่อ"
     }
   }
 }

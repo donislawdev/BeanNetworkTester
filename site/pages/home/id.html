@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Uji aplikasi Anda di jaringan yang buruk</h1>
+  <p class="lead">Bean Network Tester menambahkan lag, kehilangan paket, dan batas kecepatan ke satu aplikasi Windows. Anda bisa melihat apa yang dialami pengguna Anda di kereta, di hotspot hotel, atau di ponsel dengan satu garis sinyal.</p>
+  <p>Ini adalah emulator jaringan yang menyasar satu program, bukan seluruh komputer, sehingga Anda dapat mereproduksi internet lambat untuk aplikasi yang diuji sementara semua yang lain tetap berjalan.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Ping langsung kehilangan paket dan bertambah jeda saat alat ini berjalan">
+  <figcaption>Menambahkan jeda dan kehilangan paket pada koneksi yang sedang berjalan.</figcaption>
+</figure>
+
+<section>
+  <h2>Apa yang dilakukannya pada jaringan Anda</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Memperlambatnya</h3>
+      <p>Tambahkan jeda tetap atau acak. Cari tahu apa yang dilakukan ping 300 ms pada indikator pemuatan Anda.</p>
+    </article>
+    <article class="card">
+      <h3>Menghilangkan paket</h3>
+      <p>Buang, gandakan, atau rusak paket, lalu amati apakah aplikasi Anda pulih atau hanya macet.</p>
+    </article>
+    <article class="card">
+      <h3>Membatasi kecepatan</h3>
+      <p>Tahan unduhan atau unggahan pada sejumlah KB per detik, seperti yang dilakukan tautan seluler yang lemah.</p>
+    </article>
+    <article class="card">
+      <h3>Memutus tautan</h3>
+      <p>Putuskan koneksi, blokir port atau alamat, atau buat jaringan datang dan pergi.</p>
+    </article>
+    <article class="card">
+      <h3>Menyasar satu aplikasi</h3>
+      <p>Pilih proses, PID, alamat, atau port. Bagian lain komputer tetap bekerja normal.</p>
+    </article>
+    <article class="card">
+      <h3>Berulang persis sama</h3>
+      <p>Seed yang sama memutar ulang eksekusi yang sama. Itulah beda antara laporan bug dan sekadar cerita.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Menjalankannya hanya butuh tiga langkah</h2>
+  <ol class="steps">
+    <li>Unduh zip dari halaman rilis dan ekstrak di mana saja.</li>
+    <li>Jalankan <code>BeanNetworkTester.exe</code>. Program ini meminta hak administrator sendiri, karena menangkap lalu lintas membutuhkannya.</li>
+    <li>Pilih profil siap pakai seperti “{{app.presets.3g}}”, tekan {{app.buttons.start}}, lalu gunakan aplikasi Anda.</li>
+  </ol>
+  <p>Ada mode teks di file yang sama, sehingga semuanya juga berjalan di pipeline. Satu perintah cukup untuk memeriksa apakah layanan Anda bertahan dari kehilangan paket 10%:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Program berhenti sendiri saat waktunya habis, sehingga langkah yang macet tidak bisa meninggalkan jaringan yang rusak. Tambahkan <code>--simulate</code> untuk melatih perintah tanpa menyentuh lalu lintas sungguhan.</p>
+</section>
+
+<section>
+  <h2>Siapa yang memakainya</h2>
+  <p>Penguji yang harus mereproduksi “di komputer saya jalan”. Pengembang yang membutuhkan timeout benar-benar terjadi. Pengembang game yang memeriksa dampak lag pada netcode mereka. Siapa pun yang pernah ditanya apakah aplikasinya berjalan di koneksi lemah dan tidak punya cara jujur untuk mengetahuinya.</p>
+</section>
+
+<section>
+  <h2>Cara melakukan hal tertentu</h2>
+  <p>Panduan singkat, masing-masing dengan angka yang layak dicoba dan perintah yang menjalankannya.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

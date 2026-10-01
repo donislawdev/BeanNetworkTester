@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>Vragen die mensen als eerste stellen</h1>
+  <p class="lead">Degene die het waard zijn om te beantwoorden voordat je downloadt in plaats van erna.</p>
+</section>
+
+<section>
+  <h2>Waarom heeft het beheerdersrechten nodig?</h2>
+  <p>Omdat pakketten worden onderschept door een kernelstuurprogramma, en Windows laadt er geen voor een gewone gebruiker. Het programma vraagt de rechten zelf bij het starten. Vanaf de opdrachtregel weigert het met een specifieke afsluitcode in plaats van halverwege te falen.</p>
+</section>
+
+<section>
+  <h2>Gaat het de hele machine slopen of alleen mijn app?</h2>
+  <p>Wat je ook als doel instelt. Stel een doel in en alleen die applicatie wordt geraakt. Laat het doel leeg en elke verbinding op de computer wordt geraakt, waarvoor het programma je waarschuwt, in het venster en op de opdrachtregel, voordat je je kunt afvragen waarom het videogesprek wegviel.</p>
+</section>
+
+<section>
+  <h2>Hoe maak ik het ongedaan?</h2>
+  <p>{{app.buttons.stop}}. Het programma sluiten doet hetzelfde, en een tijdslimiet ook, als je er een hebt ingesteld. Als de tool zelf midden in een sessie sterft, zet een watchdog erin het onderscheppen stop in plaats van je netwerk verslechterd achter te laten: een sessie mag nooit langer leven dan het programma dat haar startte.</p>
+</section>
+
+<section>
+  <h2>Verstuurt het ergens iets naartoe?</h2>
+  <p>Nee. Er is geen analytics, geen crashrapportage naar een dienst en geen updatecontrole. Het programma heeft helemaal geen netwerkclient. De enige uitgaande verbinding die het kan maken is het openen van de ondersteuningspagina in je browser, nadat je erop hebt geklikt. Het onderschept je verkeer, dus dat verkeer mag je machine nooit verlaten, en ook deze pagina die je leest laadt niets van anderen.</p>
+</section>
+
+<section>
+  <h2>Windows waarschuwde me voor de download. Waarom?</h2>
+  <p>Het programma is ondertekend, dus de waarschuwing noemt wie het heeft ondertekend in plaats van “Onbekende uitgever”. SmartScreen kan nog een tijdje waarschuwen, omdat het certificaat nieuw is en het het nog niet vaak heeft gezien. Sommige antivirusprogramma’s kunnen ook reageren op een programma dat beheerdersrechten vraagt en een netwerkstuurprogramma laadt. Elke release publiceert een SHA-256-controlesom en een ondertekende lijst van haar onderdelen, zodat je kunt verifiëren wat je hebt gedownload in plaats van een groen vinkje te vertrouwen.</p>
+</section>
+
+<section>
+  <h2>Mijn download is helemaal gestorven en niets zegt waarom</h2>
+  <p>Controleer de maximale pakketgrootte. Laag genoeg ingesteld is het geen kleiner pakket, maar een zwart gat: het netwerk gooit weg wat te groot is en meldt dat nooit. Zet hem terug en de overdracht komt terug.</p>
+</section>
+
+<section>
+  <h2>Werkt het op Linux of macOS?</h2>
+  <p>Nee, en dat gaat ook niet gebeuren. Het steunt op een Windows-kernelstuurprogramma. Op Linux doet <code>tc</code> met <code>netem</code> dit werk en dat is al geïnstalleerd.</p>
+</section>
+
+<section>
+  <h2>Is het echt gratis? Mag ik het op het werk gebruiken?</h2>
+  <p>Ja. Het is gratis en open source onder de GNU GPL v3, ook op het werk, en de broncode is voor iedereen beschikbaar om te lezen of te wijzigen. De download is voor iedereen hetzelfde bestand.</p>
+</section>
+
+<section>
+  <h2>Meer</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

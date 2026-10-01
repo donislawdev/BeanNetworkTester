@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>İndirme ve yükleme hızını sınırlayın</h1>
+  <p class="lead">Bir uygulamayı saniyede belirli bir kilobayt sayısıyla kısıtlayın, bundan fazlasını alamaz. İki yön ayrıdır; ona hızlı bir indirme ve umutsuz bir yükleme verebilirsiniz, ki çoğu ev ve mobil bağlantı tam olarak böyle görünür.</p>
+</section>
+
+<section>
+  <h2>Pencerede</h2>
+  <ol class="steps">
+    <li><strong>{{app.fields.target_process}}</strong> alanını uygulamanıza ayarlayın.</li>
+    <li><strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> ya da ikisini de KB/s olarak doldurun. O yöne dokunmamak için bir alanı 0’da bırakın.</li>
+    <li><strong>{{app.buttons.start}}</strong> düğmesine basın.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Sayıların anlamı</h2>
+  <table>
+    <tr><th>KB/s</th><th>Yaklaşık</th><th>Nedir</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Çevirmeli ağ modemi. “{{app.presets.modem56k}}” profili.</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Uçak Wi-Fi’ı, dolu bir otel, kötü bir mobil sinyal.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Mütevazı bir ev hattı. Tek bir video akışına yeter.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Bugün normal bir sabit bağlantı.</td></tr>
+  </table>
+  <p>Kilobit değil kilobayt: internet sağlayıcısının reklamını yaptığı değerle karşılaştırmak için sekizle çarpın. İki yönü birden kısmak, bir bağlantıyı yalnızca yavaş bir indirme gibi değil, kötü bir hotspot gibi hissettiren şeydir.</p>
+</section>
+
+<section>
+  <h2>Kuyruk, sınır kadar önemlidir</h2>
+  <p>Bir hız sınırının henüz sığmayan paketleri koyacak bir yere ihtiyacı vardır. Bu, milisaniye cinsinden <strong>{{app.fields.buffer}}</strong> ayarıdır ve bir market kasasındaki kuyruk gibi davranır:</p>
+  <ul>
+    <li><strong>Kısa bir kuyruk</strong>, hat dolar dolmaz paketlerin atılması demektir. Uygulamanız kayıp görür ve hızlı tepki verir.</li>
+    <li><strong>Uzun bir kuyruk</strong>, hiçbir şeyin atılmadığı ama her şeyin beklediği anlamına gelir. Uygulamanız bağlantının başarısız olmak yerine giderek yavaşladığını görür; bu, tıkanmış bir ev hattının etkisidir ve bir indirme sürerken görüntülü görüşmenin kötüleşmesinin nedenidir.</li>
+  </ul>
+  <p>“{{app.presets.bufferbloat}}” profili tam olarak budur: uzun kuyruklu bir sınır. Aynı hızı kısa ve uzun kuyrukla deneyin ve uygulamanın ne kadar farklı davrandığını izleyin.</p>
+</section>
+
+<section>
+  <h2>Ne beklemeli</h2>
+  <p>Bir sınır çalışırken atılan paket sayacı sıfırda kalabilir. Bu bir hata değil: sınır önce paketleri bekletir ve yalnızca kuyruk gerçekten dolduğunda atar. Küçük bir arabellek verin, atılanlar görünür.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Test aplikace bez internetu</h1>
+  <p class="lead">Vytažení síťového kabelu otestuje jedinou věc: počítač bez sítě. Většina chyb offline taková není. Vznikají, když je adaptér zapnutý, ikona WiFi vypadá dobře a to, co aplikace potřebuje, je prostě nedosažitelné.</p>
+</section>
+
+<section>
+  <h2>Tři různé druhy „offline“</h2>
+  <table>
+    <tr><th>Co zapnete</th><th>Co aplikace vidí</th><th>Chyba, kterou to najde</th></tr>
+    <tr><td><strong>Režim LAN</strong></td><td>Místní síť funguje. Cokoli za ní ne.</td><td>Hotelové WiFi před přihlášením, mrtvý uplink, firemní síť bez cesty ven.</td></tr>
+    <tr><td><strong>Blokování adresy</strong></td><td>Jeden server je nedostupný. Všechno ostatní funguje.</td><td>Jedna závislost nefunguje, zatímco aplikace sama je v pořádku, což je případ, který kontrola stavu (health check) obvykle mine.</td></tr>
+    <tr><td><strong>Blokování portu 53</strong></td><td>Názvy se přestanou překládat, spojení podle adresy stále fungují.</td><td>Rozbité DNS, které uživateli připadá jako „internet nefunguje“ a v logech jako úplně něco jiného.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Z příkazového řádku</h2>
+  <p>Internet pryč pro jednu aplikaci, místní síť nedotčená, na dvě minuty:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Jedna služba nedostupná, všechno ostatní normální:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Názvy se přestanou překládat:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>Existuje také hotová časová osa, která DNS rozbije a sama zase vrátí: <code>failing-dns.json</code> ve složce <code>scenarios</code> vedle programu. Viz <a href="../scenare-v-case/">scénáře v čase</a>.</p>
+</section>
+
+<section>
+  <h2>Na co se skutečně dívat</h2>
+  <ul>
+    <li><strong>Zpráva.</strong> Řekne aplikace, co se stalo, nebo ukazuje točící se kolečko donekonečna?</li>
+    <li><strong>Opakování.</strong> Zpomaluje intervaly, nebo buší na stejnou adresu ve smyčce?</li>
+    <li><strong>Fronta.</strong> Zůstane práce, kterou uživatel udělal offline, uložena a odeslána později, nebo se ztratí?</li>
+    <li><strong>Obnovení.</strong> {{app.buttons.stop}} vrátí síť. Všimne si toho aplikace sama, nebo potřebuje restart?</li>
+  </ul>
+  <p>Právě tohle poslední má největší cenu. Přechod do offline se snadno špatně ošetří a snadno otestuje. Návrat je místo, kde se stav pokazí.</p>
+</section>
+
+<section>
+  <h2>Čím tohle není</h2>
+  <p>Adaptér zůstává zapnutý a počítač si drží adresu, takže aplikace, která se Windows jen zeptá „je tu síť“, stále dostane ano. Je to záměrné a je to zajímavější test: skuteční uživatelé jsou málokdy odpojeni, jsou připojeni k něčemu, co nedosáhne na to, co potřebují. Pokud chcete výslovně případ „žádný adaptér“, adaptér zakažte, žádný nástroj netřeba.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

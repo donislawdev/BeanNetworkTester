@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Chaos testing di rete su Windows</h1>
+  <p class="lead">Il chaos testing significa rompere qualcosa di proposito, mentre guardi, per scoprire cosa fa il tuo software. A livello di rete è esattamente questo strumento: un modo per iniettare un guasto in un’applicazione e vedere se sopravvive.</p>
+</section>
+
+<section>
+  <h2>I guasti che puoi iniettare</h2>
+  <table>
+    <tr><th>Guasto</th><th>Cosa modella</th></tr>
+    <tr><td>Perdita, corruzione, duplicazione</td><td>Un percorso degradato. I pacchetti spariscono, arrivano danneggiati o arrivano due volte.</td></tr>
+    <tr><td>Latenza, jitter, picchi</td><td>Un percorso lento o instabile, compreso il blocco di diversi secondi che manda in crisi i timeout.</td></tr>
+    <tr><td>Reset delle connessioni</td><td>Un firewall o un bilanciatore di carico che uccide le connessioni a metà trasferimento.</td></tr>
+    <tr><td>Interruzioni del collegamento</td><td>Il percorso che scompare e ritorna, a cicli.</td></tr>
+    <tr><td>Indirizzo o porta bloccati</td><td>Una dipendenza irraggiungibile mentre tutto il resto funziona.</td></tr>
+    <tr><td>Internet assente, LAN viva</td><td>La forma del captive portal: il locale funziona, il mondo no.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Cosa distingue il caos dal rumore: la ripetibilità</h2>
+  <p>Un guasto casuale che non si può rigiocare produce un racconto, non una segnalazione di bug. Ogni decisione casuale qui nasce da un seed, quindi lo stesso comando riproduce la stessa esecuzione: gli stessi pacchetti persi, lo stesso jitter, nello stesso ordine:</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>È la differenza tra «è caduto una volta martedì scorso» e un test che fallisce e che qualcun altro può eseguire.</p>
+</section>
+
+<section>
+  <h2>In una pipeline</h2>
+  <p>La riga di comando riporta con codici di uscita, quindi una build può distinguere «l’applicazione è fallita» da «lo strumento non è riuscito ad avviarsi», e la sessione termina da sola: non c’è nessun passaggio di pulizia da dimenticare:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Una sequenza di guasti invece di uno solo è un file di scenario, e anche questi sono ripetibili. Vedi <a href="../scenari-nel-tempo/">scenari nel tempo</a> e <a href="../test-di-rete-in-ci/">test di rete in CI</a> per i codici di uscita e il runner che serve.</p>
+</section>
+
+<section>
+  <h2>Dove si ferma il raggio d’azione</h2>
+  <p>Due limiti, entrambi voluti. Il degrado raggiunge un processo, PID, indirizzo o porta quando lo punti, quindi la macchina su cui lavori continua a funzionare. Ed è una sola macchina: questa è iniezione di guasti per un client e la sua connessione, non per un cluster. Se cerchi caos tra servizi e nodi, è un altro tipo di strumento, e questo è il pezzo che rompe la rete sotto una singola applicazione Windows.</p>
+  <p>Tutto è reversibile all’istante. {{app.buttons.stop}} ripristina la rete, un limite di tempo fa lo stesso, e un watchdog nello strumento chiude la cattura se lo strumento stesso muore: un guasto che hai iniettato non deve mai sopravvivere all’esecuzione che lo ha iniettato.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

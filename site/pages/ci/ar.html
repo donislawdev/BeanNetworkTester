@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>محاكاة شبكة سيئة في CI</h1>
+  <p class="lead">النافذة اختيارية. الملف التنفيذي نفسه يعمل كأداة سطر أوامر، وينتهي وحده بعد مدة محددة، ويبلغ بما حدث بطريقة يستطيع pipeline قراءتها.</p>
+</section>
+
+<section>
+  <h2>شكل الخطوة</h2>
+  <p>أضعف الشبكة طوال مدة الاختبار ثم دعها تتوقف وحدها. لا توجد خطوة تنظيف يمكن نسيانها:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>في مهمة GitHub Actions على مشغّل Windows مستضاف ذاتيًا:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>أمران عن المشغّل: التقاط الحركة يتطلب صلاحيات المسؤول، والمشغّل المستضاف لن يمنحك إياها، فهذا يخص جهاز Windows مستضافًا ذاتيًا.</p>
+</section>
+
+<section>
+  <h2>لكل نهاية رمز خروج</h2>
+  <p>لا شيء ينتهي بتتبّع أخطاء (traceback). لكل طريقة قد ينتهي بها التشغيل رقم، فيستطيع pipeline التمييز بين «فشل تطبيقك» و«تعذر بدء الأداة»:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>مخرجات تقرؤها الآلة</h2>
+  <p>يكتب <code>--format json</code> كائن JSON واحدًا في كل سطر، أي عينات أثناء التشغيل وملخصًا في النهاية، لتتمكن خطوة لاحقة من التحقق منها:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>تذهب أسطر السجل إلى خرج الأخطاء القياسي والبيانات إلى الخرج القياسي، فلا يخلط إعادة توجيه البيانات بينهما أبدًا. يجعل <code>--seed</code> التشغيل قابلًا للتكرار، وهذا ما يحتاجه الاختبار غير المستقر (flaky) قبل أن يجادل أحد فيه.</p>
+</section>
+
+<section>
+  <h2>تشغيل تجريبي لا يمس شيئًا</h2>
+  <p>علَمان يجعلان توصيله آمنًا قبل أن تثق به: <code>--dry-run</code> يبلغ بما ستفعله الإعدادات ثم يخرج، و<code>--simulate</code> يشغّل المحرك كاملًا على حركة اصطناعية، دون تحميل برنامج التشغيل ودون المساس بالشبكة. وكلاهما مفيد في بناء لا يجوز أن يُدهور الجهاز الذي يعمل عليه.</p>
+</section>
+
+<section>
+  <h2>التالي</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

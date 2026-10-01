@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Měňte podmínky sítě v čase</h1>
+  <p class="lead">Pevná ztráta 10 % je laboratorní podmínka. Skutečná spojení se zhoršují, zotavují, na čtyři sekundy se zadrhnou a vrátí se, a chyba, kterou hledáte, obvykle žije ve změně, ne v ustáleném stavu.</p>
+</section>
+
+<section>
+  <h2>Scénář je časová osa</h2>
+  <p>Jeden soubor JSON. Každý krok říká <em>v této sekundě tato nastavení</em> a cokoli nezmíníte, zachová svou hodnotu:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Časy jsou sekundy od začátku běhu, ne mezery mezi kroky. S <code>"loop": true</code> začne časová osa po skončení znovu, což chcete pro dlouhý soak test: nechte to běžet a používejte aplikaci.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Hotové scénáře v programu: {{page.scenario_count}}</h2>
+  <p>Ve složce <code>scenarios</code> vedle spustitelného souboru. Čteno z těchto souborů, takže je to to, co skutečně máte:</p>
+  {{page.scenario_table}}
+  <p>Jsou to obyčejné textové soubory: otevřete jeden, změňte číslo, uložte. Názvy říkají, co reprodukují: přeplněnou kavárnu, mobilní spojení klesající z LTE na 3G, odesílání, které zemře v půlce, přetížený server, DNS, které přestane odpovídat.</p>
+</section>
+
+<section>
+  <h2>Dva jednodušší způsoby, jak získat změnu</h2>
+  <p>Scénář má smysl psát, když záleží na pořadí. Když ne, dvě nastavení se mění samy:</p>
+  <ul>
+    <li><strong>Zapínání a vypínání linky</strong>: délka cyklu a kolik z něj tvoří výpadek. Desetisekundové cykly, čtyři sekundy výpadek, donekonečna.</li>
+    <li><strong>Plán rychlosti</strong>: řada rychlostí, kterými limit prochází, takže se spojení zhoršuje a zotavuje bez souboru.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Proč to funguje, zatímco aplikace běží</h2>
+  <p>Každé nastavení, kterého se scénář dotkne, se použije naživo na už probíhající relaci: aplikaci není třeba restartovat a nástroj také ne. Protokol událostí zaznamená každý krok, jak nastane, takže když se něco rozbije, uvidíte, po které změně. Spojte to se seedem a celá posloupnost, včetně náhodné ztráty v ní, se přesně zopakuje.</p>
+</section>
+
+<section>
+  <h2>Dále</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

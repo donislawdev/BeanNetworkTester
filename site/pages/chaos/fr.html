@@ -1,0 +1,49 @@
+<section class="hero">
+  <h1>Chaos testing réseau sous Windows</h1>
+  <p class="lead">Le chaos testing consiste à casser quelque chose exprès, sous vos yeux, pour découvrir ce que fait votre logiciel. Au niveau du réseau, c’est exactement ce qu’est cet outil : un moyen d’injecter une panne dans une application et de voir si elle y survit.</p>
+</section>
+
+<section>
+  <h2>Les pannes que vous pouvez injecter</h2>
+  <table>
+    <tr><th>Panne</th><th>Ce qu’elle modélise</th></tr>
+    <tr><td>Perte, corruption, duplication</td><td>Un chemin dégradé. Des paquets disparaissent, arrivent abîmés ou arrivent deux fois.</td></tr>
+    <tr><td>Latence, gigue, pics</td><td>Un chemin lent ou instable, y compris le blocage de plusieurs secondes qui fait sauter les délais d’attente.</td></tr>
+    <tr><td>Réinitialisations de connexion</td><td>Un pare-feu ou un répartiteur de charge qui coupe des connexions en plein transfert.</td></tr>
+    <tr><td>Coupures de liaison</td><td>Le chemin qui disparaît puis revient, selon un cycle.</td></tr>
+    <tr><td>Adresse ou port bloqué</td><td>Une dépendance injoignable alors que tout le reste fonctionne.</td></tr>
+    <tr><td>Internet coupé, réseau local vivant</td><td>La forme du portail captif : le local fonctionne, le monde extérieur non.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ce qui distingue le chaos du bruit : la répétabilité</h2>
+  <p>Une panne aléatoire qu’on ne peut pas rejouer produit une anecdote, pas un rapport de bug. Chaque décision aléatoire ici vient d’une graine, si bien que la même commande reproduit la même exécution : les mêmes paquets perdus, la même gigue, dans le même ordre :</p>
+<pre><code>BeanNetworkTester.exe --loss 15 --rst-prob 5 --seed 42 --target myapp.exe --duration 120</code></pre>
+  <p>C’est la différence entre « ça a planté une fois mardi dernier » et un test en échec qu’une autre personne peut lancer.</p>
+</section>
+
+<section>
+  <h2>Dans un pipeline</h2>
+  <p>La ligne de commande rend compte par des codes de sortie, si bien qu’une build peut distinguer « l’application a échoué » de « l’outil n’a pas pu démarrer », et la session se termine d’elle-même : il n’y a aucune étape de nettoyage à oublier :</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --rst-prob 5 --target myapp.exe --duration 90 --format json &gt; chaos.ndjson</code></pre>
+  <p>Une suite de pannes plutôt qu’une seule est un fichier de scénario, et ceux-ci sont eux aussi répétables. Voir <a href="../scenarios-dans-le-temps/">scénarios temporels</a> et <a href="../tests-reseau-en-ci/">tests réseau en CI</a> pour les codes de sortie et le runner nécessaire.</p>
+</section>
+
+<section>
+  <h2>Où s’arrête le rayon d’action</h2>
+  <p>Deux limites, toutes deux voulues. La dégradation atteint un seul processus, PID, adresse ou port quand vous la dirigez, si bien que la machine sur laquelle vous travaillez continue de fonctionner. Et c’est une seule machine : il s’agit d’injection de pannes pour un client et sa connexion, pas pour un cluster. Si vous cherchez du chaos entre services et nœuds, c’est un autre type d’outil, et celui-ci est la pièce qui casse le réseau sous une seule application Windows.</p>
+  <p>Tout est réversible sur-le-champ. {{app.buttons.stop}} rétablit le réseau, une limite de durée fait de même, et un chien de garde dans l’outil arrête la capture si l’outil lui-même meurt : une panne que vous avez injectée ne doit jamais survivre à l’exécution qui l’a injectée.</p>
+</section>
+
+<section>
+  <h2>Pour aller plus loin</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

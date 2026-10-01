@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>CIで悪いネットワークを再現する</h1>
+  <p class="lead">ウィンドウは必須ではありません。同じ実行ファイルがコマンドラインツールとして動き、指定した時間で自動的に終了し、何が起きたかをパイプラインが読める形で報告します。</p>
+</section>
+
+<section>
+  <h2>1ステップの形</h2>
+  <p>テストの間だけ劣化させ、あとは自動で止まらせます。忘れてはいけない後片付けのステップはありません：</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>GitHub Actionsのジョブで、セルフホストのWindowsランナーを使う場合：</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>ランナーについて2点。通信の取得には管理者権限が必要で、ホスト型ランナーはそれを与えてくれないため、セルフホストのWindowsマシンで使うことになります。</p>
+</section>
+
+<section>
+  <h2>すべての終わり方に終了コードがある</h2>
+  <p>スタックトレースで終わることはありません。実行が終わるあらゆるパターンに番号があるので、パイプラインは「アプリが失敗した」と「ツールが起動できなかった」を区別できます：</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>機械で読める出力</h2>
+  <p><code>--format json</code> は1行につき1つのJSONオブジェクトを書き出します。実行中はサンプル、最後はサマリーなので、後続のステップでそれを検証できます：</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>ログ行は標準エラーに、データは標準出力に出るため、データをリダイレクトしても2つが混ざることはありません。<code>--seed</code> で実行を再現可能にできます。不安定なテストが、議論の前にまず必要とするものです。</p>
+</section>
+
+<section>
+  <h2>何にも触れないドライラン</h2>
+  <p>2つのフラグのおかげで、信頼する前に安心して組み込めます。<code>--dry-run</code> は設定が何をするかを報告して終了し、<code>--simulate</code> はドライバーを読み込まず、ネットワークにも触れずに、合成トラフィックでエンジン全体を動かします。どちらも、実行しているマシン自体を劣化させてはいけないビルドで役立ちます。</p>
+</section>
+
+<section>
+  <h2>次のステップ</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

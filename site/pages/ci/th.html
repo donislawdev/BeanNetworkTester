@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>จำลองเครือข่ายแย่ใน CI</h1>
+  <p class="lead">หน้าต่างเป็นทางเลือก ไฟล์ปฏิบัติการเดียวกันรันเป็นเครื่องมือบรรทัดคำสั่ง จบเองเมื่อครบเวลาที่ตั้ง และรายงานสิ่งที่เกิดขึ้นในรูปแบบที่ไปป์ไลน์อ่านได้</p>
+</section>
+
+<section>
+  <h2>หน้าตาของหนึ่งขั้นตอน</h2>
+  <p>ทำให้เครือข่ายแย่ตลอดช่วงทดสอบ แล้วปล่อยให้มันหยุดเอง ไม่มีขั้นตอนล้างข้อมูลที่ลืมได้:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>ในงาน GitHub Actions บนรันเนอร์ Windows ที่โฮสต์เอง (self-hosted):</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>สองข้อเกี่ยวกับรันเนอร์ การดักจับทราฟฟิกต้องใช้สิทธิ์ผู้ดูแลระบบ และรันเนอร์ที่โฮสต์ให้จะไม่ให้สิทธิ์นั้น จึงต้องใช้เครื่อง Windows ที่โฮสต์เอง</p>
+</section>
+
+<section>
+  <h2>ทุกการจบมีรหัสออก</h2>
+  <p>ไม่มีอะไรจบด้วย traceback ทุกวิธีที่การรันจบได้มีหมายเลข ไปป์ไลน์จึงแยก “แอปของคุณล้มเหลว” ออกจาก “เครื่องมือเริ่มไม่ได้” ได้:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>เอาต์พุตที่เครื่องอ่านได้</h2>
+  <p><code>--format json</code> เขียนออบเจ็กต์ JSON หนึ่งตัวต่อบรรทัด คือตัวอย่างระหว่างรันและสรุปตอนท้าย เพื่อให้ขั้นตอนถัดไปตรวจสอบกับมันได้:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>บรรทัดล็อกไปที่ข้อผิดพลาดมาตรฐานและข้อมูลไปที่เอาต์พุตมาตรฐาน การเปลี่ยนเส้นทางข้อมูลจึงไม่ปนกันสองอย่าง <code>--seed</code> ทำให้การรันซ้ำได้ ซึ่งเป็นสิ่งที่เทสต์ที่ไม่เสถียร (flaky) ต้องมีก่อนที่ใครจะเถียงเรื่องมันได้</p>
+</section>
+
+<section>
+  <h2>รันทดลองที่ไม่แตะอะไรเลย</h2>
+  <p>แฟลกสองตัวทำให้ต่อเข้าได้อย่างปลอดภัยก่อนที่คุณจะไว้ใจ: <code>--dry-run</code> รายงานว่าการตั้งค่าจะทำอะไรแล้วออก และ <code>--simulate</code> รันเอนจินทั้งหมดกับทราฟฟิกสังเคราะห์ โดยไม่โหลดไดรเวอร์และไม่แตะเครือข่าย ทั้งสองมีประโยชน์ในบิลด์ที่ห้ามทำให้เครื่องที่รันอยู่แย่ลง</p>
+</section>
+
+<section>
+  <h2>ต่อไป</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

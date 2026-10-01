@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Pakketverlies simuleren op Windows</h1>
+  <p class="lead">Pakketverlies is de fout die gebruikers beschrijven als “het hangt gewoon”. Je stelt een percentage in, de tool gooit dat deel van de pakketten weg, en je app moet ermee omgaan.</p>
+</section>
+
+<section>
+  <h2>In het venster</h2>
+  <ol class="steps">
+    <li>Vul <strong>{{app.fields.target_process}}</strong> in zodat alleen jouw app wordt geraakt, niet de hele machine.</li>
+    <li>Zet <strong>{{app.fields.loss}}</strong> op een percentage tussen 0 en 100. Begin bij 5.</li>
+    <li>Druk op <strong>{{app.buttons.start}}</strong> en gebruik de app.</li>
+  </ol>
+  <p>De balk bovenaan het venster vat samen wat er draait, en het tabblad <strong>{{app.app.tabs.statistics}}</strong> telt de pakketten die zijn weggegooid.</p>
+</section>
+
+<section>
+  <h2>Vanaf de opdrachtregel</h2>
+  <p>Hetzelfde uitvoerbare bestand draait zonder venster. Vijf procent verlies op één browser, twee minuten lang, daarna is alles vanzelf weer normaal:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --target chrome.exe --duration 120</code></pre>
+  <p>Voeg <code>--simulate</code> toe om de opdracht te oefenen zonder echt verkeer aan te raken.</p>
+</section>
+
+<section>
+  <h2>Welk percentage je kiest</h2>
+  <table>
+    <tr><th>Verlies</th><th>Hoe het aanvoelt</th></tr>
+    <tr><td>1 procent</td><td>Een goede verbinding met een slechte minuut. De meeste apps verbergen het.</td></tr>
+    <tr><td>5 procent</td><td>Zwakke wifi. Trage paginaladingen, video zakt in kwaliteit.</td></tr>
+    <tr><td>20 procent</td><td>Een hotspot in een drukke koffiebar of een treintunnel. Timeouts beginnen te verschijnen.</td></tr>
+    <tr><td>60 procent en hoger</td><td>Bijna onbruikbaar. Goed om de foutmelding te vinden die nooit iemand heeft getest.</td></tr>
+  </table>
+  <p>De kant-en-klare profielen stellen dit voor je in. “{{app.presets.weak_wifi}}”, “{{app.presets.cafe}}” en “{{app.presets.3g}}” hebben alle drie een verliescijfer naast vertraging en een snelheidslimiet.</p>
+</section>
+
+<section>
+  <h2>Twee dingen die mensen verrassen</h2>
+  <p><strong>Op TCP zie je misschien helemaal niets.</strong> TCP verstuurt opnieuw wat het verliest, dus een download over HTTPS wordt gewoon trager in plaats van te falen. Wil je verlies als verlies zien, test dan iets dat over UDP loopt: een spraakgesprek, een game, een videostream of DNS.</p>
+  <p><strong>Verlies is willekeurig, dus twee runs verschillen.</strong> Stel een seed in en dezelfde run herhaalt zich exact, wat “het ging één keer stuk” verandert in een bugrapport dat iemand anders kan reproduceren:</p>
+<pre><code>BeanNetworkTester.exe --loss 20 --target myapp.exe --seed 42 --duration 60</code></pre>
+</section>
+
+<section>
+  <h2>Verder</h2>
+  <p>Verlies alleen is zeldzaam. Echt slechte verbindingen verliezen pakketten <em>en</em> voegen vertraging toe <em>en</em> raken door hun snelheid heen, en dat is wat de profielen nabootsen.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

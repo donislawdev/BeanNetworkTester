@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>設定檔、設定與結束代碼</h1>
+  <p class="lead">三張表，沒有一張是手寫的。它們是在建置本頁時從程式自己的內部登錄資料生成的，所以不可能說出程式並不具備的內容。</p>
+</section>
+
+<section>
+  <h2>現成的設定檔</h2>
+  <p>選擇其中一個，表單就會自動填好。短橫線表示該設定檔不改動那項設定。速度單位是千位元組每秒，乘以八才能與業者宣傳的數字比較。</p>
+  {{page.preset_table}}
+  <p>選擇設定檔只會填寫各個欄位。在你點選{{app.buttons.start}}之前，網路上不會發生任何變化。</p>
+</section>
+
+<section>
+  <h2>每項設定，以及設定它的參數</h2>
+  <p>視窗和命令列接受的是同樣的設定。這是完整的列表，附有每項設定接受的單位和範圍。</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>結束代碼</h2>
+  <p>命令列永遠不會以堆疊追蹤收場。一次執行的每種結束方式都有一個編號，所以管線能區分應用失敗和工具無法啟動。</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>相關內容</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

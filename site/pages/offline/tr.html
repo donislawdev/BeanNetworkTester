@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Bir uygulamayı internetsiz test edin</h1>
+  <p class="lead">Ağ kablosunu çekmek tek bir şeyi test eder: ağsız bir makine. Çoğu çevrimdışı hata bu değildir. Bağdaştırıcı açıkken, Wi-Fi simgesi iyi görünürken ve uygulamanın ihtiyaç duyduğu şey sadece erişilemezken ortaya çıkarlar.</p>
+</section>
+
+<section>
+  <h2>Üç farklı “çevrimdışı” türü</h2>
+  <table>
+    <tr><th>Neyi açarsınız</th><th>Uygulamanın gördüğü</th><th>Bulduğu hata</th></tr>
+    <tr><td><strong>LAN modu</strong></td><td>Yerel ağ çalışır. Ötesindeki hiçbir şey çalışmaz.</td><td>Oturum açmadan önceki otel Wi-Fi’ı, ölü bir yukarı bağlantı, dışarı yolu olmayan bir şirket ağı.</td></tr>
+    <tr><td><strong>Bir adresi engelle</strong></td><td>Bir sunucu erişilemez. Geri kalan her şey çalışır.</td><td>Uygulamanın kendisi iyiyken bir bağımlılığın çökmesi: sağlık denetiminin genellikle kaçırdığı durum.</td></tr>
+    <tr><td><strong>53 numaralı portu engelle</strong></td><td>Adlar çözülmez, adresle bağlantılar çalışmaya devam eder.</td><td>Kullanıcıya “internet çöktü” gibi, günlüklerde ise bambaşka bir şey gibi görünen bozuk DNS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Komut satırından</h2>
+  <p>Bir uygulama için internet yok, yerel ağa dokunulmamış, iki dakika boyunca:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Bir hizmet erişilemez, geri kalan her şey normal:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>Adlar çözülmez:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>DNS’i bozup kendiliğinden geri getiren hazır bir zaman çizelgesi de var: programın yanındaki <code>scenarios</code> klasöründe <code>failing-dns.json</code>. <a href="../zamana-bagli-senaryolar/">Zamana bağlı senaryolar</a> sayfasına bakın.</p>
+</section>
+
+<section>
+  <h2>Gerçekte neye bakmalı</h2>
+  <ul>
+    <li><strong>Mesaj.</strong> Uygulama ne olduğunu söylüyor mu, yoksa sonsuza dek bir yükleniyor göstergesi mi gösteriyor?</li>
+    <li><strong>Yeniden deneme.</strong> Geri çekiliyor mu, yoksa aynı adresi bir döngüde mi dövüyor?</li>
+    <li><strong>Kuyruk.</strong> Kullanıcının çevrimdışıyken yaptığı iş saklanıp sonra gönderiliyor mu, yoksa kayboluyor mu?</li>
+    <li><strong>Toparlanma.</strong> {{app.buttons.stop}} ağı geri getirir. Uygulama bunu kendiliğinden fark ediyor mu, yoksa yeniden başlatma mı gerekiyor?</li>
+  </ul>
+  <p>Değerin çoğu bu son noktadadır. Çevrimdışı olmayı kötü yönetmek kolaydır ve test etmek kolaydır. Durumun yanlış gittiği yer geri dönüştür.</p>
+</section>
+
+<section>
+  <h2>Bu ne değildir</h2>
+  <p>Bağdaştırıcı açık kalır ve makine adresini korur; bu yüzden Windows’a yalnızca “ağ var mı” diye soran bir uygulama hâlâ evet yanıtı alır. Bu bilinçlidir ve daha ilginç testtir: gerçek kullanıcılar nadiren tamamen bağlantısızdır; ihtiyaç duyduklarına ulaşamayan bir şeye bağlıdırlar. Özellikle “bağdaştırıcı yok” durumunu istiyorsanız bağdaştırıcıyı devre dışı bırakın: araç gerekmez.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

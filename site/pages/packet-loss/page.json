@@ -13,6 +13,126 @@
       "link_text": "Utrata pakietów",
       "title": "Jak symulować utratę pakietów na Windows",
       "description": "Odrzucaj ustalony procent pakietów jednej aplikacji na Windows, patrz co się psuje i powtórz ten sam przebieg z ziarnem."
+    },
+    "zh-Hans": {
+      "slug": "moni-diubao",
+      "title": "在 Windows 上为单个应用模拟丢包",
+      "description": "按设定的百分比丢弃单个 Windows 应用的数据包，观察哪里会出问题，并用随机种子重放同一次运行。",
+      "link_text": "丢包"
+    },
+    "ja": {
+      "slug": "paketto-rosu",
+      "title": "Windowsで特定のアプリにパケットロスを発生させる",
+      "description": "Windows上の1つのアプリのパケットを指定した割合で破棄し、何が壊れるかを確認します。シードを指定すれば同じ実行を再現できます。",
+      "link_text": "パケットロス"
+    },
+    "de": {
+      "slug": "paketverlust",
+      "title": "Paketverlust unter Windows für eine App simulieren",
+      "description": "Verwirf unter Windows einen festen Prozentsatz der Pakete einer App, sieh, was kaputtgeht, und wiederhole denselben Durchlauf mit einem Seed.",
+      "link_text": "Paketverlust"
+    },
+    "fr": {
+      "slug": "perte-de-paquets",
+      "title": "Simuler la perte de paquets sous Windows pour une application",
+      "description": "Abandonnez un pourcentage donné des paquets d’une application Windows, observez ce qui casse et rejouez exactement la même exécution grâce à une graine.",
+      "link_text": "Perte de paquets"
+    },
+    "es": {
+      "slug": "perdida-de-paquetes",
+      "title": "Simula pérdida de paquetes en Windows para una aplicación",
+      "description": "Descarta un porcentaje fijo de los paquetes de una aplicación en Windows, observa qué se rompe y repite exactamente la misma ejecución con una semilla.",
+      "link_text": "Pérdida de paquetes"
+    },
+    "pt-BR": {
+      "slug": "perda-de-pacotes",
+      "title": "Simule perda de pacotes no Windows para um aplicativo",
+      "description": "Descarte uma porcentagem fixa dos pacotes de um aplicativo no Windows, veja o que quebra e repita exatamente a mesma execução com uma semente.",
+      "link_text": "Perda de pacotes"
+    },
+    "it": {
+      "slug": "perdita-di-pacchetti",
+      "title": "Simula la perdita di pacchetti su Windows per un’app",
+      "description": "Scarta una percentuale fissa dei pacchetti di un’app su Windows, osserva cosa si rompe e ripeti esattamente la stessa esecuzione con un seed.",
+      "link_text": "Perdita di pacchetti"
+    },
+    "id": {
+      "slug": "kehilangan-paket",
+      "title": "Simulasikan kehilangan paket di Windows untuk satu aplikasi",
+      "description": "Buang persentase tertentu paket satu aplikasi di Windows, lihat apa yang rusak, lalu ulangi eksekusi yang sama persis dengan seed.",
+      "link_text": "Kehilangan paket"
+    },
+    "ru": {
+      "slug": "poterya-paketov",
+      "title": "Имитация потери пакетов в Windows для одного приложения",
+      "description": "Отбрасывайте заданный процент пакетов одного приложения в Windows, смотрите, что ломается, и повторяйте тот же запуск с помощью seed.",
+      "link_text": "Потеря пакетов"
+    },
+    "tr": {
+      "slug": "paket-kaybi",
+      "title": "Windows’ta bir uygulama için paket kaybı simülasyonu",
+      "description": "Windows’ta bir uygulamanın paketlerinin belirli bir yüzdesini atın, neyin bozulduğunu görün ve aynı çalıştırmayı seed ile birebir tekrarlayın.",
+      "link_text": "Paket kaybı"
+    },
+    "cs": {
+      "slug": "ztrata-paketu",
+      "title": "Simulace ztráty paketů ve Windows pro jednu aplikaci",
+      "description": "Zahoďte zadané procento paketů jedné aplikace ve Windows, sledujte, co se rozbije, a stejný běh přesně zopakujte pomocí seedu.",
+      "link_text": "Ztráta paketů"
+    },
+    "vi": {
+      "slug": "mat-goi-tin",
+      "title": "Mô phỏng mất gói tin trên Windows cho một ứng dụng",
+      "description": "Loại bỏ một tỷ lệ phần trăm gói tin của một ứng dụng trên Windows, xem điều gì hỏng, rồi chạy lại đúng lần đó nhờ seed.",
+      "link_text": "Mất gói tin"
+    },
+    "hi": {
+      "slug": "paiket-los",
+      "title": "Windows पर एक ऐप के लिए पैकेट लॉस सिमुलेशन",
+      "description": "Windows पर किसी एक ऐप के पैकेट का तय प्रतिशत गिराएँ, देखें क्या टूटता है, और उसी रन को seed से हूबहू दोहराएँ।",
+      "link_text": "पैकेट लॉस"
+    },
+    "ko": {
+      "slug": "paekit-sonsil",
+      "title": "Windows 앱 하나에 패킷 손실 시뮬레이션",
+      "description": "Windows 앱 하나의 패킷을 정해진 비율만큼 버려 무엇이 깨지는지 보고, 같은 실행을 시드로 그대로 재현하세요.",
+      "link_text": "패킷 손실"
+    },
+    "ar": {
+      "slug": "fiqdan-alhuzam",
+      "title": "محاكاة فقدان الحزم على Windows لتطبيق واحد",
+      "description": "أسقط نسبة محددة من حزم تطبيق واحد على Windows، وشاهد ما ينكسر، ثم أعد التشغيل نفسه تمامًا بفضل seed.",
+      "link_text": "فقدان الحزم"
+    },
+    "ro": {
+      "slug": "pierdere-pachete",
+      "title": "Simulează pierderea de pachete în Windows pentru o aplicație",
+      "description": "Elimină un procent de pachete ale unei aplicații în Windows, vezi ce se strică și reia exact aceeași rulare cu un seed.",
+      "link_text": "Pierdere de pachete"
+    },
+    "nl": {
+      "slug": "pakketverlies",
+      "title": "Pakketverlies simuleren op Windows voor één app",
+      "description": "Laat een vast percentage pakketten van één app op Windows vallen, zie wat er stukgaat en herhaal exact dezelfde run met een seed.",
+      "link_text": "Pakketverlies"
+    },
+    "zh-Hant": {
+      "slug": "moni-diubao",
+      "title": "在 Windows 上為單一應用模擬封包遺失",
+      "description": "按設定的百分比丟棄單一 Windows 應用的封包，觀察哪裡會出問題，並用隨機種子重播同一次執行。",
+      "link_text": "封包遺失"
+    },
+    "uk": {
+      "slug": "vtrata-paketiv",
+      "title": "Симуляція втрати пакетів у Windows для одного застосунку",
+      "description": "Відкидайте задану частку пакетів одного застосунку у Windows, дивіться, що ламається, і відтворюйте той самий запуск за допомогою seed.",
+      "link_text": "Втрата пакетів"
+    },
+    "th": {
+      "slug": "paeket-sunhai",
+      "title": "จำลองแพ็กเก็ตสูญหายบน Windows สำหรับแอปเดียว",
+      "description": "ทิ้งแพ็กเก็ตของแอปเดียวบน Windows ตามเปอร์เซ็นต์ที่กำหนด ดูว่าอะไรพัง แล้วรันซ้ำให้เหมือนเดิมทุกอย่างด้วย seed",
+      "link_text": "แพ็กเก็ตสูญหาย"
     }
   }
 }

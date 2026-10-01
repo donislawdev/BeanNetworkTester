@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profils, réglages et codes de sortie</h1>
+  <p class="lead">Trois tableaux, aucun saisi à la main. Ils sont générés à partir des registres propres au programme lors de la construction de cette page, si bien qu’ils ne peuvent pas dire quelque chose que le programme ne dit pas.</p>
+</section>
+
+<section>
+  <h2>Profils prêts à l’emploi</h2>
+  <p>Choisissez-en un et le formulaire se remplit tout seul. Un tiret signifie que le profil laisse ce réglage tranquille. Les vitesses sont en kilo-octets par seconde : multipliez par huit pour comparer avec ce qu’annonce un fournisseur d’accès.</p>
+  {{page.preset_table}}
+  <p>Sélectionner un profil ne fait que remplir les champs. Rien ne change sur le réseau tant que vous n’appuyez pas sur {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Chaque réglage, et l’option qui le définit</h2>
+  <p>La fenêtre et la ligne de commande acceptent les mêmes réglages. Voici la liste complète, avec l’unité et la plage que chacun accepte.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Codes de sortie</h2>
+  <p>La ligne de commande ne se termine jamais par une trace d’appels. Chaque façon dont une exécution peut finir a un numéro, si bien qu’un pipeline peut distinguer une application en échec d’un outil qui n’a pas pu démarrer.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Voir aussi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
