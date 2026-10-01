@@ -170,6 +170,24 @@ def _create_use_marker():
     return None
 
 
+def _marker_held_elsewhere(api):
+    """Is a handle to the use marker open under EITHER of its names?
+
+    Asked only by a caller that holds no marker of its own (dropped, or never
+    taken), so whatever is found belongs to somebody else. Both names, because
+    ``_create_use_marker`` falls back to the session-local one when the global
+    one is refused, and the two live in separate namespaces: asking for one name
+    only missed an instance that had the other, and the exit path stopped the
+    driver under its session (review of #238).
+    """
+    for name in _USE_MARKER_NAMES:
+        other = api.OpenMutexW(_SYNCHRONIZE, False, name)
+        if other:
+            api.CloseHandle(other)
+            return True
+    return False
+
+
 def _drop_use_marker():
     """Release ours and answer: is ANOTHER process still using the driver?"""
     # Under the claim because two threads can get here - a window's cleanup and the
@@ -184,17 +202,17 @@ def _drop_use_marker():
             api = _kernel32()
             if marker is not None:
                 api.CloseHandle(marker[0])
-            name = marker[1] if marker is not None else _USE_MARKER_NAMES[0]
             # Ours is closed, so anything left belongs to somebody else.
-            other = api.OpenMutexW(_SYNCHRONIZE, False, name)
-            if other:
-                api.CloseHandle(other)
-                return True
+            return _marker_held_elsewhere(api)
         return False
 
 # WinDivert registers itself under a version-dependent service name; pydivert
 # has shipped 1.1 / 1.4 / 2.x over time, so every known name is checked.
-DRIVER_SERVICES = ("WinDivert", "WinDivert1.4", "WinDivert1.1")
+# OWN_SERVICE is the one THIS build loads: WinDivert 2.x registers "WinDivert",
+# and the build ships 2.2 (legal.WINDIVERT_VERSION, checked against the driver
+# by the tests). A running WinDivert1.4 or 1.1 belongs to another program.
+OWN_SERVICE = "WinDivert"
+DRIVER_SERVICES = (OWN_SERVICE, "WinDivert1.4", "WinDivert1.1")
 
 # Service control constants (winsvc.h)
 #
@@ -217,7 +235,13 @@ _SERVICE_ALL_ACCESS = 0xF01FF
 _SERVICE_QUERY_STATUS = 0x0004
 _SERVICE_CONTROL_STOP = 0x1
 _SERVICE_STOPPED = 0x1
+_SERVICE_STOP_PENDING = 0x3
 _ERROR_ACCESS_DENIED = 5
+# ControlService fills in the status only with these two among its failures
+# (Microsoft Learn, ControlService): 1061 when the service is stopped, starting
+# or already stopping, 1062 when it is not running.
+_ERROR_SERVICE_CANNOT_ACCEPT_CTRL = 1061
+_ERROR_SERVICE_NOT_ACTIVE = 1062
 _ERROR_SERVICE_DOES_NOT_EXIST = 1060
 # MEASURED 2026-08-04: this is what DeleteService returns on a perfectly healthy,
 # single-instance exit - WinDivert marks its OWN service for deletion when it
@@ -387,23 +411,66 @@ def stop_and_remove(name):
                 return f"{name}: cannot open the service (Windows error {err})"
             return f"{name}: not installed"
         try:
-            status = _status_type()()
-            api.ControlService(handle, _SERVICE_CONTROL_STOP, ctypes.byref(status))
-            if bool(api.DeleteService(handle)):
-                return f"{name}: stopped and removed"
-            # WHY the delete failed decides whether anything is wrong at all, and
-            # this used to be thrown away. MEASURED (see the constant): 1072 on
-            # every ordinary exit, because WinDivert already scheduled the removal
-            # itself - the service does vanish, and the STOP above is the part that
-            # actually unloads the driver and frees its .sys file.
-            err = ctypes.get_last_error()
-            if err == _ERROR_SERVICE_MARKED_FOR_DELETE:
-                return f"{name}: stopped (removal was already scheduled)"
-            return f"{name}: stopped (removal failed, Windows error {err})"
+            stop = _stop_service(api, handle)
+            return f"{name}: {_delete_service(api, handle, stop)}"
         finally:
             api.CloseServiceHandle(handle)
     finally:
         api.CloseServiceHandle(manager)
+
+
+def _delete_service(api, handle, stop):
+    """DELETE, said together with what the STOP did (``_stop_service``)."""
+    import ctypes
+
+    if bool(api.DeleteService(handle)):
+        if stop == "stopped":
+            return "stopped and removed"
+        # Only MARKED for deletion while the service still runs.
+        return f"{stop} ({'removed' if stop == 'was not running' else 'marked for removal'})"
+    # WHY the delete failed decides whether anything is wrong at all, and this
+    # used to be thrown away. MEASURED (see the constant): 1072 on every ordinary
+    # exit, because WinDivert already scheduled the removal itself - the service
+    # does vanish, and the STOP is the part that actually unloads the driver and
+    # frees its .sys file.
+    err = ctypes.get_last_error()
+    if err == _ERROR_SERVICE_MARKED_FOR_DELETE:
+        return f"{stop} (removal was already scheduled)"
+    return f"{stop} (removal failed, Windows error {err})"
+
+
+# How a line says that the STOP did not happen. The cleanup looks for it to add
+# _UNLOADED_AT_RESTART, so the two cannot drift apart.
+_NOT_STOPPED = "NOT stopped"
+
+
+def _stop_service(api, handle):
+    """Send STOP and say what it did - read back, never assumed.
+
+    The result used to be thrown away and every line began "stopped", including
+    for a stop Windows refused (external review P2-22): a driver still unloading
+    (1061), an access denied. The state comes from the status ControlService
+    fills in, which it does on success and for 1061 and 1062 only.
+    """
+    import ctypes
+
+    status = _status_type()()
+    if api.ControlService(handle, _SERVICE_CONTROL_STOP, ctypes.byref(status)):
+        err = 0
+    else:
+        err = ctypes.get_last_error()
+        if err == _ERROR_SERVICE_NOT_ACTIVE:
+            return "was not running"
+        if err != _ERROR_SERVICE_CANNOT_ACCEPT_CTRL:
+            why = "access denied" if err == _ERROR_ACCESS_DENIED else f"Windows error {err}"
+            return f"{_NOT_STOPPED}, {why}"
+    state = int(status.dwCurrentState)
+    if state == _SERVICE_STOPPED:
+        return "stopped" if err == 0 else "was not running"
+    if state == _SERVICE_STOP_PENDING:
+        # MEASURED 2026-08-04: what another process's open handle leaves behind.
+        return "stop pending, it unloads when the last program using it closes"
+    return f"{_NOT_STOPPED}, the service is {STATE_LABELS.get(state, 'in an unknown state')}"
 
 
 def stale_temp_dirs():
@@ -426,15 +493,20 @@ def _another_instance_holds_the_driver():
     if not is_windows() or _USE_MARKER[0] is not None:
         return False
     with crashlog.quiet("driver.use_marker"):
-        api = _kernel32()
-        other = api.OpenMutexW(_SYNCHRONIZE, False, _USE_MARKER_NAMES[0])
-        if other:
-            api.CloseHandle(other)
-            return True
+        return _marker_held_elsewhere(_kernel32())
     return False
 
 
-def cleanup_driver(release_own=False, opens_seen=None):
+_STAND_DOWN = ("Another instance is still using the WinDivert driver - "
+               "leaving it loaded for them.")
+
+# Added after the lines when a STOP did not happen: the one thing left to do,
+# and true of every such line (review of #238). Not "Run as Administrator": the
+# cleanup refused to run without it. Said in the window too, so no command name.
+_UNLOADED_AT_RESTART = "Restarting Windows unloads a driver that could not be stopped."
+
+
+def cleanup_driver(release_own=False, opens_seen=None, on_exit=False):
     """Stop and remove every leftover WinDivert service. Returns report lines.
 
     ``release_own`` is for a caller that may itself hold the use marker: the Tools
@@ -453,12 +525,21 @@ def cleanup_driver(release_own=False, opens_seen=None):
     open. A divert opened since the yes is a session this cleanup would stop, so
     it stands down and says so. The whole cleanup holds the claim, so a START that
     comes second waits for it instead (``mark_driver_used``).
+
+    ``on_exit`` is ``release_on_exit``'s: nobody asked for this cleanup, so it
+    touches only ``OWN_SERVICE`` and stands down instead of warning. It used to
+    stop a WinDivert1.4 or 1.1 service of another program on every exit, and to
+    stop the driver under another instance that started after ``release_on_exit``
+    had looked, with only a warning in a log nobody was reading (external review
+    P2-23). An instance that starts after the second look is still not seen:
+    nothing machine-wide orders the two. The explicit cleanups - ``--cleanup-driver``
+    and the Tools tab - keep every known name and the warning.
     """
     with _CLAIM:
-        return _cleanup_claimed(release_own, opens_seen)
+        return _cleanup_claimed(release_own, opens_seen, on_exit)
 
 
-def _cleanup_claimed(release_own, opens_seen):
+def _cleanup_claimed(release_own, opens_seen, on_exit):
     lines = []
     if not is_windows():
         return ["Not Windows - there is no WinDivert driver to clean up."]
@@ -468,10 +549,16 @@ def _cleanup_claimed(release_own, opens_seen):
         return ["A session was started after this cleanup was asked for - nothing was "
                 "unloaded. Clean up again when no session is running."]
     drivers = installed_drivers()
+    if on_exit:
+        drivers = {n: s for n, s in drivers.items() if n == OWN_SERVICE}
+        if not drivers:        # another program's may be there: not "none installed"
+            return [f"The {OWN_SERVICE} service is not installed - nothing to unload."]
     if not drivers:
         return ["No WinDivert driver service is installed - nothing to clean up."]
     someone_else = (_drop_use_marker() if release_own
                     else _another_instance_holds_the_driver())
+    if someone_else and on_exit:
+        return [_STAND_DOWN]
     if someone_else:
         # Said, not obeyed: this function is also `--cleanup-driver`, which is a
         # rescue command someone typed on purpose. But they deserve to know that
@@ -479,8 +566,10 @@ def _cleanup_claimed(release_own, opens_seen):
         # that its next start will fail with 433 until this settles.
         lines.append("WARNING: another instance of this tool is using the WinDivert "
                      "driver right now. Unloading it will interrupt that session.")
-    for name in drivers:
-        lines.append(stop_and_remove(name))
+    stops = [stop_and_remove(name) for name in drivers]
+    lines.extend(stops)
+    if any(_NOT_STOPPED in line for line in stops):
+        lines.append(_UNLOADED_AT_RESTART)
     leftovers = stale_temp_dirs()
     if leftovers:
         lines.append("Stale PyInstaller temp directories (safe to delete once no "
@@ -509,12 +598,11 @@ def release_on_exit(log=lambda *_: None):
         # others, and a marker left behind would make the next instance stand down
         # for a process that has already gone.
         if _drop_use_marker():
-            lines = ["Another instance is still using the WinDivert driver - "
-                     "leaving it loaded for them."]
+            lines = [_STAND_DOWN]
             for line in lines:
                 log(line)
             return lines
-        lines = cleanup_driver()
+        lines = cleanup_driver(on_exit=True)
         for line in lines:
             log(line)
         return lines

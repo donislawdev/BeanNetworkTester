@@ -905,7 +905,7 @@ connections arriving from outside, are still blocked in silence.
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |
 | `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights) and exit |
-| `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit |
+| `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit. Each line says what happened to one service. The exit code is `0` even when a service could not be stopped |
 
 Precedence order: **defaults < `--config` < `--preset` < flags**. Full list:
 `BeanNetworkTester.exe --help`.
@@ -1591,7 +1591,9 @@ seeded).
   removed, even when it looks empty** (Windows lets you delete a file with an open handle: it
   vanishes from the list but stays in *pending delete* and blocks the directory). If something is
   left over, the rescue without a restart is `BeanNetworkTester.exe --cleanup-driver` (or `sc stop
-  WinDivert` + `sc delete WinDivert`).
+  WinDivert` + `sc delete WinDivert`). On exit the program touches only the `WinDivert` service it
+  loads, and leaves it loaded while another copy of this program is using it. `--cleanup-driver`
+  also stops `WinDivert1.4` and `WinDivert1.1`, which other programs install.
 - **"Duration" and "Traffic to modify" are taken into account only at START** - which is why during
   a session both are **locked** (an editable field that does nothing is worse than a greyed-out one).
 
