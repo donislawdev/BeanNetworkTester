@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Bir uygulamaya gecikme ve jitter ekleyin</h1>
+  <p class="lead">Hızlı bir yerel bağlantıda her şey çalışır. Uygulamaya 300 ms ping verin; hangi ekranların yanıt anında geliyormuş gibi yazıldığını öğrenirsiniz.</p>
+</section>
+
+<section>
+  <h2>Üç farklı şey</h2>
+  <table>
+    <tr><th>Ayar</th><th>Ne yapar</th><th>Gerçek hayatta nereden gelir</th></tr>
+    <tr><td><strong>{{app.fields.latency}}</strong></td><td>Her pakete milisaniye cinsinden aynı gecikmeyi ekler.</td><td>Mesafe. Başka bir kıtadaki sunucu ya da bir uydu.</td></tr>
+    <tr><td><strong>{{app.fields.jitter}}</strong></td><td>Üstüne rastgele bir miktar ekler; böylece gecikme sürekli değişir.</td><td>Paylaşılan Wi-Fi, mobil ağlar, tıkanık her şey.</td></tr>
+    <tr><td><strong>Gecikme sıçramaları</strong></td><td>Ne sıklıkla ve ne kadar sürdüğüyle belirlenen ara sıra uzun takılmalar.</td><td>Baz istasyonları arası devir, yük altındaki bir yönlendirici.</td></tr>
+  </table>
+  <p>Üçü de milisaniye cinsindendir ve birlikte çalışabilir. İki gecikme değeri de 0’dan başlayan her sayıyı kabul eder; inandırıcı 40 ms’den saçma 60 saniyeye kadar gidebilirsiniz.</p>
+</section>
+
+<section>
+  <h2>Komut satırından</h2>
+  <p>Tek bir uygulamada sabit 200 ms ve 80 ms jitter:</p>
+<pre><code>BeanNetworkTester.exe --latency 200 --jitter 80 --target myapp.exe --duration 60</code></pre>
+  <p>Bunun yerine nadir ve uzun takılmalar: yaklaşık yirmi paketten biri fazladan bir saniye bekler:</p>
+<pre><code>BeanNetworkTester.exe --spike-prob 5 --spike-ms 1000 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Denemeye değer sayılar</h2>
+  <ul>
+    <li><strong>40 ms</strong>: aynı ülkedeki bir sunucu. Hiçbir şey değişmemeli.</li>
+    <li><strong>150 ms</strong>: başka bir kıta. Çok konuşan her şey yavaş hissettirmeye başlar, çünkü her gidiş dönüşün bir bedeli vardır.</li>
+    <li><strong>600 ms ve üzeri</strong>: yer sabit yörüngeli uydu ya da uçak Wi-Fi’ı. İlerleme çubuklarının takıldığı ve yeniden deneme mantığının sonunda çalıştığı yer burasıdır.</li>
+  </ul>
+  <p>Hazır profiller ölçülmüş değerler taşır: “{{app.presets.distant}}”, “{{app.presets.leo}}”, “{{app.presets.satellite}}”, “{{app.presets.inflight}}”, “{{app.presets.lte}}”.</p>
+</section>
+
+<section>
+  <h2>Ölçmek: ortalamaya değil, en kötü duruma bakın</h2>
+  <p>Jitter bir ortalamayı neredeyse hiç oynatmaz, bir medyanı da neredeyse oynatmaz. 30 ms jitter’lı bir çalıştırma ile jitter’sız bir çalıştırma, tamamen farklı hissettirirken neredeyse aynı “tipik” pingi bildirebilir.</p>
+  <p>Bunun yerine <strong>95. yüzdelik dilimi medyanla</strong> karşılaştırın. İkisi arasındaki fark jitter’dır ve ortalama hâlâ iyi görünürken bir aramayı kesik kesik, bir oyunu oynanamaz yapan şey de o farktır.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

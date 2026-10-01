@@ -67,6 +67,12 @@
       "title": "Проверка приложения в Windows без интернета",
       "description": "Отключите интернет одному приложению, пока локальная сеть работает, сделайте недоступным один сервис или сломайте DNS, ничего не выдёргивая.",
       "link_text": "Без интернета"
+    },
+    "tr": {
+      "slug": "internetsiz-test",
+      "title": "Windows uygulamasını internetsiz test edin",
+      "description": "Yerel ağ çalışırken bir uygulamanın internetini alın, tek bir hizmeti erişilemez yapın ya da DNS’i bozun, hiçbir şeyi çekmeden.",
+      "link_text": "İnternetsiz"
     }
   }
 }

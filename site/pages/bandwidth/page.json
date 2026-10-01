@@ -67,6 +67,12 @@
       "title": "Ограничение скорости загрузки и отдачи в Windows",
       "description": "Ограничьте приложение в Windows заданным числом КБ/с в каждом направлении и посмотрите, что с ним сделают модем 56k или Wi-Fi в самолёте.",
       "link_text": "Ограничение скорости"
+    },
+    "tr": {
+      "slug": "hiz-siniri",
+      "title": "Windows’ta indirme ve yükleme hızını sınırlayın",
+      "description": "Bir Windows uygulamasını her yönde saniyede belirli KB ile sınırlayın ve 56k modemin ya da uçak Wi-Fi’ının ona ne yaptığını görün.",
+      "link_text": "Hız sınırı"
     }
   }
 }

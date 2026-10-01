@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Uygulamanızı kötü bir ağda test edin</h1>
+  <p class="lead">Bean Network Tester, tek bir Windows uygulamasına gecikme, paket kaybı ve hız sınırı ekler. Kullanıcılarınızın trende, otel hotspot’unda ya da tek çubuk çeken bir telefonda gördüklerini siz de görürsünüz.</p>
+  <p>Tüm bilgisayarı değil, tek bir programı hedefleyen bir ağ emülatörüdür; böylece test ettiğiniz uygulama için yavaş interneti yeniden üretirken diğer her şey çalışmaya devam eder.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Araç çalışırken canlı bir ping paket kaybediyor ve gecikme kazanıyor">
+  <figcaption>Çalışan bir bağlantıya gecikme ve paket kaybı eklenmesi.</figcaption>
+</figure>
+
+<section>
+  <h2>Ağınıza ne yapar</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Yavaşlatır</h3>
+      <p>Sabit ya da rastgele bir gecikme ekleyin. 300 ms pingin yükleme göstergenize ne yaptığını öğrenin.</p>
+    </article>
+    <article class="card">
+      <h3>Paket kaybettirir</h3>
+      <p>Paketleri atın, çoğaltın ya da bozun, ardından uygulamanızın toparlanıp toparlanmadığını ya da sadece donup donmadığını izleyin.</p>
+    </article>
+    <article class="card">
+      <h3>Hızı kısar</h3>
+      <p>İndirmeyi ya da yüklemeyi, zayıf bir mobil bağlantının yaptığı gibi saniyede belirli bir KB sayısında tutun.</p>
+    </article>
+    <article class="card">
+      <h3>Bağlantıyı koparır</h3>
+      <p>Bağlantıları kesin, bir portu ya da adresi engelleyin ya da ağı gelip gitmeye zorlayın.</p>
+    </article>
+    <article class="card">
+      <h3>Tek bir uygulamayı hedefler</h3>
+      <p>Bir işlem, PID, adres ya da port seçin. Bilgisayarın geri kalanı normal çalışmaya devam eder.</p>
+    </article>
+    <article class="card">
+      <h3>Birebir tekrarlanır</h3>
+      <p>Aynı seed aynı çalıştırmayı yeniden oynatır. Hata raporu ile hikâye arasındaki fark budur.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Çalıştırmak üç adım sürer</h2>
+  <ol class="steps">
+    <li>Zip dosyasını sürümler sayfasından indirin ve istediğiniz yere çıkarın.</li>
+    <li><code>BeanNetworkTester.exe</code> dosyasını başlatın. Trafiği yakalamak yönetici hakları gerektirdiği için bunları kendisi ister.</li>
+    <li>“{{app.presets.3g}}” gibi hazır bir profil seçin, {{app.buttons.start}} düğmesine basın ve uygulamanızı kullanın.</li>
+  </ol>
+  <p>Aynı dosyada bir metin modu da var, böylece her şey bir pipeline içinde de çalışır. Hizmetinizin %10 paket kaybından sağ çıkıp çıkmadığını denetlemek için tek bir komut yeter:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Süre dolunca kendiliğinden durur; böylece takılı kalan bir adım arkasında bozuk bir ağ bırakamaz. Gerçek trafiğe dokunmadan bir komutu denemek için <code>--simulate</code> ekleyin.</p>
+</section>
+
+<section>
+  <h2>Kimler kullanır</h2>
+  <p>“Bende çalışıyor” durumunu yeniden üretmesi gereken test uzmanları. Bir zaman aşımının gerçekten yaşanmasını isteyen geliştiriciler. Lag’in ağ kodlarına ne yaptığını kontrol eden oyun geliştiricileri. Uygulamanın zayıf bir bağlantıda çalışıp çalışmadığı sorulup da bunu öğrenmenin dürüst bir yolu olmayan herkes.</p>
+</section>
+
+<section>
+  <h2>Belirli bir şey nasıl yapılır</h2>
+  <p>Her biri denemeye değer değerleri ve bunu yapan komutu içeren kısa kılavuzlar.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

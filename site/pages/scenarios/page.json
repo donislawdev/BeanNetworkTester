@@ -67,6 +67,12 @@
       "title": "Меняйте условия сети с течением времени",
       "description": "Файл сценария задаёт временную шкалу: на этих секундах такие настройки. Готовые сценарии идут с программой и повторяются, пока вы наблюдаете.",
       "link_text": "Сценарии во времени"
+    },
+    "tr": {
+      "slug": "zamana-bagli-senaryolar",
+      "title": "Ağ koşullarını zamanla değiştirin",
+      "description": "Senaryo dosyası bir zaman çizelgesidir: şu saniyelerde şu ayarlar. Program hazır senaryolarla gelir ve siz izledikçe onları tekrarlar.",
+      "link_text": "Zamana bağlı senaryolar"
     }
   }
 }

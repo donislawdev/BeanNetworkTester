@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Bağlantıları bilerek koparın</h1>
+  <p class="lead">Yavaş, kötünün bir türüdür. Yok olmak başka bir türdür ve kimsenin yazmadığı kod yolunu bulan odur: yeniden bağlanma, yeniden deneme, kullanıcıya ne olduğunu söyleyen mesaj.</p>
+  <p>Bir uygulamayı hiçbir şeyi çekmeden çevrimdışı test etmenin yolu da budur: LAN modu yerel ağı çalışır bırakır ve interneti alır, tek bir adresi engellemek ise bağlantının geri kalanı sağlamken tek bir hizmeti erişilemez yapar.</p>
+</section>
+
+<section>
+  <h2>Yok olmanın beş farklı yolu</h2>
+  <table>
+    <tr><th>Ayar</th><th>Uygulamanın gördüğü</th></tr>
+    <tr><td><strong>Bağlantıları sıfırla</strong></td><td>Bağlantılar, bir güvenlik duvarının ya da yük dengeleyicinin öldürdüğü gibi aktarımın ortasında ölür. Ne sıklıkta olacağını yüzde olarak siz belirlersiniz.</td></tr>
+    <tr><td><strong>Bağlantı açılıp kapanır</strong></td><td>Ağ bir süreliğine kaybolur, sonra geri gelir, tekrar tekrar. Döngü uzunluğunu ve bunun ne kadarının kesinti olacağını siz belirlersiniz.</td></tr>
+    <tr><td><strong>Bir portu engelle</strong></td><td>O porta giden her şey yok olur. Başka hiçbir şeye dokunulmaz.</td></tr>
+    <tr><td><strong>Bir adresi engelle</strong></td><td>İnternetin geri kalanı çalışırken tek bir sunucu erişilemez olur.</td></tr>
+    <tr><td><strong>LAN modu</strong></td><td>Yerel ağ çalışmaya devam eder, internet çalışmaz. Tam bir captive portal ya da ölü bir yukarı bağlantı biçimi.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Komut satırından</h2>
+  <p>Tek bir uygulamada yaklaşık her on bağlantıdan birini öldürün:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>On saniyelik döngüler, bunların dördü kesinti: sürekli gelip giden bir bağlantı:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Bir sunucu erişilemez, geri kalan her şey yolunda:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Engelleme yalnızca adını andığına çarpar</h2>
+  <p>Kayıp ya da gecikmeden farklı olarak, bir portu ya da adresi engellemek <strong>yalnızca</strong> eşleşen trafiği etkiler. Bu, onu işlem hedefi olmadan çalıştırmak için bunların en güvenlisi yapar ve “şu tek bağımlılığı yok et” komutunun tek satır olmasının nedeni de budur.</p>
+</section>
+
+<section>
+  <h2>Ölü indirme tuzağı</h2>
+  <p>Bir de en büyük paket boyutu var. Biraz düşürün, büyük aktarımlar yavaşlar. 576 gibi bir değere düşürün, indirmeler hiçbir hata vermeden sonsuza dek tamamen durur; çünkü bu artık daha küçük bir paket boyutu değil, ağın fazla büyük olanı attığı ve bunu asla söylemediği klasik kara delik.</p>
+  <p>Bu, bilerek yeniden üretmeye değer gerçek bir arıza kipidir ve kazara karşılaşmak gerçekten kafa karıştırıcıdır. Bu ayarı değiştirdikten hemen sonra bir indirme sessizce ölüyorsa, sebep budur.</p>
+</section>
+
+<section>
+  <h2>Normale dönmek</h2>
+  <p>{{app.buttons.stop}} her şeyi geri yükler. Programı kapatmak da, bir süre sınırı belirlediyseniz o da öyle. Aracın kendisi oturumun ortasında ölecek olsa bile içindeki watchdog, ağınızı bozuk bırakmak yerine yakalamayı durdurur.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

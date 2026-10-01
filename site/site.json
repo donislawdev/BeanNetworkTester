@@ -69,6 +69,12 @@
       "name": "Русский",
       "dir": "ru",
       "og_locale": "ru_RU"
+    },
+    {
+      "code": "tr",
+      "name": "Türkçe",
+      "dir": "tr",
+      "og_locale": "tr_TR"
     }
   ],
   "og_image": "assets/bean.png",

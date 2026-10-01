@@ -67,6 +67,12 @@
       "title": "Целимся в одно приложение в Windows, а не во весь компьютер",
       "description": "Направьте помехи на один процесс, PID, адрес или порт, чтобы тест ломал только проверяемое приложение и не трогал остальной компьютер.",
       "link_text": "Одно приложение"
+    },
+    "tr": {
+      "slug": "tek-uygulamayi-hedefle",
+      "title": "Windows’ta tüm bilgisayarı değil, tek uygulamayı hedefleyin",
+      "description": "Bozulmayı bir işleme, PID’ye, adrese veya porta yöneltin; test yalnızca denenen uygulamayı bozsun, bilgisayarın geri kalanına dokunmasın.",
+      "link_text": "Tek uygulamayı hedefle"
     }
   }
 }

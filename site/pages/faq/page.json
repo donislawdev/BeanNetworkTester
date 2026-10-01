@@ -67,6 +67,12 @@
       "title": "Частые вопросы о Bean Network Tester",
       "description": "Права администратора, затрагивает ли программа весь компьютер, как всё отменить, предупреждение SmartScreen и что программа делает с вашими данными.",
       "link_text": "Вопросы и ответы"
+    },
+    "tr": {
+      "slug": "sik-sorulan-sorular",
+      "title": "Bean Network Tester hakkında sık sorulan sorular",
+      "description": "Yönetici hakları, tüm bilgisayarı etkileyip etkilemediği, nasıl geri alınacağı, SmartScreen uyarısı ve programın verilerinizle ne yaptığı.",
+      "link_text": "Sorular ve yanıtlar"
     }
   }
 }

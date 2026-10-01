@@ -1,0 +1,56 @@
+<section class="hero">
+  <h1>İnsanların ilk sorduğu sorular</h1>
+  <p class="lead">İndirmeden sonra değil, önce yanıtlanmaya değenler.</p>
+</section>
+
+<section>
+  <h2>Neden yönetici haklarına ihtiyaç duyar?</h2>
+  <p>Çünkü paketler bir çekirdek sürücüsü tarafından yakalanır ve Windows normal bir kullanıcı için bir tane yüklemez. Program haklarını başlarken kendisi ister. Komut satırından, yarı yolda başarısız olmak yerine belirli bir çıkış koduyla reddeder.</p>
+</section>
+
+<section>
+  <h2>Tüm makineyi mi bozar, yoksa yalnızca uygulamamı mı?</h2>
+  <p>Neyi hedeflediyseniz onu. Bir hedef belirleyin, yalnızca o uygulama etkilenir. Hedefi boş bırakın, bilgisayardaki her bağlantı etkilenir; program bunu pencerede de komut satırında da, görüntülü görüşmenin neden koptuğunu merak etmenizden önce size bildirir.</p>
+</section>
+
+<section>
+  <h2>Nasıl geri alırım?</h2>
+  <p>{{app.buttons.stop}}. Programı kapatmak aynısını yapar, bir süre sınırı belirlediyseniz o da öyle. Aracın kendisi oturumun ortasında ölürse içindeki watchdog, ağınızı bozuk bırakmak yerine yakalamayı kapatır: bir oturum, onu başlatan programdan uzun yaşamamalıdır.</p>
+</section>
+
+<section>
+  <h2>Bir yere bir şey gönderir mi?</h2>
+  <p>Hayır. Analitik yok, bir hizmete çökme raporu yok, güncelleme denetimi yok. Programın hiçbir ağ istemcisi yoktur. Yapabileceği tek giden bağlantı, siz tıkladıktan sonra destek sayfasını tarayıcınızda açmaktır. Trafiğinizi yakalar, bu yüzden o trafik makinenizi asla terk etmemelidir; okuduğunuz bu sayfa da başkalarından hiçbir şey yüklemez.</p>
+</section>
+
+<section>
+  <h2>Windows indirme hakkında beni uyardı. Neden?</h2>
+  <p>Program imzalıdır; bu yüzden uyarı “Bilinmeyen yayımcı” demek yerine kimin imzaladığını söyler. SmartScreen bir süre daha uyarabilir, çünkü sertifika yenidir ve onu henüz sık görmemiştir. Bazı virüsten koruma araçları da yönetici hakları isteyen ve bir ağ sürücüsü yükleyen bir programa tepki verebilir. Her sürüm bir SHA-256 sağlama toplamı ve bileşenlerinin imzalı bir listesini yayımlar; böylece yeşil bir onay işaretine güvenmek yerine indirdiğinizi doğrulayabilirsiniz.</p>
+</section>
+
+<section>
+  <h2>İndirmem tamamen öldü ve hiçbir şey nedenini söylemiyor</h2>
+  <p>En büyük paket boyutunu kontrol edin. Yeterince düşük ayarlanırsa bu daha küçük bir paket değil, bir kara delik olur: ağ fazla büyük olanı atar ve bunu asla bildirmez. Geri alın, aktarım geri gelir.</p>
+</section>
+
+<section>
+  <h2>Linux ya da macOS’ta çalışır mı?</h2>
+  <p>Hayır ve çalışmayacak. Bir Windows çekirdek sürücüsünün üzerinde durur. Linux’ta <code>netem</code> ile <code>tc</code> bu işi yapar ve zaten kuruludur.</p>
+</section>
+
+<section>
+  <h2>Gerçekten ücretsiz mi? İşte kullanabilir miyim?</h2>
+  <p>Evet. GNU GPL v3 altında ücretsiz ve açık kaynaktır, işte de; kaynak kodu herkesin okuması veya değiştirmesi için açıktır. İndirme herkes için aynı dosyadır.</p>
+</section>
+
+<section>
+  <h2>Daha fazlası</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

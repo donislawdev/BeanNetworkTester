@@ -67,6 +67,12 @@
       "title": "Альтернатива Clumsy для Windows с командной строкой",
       "description": "На что смотреть при выборе инструмента для порчи сети в Windows, чем этот лучше чисто интерактивного и когда стоит взять другой.",
       "link_text": "Альтернатива Clumsy"
+    },
+    "tr": {
+      "slug": "clumsy-alternatifi",
+      "title": "Komut satırlı, Windows için bir Clumsy alternatifi",
+      "description": "Windows için bir ağ bozma aracında nelere bakmalı, bu aracın yalnızca etkileşimli olanlara göre artıları ve ne zaman başkasını seçmeli.",
+      "link_text": "Clumsy alternatifi"
     }
   }
 }

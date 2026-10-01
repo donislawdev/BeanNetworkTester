@@ -67,6 +67,12 @@
       "title": "Хаос-тестирование сети в Windows",
       "description": "Вносите сетевые сбои намеренно, повторяйте их точно с помощью seed и пусть пайплайн по коду завершения решает, выдержало ли приложение.",
       "link_text": "Хаос-тестирование"
+    },
+    "tr": {
+      "slug": "ag-kaos-testi",
+      "title": "Windows’ta ağ kaos testi",
+      "description": "Ağ hatalarını bilerek enjekte edin, seed ile birebir tekrarlayın ve uygulamanın dayanıp dayanmadığına pipeline çıkış koduyla karar versin.",
+      "link_text": "Kaos testi"
     }
   }
 }

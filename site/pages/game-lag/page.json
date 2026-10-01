@@ -67,6 +67,12 @@
       "title": "Имитация лагов и потери пакетов в играх",
       "description": "Дайте игровому клиенту пинг, джиттер и потери плохого соединения только для его процесса и повторяйте тот же запуск с помощью seed.",
       "link_text": "Лаги в играх"
+    },
+    "tr": {
+      "slug": "oyun-lag-simulatoru",
+      "title": "Oyunlarda lag ve paket kaybı simülasyonu",
+      "description": "Bir oyun istemcisine kötü bir bağlantının pingini, jitter’ını ve paket kaybını yalnızca o işlem için verin; aynı çalıştırmayı seed ile tekrarlayın.",
+      "link_text": "Oyunlarda lag"
     }
   }
 }

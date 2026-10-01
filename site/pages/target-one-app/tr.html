@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Makineyi değil, tek bir uygulamayı hedefleyin</h1>
+  <p class="lead">Hedef olmadan bilgisayardaki her bağlantı etkilenir; kullandığınız uzak masaüstü ve düzeltmenin indirmesi dahil. Hedefle, kötü ağı tek bir işlem alır ve geri kalan her şey sürer.</p>
+</section>
+
+<section>
+  <h2>İşleme göre</h2>
+  <p><strong>{{app.fields.target_process}}</strong> alanına bir ad yazın ya da <code>--target</code> geçin. Yalın bir ad parça olarak eşleşir; böylece <code>chrome</code>, <code>chrome.exe</code> dosyasını kapsar:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>İşlem ağacını izler; bu, alt işlem doğuran her şey için önemlidir: bir tarayıcı sekme başına bir işlem açar ve onlar da vurulur.</p>
+  <p>Alan birden fazla adı ve aynı anda birden fazla türde şeyi kabul eder:</p>
+  <table>
+    <tr><th>Yazdığınız</th><th>Anlamı</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>İki uygulama.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, ama sürücü asla. Dışlamalar kazanır.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>“my” ile başlayan her şey.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Bir joker karakter yetmediğinde düzenli ifade.</td></tr>
+    <tr><td><code>4812</code></td><td>Tek bir işlem kimliği.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>1000’in üzerindeki her işlem kimliği.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Adrese veya porta göre</h2>
+  <p>Bazen ilgilenilen birim uygulama değil, bir sunucudur. Bunlar aynı liste, aralık ve dışlama söz dizimini kabul eder ve CIDR ile IPv6’yı anlar:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>İkincisini bilmeye değer: DNS dışındaki her şey. Bir porttan <em>uzağı</em> hedeflemek çoğu zaman istediklerinizi sıralamaktan daha kolaydır.</p>
+</section>
+
+<section>
+  <h2>Bir işlemi ada göre hedeflemek yeniden başlatmasından sağ çıkar</h2>
+  <p>Bir oturum çalışırken uygulamayı yeniden başlatın; <strong>ada</strong> göre bir hedef yeni işlemi yeniden bulur. <strong>İşlem kimliğine</strong> göre bir hedef bunu yapamaz: kimlik, çıkan işleme aitti. Windows’un daha sonra aynı kimliği verdiği başka bir program da etkilenmez. Testiniz sınanan şeyi yeniden başlatıyorsa onu ada göre hedefleyin.</p>
+</section>
+
+<section>
+  <h2>Göz ardı etmemeniz gereken uyarı</h2>
+  <p>Bozulma açıkken, hedeflenecek bir şey ve süre sınırı olmadan başlatın; hem pencere hem komut satırı bunu söyler: bu, bu makinedeki her bağlantıyı etkiler. Bu bir uyarıdır, ret değil: bazen istediğiniz tam olarak budur. Değilse bir hedef ya da <code>--duration</code> belirleyin; {{app.buttons.stop}} her zaman her şeyi geri koyar.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -67,6 +67,12 @@
       "title": "Профили, настройки и коды завершения",
       "description": "Каждый готовый профиль с его значениями, каждая настройка с параметром, единицей и диапазоном и каждый код завершения командной строки.",
       "link_text": "Справочные таблицы"
+    },
+    "tr": {
+      "slug": "basvuru-tablolari",
+      "title": "Profiller, ayarlar ve çıkış kodları",
+      "description": "Hazır her profil değerleriyle, her ayar seçeneği, birimi ve aralığıyla, ayrıca komut satırının döndürebileceği her çıkış kodu.",
+      "link_text": "Başvuru tabloları"
     }
   }
 }

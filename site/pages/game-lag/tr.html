@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Oyunlarda lag ve paket kaybı simülasyonu</h1>
+  <p class="lead">Ağ kodu 1 ms pingli yerel bir bağlantıda yazılır ve otel Wi-Fi’ındaki oyuncular tarafından test edilir. Bu araç o boşluğu kendi makinenizde, yalnızca oyun işleminde kapatır; bilgisayarın geri kalanı kullanılabilir kalır.</p>
+</section>
+
+<section>
+  <h2>Buradan başlayın</h2>
+  <p>Oyun istemcisini hedefleyin, ona gerçekçi kötü bir bağlantı verin ve beş dakika sonra kendiliğinden durmasına izin verin:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 3 --target mygame.exe --duration 300</code></pre>
+  <p>Bunun için hazır bir zaman çizelgesi de var: <code>scenarios</code> klasöründeki <code>overloaded-game-server.json</code>, bir bağlantıyı tıkanıklığa sokup geri çıkarır; böylece istemcinin değişimin iki yönünü nasıl karşıladığını görebilirsiniz. <a href="../zamana-bagli-senaryolar/">Zamana bağlı senaryolar</a> sayfasına bakın.</p>
+</section>
+
+<section>
+  <h2>Bir oyun kaybı gösterirken tarayıcı neden göstermez</h2>
+  <p>Oyun trafiğinin çoğu UDP’dir ve UDP’nin kaybı saklayacak hiçbir şeyi yoktur. TCP üzerindeki bir web sayfası sessizce yeniden gönderir ve yalnızca daha uzun sürer; bu yüzden bir tarayıcı %5 kayıpta iyi hissettirebilirken aynı %5’le bir maç takılır, geri sarar ve eşgüdümden çıkar.</p>
+  <p>Bu, oyunu kaybı test etmek için dürüst yer yapar: ayarladığınız şey, istemcinin gerçekten yaşadığıdır.</p>
+</section>
+
+<section>
+  <h2>Ne ayarlamalı ve neyi arar</h2>
+  <table>
+    <tr><th>Ayar</th><th>Deneyin</th><th>Neyi ortaya çıkarır</th></tr>
+    <tr><td>Gecikme</td><td>80 ile 250 ms</td><td>Tahmin ve ara değerleme. Bir atıştan sonra karakteriniz geri kayıyor mu?</td></tr>
+    <tr><td>Jitter</td><td>40 ile 100 ms</td><td>Arabelleğe alma. Sabit 200 ms, sürekli oynayan bir pingden daha kolay gizlenir.</td></tr>
+    <tr><td>Kayıp</td><td>%2 ile %10</td><td>Eksik durum güncellemeleri ve istemcinin toparlanıp toparlanmadığı ya da sürüklenip sürüklenmediği.</td></tr>
+    <tr><td>Sıçramalar</td><td>1 saniye, nadiren</td><td>Baz istasyonu devrinin neden olduğu takılma. Genellikle en çirkini.</td></tr>
+    <tr><td>Bağlantı açılıp kapanır</td><td>10 sn döngü, %30 kesinti</td><td>Yeniden bağlanma ve yeniden katılma.</td></tr>
+  </table>
+  <p>Jitter’ı ortalama olarak değil, 95. yüzdelik dilim ile medyan arasındaki fark olarak ölçün: jitter bir ortalamayı neredeyse hiç oynatmaz; bu yüzden bir çalıştırma kâğıt üzerinde aynı görünüp farklı oynanabilir.</p>
+</section>
+
+<section>
+  <h2>İki derlemeyi karşılaştırmak seed gerektirir</h2>
+  <p>Rastgele kayıp iki çalıştırmayı birbirinden farklı kılar; bu yüzden “yeni derleme daha kötü hissettiriyor” bir kanıt değildir. Aynı seed aynı kaybı ve aynı jitter’ı yeniden oynatır ve bir hissi karşılaştırmaya dönüştürür:</p>
+<pre><code>BeanNetworkTester.exe --latency 120 --jitter 60 --loss 5 --seed 42 --target mygame.exe --duration 180</code></pre>
+</section>
+
+<section>
+  <h2>Neyi yapamaz</h2>
+  <p>Bu, <em>sizin</em> makinenizin trafiğini biçimlendirir. Sunucuyu yavaşlatmaz, tick hızını değiştirmez ve diğer oyuncuları kötü bir bağlantıya koymaz; yani istemcinizi kötü bir bağlantıya karşı test eder, sunucunuzu yük altında değil. Sunucu tarafı için yük testi gerekir, kötü bağlantılarla dolu bir lobi için ise birden fazla makine gerekir.</p>
+</section>
+
+<section>
+  <h2>Sonraki adımlar</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

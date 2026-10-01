@@ -67,6 +67,12 @@
       "title": "Добавьте задержку и джиттер приложению в Windows",
       "description": "Дайте приложению в Windows пинг далёкого сервера или поезда в туннеле: постоянная задержка, случайный джиттер или редкие всплески.",
       "link_text": "Задержка и джиттер"
+    },
+    "tr": {
+      "slug": "gecikme-ve-jitter",
+      "title": "Windows uygulamasına gecikme ve jitter ekleyin",
+      "description": "Windows uygulamasına uzak bir sunucunun ya da tünelin pingini verin: sabit gecikme, rastgele jitter veya ara sıra ani sıçramalar.",
+      "link_text": "Gecikme ve jitter"
     }
   }
 }

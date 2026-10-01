@@ -67,6 +67,12 @@
       "title": "Bean Network Tester: имитация плохой сети в Windows",
       "description": "Бесплатная программа для Windows: добавляет задержку, потерю пакетов и ограничение скорости одному приложению, чтобы проверить его на плохом соединении.",
       "link_text": "Главная"
+    },
+    "tr": {
+      "slug": "",
+      "title": "Bean Network Tester - Windows’ta kötü ağı simüle edin",
+      "description": "Bir uygulamaya gecikme, paket kaybı ve hız sınırı ekleyen ücretsiz Windows aracı. Kötü bir bağlantıda nasıl davrandığını test edin.",
+      "link_text": "Ana sayfa"
     }
   },
   "schema": "software_application"

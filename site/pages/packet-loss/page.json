@@ -67,6 +67,12 @@
       "title": "Имитация потери пакетов в Windows для одного приложения",
       "description": "Отбрасывайте заданный процент пакетов одного приложения в Windows, смотрите, что ломается, и повторяйте тот же запуск с помощью seed.",
       "link_text": "Потеря пакетов"
+    },
+    "tr": {
+      "slug": "paket-kaybi",
+      "title": "Windows’ta bir uygulama için paket kaybı simülasyonu",
+      "description": "Windows’ta bir uygulamanın paketlerinin belirli bir yüzdesini atın, neyin bozulduğunu görün ve aynı çalıştırmayı seed ile birebir tekrarlayın.",
+      "link_text": "Paket kaybı"
     }
   }
 }
