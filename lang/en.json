@@ -461,6 +461,7 @@
   "summary.asym_up": "upload: {v}",
   "summary.asym_up_clean": "upload: untouched",
   "summary.block": "blocking {v}",
+  "summary.block_either": "blocking {ip} (any port) and port {port} (any IP)",
   "summary.corrupt": "{v}% corruption",
   "summary.dest": "dest only {v}",
   "summary.down": "download <= {v} KB/s",

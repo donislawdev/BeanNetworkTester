@@ -31,9 +31,11 @@ packet, and on Windows the timer granularity turns that into a ceiling: measured
 it delivers **~1900 packets/s no matter what ``gen_kbps`` says** (2000 kbps and
 1 Gbps both land there). Its flow space is just as small - three local ports
 against three hard-coded remote addresses, so the connection table stops at
-**12 rows** however long the test runs. That is fine for the engine tests below,
-which are about threads rather than volume, but it is nowhere near a load: a
-model-worker test on that table would sort twelve rows and prove nothing.
+**9 rows** however long the test runs (12 until 2026-10-01, when inbound packets
+still came from the local address and made three rows of their own). That is
+fine for the engine tests below, which are about threads rather than volume, but
+it is nowhere near a load: a model-worker test on that table would sort nine rows
+and prove nothing.
 ``FastDivert`` exists for that one test, and only there.
 """
 import threading

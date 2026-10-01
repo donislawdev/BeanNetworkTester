@@ -461,6 +461,7 @@
   "summary.asym_up": "wysyłanie: {v}",
   "summary.asym_up_clean": "wysyłanie: bez zmian",
   "summary.block": "blokada {v}",
+  "summary.block_either": "blokada {ip} (dowolny port) oraz portu {port} (dowolne IP)",
   "summary.corrupt": "{v}% uszkodzeń",
   "summary.dest": "tylko cel {v}",
   "summary.down": "pobieranie <= {v} KB/s",

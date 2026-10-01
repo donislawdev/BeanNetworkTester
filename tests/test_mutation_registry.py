@@ -2658,12 +2658,10 @@ MUTATIONS = [
         # to be load-bearing on its own.
         "label": "reordering: a refused send still moves the mark",
         "file": "beantester/engine.py",
-        "old": '                self._bump("drop_send")\n'
-               '                self._conns_log.charge(key, "dropped")\n',
-        "new": '                self._bump("drop_send")\n'
-               '                self._conns_log.charge(key, "dropped")\n'
-               "                self._note_order(arrived,\n"
-               '                                 bool(getattr(packet, "is_outbound", True)))\n',
+        "old": '                if self._release_lost(copy, key, "drop_send") and session.live:\n',
+        "new": "                self._note_order(arrived,\n"
+               '                                 bool(getattr(packet, "is_outbound", True)))\n'
+               '                if self._release_lost(copy, key, "drop_send") and session.live:\n',
         "test": "test_a_packet_the_driver_refused_does_not_make_the_next_one_look_overtaken",
     },
     {
@@ -5807,6 +5805,98 @@ MUTATIONS = [
         "old": "        if failed:\n            error = RuntimeError(\n",
         "new": "        if 0 < len(failed) < 4:\n            error = RuntimeError(\n",
         "test": "test_a_table_that_fails_is_recorded_every_time_and_so_is_none_answering",
+    },
+    {
+        # P3-2: stamps frozen while NAT was off judged a busy flow as silent.
+        "label": "core: NAT switched back on keeps the stamps that stopped moving",
+        "file": "beantester/core.py",
+        "old": "            if self.nat_timeout_s > 0 and not was_on:\n",
+        "new": "            if False:\n",
+        "test": "test_switching_nat_back_on_does_not_judge_a_busy_flow_by_old_stamps",
+    },
+    {
+        # P3-2: forgetting on EVERY set_nat would end each blackhole at the next Apply.
+        "label": "core: every set_nat forgets the NAT stamps",
+        "file": "beantester/core.py",
+        "old": "            if self.nat_timeout_s > 0 and not was_on:\n",
+        "new": "            if self.nat_timeout_s > 0:\n",
+        "test": "test_applying_the_same_nat_timeout_again_keeps_an_expired_mapping_shut",
+    },
+    {
+        # P3-8: TCP and UDP on the same ports and peer shared one NAT mapping.
+        "label": "core: the flow key of the NAT table loses its protocol",
+        "file": "beantester/core.py",
+        "old": "            key = self._flowkey(local_port, remote_ip, remote_port, is_tcp)\n",
+        "new": "            key = self._flowkey(local_port, remote_ip, remote_port)\n",
+        "test": "test_a_udp_flow_does_not_keep_a_tcp_mapping_alive",
+    },
+    {
+        # P3-7a: the injector threw the copy flag away, as it shipped.
+        "label": "engine: the injector forgets which release is a copy",
+        "file": "beantester/engine.py",
+        "old": "                release, arrived, packet, copy, key, modified = self._heap[0]\n",
+        "new": "                release, arrived, packet, _, key, modified = self._heap[0]\n"
+               "                copy = False\n",
+        "test": "test_a_copy_the_driver_refused_is_not_a_lost_packet",
+    },
+    {
+        # P3-7a: a refused copy counted as a lost packet.
+        "label": "engine: a refused copy counts as a lost packet",
+        "file": "beantester/engine.py",
+        "old": "        if copy:\n            return False\n        self._bump(counter)\n",
+        "new": "        self._bump(counter)\n",
+        "test": "test_a_copy_the_driver_refused_is_not_a_lost_packet",
+    },
+    {
+        # P3-7a: a copy stranded between the pop and the send counted at STOP.
+        "label": "engine: a copy stranded at STOP counts as a lost packet",
+        "file": "beantester/engine.py",
+        "old": "                    self._release_lost(copy, key, \"drop_shutdown\")\n",
+        "new": "                    self._release_lost(False, key, \"drop_shutdown\")\n",
+        "test": "test_a_duplicate_copy_popped_after_the_session_ended_is_not_a_lost_packet",
+    },
+    {
+        # NOWE-2-4: the warning fired for a copy, quoting a count it did not raise.
+        "label": "engine: a refused copy warns that sends are failing",
+        "file": "beantester/engine.py",
+        "old": "                if self._release_lost(copy, key, \"drop_send\") and session.live:\n",
+        "new": "                self._release_lost(copy, key, \"drop_send\")\n"
+               "                if session.live:\n",
+        "test": "test_a_copy_the_driver_refused_is_not_a_lost_packet",
+    },
+    {
+        # P3-7b: every late copy read as a packet overtaken.
+        "label": "engine: a duplicate copy counts as reordered",
+        "file": "beantester/engine.py",
+        "old": "        if copy:\n            return\n        if arrived < self._last_sent[is_out]:\n",
+        "new": "        if arrived < self._last_sent[is_out]:\n",
+        "test": "test_a_duplicate_copy_is_not_counted_as_overtaken",
+    },
+    {
+        # P3-7b: the injector does not tell the order check it sent a copy.
+        "label": "engine: the order check is not told the release was a copy",
+        "file": "beantester/engine.py",
+        "old": "                    self._note_order(arrived, bool(is_out), copy)\n",
+        "new": "                    self._note_order(arrived, bool(is_out))\n",
+        "test": "test_a_duplicate_copy_is_not_counted_as_overtaken",
+    },
+    {
+        # P3-5: "blocking 203.0.113.0/24:8080" read as both at once.
+        "label": "summary: an address-and-port block reads as both at once",
+        "file": "beantester/summary.py",
+        "old": "    if block_ip and block_port:\n        return tr(\"summary.block_either\"",
+        "new": "    if False:\n        return tr(\"summary.block_either\"",
+        "test": "test_a_block_on_an_address_and_a_port_reads_as_either_not_both",
+    },
+    {
+        # P3-6: simulated inbound traffic came from this machine's own address.
+        "label": "synthetic: inbound packets come from the local address again",
+        "file": "beantester/synthetic.py",
+        "old": "            src_addr=local if is_outbound else remote,\n"
+               "            dst_addr=remote if is_outbound else local,\n",
+        "new": "            src_addr=local,\n"
+               "            dst_addr=remote,\n",
+        "test": "test_simulated_inbound_traffic_comes_from_the_remote_end",
     },
 ]
 

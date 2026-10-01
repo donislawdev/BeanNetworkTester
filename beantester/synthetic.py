@@ -92,6 +92,7 @@ class SyntheticDivert:
     """
 
     _REMOTE_ADDRS = ("93.184.216.34", "142.250.1.100", "1.1.1.1")
+    _LOCAL_ADDR = "10.0.0.2"
 
     def __init__(self, gen_kbps=2000, ports=(2000, 2001, 2002), seed=None):
         self._interval = 1500.0 / (gen_kbps * 1024) if gen_kbps > 0 else 0.001
@@ -128,12 +129,23 @@ class SyntheticDivert:
         rng = self._rng
         is_outbound = rng.random() < 0.4
         layer = self._make_layer(rng, is_outbound)
+        raw = b"\x00" * rng.randint(200, 1500)
+        port = rng.choice(self._ports)
+        remote = rng.choice(self._REMOTE_ADDRS)
+        # The remote end is the SOURCE of an inbound packet. Both directions used
+        # to come from 10.0.0.2, so the engine read this machine's own address as
+        # the peer of everything inbound: --lan and --internet-only cut one
+        # direction each, destination and block rules matched outbound only, and
+        # NAT never paired a reply with its request (external review, P3-6). The
+        # draws above are the same ones in the same order, so a seed still gives
+        # the same packets.
+        local = self._LOCAL_ADDR
         return _SyntheticPacket(
-            raw=b"\x00" * rng.randint(200, 1500),
+            raw=raw,
             is_outbound=is_outbound,
-            port=rng.choice(self._ports),
-            src_addr="10.0.0.2",
-            dst_addr=rng.choice(self._REMOTE_ADDRS),
+            port=port,
+            src_addr=local if is_outbound else remote,
+            dst_addr=remote if is_outbound else local,
             **layer,
         )
 

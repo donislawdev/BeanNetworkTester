@@ -1594,6 +1594,36 @@ def test_cli_simulate_end_to_end():
     check("CLI-sim: loss ~30%", 0.24 < frac < 0.36, f"(measured {frac:.2f})")
 
 
+def test_simulated_inbound_traffic_comes_from_the_remote_end():
+    """External review, P3-6: both directions of ``--simulate`` traffic came FROM
+    10.0.0.2, so the engine read this machine's own address as the peer of every
+    inbound packet. ``--lan`` then cut outbound only and ``--internet-only``
+    inbound only, destination and block rules matched outbound only, and NAT
+    never paired a reply with its request - in the mode used to check a
+    configuration without a driver."""
+    divert = SyntheticDivert(gen_kbps=20000, seed=3)
+    remotes, local = set(SyntheticDivert._REMOTE_ADDRS), "10.0.0.2"
+    packets = [divert.recv() for _ in range(200)]
+    inbound = [p for p in packets if not p.is_outbound]
+    outbound = [p for p in packets if p.is_outbound]
+    check("both directions were generated", inbound and outbound,
+          f"(in {len(inbound)}, out {len(outbound)})")
+    check("inbound: from a remote end to this machine",
+          all(p.src_addr in remotes and p.dst_addr == local for p in inbound))
+    check("outbound: from this machine to a remote end",
+          all(p.src_addr == local and p.dst_addr in remotes for p in outbound))
+
+    sh = BeanEngine()
+    sh.set_lan(True)                     # cut the internet: every remote here is public
+    sh.start("both", divert=SyntheticDivert(gen_kbps=3000, seed=7))
+    time.sleep(1.0)
+    sh.stop()
+    s = sh.stats_snapshot()
+    check("--lan cuts the internet in BOTH directions",
+          s["seen"] > 50 and s["bytes_in"] == 0 and s["bytes_out"] == 0,
+          f"(seen={s['seen']}, bytes_in={s['bytes_in']}, bytes_out={s['bytes_out']})")
+
+
 # --- stability / edge-case tests ------------------------------------------- #
 
 

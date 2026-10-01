@@ -30,6 +30,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A duplicated packet is no longer counted as lost or as reordered.** With *Duplicate* on,
+  the second copy of a packet that the driver refused was counted in "Send failed" and in the
+  connection's dropped packets, and the warning about failing sends fired for it. A copy still
+  queued at STOP was counted in "Dropped at stop". And almost every copy was counted in
+  "Reordered", because it leaves after the packet that came next. These counters now count
+  packets, and a copy that is not delivered is not a lost packet.
+
+- **NAT timeout keeps a busy connection open.** Switched off and on again during a session,
+  *NAT timeout* dropped incoming packets of connections that had been busy the whole time,
+  until each of them next sent something. And UDP traffic kept a silent TCP connection's
+  mapping open when both used the same ports and the same remote end. Each now has its own
+  mapping, and switching NAT timeout on starts every mapping fresh.
+
+- **The "Active:" bar describes a block on an address and a port correctly.** A packet is
+  blocked when its address matches or its port does, but the bar wrote "blocking
+  203.0.113.0/24:8080", which reads as both at once. It now says "blocking 203.0.113.0/24 (any
+  port) and port 8080 (any IP)".
+
+- **`--simulate` traffic comes in from the remote end.** Incoming simulated packets came from
+  this computer's own address, so `--lan` cut only outgoing traffic, `--internet-only` only
+  incoming, `--dst-ip` and `--block-ip` matched outgoing traffic only, and NAT timeout never
+  paired a reply with its request. Both directions now behave as they do on a real connection.
+
 - **Closing the console window stops a command-line run cleanly.** Closing the window ended
   the program at once: no summary, no `--repro-out` report, and after a real capture the
   WinDivert driver stayed loaded. It now ends the run the way Ctrl+Break does: the capture
