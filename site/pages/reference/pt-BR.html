@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Perfis, configurações e códigos de saída</h1>
+  <p class="lead">Três tabelas, nenhuma digitada à mão. Elas são geradas a partir dos registros do próprio programa quando esta página é construída, então não podem dizer algo que o programa não diz.</p>
+</section>
+
+<section>
+  <h2>Perfis prontos</h2>
+  <p>Escolha um deles e o formulário se preenche sozinho. Um traço significa que o perfil deixa aquela configuração como está. As velocidades estão em quilobytes por segundo: multiplique por oito para comparar com o que um provedor anuncia.</p>
+  {{page.preset_table}}
+  <p>Selecionar um perfil só preenche os campos. Nada muda na rede até você pressionar {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Cada configuração e a opção que a define</h2>
+  <p>A janela e a linha de comando aceitam as mesmas configurações. Esta é a lista completa, com a unidade e a faixa que cada uma aceita.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Códigos de saída</h2>
+  <p>A linha de comando nunca termina com um traceback. Cada jeito de uma execução terminar tem um número, então um pipeline consegue distinguir um aplicativo que falha de uma ferramenta que não conseguiu iniciar.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Relacionados</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

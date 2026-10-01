@@ -43,6 +43,18 @@
       "title": "Cambia las condiciones de red con el tiempo",
       "description": "Un archivo de escenario es una línea de tiempo: en estos segundos, estos ajustes. El programa incluye escenarios listos y los repite mientras tú observas.",
       "link_text": "Escenarios temporales"
+    },
+    "pt-BR": {
+      "slug": "cenarios-ao-longo-do-tempo",
+      "title": "Mude as condições de rede ao longo do tempo",
+      "description": "Um arquivo de cenário é uma linha do tempo: nestes segundos, estas configurações. O programa traz cenários prontos e os repete enquanto você observa.",
+      "link_text": "Cenários no tempo"
+    },
+    "it": {
+      "slug": "scenari-nel-tempo",
+      "title": "Cambia le condizioni di rete nel tempo",
+      "description": "Un file di scenario è una linea temporale: in questi secondi, queste impostazioni. Il programma include scenari pronti e li ripete finché osservi.",
+      "link_text": "Scenari nel tempo"
     }
   }
 }

@@ -43,6 +43,18 @@
       "title": "Descargar Bean Network Tester para Windows",
       "description": "Descarga gratuita para Windows 10 y 11, en zip o instalador. Qué incluye la versión, cómo comprobar el archivo y qué necesita para funcionar.",
       "link_text": "Descarga"
+    },
+    "pt-BR": {
+      "slug": "baixar",
+      "title": "Baixar o Bean Network Tester para Windows",
+      "description": "Download gratuito para Windows 10 e 11, em zip ou instalador. O que vem na versão, como conferir o arquivo e o que ele precisa para funcionar.",
+      "link_text": "Download"
+    },
+    "it": {
+      "slug": "scarica",
+      "title": "Scarica Bean Network Tester per Windows",
+      "description": "Download gratuito per Windows 10 e 11, come zip o installer. Cosa contiene la versione, come controllare il file e cosa serve per farlo funzionare.",
+      "link_text": "Download"
     }
   }
 }

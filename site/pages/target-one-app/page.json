@@ -43,6 +43,18 @@
       "title": "Apunta a una sola aplicación en Windows, no a todo el sistema",
       "description": "Dirige el deterioro a un proceso, un PID, una dirección o un puerto, para que tu prueba rompa solo la aplicación que estás probando y deje en paz el resto.",
       "link_text": "Apuntar a una app"
+    },
+    "pt-BR": {
+      "slug": "mirar-em-um-app",
+      "title": "Mire em um aplicativo no Windows, não no computador todo",
+      "description": "Direcione a degradação a um processo, PID, endereço ou porta, para que o teste quebre só o aplicativo testado e deixe o resto do computador em paz.",
+      "link_text": "Mirar em um app"
+    },
+    "it": {
+      "slug": "puntare-a-una-app",
+      "title": "Punta a una sola app su Windows, non a tutto il computer",
+      "description": "Indirizza il degrado a un processo, PID, indirizzo o porta, così il test rompe solo l’app in prova e lascia in pace il resto del computer.",
+      "link_text": "Puntare a una app"
     }
   }
 }

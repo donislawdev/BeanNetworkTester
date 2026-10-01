@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Scarica Bean Network Tester</h1>
+  <p class="lead">Uno zip che funziona senza installare nulla, oppure un installer per tutti gli utenti del computer. In entrambi i casi il programma chiede da solo i privilegi di amministratore.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>I fatti, in un unico posto</h2>
+  <ul class="facts">
+    <li><strong>Prezzo:</strong> gratuito, e software libero: GNU GPL v3.</li>
+    <li><strong>Funziona su:</strong> Windows 10 e Windows 11, 64 bit.</li>
+    <li><strong>Richiede:</strong> privilegi di amministratore, perché il traffico è catturato da un driver.</li>
+    <li><strong>Installazione:</strong> non necessaria. Decomprimi lo zip dove vuoi ed eseguilo. Oppure usa l’installer <code>.msi</code>, che aggiunge una voce al menu Start e mette il programma nel <code>PATH</code> (richiede privilegi di amministratore).</li>
+    <li><strong>Invia dati:</strong> da nessuna parte. Nessuna telemetria, nessun controllo degli aggiornamenti, nessun client di rete.</li>
+    <li><strong>Modalità:</strong> una finestra e lo stesso file come strumento da riga di comando.</li>
+    <li><strong>Sorgenti:</strong> <a href="{{site.repo_url}}">su GitHub</a>, con la stessa licenza.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Cosa contiene la versione</h2>
+  <p>Una versione pubblica cinque file. Due sono il programma, e gli altri tre ci sono per non farti prendere il download sulla fiducia:</p>
+  <ul>
+    <li><strong>lo zip</strong>: il programma e il driver che usa, insieme in una cartella;</li>
+    <li><strong>l’installer .msi</strong>: lo stesso programma, installato per tutti gli utenti del computer, con una voce nel menu Start;</li>
+    <li><strong>SHA256SUMS.txt</strong>: i checksum dello zip e dell’installer;</li>
+    <li><strong>un SBOM</strong>: un elenco standard di ogni componente interno, con versioni e licenze, firmato rispetto allo zip;</li>
+    <li><strong>un file .sigstore.json</strong>: quella firma come file, per controllarla senza chiedere a GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Controllare di aver ricevuto ciò che abbiamo costruito</h2>
+  <p>Il checksum risponde a «è arrivato invariato». In PowerShell, confronta l’output con la riga in <code>SHA256SUMS.txt</code> (per l’installer metti <code>.msi</code> al posto di <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>La firma risponde a un’altra domanda, «è uscito da quel repository», e richiede lo strumento da riga di comando di GitHub:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Scrivi come prima parte il nome dello zip scaricato: <code>gh</code> non accetta un <code>*</code> lì. Mantieni <code>--predicate-type</code>: senza, <code>gh</code> cerca un altro tipo di dichiarazione e riporta di non averne trovata nessuna.</p>
+  <p>Un checksum copiato dalla stessa pagina del download prova meno di una firma. Entrambi sono pubblicati, quindi vale la pena controllarli entrambi.</p>
+</section>
+
+<section>
+  <h2>Windows potrebbe avvisarti</h2>
+  <p>Il programma e l’installer sono firmati, quindi Windows indica chi li ha firmati invece di dire «Autore sconosciuto». Il certificato è nuovo, quindi SmartScreen potrebbe ancora avvisare per un po’: non l’ha ancora visto spesso. Riguarda il certificato, non il file, e i due controlli qui sopra ti permettono di verificare il file da solo. La <a href="../domande-frequenti/">pagina delle domande</a> ne parla e spiega di cosa ha bisogno il driver.</p>
+</section>
+
+<section>
+  <h2>Da dove iniziare dopo che funziona</h2>
+  {{page.guide_links}}
+</section>

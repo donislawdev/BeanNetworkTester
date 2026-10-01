@@ -43,6 +43,18 @@
       "title": "Añade latencia y jitter a una aplicación de Windows",
       "description": "Dale a una aplicación de Windows el ping de un servidor lejano o de un túnel: con retardo constante, jitter aleatorio o picos ocasionales.",
       "link_text": "Latencia y jitter"
+    },
+    "pt-BR": {
+      "slug": "latencia-e-jitter",
+      "title": "Adicione latência e jitter a um aplicativo no Windows",
+      "description": "Dê a um aplicativo do Windows o ping de um servidor distante ou de um túnel: com atraso constante, jitter aleatório ou picos ocasionais.",
+      "link_text": "Latência e jitter"
+    },
+    "it": {
+      "slug": "latenza-e-jitter",
+      "title": "Aggiungi latenza e jitter a un’app su Windows",
+      "description": "Dai a un’app Windows il ping di un server lontano o di una galleria: con ritardo costante, jitter casuale o picchi occasionali.",
+      "link_text": "Latenza e jitter"
     }
   }
 }

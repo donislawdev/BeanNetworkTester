@@ -43,6 +43,18 @@
       "title": "Preguntas frecuentes sobre Bean Network Tester",
       "description": "Permisos de administrador, si afecta a todo el sistema, cómo deshacerlo, el aviso de SmartScreen y qué hace el programa con tus datos.",
       "link_text": "Preguntas y respuestas"
+    },
+    "pt-BR": {
+      "slug": "perguntas-frequentes",
+      "title": "Perguntas frequentes sobre o Bean Network Tester",
+      "description": "Permissões de administrador, se afeta o computador todo, como desfazer, o aviso do SmartScreen e o que o programa faz com os seus dados.",
+      "link_text": "Perguntas e respostas"
+    },
+    "it": {
+      "slug": "domande-frequenti",
+      "title": "Domande frequenti su Bean Network Tester",
+      "description": "Privilegi di amministratore, se tocca tutto il computer, come annullare, l’avviso di SmartScreen e cosa fa il programma con i tuoi dati.",
+      "link_text": "Domande e risposte"
     }
   }
 }

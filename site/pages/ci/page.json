@@ -43,6 +43,18 @@
       "title": "Simula una mala red en CI con Windows",
       "description": "El mismo ejecutable funciona sin ventana, informa con códigos de salida y NDJSON y se detiene solo, así que un pipeline puede probar una mala conexión.",
       "link_text": "Pruebas de red en CI"
+    },
+    "pt-BR": {
+      "slug": "testes-de-rede-no-ci",
+      "title": "Simule uma rede ruim no CI com Windows",
+      "description": "O mesmo executável roda sem janela, informa por códigos de saída e NDJSON e para sozinho, então um pipeline pode testar uma conexão ruim.",
+      "link_text": "Testes de rede no CI"
+    },
+    "it": {
+      "slug": "test-di-rete-in-ci",
+      "title": "Simula una brutta rete in CI su Windows",
+      "description": "Lo stesso eseguibile funziona senza finestra, riporta con codici di uscita e NDJSON e si ferma da solo, così una pipeline può provare una brutta connessione.",
+      "link_text": "Test di rete in CI"
     }
   }
 }

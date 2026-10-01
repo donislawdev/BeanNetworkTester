@@ -1,0 +1,55 @@
+<section class="hero">
+  <h1>Interrompere le connessioni di proposito</h1>
+  <p class="lead">Lento è un modo di essere messi male. Scomparso è un altro, ed è quello che trova il percorso di codice che nessuno ha scritto: la riconnessione, il nuovo tentativo, il messaggio che dice all’utente cos’è successo.</p>
+  <p>È anche il modo di provare un’applicazione offline senza staccare nulla: la modalità LAN lascia funzionare la rete locale e toglie internet, e bloccare un indirizzo rende irraggiungibile un singolo servizio mentre il resto della connessione va bene.</p>
+</section>
+
+<section>
+  <h2>Cinque modi diversi di sparire</h2>
+  <table>
+    <tr><th>Impostazione</th><th>Cosa vede l’app</th></tr>
+    <tr><td><strong>Reset delle connessioni</strong></td><td>Le connessioni muoiono a metà trasferimento, come le ucciderebbe un firewall o un bilanciatore di carico. Imposti tu la frequenza, in percentuale.</td></tr>
+    <tr><td><strong>Collegamento che va e viene</strong></td><td>La rete scompare per un po’ e poi torna, ancora e ancora. Imposti tu la durata del ciclo e quanta parte è di inattività.</td></tr>
+    <tr><td><strong>Bloccare una porta</strong></td><td>Tutto ciò che va a quella porta scompare. Nient’altro viene toccato.</td></tr>
+    <tr><td><strong>Bloccare un indirizzo</strong></td><td>Un server diventa irraggiungibile mentre il resto di internet funziona.</td></tr>
+    <tr><td><strong>Modalità LAN</strong></td><td>La rete locale continua a funzionare, internet no. Esattamente la forma di un captive portal o di un uplink morto.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Dalla riga di comando</h2>
+  <p>Uccidere circa una connessione su dieci, su un’app:</p>
+<pre><code>BeanNetworkTester.exe --rst-prob 10 --target myapp.exe --duration 60</code></pre>
+  <p>Cicli di dieci secondi, quattro dei quali di inattività: un collegamento che va e viene di continuo:</p>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+  <p>Un server irraggiungibile, tutto il resto a posto:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+</section>
+
+<section>
+  <h2>Il blocco colpisce solo ciò che nomina</h2>
+  <p>A differenza di perdita o ritardo, bloccare una porta o un indirizzo riguarda <strong>solo</strong> il traffico corrispondente. Questo lo rende il più sicuro di questi da eseguire senza un processo di destinazione, ed è il motivo per cui «fai sparire questa dipendenza» è un comando di una riga.</p>
+</section>
+
+<section>
+  <h2>La trappola del download morto</h2>
+  <p>C’è anche una dimensione massima del pacchetto. Abbassala un poco e i trasferimenti grandi rallentano. Abbassala a un valore come 576 e i download si fermano del tutto, per sempre, senza alcun errore, perché non è più una dimensione di pacchetto più piccola: è il classico buco nero in cui la rete scarta ciò che è troppo grande e non lo dice mai.</p>
+  <p>È una vera modalità di guasto che vale la pena riprodurre di proposito, ed è davvero sconcertante incontrarla per caso. Se un download muore in silenzio subito dopo aver cambiato questa impostazione, è per questo.</p>
+</section>
+
+<section>
+  <h2>Tornare alla normalità</h2>
+  <p>{{app.buttons.stop}} ripristina tutto. Lo fa anche chiudere il programma, e lo fa anche il limite di tempo se ne hai impostato uno. Se lo strumento stesso dovesse morire a metà sessione, un watchdog al suo interno interrompe la cattura invece di lasciare la tua rete in uno stato rotto.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

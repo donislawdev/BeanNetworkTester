@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simulare una brutta rete in CI</h1>
+  <p class="lead">La finestra è facoltativa. Lo stesso eseguibile funziona come strumento da riga di comando, termina da solo dopo un tempo stabilito e riporta cos’è successo in un modo che una pipeline sa leggere.</p>
+</section>
+
+<section>
+  <h2>La forma di un passaggio</h2>
+  <p>Degrada per la durata del test, poi lascia che si fermi da solo. Nessun passaggio di pulizia da dimenticare:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>In un job di GitHub Actions, su un runner Windows self-hosted:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Due cose sul runner: catturare il traffico richiede privilegi di amministratore, e un runner ospitato non te li darà, quindi questo va su una macchina Windows self-hosted.</p>
+</section>
+
+<section>
+  <h2>Ogni fine ha un codice di uscita</h2>
+  <p>Niente finisce con un traceback. Ogni modo in cui un’esecuzione può terminare ha un numero, quindi una pipeline può distinguere «la tua app è fallita» da «lo strumento non è riuscito ad avviarsi»:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Output leggibile da macchina</h2>
+  <p><code>--format json</code> scrive un oggetto JSON per riga: campioni durante l’esecuzione e un riepilogo alla fine, così un passaggio successivo può fare asserzioni su di esso:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Le righe di log vanno sullo standard error e i dati sullo standard output, quindi reindirizzare i dati non mescola mai i due. <code>--seed</code> rende l’esecuzione ripetibile, ed è ciò di cui un test instabile ha bisogno prima che qualcuno possa discuterne.</p>
+</section>
+
+<section>
+  <h2>Una prova a secco che non tocca nulla</h2>
+  <p>Due opzioni rendono sicuro collegarlo prima di fidarsi: <code>--dry-run</code> riporta cosa farebbero le impostazioni ed esce, e <code>--simulate</code> esegue l’intero motore su traffico sintetico, senza caricare il driver e senza toccare la rete. Entrambe sono utili in una build che non deve degradare la macchina su cui gira.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

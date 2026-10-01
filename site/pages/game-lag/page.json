@@ -43,6 +43,18 @@
       "title": "Simula lag y pérdida de paquetes en juegos",
       "description": "Dale a un cliente de juego el ping, el jitter y la pérdida de paquetes de una mala conexión, solo para ese proceso, y repite la ejecución con una semilla.",
       "link_text": "Lag en juegos"
+    },
+    "pt-BR": {
+      "slug": "simulador-de-lag-em-jogos",
+      "title": "Simule lag e perda de pacotes em jogos",
+      "description": "Dê a um cliente de jogo o ping, o jitter e a perda de pacotes de uma conexão ruim, só para esse processo, e repita a execução com uma semente.",
+      "link_text": "Lag em jogos"
+    },
+    "it": {
+      "slug": "simulatore-di-lag-nei-giochi",
+      "title": "Simula lag e perdita di pacchetti nei giochi",
+      "description": "Dai a un client di gioco il ping, il jitter e la perdita di pacchetti di una brutta connessione, solo per quel processo, e ripeti l’esecuzione con un seed.",
+      "link_text": "Lag nei giochi"
     }
   }
 }

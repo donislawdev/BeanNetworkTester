@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Limitare la velocità di download e upload</h1>
+  <p class="lead">Limita un’applicazione a un numero fisso di kilobyte al secondo e non otterrà di più. Le due direzioni sono separate, quindi puoi darle un download veloce e un upload disperato, che è esattamente l’aspetto della maggior parte delle connessioni domestiche e mobili.</p>
+</section>
+
+<section>
+  <h2>Nella finestra</h2>
+  <ol class="steps">
+    <li>Imposta <strong>{{app.fields.target_process}}</strong> sulla tua applicazione.</li>
+    <li>Compila <strong>{{app.fields.download}}</strong>, <strong>{{app.fields.upload}}</strong> o entrambi, in KB/s. Lascia un campo a 0 per non toccare quella direzione.</li>
+    <li>Premi <strong>{{app.buttons.start}}</strong>.</li>
+  </ol>
+<pre><code>BeanNetworkTester.exe --down 128 --up 32 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Cosa significano i numeri</h2>
+  <table>
+    <tr><th>KB/s</th><th>Circa</th><th>Cos’è</th></tr>
+    <tr><td>6</td><td>56 kbit/s</td><td>Un modem dial-up. Il profilo «{{app.presets.modem56k}}».</td></tr>
+    <tr><td>128</td><td>1 Mbit/s</td><td>Wi-Fi in volo, un hotel affollato, un cattivo segnale mobile.</td></tr>
+    <tr><td>1024</td><td>8 Mbit/s</td><td>Una linea domestica modesta. Basta per un flusso video.</td></tr>
+    <tr><td>12800</td><td>100 Mbit/s</td><td>Una normale connessione fissa di oggi.</td></tr>
+  </table>
+  <p>Kilobyte, non kilobit: moltiplica per otto per confrontarli con quanto pubblicizza un provider. Limitare entrambe le direzioni insieme è ciò che fa sembrare una connessione un brutto hotspot e non solo un download lento.</p>
+</section>
+
+<section>
+  <h2>La coda conta quanto il limite</h2>
+  <p>Un limite di velocità ha bisogno di un posto dove mettere i pacchetti che non ci stanno ancora. È l’impostazione <strong>{{app.fields.buffer}}</strong>, in millisecondi, e si comporta come la coda alla cassa di un supermercato:</p>
+  <ul>
+    <li><strong>Una coda corta</strong> significa che i pacchetti vengono buttati appena la linea è piena. La tua app vede perdita e reagisce in fretta.</li>
+    <li><strong>Una coda lunga</strong> significa che nulla viene buttato, ma tutto aspetta. La tua app vede la connessione diventare sempre più lenta invece di fallire: l’effetto di una linea domestica congestionata e il motivo per cui una videochiamata peggiora mentre un download prosegue.</li>
+  </ul>
+  <p>Il profilo «{{app.presets.bufferbloat}}» è esattamente questo: un limite con una coda lunga. Prova la stessa velocità con una coda corta e una lunga e guarda quanto cambia il comportamento dell’app.</p>
+</section>
+
+<section>
+  <h2>Cosa aspettarsi</h2>
+  <p>Con un limite attivo, il contatore dei pacchetti scartati può restare a zero. Non è un bug: un limite prima fa attendere i pacchetti e li scarta solo quando la coda è davvero piena. Dagli un buffer piccolo e gli scarti compaiono.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,51 @@
+<section class="hero">
+  <h1>Mire em um aplicativo, não na máquina</h1>
+  <p class="lead">Sem um alvo, toda conexão do computador é afetada, inclusive a área de trabalho remota que você está usando e o download da correção. Com um alvo, um processo recebe a rede ruim e todo o resto segue.</p>
+</section>
+
+<section>
+  <h2>Por processo</h2>
+  <p>Digite um nome em <strong>{{app.fields.target_process}}</strong> ou passe <code>--target</code>. Um nome simples casa como fragmento, então <code>chrome</code> cobre <code>chrome.exe</code>:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target chrome.exe</code></pre>
+  <p>Ele segue a árvore de processos, o que importa para qualquer coisa que gera filhos: um navegador abre um processo por aba, e esses também são atingidos.</p>
+  <p>O campo aceita mais de um nome, e mais de um tipo de coisa ao mesmo tempo:</p>
+  <table>
+    <tr><th>O que você digita</th><th>O que significa</th></tr>
+    <tr><td><code>chrome.exe,firefox.exe</code></td><td>Dois aplicativos.</td></tr>
+    <tr><td><code>chrome,!chromedriver</code></td><td>Chrome, mas nunca o driver. As exclusões vencem.</td></tr>
+    <tr><td><code>my*.exe</code></td><td>Tudo que começa com “my”.</td></tr>
+    <tr><td><code>re:^node\.exe$</code></td><td>Uma expressão regular, quando um curinga não basta.</td></tr>
+    <tr><td><code>4812</code></td><td>Um único ID de processo.</td></tr>
+    <tr><td><code>&gt;1000</code></td><td>Todos os IDs de processo acima de 1000.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Por endereço ou porta</h2>
+  <p>Às vezes a unidade de interesse não é o aplicativo, é um servidor. Estas opções aceitam a mesma sintaxe de lista, intervalo e exclusão, e entendem CIDR e IPv6:</p>
+<pre><code>BeanNetworkTester.exe --latency 300 --dst-ip 10.0.0.0/24 --dst-port 443</code></pre>
+<pre><code>BeanNetworkTester.exe --loss 20 --dst-port "!53"</code></pre>
+  <p>A segunda vale conhecer: tudo, exceto DNS. Mirar <em>longe</em> de uma porta costuma ser mais fácil do que listar as que você quer.</p>
+</section>
+
+<section>
+  <h2>Mirar um processo por nome sobrevive à reinicialização dele</h2>
+  <p>Reinicie o aplicativo enquanto uma sessão roda e um alvo por <strong>nome</strong> reencontra o novo processo. Um alvo por <strong>ID de processo</strong> não consegue: o ID pertencia ao processo que saiu. Outro programa a quem o Windows der o mesmo ID depois também não é afetado. Se o seu teste reinicia o que está sob teste, mire por nome.</p>
+</section>
+
+<section>
+  <h2>O aviso que você não deve ignorar</h2>
+  <p>Comece com a degradação ligada, sem nada para mirar e sem limite de tempo, e tanto a janela quanto a linha de comando avisam: isto afeta todas as conexões desta máquina. É um aviso, não uma recusa: às vezes é exatamente o que você quer. Se não for, defina um alvo ou um <code>--duration</code>, e {{app.buttons.stop}} sempre devolve tudo ao normal.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

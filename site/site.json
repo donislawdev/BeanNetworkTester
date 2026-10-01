@@ -45,6 +45,18 @@
       "name": "Español",
       "dir": "es",
       "og_locale": "es_ES"
+    },
+    {
+      "code": "pt-BR",
+      "name": "Português (Brasil)",
+      "dir": "pt-br",
+      "og_locale": "pt_BR"
+    },
+    {
+      "code": "it",
+      "name": "Italiano",
+      "dir": "it",
+      "og_locale": "it_IT"
     }
   ],
   "og_image": "assets/bean.png",

@@ -1,0 +1,53 @@
+<section class="hero">
+  <h1>Provare un’app senza internet</h1>
+  <p class="lead">Staccare il cavo di rete prova una cosa sola: una macchina senza rete. La maggior parte dei bug offline non è questo. Succedono quando la scheda è attiva, l’icona del Wi-Fi sembra a posto e ciò che serve all’app semplicemente non è raggiungibile.</p>
+</section>
+
+<section>
+  <h2>Tre tipi diversi di «offline»</h2>
+  <table>
+    <tr><th>Cosa attivi</th><th>Cosa vede l’app</th><th>Il bug che trova</th></tr>
+    <tr><td><strong>Modalità LAN</strong></td><td>La rete locale funziona. Niente al di là funziona.</td><td>Il Wi-Fi di un hotel prima di fare il login, un uplink morto, una rete aziendale senza una via verso l’esterno.</td></tr>
+    <tr><td><strong>Bloccare un indirizzo</strong></td><td>Un server è irraggiungibile. Tutto il resto funziona.</td><td>Una dipendenza caduta mentre l’app stessa sta bene: il caso che un health check di solito non vede.</td></tr>
+    <tr><td><strong>Bloccare la porta 53</strong></td><td>I nomi non vengono più risolti, le connessioni per indirizzo continuano a funzionare.</td><td>DNS rotto, che all’utente sembra «internet è giù» e nei log sembra tutt’altro.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Dalla riga di comando</h2>
+  <p>Internet assente per un’applicazione, rete locale intatta, per due minuti:</p>
+<pre><code>BeanNetworkTester.exe --lan-mode --target myapp.exe --duration 120</code></pre>
+  <p>Un servizio irraggiungibile, tutto il resto normale:</p>
+<pre><code>BeanNetworkTester.exe --block-ip 203.0.113.10</code></pre>
+  <p>I nomi non vengono più risolti:</p>
+<pre><code>BeanNetworkTester.exe --block-port 53 --target myapp.exe</code></pre>
+  <p>C’è anche una linea temporale pronta che rompe il DNS e lo ripristina da sola: <code>failing-dns.json</code>, nella cartella <code>scenarios</code> accanto al programma. Vedi <a href="../scenari-nel-tempo/">scenari nel tempo</a>.</p>
+</section>
+
+<section>
+  <h2>Cosa osservare davvero</h2>
+  <ul>
+    <li><strong>Il messaggio.</strong> L’app dice cos’è successo, o mostra un indicatore di caricamento per sempre?</li>
+    <li><strong>Il nuovo tentativo.</strong> Rallenta progressivamente, o martella lo stesso indirizzo in un ciclo?</li>
+    <li><strong>La coda.</strong> Il lavoro che l’utente ha fatto offline viene conservato e inviato dopo, o va perso?</li>
+    <li><strong>Il ripristino.</strong> {{app.buttons.stop}} riporta la rete. L’app se ne accorge da sola, o serve un riavvio?</li>
+  </ul>
+  <p>Quest’ultimo punto è dove sta la maggior parte del valore. Andare offline è facile da gestire male e facile da provare. È al ritorno che lo stato va storto.</p>
+</section>
+
+<section>
+  <h2>Cosa non è questo</h2>
+  <p>La scheda resta attiva e la macchina mantiene il suo indirizzo, quindi un’applicazione che chiede solo a Windows «c’è una rete» continua a ricevere un sì. È voluto, ed è il test più interessante: gli utenti reali sono raramente disconnessi, sono connessi a qualcosa che non raggiunge ciò di cui hanno bisogno. Se vuoi proprio il caso «nessuna scheda», disattiva la scheda: non serve nessuno strumento.</p>
+</section>
+
+<section>
+  <h2>Prossimi passi</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

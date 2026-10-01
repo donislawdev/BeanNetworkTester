@@ -43,6 +43,18 @@
       "title": "Corta conexiones y bloquea puertos en Windows",
       "description": "Restablece conexiones, bloquea un puerto o una dirección, corta el enlace por ratos o reduce los paquetes hasta que nada pase, y mira cómo se recupera la app.",
       "link_text": "Cortar conexiones"
+    },
+    "pt-BR": {
+      "slug": "cortar-conexoes",
+      "title": "Corte conexões e bloqueie portas no Windows",
+      "description": "Redefina conexões, bloqueie uma porta ou um endereço, derrube o link por períodos ou reduza os pacotes até nada passar, e veja como o app se recupera.",
+      "link_text": "Cortar conexões"
+    },
+    "it": {
+      "slug": "interrompere-le-connessioni",
+      "title": "Interrompi connessioni e blocca porte su Windows",
+      "description": "Azzera le connessioni, blocca una porta o un indirizzo, interrompi il collegamento o riduci i pacchetti finché nulla passa, e guarda come si riprende l’app.",
+      "link_text": "Interrompere connessioni"
     }
   }
 }

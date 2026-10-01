@@ -43,6 +43,18 @@
       "title": "Simula pérdida de paquetes en Windows para una aplicación",
       "description": "Descarta un porcentaje fijo de los paquetes de una aplicación en Windows, observa qué se rompe y repite exactamente la misma ejecución con una semilla.",
       "link_text": "Pérdida de paquetes"
+    },
+    "pt-BR": {
+      "slug": "perda-de-pacotes",
+      "title": "Simule perda de pacotes no Windows para um aplicativo",
+      "description": "Descarte uma porcentagem fixa dos pacotes de um aplicativo no Windows, veja o que quebra e repita exatamente a mesma execução com uma semente.",
+      "link_text": "Perda de pacotes"
+    },
+    "it": {
+      "slug": "perdita-di-pacchetti",
+      "title": "Simula la perdita di pacchetti su Windows per un’app",
+      "description": "Scarta una percentuale fissa dei pacchetti di un’app su Windows, osserva cosa si rompe e ripeti esattamente la stessa esecuzione con un seed.",
+      "link_text": "Perdita di pacchetti"
     }
   }
 }

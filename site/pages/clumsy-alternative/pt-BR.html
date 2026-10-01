@@ -1,0 +1,65 @@
+<section class="hero">
+  <h1>Uma alternativa ao Clumsy para Windows</h1>
+  <p class="lead">O Clumsy é a ferramenta que a maioria encontra primeiro, e é boa: gratuita, com licença MIT, interativa e construída sobre o mesmo driver WinDivert que esta usa. Se ele faz o que você precisa, use-o. Esta página trata dos casos em que não faz.</p>
+</section>
+
+<section>
+  <h2>O que procurar, qualquer que seja a sua escolha</h2>
+  <table>
+    <tr><th>Pergunta</th><th>Por que ela decide a ferramenta</th></tr>
+    <tr><td>Ele consegue mirar <strong>um único aplicativo</strong>?</td><td>Senão você degrada a máquina em que está trabalhando, inclusive a sessão remota e o navegador em que lê a documentação.</td></tr>
+    <tr><td>Ele tem <strong>linha de comando</strong>?</td><td>Um pipeline não consegue clicar em uma caixa de seleção. Sem uma, um teste de rede nunca pode fazer parte do build.</td></tr>
+    <tr><td>Uma execução é <strong>repetível</strong>?</td><td>Perda aleatória que não pode ser repetida gera relatórios de bug que ninguém mais consegue reproduzir.</td></tr>
+    <tr><td>Ele <strong>para sozinho</strong>?</td><td>Uma ferramenta que depende de você lembrar de desligá-la vai ficar ligada.</td></tr>
+    <tr><td>Dá para saber o que ele <strong>realmente fez</strong>?</td><td>Contadores e uma lista de conexões transformam “pareceu lento” em números.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>O que esta traz</h2>
+  <ul>
+    <li><strong>Mira por processo, PID, endereço ou porta</strong>, seguindo a árvore de processos, de modo que um navegador com trinta processos filhos continua sendo um único alvo.</li>
+    <li><strong>O mesmo executável é a linha de comando</strong>, com um código de saída para cada resultado e saída NDJSON, então funciona no CI.</li>
+    <li><strong>Execuções com semente</strong>: a mesma semente reproduz a mesma perda aleatória e o mesmo jitter.</li>
+    <li><strong>Perfis prontos</strong>: 3G, LTE, satélite, uma cafeteria lotada, Wi-Fi de avião, um modem discado de 56k, para você partir de algo crível em vez de chutar números.</li>
+    <li><strong>Sessões cronometradas e cenários com roteiro</strong>, para que a degradação mude sozinha enquanto você observa o aplicativo.</li>
+    <li><strong>Uma visão ao vivo</strong>: gráfico, contadores e uma tabela de conexões mostrando qual conexão foi atingida.</li>
+    <li>Interface em <strong>inglês, polonês e chinês simplificado</strong>, e nenhuma telemetria de qualquer tipo.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Se você veio de outra ferramenta</h2>
+  <p>Quatro nomes aparecem sempre que isso é discutido, e eles não são intercambiáveis.</p>
+  <table>
+    <tr><th>Você conhece</th><th>O que é</th><th>O que esperar aqui</th></tr>
+    <tr><td><strong>tc com netem</strong></td><td>A resposta do Linux, embutida no kernel e controlada pela linha de comando. Muitas vezes o que uma busca por emulação de WAN retorna.</td><td>Não existe <code>tc</code> no Windows. Este é o mais próximo em espírito: os mesmos tipos de degradação, uma linha de comando com códigos de saída e um driver em vez de uma disciplina de filas.</td></tr>
+    <tr><td><strong>Clumsy</strong></td><td>Uma ferramenta Windows gratuita, com licença MIT e interativa, sobre o mesmo driver WinDivert.</td><td>Use-o quando uma janela e um filtro bastarem. Venha para cá se quiser mirar por processo, execuções com semente e uma linha de comando que um pipeline possa chamar.</td></tr>
+    <tr><td><strong>NetLimiter</strong></td><td>Um produto Windows comercial para gerenciar a largura de banda por aplicativo, de forma permanente.</td><td>Outro trabalho. Este é um instrumento de teste: ligado por um tempo e depois desligado, e degrada muito mais que a velocidade.</td></tr>
+    <tr><td><strong>Fiddler ou Charles</strong></td><td>Proxies que podem inspecionar, reescrever e limitar o tráfego que passa por eles.</td><td>Também outro trabalho. Um proxy molda o que passa por ele e vê os dados. Este molda a própria conexão, inclusive UDP e tudo que nunca toca em um proxy.</td></tr>
+  </table>
+  <p>Em resumo: se você quer um emulador de rede para um aplicativo Windows, com linha de comando, este é o formato de ferramenta que procura. Se quer ler e modificar dados do aplicativo, precisa de um proxy, e se está no Linux já tem o netem.</p>
+</section>
+
+<section>
+  <h2>Quando usar outra coisa</h2>
+  <p>Ser honesto sai mais barato que um download decepcionante.</p>
+  <ul>
+    <li><strong>Você está no Linux ou no macOS.</strong> Isto é só para Windows, e sempre será, pois é construído sobre um driver do Windows. No Linux, <code>tc</code> com <code>netem</code> é a resposta padrão e não precisa de software extra.</li>
+    <li><strong>Você quer gerenciamento permanente de largura de banda</strong> para o computador inteiro, por aplicativo, como recurso de um produto e não como teste. É para isso que servem ferramentas comerciais de controle de tráfego como o NetLimiter. Este é um instrumento de teste: foi feito para ser ligado por um tempo e depois desligado.</li>
+    <li><strong>Você não consegue permissões de administrador.</strong> Capturar pacotes exige isso. Não há como contornar, e uma ferramenta que afirma o contrário não está capturando o seu tráfego.</li>
+    <li><strong>Você precisa inspecionar e reescrever dados do aplicativo</strong> em vez de degradar o link. Isso é trabalho de proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

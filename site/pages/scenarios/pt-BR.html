@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>Mude as condições de rede ao longo do tempo</h1>
+  <p class="lead">Uma perda fixa de 10% é uma condição de laboratório. Conexões reais pioram, se recuperam, travam por quatro segundos e voltam, e o bug que você persegue costuma morar na mudança, não no estado estável.</p>
+</section>
+
+<section>
+  <h2>Um cenário é uma linha do tempo</h2>
+  <p>Um arquivo JSON. Cada etapa diz <em>neste segundo, estas configurações</em>, e tudo que você não menciona mantém o valor:</p>
+<pre><code>{
+  "loop": true,
+  "steps": [
+    {"at": 0,  "settings": {"latency": 20, "jitter": 15, "down": 4096}},
+    {"at": 20, "settings": {"loss": 8, "latency": 180}},
+    {"at": 45, "settings": {"block_ip": "203.0.113.0/24"}},
+    {"at": 65, "settings": {"block_ip": "", "loss": 0, "latency": 20}}
+  ]
+}</code></pre>
+  <p>Os tempos são segundos desde o início da execução, não intervalos entre etapas. Com <code>"loop": true</code>, a linha do tempo recomeça quando termina, que é o que você quer para um teste de longa duração: deixe rodando e use o aplicativo.</p>
+<pre><code>BeanNetworkTester.exe --scenario cafe-wifi.json --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>{{page.scenario_count}} cenários prontos acompanham o programa</h2>
+  <p>Na pasta <code>scenarios</code> ao lado do executável. Lidos desses arquivos, então isto é o que você realmente tem:</p>
+  {{page.scenario_table}}
+  <p>São texto comum: abra um, mude um número, salve. Os nomes dizem o que reproduzem: uma cafeteria lotada, uma conexão móvel caindo de LTE para 3G, um upload que morre no meio, um servidor que fica sobrecarregado, um DNS que para de responder.</p>
+</section>
+
+<section>
+  <h2>Duas formas mais simples de obter mudança</h2>
+  <p>Vale a pena escrever um cenário quando a sequência importa. Quando não importa, duas configurações variam sozinhas:</p>
+  <ul>
+    <li><strong>Link liga e desliga</strong>: a duração de um ciclo e quanto dele fica fora do ar. Ciclos de dez segundos, quatro fora do ar, para sempre.</li>
+    <li><strong>Um cronograma de velocidade</strong>: uma série de velocidades pelas quais o limite passa, de modo que a conexão piora e se recupera sem um arquivo.</li>
+  </ul>
+<pre><code>BeanNetworkTester.exe --flap-period 10 --flap-down 40 --target myapp.exe</code></pre>
+</section>
+
+<section>
+  <h2>Por que funciona com o aplicativo em execução</h2>
+  <p>Toda configuração que um cenário toca é aplicada ao vivo na sessão já em andamento: o aplicativo não precisa reiniciar, nem a ferramenta. O log de eventos registra cada etapa quando acontece, então, quando algo quebra, você vê a qual mudança ele seguiu. Combine isso com uma semente e a sequência inteira, incluindo a perda aleatória dentro dela, se repete exatamente.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

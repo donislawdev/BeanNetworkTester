@@ -43,6 +43,18 @@
       "title": "Una alternativa a Clumsy para Windows con línea de comandos",
       "description": "Qué buscar en una herramienta de deterioro de red para Windows, qué aporta esta frente a una solo interactiva y cuándo conviene usar otra.",
       "link_text": "Alternativa a Clumsy"
+    },
+    "pt-BR": {
+      "slug": "alternativa-ao-clumsy",
+      "title": "Uma alternativa ao Clumsy para Windows com linha de comando",
+      "description": "O que procurar em uma ferramenta de degradação de rede para Windows, o que esta traz a mais que uma só interativa e quando usar outra.",
+      "link_text": "Alternativa ao Clumsy"
+    },
+    "it": {
+      "slug": "alternativa-a-clumsy",
+      "title": "Un’alternativa a Clumsy per Windows con riga di comando",
+      "description": "Cosa cercare in uno strumento di degrado di rete per Windows, cosa offre questo in più di uno solo interattivo e quando conviene usarne un altro.",
+      "link_text": "Alternativa a Clumsy"
     }
   }
 }

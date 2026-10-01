@@ -43,6 +43,18 @@
       "title": "Limita la velocidad de descarga y subida en Windows",
       "description": "Limita una aplicación de Windows a un número fijo de KB/s, en cada sentido, y comprueba qué le hacen un módem de 56k o el Wi-Fi de un avión.",
       "link_text": "Límite de velocidad"
+    },
+    "pt-BR": {
+      "slug": "limite-de-velocidade",
+      "title": "Limite a velocidade de download e upload no Windows",
+      "description": "Limite um aplicativo do Windows a um número fixo de KB/s, em cada sentido, e veja o que um modem de 56k ou o Wi-Fi de um avião fazem com ele.",
+      "link_text": "Limite de velocidade"
+    },
+    "it": {
+      "slug": "limite-di-velocita",
+      "title": "Limita la velocità di download e upload su Windows",
+      "description": "Limita un’app Windows a un numero fisso di KB/s, in ciascuna direzione, e scopri cosa le fanno un modem a 56k o il Wi-Fi di un aereo.",
+      "link_text": "Limite di velocità"
     }
   }
 }

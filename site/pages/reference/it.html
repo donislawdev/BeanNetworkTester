@@ -1,0 +1,35 @@
+<section class="hero">
+  <h1>Profili, impostazioni e codici di uscita</h1>
+  <p class="lead">Tre tabelle, nessuna scritta a mano. Sono generate dai registri del programma quando si costruisce questa pagina, quindi non possono dire qualcosa che il programma non dice.</p>
+</section>
+
+<section>
+  <h2>Profili pronti</h2>
+  <p>Sceglierne uno e il modulo si compila da solo. Un trattino significa che il profilo lascia stare quell’impostazione. Le velocità sono in kilobyte al secondo: moltiplica per otto per confrontarle con quanto pubblicizza un provider.</p>
+  {{page.preset_table}}
+  <p>Selezionare un profilo compila solo i campi. Sulla rete non cambia nulla finché non premi {{app.buttons.start}}.</p>
+</section>
+
+<section>
+  <h2>Ogni impostazione e l’opzione che la imposta</h2>
+  <p>La finestra e la riga di comando accettano le stesse impostazioni. Questo è l’elenco completo, con l’unità e l’intervallo che ciascuna accetta.</p>
+  {{page.settings_table}}
+</section>
+
+<section>
+  <h2>Codici di uscita</h2>
+  <p>La riga di comando non finisce mai con un traceback. Ogni modo in cui un’esecuzione può terminare ha un numero, quindi una pipeline può distinguere un’applicazione che fallisce da uno strumento che non è riuscito ad avviarsi.</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Correlati</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

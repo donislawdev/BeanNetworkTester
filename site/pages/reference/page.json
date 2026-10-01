@@ -43,6 +43,18 @@
       "title": "Perfiles, ajustes y códigos de salida",
       "description": "Cada perfil listo con sus valores, cada ajuste con su opción, unidad y rango, y cada código de salida que puede devolver la línea de comandos.",
       "link_text": "Tablas de referencia"
+    },
+    "pt-BR": {
+      "slug": "tabelas-de-referencia",
+      "title": "Perfis, configurações e códigos de saída",
+      "description": "Cada perfil pronto com seus valores, cada configuração com sua opção, unidade e faixa, e cada código de saída que a linha de comando pode retornar.",
+      "link_text": "Tabelas de referência"
+    },
+    "it": {
+      "slug": "tabelle-di-riferimento",
+      "title": "Profili, impostazioni e codici di uscita",
+      "description": "Ogni profilo pronto con i suoi valori, ogni impostazione con opzione, unità e intervallo, e ogni codice di uscita che la riga di comando può restituire.",
+      "link_text": "Tabelle di riferimento"
     }
   }
 }

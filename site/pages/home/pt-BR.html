@@ -1,0 +1,77 @@
+<section class="hero">
+  <h1>Teste seu aplicativo em uma rede ruim</h1>
+  <p class="lead">O Bean Network Tester adiciona lag, perda de pacotes e limites de velocidade a um único aplicativo do Windows. Você vê o que seus usuários veem em um trem, no hotspot de um hotel ou em um celular com uma barrinha de sinal.</p>
+  <p>É um emulador de rede voltado a um único programa, e não ao computador inteiro, então você pode reproduzir uma internet lenta para o aplicativo que está testando enquanto todo o resto continua funcionando.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+    <a class="btn" href="{{site.repo_url}}">{{cta.source}}</a>
+  </p>
+  <p class="note">{{cta.note}}</p>
+</section>
+
+<figure class="shot">
+  <img src="{{page.asset_prefix}}assets/demo.gif" width="820" height="461" loading="lazy"
+       decoding="async"
+       alt="Um ping ao vivo perde pacotes e ganha atraso enquanto a ferramenta está em execução">
+  <figcaption>Adicionando atraso e perda de pacotes a uma conexão em andamento.</figcaption>
+</figure>
+
+<section>
+  <h2>O que ele faz com a sua rede</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>Deixa lenta</h3>
+      <p>Adicione um atraso fixo ou aleatório. Descubra o que 300 ms de ping fazem com o seu indicador de carregamento.</p>
+    </article>
+    <article class="card">
+      <h3>Perde pacotes</h3>
+      <p>Descarte, duplique ou corrompa pacotes e observe se o seu aplicativo se recupera ou simplesmente trava.</p>
+    </article>
+    <article class="card">
+      <h3>Limita a velocidade</h3>
+      <p>Segure o download ou o upload em um número fixo de KB por segundo, como faz um link móvel fraco.</p>
+    </article>
+    <article class="card">
+      <h3>Derruba o link</h3>
+      <p>Derrube conexões, bloqueie uma porta ou um endereço, ou faça a rede ir e vir.</p>
+    </article>
+    <article class="card">
+      <h3>Mira em um app</h3>
+      <p>Escolha um processo, um PID, um endereço ou uma porta. O resto do computador continua funcionando normalmente.</p>
+    </article>
+    <article class="card">
+      <h3>Repete com exatidão</h3>
+      <p>A mesma semente reproduz a mesma execução. Essa é a diferença entre um relatório de bug e uma história.</p>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>Para começar são três passos</h2>
+  <ol class="steps">
+    <li>Baixe o zip na página de versões e descompacte onde quiser.</li>
+    <li>Abra o <code>BeanNetworkTester.exe</code>. Ele pede permissões de administrador sozinho, porque capturar o tráfego exige isso.</li>
+    <li>Escolha um perfil pronto, como “{{app.presets.3g}}”, pressione {{app.buttons.start}} e use o seu aplicativo.</li>
+  </ol>
+  <p>Há um modo de texto no mesmo arquivo, então tudo também roda em um pipeline. Um único comando basta para verificar se o seu serviço sobrevive a 10% de perda de pacotes:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
+  <p>Ele para sozinho quando o tempo acaba, então uma etapa que trava não pode deixar uma rede quebrada para trás. Adicione <code>--simulate</code> para ensaiar um comando sem tocar no tráfego real.</p>
+</section>
+
+<section>
+  <h2>Quem usa</h2>
+  <p>Testadores que precisam reproduzir o “na minha máquina funciona”. Desenvolvedores que precisam que um timeout realmente aconteça. Desenvolvedores de jogos que verificam o que o lag faz com o netcode. Qualquer pessoa que já ouviu a pergunta se o app funciona com uma conexão fraca e não tinha uma forma honesta de descobrir.</p>
+</section>
+
+<section>
+  <h2>Como fazer algo específico</h2>
+  <p>Guias curtos, cada um com os valores que vale a pena testar e o comando que faz isso.</p>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -43,6 +43,18 @@
       "title": "Prueba una aplicación de Windows sin internet",
       "description": "Quita internet a una aplicación mientras la red local sigue funcionando, deja inalcanzable un servicio o rompe el DNS, sin desenchufar nada.",
       "link_text": "Sin internet"
+    },
+    "pt-BR": {
+      "slug": "testar-sem-internet",
+      "title": "Teste um aplicativo do Windows sem internet",
+      "description": "Tire a internet de um aplicativo enquanto a rede local continua funcionando, deixe um serviço inacessível ou quebre o DNS, sem desconectar nada.",
+      "link_text": "Sem internet"
+    },
+    "it": {
+      "slug": "test-senza-internet",
+      "title": "Prova un’app Windows senza internet",
+      "description": "Togli internet a un’app mentre la rete locale continua a funzionare, rendi irraggiungibile un servizio o rompi il DNS, senza staccare nulla.",
+      "link_text": "Senza internet"
     }
   }
 }

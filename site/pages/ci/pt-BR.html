@@ -1,0 +1,48 @@
+<section class="hero">
+  <h1>Simule uma rede ruim no CI</h1>
+  <p class="lead">A janela é opcional. O mesmo executável roda como ferramenta de linha de comando, termina sozinho depois de um tempo definido e informa o que aconteceu de uma forma que um pipeline consegue ler.</p>
+</section>
+
+<section>
+  <h2>O formato de uma etapa</h2>
+  <p>Degrade durante o tempo do teste e deixe parar sozinho. Sem etapa de limpeza para esquecer:</p>
+<pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
+  <p>Em um job do GitHub Actions, em um runner Windows auto-hospedado:</p>
+<pre><code>- name: Test the app on a poor connection
+  shell: pwsh
+  run: |
+    Start-Process -FilePath BeanNetworkTester.exe `
+      -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
+    npm test</code></pre>
+  <p>Duas coisas sobre o runner: capturar tráfego exige permissões de administrador, e um runner hospedado não vai dá-las a você, então isto pertence a uma máquina Windows auto-hospedada.</p>
+</section>
+
+<section>
+  <h2>Todo final tem um código de saída</h2>
+  <p>Nada termina com um traceback. Cada jeito de uma execução terminar tem um número, então um pipeline consegue distinguir “seu aplicativo falhou” de “a ferramenta não conseguiu iniciar”:</p>
+  {{page.exit_code_table}}
+</section>
+
+<section>
+  <h2>Saída legível por máquina</h2>
+  <p><code>--format json</code> escreve um objeto JSON por linha, amostras durante a execução e um resumo no fim, para que uma etapa seguinte possa fazer asserções sobre ele:</p>
+<pre><code>BeanNetworkTester.exe --loss 5 --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>As linhas de log vão para o erro padrão e os dados para a saída padrão, então redirecionar os dados nunca mistura os dois. <code>--seed</code> torna a execução repetível, que é o que um teste instável precisa antes de alguém poder discutir.</p>
+</section>
+
+<section>
+  <h2>Uma execução de ensaio que não toca em nada</h2>
+  <p>Duas opções deixam seguro ligar isso antes de confiar nele: <code>--dry-run</code> informa o que as configurações fariam e sai, e <code>--simulate</code> roda o mecanismo inteiro contra tráfego sintético, sem carregar o driver e sem tocar na rede. As duas são úteis em um build que não pode degradar a máquina em que roda.</p>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  {{page.guide_links}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

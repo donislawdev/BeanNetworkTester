@@ -43,6 +43,18 @@
       "title": "Pruebas de caos de red en Windows",
       "description": "Inyecta fallos de red a propósito, repítelos exactamente con una semilla y deja que un pipeline decida por el código de salida si la aplicación resistió.",
       "link_text": "Pruebas de caos"
+    },
+    "pt-BR": {
+      "slug": "testes-de-caos-de-rede",
+      "title": "Testes de caos de rede no Windows",
+      "description": "Injete falhas de rede de propósito, repita-as exatamente com uma semente e deixe o pipeline decidir pelo código de saída se o aplicativo sobreviveu.",
+      "link_text": "Testes de caos"
+    },
+    "it": {
+      "slug": "chaos-testing-di-rete",
+      "title": "Chaos testing di rete su Windows",
+      "description": "Inietta guasti di rete di proposito, ripetili esattamente con un seed e lascia che la pipeline decida dal codice di uscita se l’applicazione ha retto.",
+      "link_text": "Chaos testing"
     }
   }
 }
