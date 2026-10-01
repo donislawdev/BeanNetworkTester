@@ -97,6 +97,12 @@
       "title": "Bean Network Tester - Windows에서 나쁜 네트워크 시뮬레이션",
       "description": "앱 하나에 지연, 패킷 손실, 속도 제한을 더하는 무료 Windows 도구입니다. 나쁜 연결에서 앱이 어떻게 동작하는지 확인하세요.",
       "link_text": "홈페이지"
+    },
+    "ar": {
+      "slug": "",
+      "title": "Bean Network Tester - محاكاة شبكة سيئة على Windows",
+      "description": "أداة مجانية لنظام Windows تضيف التأخير وفقدان الحزم وتحديد السرعة إلى تطبيق واحد، لتختبر سلوكه على اتصال سيئ.",
+      "link_text": "الرئيسية"
     }
   },
   "schema": "software_application"

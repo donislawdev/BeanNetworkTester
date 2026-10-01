@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>تنزيل Bean Network Tester</h1>
+  <p class="lead">ملف zip يعمل دون تثبيت، أو مثبّت لجميع مستخدمي الحاسوب. وفي الحالتين يطلب البرنامج صلاحيات المسؤول بنفسه.</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
+
+<section>
+  <h2>الحقائق في مكان واحد</h2>
+  <ul class="facts">
+    <li><strong>السعر:</strong> مجاني، وبرنامج حر، بموجب GNU GPL v3.</li>
+    <li><strong>يعمل على:</strong> Windows 10 وWindows 11، 64 بت.</li>
+    <li><strong>يحتاج إلى:</strong> صلاحيات المسؤول، لأن الحركة تُلتقط عبر برنامج تشغيل.</li>
+    <li><strong>التثبيت:</strong> غير لازم. فُك ضغط zip في أي مكان وشغّل. أو استخدم المثبّت <code>.msi</code> الذي يضيف مدخلًا إلى قائمة ابدأ ويضع البرنامج في <code>PATH</code> (ويتطلب صلاحيات المسؤول).</li>
+    <li><strong>يرسل بيانات:</strong> لا إلى أي مكان. لا قياس عن بُعد ولا فحص للتحديثات ولا عميل شبكة.</li>
+    <li><strong>الأوضاع:</strong> نافذة، والملف نفسه كأداة سطر أوامر.</li>
+    <li><strong>الشيفرة المصدرية:</strong> <a href="{{site.repo_url}}">على GitHub</a>، بالترخيص نفسه.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ما في الإصدار</h2>
+  <p>ينشر الإصدار خمسة ملفات. اثنان منها هما البرنامج، والثلاثة الباقية موجودة كي لا تضطر إلى الوثوق بالتنزيل دون تحقق:</p>
+  <ul>
+    <li><strong>ملف zip</strong>: البرنامج وبرنامج التشغيل الذي يستخدمه، معًا في مجلد واحد؛</li>
+    <li><strong>المثبّت .msi</strong>: البرنامج نفسه، مثبّتًا لجميع مستخدمي الحاسوب، مع مدخل في قائمة ابدأ؛</li>
+    <li><strong>SHA256SUMS.txt</strong>: المجاميع الاختبارية لملف zip والمثبّت؛</li>
+    <li><strong>قائمة SBOM</strong>: قائمة قياسية بكل مكوّن في الداخل، مع الإصدارات والتراخيص، موقَّعة على ملف zip؛</li>
+    <li><strong>ملف .sigstore.json</strong>: ذلك التوقيع كملف، للتحقق منه دون سؤال GitHub.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>التحقق من أنك حصلت على ما بنيناه</h2>
+  <p>يجيب المجموع الاختباري عن سؤال «هل وصل دون تغيير». في PowerShell قارن الناتج بالسطر الموجود في <code>SHA256SUMS.txt</code> (للمثبّت ضع <code>.msi</code> مكان <code>.zip</code>):</p>
+<pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
+  <p>ويجيب التوقيع عن سؤال مختلف، «هل خرج هذا من ذلك المستودع»، ويحتاج أداة سطر أوامر GitHub:</p>
+<pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>اكتب اسم ملف zip الذي نزّلته في الجزء الأول، فـ <code>gh</code> لا يقبل <code>*</code> هناك. وأبقِ <code>--predicate-type</code>: فبدونه يبحث <code>gh</code> عن نوع آخر من الإقرارات ويبلغ أنه لم يجد شيئًا.</p>
+  <p>المجموع الاختباري الذي تنسخه من الصفحة نفسها التي نزّلت منها يثبت أقل من التوقيع. وكلاهما منشور، فكلاهما يستحق لحظة.</p>
+</section>
+
+<section>
+  <h2>قد يحذّرك Windows</h2>
+  <p>البرنامج والمثبّت موقَّعان، فيذكر Windows من وقّعهما بدل «ناشر غير معروف». الشهادة جديدة، لذا قد يظل SmartScreen يحذّر لبعض الوقت، فهو لم يرها كثيرًا بعد. هذا يخص الشهادة لا الملف، والفحصان أعلاه يتيحان لك التحقق من الملف بنفسك. وتتناول <a href="../asila-shaiea/">صفحة الأسئلة</a> هذا وما يحتاجه برنامج التشغيل.</p>
+</section>
+
+<section>
+  <h2>من أين تبدأ بعد أن يعمل</h2>
+  {{page.guide_links}}
+</section>

@@ -97,6 +97,12 @@
       "title": "Windows 네트워크 카오스 테스트",
       "description": "네트워크 장애를 일부러 주입하고 시드로 정확히 반복하며, 앱이 버텼는지는 파이프라인이 종료 코드로 판단하게 하세요.",
       "link_text": "카오스 테스트"
+    },
+    "ar": {
+      "slug": "ikhtibar-alfawda-lilshabaka",
+      "title": "اختبار فوضى الشبكة على Windows",
+      "description": "احقن أعطال الشبكة عمدًا، وكررها بدقة بفضل seed، ودع pipeline يقرر من رمز الخروج هل صمد التطبيق.",
+      "link_text": "اختبار الفوضى"
     }
   }
 }

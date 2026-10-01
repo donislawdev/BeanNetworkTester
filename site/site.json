@@ -99,6 +99,13 @@
       "name": "한국어",
       "dir": "ko",
       "og_locale": "ko_KR"
+    },
+    {
+      "code": "ar",
+      "name": "العربية",
+      "dir": "ar",
+      "og_locale": "ar_AR",
+      "direction": "rtl"
     }
   ],
   "og_image": "assets/bean.png",

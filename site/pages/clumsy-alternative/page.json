@@ -97,6 +97,12 @@
       "title": "명령줄을 지원하는 Windows용 Clumsy 대안",
       "description": "Windows 네트워크 열화 도구에서 무엇을 봐야 하는지, 대화형 도구만 있는 경우보다 이 도구가 더하는 점, 다른 도구가 나은 경우.",
       "link_text": "Clumsy 대안"
+    },
+    "ar": {
+      "slug": "badil-clumsy",
+      "title": "بديل Clumsy لنظام Windows مع سطر أوامر",
+      "description": "ما الذي يجب البحث عنه في أداة تدهور الشبكة على Windows، وما تضيفه هذه الأداة على الأدوات التفاعلية فقط، ومتى تختار غيرها.",
+      "link_text": "بديل Clumsy"
     }
   }
 }

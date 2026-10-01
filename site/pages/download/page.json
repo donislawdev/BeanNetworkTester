@@ -97,6 +97,12 @@
       "title": "Windows용 Bean Network Tester 다운로드",
       "description": "Windows 10과 11용 무료 다운로드(zip 또는 설치 프로그램). 릴리스 구성, 직접 빌드한 파일인지 확인하는 법, 실행 요건을 안내합니다.",
       "link_text": "다운로드"
+    },
+    "ar": {
+      "slug": "tahmil",
+      "title": "تنزيل Bean Network Tester لنظام Windows",
+      "description": "تنزيل مجاني لنظامي Windows 10 و11 بصيغة zip أو مثبّت. ما في الإصدار، وكيف تتحقق أنه الملف الذي بنيناه، وما يلزم لتشغيله.",
+      "link_text": "التنزيل"
     }
   }
 }

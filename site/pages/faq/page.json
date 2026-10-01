@@ -97,6 +97,12 @@
       "title": "Bean Network Tester 자주 묻는 질문",
       "description": "관리자 권한, 컴퓨터 전체에 영향을 주는지, 되돌리는 방법, SmartScreen 경고, 프로그램이 데이터를 어떻게 다루는지 설명합니다.",
       "link_text": "질문과 답변"
+    },
+    "ar": {
+      "slug": "asila-shaiea",
+      "title": "أسئلة شائعة حول Bean Network Tester",
+      "description": "صلاحيات المسؤول، وهل يمس الجهاز كله، وكيف تتراجع، وتحذير SmartScreen، وماذا يفعل البرنامج ببياناتك.",
+      "link_text": "أسئلة وأجوبة"
     }
   }
 }
