@@ -37,6 +37,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The window opens after the administrator prompt however the program was started.**
+  Started with `python -m beantester` or with the `bean-network-tester` command a pip install
+  adds, the program asked for administrator rights and then no window appeared: the copy with
+  the rights was started from a file that does not run. It now starts the same way as the
+  first one, and never asks again. Where Windows starts it without the rights (User Account
+  Control switched off for an account that is not an administrator), it opens without them, as
+  after "No" in the prompt.
+
+- **A window that cannot open now says why.** Any failure before the window appeared was
+  reported as "No tkinter" and kept nowhere, and `BeanNetworkTester.exe` closed without a word.
+  Now only a Python without Tk says "No tkinter". Any other failure names the error and is
+  saved in the `crashes/` folder, and `BeanNetworkTester.exe` shows the same text in a message
+  box.
+
 - **Closing the console window stops a command-line run cleanly.** Closing the window ended
   the program at once: no summary, no `--repro-out` report, and after a real capture the
   WinDivert driver stayed loaded. It now ends the run the way Ctrl+Break does: the capture
