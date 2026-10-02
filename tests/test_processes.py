@@ -470,12 +470,15 @@ def test_a_process_that_will_not_name_itself_is_declined():
           _native_process_info(4) is None)
 
 
-def _fake_native_api(name_value, ppid=4321, ticks=133_000_000_000_000_000, ok=True):
+def _fake_native_api(name_value, ppid=4321, ticks=133_000_000_000_000_000, ok=True,
+                     open_error=None):
     """A stand-in for the bound ctypes surface, so the parsing can be driven directly.
 
     The five entry points live in one injectable tuple precisely so this is possible:
     it makes the branches reachable without a process in the right state, and it runs
     the parsing on EVERY platform rather than only where the API exists.
+
+    ``open_error``: ``OpenProcess`` refuses, and the thread's last error is this code.
     """
     class _Field:
         def __init__(self, v=0):
@@ -495,6 +498,7 @@ def _fake_native_api(name_value, ppid=4321, ticks=133_000_000_000_000_000, ok=Tr
         byref = staticmethod(lambda x: x)
         sizeof = staticmethod(lambda x: 48)
         create_unicode_buffer = staticmethod(lambda n: _Field(name_value))
+        get_last_error = staticmethod(lambda: open_error or 0)
 
     class _Wintypes:
         ULONG = _Field
@@ -502,7 +506,7 @@ def _fake_native_api(name_value, ppid=4321, ticks=133_000_000_000_000_000, ok=Tr
         FILETIME = _Filetime
 
     class _K32:
-        OpenProcess = staticmethod(lambda *a: 1234)
+        OpenProcess = staticmethod(lambda *a: 0 if open_error is not None else 1234)
         CloseHandle = staticmethod(lambda *a: 1)
         GetProcessTimes = staticmethod(lambda *a: 1)
         QueryFullProcessImageNameW = staticmethod(lambda *a: 1 if ok else 0)
@@ -550,6 +554,66 @@ def test_a_name_that_comes_back_empty_is_declined_not_cached(monkeypatch):
                         [_fake_native_api("cmd.exe", ok=False)])
     check("a failed name call is declined too",
           portmap._native_process_info(45336) is None)
+
+
+def test_only_a_number_nobody_holds_is_called_gone(monkeypatch):
+    """``OpenProcess`` refusing is two different answers (performance review NOWE-1).
+
+    ``ERROR_INVALID_PARAMETER`` (87) is the kernel saying no process holds the
+    number - measured on every exited pid tried and on none of 400 live ones - and
+    only that one may skip psutil and the whole-system snapshot. ``ERROR_ACCESS_DENIED``
+    is a process that EXISTS and refuses: the snapshot is how it gets a name, so it
+    must stay "cannot tell". PID 0, the idle process, is alive and answers 87 too.
+    Driven through the fake binding, so it runs on every platform.
+    """
+    from beantester import portmap
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API",
+                        [_fake_native_api("cmd.exe", open_error=87)])
+    check("a number nobody holds is gone", portmap._native_process_info(1336) is portmap._GONE)
+    check("...but the idle process is not", portmap._native_process_info(0) is None)
+
+    monkeypatch.setattr(portmap, "_NATIVE_INFO_API",
+                        [_fake_native_api("cmd.exe", open_error=5)])
+    check("a process that refuses is 'cannot tell', not gone",
+          portmap._native_process_info(1336) is None)
+
+    called = []
+    monkeypatch.setattr(portmap, "_native_process_info", lambda pid: portmap._GONE)
+    monkeypatch.setattr(portmap, "_psutil_process_info",
+                        lambda pid: called.append(pid) or ("x.exe", 1, 1.0))
+    check("and psutil is not asked about a pid the kernel says is gone",
+          portmap._process_info(1336) is portmap._GONE and called == [], f"({called})")
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="the handle read is Windows-only")
+def test_the_kernel_says_gone_for_a_process_that_has_exited(monkeypatch):
+    """The fake above pins the RULE; this pins the FACT it rests on, on a real
+    process: once it has exited and the last handle to it is closed, the number
+    answers 87. Polled briefly, because something else on the machine (a scanner)
+    may hold a handle to a fresh process for a moment - the object then outlives the
+    process, and the read is a partial one, never a wrong one."""
+    import gc
+    import os
+    import subprocess
+    from beantester import portmap
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    pid = proc.pid
+    proc.wait(timeout=30)
+    del proc                         # its handle is the one this process still holds
+    gc.collect()
+    answer = None
+    for _ in range(40):
+        answer = portmap._native_process_info(pid)
+        if answer is portmap._GONE:
+            break
+        time.sleep(0.05)
+    check("an exited process's number is gone", answer is portmap._GONE, f"({answer!r})")
+    check("this process is not", isinstance(portmap._native_process_info(os.getpid()), tuple))
+    check("nor the idle process", portmap._native_process_info(0) is None)
 
 
 def test_the_native_policy_gate_is_read_per_call_not_cached(monkeypatch):
@@ -1505,6 +1569,235 @@ def test_a_snapshot_still_replaces_an_entry_about_another_process(monkeypatch):
           table._info[200][2] == 2222.0, f"({table._info[200]})")
     check("an entry nobody could verify is refreshed as before",
           table._info[300][3] > unverified, f"({table._info[300][3]} vs {unverified})")
+
+
+def _native_over(world, gone=()):
+    """A handle read over the fake world: the three fields of ONE process, ``_GONE``
+    for a number nobody holds, ``None`` for a process with no start time - one that
+    exists and will not open."""
+    from beantester import portmap
+
+    def read(pid):
+        pid = int(pid)
+        if pid in gone:
+            return portmap._GONE
+        if pid in world.procs and pid in world.created:
+            name, ppid = world.procs[pid]
+            return (name, ppid, world.created[pid])
+        return None
+    return read
+
+
+def _counting(calls, label, fn):
+    def counted(pid):
+        calls.append((label, int(pid)))
+        return fn(pid)
+    return counted
+
+
+def test_a_younger_parent_is_caught_after_a_snapshot_wrote_both_entries(monkeypatch):
+    """Performance review NOWE-1, reproduced on a real table before the fix.
+
+    The P2-9 check in ``ancestors`` needs BOTH start times, and the whole-system
+    snapshot writes every process it finds without one. One process that will not
+    open was enough to run it, and every entry it wrote then stayed unstamped: the
+    identity check ran on it and threw its answer away, and nothing else stamped it.
+    With a target set, 413 of 419 entries had no start time and the check could run
+    on 18 of 84 links. Here the owner and its "parent" both come from such a
+    snapshot, and the parent's number belongs to a NEW chrome.
+    """
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {500: ("backup_agent.exe", 900), 900: ("chrome.exe", 4),
+                   777: ("hardened.exe", 4)}
+    world.created = {500: 100.0, 900: 200.0}      # 900: a NEW chrome took the number
+    world.ports = {6000: 500}
+    monkeypatch.setattr(portmap, "_native_process_info", _native_over(world))
+    monkeypatch.setattr(portmap, "_psutil_process_info", lambda pid: None)
+    monkeypatch.setattr(portmap, "_process_table", lambda: {
+        p: (n, pp, None) for p, (n, pp) in world.procs.items()})
+
+    table.name_of(777)                            # will not open: the snapshot runs
+    check("the snapshot wrote the owner and its 'parent' with no start time",
+          table._info[500][2] is None and table._info[900][2] is None,
+          f"({table._info.get(500)}, {table._info.get(900)})")
+
+    targeting = _targeting_on(table, "chrome")
+    targeting.refresh()
+    check("NOWE-1: a target of chrome leaves the stranger's child alone",
+          6000 not in targeting.ports(), f"({sorted(targeting.ports())})")
+    check("because both entries now carry the start time their own handle gave",
+          (table._info[500][2], table._info[900][2]) == (100.0, 200.0),
+          f"({table._info[500]}, {table._info[900]})")
+
+
+def test_a_snapshot_entry_that_will_not_open_keeps_what_the_snapshot_said(monkeypatch):
+    """The other side of stamping: a process that refuses its handle stays exactly
+    as the snapshot named it - "cannot tell" is not "another process" - and nothing
+    behind the handle is asked, because psutil would pay a whole-system scan for the
+    parent of a process it may not open either."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {777: ("hardened.exe", 4)}       # no start time: it will not open
+    calls = []
+    monkeypatch.setattr(portmap, "_native_process_info",
+                        _counting(calls, "handle", _native_over(world)))
+    monkeypatch.setattr(portmap, "_psutil_process_info",
+                        _counting(calls, "psutil", lambda pid: None))
+    monkeypatch.setattr(portmap, "_process_table", lambda: {
+        p: (n, pp, None) for p, (n, pp) in world.procs.items()})
+    table.name_of(777)
+    calls.clear()
+    names = [table.name_of(777) for _ in range(3)]
+    check("the snapshot's name is kept", names == ["hardened.exe"] * 3, f"({names})")
+    check("...and so is the entry", table._info.get(777) is not None)
+    check("only the handle was asked, never psutil",
+          calls and all(label == "handle" for label, _ in calls), f"({calls})")
+
+
+def test_a_targeting_walk_asks_the_os_once_per_pid(monkeypatch):
+    """Performance review W-B1, measured on a real table: per rebuild, 119.5 identity
+    checks for 41 distinct pids (wininit 18 times, services 17) and 34 failed lookups
+    for 9 dead ancestors, each dead one handed on to psutil. The owners share their
+    ancestors, and each was asked about once per child.
+
+    The steady state is the second walk: everything is cached and only checked.
+    """
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {10: ("a.exe", 20), 11: ("b.exe", 20), 12: ("c.exe", 20),
+                   20: ("explorer.exe", 30)}                # 30: long gone
+    world.created = {10: 300.0, 11: 300.0, 12: 300.0, 20: 100.0}
+    world.ports = {7010: 10, 7011: 11, 7012: 12}
+    calls, scans = [], []
+    monkeypatch.setattr(portmap, "_native_process_info",
+                        _counting(calls, "handle", _native_over(world, gone={30})))
+    monkeypatch.setattr(portmap, "_psutil_created",
+                        _counting(calls, "check", portmap._psutil_created))
+    monkeypatch.setattr(portmap, "_psutil_process_info",
+                        _counting(calls, "psutil", portmap._psutil_process_info))
+    monkeypatch.setattr(portmap, "_process_table", lambda: scans.append(1) or {})
+    targeting = _targeting_on(table, "nothing-is-called-this")
+    targeting.refresh()                                    # cold: resolves each pid
+    calls.clear()
+    scans.clear()
+    # As if the last snapshot were long ago: its one-a-second throttle must not be
+    # what keeps the gone ancestor from running one here.
+    table._bulk_at = float("-inf")
+    targeting.refresh()
+
+    checks = sorted(pid for label, pid in calls if label == "check")
+    check("each live pid is checked ONCE per walk", checks == [10, 11, 12, 20],
+          f"({calls})")
+    check("the gone ancestor is asked once, at the handle",
+          [pid for label, pid in calls if label == "handle"] == [30], f"({calls})")
+    check("...and never psutil, nor a whole-system snapshot",
+          not [c for c in calls if c[0] == "psutil"] and not scans,
+          f"({calls}, {len(scans)} snapshots)")
+
+
+def test_a_walk_over_the_live_socket_map_asks_once_per_pid_too(monkeypatch):
+    """A real session walks the live SOCKET map, which hands every name question to
+    the port table behind it - so the block has to be handed on as well, or the
+    one path every elevated session takes keeps asking once per child."""
+    from beantester import portmap
+    from beantester.socketwatch import SocketWatcher
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs = {10: ("a.exe", 20), 11: ("b.exe", 20), 20: ("explorer.exe", 4)}
+    world.created = {10: 300.0, 11: 300.0, 20: 100.0}
+    watcher = SocketWatcher(names=table, source_factory=lambda: None)
+    watcher.reconcile({7010: 10, 7011: 11}, time.monotonic())
+    targeting = _targeting_on(table, "nothing-is-called-this")
+    targeting.set_table(watcher)
+    targeting.refresh()
+    asked = []
+    monkeypatch.setattr(portmap, "_psutil_created",
+                        lambda pid: asked.append(int(pid)) or world.created.get(int(pid)))
+    targeting.refresh()
+    check("each pid is checked once through the live map", sorted(asked) == [10, 11, 20],
+          f"({asked})")
+
+
+def test_one_lookup_per_pid_is_one_walk_on_one_thread(monkeypatch):
+    """The memo is a single walk's, and nobody else's: another thread asking at the
+    same moment is answered as before, a nested block keeps the outer answers, and
+    the next block asks again - so a recycled number is seen at the next rebuild,
+    exactly as it was without the memo."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[10] = ("app.exe", 1)
+    world.created[10] = 300.0
+    table.info(10)
+    asked = []
+    monkeypatch.setattr(portmap, "_psutil_created", lambda pid: asked.append(
+        threading.current_thread().name) or world.created.get(int(pid)))
+
+    with table.one_lookup_per_pid():
+        table.info(10)
+        table.info(10)
+        other = threading.Thread(target=table.info, args=(10,), name="other")
+        other.start()
+        other.join(5)
+        with table.one_lookup_per_pid():
+            table.info(10)
+        here = asked.count(threading.current_thread().name)
+    check("inside a block a pid is checked once, nested blocks included", here == 1,
+          f"({asked})")
+    check("another thread is not answered from it", asked.count("other") == 1,
+          f"({asked})")
+    table.info(10)
+    check("after the block every call checks again",
+          asked.count(threading.current_thread().name) == 2, f"({asked})")
+
+    world.procs[10] = ("new.exe", 1)
+    world.created[10] = 999.0                     # the number changed hands meanwhile
+    with table.one_lookup_per_pid():
+        check("the next block sees it", table.name_of(10) == "new.exe",
+              f"({table.name_of(10)!r})")
+
+
+def test_warm_names_does_not_go_through_the_same_map_twice(monkeypatch):
+    """Performance review W-B4: the watchdog ticks every 0.20 s and the table
+    refreshes every 0.30 s, so every other tick warmed the very map the previous one
+    had - every pid checked again, for nothing that could have changed."""
+    from beantester import portmap
+    world = _World()
+    table = world.install(monkeypatch)
+    world.procs[8100] = ("app.exe", 1)
+    world.created[8100] = 1000.0
+    world.ports[9100] = 8100
+    table.refresh(force=True)
+    table.warm_names()
+    asked = []
+    monkeypatch.setattr(portmap, "_psutil_created",
+                        lambda pid: asked.append(pid) or world.created.get(int(pid)))
+    table.warm_names()
+    check("a map already warmed is skipped", asked == [], f"({asked})")
+    table.refresh(force=True)
+    table.warm_names()
+    check("a new collection is warmed again", asked == [8100], f"({asked})")
+
+
+def test_collected_hands_out_the_installed_map_not_a_copy(monkeypatch):
+    """Performance review W-B4: the copy was O(n) under the lock the capture thread
+    takes (0.84 ms at 50 000 ports) for a caller that only reads it. Safe only
+    because a refresh REPLACES the map: the one handed out never changes."""
+    world = _World()
+    table = world.install(monkeypatch)
+    world.ports[9100] = 8100
+    table.refresh(force=True)
+    ports, _at = table.collected()
+    check("the map is the table's own", ports is table._ports)
+    world.ports[9101] = 8100
+    table.refresh(force=True)
+    check("a refresh installs a new map...", table.collected()[0] is not ports)
+    check("...and leaves the one handed out as it was", ports == {9100: 8100},
+          f"({ports})")
 
 
 def test_created_of_answers_for_the_process_holding_the_number_now(monkeypatch):

@@ -169,6 +169,8 @@ class SocketWatcher:
         self._died = False
         self._events = 0                 # applied-event counter (tests/diagnostics)
         self._reconciles = 0
+        # collected_at of the last snapshot reconcile APPLIED (see there).
+        self._reconciled_at = _NEVER
         # Told about every socket this map GAINS, so a consumer can act on the
         # event instead of discovering it at its own next poll. Injected by
         # BeanEngine (targeting.note_socket) rather than imported, so this module
@@ -342,8 +344,22 @@ class SocketWatcher:
         mutated in place, because ``pid_for`` reads this map WITHOUT a lock from the
         capture thread: a reader has to see this pass either not at all or completely,
         never with half the snapshot folded in and half the prunes applied.
+
+        A snapshot no newer than the last one applied is ignored, which is what
+        makes "twice running" mean two DIFFERENT walks. The watchdog ticks every
+        0.20 s and the table refreshes every 0.30 s, so every other tick handed over
+        the snapshot the previous tick had applied - and the bootstrap's snapshot
+        came round again at the first tick - so a port the walk had missed was
+        pruned by one walk seen twice (performance review W-B4, reproduced). An
+        OLDER snapshot than one applied could only undo it: a port the newer walk
+        found absent would be put back. Equal times are a near-duplicate at worst
+        (``time.monotonic`` ticks every ~15 ms on Windows before Python 3.13), and
+        the next walk is applied.
         """
         with self._lock:
+            if collected_at <= self._reconciled_at:
+                return
+            self._reconciled_at = collected_at
             merged = dict(self._ports)
             evidence = self._evidence
             for port, pid in port_pid.items():
@@ -417,6 +433,11 @@ class SocketWatcher:
 
     def ancestors(self, pid, depth=8):
         return self._names.ancestors(pid, depth=depth)
+
+    def one_lookup_per_pid(self):
+        # By getattr, like created_of below: a name cache a test hands in may not
+        # have it, and then the walk simply asks as often as it always did.
+        return portmap.lookup_scope(self._names)
 
     def created_of(self, pid):
         # By getattr: the name caches the tests hand in predate it, and without an

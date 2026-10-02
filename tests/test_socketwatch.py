@@ -306,6 +306,39 @@ def test_reconcile_grace_resets_when_a_port_reappears():
           w.snapshot().get(5000) == 9, f"({w.snapshot()})")
 
 
+def test_one_walk_handed_over_twice_is_one_absence_not_two():
+    """Performance review W-B4, reproduced: "absent twice running" must mean two
+    WALKS. The watchdog ticks every 0.20 s and the table refreshes every 0.30 s, so
+    every other tick handed over the walk the previous tick had applied (and the
+    bootstrap's walk came round again at the first tick) - and a port that walk
+    missed was pruned by one walk seen twice."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.apply(ev(CONNECT, 9, 5000))
+    walk, at = {80: 1}, clock.tick()                  # collected after the event, missed it
+    w.reconcile(walk, at)
+    w.reconcile(walk, at)                             # the same walk, the next tick
+    check("one walk seen twice does not prune it", w.pid_for(5000) == 9,
+          f"({w.snapshot()})")
+    w.reconcile({80: 1}, clock.tick())                # a second walk that misses it too
+    check("...a second walk does", w.pid_for(5000) is None, f"({w.snapshot()})")
+
+
+def test_an_older_walk_than_one_applied_changes_nothing():
+    """A walk older than one already applied can only undo it: a port the newer walk
+    found absent would be put back and its grace restarted."""
+    clock = _Clock()
+    w = _watcher(clock)
+    w.reconcile({5000: 9}, clock.tick())
+    older = clock.tick()
+    newer = clock.tick()
+    w.reconcile({}, newer)                            # absent once
+    w.reconcile({5000: 9}, older)                     # a late walk that still lists it
+    w.reconcile({}, clock.tick())                     # absent twice running
+    check("the late walk did not reset the grace", w.pid_for(5000) is None,
+          f"({w.snapshot()})")
+
+
 # -- reconcile: the snapshot is COMPLETE, not CURRENT (F2) --------------------- #
 def test_a_newer_event_is_not_undone_by_an_older_snapshot():
     """The socket table is collected up to REFRESH_S before it is handed over, so

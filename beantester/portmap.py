@@ -29,6 +29,7 @@ worker thread and never by the packet path. It raises
 :class:`SocketTableUnavailable` when nothing can be read at all, because the
 person looking at an empty table must be told it is not an empty machine.
 """
+import contextlib
 import ipaddress
 import sys
 import threading
@@ -529,7 +530,9 @@ def _toolhelp_process_table():
     a per-PID ``psutil.Process(pid)`` needs, and so had NO name at all before. That
     gap is why targeting ``chrome`` by NAME resolved to nothing while targeting its
     PID worked: PID matching needs no name, name matching does. It gives no start
-    time (the recycle check then falls back to the TTL, the unverifiable-env path).
+    time: the first full ``PortTable.info`` of such an entry reads one through the
+    process's own handle (``_stamped``), and one that will not open falls back to the
+    TTL, the unverifiable-env path.
 
     The WIDE entry points, so a name is the name the file has. The ANSI pair this
     used to call converts it to the system code page first: a character that page
@@ -662,6 +665,28 @@ def _snapshot_entries(cached, snapshot, now):
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _STATUS_SUCCESS = 0
 _FILETIME_EPOCH_DELTA = 11644473600.0     # 1601-01-01 -> unix epoch, in seconds
+_ERROR_INVALID_PARAMETER = 87
+
+# "No process holds this number right now" - the one failure of a lookup that is
+# an ANSWER rather than a refusal. ``_native_process_info`` returns it, ``info``
+# acts on it, and nothing else ever sees it.
+_GONE = object()
+
+
+def _open_failure(pid, error):
+    """What a refused ``OpenProcess`` means: ``_GONE`` or ``None`` ("cannot tell").
+
+    ``ERROR_INVALID_PARAMETER`` is the kernel saying no process has this id - MEASURED
+    2026-10-02, elevated: every one of 9 exited pids, and none of 400 live processes,
+    ``Secure System`` and ``Registry`` included. A process that exists and refuses
+    answers ``ERROR_ACCESS_DENIED`` instead, and that one still goes to psutil and the
+    snapshot, which is how a hardened process gets its name. PID 0 is the exception:
+    the idle process exists and answers 87 too, so it is never called gone.
+
+    A function of its own so the rule can be tested on any platform: the error comes
+    from ``ctypes.get_last_error``, which only Windows has.
+    """
+    return _GONE if pid > 0 and error == _ERROR_INVALID_PARAMETER else None
 
 # ``(ctypes, wintypes, kernel32, ntdll, PROCESS_BASIC_INFORMATION)``, bound once;
 # ``False`` once it is known to be unavailable. Deliberately NOT rebuilt per call,
@@ -767,6 +792,14 @@ def _native_process_info(pid):
     failure mode above lands on the same ``None``: if a future Windows withdraws it,
     this degrades to the psutil path that used to run - to today's behaviour and
     today's cost, not to a broken tool.
+
+    ``_GONE`` is the one exception, and it is not a failure: ``OpenProcess`` saying
+    that NO process has this number (``_open_failure``). Asking psutil and then
+    snapshotting the whole system cannot name a process the kernel says does not
+    exist - and that snapshot was the costly part: a dead ancestor sits at the top of
+    nearly every process tree, so with a target set it ran once a second for the
+    whole session (9.7 ms each, measured 2026-10-02) and filled the cache with
+    entries that carry no start time (performance review NOWE-1).
     """
     if not _ALLOW_NATIVE_PROCESSES:
         return None
@@ -779,7 +812,9 @@ def _native_process_info(pid):
     except Exception:
         return None
     if not handle:
-        return None
+        # Read at once: ``use_last_error`` keeps the code from THIS call only until
+        # the next foreign call on this thread.
+        return _open_failure(int(pid), ctypes.get_last_error())
     try:
         basic = PROCESS_BASIC_INFORMATION()
         written = wintypes.ULONG()
@@ -857,6 +892,10 @@ def _process_info(pid):
     The one route ``PortTable.info`` takes to resolve a PID it has not cached.
     Both halves are module-level functions so the hot-path guard can count trips to
     the OS by replacing them (``tests/test_hot_path.py``).
+
+    ``_GONE`` passes straight through: psutil would only fail to find it too.
+    MEASURED 2026-10-02: a dead pid cost 1.1 us at the handle and another ~5 us in
+    psutil, and the targeting walk asked for 9 of them 34 times per rebuild.
     """
     resolved = _native_process_info(pid)
     return resolved if resolved is not None else _psutil_process_info(pid)
@@ -896,6 +935,12 @@ class PortTable:
         self._installed_gen = 0
         self._native = _make_native()
         self.native = self._native is not None
+        # Per THREAD, on purpose: ``one_lookup_per_pid`` gives the walk on the
+        # resolver thread one answer per pid, and the watchdog, the GUI and the
+        # capture thread asking at the same moment must not read that walk's memo.
+        self._pass = threading.local()
+        # The map ``warm_names`` last went through (by identity, see there).
+        self._warmed = None
 
     # -- port table ------------------------------------------------------------ #
     def refresh(self, now=None, force=False):
@@ -1069,9 +1114,16 @@ class PortTable:
         only assigns it at the end. So this UNDER-states how fresh the map is
         rather than over-stating it, which is the safe direction here - a tie, or
         a doubt, resolves in favour of the live event stream.
+
+        The map is the table's OWN, not a copy: read it, never change it. That is
+        safe because ``refresh`` only ever REPLACES ``_ports`` (see
+        ``refresh_if_stale``), so the dict handed out here describes one collection
+        for as long as anybody holds it. The copy it used to be was O(n) under the
+        lock the capture thread takes (0.84 ms at 50 000 ports, performance review
+        W-B4) - for a caller that only reads it.
         """
         with self._lock:
-            return dict(self._ports), self._last
+            return self._ports, self._last
 
     def pid_for(self, port):
         if port is None:
@@ -1142,15 +1194,45 @@ class PortTable:
         resolution; both halves were wrong. MEASURED 2026-08-01: the PARENT lookup
         was 9.36 ms of a 9.4 ms per-PID resolve while the name cost 0.02-0.06 ms, so
         33 PIDs came to 308.9 ms. Read through one handle, the same set costs 1.0 ms.
+
+        An entry WITHOUT a start time - a whole-system snapshot wrote it - gets one
+        here, through the same single handle (``_stamped``). Until 2026-10-02 the
+        check above ran on it anyway and its answer was thrown away
+        (``_looks_recycled`` cannot compare with nothing), and nothing ever stamped
+        it: with a target set, 413 of 419 entries had no start time, so the P2-9
+        check in ``ancestors`` could run on 18 of 84 links (performance review W-B2
+        and NOWE-1, measured on a real table).
+
+        Inside ``one_lookup_per_pid`` the full answer is computed once per pid and
+        then repeated for the rest of that block, on that thread only.
         """
         if pid is None:
             return ("", None)
         pid = int(pid)
+        if cheap:
+            # Never the OS, and never the memo: the cache as it stands, or nothing.
+            # "" is the honest answer; the resolver will have filled the cache by
+            # the time this row is looked at again.
+            with self._lock:
+                entry = self._info.get(pid)
+            return (entry[0], entry[1]) if entry else ("", None)
+        memo = getattr(self._pass, "memo", None)
+        if memo is None:
+            return self._lookup(pid)
+        answer = memo.get(pid)
+        if answer is None:
+            answer = memo[pid] = self._lookup(pid)
+        return answer
+
+    def _lookup(self, pid):
+        """``info`` for one pid, verified, stamped or resolved - may ask the OS."""
         now = self.clock()
         with self._lock:
             entry = self._info.get(pid)
         if entry is not None:
-            if cheap or not _looks_recycled(_psutil_created(pid), entry[2]):
+            if entry[2] is None:
+                return self._stamped(pid, entry, now)
+            if not _looks_recycled(_psutil_created(pid), entry[2]):
                 # The timestamp is NOT bumped here. It marks when the entry was
                 # written, so the TTL means "this answer is at most N seconds old"
                 # rather than "nobody has asked lately". Bumping it made the entry
@@ -1162,21 +1244,52 @@ class PortTable:
             with self._lock:
                 if self._info.get(pid) is entry:
                     del self._info[pid]
-        if cheap:
-            # Nothing cached (or what was cached is provably wrong) and we may not
-            # ask the OS. "" is the honest answer; the resolver will have filled the
-            # cache by the time this row is looked at again.
-            return ("", None)
         resolved = _process_info(pid)
-        if resolved is None:
-            # psutil.Process could not open the process (it is HARDENED - Chrome's
-            # network service, some services - or denied, or already gone). Fall back
-            # to a whole-system snapshot, which names it WITHOUT opening it. This used
-            # to be ``psutil.process_iter`` at ~2.6 s; it is now a native toolhelp
-            # snapshot at ~6 ms (see _process_table), so it is affordable on the
-            # SYNCHRONOUS start/apply resolve too - which is what makes targeting a
-            # hardened app like chrome BY NAME work fast. Throttled so a burst of
-            # misses shares one snapshot.
+        if resolved is None or resolved is _GONE:
+            return self._unresolved(pid, now, scan=resolved is None)
+        with self._lock:
+            self._info[pid] = (resolved[0], resolved[1], resolved[2], now)
+        return (resolved[0], resolved[1])
+
+    def _stamped(self, pid, entry, now):
+        """An entry with no start time, read again through ONE handle.
+
+        The handle answers name, parent and start time for the one process it pins
+        (the ADR of 2026-08-01), so the entry is REPLACED by that answer rather
+        than given a stamp on its own: if the number has changed hands since the
+        snapshot, the snapshot's name and parent are about somebody else.
+
+        Not through psutil, and with no memory of the pids that refused. A refused
+        handle costs 1.1-1.4 us (measured 2026-10-02) - less than the identity check
+        that used to be wasted here - while psutil behind it pays a whole-system
+        scan for the parent of a process it may not open (~9 ms). A pid that will
+        not open keeps its entry exactly as before: "cannot tell" is not "another
+        process" (see ``_looks_recycled``). Off Windows there is nothing to stamp -
+        the psutil snapshot carries start times.
+        """
+        read = _native_process_info(pid)
+        if read is None or read is _GONE:
+            return (entry[0], entry[1])
+        with self._lock:
+            self._info[pid] = (read[0], read[1], read[2], now)
+        return (read[0], read[1])
+
+    def _unresolved(self, pid, now, scan):
+        """What the cache can say about a pid the OS did not resolve.
+
+        ``scan``: the process may exist and refuse (it is HARDENED - Chrome's network
+        service, some services - or denied). A whole-system snapshot names it
+        WITHOUT opening it. This used to be ``psutil.process_iter`` at ~2.6 s; it
+        is now a native toolhelp snapshot at ~6 ms (see _process_table), so it is
+        affordable on the SYNCHRONOUS start/apply resolve too - which is what makes
+        targeting a hardened app like chrome BY NAME work fast. Throttled so a
+        burst of misses shares one snapshot.
+
+        No scan when the kernel said nobody holds the number (``_GONE``): a snapshot
+        cannot name a process that does not exist, and those were nearly all of
+        them - dead ancestors, asked on every rebuild.
+        """
+        if scan:
             with self._lock:
                 stale = (now - self._bulk_at) > 1.0
             if stale:
@@ -1184,14 +1297,35 @@ class PortTable:
                 with self._lock:
                     self._bulk_at = now
                     self._info.update(_snapshot_entries(self._info, table, now))
-                    entry = self._info.get(pid)
-                return (entry[0], entry[1]) if entry else ("", None)
-            with self._lock:
-                entry = self._info.get(pid)
-            return (entry[0], entry[1]) if entry else ("", None)
         with self._lock:
-            self._info[pid] = (resolved[0], resolved[1], resolved[2], now)
-        return (resolved[0], resolved[1])
+            entry = self._info.get(pid)
+        return (entry[0], entry[1]) if entry else ("", None)
+
+    @contextlib.contextmanager
+    def one_lookup_per_pid(self):
+        """Within this block, on this thread, each pid is asked of the OS ONCE.
+
+        A targeting walk asks about the same pids over and over: the owner's name,
+        then the owner again at the foot of its ancestor chain, then every ancestor
+        once per child - wininit 18 times and services 17 times per rebuild,
+        119.5 identity checks for 41 distinct pids, and 34 failed lookups for 9
+        (measured 2026-10-02, performance review W-B1). Inside this block the first
+        answer stands, so the walk also sees ONE picture of each process instead of
+        one that may change between two of its own questions.
+
+        Per thread and per block, never a cache across walks: the next walk asks
+        again, so a recycled number is seen at the next rebuild exactly as before.
+        A nested block keeps the outer one's answers.
+        """
+        local = self._pass
+        if getattr(local, "memo", None) is not None:
+            yield
+            return
+        local.memo = {}
+        try:
+            yield
+        finally:
+            local.memo = None
 
     def name_of(self, pid, cheap=False):
         return self.info(pid, cheap=cheap)[0]
@@ -1243,9 +1377,23 @@ class PortTable:
         is dropping packets" warnings in 95 s (measured 2026-08-01 - the whole reason
         ``_process_info`` exists). At ~1 ms the recurrence is harmless, but it is
         still a recurrence, not a first pass.
+
+        A map this already went through is skipped. The watchdog ticks every 0.20 s
+        and the table refreshes every 0.30 s, so every other tick handed over the
+        SAME map (performance review W-B4) - and nothing a pass does can be due
+        again before the map changes: entries expire and departed pids are
+        forgotten only inside ``refresh``, which installs a NEW dict every time,
+        and a number can change hands only after its owner exits. Compared by
+        identity, so two collections that happen to look alike are still two. The
+        mark is set after the pass, so a pass that raised is not skipped next time.
+        Read without the lock, for the reasons in ``refresh_if_stale``.
         """
-        for pid in set(self.snapshot().values()):
+        ports = self._ports
+        if ports is self._warmed:
+            return
+        for pid in set(ports.values()):
             self.info(pid)
+        self._warmed = ports
 
     def ancestors(self, pid, depth=8):
         """``[(pid, name), ...]`` from the parent upwards (bounded, cycle-safe).
@@ -1289,6 +1437,18 @@ class PortTable:
         # verifying an identity are both psutil calls; gating only one of them left
         # the packet path making the other.
         return self.name_of(pid, cheap=not allow_refresh) if pid else ""
+
+
+def lookup_scope(table):
+    """``table.one_lookup_per_pid()``, or a block that changes nothing.
+
+    One helper for the two places that open such a block on a table they did not
+    choose - the targeting walk and the socket watcher delegating to its name cache
+    - because both accept anything with the read surface (``set_table``), test
+    doubles included, and a double without it must cost a walk nothing but speed.
+    """
+    scope = getattr(table, "one_lookup_per_pid", None)
+    return scope() if scope is not None else contextlib.nullcontext()
 
 
 _DEFAULT = None
