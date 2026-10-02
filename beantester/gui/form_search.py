@@ -40,6 +40,10 @@ from ..i18n import T, field_name
 SECTION, FIELD = "section", "field"
 
 
+# Letters with no decomposition that people still type without their stroke.
+_NO_MARK = str.maketrans({"ł": "l", "Ł": "L"})
+
+
 def fold(text):
     """Case- and accent-insensitive form of a string, for comparing by hand.
 
@@ -49,8 +53,12 @@ def fold(text):
     survives - so the string is decomposed (NFKD) and the combining marks are
     dropped. Without this the feature works for half the Polish labels and nobody
     can tell which half.
+
+    🔴 The l-stroke is a letter of its own in Unicode, not an l with a mark, so
+    NFKD leaves it whole: "wysylanie" did not find the upload label, nor eight
+    other Polish ones (external review, P3-35). It is mapped by hand, here.
     """
-    decomposed = unicodedata.normalize("NFKD", str(text or ""))
+    decomposed = unicodedata.normalize("NFKD", str(text or "").translate(_NO_MARK))
     return "".join(ch for ch in decomposed
                    if not unicodedata.combining(ch)).casefold().strip()
 

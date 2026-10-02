@@ -399,7 +399,9 @@ def test_the_known_unused_list_only_ever_shrinks():
 SILENT_BROAD_HANDLERS = {
     # 12 until 2026-09-29, when the repro report and "Copy CLI command" moved to
     # gui/session_repro.py with their two handlers (below) - moved, not new.
-    "gui/app.py": 10,
+    # 10 until 2026-10-02: writing the clipboard moved to gui/clipboard.put
+    # (external review P3-31), where its handler now records to crashlog.note.
+    "gui/app.py": 9,
     # The two from app.py: a report that cannot be written is shown in a dialog,
     # a command that cannot be copied is said in the log. Both are the user's
     # answer, not a fault to record.

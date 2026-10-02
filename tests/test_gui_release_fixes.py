@@ -45,8 +45,29 @@ def test_delete_is_disabled_for_a_built_in_preset():
 
         app.delete_profile()
         assert "Moje VPN" not in app.profiles
-        assert app._profile_key == "presets.perfect"
+        # The fallback is what the NEXT start restores (test_prefs pins that);
+        # now no profile is named, because the form still holds the deleted
+        # one's values (external review, P3-27).
+        assert app.ui.get("profile") == "presets.perfect", app.ui.get("profile")
+        assert app._profile_key == "", app._profile_key
         assert app.btn_delete_profile.kw.get("state") == "disabled"
+    """)
+
+
+def test_deleting_the_loaded_profile_names_no_profile_over_its_values():
+    """External review, P3-27: the picker read "Perfect network" while the form
+    still held the deleted profile's impairments, and START applied them under
+    that name. A language switch refills the picker - it must stay blank."""
+    run_gui("""
+        app.loss_var.set("37")
+        app.profiles.set("Moje VPN", app._settings_from_widgets())
+        app.select_profile("Moje VPN")
+        app.delete_profile()
+        assert app.loss_var.get() == "37", "deleting a profile must not reset the form"
+        assert app.profile_var.get() == "", app.profile_var.get()
+        app.lang_var.set("English")
+        app._switch_language()
+        assert app.profile_var.get() == "", app.profile_var.get()
     """)
 
 

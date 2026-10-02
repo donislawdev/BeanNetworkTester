@@ -15,6 +15,28 @@ from ..i18n import T
 from .. import crashlog
 
 
+def put(app, text):
+    """Replace the clipboard with ``text``. ``App.copy_to_clipboard`` is this.
+
+    An empty text leaves the clipboard alone. Writing it emptied the clipboard,
+    so "Copy" in the event log with no row selected threw away whatever another
+    program had put there (external review, P3-31). Every other caller already
+    checked first; this is the one place that cannot forget to.
+
+    A failure is said in the log and returns False.
+    """
+    if not text:
+        return False
+    try:
+        app.root.clipboard_clear()
+        app.root.clipboard_append(text)
+    except Exception as e:
+        crashlog.note(e, "gui.clipboard")
+        app.log(f"{T('log.not_copied')}: {e}")
+        return False
+    return True
+
+
 def copy_confirmed(app, text, logged, area="gui.clipboard"):
     """Put ``text`` on the clipboard; log ``copied: <logged>`` once it is there.
 

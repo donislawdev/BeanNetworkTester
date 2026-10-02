@@ -117,7 +117,11 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-30 from 1120: closing the window no longer waits for a START in
 # flight - the engine asks the start's `admit` under its own stop lock (external
 # review P2-14). The band falls to 781.9; `engine.py` is 780 after taking `admit`.
-FILE_CEILING = 1117             # beantester/gui/app.py
+# Lowered 2026-10-02 from 1117: writing the clipboard moved to `gui/clipboard.py`
+# (`put`, which leaves the clipboard alone for an empty text - external review
+# P3-31), so `App.copy_to_clipboard` is one line. The band falls to 779.1;
+# `engine.py` is 775, four lines clear - the next engine change pays for itself.
+FILE_CEILING = 1113             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
