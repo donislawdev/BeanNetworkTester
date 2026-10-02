@@ -2,6 +2,7 @@
 
 psutil is faked, so the tests run anywhere (the real lookup needs a live system).
 """
+import ctypes
 import itertools
 import sys
 import threading
@@ -305,6 +306,63 @@ def test_toolhelp_snapshot_names_this_process_without_opening_it():
     name, ppid, created = table[os.getpid()]
     check("this process is named", name.lower().endswith(".exe"), f"({name!r})")
     check("the snapshot carries no start time (TTL takes over)", created is None)
+
+
+class _Toolhelp:
+    """kernel32 as Microsoft Learn documents the WIDE toolhelp calls, on any system.
+
+    ``Process32FirstW`` fails unless ``dwSize`` is the size of the structure handed
+    in; it and ``Process32NextW`` copy one process at a time into ``szExeFile``,
+    a ``WCHAR[MAX_PATH]``, and return FALSE after the last. Only the W calls exist
+    here: a fallback to the ANSI pair finds nothing to call.
+    """
+    SNAPSHOT = 77
+
+    def __init__(self, processes, snapshot=SNAPSHOT):
+        self.processes, self.snapshot, self.closed, self._next = processes, snapshot, [], 0
+        # Plain functions, because the code under test sets restype and argtypes on them.
+        self.CreateToolhelp32Snapshot = lambda flags, pid: self.snapshot
+        self.Process32FirstW = lambda handle, ref: self._first(handle, ref)
+        self.Process32NextW = lambda handle, ref: self._following(handle, ref)
+        self.CloseHandle = lambda handle: self.closed.append(handle)
+
+    def _first(self, handle, ref):
+        entry = ref._obj
+        fields = dict(type(entry)._fields_)
+        if (entry.dwSize != ctypes.sizeof(entry) or fields["szExeFile"]._type_ is not ctypes.c_wchar
+                or fields["szExeFile"]._length_ != 260):
+            return False
+        self._next = 0
+        return self._following(handle, ref)
+
+    def _following(self, handle, ref):
+        if handle != self.snapshot or self._next >= len(self.processes):
+            return False
+        entry = ref._obj
+        entry.th32ProcessID, entry.th32ParentProcessID, entry.szExeFile = (
+            self.processes[self._next])
+        self._next += 1
+        return True
+
+
+def test_the_snapshot_walks_every_process_through_the_wide_calls(monkeypatch):
+    """The walk itself, on every system the suite runs on: each process once, its name
+    as it is, the parent kept, the snapshot closed, and nothing for a snapshot the
+    system refused. The Windows test below is the same claim on a real process."""
+    from beantester import portmap
+    processes = [(4, 0, "System"), (5000, 4, NOT_ANSI_NAME), (6000, 5000, "chrome.exe")]
+    fake = _Toolhelp(processes)
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda name, **_: fake, raising=False)
+    table = portmap._toolhelp_process_table()
+    check("every process, named as it is, with its parent and no start time",
+          table == {pid: (name, ppid, None) for pid, ppid, name in processes}, f"({table})")
+    check("the snapshot is closed once", fake.closed == [fake.SNAPSHOT], f"({fake.closed})")
+
+    refused = _Toolhelp(processes, snapshot=ctypes.c_void_p(-1).value)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda name, **_: refused, raising=False)
+    check("a snapshot the system refused gives no table",
+          portmap._toolhelp_process_table() is None)
 
 
 # Greek, Cyrillic, Japanese and Polish: no legacy ANSI code page holds all four, and
