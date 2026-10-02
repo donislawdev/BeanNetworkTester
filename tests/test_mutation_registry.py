@@ -799,15 +799,16 @@ MUTATIONS = [
         # function and cannot see the runners-up climbing together underneath it.
         "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        # Re-anchored 2026-08-31 (3 -> 5) and again 2026-09-06 (5 -> 4, when
-        # `_run_session` was split into three phases and left the band). The
-        # mutation still proves the same thing - a count frozen looser than
+        # Re-anchored 2026-08-31 (3 -> 5), 2026-09-06 (5 -> 4, when
+        # `_run_session` was split into three phases and left the band) and
+        # 2026-10-02 (4 -> 3, `_capture_loop` left it - performance review R-1).
+        # The mutation still proves the same thing - a count frozen looser than
         # today's measurement is caught by the equality half of that test, not by
         # the "at most" half. Re-anchoring is the routine cost of a pattern that
         # pins exact source text; a stale one reports SKIP, which reads like a
         # result and is not one.
-        "old": "COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,",
-        "new": "COMPLEX_NEAR_CEILING = 7    # decide, settings_summary, _capture_loop,",
+        "old": "COMPLEX_NEAR_CEILING = 3    # decide, settings_summary, test_layering._module_level",
+        "new": "COMPLEX_NEAR_CEILING = 6    # decide, settings_summary, test_layering._module_level",
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {
@@ -883,7 +884,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -6290,6 +6291,22 @@ MUTATIONS = [
         "new": "        pass\n",
         "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
     },
+    {
+        # The packet reads moved from engine._capture_loop to BeanCore.packet_meta
+        # (R-1): the guards that drive the whole engine must still see them there.
+        "label": "core (W-A1 move): an inbound packet's ports are read the wrong way round",
+        "file": "beantester/core.py",
+        "old": "                local_port, remote_port = packet.dst_port, packet.src_port\n",
+        "new": "                local_port, remote_port = packet.src_port, packet.dst_port\n",
+        "test": "test_every_remote_endpoint_gate_fires_in_both_directions",
+    },
+    {
+        "label": "core (W-A1 move): a ping is no longer labelled ICMP",
+        "file": "beantester/core.py",
+        "old": "                proto = \"ICMP\"\n",
+        "new": "                pass\n",
+        "test": "test_portless_traffic_reaches_the_connection_log",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
@@ -6319,7 +6336,9 @@ PROVEN_BY_HAND = {
     # when Ctrl+F gave it a patch worth writing down. This list is meant to shrink.
     "test_an_overridden_field_is_visibly_disabled": "2026-07-21, removing the disabled style maps",
     "test_no_stale_pending_markers": "2026-07-25, both directions",
-    "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",
+    # test_every_remote_endpoint_gate_fires_in_both_directions moved to MUTATIONS on
+    # 2026-10-02: its hand-proven patch (the inbound branch) became an entry when the
+    # packet reads moved to BeanCore.packet_meta.
     "test_a_worker_thread_exception_is_recorded": "2026-08-01, the excepthook body",
     "test_pid_for_takes_no_lock_because_the_capture_thread_calls_it": "2026-07-29, taking the lock",
     # Not in MUTATIONS because the patch would be the two enormous `log.driver_*`

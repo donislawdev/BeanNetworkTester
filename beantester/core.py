@@ -1352,6 +1352,59 @@ class BeanCore:
             return Decision(False, corrupt, releases)
 
     @staticmethod
+    def packet_meta(packet):
+        """What the capture loop needs from a packet, read once.
+
+        ``(is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp)``. The
+        REMOTE end is the destination on an outbound packet and the source on an
+        inbound one. A packet that will not answer a read keeps the defaults (no
+        ports, no address, protocol "IP"), and the failure is recorded once - under
+        "engine.packet", the subsystem it was recorded under while this sat in the
+        capture loop, and through the lazy import ``corrupt_packet`` uses, because
+        this module stays pure (``tests/test_layering.py``).
+
+        Moved here from ``BeanEngine._capture_loop`` (2026-10-02, performance review
+        R-1), beside ``build_rst_fields``, the other reader of a packet's headers:
+        the loop had to give back the lines its header-cache fix took (the size
+        ratchet in ``tests/test_code_shape.py``), and this is also the one place a
+        faster reader of pydivert's headers would go. The call is not free, and it
+        was MEASURED rather than assumed (2026-10-02, CPython 3.14.7, paired and
+        alternated, min of 8 rounds of 20 000 against the block inline): +86 ns a
+        packet on a test fake, +155-208 ns on a real pydivert packet - against the
+        0.6-3.5 us of cycle collection per packet that dropping the header cache
+        removed in the same change, and the 48-123 ms pauses with it.
+        """
+        is_out = bool(getattr(packet, "is_outbound", True))
+        local_port = remote_port = remote_ip = None
+        is_syn = is_tcp = False
+        try:
+            if is_out:
+                local_port, remote_port = packet.src_port, packet.dst_port
+                remote_ip = getattr(packet, "dst_addr", None)
+            else:
+                local_port, remote_port = packet.dst_port, packet.src_port
+                remote_ip = getattr(packet, "src_addr", None)
+        except Exception as _exc:
+            from . import crashlog
+            crashlog.once("engine.packet", _exc)
+        proto = "IP"
+        try:
+            if getattr(packet, "tcp", None) is not None:
+                is_tcp = True
+                proto = "TCP"
+                tcp = packet.tcp
+                if getattr(tcp, "syn", False) and not getattr(tcp, "ack", False):
+                    is_syn = True
+            elif getattr(packet, "udp", None) is not None:
+                proto = "UDP"
+            elif getattr(packet, "icmp", None) is not None or getattr(packet, "icmpv6", None) is not None:
+                proto = "ICMP"
+        except Exception as _exc:
+            from . import crashlog
+            crashlog.once("engine.packet", _exc)
+        return is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp
+
+    @staticmethod
     def build_rst_fields(pkt):
         """Return the RST fields to inject (aimed at the local end).
 

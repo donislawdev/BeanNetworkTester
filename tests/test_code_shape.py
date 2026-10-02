@@ -177,7 +177,9 @@ DEPTH_BAND = 4                  # absolute: see above
 # the target binding left `engine._start_locked` for its own method when the start
 # order changed (external review P1-5). 9 -> 8 on 2026-09-30: the snapshot merge
 # left `portmap.PortTable.info` for a function of its own (external review P2-9).
-DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4
+# 8 -> 7 on 2026-10-02: the packet reads left `engine._capture_loop` for
+# `BeanCore.packet_meta` (performance review R-1).
+DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4
 
 
 def _logic_lines(source):
@@ -584,8 +586,9 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
 # move a metric would be damaging something that works in order to make a number
 # look better. (It is 24 today and `summary.settings_summary` holds the ceiling of
 # 26 - measured with ruff 2026-10-01; read them there, a comment does not move.)
-COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,
-                            # test_layering._module_level
+# 4 -> 3 on 2026-10-02: `_capture_loop` left the band when its packet reads moved
+# to `BeanCore.packet_meta` (performance review R-1).
+COMPLEX_NEAR_CEILING = 3    # decide, settings_summary, test_layering._module_level
 
 
 # Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a

@@ -1683,6 +1683,7 @@ class BeanEngine:
     def _capture_loop(self, session):
         rng = self._rng
         wait = self._driver_wait
+        meta = BeanCore.packet_meta     # ports, address, protocol: see its docstring
         divert = session.divert         # this session's handle, never the next one's
         while session.live:
             # Three stores per packet and not one allocation: `True`/`False` are
@@ -1721,32 +1722,7 @@ class BeanEngine:
             if now >= wait.next_at:
                 wait.sample(packet, now)
             size = len(packet.raw)
-            is_out = bool(getattr(packet, "is_outbound", True))
-            local_port = remote_port = remote_ip = None
-            is_syn = is_tcp = False
-            try:
-                if is_out:
-                    local_port, remote_port = packet.src_port, packet.dst_port
-                    remote_ip = getattr(packet, "dst_addr", None)
-                else:
-                    local_port, remote_port = packet.dst_port, packet.src_port
-                    remote_ip = getattr(packet, "src_addr", None)
-            except Exception as _exc:
-                crashlog.once("engine.packet", _exc)
-            proto = "IP"
-            try:
-                if getattr(packet, "tcp", None) is not None:
-                    is_tcp = True
-                    proto = "TCP"
-                    tcp = packet.tcp
-                    if getattr(tcp, "syn", False) and not getattr(tcp, "ack", False):
-                        is_syn = True
-                elif getattr(packet, "udp", None) is not None:
-                    proto = "UDP"
-                elif getattr(packet, "icmp", None) is not None or getattr(packet, "icmpv6", None) is not None:
-                    proto = "ICMP"
-            except Exception as _exc:
-                crashlog.once("engine.packet", _exc)
+            is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp = meta(packet)
 
             key = BeanCore._flowkey(local_port, remote_ip, remote_port)
             if key is None and remote_ip is not None:
