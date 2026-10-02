@@ -57,6 +57,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   with many steps no longer slows down every packet either: the program finds the current
   step instead of going through the list from the start.
 
+- **Less processor time with a latency set on a busy link.** The part that sends delayed
+  packets back used to wake up for every new packet only to find nothing due yet. It now
+  wakes when the next packet is due. Measured at 2000 and 8000 packets a second: 16 to 24%
+  less processor time per packet. On such a busy link a packet now arrives on average 0.3 to
+  0.4 ms later than before - as late as a single packet on a quiet link always did - and
+  the slowest one in a hundred is as late as before.
+
 - **The window opens a little sooner.** At start the program now only checks that the
   `pydivert` package is installed instead of loading it, which took about a tenth of a second
   before the window appeared. It is loaded at the first **START**, as before.

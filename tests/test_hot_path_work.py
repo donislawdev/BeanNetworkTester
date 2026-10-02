@@ -17,12 +17,15 @@ flake with a threshold.
 import ipaddress
 import itertools
 import random
+import threading
+import time
 
-from fakes import check
+from fakes import FakeDivert, FakePacket, check, wait_until
 
 from beantester import core as core_mod
 from beantester import matchers, utils
 from beantester.core import BeanCore
+from beantester.engine import BeanEngine
 from beantester.matchers import KIND_INT, KIND_IP, parse_matcher
 
 
@@ -310,3 +313,88 @@ def test_rst_cooldowns_are_still_retired_without_nat():
                     remote_port=443, is_tcp=True)
     check("with NAT off the RST table still ages out", len(core._reset_until) == 0,
           f"({len(core._reset_until)} left)")
+
+
+# -- W-A4 / W-A6: the queue hand-off --------------------------------------------- #
+class _CountingCondition(threading.Condition):
+    def __init__(self):
+        super().__init__()
+        self.notified = 0
+
+    def notify(self, n=1):
+        self.notified += 1
+        super().notify(n)
+
+
+class _CountingLock:
+    """A lock that counts how often it was taken."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.taken = 0
+
+    def __enter__(self):
+        self.taken += 1
+        return self._lock.__enter__()
+
+    def __exit__(self, *exc):
+        return self._lock.__exit__(*exc)
+
+
+def test_the_injector_is_woken_only_for_a_new_head():
+    """It waits for the head's release time; only a new head can change that."""
+    eng = BeanEngine()
+    eng._cv = _CountingCondition()
+    packet = FakePacket()
+    for release, wakes in ((10.0, True),        # empty queue: it waits for anything
+                           (12.0, False),       # due later: the head is unchanged
+                           (10.0, False),       # due at the same time: sorts behind
+                           (9.0, True),         # due sooner: a new head
+                           (9.5, False)):
+        before = eng._cv.notified
+        eng._enqueue(release, packet)
+        check(f"a packet due at {release} {'wakes' if wakes else 'does not wake'} "
+              f"the injector", (eng._cv.notified > before) == wakes,
+              f"({eng._cv.notified - before} wake-ups)")
+
+
+def test_a_packet_due_sooner_is_not_held_behind_a_later_head():
+    """The injector is asleep on a packet 2 s away; one due in 10 ms must not wait.
+
+    Without the wake-up it would sleep until its 0.5 s cap, so the margin on either
+    side of 0.35 s is wide on purpose: this is about a missed wake, not timing.
+    """
+    fake = FakeDivert([])
+    eng = BeanEngine()
+    eng.start("test", divert=fake)
+    try:
+        later, sooner = FakePacket(port=1), FakePacket(port=2)
+        eng._enqueue(time.monotonic() + 2.0, later)
+        time.sleep(0.05)                          # the injector settles on `later`
+        queued_at = time.monotonic()
+        eng._enqueue(queued_at + 0.01, sooner)
+        check("the sooner packet goes out", wait_until(lambda: fake.sent, timeout=2.0))
+        sent_at, first = fake.sent[0]
+        check("the sooner packet goes out first", first is sooner)
+        check("and does not wait for the injector's next scheduled look",
+              sent_at - queued_at < 0.35, f"({sent_at - queued_at:.3f} s)")
+    finally:
+        eng.stop()
+
+
+def test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock():
+    """One writer each - the capture thread and the injector - so no lock (W-A6)."""
+    eng = BeanEngine()
+    eng._slock = _CountingLock()
+    packet = FakePacket()
+    for i in range(100):
+        eng._enqueue(10.0 + i, packet)
+    eng._log_delivered(None, 300, True)
+    eng._log_delivered(None, 200, False)
+    check("queueing 100 packets takes the stats lock zero times",
+          eng._slock.taken == 0, f"(taken {eng._slock.taken} times)")
+    check("and still records the queue's peak", eng.st["peak_queue"] == 100,
+          f"(peak {eng.st['peak_queue']})")
+    check("the delivered bytes are counted by direction",
+          (eng.st["bytes_out"], eng.st["bytes_in"]) == (300, 200),
+          f"({eng.st['bytes_out']}, {eng.st['bytes_in']})")

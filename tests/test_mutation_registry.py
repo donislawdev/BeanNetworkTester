@@ -884,7 +884,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 6         # make_gear_icon at 5, five more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -6543,6 +6543,48 @@ MUTATIONS = [
                "                                else (self.rate_down, self.rate_up))\n",
         "new": "            down_bps, up_bps = self._current_rates(now)\n",
         "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        # W-A4: every queued packet woke the injector to see "not yet" (CPU per
+        # packet 172-180 -> 133-137 us on the real driver at 8000/s).
+        "label": "engine (W-A4): every queued packet wakes the injector",
+        "file": "beantester/engine.py",
+        "old": "                if wake:\n                    self._cv.notify()\n",
+        "new": "                self._cv.notify()\n",
+        "test": "test_the_injector_is_woken_only_for_a_new_head",
+    },
+    {
+        "label": "engine (W-A4): a new head does not wake the injector",
+        "file": "beantester/engine.py",
+        "old": "                wake = not self._heap or release < self._heap[0][0]\n",
+        "new": "                wake = not self._heap\n",
+        "test": "test_a_packet_due_sooner_is_not_held_behind_a_later_head",
+    },
+    {
+        # W-A6: a lock hand-off for every packet queued and every packet delivered.
+        "label": "engine (W-A6): the queue peak takes the stats lock again",
+        "file": "beantester/engine.py",
+        "old": "                st = self.st\n"
+               "                if q > st[\"peak_queue\"]:\n"
+               "                    st[\"peak_queue\"] = q\n",
+        "new": "                with self._slock:\n"
+               "                    if q > self.st[\"peak_queue\"]:\n"
+               "                        self.st[\"peak_queue\"] = q\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
+    },
+    {
+        "label": "engine (W-A6): the queue peak is no longer recorded",
+        "file": "beantester/engine.py",
+        "old": "                    st[\"peak_queue\"] = q\n",
+        "new": "                    pass\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
+    },
+    {
+        "label": "engine (W-A6): the delivered bytes take the stats lock again",
+        "file": "beantester/engine.py",
+        "old": "        st[total] = st[total] + size\n",
+        "new": "        self._bump(total, size)\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
     },
 ]
 
