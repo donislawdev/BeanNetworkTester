@@ -116,6 +116,13 @@ from . import driverwait
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
 
+# What pydivert's Packet must keep in __slots__ for the capture loop to drop its
+# header cache (`packet.__dict__.clear()`): the fields send() and the checksum
+# helper read, and the __dict__ that holds nothing but cached headers. Measured on
+# pydivert 3.1.3 and pinned by tests/test_packet_header_cache.py; a version laid out
+# any other way is simply left alone - slower, never broken - whatever installed it.
+PYDIVERT_SLOTS = frozenset({"raw", "_wd_addr", "_direction", "__dict__"})
+
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
 _LIVE_ENGINES: weakref.WeakSet = weakref.WeakSet()
@@ -1691,8 +1698,11 @@ class BeanEngine:
         wait = self._driver_wait
         # pydivert's own packet class, or None: the one type whose header cache is
         # dropped before the queue (see the comment there). Looked up, never imported
-        # - without pydivert loaded no such packet can exist.
+        # - without pydivert loaded no such packet can exist - and only while it is
+        # laid out the way that was measured (PYDIVERT_SLOTS).
         real_packet = getattr(sys.modules.get("pydivert"), "Packet", None)
+        if not PYDIVERT_SLOTS <= set(getattr(real_packet, "__slots__", ())):
+            real_packet = None
         meta = BeanCore.packet_meta     # ports, address, protocol: see its docstring
         divert = session.divert         # this session's handle, never the next one's
         while session.live:

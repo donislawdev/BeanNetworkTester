@@ -16,13 +16,15 @@ p99.9 lateness 120-183 ms before ``_capture_loop`` dropped the cache, 16-19 ms
 after - the level of the same run with the collector switched off - with full
 collections of 48-123 ms gone.
 
-Four tests, because the fix rests on more than one fact:
+Five tests, because the fix rests on more than one fact:
 
 * the engine drops the cache of pydivert's OWN packet class before it queues one
   (a stand-in ``pydivert`` module with the same layout, so this runs on every
   runner - pydivert installs on Windows only);
 * it leaves every OTHER packet type alone: the synthetic source and the test fakes
   keep their real fields in ``__dict__``, and clearing those would empty them;
+* it leaves pydivert ITSELF alone when the class is laid out any other way than
+  ``engine.PYDIVERT_SLOTS`` (an unpinned install, a future release);
 * the real pydivert keeps what ``send()`` reads in ``__slots__`` and nothing but
   cached headers in ``__dict__`` - the condition that makes the clear safe at all;
 * the real class is the one the engine finds (``sys.modules["pydivert"].Packet``).
@@ -38,6 +40,7 @@ import types
 import pytest
 
 from beantester import BeanEngine
+from beantester.engine import PYDIVERT_SLOTS
 from fakes import FakeDivert, FakePacket, check
 
 
@@ -50,19 +53,24 @@ class _Header:
 
 
 class _StandInPacket:
-    """pydivert's layout in miniature: real fields in slots, caches in __dict__."""
+    """pydivert's layout in miniature: real fields in slots, caches in __dict__.
 
-    __slots__ = ("raw", "_outbound", "_sport", "__dict__")
+    The slot NAMES are pydivert's (``engine.PYDIVERT_SLOTS``): the engine clears
+    only a class laid out that way.
+    """
+
+    __slots__ = ("raw", "_wd_addr", "_direction", "_sport", "__dict__")
     udp = icmp = icmpv6 = None
 
     def __init__(self, sport):
         self.raw = b"\x00" * 60
-        self._outbound = True
+        self._wd_addr = None
+        self._direction = 0             # pydivert's Direction.OUTBOUND
         self._sport = sport
 
     @property
     def is_outbound(self):
-        return self._outbound
+        return self._direction == 0
 
     @functools.cached_property
     def tcp(self):
@@ -80,9 +88,34 @@ class _StandInPacket:
     src_addr = "10.0.0.2"
 
 
-def _stand_in_pydivert(monkeypatch):
+class _ReshapedPacket:
+    """A pydivert that keeps its fields in __dict__ - a layout nobody measured."""
+
+    udp = icmp = icmpv6 = None
+    is_outbound = True
+    dst_addr = "93.184.216.34"
+    src_addr = "10.0.0.2"
+
+    def __init__(self, sport):
+        self.raw = b"\x00" * 60
+        self._sport = sport
+
+    @functools.cached_property
+    def tcp(self):
+        return _Header(self)
+
+    @property
+    def src_port(self):
+        return self._sport if self.tcp else None
+
+    @property
+    def dst_port(self):
+        return 443 if self.tcp else None
+
+
+def _stand_in_pydivert(monkeypatch, packet_class=_StandInPacket):
     module = types.ModuleType("pydivert")
-    module.Packet = _StandInPacket
+    module.Packet = packet_class
     monkeypatch.setitem(sys.modules, "pydivert", module)
 
 
@@ -133,6 +166,21 @@ def test_only_pydivert_s_own_packets_lose_their_cache(monkeypatch):
           f"({len(emptied)} of {len(kept)} fakes were emptied)")
 
 
+def test_a_pydivert_laid_out_another_way_is_left_alone(monkeypatch):
+    """The clear is safe only for the layout it was measured on.
+
+    A pydivert that kept ``raw`` in ``__dict__`` - an unpinned install from source,
+    a future release - would lose the bytes ``send()`` needs. Such a class is left
+    alone: the old cost, never a broken packet.
+    """
+    _stand_in_pydivert(monkeypatch, _ReshapedPacket)
+    queued, _rows = _queued_after_capture([_ReshapedPacket(44000 + i) for i in range(20)])
+    check("every packet reached the queue", len(queued) == 20, f"(queued={len(queued)})")
+    emptied = [p for p in queued if "raw" not in p.__dict__]
+    check("a packet laid out another way keeps its fields", not emptied,
+          f"({len(emptied)} of {len(queued)} lost them)")
+
+
 def _raw_ipv4_tcp(sport, dport=443):
     tcp = struct.pack(">HHIIBBHHH", sport, dport, 1, 2, 0x50, 0x10, 8192, 0, 0)
     ip = struct.pack(">BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0, 64, 6, 0,
@@ -143,8 +191,9 @@ def _raw_ipv4_tcp(sport, dport=443):
 def test_pydivert_keeps_what_send_reads_out_of_the_dict_the_engine_clears():
     pydivert = pytest.importorskip("pydivert")
     slots = set(getattr(pydivert.Packet, "__slots__", ()))
-    needed = {"raw", "_wd_addr", "_direction", "_interface", "__dict__"}
-    check("pydivert keeps the packet's real fields in __slots__", needed <= slots,
+    needed = set(PYDIVERT_SLOTS) | {"_interface"}
+    check("pydivert keeps the packet's real fields in __slots__ - the layout the "
+          "engine checks before it clears anything", needed <= slots,
           f"(missing {sorted(needed - slots)})")
     p = pydivert.Packet(_raw_ipv4_tcp(50001), (1, 0), pydivert.Direction.OUTBOUND)
     before = (p.src_port, p.dst_port, p.dst_addr, p.tcp.syn, p.udp)

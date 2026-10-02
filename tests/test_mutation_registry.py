@@ -6310,6 +6310,17 @@ MUTATIONS = [
         "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
     },
     {
+        # Review of PR #248: an unpinned install or a future pydivert with its fields
+        # in __dict__ must be left alone, not emptied before send().
+        "label": "engine (W-A1): a pydivert laid out another way is cleared anyway",
+        "file": "beantester/engine.py",
+        "old": "        if not PYDIVERT_SLOTS <= set(getattr(real_packet, \"__slots__\", ())):\n"
+               "            real_packet = None\n",
+        "new": "        if False:\n"
+               "            real_packet = None\n",
+        "test": "test_a_pydivert_laid_out_another_way_is_left_alone",
+    },
+    {
         # The synthetic packet and the fakes keep their real fields in __dict__.
         "label": "engine (W-A1): every packet type loses its __dict__",
         "file": "beantester/engine.py",

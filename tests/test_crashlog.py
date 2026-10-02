@@ -1410,7 +1410,10 @@ def test_a_real_capture_start_builds_the_crash_context_before_the_handle_opens()
     assert len(starts) == 1, "engine.py must arm the crash log for a capture exactly once"
     real_branch = [n for n in ast.walk(starts[0]) if isinstance(n, ast.If)
                    and ast.unparse(n.test) == "divert is None"]
-    assert real_branch and calls(real_branch[0], "arm_for_capture"), (
+    # The branch's BODY only: walking the If node would read its `else` too, where
+    # the call would not run for a real driver at all (review of PR #248).
+    assert real_branch and any(calls(statement, "arm_for_capture")
+                               for statement in real_branch[0].body), (
         "arm_for_capture must run on the real-driver branch")
     opens = calls(starts[0], "_open_with_retry")
     assert opens and min(calls(starts[0], "arm_for_capture")) < min(opens), (
