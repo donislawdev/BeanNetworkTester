@@ -121,7 +121,12 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # (`put`, which leaves the clipboard alone for an empty text - external review
 # P3-31), so `App.copy_to_clipboard` is one line. The band falls to 779.1;
 # `engine.py` is 775, four lines clear - the next engine change pays for itself.
-FILE_CEILING = 1113             # beantester/gui/app.py
+# Lowered 2026-10-02 from 1113: the startup check asks `driver.pydivert_available(
+# load=False)` instead of importing pydivert in a try (performance review W-D5),
+# five lines become one. The band falls to 776.3, and `engine.py` paid in advance:
+# its header-cache drop (W-A1) cost four lines, the packet reads moved to
+# `BeanCore.packet_meta` gave back 24, so it is 755 - 21 lines clear.
+FILE_CEILING = 1109             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

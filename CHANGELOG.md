@@ -47,6 +47,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   moves in 15.6 ms steps, so latency, jitter and speed limits finer than that come out in whole
   steps. The new **Clock** row warns when that is the case. The `.exe` is not affected.
 
+### Changed
+
+- **The window opens a little sooner.** At start the program now only checks that the
+  `pydivert` package is installed instead of loading it, which took about a tenth of a second
+  before the window appeared. It is loaded at the first **START**, as before.
+
 ### Fixed
 
 - **The latency you set is the latency packets get, also on a busy link.** With a long

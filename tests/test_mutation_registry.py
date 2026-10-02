@@ -6375,6 +6375,21 @@ MUTATIONS = [
         "test": "test_a_crash_report_never_imports_a_module",
     },
     {
+        # W-D5: the GUI's startup line imported pydivert (~97 ms before the window).
+        "label": "driver (W-D5): asking without loading imports pydivert anyway",
+        "file": "beantester/driver.py",
+        "old": "    if not load:\n",
+        "new": "    if False:\n",
+        "test": "test_pydivert_available_can_answer_without_importing_it",
+    },
+    {
+        "label": "driver (W-D5): a blocked pydivert import counts as installed",
+        "file": "beantester/driver.py",
+        "old": "            return (sys.modules.get(\"pydivert\") is not None\n",
+        "new": "            return (\"pydivert\" in sys.modules\n",
+        "test": "test_pydivert_available_can_answer_without_importing_it",
+    },
+    {
         # The packet reads moved from engine._capture_loop to BeanCore.packet_meta
         # (R-1): the guards that drive the whole engine must still see them there.
         "label": "core (W-A1 move): an inbound packet's ports are read the wrong way round",
@@ -6389,6 +6404,13 @@ MUTATIONS = [
         "old": "                proto = \"ICMP\"\n",
         "new": "                pass\n",
         "test": "test_portless_traffic_reaches_the_connection_log",
+    },
+    {
+        "label": "gui (W-D5): the startup line imports pydivert",
+        "file": "beantester/gui/app.py",
+        "old": "driver.pydivert_available(load=False) else",
+        "new": "driver.pydivert_available() else",
+        "test": "test_the_gui_startup_line_does_not_import_pydivert",
     },
 ]
 

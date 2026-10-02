@@ -35,6 +35,7 @@ service when the app closes releases it, and the folder can be deleted normally.
 """
 import glob
 import os
+import sys
 import tempfile
 import threading
 
@@ -609,7 +610,27 @@ def release_on_exit(log=lambda *_: None):
     return []
 
 
-def pydivert_available():
+def pydivert_available(load=True):
+    """Can this process use pydivert? ``load=False``: is it INSTALLED, without importing.
+
+    ``--doctor`` asks the real question - does it import - and pays the import for
+    it. The GUI's startup line asks only whether it is there, before the window is
+    shown: importing it there cost ~97 ms on the UI thread (MEASURED 2026-10-02,
+    ``-X importtime``; performance review W-D5), and the first START imports it
+    anyway, on the transition thread, and reports a broken install itself.
+
+    A module already in ``sys.modules`` counts as there - a test's stand-in has no
+    spec for ``find_spec`` to read - and one set to ``None`` (an import blocked on
+    purpose) does not.
+    """
+    if not load:
+        try:
+            import importlib.util
+            return (sys.modules.get("pydivert") is not None
+                    or importlib.util.find_spec("pydivert") is not None)
+        except Exception as exc:        # a broken import hook: say "not there", and why
+            crashlog.note(exc, "driver.pydivert_spec")
+            return False
     try:
         import pydivert  # noqa: F401
         return True
