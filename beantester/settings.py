@@ -469,6 +469,19 @@ def _warn_about_shared_ports(targeting, log):
             log(T("log.shared_port_footer"))
 
 
+def _kept_fresh(engine, targeting):
+    """Is a running session's resolver already rebuilding this very targeting?
+
+    Asked of the resolver and not of ``engine.targeting()``: ``target_for`` stores
+    the object it hands out before anything installs it, so "the engine holds it"
+    is true for a target nothing resolves yet. By getattr, because this module is
+    handed engine doubles (see ``_destination_is_frozen``).
+    """
+    get = getattr(engine, "resolver", None)
+    keeps_fresh = getattr(get() if get is not None else None, "keeps_fresh", None)
+    return bool(keeps_fresh is not None and keeps_fresh(targeting))
+
+
 def apply_targeting(engine, target, log=lambda *_: None, announce=True, live=None):
     """Resolve the target-process expression and point the engine at its ports.
 
@@ -518,13 +531,20 @@ def apply_targeting(engine, target, log=lambda *_: None, announce=True, live=Non
     except Exception as e:                                   # pragma: no cover
         log(f"{T('log.targeting_error')}: {e}")
         return None
-    if announce:
+    if announce and not _kept_fresh(engine, targeting):
         # ONE synchronous resolve, and only on the announcing path - the explicit
         # "the user applied settings" one. It is needed because the log line below
         # reports what was actually matched, and an unresolved target would always
         # read as "matches nothing" - the very message this project made loud on
         # purpose. The periodic path passes announce=False and never blocks:
         # keeping the port set fresh is the resolver thread's job from then on.
+        #
+        # ...and not when that job is already being done. A running session's
+        # resolver rebuilding this very targeting has it at most one interval old,
+        # so the announcement is just as true without it - while a scenario step
+        # with the target unchanged paid a whole walk for every step: 1 ms at 1 000
+        # sockets, 64 ms at 100 000 (performance review W-B8). A NEW target is a new
+        # object (``engine.target_for``) and is still resolved here.
         #
         # Outside the try above, and swallowed: a failed resolve must NOT abort the
         # install. Aborting left the engine holding a new targeting object that the

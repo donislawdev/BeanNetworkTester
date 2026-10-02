@@ -259,6 +259,31 @@ def test_retargeting_swaps_a_reference_instead_of_churning_threads():
         resolver.stop()
 
 
+def test_the_same_target_again_neither_wakes_nor_needs_a_rebuild():
+    """Performance review W-B8: every settings apply while a scenario plays hands the
+    resolver the targeting it already has. Waking it then bought a rebuild for
+    nothing, and the caller's own synchronous rebuild was just as redundant - which
+    is what ``keeps_fresh`` answers. Not started, or stopped, nothing keeps it fresh."""
+    targeting, _ = _targeting("chrome")
+    other, _ = _targeting("firefox")
+    resolver = TargetResolver(interval=5.0)
+    resolver.retarget(targeting)
+    check("before start nothing keeps it fresh", not resolver.keeps_fresh(targeting))
+    resolver.start()
+    try:
+        check("the first pass ran", _wait(lambda: resolver.rebuilds >= 1))
+        check("a live resolver keeps its own target fresh", resolver.keeps_fresh(targeting))
+        check("...and only that one", not resolver.keeps_fresh(other))
+        resolver._wake.clear()
+        resolver.retarget(targeting)
+        check("the same targeting again does not wake it", not resolver._wake.is_set())
+        resolver.retarget(other)
+        check("a different one does", resolver._wake.is_set())
+    finally:
+        resolver.stop()
+    check("after stop nothing keeps it fresh", not resolver.keeps_fresh(other))
+
+
 def test_an_orphaned_targeting_stops_waking_the_resolver():
     """A target that has been replaced must not keep poking the thread awake."""
     old, _ = _targeting("chrome")

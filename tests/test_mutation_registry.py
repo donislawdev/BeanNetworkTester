@@ -5865,6 +5865,30 @@ MUTATIONS = [
         "test": "test_an_older_walk_than_one_applied_changes_nothing",
     },
     {
+        # Performance review W-B8.
+        "label": "settings: an unchanged running target is rebuilt on every apply",
+        "file": "beantester/settings.py",
+        "old": "    if announce and not _kept_fresh(engine, targeting):\n",
+        "new": "    if announce:\n",
+        "test": "test_an_unchanged_target_is_left_to_the_running_resolver",
+    },
+    {
+        "label": "resolver: the same target again wakes it",
+        "file": "beantester/target_resolver.py",
+        "old": ("        if targeting is not previous:\n"
+                "            self._wake.set()\n"),
+        "new": ("        if True:\n"
+                "            self._wake.set()\n"),
+        "test": "test_the_same_target_again_neither_wakes_nor_needs_a_rebuild",
+    },
+    {
+        "label": "resolver: a stopped resolver claims to keep its target fresh",
+        "file": "beantester/target_resolver.py",
+        "old": "        return self.is_running() and self._targeting is targeting\n",
+        "new": "        return self._targeting is targeting\n",
+        "test": "test_the_same_target_again_neither_wakes_nor_needs_a_rebuild",
+    },
+    {
         # P2-9: a verified entry survives a start time that proves another process.
         "label": "portmap: a snapshot keeps an entry another start time disproves",
         "file": "beantester/portmap.py",

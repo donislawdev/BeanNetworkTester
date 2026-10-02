@@ -127,7 +127,20 @@ class TargetResolver:
             previous.on_miss(None)          # an orphan must not keep waking us
         if targeting is not None:
             targeting.on_miss(self._wake.set)
-        self._wake.set()
+        # Only for a CHANGE. The same targeting again is what every settings apply
+        # does while a scenario plays, and the loop is already working on it - a
+        # wake-up then bought one more rebuild for nothing (performance review W-B8).
+        if targeting is not previous:
+            self._wake.set()
+
+    def keeps_fresh(self, targeting):
+        """Is this the targeting a LIVE resolver thread is rebuilding right now?
+
+        Then a synchronous rebuild by somebody else adds nothing: this thread keeps
+        it at most one ``interval`` old. False before ``start`` and after ``stop``,
+        which lets go of the target - so a new session always resolves once itself.
+        """
+        return self.is_running() and self._targeting is targeting
 
     # -- introspection (tests, diagnostics) ------------------------------------ #
     def is_running(self):

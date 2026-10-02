@@ -1156,6 +1156,49 @@ def test_a_scenario_step_still_resolving_at_stop_never_reaches_the_next_session(
         sh.stop()
 
 
+def test_an_unchanged_target_is_left_to_the_running_resolver(monkeypatch):
+    """Performance review W-B8, reproduced: every settings apply in a running
+    session - every scenario step - rebuilt the UNCHANGED target synchronously on
+    the applying thread (1 ms at 1 000 sockets, 64 ms at 100 000), while the
+    session's resolver was rebuilding that very object anyway. A changed target is
+    a new object and is still resolved there and then, and the line naming what it
+    matched is still logged."""
+    import threading
+    from beantester.i18n import T
+    from beantester.targeting import ProcessTargeting
+
+    calls = []
+    real_refresh = ProcessTargeting.refresh
+
+    def counted(self, *args, **kwargs):
+        calls.append(threading.current_thread())
+        return real_refresh(self, *args, **kwargs)
+
+    monkeypatch.setattr(ProcessTargeting, "refresh", counted)
+    sh = BeanEngine()
+    base = dict(DEFAULT_SETTINGS, target="beanprobe-names-nothing.exe")
+    apply_settings(sh, base)
+    sh.start("test", divert=FakeDivert([]))
+    try:
+        check("the resolver runs the target", wait_until(
+            lambda: sh.resolver().keeps_fresh(sh.targeting())))
+        lines = []
+        for step in range(3):
+            calls.clear()
+            apply_settings(sh, dict(base, loss=5 + step), lines.append)
+            mine = [t for t in calls if t is threading.current_thread()]
+            check(f"step {step}: no synchronous rebuild of the unchanged target",
+                  mine == [], f"({len(mine)})")
+        check("the target is still announced at every step",
+              lines.count(T("log.targeting_none")) == 3, f"({lines})")
+        calls.clear()
+        apply_settings(sh, dict(base, target="another-name-nothing-has.exe"))
+        check("a changed target is resolved there and then",
+              [t for t in calls if t is threading.current_thread()] != [])
+    finally:
+        sh.stop()
+
+
 def test_a_connection_row_records_the_drops_the_queue_made():
     """`dropped` used to be recorded one step too early.
 
