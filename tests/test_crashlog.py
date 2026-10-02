@@ -1292,3 +1292,131 @@ def test_a_missing_tkinter_is_not_a_crash(isolated, monkeypatch, capsys):
     assert "No tkinter" in capsys.readouterr().err
     assert _entries(isolated) == [], "a missing tkinter was recorded as a crash"
     assert len(shown) == 1 and "No tkinter" in shown[0][1], shown
+
+
+# -- what a repeat and a first record cost (performance review 2026-09-26) ----- #
+def _boom_elsewhere():
+    """A second fault from a different place than ``_boom``."""
+    try:
+        raise KeyError("elsewhere")
+    except KeyError as exc:
+        return exc
+
+
+def test_a_repeated_fault_is_counted_without_reading_its_traceback_again(isolated, monkeypatch):
+    """W-D2: ``extract_tb`` once per FAULT, not once per occurrence.
+
+    It stats every frame's file through ``linecache``: MEASURED 2026-10-02 a repeat
+    cost 198-380 us that way and 3.9-6.9 us through ``_quick_key``.
+    """
+    import traceback
+    walks = []
+    real = traceback.extract_tb
+
+    def counting(tb, *args, **kwargs):
+        walks.append(1)
+        return real(tb, *args, **kwargs)
+
+    monkeypatch.setattr(traceback, "extract_tb", counting)
+    exc = _boom("the same fault, again and again")
+    for _ in range(200):
+        entry = crashlog.record(exc, source="tick")
+    assert entry["count"] == 200, entry["count"]
+    assert len(walks) == 1, f"the traceback was read {len(walks)} times for one fault"
+    assert len(_entries(isolated)) == 1
+
+
+def test_the_shortcut_never_merges_two_faults_and_survives_being_cleared(isolated, monkeypatch):
+    """Cleared at its ceiling, the shortcut still counts each fault as itself."""
+    monkeypatch.setattr(crashlog, "_QUICK_MAX", 1)
+    first, second = _boom("one"), _boom_elsewhere()
+    for _ in range(3):
+        crashlog.record(first, source="test")
+        crashlog.record(second, source="test")
+    counts = sorted(e["count"] for e in crashlog.recent())
+    assert counts == [3, 3], counts
+    assert len(_entries(isolated)) == 2, "a cleared shortcut wrote a fault a second time"
+    assert len(crashlog._quick) <= 1, f"the shortcut outgrew its ceiling: {len(crashlog._quick)}"
+
+
+def test_the_fixed_context_is_built_once_per_process(isolated, monkeypatch):
+    """W-D3: ``platform.platform()`` is 58-151 ms of WMI on Windows, the first time."""
+    asked = []
+    monkeypatch.setattr(crashlog.platform, "platform",
+                        lambda *a, **k: asked.append(1) or "TestOS-1")
+    crashlog.record(_boom("one"), source="test")
+    crashlog.record(_boom_elsewhere(), source="test")
+    assert asked == [1], f"platform asked {len(asked)} times for two records"
+    assert {e["context"]["platform"] for e in _entries(isolated)} == {"TestOS-1"}
+
+
+def test_a_real_capture_start_leaves_no_context_to_build_on_a_worker(isolated, monkeypatch):
+    """``arm_for_capture`` builds it; a fault on another thread then asks nothing."""
+    asked = []
+    monkeypatch.setattr(crashlog.platform, "platform",
+                        lambda *a, **k: asked.append(threading.current_thread().name)
+                        or "TestOS-1")
+    crashlog.arm_for_capture()
+    assert len(asked) == 1, asked
+    worker = threading.Thread(target=lambda: crashlog.note(_boom(), "engine.packet"),
+                              name="bean-capture")
+    worker.start()
+    worker.join(5)
+    assert len(asked) == 1, f"the worker built the context again: {asked}"
+    assert _entries(isolated)[0]["context"]["platform"] == "TestOS-1"
+
+
+def test_a_platform_lookup_that_fails_still_leaves_the_record(isolated, monkeypatch):
+    """A broken WMI raised inside the context, and that cost the whole record."""
+    def broken(*args, **kwargs):
+        raise OSError("WMI is not answering")
+
+    monkeypatch.setattr(crashlog.platform, "platform", broken)
+    crashlog.record(_boom(), source="test")
+    written = _entries(isolated)
+    assert len(written) == 1, "the record was lost with the platform name"
+    assert "OSError" in written[0]["context"]["platform"], written[0]["context"]
+
+
+def test_a_crash_report_never_imports_a_module(isolated, monkeypatch):
+    """W-D3: importing pydivert from here was ~97 ms on the thread that failed."""
+    (isolated / "beanprobe_never_imported.py").write_text(
+        "raise RuntimeError('a crash report imported this')\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(isolated))
+    assert crashlog._module_version("beanprobe_never_imported") == "not loaded"
+    assert "beanprobe_never_imported" not in sys.modules
+    loaded = types.ModuleType("beanprobe_loaded")
+    loaded.__version__ = "9.9"
+    monkeypatch.setitem(sys.modules, "beanprobe_loaded", loaded)
+    assert crashlog._module_version("beanprobe_loaded") == "9.9"
+
+
+def test_a_real_capture_start_builds_the_crash_context_before_the_handle_opens():
+    """The wiring, read from the engine's source: only the real-driver branch can
+    run it (a test cannot open WinDivert), and the behaviour above is tested on
+    ``arm_for_capture`` itself."""
+    import ast
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "beantester", "engine.py")
+    tree = ast.parse(open(path, encoding="utf-8").read())
+
+    def calls(node, attr):
+        return [n.lineno for n in ast.walk(node)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == attr]
+
+    starts = [f for f in ast.walk(tree)
+              if isinstance(f, ast.FunctionDef) and calls(f, "arm_for_capture")]
+    assert len(starts) == 1, "engine.py must arm the crash log for a capture exactly once"
+    real_branch = [n for n in ast.walk(starts[0]) if isinstance(n, ast.If)
+                   and ast.unparse(n.test) == "divert is None"]
+    # The branch's BODY only: walking the If node would read its `else` too, where
+    # the call would not run for a real driver at all (review of PR #248).
+    assert real_branch and any(calls(statement, "arm_for_capture")
+                               for statement in real_branch[0].body), (
+        "arm_for_capture must run on the real-driver branch")
+    opens = calls(starts[0], "_open_with_retry")
+    assert opens and min(calls(starts[0], "arm_for_capture")) < min(opens), (
+        "the context must be built BEFORE the handle opens")
+    assert not calls(tree, "arm_native"), (
+        "engine.py arms with arm_native: the capture thread builds the context again")

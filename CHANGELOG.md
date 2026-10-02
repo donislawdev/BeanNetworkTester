@@ -47,7 +47,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   moves in 15.6 ms steps, so latency, jitter and speed limits finer than that come out in whole
   steps. The new **Clock** row warns when that is the case. The `.exe` is not affected.
 
+### Changed
+
+- **The window opens a little sooner.** At start the program now only checks that the
+  `pydivert` package is installed instead of loading it, which took about a tenth of a second
+  before the window appeared. It is loaded at the first **START**, as before.
+
 ### Fixed
+
+- **The latency you set is the latency packets get, also on a busy link.** With a long
+  **Latency** and many packets waiting, the program paused every few seconds to free memory,
+  and packets that came in during a pause arrived over 100 ms later than set. Measured
+  at 8000 packets a second and 500 ms: one packet in a thousand was over 120 ms late before,
+  and is under 20 ms late now. The first error recorded during a capture no longer holds the
+  capture up for up to 0.15 s either.
 
 - **The event log window and the Connections tab show everything they hold.** The
   **Copy row** button under the **Event log** table came out cut in half and vanished in a

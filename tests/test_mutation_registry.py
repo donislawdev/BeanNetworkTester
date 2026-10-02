@@ -799,15 +799,16 @@ MUTATIONS = [
         # function and cannot see the runners-up climbing together underneath it.
         "label": "ratchet: the complexity crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        # Re-anchored 2026-08-31 (3 -> 5) and again 2026-09-06 (5 -> 4, when
-        # `_run_session` was split into three phases and left the band). The
-        # mutation still proves the same thing - a count frozen looser than
+        # Re-anchored 2026-08-31 (3 -> 5), 2026-09-06 (5 -> 4, when
+        # `_run_session` was split into three phases and left the band) and
+        # 2026-10-02 (4 -> 3, `_capture_loop` left it - performance review R-1).
+        # The mutation still proves the same thing - a count frozen looser than
         # today's measurement is caught by the equality half of that test, not by
         # the "at most" half. Re-anchoring is the routine cost of a pattern that
         # pins exact source text; a stale one reports SKIP, which reads like a
         # result and is not one.
-        "old": "COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,",
-        "new": "COMPLEX_NEAR_CEILING = 7    # decide, settings_summary, _capture_loop,",
+        "old": "COMPLEX_NEAR_CEILING = 3    # decide, settings_summary, test_layering._module_level",
+        "new": "COMPLEX_NEAR_CEILING = 6    # decide, settings_summary, test_layering._module_level",
         "test": "test_nothing_else_is_creeping_up_on_the_complexity_ceiling",
     },
     {
@@ -883,7 +884,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -6290,6 +6291,138 @@ MUTATIONS = [
         "new": "        pass\n",
         "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
     },
+    {
+        # Performance review W-A1/W-A3: a queued packet held pydivert's header
+        # cache, a reference cycle only a FULL collection frees (p99.9 128 ms late).
+        "label": "engine (W-A1): a queued packet keeps pydivert's header cache",
+        "file": "beantester/engine.py",
+        "old": "            if type(packet) is real_packet:\n"
+               "                packet.__dict__.clear()\n",
+        "new": "            if type(packet) is real_packet:\n"
+               "                pass\n",
+        "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
+    },
+    {
+        "label": "engine (W-A1): pydivert's packet class is never found",
+        "file": "beantester/engine.py",
+        "old": "        real_packet = getattr(sys.modules.get(\"pydivert\"), \"Packet\", None)\n",
+        "new": "        real_packet = None\n",
+        "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
+    },
+    {
+        # Review of PR #248: an unpinned install or a future pydivert with its fields
+        # in __dict__ must be left alone, not emptied before send().
+        "label": "engine (W-A1): a pydivert laid out another way is cleared anyway",
+        "file": "beantester/engine.py",
+        "old": "        if not PYDIVERT_SLOTS <= set(getattr(real_packet, \"__slots__\", ())):\n"
+               "            real_packet = None\n",
+        "new": "        if False:\n"
+               "            real_packet = None\n",
+        "test": "test_a_pydivert_laid_out_another_way_is_left_alone",
+    },
+    {
+        # The synthetic packet and the fakes keep their real fields in __dict__.
+        "label": "engine (W-A1): every packet type loses its __dict__",
+        "file": "beantester/engine.py",
+        "old": "            if type(packet) is real_packet:\n",
+        "new": "            if True:\n",
+        "test": "test_only_pydivert_s_own_packets_lose_their_cache",
+    },
+    {
+        # W-D3: the first fault on the capture thread built the context there.
+        "label": "engine (W-D3): a real start arms without building the crash context",
+        "file": "beantester/engine.py",
+        "old": "            crashlog.arm_for_capture()\n",
+        "new": "            crashlog.arm_native()\n",
+        "test": "test_a_real_capture_start_builds_the_crash_context_before_the_handle_opens",
+    },
+    {
+        # W-D2: extract_tb ran for every occurrence (198-380 us a repeat).
+        "label": "crashlog (W-D2): a repeat reads its traceback again",
+        "file": "beantester/crashlog.py",
+        "old": "        fingerprint = _quick.get(quick)\n",
+        "new": "        fingerprint = None\n",
+        "test": "test_a_repeated_fault_is_counted_without_reading_its_traceback_again",
+    },
+    {
+        "label": "crashlog (W-D2): the shortcut map grows without a ceiling",
+        "file": "beantester/crashlog.py",
+        "old": "        if len(_quick) >= _QUICK_MAX:\n            _quick.clear()\n",
+        "new": "        pass\n",
+        "test": "test_the_shortcut_never_merges_two_faults_and_survives_being_cleared",
+    },
+    {
+        # W-D3: platform.platform() is 58-151 ms of WMI the first time.
+        "label": "crashlog (W-D3): the fixed context is built for every record",
+        "file": "beantester/crashlog.py",
+        "old": "    static = _static\n    if static is None:\n",
+        "new": "    static = None\n    if static is None:\n",
+        "test": "test_the_fixed_context_is_built_once_per_process",
+    },
+    {
+        "label": "crashlog (W-D3): arming for a capture builds no context",
+        "file": "beantester/crashlog.py",
+        "old": "    arm_native()\n    _static_context()\n",
+        "new": "    arm_native()\n",
+        "test": "test_a_real_capture_start_leaves_no_context_to_build_on_a_worker",
+    },
+    {
+        "label": "crashlog (W-D3): a failing platform lookup loses the record",
+        "file": "beantester/crashlog.py",
+        "old": "    except Exception as exc:\n"
+               "        return f\"{sys.platform} (platform.platform() failed",
+        "new": "    except ZeroDivisionError as exc:\n"
+               "        return f\"{sys.platform} (platform.platform() failed",
+        "test": "test_a_platform_lookup_that_fails_still_leaves_the_record",
+    },
+    {
+        # W-D3: importing pydivert from a crash report cost ~97 ms.
+        "label": "crashlog (W-D3): the context imports a module that was not loaded",
+        "file": "beantester/crashlog.py",
+        "old": "    module = sys.modules.get(name)\n    if module is None:\n"
+               "        return \"not loaded\"\n",
+        "new": "    module = sys.modules.get(name) or __import__(name)\n    if module is None:\n"
+               "        return \"not loaded\"\n",
+        "test": "test_a_crash_report_never_imports_a_module",
+    },
+    {
+        # W-D5: the GUI's startup line imported pydivert (~97 ms before the window).
+        "label": "driver (W-D5): asking without loading imports pydivert anyway",
+        "file": "beantester/driver.py",
+        "old": "    if not load:\n",
+        "new": "    if False:\n",
+        "test": "test_pydivert_available_can_answer_without_importing_it",
+    },
+    {
+        "label": "driver (W-D5): a blocked pydivert import counts as installed",
+        "file": "beantester/driver.py",
+        "old": "            return (sys.modules.get(\"pydivert\") is not None\n",
+        "new": "            return (\"pydivert\" in sys.modules\n",
+        "test": "test_pydivert_available_can_answer_without_importing_it",
+    },
+    {
+        # The packet reads moved from engine._capture_loop to BeanCore.packet_meta
+        # (R-1): the guards that drive the whole engine must still see them there.
+        "label": "core (W-A1 move): an inbound packet's ports are read the wrong way round",
+        "file": "beantester/core.py",
+        "old": "                local_port, remote_port = packet.dst_port, packet.src_port\n",
+        "new": "                local_port, remote_port = packet.src_port, packet.dst_port\n",
+        "test": "test_every_remote_endpoint_gate_fires_in_both_directions",
+    },
+    {
+        "label": "core (W-A1 move): a ping is no longer labelled ICMP",
+        "file": "beantester/core.py",
+        "old": "                proto = \"ICMP\"\n",
+        "new": "                pass\n",
+        "test": "test_portless_traffic_reaches_the_connection_log",
+    },
+    {
+        "label": "gui (W-D5): the startup line imports pydivert",
+        "file": "beantester/gui/app.py",
+        "old": "driver.pydivert_available(load=False) else",
+        "new": "driver.pydivert_available() else",
+        "test": "test_the_gui_startup_line_does_not_import_pydivert",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
@@ -6319,7 +6452,9 @@ PROVEN_BY_HAND = {
     # when Ctrl+F gave it a patch worth writing down. This list is meant to shrink.
     "test_an_overridden_field_is_visibly_disabled": "2026-07-21, removing the disabled style maps",
     "test_no_stale_pending_markers": "2026-07-25, both directions",
-    "test_every_remote_endpoint_gate_fires_in_both_directions": "2026-07, the inbound branch",
+    # test_every_remote_endpoint_gate_fires_in_both_directions moved to MUTATIONS on
+    # 2026-10-02: its hand-proven patch (the inbound branch) became an entry when the
+    # packet reads moved to BeanCore.packet_meta.
     "test_a_worker_thread_exception_is_recorded": "2026-08-01, the excepthook body",
     "test_pid_for_takes_no_lock_because_the_capture_thread_calls_it": "2026-07-29, taking the lock",
     # Not in MUTATIONS because the patch would be the two enormous `log.driver_*`

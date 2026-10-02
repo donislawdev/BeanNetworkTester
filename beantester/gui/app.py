@@ -1656,11 +1656,9 @@ class App:
             self.log(T("log.note_windows"))
         elif not self._is_admin:
             self.log(T("log.note_admin"))
-        try:
-            import pydivert  # noqa: F401
-            self.log(T("log.ready"))
-        except ImportError:
-            self.log(T("log.no_pydivert"))
+        # Installed, not IMPORTED: this runs before the window is shown, and the
+        # import was ~97 ms of it (see driver.pydivert_available).
+        self.log(T("log.ready") if driver.pydivert_available(load=False) else T("log.no_pydivert"))
         self._report_storage_problems()
 
     # -- periodic refresh -------------------------------------------------------- #

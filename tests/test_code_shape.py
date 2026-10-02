@@ -121,7 +121,12 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # (`put`, which leaves the clipboard alone for an empty text - external review
 # P3-31), so `App.copy_to_clipboard` is one line. The band falls to 779.1;
 # `engine.py` is 775, four lines clear - the next engine change pays for itself.
-FILE_CEILING = 1113             # beantester/gui/app.py
+# Lowered 2026-10-02 from 1113: the startup check asks `driver.pydivert_available(
+# load=False)` instead of importing pydivert in a try (performance review W-D5),
+# five lines become one. The band falls to 776.3, and `engine.py` paid in advance:
+# its header-cache drop (W-A1) cost four lines, the packet reads moved to
+# `BeanCore.packet_meta` gave back 24, so it is 755 - 21 lines clear.
+FILE_CEILING = 1109             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -177,7 +182,9 @@ DEPTH_BAND = 4                  # absolute: see above
 # the target binding left `engine._start_locked` for its own method when the start
 # order changed (external review P1-5). 9 -> 8 on 2026-09-30: the snapshot merge
 # left `portmap.PortTable.info` for a function of its own (external review P2-9).
-DEPTHS_NEAR_CEILING = 8         # make_gear_icon at 5, seven more at 4
+# 8 -> 7 on 2026-10-02: the packet reads left `engine._capture_loop` for
+# `BeanCore.packet_meta` (performance review R-1).
+DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4
 
 
 def _logic_lines(source):
@@ -584,8 +591,9 @@ def test_the_ceilings_are_not_set_so_loosely_that_they_never_fire():
 # move a metric would be damaging something that works in order to make a number
 # look better. (It is 24 today and `summary.settings_summary` holds the ceiling of
 # 26 - measured with ruff 2026-10-01; read them there, a comment does not move.)
-COMPLEX_NEAR_CEILING = 4    # decide, settings_summary, _capture_loop,
-                            # test_layering._module_level
+# 4 -> 3 on 2026-10-02: `_capture_loop` left the band when its packet reads moved
+# to `BeanCore.packet_meta` (performance review R-1).
+COMPLEX_NEAR_CEILING = 3    # decide, settings_summary, test_layering._module_level
 
 
 # Ruff is not in requirements-dev.txt: it lives in requirements-lint.txt, which a

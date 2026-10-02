@@ -97,6 +97,7 @@ import atexit
 import heapq
 import itertools
 import random
+import sys
 import threading
 import time
 import weakref
@@ -114,6 +115,13 @@ from . import crashlog
 from . import driverwait
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
+
+# What pydivert's Packet must keep in __slots__ for the capture loop to drop its
+# header cache (`packet.__dict__.clear()`): the fields send() and the checksum
+# helper read, and the __dict__ that holds nothing but cached headers. Measured on
+# pydivert 3.1.3 and pinned by tests/test_packet_header_cache.py; a version laid out
+# any other way is simply left alone - slower, never broken - whatever installed it.
+PYDIVERT_SLOTS = frozenset({"raw", "_wd_addr", "_direction", "__dict__"})
 
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
@@ -900,7 +908,12 @@ class BeanEngine:
             # possible - the kernel driver is now in play - so arm native crash
             # capture now, not at launch (keeps crashes/ from appearing until it
             # can actually be needed). No-op under --simulate/tests (no real driver).
-            crashlog.arm_native()
+            # It also builds the crash report's fixed context HERE, before the
+            # handle opens: the first fault on the capture thread used to build it
+            # there, and `platform.platform()` alone is 58-151 ms of WMI on Windows
+            # - the capture thread standing still while the driver queues the
+            # user's packets (performance review W-D3; see crashlog.arm_for_capture).
+            crashlog.arm_for_capture()
         self._divert = divert
         # EVERYTHING SLOW HAPPENS BEFORE THE HANDLE OPENS (external review P1-5).
         # From the open on, WinDivert diverts every packet the filter matches into a
@@ -1683,6 +1696,14 @@ class BeanEngine:
     def _capture_loop(self, session):
         rng = self._rng
         wait = self._driver_wait
+        # pydivert's own packet class, or None: the one type whose header cache is
+        # dropped before the queue (see the comment there). Looked up, never imported
+        # - without pydivert loaded no such packet can exist - and only while it is
+        # laid out the way that was measured (PYDIVERT_SLOTS).
+        real_packet = getattr(sys.modules.get("pydivert"), "Packet", None)
+        if not PYDIVERT_SLOTS <= set(getattr(real_packet, "__slots__", ())):
+            real_packet = None
+        meta = BeanCore.packet_meta     # ports, address, protocol: see its docstring
         divert = session.divert         # this session's handle, never the next one's
         while session.live:
             # Three stores per packet and not one allocation: `True`/`False` are
@@ -1721,32 +1742,7 @@ class BeanEngine:
             if now >= wait.next_at:
                 wait.sample(packet, now)
             size = len(packet.raw)
-            is_out = bool(getattr(packet, "is_outbound", True))
-            local_port = remote_port = remote_ip = None
-            is_syn = is_tcp = False
-            try:
-                if is_out:
-                    local_port, remote_port = packet.src_port, packet.dst_port
-                    remote_ip = getattr(packet, "dst_addr", None)
-                else:
-                    local_port, remote_port = packet.dst_port, packet.src_port
-                    remote_ip = getattr(packet, "src_addr", None)
-            except Exception as _exc:
-                crashlog.once("engine.packet", _exc)
-            proto = "IP"
-            try:
-                if getattr(packet, "tcp", None) is not None:
-                    is_tcp = True
-                    proto = "TCP"
-                    tcp = packet.tcp
-                    if getattr(tcp, "syn", False) and not getattr(tcp, "ack", False):
-                        is_syn = True
-                elif getattr(packet, "udp", None) is not None:
-                    proto = "UDP"
-                elif getattr(packet, "icmp", None) is not None or getattr(packet, "icmpv6", None) is not None:
-                    proto = "ICMP"
-            except Exception as _exc:
-                crashlog.once("engine.packet", _exc)
+            is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp = meta(packet)
 
             key = BeanCore._flowkey(local_port, remote_ip, remote_port)
             if key is None and remote_ip is not None:
@@ -1821,6 +1817,31 @@ class BeanEngine:
             self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,
                                 size, now, proto, scoped=dec.scoped)
             rels = dec.releases
+            # 🔴 DROP PYDIVERT'S CACHED HEADERS before the packet waits in the queue
+            # (performance review 2026-09-26, W-A1/W-A3). Every header the reads above
+            # touched is a `functools.cached_property` stored in the packet's
+            # `__dict__`, and each header keeps the packet in `_packet`: a reference
+            # CYCLE, which reference counting never frees. A packet sitting out a
+            # delay outlives the young collections, ages into the OLDEST generation
+            # and dies there, so only a FULL collection frees it - and that stops
+            # both workers, landing on the very latency this tool promises to keep.
+            # MEASURED 2026-10-02 (Win11, elevated, CPython 3.14.7, pydivert 3.1.3,
+            # real driver, 8000 UDP datagrams/s, --latency 500, runs alternated in
+            # one sitting, internal_tools/probe_latency_precision.py): before,
+            # p99.9 120-183 ms LATE, worst 121-186 ms, 9-24% of packets over 20 ms
+            # late, and full collections of 48-123 ms freeing 105-205k objects;
+            # after, p99.9 16-19 ms, worst 20-25 ms, at most 56 of 60 000 over
+            # 20 ms, one collection of 5 ms - the level of the same CLI with the
+            # collector switched OFF (p99.9 18 ms, worst 22 ms), so what is left is
+            # not the collector. Here and not right after the reads, so a
+            # corruption's payload write (which rebuilds the headers) is covered too.
+            # Only pydivert's class, and that is the safety of it: pydivert keeps
+            # every real field in __slots__ (raw, _wd_addr, _direction...) and only
+            # those caches in __dict__, so send() and the checksum helper lose
+            # nothing; the synthetic packet and the test fakes keep their real
+            # fields IN __dict__. tests/test_packet_header_cache.py pins both.
+            if type(packet) is real_packet:
+                packet.__dict__.clear()
             queued = self._enqueue(rels[0], packet, key=key, modified=modified)
             if len(rels) > 1:
                 # Counted per copy that the queue ACCEPTED, not per decision to

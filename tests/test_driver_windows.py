@@ -11,8 +11,14 @@ QueryServiceStatus write through a garbage pointer. The fix is to declare full
 argtypes/restype on every advapi32 function used. These tests check the two
 properties that keep it fixed and keep it safe off Windows.
 """
+import builtins
 import ctypes
+import importlib.util
+import sys
 import threading
+import types
+
+import pytest
 
 from beantester import driver
 from fakes import LANGS, check, forget_the_driver_state
@@ -894,3 +900,52 @@ def test_doctor_says_when_the_session_clock_is_too_coarse_to_time_an_impairment(
     real = next(c for c in driver.doctor()[1] if c[0] == "clock")
     check("and this machine's own clock is asked", real[2].startswith(
         time.get_clock_info("monotonic").implementation), f"({real})")
+
+
+# -- "is pydivert there?" without paying its import (performance review W-D5) -- #
+def test_pydivert_available_can_answer_without_importing_it(monkeypatch):
+    """``load=False`` is the GUI's startup question: the import was ~97 ms there."""
+    imported = []
+    real_import, real_find = builtins.__import__, importlib.util.find_spec
+
+    def no_pydivert_import(name, *args, **kwargs):
+        if name == "pydivert" or name.startswith("pydivert."):
+            imported.append(name)
+            raise AssertionError("pydivert was imported")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.delitem(sys.modules, "pydivert", raising=False)
+    monkeypatch.setattr(builtins, "__import__", no_pydivert_import)
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name, *a: object() if name == "pydivert" else real_find(name, *a))
+    check("installed, and nothing imported", driver.pydivert_available(load=False) is True
+          and not imported, f"(imported={imported})")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None)
+    check("not installed", driver.pydivert_available(load=False) is False)
+    monkeypatch.setitem(sys.modules, "pydivert", None)
+    check("an import blocked on purpose is not there", driver.pydivert_available(load=False) is False)
+    monkeypatch.setitem(sys.modules, "pydivert", types.ModuleType("pydivert"))
+    check("a module already loaded is there, spec or not",
+          driver.pydivert_available(load=False) is True)
+    check("and still nothing imported", not imported, f"(imported={imported})")
+
+
+def test_the_gui_startup_line_does_not_import_pydivert(monkeypatch):
+    """The wiring: App's startup check asks ``load=False``, and says what it heard."""
+    pytest.importorskip("tkinter")
+    from beantester.gui import app as app_module
+    from beantester.i18n import T
+    asked, lines = [], []
+    answer = [True]
+    monkeypatch.setattr(app_module.driver, "pydivert_available",
+                        lambda load=True: asked.append(load) or answer[0])
+    stub = types.SimpleNamespace(log=lines.append, _is_admin=True,
+                                 _report_storage_problems=lambda: None)
+    app_module.App._check_environment(stub)
+    check("asked whether it is installed, not whether it imports", asked == [False],
+          f"(asked={asked})")
+    check("and said it is ready", T("log.ready") in lines, f"({lines})")
+    answer[0] = False
+    lines.clear()
+    app_module.App._check_environment(stub)
+    check("a missing pydivert is still said", T("log.no_pydivert") in lines, f"({lines})")
