@@ -137,6 +137,10 @@ Installing from source works on Python 3.10 and newer. CI tests and builds on **
 that is the version the released `.exe` is frozen with, so older ones are supported but not
 re-proven on every commit.
 
+On Windows, Python 3.10 to 3.12 measure time in steps of 15.6 ms. Every packet is timed by that
+clock, so latency, jitter and speed limits finer than a step come out in whole steps, and
+`--doctor` warns about it. Python 3.13 and newer, and the `.exe`, measure in microseconds.
+
 `psutil` is installed with the tool but is not what makes process targeting work on Windows. There
 the socket table and the process names come straight from the OS, and targeting keeps working with
 `psutil` removed entirely (measured: 310 ports mapped, 37 of 37 names resolved). It is the fallback
@@ -339,7 +343,9 @@ seconds into the future: packets carried extreme delay, and raising the limit mi
 "link recovers" schedule step) had no effect, because the backlog swallowed every faster step. With
 an `N` ms buffer the delay is bounded to ~`N` ms, the excess goes as "Rate-limit drop" (a separate
 counter, not "Loss" nor "Buffer overflow"), and after raising the limit throughput recovers within
-~`N` ms. Default 1000 ms. Active only with a download/upload limit or a schedule set.
+~`N` ms. Default 1000 ms. Active only with a download/upload limit or a schedule set. The time in
+the buffer comes on top of *Latency*, as on a real link: with 200 ms of latency and a full 150 ms
+buffer a packet arrives after about 350 ms.
 
 **Delay (ping)** - *Latency*: how many ms to add to every packet. *Jitter*: random
 variation of the delay (+/- ms), which makes ping jump and reorders packets. Three things worth
@@ -913,7 +919,7 @@ connections arriving from outside, are still blocked in silence.
 | `--print-config` | print the effective settings (after `defaults < file < preset < flags`) as JSON and exit |
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |
-| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights) and exit |
+| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights, how finely the clock measures time) and exit |
 | `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit. Each line says what happened to one service. The exit code is `0` even when a service could not be stopped |
 
 Precedence order: **defaults < `--config` < `--preset` < flags**. Full list:
@@ -1046,6 +1052,7 @@ variable.
 | "Show only the targeted traffic" | **ignored on purpose** - see below | **followed** |
 | the "Row limit" field | not applicable | **ignored** - every filtered row is exported, not just the drawn ones |
 | columns change between versions | the old file is renamed with a timestamp and a new one started, so rows never misalign under a stale header | not applicable |
+| encoding | UTF-8 with no byte-order mark. Double-clicked, Excel reads such a file in the Windows code page and mangles letters outside it (process names in Polish or Chinese). Open it through **Data > Get Data > From File > From Text/CSV** and set **File Origin** to **65001: Unicode (UTF-8)** | same |
 
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than

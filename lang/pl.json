@@ -659,6 +659,7 @@
   "tools.common.failed": "Nie udało się: {error}",
   "tools.common.working": "W toku...",
   "tools.diagnostics.check.administrator": "Uprawnienia administratora",
+  "tools.diagnostics.check.clock": "Zegar",
   "tools.diagnostics.check.driver_queue": "Kolejka sterownika",
   "tools.diagnostics.check.frozen": "Wersja spakowana (.exe)",
   "tools.diagnostics.check.platform": "System operacyjny",

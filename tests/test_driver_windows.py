@@ -864,3 +864,33 @@ def test_doctor_does_not_ask_the_question_from_a_source_checkout(monkeypatch):
     check("doctor: no program-folder row when running from sources",
           not [c for c in checks if c[0] == "program folder"],
           f"({[c[0] for c in checks]})")
+
+
+def test_doctor_says_when_the_session_clock_is_too_coarse_to_time_an_impairment(monkeypatch):
+    """Every packet is stamped and released by ``time.monotonic()``. On Windows,
+    CPython before 3.13 read it from a clock that moves in 15.6 ms steps, so a 5 ms
+    latency or a fine speed limit came out in whole steps and nothing said so
+    (external review P3-10). The row reads what the clock reports, through the same
+    call the session's clock answers to."""
+    import time
+    from types import SimpleNamespace
+
+    def doctor_with(implementation, resolution):
+        monkeypatch.setattr(time, "get_clock_info",
+                            lambda name: SimpleNamespace(implementation=implementation,
+                                                         resolution=resolution))
+        _, checks = driver.doctor()
+        return next(c for c in checks if c[0] == "clock")
+
+    coarse = doctor_with("GetTickCount64()", 0.015625)
+    check("a clock stepping 15.6 ms is a warning", coarse[1] == "warn", f"({coarse})")
+    check("that names the step and the way out",
+          "15.6 ms" in coarse[2] and "3.13" in coarse[2], f"({coarse[2]!r})")
+    fine = doctor_with("QueryPerformanceCounter()", 1e-07)
+    check("a microsecond clock is fine", fine[1] == "ok", f"({fine})")
+    at_the_line = doctor_with("clock_gettime(CLOCK_MONOTONIC)", driver.CLOCK_FINE_S)
+    check("one millisecond is still fine", at_the_line[1] == "ok", f"({at_the_line})")
+    monkeypatch.undo()
+    real = next(c for c in driver.doctor()[1] if c[0] == "clock")
+    check("and this machine's own clock is asked", real[2].startswith(
+        time.get_clock_info("monotonic").implementation), f"({real})")

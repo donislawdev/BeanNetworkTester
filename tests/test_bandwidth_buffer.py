@@ -61,6 +61,35 @@ def test_bounded_buffer_caps_queueing_delay():
     assert abs(eff_kbps - 256) < 8, eff_kbps          # delivered rate stays at the cap
 
 
+def test_latency_adds_to_the_time_spent_in_the_queue():
+    """The shaped link sends a packet, then the path delays it: on a link with
+    200 ms of latency and a full 150 ms buffer a packet arrives after about 350 ms,
+    the way a real link and Linux netem deliver it. The release used to be the
+    LATER of the two, so the queue hid inside the latency and every packet arrived
+    after exactly 0.200 s - a loaded 3G or satellite profile showed its idle ping
+    (external review P3-1, owner decision D-11)."""
+    rate_kbps, latency_ms, buffer_ms = 100, 200, 150
+    one_packet_s = SIZE / (rate_kbps * 1024)
+    core = BeanCore()
+    core.set_params(0, 0, 0, latency_ms, 0, rate_kbps, 0)
+    core.set_buffer(buffer_ms)
+    core.reset_buckets(0.0)
+    rng = random.Random(1)
+    first = core.decide(SIZE, False, 1000, 0.0, rng, remote_ip="8.8.8.8", remote_port=443)
+    alone = first.releases[0]
+    assert abs(alone - (0.200 + one_packet_s)) < 1e-9, alone   # an empty link: send, then fly
+    interval = SIZE / OFFERED_BPS
+    loaded = []
+    for i in range(1, 8000):                 # 3 s offered at 40x the limit
+        now = i * interval
+        d = core.decide(SIZE, False, 1000, now, rng, remote_ip="8.8.8.8", remote_port=443)
+        if not d.drop and now > 1.0:         # the buffer has long been full
+            loaded.append(d.releases[0] - now)
+    assert len(loaded) > 50, len(loaded)
+    assert min(loaded) > 0.200 + 0.150 - one_packet_s, min(loaded)    # latency + a full queue
+    assert max(loaded) <= 0.200 + 0.150 + one_packet_s + 1e-9, max(loaded)
+
+
 def test_rate_increase_recovers_within_the_buffer():
     # P1 (constant limits): saturate at 64 KB/s so the bucket runs ~2 s ahead, then
     # raise the cap. A packet arriving after the buffer has drained gets ~no delay.

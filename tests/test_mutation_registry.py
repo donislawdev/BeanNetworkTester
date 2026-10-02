@@ -81,6 +81,14 @@ MUTATIONS = [
         "test": "test_doctor_says_when_anything_running_as_you_could_replace_the_driver",
     },
     {
+        # P3-10: a 15.6 ms clock passed as fine.
+        "label": "doctor: a coarse session clock reports as a pass",
+        "file": "beantester/driver.py",
+        "old": "    if info.resolution <= CLOCK_FINE_S:\n",
+        "new": "    if info.resolution <= 1.0:\n",
+        "test": "test_doctor_says_when_the_session_clock_is_too_coarse_to_time_an_impairment",
+    },
+    {
         # The hand-rolled quoting, restored exactly as it shipped: an argument
         # ending in a backslash escapes its own closing quote.
         "label": "winenv: relaunch quoting goes back to wrapping each argument",
@@ -626,6 +634,30 @@ MUTATIONS = [
         "test": "test_apply_targeting_logs_and_keeps_the_target_on_a_bad_expression",
     },
     {
+        # P3-7c: the NDJSON sample without the MTU and link-flap drops.
+        "label": "cli: the NDJSON sample leaves out the MTU and flap drops",
+        "file": "beantester/cli.py",
+        "old": '                drop_mtu=s["drop_mtu"], drop_flap=s["drop_flap"],\n',
+        "new": "",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
+        # P3-7c: the same two left out of the text line.
+        "label": "cli: the text sample leaves out the MTU and flap drops",
+        "file": "beantester/cli.py",
+        "old": "f\"block={s['drop_block']} mtu={s['drop_mtu']} flap={s['drop_flap']} \"",
+        "new": "f\"block={s['drop_block']} \"",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
+        # CodeRabbit on PR #247: both numbers present under swapped labels.
+        "label": "cli: the text sample swaps the MTU and flap labels",
+        "file": "beantester/cli.py",
+        "old": "f\"block={s['drop_block']} mtu={s['drop_mtu']} flap={s['drop_flap']} \"",
+        "new": "f\"block={s['drop_block']} mtu={s['drop_flap']} flap={s['drop_mtu']} \"",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
         # Back to the check as it stood before 2026-09-02, which is the exact
         # shape that let NaN through: `float('nan') <= 0` is False.
         "label": "cli: the report interval is only checked for being above zero",
@@ -918,6 +950,15 @@ MUTATIONS = [
         "old": "CLASS_ATTR_CEILING = 77         # gui/app.py::App",
         "new": "CLASS_ATTR_CEILING = 86         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
+    },
+    {
+        # D-11 / P3-1: the release as it stood until 2026-10-02 - the LATER of the
+        # queue and the latency, so a full queue hid inside the latency.
+        "label": "rate: the time in the queue hides inside the latency",
+        "file": "beantester/core.py",
+        "old": "        return finish + (release - now)\n",
+        "new": "        return finish if finish > release else release\n",
+        "test": "test_latency_adds_to_the_time_spent_in_the_queue",
     },
     {
         # The bucket is a virtual FINISH TIME, not a token count, so a link that
@@ -2197,7 +2238,7 @@ MUTATIONS = [
         # nothing, and one orphan keeps `crashes/` alive for ever after.
         "label": "crashlog: the sweep for orphaned temp breadcrumbs stops sweeping",
         "file": "beantester/crashlog.py",
-        "old": "            if now - os.path.getmtime(temp) > STALE_TEMP_S:\n",
+        "old": "            if now - os.path.getmtime(leftover) > keep:\n",
         "new": "            if False:\n",
         "test": "test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit",
     },
@@ -6039,26 +6080,46 @@ MUTATIONS = [
         # P3-41: every clean exit took the temp file another copy was writing.
         "label": "crashlog: a clean exit sweeps temp files of any age",
         "file": "beantester/crashlog.py",
-        "old": "            if now - os.path.getmtime(temp) > STALE_TEMP_S:\n",
-        "new": "            if True:\n",
+        "old": "            keep = STALE_TEMP_S\n",
+        "new": "            keep = -1.0\n",
         "test": "test_a_temp_breadcrumb_another_copy_is_writing_survives_a_clean_exit",
     },
     {
         # P3-41: every clean exit - a --doctor too - took whatever breadcrumb was there.
+        # One file per process since NOWE-5b-3: the age rule is what keeps the others.
         "label": "crashlog: a clean exit takes any breadcrumb, not only its own",
         "file": "beantester/crashlog.py",
-        "old": "    if _still_holds(path, mine):\n",
-        "new": "    if os.path.exists(path):\n",
+        "old": "            keep = BREADCRUMB_KEEP_S\n",
+        "new": "            keep = -1.0\n",
         "test": "test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running",
     },
     {
-        # P3-41: pids come back within seconds, so a process that wrote nothing
-        # owns nothing, whatever pid the file names.
-        "label": "crashlog: a process that wrote no breadcrumb owns the one on disk",
+        # P3-41: pids come back within seconds, so a pid is not an owner. Since
+        # NOWE-5b-3 the name carries the start too; without it the restart that got
+        # a crashed copy's pid wrote over that copy's breadcrumb and took it.
+        "label": "crashlog: a breadcrumb is named by its pid alone",
         "file": "beantester/crashlog.py",
-        "old": "        return False                # this process wrote no breadcrumb\n",
-        "new": "        return os.path.exists(path)\n",
+        "old": '    return f"{BREADCRUMB_PREFIX}-{start:%Y%m%dT%H%M%SZ}-{pid}.json"\n',
+        "new": '    return f"{BREADCRUMB_PREFIX}-{pid}.json"\n',
         "test": "test_a_clean_exit_leaves_a_crashed_copys_breadcrumb_that_had_our_pid",
+    },
+    {
+        # NOWE-5b-3: one name for every copy - the restart after a native crash
+        # replaced the crashed copy's breadcrumb and its clean exit deleted it.
+        "label": "crashlog: every copy writes one shared breadcrumb again",
+        "file": "beantester/crashlog.py",
+        "old": '    return f"{BREADCRUMB_PREFIX}-{start:%Y%m%dT%H%M%SZ}-{pid}.json"\n',
+        "new": "    return BREADCRUMB_NAME\n",
+        "test": "test_a_restart_after_a_crash_keeps_the_crashed_copys_breadcrumb",
+    },
+    {
+        # CodeRabbit on PR #247: an unchanged state never written again, so a GUI
+        # left alone for a month lost its breadcrumb to another copy's exit sweep.
+        "label": "crashlog: an unchanged breadcrumb is never written again",
+        "file": "beantester/crashlog.py",
+        "old": "            and time.time() - _breadcrumb_written_at < BREADCRUMB_REFRESH_S):\n",
+        "new": "            and True):\n",
+        "test": "test_an_unchanged_breadcrumb_is_written_again_before_a_sweep_takes_it",
     },
     {
         # P3-41: one name for every copy, so "ours" is the text this process wrote.
@@ -6066,7 +6127,7 @@ MUTATIONS = [
         "file": "beantester/crashlog.py",
         "old": "            return f.read(len(text) + 1) == text\n",
         "new": "            return bool(f.read(len(text) + 1))\n",
-        "test": "test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours",
+        "test": "test_a_breadcrumb_no_parser_can_read_does_not_stop_the_exit_cleanup",
     },
     {
         # CodeRabbit on PR #242: the exit parsed the file, and RecursionError

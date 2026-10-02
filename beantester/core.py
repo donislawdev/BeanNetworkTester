@@ -1063,14 +1063,22 @@ class BeanCore:
         ``damage.DROP_BY_REASON``, and moving this out of ``decide`` does not move
         the attribution with it.
 
-        A packet is never released EARLIER than it already would have been: the
-        shaped link can delay a packet, and nothing here may undo a delay that
-        latency, jitter or a spike has already decided on.
+        The link sends the packet first and the path delays it after: ``finish``
+        is when the shaped link has sent it, and the latency, jitter and spike
+        already decided (``release - now``) start from there. Time in the queue and
+        latency ADD UP, as on a real link and in Linux netem, whose
+        ``netem_enqueue`` sends a packet at ``max(now + delay, last->time_to_send) +
+        packet_time`` with the last packet's time already delayed. This returned
+        ``max(finish, release)`` until 2026-10-02, which hid the queue inside the
+        latency: at 200 ms and a full 150 ms buffer every packet arrived after
+        exactly 0.200 s, and 0.350 s now (external review P3-1, owner decision
+        D-11). Each packet keeps its own delay rather than queueing behind the one
+        before, so a spike still lets later packets overtake it.
         """
         finish = self._charge(is_outbound, size, now, rate)
         if finish is None:
             return None
-        return finish if finish > release else release
+        return finish + (release - now)
 
     def decide(self, size, is_outbound, local_port, now, rng,
                remote_ip=None, remote_port=None, is_syn=False, is_tcp=False):

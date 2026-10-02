@@ -42,6 +42,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   only in what it sends. Applying such settings with this filter now says so in the log, and
   the README explains it.
 
+- **`--doctor` and the Diagnostics tool say how finely the clock measures time.** Run from
+  source on Windows with Python 3.10 to 3.12, the program times every packet with a clock that
+  moves in 15.6 ms steps, so latency, jitter and speed limits finer than that come out in whole
+  steps. The new **Clock** row warns when that is the case. The `.exe` is not affected.
+
 ### Fixed
 
 - **The event log window and the Connections tab show everything they hold.** The
@@ -78,6 +83,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   queued at STOP was counted in "Dropped at stop". And almost every copy was counted in
   "Reordered", because it leaves after the packet that came next. These counters now count
   packets, and a copy that is not delivered is not a lost packet.
+
+- **A speed limit's queue now adds to the latency.** A packet waiting in the speed-limit
+  buffer got its latency during that wait, so the two overlapped: with 200 ms of latency and a
+  full 150 ms buffer every packet arrived after 200 ms. Now it arrives after about 350 ms, as on
+  a real link. Profiles that combine a speed limit with latency (3G, satellite, roaming) show a
+  higher ping while the link is busy. An idle link is unchanged.
 
 - **NAT timeout keeps a busy connection open.** Switched off and on again during a session,
   *NAT timeout* dropped incoming packets of connections that had been busy the whole time,
@@ -129,6 +140,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   `WinDivert1.1`, which belong to other programs. It now unloads only its own `WinDivert`
   service, and leaves it loaded if another copy of this program has started a session in
   the meantime. `--cleanup-driver` still cleans up all of them.
+
+- **The reports during a command-line run count every packet the link drops.** With
+  `--max-size` or `--flap-period`, the line printed every interval showed no losses while
+  packets were being dropped, and only the final summary had them. The text line now shows
+  `mtu=` and `flap=`, and each NDJSON `sample` carries `drop_mtu` and `drop_flap`. The fields
+  that were already there are unchanged.
 
 - **A command-line run notices the end of its scenario, a fault or Ctrl+Break at once.**
   It slept until the next report before looking, so a scenario that ended after one
@@ -370,6 +387,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   installed, every connection in the traffic filter is impaired, and the note now says
   so. It used to say that no traffic was being impaired. The note also goes away when
   the session stops.
+
+- **Starting the program again after a crash keeps what the crashed one was doing.** Every
+  copy wrote its state to one `breadcrumb.json` in the `crashes` folder, so the next start
+  replaced the crashed copy's state and its clean exit deleted the file. Only the stack in
+  `native-crash.txt` was left. Each copy now writes its own `breadcrumb-<start>-<pid>.json`
+  and deletes only its own. A leftover file is deleted after 30 days.
 
 - **The program no longer freezes while it records an internal error.** Writing a crash
   report used to read the Control page form. If a field held a value the program cannot
