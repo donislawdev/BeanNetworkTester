@@ -763,6 +763,31 @@ def test_an_unchanged_breadcrumb_costs_no_disk_write(isolated):
         crashlog._cleanup_native()
 
 
+def test_an_unchanged_breadcrumb_is_written_again_before_a_sweep_takes_it(isolated):
+    """A clean exit takes any breadcrumb older than ``BREADCRUMB_KEEP_S``, and a GUI
+    whose state did not change wrote nothing for that long - so a GUI left on one
+    page for a month lost its own breadcrumb to the next ``--doctor``, and a crash
+    after that had no state on disk (CodeRabbit on PR #247). An unchanged state is
+    written again once ``BREADCRUMB_REFRESH_S`` has passed, well inside the keep."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    try:
+        assert crashlog.breadcrumb(page="control", running=False, windows=[])
+        assert not crashlog.breadcrumb(page="control", running=False, windows=[])
+        assert crashlog.BREADCRUMB_REFRESH_S < crashlog.BREADCRUMB_KEEP_S
+        crashlog._breadcrumb_written_at = time.time() - crashlog.BREADCRUMB_REFRESH_S - 1
+        path = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
+        long_ago = time.time() - crashlog.BREADCRUMB_KEEP_S + 60
+        os.utime(path, (long_ago, long_ago))
+        assert crashlog.breadcrumb(page="control", running=False, windows=[]), (
+            "an unchanged state a day old was not written again")
+        assert time.time() - os.path.getmtime(path) < 60, "the file was not renewed"
+        assert not crashlog.breadcrumb(page="control", running=False, windows=[]), (
+            "a renewed state is written again on every tick")
+    finally:
+        crashlog._cleanup_native()
+
+
 def test_no_breadcrumb_before_anything_is_armed(isolated):
     """Same rule as the native file: nothing appears until a hard crash is possible,
     or a plain `import beantester` leaves a crashes/ folder behind again."""
@@ -1035,6 +1060,10 @@ def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
         return real_replace(src, dst)
 
     try:
+        # A state already on disk first: right after it, the daily rewrite of an
+        # unchanged state is far off, so only the retry can bring "conns" back.
+        # Without it the never-written process rewrote anyway and hid the bug.
+        assert crashlog.breadcrumb(page="control", running=False, windows=[])
         monkeypatch.setattr(os, "replace", fail_once)
         assert not crashlog.breadcrumb(page="conns", running=False, windows=[])
         assert failures, "the stand-in never ran - this proves nothing"

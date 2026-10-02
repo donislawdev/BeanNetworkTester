@@ -650,6 +650,14 @@ MUTATIONS = [
         "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
     },
     {
+        # CodeRabbit on PR #247: both numbers present under swapped labels.
+        "label": "cli: the text sample swaps the MTU and flap labels",
+        "file": "beantester/cli.py",
+        "old": "f\"block={s['drop_block']} mtu={s['drop_mtu']} flap={s['drop_flap']} \"",
+        "new": "f\"block={s['drop_block']} mtu={s['drop_flap']} flap={s['drop_mtu']} \"",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
         # Back to the check as it stood before 2026-09-02, which is the exact
         # shape that let NaN through: `float('nan') <= 0` is False.
         "label": "cli: the report interval is only checked for being above zero",
@@ -6103,6 +6111,15 @@ MUTATIONS = [
         "old": '    return f"{BREADCRUMB_PREFIX}-{start:%Y%m%dT%H%M%SZ}-{pid}.json"\n',
         "new": "    return BREADCRUMB_NAME\n",
         "test": "test_a_restart_after_a_crash_keeps_the_crashed_copys_breadcrumb",
+    },
+    {
+        # CodeRabbit on PR #247: an unchanged state never written again, so a GUI
+        # left alone for a month lost its breadcrumb to another copy's exit sweep.
+        "label": "crashlog: an unchanged breadcrumb is never written again",
+        "file": "beantester/crashlog.py",
+        "old": "            and time.time() - _breadcrumb_written_at < BREADCRUMB_REFRESH_S):\n",
+        "new": "            and True):\n",
+        "test": "test_an_unchanged_breadcrumb_is_written_again_before_a_sweep_takes_it",
     },
     {
         # P3-41: one name for every copy, so "ours" is the text this process wrote.

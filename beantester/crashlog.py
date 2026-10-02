@@ -92,6 +92,7 @@ MAX_RECORDS = 2000                  # distinct fingerprints held in memory
 MAX_LOG_TAIL = 40                   # log lines attached to a record
 STALE_TEMP_S = 60.0                 # a temp breadcrumb this old lost its writer
 BREADCRUMB_KEEP_S = 30 * 86400.0    # a breadcrumb nobody took is kept this long
+BREADCRUMB_REFRESH_S = 86400.0      # an unchanged breadcrumb is written again after this
 BREADCRUMB_RETRY_S = 1.0            # the wait after a failed breadcrumb write...
 BREADCRUMB_RETRY_MAX_S = 60.0       # ...doubled after each further one, up to this
 
@@ -495,6 +496,7 @@ _breadcrumb_text = None     # the exact text of that write: what makes the file 
 _breadcrumb_file = None     # this process's own breadcrumb name, chosen at its first write
 _breadcrumb_retry_at = 0.0  # monotonic time before which no write is tried again
 _breadcrumb_wait = BREADCRUMB_RETRY_S   # what the next failed write waits
+_breadcrumb_written_at = 0.0  # wall time of the last write: the sweep reads mtime, wall time too
 
 
 def arm_native():
@@ -593,11 +595,19 @@ def breadcrumb(**state):
     wrote and deleted one temp file - 1.4 files a second for the life of the
     process. The state current when the wait ends is the one written, so a burst of
     changes during it costs one write, not one each.
+
+    An unchanged state is written again once a day (``BREADCRUMB_REFRESH_S``). Any
+    clean exit removes a breadcrumb older than ``BREADCRUMB_KEEP_S``, and nothing
+    tells a dead copy's from the one a GUI left unchanged for a month - so without
+    this the GUI's own went with them, and a crash after that had no state on disk
+    (CodeRabbit on PR #247). Wall time, because that sweep reads the file's mtime.
     """
     global _breadcrumb_last, _breadcrumb_text, _breadcrumb_retry_at, _breadcrumb_wait
+    global _breadcrumb_written_at
     if not _armed[0] or not _enabled:
         return False
-    if state == _breadcrumb_last:
+    if (state == _breadcrumb_last
+            and time.time() - _breadcrumb_written_at < BREADCRUMB_REFRESH_S):
         return False
     now = time.monotonic()
     if now < _breadcrumb_retry_at:
@@ -608,11 +618,12 @@ def breadcrumb(**state):
         _breadcrumb_wait = min(_breadcrumb_wait * 2, BREADCRUMB_RETRY_MAX_S)
         return False
     _breadcrumb_last, _breadcrumb_text = dict(state), text
+    _breadcrumb_written_at = time.time()
     _breadcrumb_wait = BREADCRUMB_RETRY_S
     return True
 
 
-def breadcrumb_name():
+def breadcrumb_name() -> str:
     """This process's breadcrumb file name: ``breadcrumb-<UTC start>-<pid>.json``.
 
     Every copy of the program wrote ONE ``breadcrumb.json`` until 2026-10-02, so the
@@ -758,9 +769,8 @@ def _sweep_breadcrumbs(directory, own, mine):
     worth keeping - it describes the state a crash happened in - so it stays until
     it is ``BREADCRUMB_KEEP_S`` old, by when nobody will send it anywhere. The one
     name every copy shared before 2026-10-02 (``BREADCRUMB_NAME``) goes the same
-    way. A copy that runs that long without its state changing writes nothing in
-    the meantime, so its breadcrumb can go with the rest - it is written again on
-    the next change.
+    way. A copy still running is not caught by the age: it writes its breadcrumb
+    again every ``BREADCRUMB_REFRESH_S``, changed or not.
 
     A temp file is unique per writer (``paths.temp_beside``) and lives for
     milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
@@ -851,7 +861,7 @@ def summary():
 def reset():
     """Forget everything (tests)."""
     global _native_stream, _native_path, _breadcrumb_last, _breadcrumb_text
-    global _breadcrumb_retry_at, _breadcrumb_wait, _breadcrumb_file
+    global _breadcrumb_retry_at, _breadcrumb_wait, _breadcrumb_file, _breadcrumb_written_at
     with _lock:
         _seen.clear()
     _arm_wanted[0] = False
@@ -859,6 +869,7 @@ def reset():
     _native_stream = _native_path = None
     _breadcrumb_last = _breadcrumb_text = _breadcrumb_file = None
     _breadcrumb_retry_at, _breadcrumb_wait = 0.0, BREADCRUMB_RETRY_S
+    _breadcrumb_written_at = 0.0
 
 
 def set_enabled(value):
