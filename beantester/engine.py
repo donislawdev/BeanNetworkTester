@@ -901,7 +901,12 @@ class BeanEngine:
             # possible - the kernel driver is now in play - so arm native crash
             # capture now, not at launch (keeps crashes/ from appearing until it
             # can actually be needed). No-op under --simulate/tests (no real driver).
-            crashlog.arm_native()
+            # It also builds the crash report's fixed context HERE, before the
+            # handle opens: the first fault on the capture thread used to build it
+            # there, and `platform.platform()` alone is 58-151 ms of WMI on Windows
+            # - the capture thread standing still while the driver queues the
+            # user's packets (performance review W-D3; see crashlog.arm_for_capture).
+            crashlog.arm_for_capture()
         self._divert = divert
         # EVERYTHING SLOW HAPPENS BEFORE THE HANDLE OPENS (external review P1-5).
         # From the open on, WinDivert diverts every packet the filter matches into a

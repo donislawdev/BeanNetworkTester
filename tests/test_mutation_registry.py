@@ -6318,6 +6318,63 @@ MUTATIONS = [
         "test": "test_only_pydivert_s_own_packets_lose_their_cache",
     },
     {
+        # W-D3: the first fault on the capture thread built the context there.
+        "label": "engine (W-D3): a real start arms without building the crash context",
+        "file": "beantester/engine.py",
+        "old": "            crashlog.arm_for_capture()\n",
+        "new": "            crashlog.arm_native()\n",
+        "test": "test_a_real_capture_start_builds_the_crash_context_before_the_handle_opens",
+    },
+    {
+        # W-D2: extract_tb ran for every occurrence (198-380 us a repeat).
+        "label": "crashlog (W-D2): a repeat reads its traceback again",
+        "file": "beantester/crashlog.py",
+        "old": "        fingerprint = _quick.get(quick)\n",
+        "new": "        fingerprint = None\n",
+        "test": "test_a_repeated_fault_is_counted_without_reading_its_traceback_again",
+    },
+    {
+        "label": "crashlog (W-D2): the shortcut map grows without a ceiling",
+        "file": "beantester/crashlog.py",
+        "old": "        if len(_quick) >= _QUICK_MAX:\n            _quick.clear()\n",
+        "new": "        pass\n",
+        "test": "test_the_shortcut_never_merges_two_faults_and_survives_being_cleared",
+    },
+    {
+        # W-D3: platform.platform() is 58-151 ms of WMI the first time.
+        "label": "crashlog (W-D3): the fixed context is built for every record",
+        "file": "beantester/crashlog.py",
+        "old": "    static = _static\n    if static is None:\n",
+        "new": "    static = None\n    if static is None:\n",
+        "test": "test_the_fixed_context_is_built_once_per_process",
+    },
+    {
+        "label": "crashlog (W-D3): arming for a capture builds no context",
+        "file": "beantester/crashlog.py",
+        "old": "    arm_native()\n    _static_context()\n",
+        "new": "    arm_native()\n",
+        "test": "test_a_real_capture_start_leaves_no_context_to_build_on_a_worker",
+    },
+    {
+        "label": "crashlog (W-D3): a failing platform lookup loses the record",
+        "file": "beantester/crashlog.py",
+        "old": "    except Exception as exc:\n"
+               "        return f\"{sys.platform} (platform.platform() failed",
+        "new": "    except ZeroDivisionError as exc:\n"
+               "        return f\"{sys.platform} (platform.platform() failed",
+        "test": "test_a_platform_lookup_that_fails_still_leaves_the_record",
+    },
+    {
+        # W-D3: importing pydivert from a crash report cost ~97 ms.
+        "label": "crashlog (W-D3): the context imports a module that was not loaded",
+        "file": "beantester/crashlog.py",
+        "old": "    module = sys.modules.get(name)\n    if module is None:\n"
+               "        return \"not loaded\"\n",
+        "new": "    module = sys.modules.get(name) or __import__(name)\n    if module is None:\n"
+               "        return \"not loaded\"\n",
+        "test": "test_a_crash_report_never_imports_a_module",
+    },
+    {
         # The packet reads moved from engine._capture_loop to BeanCore.packet_meta
         # (R-1): the guards that drive the whole engine must still see them there.
         "label": "core (W-A1 move): an inbound packet's ports are read the wrong way round",

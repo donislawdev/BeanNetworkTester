@@ -47,8 +47,8 @@ The two things that would break it at scale
 -------------------------------------------
 * **Duplicate storms.** A crash inside the tick loop fires 1.4 times a second,
   forever. Records are therefore FINGERPRINTED (exception type + the top frames)
-  and counted, not appended: the tenth thousand occurrence of a bug costs one
-  integer, not another disk write. The table that holds those counters is bounded,
+  and counted, not appended: the tenth thousand occurrence of a bug costs a dict
+  lookup and one integer, not another disk write. The table that holds those counters is bounded,
   and it makes room by dropping the coldest fault rather than by refusing the
   newest - refusing was the same thing as switching the de-duplication off for
   whatever broke last.
@@ -104,6 +104,16 @@ _lock = threading.Lock()
 # Ordered because the order IS the eviction policy: freshest last, so the table
 # makes room by dropping the fault nobody has seen for longest. See _record.
 _seen: OrderedDict[str, dict] = OrderedDict()   # fingerprint -> record (+ a count)
+# A repeat's fingerprint, found without reading its traceback again: (exception
+# type, the code and instruction of its last four frames) -> fingerprint. See
+# _quick_key for why that pair decides the fingerprint exactly. Cleared, not
+# trimmed, when it reaches _QUICK_MAX: it is a shortcut, and losing it costs one
+# slow lookup per fault, not a record.
+_quick: dict[tuple, str] = {}
+_QUICK_MAX = 4 * MAX_RECORDS
+# The part of a crash context that cannot change while the process lives, built
+# once (see _static_context). None until then.
+_static = None
 _context_provider = None            # set by the App/CLI: returns a dict of state
 # Per thread: is this thread inside the context provider right now? A fault the
 # provider itself records must not ask the provider again (see _collect_context).
@@ -146,13 +156,14 @@ def set_context_provider(fn):
 
 
 def _collect_context():
+    static = _static_context()
     base = {
-        "version": __version__,
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        "frozen": bool(getattr(sys, "frozen", False)),
+        "version": static["version"],
+        "python": static["python"],
+        "platform": static["platform"],
+        "frozen": static["frozen"],
         "argv": sys.argv[1:],
-        "elevated": _is_elevated(),
+        "elevated": static["elevated"],
         "pydivert": _module_version("pydivert"),
         "threads": [t.name for t in threading.enumerate()],
     }
@@ -176,6 +187,48 @@ def _collect_context():
     return base
 
 
+def _static_context():
+    """The facts of a crash context that cannot change while the process lives.
+
+    Built ONCE, because one of them is expensive in a way the rest of this module
+    is not: ``platform.platform()`` asks WMI on Windows, and the first call in a
+    process MEASURED 58-151 ms on this machine (2026-10-02, CPython 3.14.7; later
+    calls are cached by ``platform`` itself). Paid on the thread that failed, that
+    was the capture thread standing still at its first ``once()`` while the driver
+    queued the user's packets (performance review W-D3). A real capture start
+    builds it beforehand (``arm_for_capture``); anywhere else the first record pays
+    it once. WMI waits without the interpreter lock (measured: a thread ticking
+    every millisecond was late by at most 2.3 ms across the call), so building it
+    early stalls nobody else.
+
+    Two threads racing here both build it and the second write wins; the values
+    are identical, so there is nothing to lock.
+    """
+    global _static
+    static = _static
+    if static is None:
+        static = _static = {
+            "version": __version__,
+            "python": sys.version.split()[0],
+            "platform": _platform_text(),
+            "frozen": bool(getattr(sys, "frozen", False)),
+            "elevated": _is_elevated(),
+        }
+    return static
+
+
+def _platform_text():
+    """``platform.platform()``, or what can be said without it.
+
+    A broken WMI repository makes that call raise, and a raise inside the context
+    used to cost the WHOLE record - ``record`` swallows it and writes nothing.
+    """
+    try:
+        return platform.platform()
+    except Exception as exc:
+        return f"{sys.platform} (platform.platform() failed: {type(exc).__name__})"
+
+
 def _is_elevated():
     try:
         if os.name == "nt":
@@ -187,11 +240,19 @@ def _is_elevated():
 
 
 def _module_version(name):
-    try:
-        module = sys.modules.get(name) or __import__(name)
-        return getattr(module, "__version__", "present")
-    except Exception:
-        return None
+    """The version of an ALREADY LOADED module, or ``"not loaded"``. Never imports.
+
+    It used to import the module when it was not loaded, on the thread that failed:
+    pydivert costs ~97 ms to import here (MEASURED 2026-10-02, ``-X importtime``),
+    and under ``--simulate`` or in the GUI before the first START nothing has
+    loaded it - so the first fault on any thread paid that, the capture thread
+    included (performance review W-D3). A crash report says what the process HAD,
+    and a module it never loaded is not part of the failure.
+    """
+    module = sys.modules.get(name)
+    if module is None:
+        return "not loaded"
+    return getattr(module, "__version__", "present")
 
 
 # -- fingerprinting ---------------------------------------------------------- #
@@ -240,17 +301,55 @@ def record(exc, source="unknown", subsystem=None, severity=ERROR, note=""):
         return None
 
 
+def _quick_key(exc_type, tb):
+    """What decides a fault's fingerprint, read straight off the traceback objects.
+
+    The fingerprint is the exception type plus file, function and line of the last
+    four frames (``_fingerprint``), and all three come from a frame's CODE object
+    and the INSTRUCTION it stopped at: ``extract_tb`` takes the file and function
+    from ``f_code`` and the line from the code's position table at ``tb_lasti``.
+    So this pair maps to exactly one fingerprint, and a repeat can be counted
+    without ``extract_tb``, which builds a summary per frame and asks ``linecache``
+    about every file (an ``os.stat`` per frame, and in the frozen build every one
+    of them fails).
+
+    The code objects are held by ``_quick``, not the frames: no local of a failed
+    call outlives it through here.
+    """
+    last = []
+    while tb is not None:
+        last.append((tb.tb_frame.f_code, tb.tb_lasti))
+        tb = tb.tb_next
+    return (exc_type, tuple(last[-4:]))
+
+
 def _record(exc, source, subsystem, severity, note):
     exc_type = type(exc)
     tb = exc.__traceback__
+    quick = _quick_key(exc_type, tb)
+    with _lock:
+        fingerprint = _quick.get(quick)
+        existing = _seen.get(fingerprint) if fingerprint is not None else None
+        if existing is not None:
+            # A repeating fault (a crash inside the tick loop fires 1.4x a second;
+            # a socket event that fails, once per event) costs a dict lookup and
+            # one integer from here on - not a traceback walk, and not another
+            # disk write (performance review W-D2; measured in `once` below).
+            return _count_again(existing, fingerprint)
+
     frames = traceback.extract_tb(tb) if tb is not None else []
     fingerprint = _fingerprint(exc_type, frames)
 
     with _lock:
+        if len(_quick) >= _QUICK_MAX:
+            _quick.clear()
+        _quick[quick] = fingerprint
         existing = _seen.get(fingerprint)
         if existing is not None:
-            # A repeating fault (a crash inside the tick loop fires 1.4x a second)
-            # costs one integer from here on - not another disk write.
+            # A fingerprint can be reached by more than one shortcut key - two
+            # instructions on one line, two files with one base name - or the key
+            # was dropped when _quick was cleared: still one record, one more
+            # occurrence.
             return _count_again(existing, fingerprint)
 
     # Built OUTSIDE the lock, and that is a deadlock fix, not tidiness (reproduced
@@ -413,15 +512,17 @@ _once_seen: set[tuple] = set()
 def once(subsystem, exc):
     """Record the FIRST occurrence only, at negligible cost. For the packet path.
 
-    ``note()`` builds a traceback and takes a lock - about a microsecond. That is
-    nothing sixty times a second, and about 15% of a core at 150 000 packets a
-    second. That rate is the SYNTHETIC path (``--simulate``); a real WinDivert
-    session was measured at ~14 000 packets/s end to end, an order of magnitude
-    lower - see the "What this actually sustains" section of ``engine.py``, which
-    is where that number lives. The argument survives the correction, because the
-    cheap version costs nothing at either rate: this is a set lookup on a short
-    string (~40 ns), so a malformed packet reports itself once and then costs
-    nothing at all.
+    ``note()`` walks the traceback and takes a lock even for a fault it has seen.
+    This used to say "about a microsecond", and it was never measured. MEASURED
+    2026-10-02 (Win11, CPython 3.14.7, one fault raised from a source file, depth
+    2 to 32 frames, the disk write stubbed out): a REPEAT cost 198-380 us while
+    ``extract_tb`` ran for every occurrence - ``linecache`` stats each frame's
+    file - and 3.9-6.9 us since ``_record`` finds a repeat by ``_quick_key``.
+    Either is nothing sixty times a second and too much 14 000 times a second
+    (a real WinDivert session, measured end to end - see the "What this actually
+    sustains" section of ``engine.py``; ``--simulate`` runs ten times that). This
+    is a set lookup on a short string (~40 ns), so a malformed packet reports
+    itself once and then costs nothing at all.
     """
     if subsystem in _once_seen:
         return
@@ -531,6 +632,21 @@ def arm_native():
         return
     _armed[0] = True
     _install_faulthandler()
+
+
+def arm_for_capture():
+    """A REAL capture is about to start: arm native capture and build the context.
+
+    ``engine.start`` calls this on the real-driver path, before the handle opens -
+    the moment the project's start already reserves for slow work, because nothing
+    is queued in the driver yet. Building the fixed context here is what keeps it
+    off the capture thread (``_static_context`` says what it costs). Not done by
+    ``arm_native`` itself: the GUI arms that at launch, on the thread that is about
+    to show the window. ``--simulate`` does not need it - a stalled synthetic
+    source delays nobody's packets.
+    """
+    arm_native()
+    _static_context()
 
 
 def _install_faulthandler():
@@ -862,8 +978,11 @@ def reset():
     """Forget everything (tests)."""
     global _native_stream, _native_path, _breadcrumb_last, _breadcrumb_text
     global _breadcrumb_retry_at, _breadcrumb_wait, _breadcrumb_file, _breadcrumb_written_at
+    global _static
     with _lock:
         _seen.clear()
+        _quick.clear()
+    _static = None
     _arm_wanted[0] = False
     _armed[0] = False
     _native_stream = _native_path = None
