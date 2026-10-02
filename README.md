@@ -137,6 +137,10 @@ Installing from source works on Python 3.10 and newer. CI tests and builds on **
 that is the version the released `.exe` is frozen with, so older ones are supported but not
 re-proven on every commit.
 
+On Windows, Python 3.10 to 3.12 measure time in steps of 15.6 ms. Every packet is timed by that
+clock, so latency, jitter and speed limits finer than a step come out in whole steps, and
+`--doctor` warns about it. Python 3.13 and newer, and the `.exe`, measure in microseconds.
+
 `psutil` is installed with the tool but is not what makes process targeting work on Windows. There
 the socket table and the process names come straight from the OS, and targeting keeps working with
 `psutil` removed entirely (measured: 310 ports mapped, 37 of 37 names resolved). It is the fallback
@@ -913,7 +917,7 @@ connections arriving from outside, are still blocked in silence.
 | `--print-config` | print the effective settings (after `defaults < file < preset < flags`) as JSON and exit |
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |
-| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights) and exit |
+| `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights, how finely the clock measures time) and exit |
 | `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit. Each line says what happened to one service. The exit code is `0` even when a service could not be stopped |
 
 Precedence order: **defaults < `--config` < `--preset` < flags**. Full list:

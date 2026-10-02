@@ -701,6 +701,28 @@ def _program_folder_check():
             f"{folder} - not writable without administrator rights")
 
 
+# A step of the session clock no impairment can be finer than. Every packet is
+# stamped and released by ``time.monotonic()``, and on Windows CPython before 3.13
+# read it from GetTickCount64, which moves in 15.6 ms steps ("What's New In Python
+# 3.13": QueryPerformanceCounter since, 1 microsecond). The clock is asked what it
+# reports, not the version guessed from, so a build that changes it is read right.
+CLOCK_FINE_S = 0.001
+
+
+def _clock_check(info=None):
+    """``--doctor``'s clock row: ``warn`` when the session clock steps coarser than 1 ms."""
+    import time
+
+    info = time.get_clock_info("monotonic") if info is None else info
+    step_ms = info.resolution * 1000.0
+    if info.resolution <= CLOCK_FINE_S:
+        return ("clock", "ok", f"{info.implementation}, steps of {step_ms:.4g} ms")
+    return ("clock", "warn",
+            f"{info.implementation} steps every {step_ms:.1f} ms - latency, jitter and "
+            f"speed limits finer than that are rounded to whole steps. Python 3.13 or "
+            f"newer, which the .exe ships, measures in microseconds")
+
+
 def doctor():
     """Environment report used by ``--doctor``: ``(ok, [(check, state, detail)])``."""
     import platform
@@ -710,7 +732,8 @@ def doctor():
               ("platform", "ok" if is_windows() else "warn",
                f"{platform.system()} {platform.release()}"
                + ("" if is_windows() else " - capture needs Windows; use --simulate")),
-              ("frozen", "ok", "yes" if getattr(sys, "frozen", False) else "no")]
+              ("frozen", "ok", "yes" if getattr(sys, "frozen", False) else "no"),
+              _clock_check()]
 
     if is_windows():
         checks.append(("administrator", "ok" if is_admin() else "fail",

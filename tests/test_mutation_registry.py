@@ -81,6 +81,14 @@ MUTATIONS = [
         "test": "test_doctor_says_when_anything_running_as_you_could_replace_the_driver",
     },
     {
+        # P3-10: a 15.6 ms clock passed as fine.
+        "label": "doctor: a coarse session clock reports as a pass",
+        "file": "beantester/driver.py",
+        "old": "    if info.resolution <= CLOCK_FINE_S:\n",
+        "new": "    if info.resolution <= 1.0:\n",
+        "test": "test_doctor_says_when_the_session_clock_is_too_coarse_to_time_an_impairment",
+    },
+    {
         # The hand-rolled quoting, restored exactly as it shipped: an argument
         # ending in a backslash escapes its own closing quote.
         "label": "winenv: relaunch quoting goes back to wrapping each argument",

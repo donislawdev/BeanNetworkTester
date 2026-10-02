@@ -659,6 +659,7 @@
   "tools.common.failed": "This did not work: {error}",
   "tools.common.working": "Working...",
   "tools.diagnostics.check.administrator": "Administrator rights",
+  "tools.diagnostics.check.clock": "Clock",
   "tools.diagnostics.check.driver_queue": "Driver queue",
   "tools.diagnostics.check.frozen": "Packaged program (.exe)",
   "tools.diagnostics.check.platform": "Operating system",

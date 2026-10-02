@@ -312,7 +312,7 @@ def build_arg_parser():
                     help="shorthand for --min-packets 1")
     ci.add_argument("--doctor", action="store_true",
                     help="check the environment (admin, pydivert, WinDivert driver, "
-                         "temp leftovers) and exit")
+                         "temp leftovers, clock step) and exit")
     ci.add_argument("--cleanup-driver", action="store_true",
                     help="unload a leftover WinDivert driver service (frees its locked "
                          ".sys file without a reboot) and exit")

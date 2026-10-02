@@ -42,6 +42,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   only in what it sends. Applying such settings with this filter now says so in the log, and
   the README explains it.
 
+- **`--doctor` and the Diagnostics tool say how finely the clock measures time.** Run from
+  source on Windows with Python 3.10 to 3.12, the program times every packet with a clock that
+  moves in 15.6 ms steps, so latency, jitter and speed limits finer than that come out in whole
+  steps. The new **Clock** row warns when that is the case. The `.exe` is not affected.
+
 ### Fixed
 
 - **The event log window and the Connections tab show everything they hold.** The

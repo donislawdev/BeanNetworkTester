@@ -659,6 +659,7 @@
   "tools.common.failed": "未能完成：{error}",
   "tools.common.working": "正在处理...",
   "tools.diagnostics.check.administrator": "管理员权限",
+  "tools.diagnostics.check.clock": "时钟",
   "tools.diagnostics.check.driver_queue": "驱动队列",
   "tools.diagnostics.check.frozen": "打包版本 (.exe)",
   "tools.diagnostics.check.platform": "操作系统",
