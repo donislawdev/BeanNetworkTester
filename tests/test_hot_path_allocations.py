@@ -38,13 +38,28 @@ be the guard that promises more than it measures. Churn stays a job for measurem
 
 Why the numbers are ceilings and not zero
 -----------------------------------------
-Measured across configurations (2026-08-02, three runs each, gc collected then
-disabled, values identical every time): the pass-through path costs **13 blocks and
-608 bytes per 5000 calls** and does not move - not with 200 ports instead of 50, not
-with the NAT flow table armed, not with latency. Duplication takes it to 15 blocks
-and 656 bytes. Those are interpreter bookkeeping, not per-packet retention, so the
-ceilings sit far above them and far below a real regression: one retained reference
-per packet is 42 kB, one retained object is +5000 blocks.
+Measured across configurations (2026-10-02, CPython 3.14.7, three runs each, values
+identical every time): **1-2 blocks and 64 bytes per 5000 calls**, the same with
+duplication, latency, the NAT table, a destination target, a block, LAN mode,
+Internet only and a throughput schedule armed. That is interpreter bookkeeping, not
+per-packet retention, so the ceilings sit far above it and far below a real
+regression: one retained reference per packet is 42 kB, one retained object is
++5000 blocks.
+
+🔴 **The collection comes BEFORE the warm-up, and that order is load-bearing.** A
+full collection also empties the interpreter's free lists, so a warm-up that ran
+first left the measured window to refill them - and the refill read as retention.
+MEASURED 2026-10-02 with the IP gates armed: 113-115 blocks and ~3.9 kB, CONSTANT for
+1000, 5000 and 20 000 packets (the ints `ipaddress` makes while parsing), i.e. over
+the block ceiling with nothing leaking at all. Collected first, the same runs read 1
+block and 64 bytes, and the one-reference-per-packet canary still reads 42 kB.
+
+🔴 **Every armed case proves it is armed before it is measured.** The first version
+armed duplication and latency by assigning ``core.dup`` and ``core.latency_s``, and
+from the day ``decide()`` began reading the per-direction values ``_recompute``
+derives, those assignments armed nothing: two of the three cases measured plain
+pass-through for months, green. Each case now arms through the setter the program
+uses and shows one decision that only an armed gate gives.
 """
 import gc
 import random
@@ -67,11 +82,15 @@ def _decide_many(core, rng, count):
 
 
 def _cost_of(core, count=CALLS):
-    """(net blocks, net bytes) retained by ``count`` decisions, warmed and gc-quiet."""
+    """(net blocks, net bytes) retained by ``count`` decisions, warmed and gc-quiet.
+
+    Collected, THEN warmed: see the module docstring for what the other order
+    measured instead.
+    """
     rng = random.Random(7)
-    _decide_many(core, rng, 200)          # fill every lazy structure first
     gc.collect()
     gc.disable()
+    _decide_many(core, rng, 200)          # fill every lazy structure first
     tracemalloc.start()
     try:
         blocks_before = sys.getallocatedblocks()
@@ -146,15 +165,50 @@ def test_the_decision_path_retains_nothing_per_packet():
           retained <= BYTE_CEILING, f"(retained {retained} bytes)")
 
 
+def _one(core, remote_ip="1.2.3.4", remote_port=443, is_out=True, now=1.0):
+    """One decision shaped like the measured ones, for proving a gate is armed."""
+    return core.decide(100, is_out, 5000, now, random.Random(7),
+                       remote_ip=remote_ip, remote_port=remote_port, is_tcp=True)
+
+
+def _nat_expires(core):
+    _one(core, now=1.0)                                  # outbound opens the mapping
+    return _one(core, is_out=False, now=40.0).reason == "nat"
+
+
+# label, how the program arms it, and one decision only the ARMED gate gives
+ARMED_GATES = (
+    ("duplication", lambda c: c.set_params(0, 0, 100, 0, 0, 0, 0),
+     lambda c: len(_one(c).releases) == 2),
+    ("latency", lambda c: c.set_params(0, 0, 0, 50, 0, 0, 0),
+     lambda c: _one(c).releases[0] > 1.04),
+    ("nat flow table", lambda c: c.set_nat(30), _nat_expires),
+    ("destination target", lambda c: c.set_dest(True, "1.2.3.0/24, 2001:db8::/32", "443"),
+     lambda c: _one(c).scoped and not _one(c, remote_ip="5.6.7.8").scoped),
+    ("block", lambda c: c.set_block(True, "203.0.113.0/24", "25"),
+     lambda c: _one(c, remote_ip="203.0.113.9").reason == "block" and not _one(c).drop),
+    ("LAN mode", lambda c: c.set_lan(True), lambda c: _one(c).reason == "lan"),
+    ("Internet only", lambda c: c.set_internet_only(True),
+     lambda c: _one(c, remote_ip="192.168.1.10").reason == "internet_only"),
+    ("throughput schedule",
+     lambda c: (c.set_schedule([(1.0, 100, 100), (1.0, 200, 200)]), c.set_buffer(150)),
+     lambda c: _one(c).releases[0] > 1.0),
+)
+
+
 def test_the_armed_gates_do_not_retain_per_packet_either():
     """Impairment on is still not a licence to keep a copy of every packet.
 
     Duplication is the one gate that legitimately hands a second packet onward, so
-    it is the honest worst case to point this at.
+    it is the honest worst case to point this at. The address gates are here because
+    they are where a cache "for speed" would live (performance review 2026-09-26,
+    W-A2): a bounded one passes, one that keeps a value per packet does not.
     """
-    for label, arm in (("duplication", lambda c: setattr(c, "dup", 1.0)),
-                       ("latency", lambda c: setattr(c, "latency_s", 0.05)),
-                       ("nat flow table", lambda c: setattr(c, "nat_timeout_s", 30))):
+    for label, arm, armed in ARMED_GATES:
+        proof = BeanCore()
+        arm(proof)
+        check(f"the {label} case really arms {label} (a disarmed case measures "
+              f"plain pass-through and passes for that reason)", armed(proof))
         core = BeanCore()
         arm(core)
         blocks, retained = _cost_of(core)
