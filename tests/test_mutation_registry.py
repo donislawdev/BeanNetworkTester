@@ -6470,6 +6470,80 @@ MUTATIONS = [
         "new": "    except ValueError:\n        return \"global\"\n",
         "test": "test_the_remembered_address_class_answers_as_the_old_code_did",
     },
+    {
+        # W-A5: a long schedule was walked step by step for every packet
+        # (decide() with 1000 steps 6.09 -> 2.66 us).
+        "label": "core (W-A5): the schedule is walked from its first step again",
+        "file": "beantester/core.py",
+        "old": "        step = bisect.bisect_right(self._sched_ends, pos)\n",
+        "new": "        step = next((i for i, e in enumerate(itertools.accumulate(\n"
+               "            s[0] for s in self.schedule)) if pos < e), len(self.schedule))\n",
+        "test": "test_the_schedule_step_is_found_not_walked",
+    },
+    {
+        "label": "core (W-A5): a step boundary belongs to the step before it",
+        "file": "beantester/core.py",
+        "old": "        step = bisect.bisect_right(self._sched_ends, pos)\n",
+        "new": "        step = bisect.bisect_left(self._sched_ends, pos)\n",
+        "test": "test_the_found_step_is_the_step_the_walk_stopped_at",
+    },
+    {
+        "label": "core (W-A5): a changed schedule keeps the old step ends",
+        "file": "beantester/core.py",
+        "old": "                self._sched_ends = list(itertools.accumulate(s[0] for s in schedule))\n",
+        "new": "",
+        "test": "test_the_found_step_is_the_step_the_walk_stopped_at",
+    },
+    {
+        # W-A7: two len() calls on empty flow tables for every packet.
+        "label": "core (W-A7): the prune gate asks the tables their length",
+        "file": "beantester/core.py",
+        "old": "            if key is not None and (self._flow_last._new or self._flow_last._old\n"
+               "                                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if key is not None and (self._flow_last or self._reset_until):\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        "label": "core (W-A7): the prune gate forgets the RST table",
+        "file": "beantester/core.py",
+        "old": "            if key is not None and (self._flow_last._new or self._flow_last._old\n"
+               "                                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if key is not None and (self._flow_last._new or self._flow_last._old):\n",
+        "test": "test_rst_cooldowns_are_still_retired_without_nat",
+    },
+    {
+        # W-A7: every TCP packet looked itself up in an empty RST table.
+        "label": "core (W-A7): every TCP packet looks up the RST table again",
+        "file": "beantester/core.py",
+        "old": "            if is_tcp and key is not None and (\n"
+               "                    self.rst_prob > 0 or now < self._reset_now_deadline\n"
+               "                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if is_tcp and key is not None:\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        "label": "core (W-A7): a recorded cooldown is ignored once RST is off",
+        "file": "beantester/core.py",
+        "old": "                    self.rst_prob > 0 or now < self._reset_now_deadline\n"
+               "                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "                    self.rst_prob > 0 or now < self._reset_now_deadline):\n",
+        "test": "test_a_reset_still_holds_down_after_the_reset_switch_goes_off",
+    },
+    {
+        "label": "core (W-A7): a manual reset with RST off is skipped",
+        "file": "beantester/core.py",
+        "old": "                    self.rst_prob > 0 or now < self._reset_now_deadline\n",
+        "new": "                    self.rst_prob > 0\n",
+        "test": "test_a_reset_still_holds_down_after_the_reset_switch_goes_off",
+    },
+    {
+        "label": "core (W-A7): the constant rates are read through the schedule again",
+        "file": "beantester/core.py",
+        "old": "            down_bps, up_bps = (self._current_rates(now) if self.schedule\n"
+               "                                else (self.rate_down, self.rate_up))\n",
+        "new": "            down_bps, up_bps = self._current_rates(now)\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
