@@ -133,12 +133,14 @@ class TargetResolver:
         if targeting is not previous:
             self._wake.set()
 
-    def keeps_fresh(self, targeting):
+    def keeps_fresh(self, targeting: object) -> bool:
         """Is this the targeting a LIVE resolver thread is rebuilding right now?
 
         Then a synchronous rebuild by somebody else adds nothing: this thread keeps
         it at most one ``interval`` old. False before ``start`` and after ``stop``,
         which lets go of the target - so a new session always resolves once itself.
+        ``object`` on purpose: it is an identity test, so anything else - ``None``
+        included - is simply not this resolver's target.
         """
         return self.is_running() and self._targeting is targeting
 

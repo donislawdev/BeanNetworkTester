@@ -267,6 +267,14 @@ def test_the_same_target_again_neither_wakes_nor_needs_a_rebuild():
     targeting, _ = _targeting("chrome")
     other, _ = _targeting("firefox")
     resolver = TargetResolver(interval=5.0)
+    # The doorbell is read with NO worker running: a live one clears it, so it could
+    # both hide a correct ring and swallow a wrong one (review of #250).
+    resolver.retarget(targeting)
+    resolver._wake.clear()
+    resolver.retarget(targeting)
+    check("the same targeting again does not wake it", not resolver._wake.is_set())
+    resolver.retarget(other)
+    check("a different one does", resolver._wake.is_set())
     resolver.retarget(targeting)
     check("before start nothing keeps it fresh", not resolver.keeps_fresh(targeting))
     resolver.start()
@@ -274,14 +282,9 @@ def test_the_same_target_again_neither_wakes_nor_needs_a_rebuild():
         check("the first pass ran", _wait(lambda: resolver.rebuilds >= 1))
         check("a live resolver keeps its own target fresh", resolver.keeps_fresh(targeting))
         check("...and only that one", not resolver.keeps_fresh(other))
-        resolver._wake.clear()
-        resolver.retarget(targeting)
-        check("the same targeting again does not wake it", not resolver._wake.is_set())
-        resolver.retarget(other)
-        check("a different one does", resolver._wake.is_set())
     finally:
         resolver.stop()
-    check("after stop nothing keeps it fresh", not resolver.keeps_fresh(other))
+    check("after stop nothing keeps it fresh", not resolver.keeps_fresh(targeting))
 
 
 def test_an_orphaned_targeting_stops_waking_the_resolver():
