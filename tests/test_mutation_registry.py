@@ -626,6 +626,22 @@ MUTATIONS = [
         "test": "test_apply_targeting_logs_and_keeps_the_target_on_a_bad_expression",
     },
     {
+        # P3-7c: the NDJSON sample without the MTU and link-flap drops.
+        "label": "cli: the NDJSON sample leaves out the MTU and flap drops",
+        "file": "beantester/cli.py",
+        "old": '                drop_mtu=s["drop_mtu"], drop_flap=s["drop_flap"],\n',
+        "new": "",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
+        # P3-7c: the same two left out of the text line.
+        "label": "cli: the text sample leaves out the MTU and flap drops",
+        "file": "beantester/cli.py",
+        "old": "f\"block={s['drop_block']} mtu={s['drop_mtu']} flap={s['drop_flap']} \"",
+        "new": "f\"block={s['drop_block']} \"",
+        "test": "test_every_drop_a_reason_can_name_is_in_each_sample",
+    },
+    {
         # Back to the check as it stood before 2026-09-02, which is the exact
         # shape that let NaN through: `float('nan') <= 0` is False.
         "label": "cli: the report interval is only checked for being above zero",

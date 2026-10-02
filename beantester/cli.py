@@ -474,6 +474,7 @@ def _sample_record(elapsed, down, up, s):
                 drop_lan=s["drop_lan"],
                 drop_internet_only=s["drop_internet_only"],
                 drop_block=s["drop_block"],
+                drop_mtu=s["drop_mtu"], drop_flap=s["drop_flap"],
                 corrupted=s["corrupted"],
                 duplicated=s["duplicated"], drop_overflow=s["drop_overflow"],
                 drop_rate=s["drop_rate"],
@@ -485,7 +486,8 @@ def _sample_text(elapsed, down, up, s):
             f"pkts={s['seen']} loss={s['drop_loss']} syn={s['drop_syn']} "
             f"nat={s['drop_nat']} rst={s['drop_rst']}/{s['rst_sent']} "
             f"lan={s['drop_lan']} localnet={s['drop_internet_only']} "
-            f"block={s['drop_block']} corrupt={s['corrupted']} "
+            f"block={s['drop_block']} mtu={s['drop_mtu']} flap={s['drop_flap']} "
+            f"corrupt={s['corrupted']} "
             f"rate={s['drop_rate']} queue={s['queue']}")
 
 

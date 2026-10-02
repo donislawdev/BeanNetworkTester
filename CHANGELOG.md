@@ -125,6 +125,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   service, and leaves it loaded if another copy of this program has started a session in
   the meantime. `--cleanup-driver` still cleans up all of them.
 
+- **The reports during a command-line run count every packet the link drops.** With
+  `--max-size` or `--flap-period`, the line printed every interval showed no losses while
+  packets were being dropped, and only the final summary had them. The text line now shows
+  `mtu=` and `flap=`, and each NDJSON `sample` carries `drop_mtu` and `drop_flap`. The fields
+  that were already there are unchanged.
+
 - **A command-line run notices the end of its scenario, a fault or Ctrl+Break at once.**
   It slept until the next report before looking, so a scenario that ended after one
   second ran on to the next report, up to `--interval` later, and Ctrl+Break took just as

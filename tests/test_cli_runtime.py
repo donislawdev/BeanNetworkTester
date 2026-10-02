@@ -1404,6 +1404,27 @@ def test_logs_go_to_stderr_and_data_to_stdout():
     check("channels: run OK", code == exitcodes.OK)
 
 
+def test_every_drop_a_reason_can_name_is_in_each_sample():
+    """A sample left out two of the drops the link inflicts: a run with
+    ``--max-size`` or ``--flap-period`` reported zero losses every interval while
+    its packets were being dropped, and only the summary said so (external review
+    P3-7c). Tied to ``damage.DROP_BY_REASON``, the one list of what a dropped
+    packet can be counted as, so a reason added there is in the samples too - each
+    counter with a value no other has, read back from the NDJSON record and from
+    the text line."""
+    from beantester import cli as cli_module
+    from beantester.damage import DROP_BY_REASON
+    counters = sorted(set(DROP_BY_REASON.values()) | {"drop_loss"})
+    values = {name: 1000 + i for i, name in enumerate(counters)}
+    stats = _engine_stats(**values)
+    record = cli_module._sample_record(1.0, 0.0, 0.0, stats)
+    missing = {name: record.get(name) for name in counters if record.get(name) != values[name]}
+    check("NDJSON: every drop counter, under its own name", not missing, f"({missing})")
+    text = cli_module._sample_text(1.0, 0.0, 0.0, stats)
+    unseen = [name for name in counters if f"={values[name]}" not in text]
+    check("text: every drop counter's value", not unseen, f"({unseen} in {text!r})")
+
+
 def test_json_format_is_parsable_ndjson():
     code, out, _ = cli(["--simulate", "--seed", "42", "--duration", "2",
                         "--interval", "1", "--format", "json"])
