@@ -16,6 +16,7 @@ already failing, so:
 
 This tests all four.
 """
+import datetime
 import faulthandler
 import json
 import os
@@ -735,7 +736,7 @@ def test_a_breadcrumb_records_what_a_native_crash_report_cannot(isolated):
     crashlog.arm_native()
     try:
         assert crashlog.breadcrumb(page="stats", running=True, windows=["help"])
-        path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+        path = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         assert data["page"] == "stats", f"the open page must be in it (got {data!r})"
@@ -823,7 +824,7 @@ def test_two_breadcrumb_writers_do_not_share_one_temp_file(isolated, monkeypatch
         assert second == [True], f"the second writer failed ({second})"
         assert first is True, ("the first writer failed - it tried to publish a temp "
                                "file the second had already taken")
-        with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
+        with open(os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name()),
                   encoding="utf-8") as f:
             data = json.load(f)
         assert data["page"] in ("first", "second"), f"a mix of two writers: {data}"
@@ -852,7 +853,8 @@ def test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit(isolat
     directory = crashlog.crash_dir()
     long_ago = time.time() - crashlog.STALE_TEMP_S - 5
     for name in (crashlog.BREADCRUMB_NAME + ".tmp",             # pre-2026-09-03
-                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp"):     # what temp_beside makes
+                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp",      # one name, temp_beside
+                 crashlog.breadcrumb_name() + ".4hq8zz.tmp"):   # one file per process
         path = os.path.join(directory, name)
         with open(path, "w", encoding="utf-8") as f:
             f.write("{half writ")
@@ -883,7 +885,7 @@ def test_the_running_gui_actually_leaves_one(isolated):
         app.select_page("statistics")     # the page the reported crash happened on
         app._tick()
 
-        path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+        path = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
         assert os.path.exists(path), "a tick left no breadcrumb"
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -901,7 +903,7 @@ def test_a_clean_exit_takes_the_breadcrumb_with_it(isolated):
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
     crashlog.breadcrumb(page="stats", running=True, windows=[])
-    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    path = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
     assert os.path.exists(path)
 
     crashlog._cleanup_native()
@@ -911,12 +913,19 @@ def test_a_clean_exit_takes_the_breadcrumb_with_it(isolated):
 
 
 # -- 10) a clean exit takes only what is its own (external review, P3-41) ---- #
-def _breadcrumb_of_another_copy(pid_offset=1):
-    """What a second copy of the program, still running, has on disk."""
-    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+def _breadcrumb_of_another_copy(pid_offset=1, start=(2026, 10, 1, 12), age_s=0.0):
+    """What another copy of the program - running, or dead - has on disk, under the
+    name the program gives it: a test that made the name up itself would stay green
+    when the program goes back to one name for every copy."""
+    started = datetime.datetime(*start, tzinfo=datetime.timezone.utc)
+    name = crashlog._breadcrumb_file_name(started, os.getpid() + pid_offset)
+    path = os.path.join(crashlog.crash_dir(), name)
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"page": "stats", "running": True, "windows": [],
                    "pid": os.getpid() + pid_offset}, f)
+    if age_s:
+        then = time.time() - age_s
+        os.utime(path, (then, then))
     return path
 
 
@@ -934,30 +943,65 @@ def test_a_clean_exit_leaves_the_breadcrumb_of_a_copy_still_running(isolated):
     assert os.path.exists(path), "a clean exit took another copy's breadcrumb"
 
 
-def test_a_clean_exit_leaves_a_breadcrumb_another_copy_wrote_over_ours(isolated):
-    """One name for every copy: having written one is not owning what is there."""
+def test_a_restart_after_a_crash_keeps_the_crashed_copys_breadcrumb(isolated):
+    """External review NOWE-5b-3: one name for every copy, so the copy started after
+    a native crash replaced the dead one's state on its first tick and deleted it on
+    its clean exit - only the stack in native-crash.txt was left. Each process now
+    writes its own file, and the restart leaves the crashed one's as it found it."""
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
-    assert crashlog.breadcrumb(page="control", running=False, windows=[])
-    path = _breadcrumb_of_another_copy()
+    crashed = _breadcrumb_of_another_copy()
+    with open(crashed, encoding="utf-8") as f:
+        evidence = f.read()
 
+    assert crashlog.breadcrumb(page="control", running=False, windows=[])
+    ours = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
+    assert ours != crashed and os.path.exists(ours), "the restart wrote no breadcrumb of its own"
     crashlog._cleanup_native()
 
-    assert os.path.exists(path), "a clean exit took the breadcrumb another copy wrote last"
+    assert not os.path.exists(ours), "a clean exit left its own breadcrumb behind"
+    with open(crashed, encoding="utf-8") as f:
+        assert f.read() == evidence, "the crashed copy's breadcrumb was changed"
 
 
 def test_a_clean_exit_leaves_a_crashed_copys_breadcrumb_that_had_our_pid(isolated):
     """Windows hands a pid out again within seconds (measured 19-36 s for the
-    external review, P2-9). A GUI that crashed natively leaves a breadcrumb naming
-    its pid; a ``--doctor`` given that pid later never wrote one, and must not take
-    the crash's evidence with it on the way out."""
+    external review, P2-9). A GUI that crashed natively leaves a breadcrumb named
+    with its pid; a process given that pid later has its own start in its name,
+    and must not take the crash's evidence with it on the way out."""
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
-    path = _breadcrumb_of_another_copy(pid_offset=0)    # this pid, written by a dead copy
+    path = _breadcrumb_of_another_copy(pid_offset=0)    # this pid, a dead copy's start
+    assert crashlog.breadcrumb(page="stats", running=False, windows=[])
+    assert os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name()) != path
 
     crashlog._cleanup_native()
 
-    assert os.path.exists(path), "a process that wrote no breadcrumb took one naming its pid"
+    assert os.path.exists(path), "a process with the same pid took a crashed copy's breadcrumb"
+
+
+def test_a_breadcrumb_nobody_took_goes_after_a_month(isolated):
+    """A breadcrumb nobody took belongs to a copy that crashed or was killed, and
+    nothing here guesses which, or whether that pid is someone else's now: it is
+    kept for ``BREADCRUMB_KEEP_S``, by when nobody will send it anywhere, so
+    ``crashes/`` does not fill with them. The one name of the versions before goes
+    the same way."""
+    crashlog._arm_wanted[0] = True
+    crashlog.arm_native()
+    month = crashlog.BREADCRUMB_KEEP_S
+    old = _breadcrumb_of_another_copy(start=(2026, 8, 1, 12), age_s=month + 60)
+    recent = _breadcrumb_of_another_copy(pid_offset=2, age_s=month - 3600)
+    legacy = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    with open(legacy, "w", encoding="utf-8") as f:
+        f.write("{}")
+    then = time.time() - month - 60
+    os.utime(legacy, (then, then))
+
+    crashlog._cleanup_native()
+
+    assert not os.path.exists(old), "a breadcrumb older than a month was kept"
+    assert not os.path.exists(legacy), "an old version's breadcrumb older than a month was kept"
+    assert os.path.exists(recent), "a breadcrumb younger than a month was taken"
 
 
 def test_a_temp_breadcrumb_another_copy_is_writing_survives_a_clean_exit(isolated):
@@ -997,7 +1041,7 @@ def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
         crashlog._breadcrumb_retry_at = 0.0             # the wait after it is over
         assert crashlog.breadcrumb(page="conns", running=False, windows=[]), (
             "the same state after a failed write must be written, not skipped")
-        with open(os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME),
+        with open(os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name()),
                   encoding="utf-8") as f:
             assert json.load(f)["page"] == "conns"
     finally:
@@ -1080,7 +1124,7 @@ def test_a_breadcrumb_no_parser_can_read_does_not_stop_the_exit_cleanup(isolated
     crashlog._arm_wanted[0] = True
     crashlog.arm_native()
     assert crashlog.breadcrumb(page="control", running=False, windows=[])
-    path = os.path.join(crashlog.crash_dir(), crashlog.BREADCRUMB_NAME)
+    path = os.path.join(crashlog.crash_dir(), crashlog.breadcrumb_name())
     with open(path, "w", encoding="utf-8") as f:
         f.write("[" * 100_000)
 

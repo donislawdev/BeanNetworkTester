@@ -82,13 +82,16 @@ CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
 LATEST_NAME = "latest-crash.txt"
 NATIVE_NAME = "native-crash.txt"
-BREADCRUMB_NAME = "breadcrumb.json"
+# One breadcrumb per process: "breadcrumb-<UTC start>-<pid>.json" (see breadcrumb_name).
+BREADCRUMB_PREFIX = "breadcrumb"
+BREADCRUMB_NAME = "breadcrumb.json"   # the one name every copy shared before 2026-10-02
 
 MAX_LOG_BYTES = 5 * 1024 * 1024     # rotate past this
 MAX_ROTATIONS = 5                   # keep this many old logs
 MAX_RECORDS = 2000                  # distinct fingerprints held in memory
 MAX_LOG_TAIL = 40                   # log lines attached to a record
 STALE_TEMP_S = 60.0                 # a temp breadcrumb this old lost its writer
+BREADCRUMB_KEEP_S = 30 * 86400.0    # a breadcrumb nobody took is kept this long
 BREADCRUMB_RETRY_S = 1.0            # the wait after a failed breadcrumb write...
 BREADCRUMB_RETRY_MAX_S = 60.0       # ...doubled after each further one, up to this
 
@@ -489,6 +492,7 @@ _arm_wanted = [False]       # native capture was requested at install()
 _armed = [False]            # faulthandler is actually enabled (a file now exists)
 _breadcrumb_last = None     # the state last written, so an unchanged one costs no disk
 _breadcrumb_text = None     # the exact text of that write: what makes the file ours
+_breadcrumb_file = None     # this process's own breadcrumb name, chosen at its first write
 _breadcrumb_retry_at = 0.0  # monotonic time before which no write is tried again
 _breadcrumb_wait = BREADCRUMB_RETRY_S   # what the next failed write waits
 
@@ -608,6 +612,29 @@ def breadcrumb(**state):
     return True
 
 
+def breadcrumb_name():
+    """This process's breadcrumb file name: ``breadcrumb-<UTC start>-<pid>.json``.
+
+    Every copy of the program wrote ONE ``breadcrumb.json`` until 2026-10-02, so the
+    copy started after a native crash replaced the dead one's state on its first
+    tick and deleted it on its clean exit: the stack survived in ``native-crash.txt``
+    (appended, never replaced), what the program was doing did not (external
+    review NOWE-5b-3, owner decision). One file per process keeps it. The pid alone
+    would not: Windows hands a pid out again within seconds, so the restart could
+    get the dead copy's number. The moment this process first needed the name is
+    in it too, and the two sort the files by start.
+    """
+    global _breadcrumb_file
+    if _breadcrumb_file is None:
+        _breadcrumb_file = _breadcrumb_file_name(datetime.now(timezone.utc), os.getpid())
+    return _breadcrumb_file
+
+
+def _breadcrumb_file_name(start, pid):
+    """The breadcrumb name of the process ``pid`` that started at ``start`` (UTC)."""
+    return f"{BREADCRUMB_PREFIX}-{start:%Y%m%dT%H%M%SZ}-{pid}.json"
+
+
 def _write_breadcrumb(state):
     """Put ``state`` on disk. The text written, or None when it is not there.
 
@@ -628,7 +655,7 @@ def _write_breadcrumb(state):
         text = json.dumps(payload, ensure_ascii=False, indent=2)
     except (TypeError, ValueError):
         return None
-    path = os.path.join(directory, BREADCRUMB_NAME)
+    path = os.path.join(directory, breadcrumb_name())
     # Unique per writer: two copies of the GUI both leave a breadcrumb, and they
     # used to leave it through one `breadcrumb.json.tmp`. See paths.temp_beside -
     # and note that this one is written from a TICK, so "two writers at the same
@@ -694,10 +721,10 @@ def _cleanup_native():
         faulthandler.disable()
     except Exception:
         pass
-    mine = _breadcrumb_text
+    mine, own = _breadcrumb_text, _breadcrumb_file
     _breadcrumb_last = _breadcrumb_text = None
     directory = crash_dir()
-    _sweep_breadcrumbs(directory, mine)
+    _sweep_breadcrumbs(directory, own, mine)
     stream, path = _native_stream, _native_path
     _native_stream = _native_path = None
     if stream is not None:
@@ -718,42 +745,55 @@ def _cleanup_native():
         pass
 
 
-def _sweep_breadcrumbs(directory, mine):
-    """Remove this process's breadcrumb and the temp files no writer is using.
+def _sweep_breadcrumbs(directory, own, mine):
+    """Remove this process's breadcrumb, and the leftovers nobody will come for.
 
-    The breadcrumb has ONE name for every copy of the program, so it goes only
-    when the file still holds exactly ``mine``, the text this process wrote last
-    (None: it wrote none). The pid in it is not enough: Windows hands a pid out
-    again within seconds, so a ``--doctor`` given the pid of a GUI that crashed
-    would take that crash's breadcrumb. Reading and then removing leaves a window
-    of microseconds in which another copy can replace it; that copy then loses one
-    breadcrumb until its state changes, which is what used to happen on every exit.
+    ``own`` is this process's file name and ``mine`` the text it wrote there last
+    (None: it wrote none). Its file goes only while it still holds exactly that
+    text - read, never parsed, see ``_still_holds``.
+
+    Every other breadcrumb belongs to a copy still running or to one that died
+    (a native crash, a kill), and nothing here guesses which: a pid says nothing,
+    Windows hands it out again within seconds. A dead copy's breadcrumb is the one
+    worth keeping - it describes the state a crash happened in - so it stays until
+    it is ``BREADCRUMB_KEEP_S`` old, by when nobody will send it anywhere. The one
+    name every copy shared before 2026-10-02 (``BREADCRUMB_NAME``) goes the same
+    way. A copy that runs that long without its state changing writes nothing in
+    the meantime, so its breadcrumb can go with the rest - it is written again on
+    the next change.
 
     A temp file is unique per writer (``paths.temp_beside``) and lives for
     milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
     killed mid-write - and an orphan here stops ``crashes/`` from ever being
     removed. A younger one may be another copy's write in progress: sweeping it
-    made that copy's replace fail. The sweep is by PREFIX, so a temp file left by
-    an older version (fixed ``breadcrumb.json.tmp``) goes the same way.
+    made that copy's replace fail. The sweep is by PREFIX, so the temp files of
+    every name shape, old and new, go the same way.
     """
-    path = os.path.join(directory, BREADCRUMB_NAME)
-    if _still_holds(path, mine):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+    if own is not None:
+        path = os.path.join(directory, own)
+        if _still_holds(path, mine):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
     try:
         names = os.listdir(directory)
     except OSError:
         return
     now = time.time()
     for name in names:
-        if not (name.startswith(BREADCRUMB_NAME) and name.endswith(".tmp")):
+        if not name.startswith(BREADCRUMB_PREFIX) or name == own:
             continue
-        temp = os.path.join(directory, name)
+        if name.endswith(".tmp"):
+            keep = STALE_TEMP_S
+        elif name.endswith(".json"):
+            keep = BREADCRUMB_KEEP_S
+        else:
+            continue
+        leftover = os.path.join(directory, name)
         try:
-            if now - os.path.getmtime(temp) > STALE_TEMP_S:
-                os.remove(temp)
+            if now - os.path.getmtime(leftover) > keep:
+                os.remove(leftover)
         except OSError:
             pass
 
@@ -811,13 +851,13 @@ def summary():
 def reset():
     """Forget everything (tests)."""
     global _native_stream, _native_path, _breadcrumb_last, _breadcrumb_text
-    global _breadcrumb_retry_at, _breadcrumb_wait
+    global _breadcrumb_retry_at, _breadcrumb_wait, _breadcrumb_file
     with _lock:
         _seen.clear()
     _arm_wanted[0] = False
     _armed[0] = False
     _native_stream = _native_path = None
-    _breadcrumb_last = _breadcrumb_text = None
+    _breadcrumb_last = _breadcrumb_text = _breadcrumb_file = None
     _breadcrumb_retry_at, _breadcrumb_wait = 0.0, BREADCRUMB_RETRY_S
 
 

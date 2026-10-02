@@ -383,6 +383,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   so. It used to say that no traffic was being impaired. The note also goes away when
   the session stops.
 
+- **Starting the program again after a crash keeps what the crashed one was doing.** Every
+  copy wrote its state to one `breadcrumb.json` in the `crashes` folder, so the next start
+  replaced the crashed copy's state and its clean exit deleted the file. Only the stack in
+  `native-crash.txt` was left. Each copy now writes its own `breadcrumb-<start>-<pid>.json`
+  and deletes only its own. A leftover file is deleted after 30 days.
+
 - **The program no longer freezes while it records an internal error.** Writing a crash
   report used to read the Control page form. If a field held a value the program cannot
   accept, such as a letter typed into Loss, or if a background task hit an error at the
