@@ -2,6 +2,7 @@
 
 psutil is faked, so the tests run anywhere (the real lookup needs a live system).
 """
+import ctypes
 import itertools
 import sys
 import threading
@@ -305,6 +306,119 @@ def test_toolhelp_snapshot_names_this_process_without_opening_it():
     name, ppid, created = table[os.getpid()]
     check("this process is named", name.lower().endswith(".exe"), f"({name!r})")
     check("the snapshot carries no start time (TTL takes over)", created is None)
+
+
+class _Toolhelp:
+    """kernel32 as Microsoft Learn documents the WIDE toolhelp calls, on any system.
+
+    ``Process32FirstW`` fails unless ``dwSize`` is the size of the structure handed
+    in; it and ``Process32NextW`` copy one process at a time into ``szExeFile``,
+    a ``WCHAR[MAX_PATH]``, and return FALSE after the last. Only the W calls exist
+    here: a fallback to the ANSI pair finds nothing to call.
+    """
+    SNAPSHOT = 77
+
+    def __init__(self, processes, snapshot=SNAPSHOT):
+        self.processes, self.snapshot, self.closed, self._next = processes, snapshot, [], 0
+        # Plain functions, because the code under test sets restype and argtypes on them.
+        self.CreateToolhelp32Snapshot = lambda flags, pid: self.snapshot
+        self.Process32FirstW = lambda handle, ref: self._first(handle, ref)
+        self.Process32NextW = lambda handle, ref: self._following(handle, ref)
+        self.CloseHandle = lambda handle: self.closed.append(handle)
+
+    def _first(self, handle, ref):
+        entry = ref._obj
+        fields = dict(type(entry)._fields_)
+        if (entry.dwSize != ctypes.sizeof(entry) or fields["szExeFile"]._type_ is not ctypes.c_wchar
+                or fields["szExeFile"]._length_ != 260):
+            return False
+        self._next = 0
+        return self._following(handle, ref)
+
+    def _following(self, handle, ref):
+        if handle != self.snapshot or self._next >= len(self.processes):
+            return False
+        entry = ref._obj
+        entry.th32ProcessID, entry.th32ParentProcessID, entry.szExeFile = (
+            self.processes[self._next])
+        self._next += 1
+        return True
+
+
+def test_the_snapshot_walks_every_process_through_the_wide_calls(monkeypatch):
+    """The walk itself, on every system the suite runs on: each process once, its name
+    as it is, the parent kept, the snapshot closed, and nothing for a snapshot the
+    system refused. The Windows test below is the same claim on a real process."""
+    from beantester import portmap
+    processes = [(4, 0, "System"), (5000, 4, NOT_ANSI_NAME), (6000, 5000, "chrome.exe")]
+    fake = _Toolhelp(processes)
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda name, **_: fake, raising=False)
+    table = portmap._toolhelp_process_table()
+    check("every process, named as it is, with its parent and no start time",
+          table == {pid: (name, ppid, None) for pid, ppid, name in processes}, f"({table})")
+    check("the snapshot is closed once", fake.closed == [fake.SNAPSHOT], f"({fake.closed})")
+
+    refused = _Toolhelp(processes, snapshot=ctypes.c_void_p(-1).value)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda name, **_: refused, raising=False)
+    check("a snapshot the system refused gives no table",
+          portmap._toolhelp_process_table() is None)
+
+
+# Greek, Cyrillic, Japanese and Polish: no legacy ANSI code page holds all four, and
+# thirty of them are more than the 260 bytes an ANSI entry has under the UTF-8 one.
+NOT_ANSI_NAME = "bean_" + "Ωжあą" * 30 + ".exe"
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"),
+                    reason="toolhelp snapshot is Windows-only")
+def test_the_snapshot_names_a_process_whose_name_is_not_ansi(monkeypatch):
+    """A name outside the system code page is the name, not ``?`` and not cut off.
+
+    The snapshot used the ANSI entry points, which convert the name first: under
+    code page 1252 a character it lacks became ``?``, and under UTF-8 a long name
+    overran the field. Targeting such a process by name then missed it, and the
+    snapshot overwrote the right name the handle read had cached. A copy of
+    ``cmd.exe`` under this name is the process: it waits on its piped input and
+    starts nothing.
+    """
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+    from beantester import portmap
+    try:
+        ansi = NOT_ANSI_NAME.encode("mbcs")
+    except UnicodeEncodeError:
+        ansi = None
+    check("an ANSI entry could not carry this name on this machine",
+          ansi is None or len(ansi) >= 260, f"({None if ansi is None else len(ansi)} bytes)")
+    monkeypatch.setattr(portmap, "_ALLOW_NATIVE_PROCESSES", True)
+    # A short directory: the full path must stay inside MAX_PATH for CreateProcess.
+    root = tempfile.mkdtemp(prefix="bean")
+    exe = os.path.join(root, NOT_ANSI_NAME)
+    shutil.copyfile(os.path.join(os.environ["SystemRoot"], "System32", "cmd.exe"), exe)
+    proc = subprocess.Popen([exe, "/d", "/q"], stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        table = portmap._toolhelp_process_table()
+        handle = portmap._native_process_info(proc.pid)
+    finally:
+        proc.stdin.close()              # end of input: the copy exits by itself
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=10)
+        shutil.rmtree(root, ignore_errors=True)
+    check("the snapshot holds the process", table is not None and proc.pid in table)
+    name = table[proc.pid][0]
+    check("under its whole name", name == NOT_ANSI_NAME, f"({name!r})")
+    check("which the handle read agrees with", handle is not None and handle[0] == name,
+          f"({handle!r})")
+    verified = {proc.pid: (handle[0], handle[1], handle[2], 0.0)}
+    check("so the snapshot leaves the verified entry alone",
+          proc.pid not in portmap._snapshot_entries(verified, table, 1.0))
 
 
 # -- the per-PID handle read (Windows only) --------------------------------- #
