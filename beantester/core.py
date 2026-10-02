@@ -7,6 +7,8 @@
 -> 7) SYN -> 8) loss -> 9) corruption -> 10) latency/jitter/spike
 -> 11) bandwidth (per-direction token bucket) -> 12) duplication.
 """
+import bisect
+import itertools
 import random
 import threading
 import time
@@ -164,6 +166,11 @@ class _FlowTable:
     see :meth:`keep_for`, called from ``set_rst`` and ``set_nat``. The size ceiling
     is unchanged and still checked on every write, so this can only make the table
     older, never bigger.
+
+    🔴 ``BeanCore.decide`` reads ``_new`` and ``_old`` DIRECTLY to ask "is this table
+    empty?" without a Python call per packet (performance review W-A7). A generation
+    added or renamed here has to be added there, or the packet path stops pruning
+    or stops seeing RST cooldowns.
     """
 
     __slots__ = ("_new", "_old", "_limit", "_half", "_rotate_s", "_last_rotate",
@@ -480,6 +487,7 @@ class BeanCore:
         # variable throughput over time: [(dur_s, down_bps, up_bps), ...]
         self.schedule = []
         self._sched_total = 0.0
+        self._sched_ends = []       # cumulative end of every step (see _current_rates)
         self._sched_start = 0.0
         self._session_start = 0.0   # session clock zero (see reset_buckets)
         # flow state - BOUNDED (size and age); see _FlowTable
@@ -929,6 +937,7 @@ class BeanCore:
             if schedule != self.schedule:
                 self.schedule = schedule
                 self._sched_total = sum(s[0] for s in schedule)
+                self._sched_ends = list(itertools.accumulate(s[0] for s in schedule))
                 self._sched_start = time.monotonic()
 
     def reset_buckets(self, now):
@@ -963,15 +972,26 @@ class BeanCore:
         return (local_port, remote_ip, remote_port, *protocol)
 
     def _current_rates(self, now):
+        """``(down, up)`` in B/s at ``now``: the schedule's step, or the constant limits.
+
+        The step is FOUND, not walked to. ``set_schedule`` keeps the cumulative end of
+        every step, and the step in force is the first one whose end lies beyond the
+        position in the cycle - which is exactly what ``bisect_right`` returns. It used
+        to walk the list for every packet, under the core's lock (performance review
+        2026-09-26, W-A5). MEASURED 2026-10-02 (CPython 3.14.7): ``decide()`` with a
+        1000-step schedule 6.09 -> 2.66 us, and the two answered alike for 40 random
+        schedules at every step boundary and 500 positions each.
+
+        Past the last end the answer is the last step, as it always was: ``sum()`` adds
+        floats with compensation and the running ends do not, so the cycle's length and
+        the last end can differ in the last bit.
+        """
         if not self.schedule or self._sched_total <= 0:
             return self.rate_down, self.rate_up
         pos = (now - self._sched_start) % self._sched_total
-        acc = 0.0
-        for dur, dn, up in self.schedule:
-            acc += dur
-            if pos < acc:
-                return dn, up
-        return self.schedule[-1][1], self.schedule[-1][2]
+        step = bisect.bisect_right(self._sched_ends, pos)
+        _dur, down, up = self.schedule[min(step, len(self.schedule) - 1)]
+        return down, up
 
     def drain_retired(self):
         """Retired flow generations, for somebody who is NOT the capture thread.
@@ -1242,11 +1262,25 @@ class BeanCore:
             # Rotate the bounded tables. O(1) (see _FlowTable) and throttled, so it
             # is safe to call from the hot path - which is the point: the tables must
             # stay bounded even in a session that runs for days.
-            if key is not None and (self._flow_last or self._reset_until):
+            #
+            # The generations are read directly: a table is non-empty exactly when
+            # one of them is, and `len()` on a _FlowTable is a Python call - two per
+            # packet, on the default path where both tables are empty (performance
+            # review 2026-09-26, W-A7).
+            if key is not None and (self._flow_last._new or self._flow_last._old
+                                    or self._reset_until._new or self._reset_until._old):
                 self._prune(now)
 
             # 4) RST injection (connection reset)
-            if is_tcp and key is not None:
+            #
+            # Skipped when nothing can hold a flow down or reset one - RST off, no
+            # manual reset running, no cooldown recorded - instead of looking every
+            # TCP packet up in an empty table (W-A7). Exact, not approximate: an empty
+            # table answers 0.0, and with both triggers off nothing below can fire or
+            # draw from `rng`, so the stream of decisions is the same.
+            if is_tcp and key is not None and (
+                    self.rst_prob > 0 or now < self._reset_now_deadline
+                    or self._reset_until._new or self._reset_until._old):
                 until = self._reset_until.get(key, 0.0)
                 if now < until:
                     return Decision(True, False, [], "rst")
@@ -1330,7 +1364,11 @@ class BeanCore:
             #     ``buffer_s`` instead of never. An empty buffer (``queued == 0``)
             #     always accepts the packet, so a tiny buffer throttles hard but
             #     never blacks the link out completely.
-            down_bps, up_bps = self._current_rates(now)
+            #
+            #     Without a schedule the constant limits are read where they are: the
+            #     call cost more than anything else left on the default path (W-A7).
+            down_bps, up_bps = (self._current_rates(now) if self.schedule
+                                else (self.rate_down, self.rate_up))
             rate = up_bps if is_outbound else down_bps
             if rate > 0:
                 release = self._shape(is_outbound, size, now, rate, release)

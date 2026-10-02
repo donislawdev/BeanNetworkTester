@@ -316,7 +316,57 @@ class Matcher:
         return f"<{type(self).__name__} {self.raw!r}>"
 
 
-class IntMatcher(Matcher):
+class _ValueMatcher(Matcher):
+    """A matcher over ONE value - a port, an address - that remembers its verdicts.
+
+    ``matches()`` is a pure function of the value: the terms are fixed when the
+    matcher is built, and every Apply builds a new one. So the packet path asks the
+    terms once per DISTINCT value instead of once per packet (performance review
+    2026-09-26, W-A2). MEASURED 2026-10-02 (CPython 3.14.7, paired in one process, 64
+    rotating addresses, every decision identical): ``decide()`` with a destination IP
+    and port 8.98 -> 3.05 us for IPv4 and 17.7 -> 2.97 us for IPv6, with a block 7.34
+    / 16.0 -> ~2.6 us. A remembered verdict costs ~80 ns against ~3.7 us parsed.
+
+    Bounded, and cleared WHOLE when full: at most ``VERDICTS_MAX`` entries (~0.4 MB of
+    address strings), so a port scan or a flood of random sources - every value new -
+    costs what it did before (measured equal within the noise) plus one clear of
+    22-58 us per 4096 new values. A larger memory was SLOWER: 65 536 entries added
+    ~0.7 us a miss (memory locality). A plain dict on purpose: ``lru_cache`` on a
+    method holds the instance (ruff B019), and a matcher replaced at every Apply would
+    then wait for a full collection to be freed - the pause chunk R-1 removed.
+
+    Only values of type exactly ``str`` or ``int`` are remembered. A dict takes
+    ``True``, ``1`` and ``1.0`` for one key while this language does not -
+    ``_as_int(True)`` is "no value", so ``!1`` passes ``True`` and refuses ``1``.
+    Anything else, ``None`` for a portless packet included, takes the long way as it
+    always did. ``explain()`` and ``excluded()`` never read the memory.
+
+    No lock, and none needed: the verdict is a pure function, so two threads can only
+    ever compute the same answer, and a dict's get, set and clear are each atomic (per
+    object in a free-threaded build too). The core's matchers are read by the capture
+    thread alone; the connection table compiles its own.
+    """
+    VERDICTS_MAX = 4096
+
+    def __init__(self, raw, terms):
+        super().__init__(raw, terms)
+        self._verdicts = {}
+
+    def matches(self, value):
+        cls = value.__class__
+        if cls is not str and cls is not int:
+            return Matcher.matches(self, value)
+        verdicts = self._verdicts
+        verdict = verdicts.get(value)
+        if verdict is None:
+            verdict = Matcher.matches(self, value)
+            if len(verdicts) >= self.VERDICTS_MAX:
+                verdicts.clear()
+            verdicts[value] = verdict
+        return verdict
+
+
+class IntMatcher(_ValueMatcher):
     """Numbers - ports today, any numeric field tomorrow."""
     kind = KIND_INT
     BLAST_PROBES = (((1,), (443,), (49152,), (65535,)),)
@@ -326,7 +376,7 @@ class IntMatcher(Matcher):
         return _as_int(value)
 
 
-class IpMatcher(Matcher):
+class IpMatcher(_ValueMatcher):
     """IPv4/IPv6 addresses. Rules only ever match their own address family."""
     kind = KIND_IP
     # Both families on purpose: a rule that covers one of them entirely is not

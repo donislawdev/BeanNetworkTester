@@ -183,8 +183,10 @@ DEPTH_BAND = 4                  # absolute: see above
 # order changed (external review P1-5). 9 -> 8 on 2026-09-30: the snapshot merge
 # left `portmap.PortTable.info` for a function of its own (external review P2-9).
 # 8 -> 7 on 2026-10-02: the packet reads left `engine._capture_loop` for
-# `BeanCore.packet_meta` (performance review R-1).
-DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4
+# `BeanCore.packet_meta` (performance review R-1). 7 -> 6 the same day: the queue
+# peak in `engine._enqueue` stopped taking a lock of its own (performance review
+# R-2, W-A6), and the block that held it was the function's deepest.
+DEPTHS_NEAR_CEILING = 6         # make_gear_icon at 5, five more at 4
 
 
 def _logic_lines(source):

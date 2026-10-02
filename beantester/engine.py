@@ -719,7 +719,8 @@ class BeanEngine:
         return self._conns_log.snapshot(limit)
 
     def _log_delivered(self, key, size, is_out):
-        """Credit delivered bytes to their flow's row, and to the scoped totals.
+        """Credit delivered bytes to the session, to their flow's row, and to the
+        scoped totals.
 
         The row half lives in ``connlog`` and takes no lock (its docstring carries
         the measurement); the session totals live here, because the stats dict is
@@ -729,10 +730,14 @@ class BeanEngine:
         reader sees the old value or the new one, never a torn one. Taking _slock
         here would put the per-packet inject path in the queue behind stats
         readers, which is the 5% regression measured for the sibling counters.
+        ``bytes_in``/``bytes_out`` went through ``_bump`` and its lock until the
+        performance review of 2026-09-26 (W-A6) pointed at exactly this argument.
         """
+        st = self.st
+        total = "bytes_out" if is_out else "bytes_in"
+        st[total] = st[total] + size
         if not self._conns_log.credit_delivered(key, size, is_out):
             return
-        st = self.st
         if is_out:
             st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
         else:
@@ -2022,14 +2027,34 @@ class BeanEngine:
                     self._bump("drop_overflow")
             else:
                 queued, overflowed = True, False
+                # 🔴 The injector is woken only when this packet becomes the HEAD
+                # (performance review 2026-09-26, W-A4). It always waits for the
+                # head's own release time and nobody else takes from the heap, so a
+                # packet due later - or at the same time: it sorts behind the head
+                # on its counter - changes nothing it is waiting for. Waking it for
+                # every packet cost a lock hand-off and a thread switch to see
+                # "not yet". MEASURED 2026-10-02 on the real driver (elevated,
+                # probe_latency_precision.py, runs alternated): CPU per packet
+                # 172-180 -> 133-137 us at 8000/s and 500 ms, 182-190 -> 153-161 us
+                # at 2000/s and 20 ms; p99 lateness unchanged, the MEDIAN 0.3-0.4 ms
+                # later. That median is Windows rounding a timed wait up to the 1 ms
+                # tick: a busy link used to be polled by its own arrivals, while a
+                # lone packet always waited out the tick - now both wait the same
+                # (owner's decision D-9). stop() wakes it with notify_all.
+                wake = not self._heap or release < self._heap[0][0]
                 heapq.heappush(self._heap,
                                (release, next(self._counter), packet, copy, key,
                                 modified))
                 q = len(self._heap)
-                with self._slock:
-                    if q > self.st["peak_queue"]:
-                        self.st["peak_queue"] = q
-                self._cv.notify()
+                # Without _slock, like _log_delivered's counters: this thread is the
+                # only writer (both callers are _capture_loop, and reset_stats runs
+                # before any worker), readers only copy, and an int store is atomic.
+                # The lock cost a hand-off for every packet queued (W-A6).
+                st = self.st
+                if q > st["peak_queue"]:
+                    st["peak_queue"] = q
+                if wake:
+                    self._cv.notify()
         if overflowed:
             self._warn_overflow()       # outside the lock: it logs, and logging waits
         return queued
@@ -2147,8 +2172,7 @@ class BeanEngine:
                     divert.send(packet, recalculate_checksum=modified)
                     size = len(packet.raw)
                     is_out = getattr(packet, "is_outbound", True)
-                    self._bump("bytes_out" if is_out else "bytes_in", size)
-                    # DELIVERED, per flow. The row already counts what was captured;
+                    # DELIVERED, for the session and per flow. The row already counts what was captured;
                     # this is the other half, and the two differ by exactly the
                     # damage done. Before, the row showed captured bytes under a
                     # heading the session panel used for delivered: measured

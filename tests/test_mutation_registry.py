@@ -884,7 +884,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 7         # make_gear_icon at 5, six more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 6         # make_gear_icon at 5, five more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -2424,8 +2424,8 @@ MUTATIONS = [
         # local development server on the machine running the tool.
         "label": "utils: loopback stops being carved out of the local network",
         "file": "beantester/utils.py",
-        "old": "        return not address.is_global and not address.is_loopback",
-        "new": "        return not address.is_global",
+        "old": "    return \"loopback\" if address.is_loopback else \"lan\"",
+        "new": "    return \"lan\"",
         "test": "test_is_lan_ip_carves_out_loopback",
     },
     {
@@ -6422,6 +6422,184 @@ MUTATIONS = [
         "old": "driver.pydivert_available(load=False) else",
         "new": "driver.pydivert_available() else",
         "test": "test_the_gui_startup_line_does_not_import_pydivert",
+    },
+    {
+        # Performance review W-A2: an IP or port filter parsed the value again for
+        # every packet (decide() 8.98 -> 3.05 us with a destination IP and port).
+        "label": "matchers (W-A2): a remembered verdict is never looked up",
+        "file": "beantester/matchers.py",
+        "old": "        verdict = verdicts.get(value)\n",
+        "new": "        verdict = None\n",
+        "test": "test_an_address_is_parsed_once_however_many_packets_carry_it",
+    },
+    {
+        "label": "matchers (W-A2): the verdict memory grows without a ceiling",
+        "file": "beantester/matchers.py",
+        "old": "            if len(verdicts) >= self.VERDICTS_MAX:\n"
+               "                verdicts.clear()\n",
+        "new": "            pass\n",
+        "test": "test_the_verdict_memory_has_a_ceiling",
+    },
+    {
+        # True == 1 == 1.0 as dict keys; `!1` lets True through and refuses 1.
+        "label": "matchers (W-A2): a bool borrows the verdict of an int",
+        "file": "beantester/matchers.py",
+        "old": "        if cls is not str and cls is not int:\n",
+        "new": "        if value is None:\n",
+        "test": "test_a_remembered_verdict_never_answers_for_a_value_of_another_type",
+    },
+    {
+        # W-A2: LAN mode and Internet only parsed the address for every packet.
+        "label": "utils (W-A2): an address is classified again for every packet",
+        "file": "beantester/utils.py",
+        "old": "@functools.lru_cache(maxsize=4096)\ndef _address_class(",
+        "new": "@functools.lru_cache(maxsize=0)\ndef _address_class(",
+        "test": "test_an_address_is_classified_once_for_lan_mode_and_internet_only",
+    },
+    {
+        "label": "utils (W-A2): the address memory has no ceiling",
+        "file": "beantester/utils.py",
+        "old": "@functools.lru_cache(maxsize=4096)\ndef _address_class(",
+        "new": "@functools.lru_cache(maxsize=None)\ndef _address_class(",
+        "test": "test_an_address_is_classified_once_for_lan_mode_and_internet_only",
+    },
+    {
+        "label": "utils (W-A2): an address that is not one is called global",
+        "file": "beantester/utils.py",
+        "old": "    except ValueError:\n        return \"invalid\"\n",
+        "new": "    except ValueError:\n        return \"global\"\n",
+        "test": "test_the_remembered_address_class_answers_as_the_old_code_did",
+    },
+    {
+        # W-A5: a long schedule was walked step by step for every packet
+        # (decide() with 1000 steps 6.09 -> 2.66 us).
+        "label": "core (W-A5): the schedule is walked from its first step again",
+        "file": "beantester/core.py",
+        "old": "        step = bisect.bisect_right(self._sched_ends, pos)\n",
+        "new": "        step = next((i for i, e in enumerate(itertools.accumulate(\n"
+               "            s[0] for s in self.schedule)) if pos < e), len(self.schedule))\n",
+        "test": "test_the_schedule_step_is_found_not_walked",
+    },
+    {
+        "label": "core (W-A5): a step boundary belongs to the step before it",
+        "file": "beantester/core.py",
+        "old": "        step = bisect.bisect_right(self._sched_ends, pos)\n",
+        "new": "        step = bisect.bisect_left(self._sched_ends, pos)\n",
+        "test": "test_the_found_step_is_the_step_the_walk_stopped_at",
+    },
+    {
+        "label": "core (W-A5): a changed schedule keeps the old step ends",
+        "file": "beantester/core.py",
+        "old": "                self._sched_ends = list(itertools.accumulate(s[0] for s in schedule))\n",
+        "new": "",
+        "test": "test_the_found_step_is_the_step_the_walk_stopped_at",
+    },
+    {
+        # W-A7: two len() calls on empty flow tables for every packet.
+        "label": "core (W-A7): the prune gate asks the tables their length",
+        "file": "beantester/core.py",
+        "old": "            if key is not None and (self._flow_last._new or self._flow_last._old\n"
+               "                                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if key is not None and (self._flow_last or self._reset_until):\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        "label": "core (W-A7): the prune gate forgets the RST table",
+        "file": "beantester/core.py",
+        "old": "            if key is not None and (self._flow_last._new or self._flow_last._old\n"
+               "                                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if key is not None and (self._flow_last._new or self._flow_last._old):\n",
+        "test": "test_rst_cooldowns_are_still_retired_without_nat",
+    },
+    {
+        # W-A7: every TCP packet looked itself up in an empty RST table.
+        "label": "core (W-A7): every TCP packet looks up the RST table again",
+        "file": "beantester/core.py",
+        "old": "            if is_tcp and key is not None and (\n"
+               "                    self.rst_prob > 0 or now < self._reset_now_deadline\n"
+               "                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "            if is_tcp and key is not None:\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        "label": "core (W-A7): a recorded cooldown is ignored once RST is off",
+        "file": "beantester/core.py",
+        "old": "                    self.rst_prob > 0 or now < self._reset_now_deadline\n"
+               "                    or self._reset_until._new or self._reset_until._old):\n",
+        "new": "                    self.rst_prob > 0 or now < self._reset_now_deadline):\n",
+        "test": "test_a_reset_still_holds_down_after_the_reset_switch_goes_off",
+    },
+    {
+        "label": "core (W-A7): a manual reset with RST off is skipped",
+        "file": "beantester/core.py",
+        "old": "                    self.rst_prob > 0 or now < self._reset_now_deadline\n",
+        "new": "                    self.rst_prob > 0\n",
+        "test": "test_a_reset_still_holds_down_after_the_reset_switch_goes_off",
+    },
+    {
+        "label": "core (W-A7): the constant rates are read through the schedule again",
+        "file": "beantester/core.py",
+        "old": "            down_bps, up_bps = (self._current_rates(now) if self.schedule\n"
+               "                                else (self.rate_down, self.rate_up))\n",
+        "new": "            down_bps, up_bps = self._current_rates(now)\n",
+        "test": "test_the_default_path_does_no_flow_table_or_schedule_work",
+    },
+    {
+        # W-A4: every queued packet woke the injector to see "not yet" (CPU per
+        # packet 172-180 -> 133-137 us on the real driver at 8000/s).
+        "label": "engine (W-A4): every queued packet wakes the injector",
+        "file": "beantester/engine.py",
+        "old": "                if wake:\n                    self._cv.notify()\n",
+        "new": "                self._cv.notify()\n",
+        "test": "test_the_injector_is_woken_only_for_a_new_head",
+    },
+    {
+        "label": "engine (W-A4): a new head does not wake the injector",
+        "file": "beantester/engine.py",
+        "old": "                wake = not self._heap or release < self._heap[0][0]\n",
+        "new": "                wake = not self._heap\n",
+        "test": "test_a_packet_due_sooner_is_not_held_behind_a_later_head",
+    },
+    {
+        # W-A6: a lock hand-off for every packet queued and every packet delivered.
+        "label": "engine (W-A6): the queue peak takes the stats lock again",
+        "file": "beantester/engine.py",
+        "old": "                st = self.st\n"
+               "                if q > st[\"peak_queue\"]:\n"
+               "                    st[\"peak_queue\"] = q\n",
+        "new": "                with self._slock:\n"
+               "                    if q > self.st[\"peak_queue\"]:\n"
+               "                        self.st[\"peak_queue\"] = q\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
+    },
+    {
+        "label": "engine (W-A6): the queue peak is no longer recorded",
+        "file": "beantester/engine.py",
+        "old": "                    st[\"peak_queue\"] = q\n",
+        "new": "                    pass\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
+    },
+    {
+        "label": "engine (W-A6): the delivered bytes take the stats lock again",
+        "file": "beantester/engine.py",
+        "old": "        st[total] = st[total] + size\n",
+        "new": "        self._bump(total, size)\n",
+        "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
+    },
+    {
+        # W-A8: a ping row retried an owner lookup by port it does not have.
+        "label": "connlog (W-A8): a portless row asks for its owner for every packet",
+        "file": "beantester/connlog.py",
+        "old": "            elif not c[\"proc\"] and local_port is not None:\n",
+        "new": "            elif not c[\"proc\"]:\n",
+        "test": "test_a_portless_row_asks_for_its_owner_once",
+    },
+    {
+        "label": "connlog (W-A8): a row with a port stops asking for its owner",
+        "file": "beantester/connlog.py",
+        "old": "            elif not c[\"proc\"] and local_port is not None:\n",
+        "new": "            elif not c[\"proc\"] and local_port is None:\n",
+        "test": "test_a_portless_row_asks_for_its_owner_once",
     },
 ]
 

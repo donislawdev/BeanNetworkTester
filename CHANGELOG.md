@@ -49,6 +49,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Address filters and long speed schedules take less time per packet.** With a destination
+  IP or port, a block, LAN mode or **Internet only**, the program worked the answer out again
+  for every packet, even for an address it had just seen. It now remembers it for each
+  address and port, which makes judging a packet two to six times faster. A speed schedule
+  with many steps no longer slows every packet either: the program finds the current step
+  instead of reading the list from the start.
+
+- **Less processor time with a latency set on a busy link.** The part that sends delayed
+  packets back woke up for every new packet only to find nothing due yet; it now wakes when
+  the next packet is due. Measured at 8000 packets a second and 500 ms, with the change
+  above: about a third less processor time per packet, the slowest one in a hundred arrives
+  sooner than before, and the average packet up to 0.1 ms later, as a packet on a quiet link
+  always did.
+
 - **The window opens a little sooner.** At start the program now only checks that the
   `pydivert` package is installed instead of loading it, which took about a tenth of a second
   before the window appeared. It is loaded at the first **START**, as before.
