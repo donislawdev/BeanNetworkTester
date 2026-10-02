@@ -6,6 +6,7 @@ grow, and `tests/test_code_shape.py` refuses to let it shrink. This module is
 in it because it is pure, small and read by every layer - the cheapest place to
 start, and the place where a wrong type travels furthest.
 """
+import functools
 import math
 from typing import Any, Optional
 
@@ -118,6 +119,37 @@ def canonical_ip(ip: Any) -> Optional[str]:
         return None
 
 
+@functools.lru_cache(maxsize=4096)
+def _address_class(text: str) -> str:
+    """``"global"``, ``"loopback"``, ``"lan"`` or ``"invalid"`` - the one reading of
+    an address that both ``is_local_ip`` and ``is_lan_ip`` answer from.
+
+    REMEMBERED, because LAN mode and "Internet only" ask it for every packet and
+    ``ipaddress`` parses the text and walks its private-network list each time
+    (performance review 2026-09-26, W-A2). MEASURED 2026-10-02 (CPython 3.14.7, 64
+    rotating addresses): ``is_lan_ip`` 3.17 us -> 81 ns; ``decide()`` with LAN mode
+    5.39 -> 2.50 us (IPv4) and 7.66 -> 2.50 us (IPv6), every decision identical. An
+    address never seen before costs what it did (measured equal).
+
+    ``lru_cache`` is the standard library's bounded memory and it fits here: a
+    module function, nothing to hold on to, thread-safe, and evicting the oldest
+    entry instead of clearing all of them. 4096 entries is at most ~0.5 MB.
+    ``matchers._ValueMatcher`` says why a matcher, an object, keeps a dict instead.
+
+    Only ``ValueError`` is caught: it is what ``ip_address`` raises for text that is
+    not an address. Anything else reaches the public wrapper, whose answer for "cannot
+    classify" is the same as it always was, and is not remembered.
+    """
+    import ipaddress
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return "invalid"
+    if address.is_global:
+        return "global"
+    return "loopback" if address.is_loopback else "lan"
+
+
 def is_local_ip(ip: Any) -> bool:
     """True for local addresses (RFC1918, loopback, link-local, CGNAT...).
 
@@ -126,12 +158,14 @@ def is_local_ip(ip: Any) -> bool:
     🔴 This one COUNTS LOOPBACK as local; ``is_lan_ip`` below does not, and the
     difference is deliberate - see its docstring before assuming one of them is
     a typo for the other.
+
+    Answered from ``_address_class``; the key is always plain text, so a value that
+    merely compares equal to another can never borrow its answer.
     """
     if not ip:
         return True
     try:
-        import ipaddress
-        return not ipaddress.ip_address(str(ip)).is_global
+        return _address_class(ip if ip.__class__ is str else str(ip)) != "global"
     except Exception:
         return True
 
@@ -160,9 +194,7 @@ def is_lan_ip(ip: Any) -> bool:
     if not ip:
         return False
     try:
-        import ipaddress
-        address = ipaddress.ip_address(str(ip))
-        return not address.is_global and not address.is_loopback
+        return _address_class(ip if ip.__class__ is str else str(ip)) == "lan"
     except Exception:
         return False
 

@@ -2424,8 +2424,8 @@ MUTATIONS = [
         # local development server on the machine running the tool.
         "label": "utils: loopback stops being carved out of the local network",
         "file": "beantester/utils.py",
-        "old": "        return not address.is_global and not address.is_loopback",
-        "new": "        return not address.is_global",
+        "old": "    return \"loopback\" if address.is_loopback else \"lan\"",
+        "new": "    return \"lan\"",
         "test": "test_is_lan_ip_carves_out_loopback",
     },
     {
@@ -6422,6 +6422,53 @@ MUTATIONS = [
         "old": "driver.pydivert_available(load=False) else",
         "new": "driver.pydivert_available() else",
         "test": "test_the_gui_startup_line_does_not_import_pydivert",
+    },
+    {
+        # Performance review W-A2: an IP or port filter parsed the value again for
+        # every packet (decide() 8.98 -> 3.05 us with a destination IP and port).
+        "label": "matchers (W-A2): a remembered verdict is never looked up",
+        "file": "beantester/matchers.py",
+        "old": "        verdict = verdicts.get(value)\n",
+        "new": "        verdict = None\n",
+        "test": "test_an_address_is_parsed_once_however_many_packets_carry_it",
+    },
+    {
+        "label": "matchers (W-A2): the verdict memory grows without a ceiling",
+        "file": "beantester/matchers.py",
+        "old": "            if len(verdicts) >= self.VERDICTS_MAX:\n"
+               "                verdicts.clear()\n",
+        "new": "            pass\n",
+        "test": "test_the_verdict_memory_has_a_ceiling",
+    },
+    {
+        # True == 1 == 1.0 as dict keys; `!1` lets True through and refuses 1.
+        "label": "matchers (W-A2): a bool borrows the verdict of an int",
+        "file": "beantester/matchers.py",
+        "old": "        if cls is not str and cls is not int:\n",
+        "new": "        if value is None:\n",
+        "test": "test_a_remembered_verdict_never_answers_for_a_value_of_another_type",
+    },
+    {
+        # W-A2: LAN mode and Internet only parsed the address for every packet.
+        "label": "utils (W-A2): an address is classified again for every packet",
+        "file": "beantester/utils.py",
+        "old": "@functools.lru_cache(maxsize=4096)\ndef _address_class(",
+        "new": "@functools.lru_cache(maxsize=0)\ndef _address_class(",
+        "test": "test_an_address_is_classified_once_for_lan_mode_and_internet_only",
+    },
+    {
+        "label": "utils (W-A2): the address memory has no ceiling",
+        "file": "beantester/utils.py",
+        "old": "@functools.lru_cache(maxsize=4096)\ndef _address_class(",
+        "new": "@functools.lru_cache(maxsize=None)\ndef _address_class(",
+        "test": "test_an_address_is_classified_once_for_lan_mode_and_internet_only",
+    },
+    {
+        "label": "utils (W-A2): an address that is not one is called global",
+        "file": "beantester/utils.py",
+        "old": "    except ValueError:\n        return \"invalid\"\n",
+        "new": "    except ValueError:\n        return \"global\"\n",
+        "test": "test_the_remembered_address_class_answers_as_the_old_code_did",
     },
 ]
 

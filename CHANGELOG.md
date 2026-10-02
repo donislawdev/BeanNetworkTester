@@ -49,6 +49,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Address filters take less time per packet.** With a destination IP or port, a block, LAN
+  mode or **Internet only**, the program used to work out the answer for every packet again,
+  even for an address it had just seen. It now remembers the answer for each address and
+  port, so judging a packet with these settings takes two to six times less time. An address
+  seen for the first time costs what it did before.
+
 - **The window opens a little sooner.** At start the program now only checks that the
   `pydivert` package is installed instead of loading it, which took about a tenth of a second
   before the window appeared. It is loaded at the first **START**, as before.
