@@ -1050,6 +1050,7 @@ variable.
 | "Show only the targeted traffic" | **ignored on purpose** - see below | **followed** |
 | the "Row limit" field | not applicable | **ignored** - every filtered row is exported, not just the drawn ones |
 | columns change between versions | the old file is renamed with a timestamp and a new one started, so rows never misalign under a stale header | not applicable |
+| encoding | UTF-8 with no byte-order mark. Double-clicked, Excel reads such a file in the Windows code page and mangles letters outside it (process names in Polish or Chinese). Open it through **Data > Get Data > From File > From Text/CSV** and set **File Origin** to **65001: Unicode (UTF-8)** | same |
 
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
