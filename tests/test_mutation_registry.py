@@ -944,6 +944,15 @@ MUTATIONS = [
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
     {
+        # D-11 / P3-1: the release as it stood until 2026-10-02 - the LATER of the
+        # queue and the latency, so a full queue hid inside the latency.
+        "label": "rate: the time in the queue hides inside the latency",
+        "file": "beantester/core.py",
+        "old": "        return finish + (release - now)\n",
+        "new": "        return finish if finish > release else release\n",
+        "test": "test_latency_adds_to_the_time_spent_in_the_queue",
+    },
+    {
         # The bucket is a virtual FINISH TIME, not a token count, so a link that
         # has been quiet leaves it in the past. Charging from a stale one banks
         # the idleness as burst credit: the shaper adds no delay until the bucket

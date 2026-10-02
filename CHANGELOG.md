@@ -79,6 +79,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   "Reordered", because it leaves after the packet that came next. These counters now count
   packets, and a copy that is not delivered is not a lost packet.
 
+- **A speed limit's queue now adds to the latency.** A packet waiting in the speed-limit
+  buffer got its latency during that wait, so the two overlapped: with 200 ms of latency and a
+  full 150 ms buffer every packet arrived after 200 ms. Now it arrives after about 350 ms, as on
+  a real link. Profiles that combine a speed limit with latency (3G, satellite, roaming) show a
+  higher ping while the link is busy. An idle link is unchanged.
+
 - **NAT timeout keeps a busy connection open.** Switched off and on again during a session,
   *NAT timeout* dropped incoming packets of connections that had been busy the whole time,
   until each of them next sent something. And UDP traffic kept a silent TCP connection's

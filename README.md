@@ -343,7 +343,9 @@ seconds into the future: packets carried extreme delay, and raising the limit mi
 "link recovers" schedule step) had no effect, because the backlog swallowed every faster step. With
 an `N` ms buffer the delay is bounded to ~`N` ms, the excess goes as "Rate-limit drop" (a separate
 counter, not "Loss" nor "Buffer overflow"), and after raising the limit throughput recovers within
-~`N` ms. Default 1000 ms. Active only with a download/upload limit or a schedule set.
+~`N` ms. Default 1000 ms. Active only with a download/upload limit or a schedule set. The time in
+the buffer comes on top of *Latency*, as on a real link: with 200 ms of latency and a full 150 ms
+buffer a packet arrives after about 350 ms.
 
 **Delay (ping)** - *Latency*: how many ms to add to every packet. *Jitter*: random
 variation of the delay (+/- ms), which makes ping jump and reorders packets. Three things worth
