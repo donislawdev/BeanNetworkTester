@@ -6292,6 +6292,32 @@ MUTATIONS = [
         "test": "test_the_elevated_copy_is_started_the_way_this_one_was",
     },
     {
+        # Performance review W-A1/W-A3: a queued packet held pydivert's header
+        # cache, a reference cycle only a FULL collection frees (p99.9 128 ms late).
+        "label": "engine (W-A1): a queued packet keeps pydivert's header cache",
+        "file": "beantester/engine.py",
+        "old": "            if type(packet) is real_packet:\n"
+               "                packet.__dict__.clear()\n",
+        "new": "            if type(packet) is real_packet:\n"
+               "                pass\n",
+        "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
+    },
+    {
+        "label": "engine (W-A1): pydivert's packet class is never found",
+        "file": "beantester/engine.py",
+        "old": "        real_packet = getattr(sys.modules.get(\"pydivert\"), \"Packet\", None)\n",
+        "new": "        real_packet = None\n",
+        "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
+    },
+    {
+        # The synthetic packet and the fakes keep their real fields in __dict__.
+        "label": "engine (W-A1): every packet type loses its __dict__",
+        "file": "beantester/engine.py",
+        "old": "            if type(packet) is real_packet:\n",
+        "new": "            if True:\n",
+        "test": "test_only_pydivert_s_own_packets_lose_their_cache",
+    },
+    {
         # The packet reads moved from engine._capture_loop to BeanCore.packet_meta
         # (R-1): the guards that drive the whole engine must still see them there.
         "label": "core (W-A1 move): an inbound packet's ports are read the wrong way round",

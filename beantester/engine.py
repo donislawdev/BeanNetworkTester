@@ -97,6 +97,7 @@ import atexit
 import heapq
 import itertools
 import random
+import sys
 import threading
 import time
 import weakref
@@ -1683,6 +1684,10 @@ class BeanEngine:
     def _capture_loop(self, session):
         rng = self._rng
         wait = self._driver_wait
+        # pydivert's own packet class, or None: the one type whose header cache is
+        # dropped before the queue (see the comment there). Looked up, never imported
+        # - without pydivert loaded no such packet can exist.
+        real_packet = getattr(sys.modules.get("pydivert"), "Packet", None)
         meta = BeanCore.packet_meta     # ports, address, protocol: see its docstring
         divert = session.divert         # this session's handle, never the next one's
         while session.live:
@@ -1797,6 +1802,31 @@ class BeanEngine:
             self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,
                                 size, now, proto, scoped=dec.scoped)
             rels = dec.releases
+            # 🔴 DROP PYDIVERT'S CACHED HEADERS before the packet waits in the queue
+            # (performance review 2026-09-26, W-A1/W-A3). Every header the reads above
+            # touched is a `functools.cached_property` stored in the packet's
+            # `__dict__`, and each header keeps the packet in `_packet`: a reference
+            # CYCLE, which reference counting never frees. A packet sitting out a
+            # delay outlives the young collections, ages into the OLDEST generation
+            # and dies there, so only a FULL collection frees it - and that stops
+            # both workers, landing on the very latency this tool promises to keep.
+            # MEASURED 2026-10-02 (Win11, elevated, CPython 3.14.7, pydivert 3.1.3,
+            # real driver, 8000 UDP datagrams/s, --latency 500, runs alternated in
+            # one sitting, internal_tools/probe_latency_precision.py): before,
+            # p99.9 120-183 ms LATE, worst 121-186 ms, 9-24% of packets over 20 ms
+            # late, and full collections of 48-123 ms freeing 105-205k objects;
+            # after, p99.9 16-19 ms, worst 20-25 ms, at most 56 of 60 000 over
+            # 20 ms, one collection of 5 ms - the level of the same CLI with the
+            # collector switched OFF (p99.9 18 ms, worst 22 ms), so what is left is
+            # not the collector. Here and not right after the reads, so a
+            # corruption's payload write (which rebuilds the headers) is covered too.
+            # Only pydivert's class, and that is the safety of it: pydivert keeps
+            # every real field in __slots__ (raw, _wd_addr, _direction...) and only
+            # those caches in __dict__, so send() and the checksum helper lose
+            # nothing; the synthetic packet and the test fakes keep their real
+            # fields IN __dict__. tests/test_packet_header_cache.py pins both.
+            if type(packet) is real_packet:
+                packet.__dict__.clear()
             queued = self._enqueue(rels[0], packet, key=key, modified=modified)
             if len(rels) > 1:
                 # Counted per copy that the queue ACCEPTED, not per decision to
