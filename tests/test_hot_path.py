@@ -48,7 +48,9 @@ name nothing has, so the socket table keeps naming PIDs that have already EXITED
 (checked: ``psutil.pid_exists`` is False for the frequent ones). Both routes decline
 them, one after the other. Traced separately over 390 resolves, the handle answered
 4, declined 386, and psutil then resolved 1 of those - which is the fallback earning
-its place rather than shadowing the primary.
+its place rather than shadowing the primary. Since 2026-10-03 a pid the kernel says
+nobody holds (``OpenProcess`` error 87, ``portmap._open_failure``) no longer goes on to
+psutil, so on today's code the two counts part ways (performance review R-3).
 
 The work is real and it is heavy - and all of it happens somewhere the user's
 packets do not wait for it. That is the whole design, asserted.
