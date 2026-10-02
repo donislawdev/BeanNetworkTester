@@ -97,9 +97,15 @@ def test_requests_coalesce_so_typing_does_not_start_six_sorts():
     assert builds[1] == "chrome", f"the wrong request was kept: {builds}"
 
 
-def test_a_stale_result_is_discarded():
-    """A slow sort finishing after the user changed column must not resurrect the
-    old order."""
+def test_the_newest_request_is_the_last_result_shown():
+    """A slow sort finishing after the user changed column must never land AFTER
+    the answer to the new request.
+
+    It may land BEFORE it, and does: this test was called "a stale result is
+    discarded" and allowed exactly that, so it never checked what its name said
+    (external review, P3-25). The guarantee is the order, and that is what it
+    pins - including that nothing older arrives once the newest has.
+    """
     slow = threading.Event()
 
     def build(payload):
@@ -126,6 +132,9 @@ def test_a_stale_result_is_discarded():
 
     assert "fresh" in delivered, f"the newest request never landed: {delivered}"
     assert delivered[-1] == "fresh", f"a stale result won: {delivered}"
+    assert set(delivered) <= {"slow", "fresh"}, delivered
+    time.sleep(0.05)
+    assert model.poll() is None and not model.busy(), "something landed after the newest"
 
 
 def test_a_worker_that_raises_keeps_the_old_model_on_screen():

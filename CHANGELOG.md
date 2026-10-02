@@ -44,6 +44,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The event log window and the Connections tab show everything they hold.** The
+  **Copy row** button under the **Event log** table came out cut in half and vanished in a
+  shorter window, and the delivered totals under the **Connections** table were not shown on
+  small screens. Both now keep their place. The type and description columns of both event
+  tables sort by the words they show, the search in the event log finds the type as shown,
+  and **Copy row** with no row selected leaves the clipboard as it was.
+
+- **Freeze keeps the Connections table still, and its headers still sort.** A refresh that
+  was already on its way when **Freeze** was ticked still changed the frozen table, and a
+  click on a column header under **Freeze** turned the arrow without moving a row. Now the
+  frozen table changes only when you sort it: a header click puts the rows on screen in the
+  new order, and the count and the totals stay as they were.
+
+- **Deleting the loaded profile no longer relabels its values.** After **Delete**, the
+  profile list read "Perfect network" while the form still held the deleted profile's
+  impairments, and START applied them under that name. Now no profile is shown until you pick
+  or save one. The next start still opens on "Perfect network".
+
+- **Searching the Control page finds Polish words typed without ł, and Sockets keeps its
+  newest view.** "wysylanie" now finds "Wysyłanie" and eight other labels with ł. On
+  **Tools > Sockets**, a computer clock set back (time sync, a resumed virtual machine) no
+  longer brings an older list back to the screen.
+
 - **A process whose name uses letters outside the system code page keeps its name.** Such
   a name came back with `?` in place of those letters, or cut short when it was long, so
   targeting the process by name missed it and the Tools tab showed it wrong. The name is

@@ -1473,8 +1473,8 @@ MUTATIONS = [
         # labels carry diacritics and people type without them.
         "label": "search: matching stops ignoring Polish diacritics",
         "file": "beantester/gui/form_search.py",
-        "old": "    decomposed = unicodedata.normalize(\"NFKD\", str(text or \"\"))",
-        "new": "    decomposed = str(text or \"\")",
+        "old": "    decomposed = unicodedata.normalize(\"NFKD\", str(text or \"\").translate(_NO_MARK))",
+        "new": "    decomposed = str(text or \"\").translate(_NO_MARK)",
         "test": "test_an_accented_label_is_reachable_without_its_accents",
     },
     {
@@ -3337,6 +3337,86 @@ MUTATIONS = [
         "old": "        if app.root.clipboard_get() == text:",
         "new": "        if True:",
         "test": "test_a_copy_is_confirmed_only_when_the_clipboard_really_has_it",
+    },
+    {
+        # P3-31: "Copy" with no row selected emptied another program's clipboard.
+        "label": "clipboard: an empty copy empties the clipboard",
+        "file": "beantester/gui/clipboard.py",
+        "old": "    if not text:\n        return False\n    try:\n",
+        "new": "    try:\n",
+        "test": "test_copy_with_nothing_to_copy_leaves_the_clipboard_alone",
+    },
+    {
+        # P3-33: the event log's action bar packed after the table, Copy cut in half.
+        "label": "event log: the action bar takes the height the table left",
+        "file": "beantester/gui/panels/event_log.py",
+        "old": '        actions.pack(side="bottom", fill="x", pady=(scaled(8), 0))\n',
+        "new": '        actions.pack(fill="x", pady=(scaled(8), 0))\n',
+        "test": "test_a_panel_window_reserves_its_footer_before_its_content",
+    },
+    {
+        # NOWE-6-2: the same on the Connections page, the totals line unmapped.
+        "label": "connections: the totals line takes the height the table left",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '        self.totals.pack(side="bottom", fill="x", padx=space("page"), pady=(0, space("row")))\n',
+        "new": '        self.totals.pack(fill="x", padx=space("page"), pady=(0, space("row")))\n',
+        "test": "test_the_connections_totals_are_reserved_before_the_table",
+    },
+    {
+        # P3-25: Freeze stopped new rebuilds, not the one already on its way.
+        "label": "connections: a rebuild on its way lands in the frozen table",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '        if result is not None and ("frozen" in result or not self.pause_var.get()):\n',
+        "new": "        if result is not None:\n",
+        "test": "test_freeze_holds_back_a_rebuild_already_on_its_way",
+    },
+    {
+        # NOWE-6-3: under Freeze a header click turned the arrow and moved nothing.
+        "label": "connections: a header click under Freeze only turns the arrow",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self.pause_var.get():\n            self._resort_frozen()\n",
+        "new": "        if False:\n            self._resort_frozen()\n",
+        "test": "test_a_header_click_under_freeze_sorts_the_frozen_rows",
+    },
+    {
+        # P3-27: "Perfect network" over the deleted profile's values, applied by START.
+        "label": "app: a deleted profile's values sit under the fallback's name",
+        "file": "beantester/gui/app.py",
+        "old": '        self._set_profile_key(DEFAULT_PROFILE, current="")\n',
+        "new": "        self._set_profile_key(DEFAULT_PROFILE)\n",
+        "test": "test_deleting_the_loaded_profile_names_no_profile_over_its_values",
+    },
+    {
+        # P3-35: NFKD leaves the l-stroke whole; nine Polish labels unreachable.
+        "label": "form search: the l-stroke is left as it is",
+        "file": "beantester/gui/form_search.py",
+        "old": '    decomposed = unicodedata.normalize("NFKD", str(text or "").translate(_NO_MARK))\n',
+        "new": '    decomposed = unicodedata.normalize("NFKD", str(text or ""))\n',
+        "test": "test_an_accented_label_is_reachable_without_its_accents",
+    },
+    {
+        # P3-36: the newest view was the latest by the wall clock.
+        "label": "sockets: the newest view is the latest by the wall clock",
+        "file": "beantester/nettools/sockets.py",
+        "old": "                (column, reverse), next(_MADE))\n",
+        "new": "                (column, reverse), time.time())\n",
+        "test": "test_a_clock_set_back_does_not_bring_an_older_view_back",
+    },
+    {
+        # P3-34: Type sorted by its code, Description by its language key.
+        "label": "views: events sort by what is stored, not what is shown",
+        "file": "beantester/views.py",
+        "old": "    shown = _SHOWN.get(sort_col, str)\n",
+        "new": "    shown = str\n",
+        "test": "test_events_sort_by_what_their_columns_show",
+    },
+    {
+        # NOWE-6-1: the search matched the type code, not the label on screen.
+        "label": "event log: the search matches the type code again",
+        "file": "beantester/gui/panels/event_log.py",
+        "old": '        return " ".join(event_cells(event)[1:]).lower()\n',
+        "new": '        return f"{event[1]} {event[2]} {T(event[3])}".lower()\n',
+        "test": "test_the_event_log_search_finds_the_type_it_shows",
     },
     {
         # A tab filled by a worker measured empty, every label outside the check.

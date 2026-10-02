@@ -198,10 +198,11 @@ def test_a_panel_window_reserves_its_footer_before_its_content():
     the content above left over - and the Settings content grew past its 520 px
     until that was nothing. Packing the footer first reserves it, and the
     content is what runs out of room instead. About had the same shape and was
-    one longer translation away from the same bug.
+    one longer translation away from the same bug. The event log had it for real
+    (external review, P3-33): "Copy" came out cut in half at the default size.
     """
     run_gui("""
-        for window_id in ("settings", "about"):
+        for window_id in ("settings", "about", "event_log"):
             app.windows.open(window_id)
             panel = app.windows._open[window_id]
             packed = panel.body.pack_slaves()
@@ -212,6 +213,56 @@ def test_a_panel_window_reserves_its_footer_before_its_content():
                 f"{window_id}: the footer is packed at position {bottom[0]} of "
                 f"{len(packed)}, so the content above it claims the height first")
             app.windows.close(window_id)
+    """)
+
+
+def test_the_connections_totals_are_reserved_before_the_table():
+    """External review, NOWE-6-2: the totals line under the Connections table was
+    packed after it, so the table took the height first and the line was not
+    shown at all at 1366x768 and 144 DPI. The same rule as the footer of a
+    window, on a page."""
+    run_gui("""
+        page = app.pages["connections"]
+        packed = page.frame.pack_slaves()
+        holder = page.table.frame.master
+        assert page.totals in packed and holder in packed, packed
+        assert page.totals.pack_info.get("side") == "bottom", page.totals.pack_info
+        assert packed.index(page.totals) < packed.index(holder), (
+            "the table is packed before the totals line, so it claims the height "
+            "first: %r" % (packed,))
+    """)
+
+
+def test_copy_with_nothing_to_copy_leaves_the_clipboard_alone():
+    """External review, P3-31: "Copy" in the event log with no row selected
+    emptied the clipboard - whatever another program had put there was gone."""
+    run_gui("""
+        import fake_tk
+        fake_tk.CLIPBOARD[:] = ["copied in another program"]
+        panel = app.open_window("event_log")
+        assert panel.table.copy_text(header=True) == "", "a row is selected - proves nothing"
+        app.copy_to_clipboard(panel.table.copy_text(header=True))
+        assert fake_tk.CLIPBOARD == ["copied in another program"], fake_tk.CLIPBOARD
+        panel.close()
+
+        app.copy_to_clipboard("a row")
+        assert fake_tk.CLIPBOARD == ["a row"], fake_tk.CLIPBOARD
+    """)
+
+
+def test_the_event_log_search_finds_the_type_it_shows():
+    """External review, NOWE-6-1: the search matched the stored type code, so in
+    Polish "zmiana" found nothing next to rows reading ZMIANA."""
+    run_gui("""
+        from beantester.i18n import set_language
+        set_language("pl")
+        app.engine.log_event("CHANGE", "first")
+        app.engine.log_event("START", "second")
+        panel = app.open_window("event_log")
+        panel.search_var.set("zmiana")
+        panel._run_search()
+        assert len(panel.table.items) == 1, len(panel.table.items)
+        panel.close()
     """)
 
 

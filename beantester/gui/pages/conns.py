@@ -35,7 +35,7 @@ from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
-from ..theme import CONN_COLORS, set_menu_entry_available, style_menu
+from ..theme import CONN_COLORS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
@@ -192,6 +192,14 @@ class ConnsPage:
         self._scope_note = note
         self._scope_note_state = state
 
+        # footer: summed traffic over the WHOLE filtered set (not just the rows the
+        # display limit lets through), so the number the cap hides is still visible.
+        # Packed to the bottom BEFORE the table: pack hands out height in call
+        # order, and packed after it the footer got what the table left - nothing
+        # at 1366x768 and 144 DPI (external review, NOWE-6-2).
+        self.totals = ttk.Label(self.frame, text="", style="Muted.TLabel")
+        self.totals.pack(side="bottom", fill="x", padx=space("page"), pady=(0, space("row")))
+
         holder = ttk.Frame(self.frame)
         holder.pack(fill="both", expand=True, padx=scaled(10), pady=(0, scaled(10)))
         # No stretch columns: this table scrolls horizontally, so a width the user
@@ -211,11 +219,6 @@ class ConnsPage:
         if isinstance(saved, list) and saved:
             self.table.set_visible_columns(saved)
         self._build_menu()
-
-        # footer: summed traffic over the WHOLE filtered set (not just the rows the
-        # display limit lets through), so the number the cap hides is still visible
-        self.totals = ttk.Label(self.frame, text="", style="Muted.TLabel")
-        self.totals.pack(fill="x", padx=scaled(10), pady=(0, scaled(8)))
 
     # -- context menu -------------------------------------------------------- #
     TARGET_INDEX = 3           # "Target this process" (after the separator)
@@ -358,7 +361,24 @@ class ConnsPage:
     def _on_sort(self, sort):
         self.app.conn_sort = sort
         self.app.ui.set("conn_sort", {k: sort[k] for k in ("col", "reverse")})
+        if self.pause_var.get():
+            self._resort_frozen()
+            return
         self.refresh(force=True)          # a user action never waits for the throttle
+
+    def _resort_frozen(self):
+        """Freeze keeps the rows; a header click puts THOSE rows in the new order.
+
+        Under Freeze the arrow turned and nothing moved (external review,
+        NOWE-6-3): refresh() stops at the pause, which is what Freeze is for. The
+        rows on screen go to the worker as they are - no new data, and the count
+        and the totals stay - and come back sorted. A list of pointers: 2.4 ms at
+        500 000 rows (measured, see refresh), and the sort itself stays off this
+        thread.
+        """
+        self._model.request({"frozen": list(self.table.items),
+                             "sort": dict(self.table.sort), "now": self._now})
+        self._poll_soon()
 
     # -- refresh ------------------------------------------------------------- #
     DUTY = 5                    # a rebuild may use at most 1/DUTY of the time
@@ -541,13 +561,22 @@ class ConnsPage:
     def _drain_model(self):
         self._poll_job = None
         result = self._model.poll()
-        if result is not None:
+        # A rebuild that was already on its way when the user pressed Freeze landed
+        # here and changed the frozen table (external review, P3-25). Under Freeze
+        # only the frozen rows re-sorted come through; fresh data waits for the next
+        # one, which refresh() asks for once Freeze is off.
+        if result is not None and ("frozen" in result or not self.pause_var.get()):
             self._apply(result)
             self.table.repaint()
         self._poll_soon()
 
     def _build_model(self, request):
         """Runs on the WORKER thread. Touches no widget, and must not raise."""
+        if "frozen" in request:             # the rows on screen, in a new order
+            return {"frozen": sort_connections(request["frozen"],
+                                               request["sort"]["col"],
+                                               request["sort"]["reverse"],
+                                               now=request["now"])}
         # limit=None: the raw rows, unsorted - the engine no longer sorts a table
         # this page is about to sort by the user's column anyway
         conns = request["engine"].connections_snapshot(limit=None)
@@ -592,6 +621,10 @@ class ConnsPage:
 
     def _apply(self, result):
         """Main thread: swap the finished model in whole."""
+        if "frozen" in result:              # the same rows: count and totals stay
+            self.table.set_model(result["frozen"], render=self._render,
+                                 key_of=self._key_of, tag_of=self._tag_of)
+            return
         rows, total, limit = result["rows"], result["total"], result["limit"]
         self._scope_active = result.get("scope_active", False)
         # WHY it would be empty, before handing the rows over: an empty table

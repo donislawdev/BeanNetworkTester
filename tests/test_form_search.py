@@ -120,24 +120,36 @@ def test_a_settings_field_is_found_but_never_offered_as_a_jump():
           elsewhere[0].section_label == "View options", f"({elsewhere[0].section_label})")
 
 
+# How a person types Polish with no Polish keyboard - written out by hand, so the
+# test does not strip accents with the very function it is testing.
+PLAIN_POLISH = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+
 def test_an_accented_label_is_reachable_without_its_accents():
     """🔴 The reason `fold` exists: people type Polish without the diacritics.
 
     Derived from the shipped labels rather than hard-coded, so it keeps asking
-    the real question after any wording change: take a real label that HAS an
-    accent, strip it, and demand that the stripped spelling still finds it.
+    the real question after any wording change: take EVERY real label that has a
+    Polish letter, spell it plain, and demand that the plain spelling finds it.
+    It used to strip the accent with ``fold`` itself and try one label, so a
+    letter ``fold`` left alone was left alone on both sides and the check could
+    not fail: nine labels with the l-stroke were unreachable (external review,
+    P3-35).
     """
     set_language("pl")
     index = S.build_index()
-    accented = [e for e in index
-                if e.kind == S.FIELD and S.fold(e.label) != e.label.casefold()]
+    accented = [e for e in index if e.label.translate(PLAIN_POLISH) != e.label]
     check("search: the Polish labels do carry accents (else this test is empty)",
           accented, "(no accented label found)")
+    check("search: one of them has the l-stroke (else the hard letter is untested)",
+          any("ł" in e.label.lower() for e in accented))
+    lost = []
+    for entry in accented:
+        plain = entry.label.translate(PLAIN_POLISH)
+        if entry.key not in [e.key for e in S.find(index, plain)]:
+            lost.append(plain)
+    check("search: every accented label is reachable spelled plain", not lost, f"({lost})")
     entry = accented[0]
-    stripped = S.fold(entry.label)
-    hits = [e.key for e in S.find(index, stripped)]
-    check(f"search: {entry.label!r} is reachable as {stripped!r}",
-          entry.key in hits, f"({hits})")
     check("search: and it is still reachable WITH the accents",
           entry.key in [e.key for e in S.find(index, entry.label)])
     set_language("en")

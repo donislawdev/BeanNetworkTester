@@ -449,3 +449,30 @@ def test_summing_before_the_sort_is_why_the_split_is_worth_making():
           [c["proc"] for c in kept] == ["a", "c", "b"], f"({[c['proc'] for c in kept]})")
     check("the sorted view is the same objects, not copies",
           all(any(r is k for k in kept) for r in rows))
+
+
+def test_events_sort_by_what_their_columns_show():
+    """External review, P3-34: the Type column sorted by the stored code and the
+    Description column by the language key, so in Polish neither order matched
+    the words on screen (BUG < CHANGE < START under BLAD, ZMIANA, START).
+
+    The tests run in Polish (conftest). The keys are picked so that the stored
+    order and the shown order differ - otherwise this would prove nothing.
+    """
+    from beantester.i18n import T, event_kind_label
+    from beantester.views import sort_events
+
+    events = [(0.0, "10:00:00", "BUG", "log.applied_changes"),
+              (1.0, "10:00:01", "CHANGE", "log.copied"),
+              (2.0, "10:00:02", "START", "log.loaded_profile")]
+    words = {2: event_kind_label, 3: T}             # what the two columns show
+    for col, idx in (("type", 2), ("desc", 3)):
+        by_code = [words[idx](e[idx]) for e in sorted(events, key=lambda e: e[idx])]
+        shown = [words[idx](e[idx]) for e in sort_events(events, col)]
+        expected = sorted(shown, key=str.lower)
+        check(f"{col}: the stored order is not the shown one (the case is real)",
+              by_code != expected, f"({by_code})")
+        check(f"{col}: sorted by the words on screen", shown == expected, f"({shown})")
+        backwards = [words[idx](e[idx]) for e in sort_events(events, col, True)]
+        check(f"{col}: reversed is the same order backwards", backwards == shown[::-1],
+              f"({backwards})")

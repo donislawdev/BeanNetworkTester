@@ -46,7 +46,7 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import applied, dialogs, session_repro
+from . import applied, clipboard, dialogs, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
@@ -935,7 +935,7 @@ class App:
         unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
         self.load_selected_profile()
 
-    def _set_profile_key(self, key):
+    def _set_profile_key(self, key, current=None):
         """Make ``key`` the current profile AND the one remembered for next start.
 
         The single place that writes ``_profile_key``. It used to be written by
@@ -945,8 +945,12 @@ class App:
         profile on startup" pointing at the preset picked before it. Persisting
         right here, not on close, is the same rule preferences follow: a
         deliberate choice must survive an unclean exit.
+
+        ``current`` is a different current profile for THIS session only:
+        deleting the loaded profile remembers the fallback for the next start but
+        names no profile now (see ``delete_profile``).
         """
-        self._profile_key = key
+        self._profile_key = key if current is None else current
         self.ui.set("profile", key)
         self.ui.persist()
 
@@ -1017,8 +1021,11 @@ class App:
             return                    # presets are not deletable (button is disabled)
         self.profiles.delete(name)
         self._persist_profiles()
-        # remember what we fall back TO, not the name that no longer exists
-        self._set_profile_key(DEFAULT_PROFILE)
+        # Remember what we fall back TO for the next start, not the name that no
+        # longer exists - and name NO profile now. The form still holds the deleted
+        # profile's values, and the picker read "Perfect network" over them, which
+        # START then applied under that name (external review, P3-27).
+        self._set_profile_key(DEFAULT_PROFILE, current="")
         self._sync_profile_widgets()
         self.log(f"{T('log.profile_deleted')}: {name}")
 
@@ -1067,11 +1074,7 @@ class App:
             self.log(f"{T('log.error')}: {e}")
 
     def copy_to_clipboard(self, text):
-        try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(text)
-        except Exception as e:
-            self.log(f"{T('log.not_copied')}: {e}")
+        clipboard.put(self, text)
 
     # -- targeting straight from the connection table ------------------------------ #
     def set_target_expression(self, expression):

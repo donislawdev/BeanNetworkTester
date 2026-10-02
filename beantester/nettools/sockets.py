@@ -13,6 +13,7 @@ columns, so the window has one search language (convention 10). Nothing here
 draws or translates.
 """
 import ipaddress
+import itertools
 import time
 from typing import NamedTuple
 
@@ -53,7 +54,15 @@ class View(NamedTuple):
     rows: list                  # the sockets the query keeps, in the sort's order
     query: str
     sort: tuple                 # (column, reverse)
-    made_at: float              # time.time(): the newest view is the one shown
+    made: int                   # a count, not a clock: the newest view is the one shown
+
+
+# Which view is newest, counted rather than timed. It was ``time.time()``, and a
+# clock set back (NTP, a resumed virtual machine) brought an older view back to the
+# screen (external review, P3-36). ``monotonic`` cannot go back but can tie: on
+# Windows it moves in steps of about 16 ms, and two views made within one step
+# compared equal. ``next`` on a count is one C call, safe across the workers.
+_MADE = itertools.count(1)
 
 
 class Unreadable(Exception):
@@ -193,4 +202,4 @@ def table(snapshot, query, column, reverse):
     if snapshot is None:
         snapshot = read()
     return View(snapshot, view(snapshot, query, column, reverse), query,
-                (column, reverse), time.time())
+                (column, reverse), next(_MADE))

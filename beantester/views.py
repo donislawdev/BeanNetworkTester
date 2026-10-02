@@ -5,7 +5,9 @@ so they never copy a row and never materialise a derived column: the tables are
 virtualised and format only what is on screen.
 """
 import heapq
+from typing import Any, Callable, Dict
 
+from .i18n import T, event_kind_label
 from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS, parse_matcher
 
 PARTIAL_SORT_RATIO = 10     # use a heap only when the limit is this much smaller
@@ -54,10 +56,40 @@ FALSE_WORDS = {"no", "n", "false", "0", "nie"}
 _BOUNDS = {"port": PORT_BOUNDS, "lport": PORT_BOUNDS}
 
 
+def event_cells(event):
+    """The four cells an event row SHOWS: elapsed seconds, time, type, description.
+
+    One place for both event tables (the Statistics page and the event log
+    window) and for what their sort and search compare, because a table that
+    sorts or finds by anything but what it shows reads as broken (external
+    review, P3-34 and NOWE-6-1): the type is a code (``CHANGE``) under a
+    translated label (``ZMIANA``), the description a language key under its text.
+    """
+    return (f"{event[0]:.1f}", event[1], event_kind_label(event[2]), T(event[3]))
+
+
+# What the two text columns show for a raw value. Time is shown as stored.
+_SHOWN: Dict[str, Callable[[Any], Any]] = {"type": event_kind_label, "desc": T}
+
+
 def sort_events(events, sort_col="t", reverse=False):
-    """Sort events (tuples: t, iso, type, description) by the chosen column."""
+    """Sort events (tuples: t, iso, type, description) by the chosen column.
+
+    By what the column SHOWS (see ``event_cells``), not by the stored code or key.
+    Each distinct value is translated once per sort: the log holds a few
+    thousand events but a handful of types and descriptions repeat in them.
+    """
     idx = {"t": 0, "time": 1, "type": 2, "desc": 3}.get(sort_col, 0)
     numeric = sort_col == "t"
+    shown = _SHOWN.get(sort_col, str)
+    texts = {}
+
+    def text(v):
+        if not isinstance(v, str):          # a malformed row: nothing to remember
+            return str(shown(v)).lower()
+        if v not in texts:
+            texts[v] = str(shown(v)).lower()
+        return texts[v]
 
     def key(e):
         v = e[idx] if len(e) > idx else ""
@@ -66,7 +98,7 @@ def sort_events(events, sort_col="t", reverse=False):
                 return float(v)
             except (TypeError, ValueError):
                 return 0.0
-        return str(v).lower()
+        return text(v)
 
     return sorted(events, key=key, reverse=reverse)
 
