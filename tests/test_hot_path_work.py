@@ -315,6 +315,32 @@ def test_rst_cooldowns_are_still_retired_without_nat():
           f"({len(core._reset_until)} left)")
 
 
+# -- W-A8: an owner lookup that cannot succeed is not retried -------------------- #
+def test_a_portless_row_asks_for_its_owner_once():
+    """A ping row is keyed by its peer and has no local port to look an owner up by."""
+    from beantester.connlog import ConnectionLog
+    asked = {"proc": [], "pid": []}
+
+    def process_for(port):
+        asked["proc"].append(port)
+        return ""
+
+    def pid_for(port):
+        asked["pid"].append(port)
+        return None
+
+    log = ConnectionLog(process_for, pid_for)
+    for i in range(1000):
+        log.log(("ICMP", "8.8.8.8"), "8.8.8.8", None, None, i % 2 == 0, 84, float(i), "ICMP")
+        log.log((5000, "8.8.4.4", 443), "8.8.4.4", 443, 5000, True, 100, float(i), "TCP")
+    check("1000 ping packets ask for an owner once, when the row is made",
+          asked["proc"].count(None) == 1 and asked["pid"].count(None) == 1,
+          f"({asked['proc'].count(None)} / {asked['pid'].count(None)})")
+    check("a row WITH a port and no owner yet still asks again for every packet",
+          asked["proc"].count(5000) == 1000 and asked["pid"].count(5000) == 1000,
+          f"({asked['proc'].count(5000)} / {asked['pid'].count(5000)})")
+
+
 # -- W-A4 / W-A6: the queue hand-off --------------------------------------------- #
 class _CountingCondition(threading.Condition):
     def __init__(self):

@@ -159,10 +159,13 @@ class ConnectionLog:
                          proc=self._process_for(local_port),
                          pid=self._pid_for(local_port))
                 self.rows[key] = c
-            elif not c["proc"]:
+            elif not c["proc"] and local_port is not None:
                 # the socket may not have been in the table yet when the flow
                 # appeared - try again while packets keep coming, otherwise the
-                # row would stay a "?" forever (resolve the pid on the same retry)
+                # row would stay a "?" forever (resolve the pid on the same retry).
+                # Not for a row with no local port - a ping, keyed by its peer: the
+                # owner is looked up BY PORT, so that retry could never succeed and
+                # cost two lookups for every packet (performance review W-A8).
                 c["proc"] = self._process_for(local_port)
                 if not c.get("pid"):
                     c["pid"] = self._pid_for(local_port)

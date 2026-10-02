@@ -6586,6 +6586,21 @@ MUTATIONS = [
         "new": "        self._bump(total, size)\n",
         "test": "test_the_queue_peak_and_the_delivered_bytes_take_no_stats_lock",
     },
+    {
+        # W-A8: a ping row retried an owner lookup by port it does not have.
+        "label": "connlog (W-A8): a portless row asks for its owner for every packet",
+        "file": "beantester/connlog.py",
+        "old": "            elif not c[\"proc\"] and local_port is not None:\n",
+        "new": "            elif not c[\"proc\"]:\n",
+        "test": "test_a_portless_row_asks_for_its_owner_once",
+    },
+    {
+        "label": "connlog (W-A8): a row with a port stops asking for its owner",
+        "file": "beantester/connlog.py",
+        "old": "            elif not c[\"proc\"] and local_port is not None:\n",
+        "new": "            elif not c[\"proc\"] and local_port is None:\n",
+        "test": "test_a_portless_row_asks_for_its_owner_once",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
