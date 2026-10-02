@@ -50,19 +50,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Changed
 
 - **Address filters and long speed schedules take less time per packet.** With a destination
-  IP or port, a block, LAN mode or **Internet only**, the program used to work out the answer
-  for every packet again, even for an address it had just seen. It now remembers the answer
-  for each address and port, so judging a packet with these settings takes two to six times
-  less time. An address seen for the first time costs what it did before. A speed schedule
-  with many steps no longer slows down every packet either: the program finds the current
-  step instead of going through the list from the start.
+  IP or port, a block, LAN mode or **Internet only**, the program worked the answer out again
+  for every packet, even for an address it had just seen. It now remembers it for each
+  address and port, which makes judging a packet two to six times faster. A speed schedule
+  with many steps no longer slows every packet either: the program finds the current step
+  instead of reading the list from the start.
 
 - **Less processor time with a latency set on a busy link.** The part that sends delayed
-  packets back used to wake up for every new packet only to find nothing due yet. It now
-  wakes when the next packet is due. Measured at 2000 and 8000 packets a second: 16 to 24%
-  less processor time per packet. On such a busy link a packet now arrives on average 0.3 to
-  0.4 ms later than before - as late as a single packet on a quiet link always did - and
-  the slowest one in a hundred is as late as before.
+  packets back woke up for every new packet only to find nothing due yet; it now wakes when
+  the next packet is due. Measured at 8000 packets a second and 500 ms, with the change
+  above: about a third less processor time per packet, the slowest one in a hundred arrives
+  sooner than before, and the average packet up to 0.1 ms later, as a packet on a quiet link
+  always did.
 
 - **The window opens a little sooner.** At start the program now only checks that the
   `pydivert` package is installed instead of loading it, which took about a tenth of a second
