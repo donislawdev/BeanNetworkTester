@@ -3485,6 +3485,15 @@ MUTATIONS = [
         "test": "test_a_package_init_resolves_its_relative_imports_inside_itself",
     },
     {
+        # NOWE-4-5: the name read back through the ANSI code page and its 260-byte
+        # field, which is what the old entry points did.
+        "label": "portmap: the process snapshot names through the ANSI code page",
+        "file": "beantester/portmap.py",
+        "old": "                    entry.szExeFile, int(entry.th32ParentProcessID), None)\n",
+        "new": "                    entry.szExeFile.encode(\"mbcs\", \"replace\")[:259].decode(\"mbcs\", \"replace\"), int(entry.th32ParentProcessID), None)\n",
+        "test": "test_the_snapshot_names_a_process_whose_name_is_not_ansi",
+    },
+    {
         # The walk the capture-side port map and the Tools tab share: a table that
         # outgrew the first buffer is dropped instead of asked again.
         "label": "portmap: the socket table stops growing its buffer",
