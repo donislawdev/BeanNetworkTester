@@ -1032,6 +1032,31 @@ MUTATIONS = [
         "test": "test_osv_scanner_reads_every_pinned_requirements_file",
     },
     {
+        # Measured on #255: 35 advisory ids for versions pip never installs.
+        "label": "osv-scanner: the scheduled scan lets the scanner guess transitive versions",
+        "file": ".github/workflows/osv-scanner.yml",
+        "old": "      scan-args: |-\n        --no-resolve\n        --lockfile=requirements.txt:./requirements.txt\n"
+               "        --lockfile=requirements.txt:./requirements-build.txt\n"
+               "        --lockfile=requirements.txt:./requirements-lint.txt\n"
+               "        --lockfile=requirements.txt:./requirements-scan.txt\n"
+               "      fail-on-vuln: true\n",
+        "new": "      scan-args: |-\n        --lockfile=requirements.txt:./requirements.txt\n"
+               "        --lockfile=requirements.txt:./requirements-build.txt\n"
+               "        --lockfile=requirements.txt:./requirements-lint.txt\n"
+               "        --lockfile=requirements.txt:./requirements-scan.txt\n"
+               "      fail-on-vuln: true\n",
+        "test": "test_osv_scanner_reads_every_pinned_requirements_file",
+    },
+    {
+        # Without the wait, a pull request carrying old-results.json replaces the
+        # baseline and the comparison passes whatever it added.
+        "label": "osv-scanner: the pull-request scan stops waiting for the result-path check",
+        "file": ".github/workflows/osv-scanner.yml",
+        "old": "    needs: result-paths\n",
+        "new": "",
+        "test": "test_osv_scanner_reads_every_pinned_requirements_file",
+    },
+    {
         # The gap the pairing exists for: `--select` on the command line REPLACES
         # the list in pyproject.toml, so a rule can stay configured, stay visible
         # to `ruff check` on a developer machine, and stop blocking anything.

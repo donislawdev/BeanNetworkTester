@@ -1323,6 +1323,16 @@ def test_osv_scanner_reads_every_pinned_requirements_file():
     The pull-request job also keeps its SARIF to itself: a pull request from a fork
     runs with a read-only token, and an upload would turn every outside
     contribution red.
+
+    Two more, each paid for on the first run (pull request #255, 2026-10-03):
+
+    * `--no-resolve` in both jobs. Without it v2.6.0 resolved the unhashed scan
+      set to versions far below what pip installs (pip 9.0.3 against 26.2.1) and
+      reported 35 advisory ids that apply to nothing CI runs.
+    * the pull-request scan waits for `result-paths`. It writes its two results
+      under fixed names in the checkout and checks the pull request out over them,
+      so a pull request carrying either name - or a symlink between them - would
+      replace the baseline and pass whatever it added.
     """
     import glob
     path = os.path.join(ROOT, ".github", "workflows", "osv-scanner.yml")
@@ -1354,7 +1364,15 @@ def test_osv_scanner_reads_every_pinned_requirements_file():
         check(f"{job} names no file that is not there",
               named <= set(pinned) | set(unpinned),
               f"(unknown: {sorted(named - set(pinned) - set(unpinned))})")
+        check(f"{job} does not let the scanner guess transitive versions",
+              re.search(r"^\s+--no-resolve\s*$", body, re.M) is not None)
 
     pull_request = job_block("scan-pr") or ""
     check("the pull-request job uploads no SARIF",
           re.search(r"^\s+upload-sarif:\s*false\s*$", pull_request, re.M) is not None)
+    check("the pull-request scan waits for the result-path check",
+          re.search(r"^    needs:\s*\[?\s*result-paths\s*\]?\s*$", pull_request, re.M) is not None)
+    paths = job_block("result-paths") or ""
+    check("the result-path check refuses both names the comparison reads",
+          "old-results.json" in paths and "new-results.json" in paths
+          and "exit \"$found\"" in paths, "(names or the failing exit are gone)")
