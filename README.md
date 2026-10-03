@@ -1387,6 +1387,13 @@ mypy in `requirements-lint.txt`, which CI installs by exact file hashes, and sem
 `requirements-scan.txt`, pinned to a version only. Semgrep is the one place where a pin cannot
 promise a stable answer anyway, because it downloads its rules when it runs.
 
+**Dependencies are checked from three sides.** The `audit` job runs pip-audit on the runtime and
+build set as installed. `review new dependencies` (`.github/workflows/dependency-review.yml`) fails
+a pull request that adds a dependency with a known advisory or a licence the project cannot ship.
+**OSV-Scanner** (`.github/workflows/osv-scanner.yml`) reads every pinned requirements file against
+the OSV database: on `master` and every week it reports to the Security tab, and on a pull request
+it fails only when that pull request brings in a new advisory.
+
 One step is worth knowing about because no unit test can do its job: a **GUI render check on real
 Tk** under a virtual screen, at the minimum supported 1366x768, **in every language**. It builds
 the actual window, walks every page, opens the About window and fails the build when any button is

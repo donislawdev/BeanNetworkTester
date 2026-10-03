@@ -50,8 +50,8 @@ the run, and nothing else is stored in the repository.
 (`contents: read`, or `read-all` in the one that only reads), so a job added to any of
 them later is read-only unless somebody says otherwise. A write scope is raised on the
 individual job that needs it and nowhere else: publishing a release, attesting a build,
-deploying the project site, uploading a scorecard result, and opening an issue when the
-dependency audit or the weekly run finds something. No workflow grants a write scope at
+deploying the project site, uploading the scorecard and OSV-Scanner results, and opening an
+issue when the dependency audit or the weekly run finds something. No workflow grants a write scope at
 the top of the file, where a later job would inherit it without anyone deciding.
 
 **The code-signing certificate never reaches CI.** It lives on a hardware token held by

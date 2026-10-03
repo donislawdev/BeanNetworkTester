@@ -1,0 +1,100 @@
+name: OSV-Scanner
+
+# Known advisories against the pinned dependency files, from the OSV database
+# (osv.dev: PyPI's own PYSEC entries and the GitHub advisories). It runs BESIDE
+# the checks that already exist, not instead of them:
+#   * `pip-audit` (ci.yml `audit`, release.yml) installs the runtime and build set
+#     on Windows and audits what landed - the only check that sees what pip
+#     actually resolved, `pydivert` and its win32 marker included;
+#   * `review new dependencies` (dependency-review.yml) fails a pull request that
+#     adds a dependency GitHub's advisory database knows to be vulnerable;
+#   * Scorecard's Vulnerabilities check resolves the transitive closure.
+# What this adds: the lint and scan sets, which no other job audits, in the
+# Security tab (`scan`), and a second advisory database on every pull request
+# (`scan-pr`).
+#
+# 🔴 What it does NOT do, written here so nobody assumes it. OSV-Scanner v2.6.0
+# resolves transitive dependencies for Maven only (its docs, "Transitive
+# dependency scanning"); a requirements file is read as written. The three
+# hashed files list their whole closure, because pip refuses a hashed install
+# with anything missing. The unhashed `requirements-scan.txt` names semgrep and
+# pip-audit and nothing under them - the layer Scorecard alert 20 came from
+# (PyJWT under semgrep, 2026-10-01). Scorecard still covers that layer.
+#
+# The scanner itself runs from a container image the action names by tag
+# (ghcr.io/google/osv-scanner-action:v2.6.0). Pinning the reusable workflow to a
+# commit pins that name, not the image's bytes; closing that would need a fork
+# of the action, which is not worth it for a check that publishes nothing.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  # Weekly, because a new advisory against a pin nobody touched is a clock event.
+  # Half an hour after CI's own cron, so the two do not queue behind each other.
+  schedule:
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+# Read-only at the top, as in every workflow here; the one write scope below is
+# raised on the jobs that upload results, and nowhere else.
+permissions:
+  contents: read
+
+concurrency:
+  group: osv-scanner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Master and the calendar: everything known against the pinned files, reported
+  # to Security > Code scanning. Red when anything is found. No branch rule
+  # requires this check, so a red run blocks nobody - it says something.
+  scan:
+    name: OSV-Scanner (pinned files)
+    if: github.event_name != 'pull_request'
+    # The reusable workflow's own job asks for these three; a caller has to grant
+    # at least that much or the run does not start.
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
+    with:
+      # 🔴 Named, not discovered. The default is `-r ./`, which leaves "which of
+      # our files did it read" to the extractor's filename rules, and a scanner
+      # that covers less than it was asked to is worse than none (the audit job
+      # in ci.yml says the same of pip-audit). So each file is listed, and
+      # test_version_and_release.py fails when a requirements file that pins a
+      # version is missing from either job. requirements-dev.txt stays out on
+      # purpose: it pins nothing, so there is no version to look up.
+      scan-args: |-
+        --lockfile=requirements.txt:./requirements.txt
+        --lockfile=requirements.txt:./requirements-build.txt
+        --lockfile=requirements.txt:./requirements-lint.txt
+        --lockfile=requirements.txt:./requirements-scan.txt
+      fail-on-vuln: true
+
+  # A pull request: the base branch and this branch are scanned against the same
+  # database a minute apart, so only what the pull request CHANGED can tell them
+  # apart - a newly published advisory shows up on both sides and cancels out.
+  scan-pr:
+    name: OSV-Scanner (what this pull request adds)
+    if: github.event_name == 'pull_request'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
+    with:
+      scan-args: |-
+        --lockfile=requirements.txt:./requirements.txt
+        --lockfile=requirements.txt:./requirements-build.txt
+        --lockfile=requirements.txt:./requirements-lint.txt
+        --lockfile=requirements.txt:./requirements-scan.txt
+      # 🔴 No SARIF from a pull request. The upload needs a token that can write
+      # security events, and a pull request from a fork never gets one - every
+      # outside contribution would go red for a reason that has nothing to do
+      # with it. The findings still reach the run log and the annotations on
+      # "Files changed"; the Security tab is fed from master by `scan` above.
+      upload-sarif: false
+      fail-on-vuln: true

@@ -1003,6 +1003,35 @@ MUTATIONS = [
         "test": "test_the_release_audits_its_pins_before_it_builds",
     },
     {
+        # The files are named rather than discovered, so a file dropped from the
+        # list is a file nobody scans - while every run stays green.
+        "label": "osv-scanner: the scheduled scan stops reading the lint set",
+        "file": ".github/workflows/osv-scanner.yml",
+        "old": "        --lockfile=requirements.txt:./requirements-lint.txt\n"
+               "        --lockfile=requirements.txt:./requirements-scan.txt\n"
+               "      fail-on-vuln: true\n",
+        "new": "        --lockfile=requirements.txt:./requirements-scan.txt\n"
+               "      fail-on-vuln: true\n",
+        "test": "test_osv_scanner_reads_every_pinned_requirements_file",
+    },
+    {
+        "label": "osv-scanner: the pull-request scan stops reading the scan set",
+        "file": ".github/workflows/osv-scanner.yml",
+        "old": "        --lockfile=requirements.txt:./requirements-scan.txt\n"
+               "      # 🔴 No SARIF from a pull request.",
+        "new": "      # 🔴 No SARIF from a pull request.",
+        "test": "test_osv_scanner_reads_every_pinned_requirements_file",
+    },
+    {
+        # A fork's pull request has a read-only token: the upload fails, and the
+        # check goes red on every outside contribution.
+        "label": "osv-scanner: the pull-request scan starts uploading SARIF",
+        "file": ".github/workflows/osv-scanner.yml",
+        "old": "      upload-sarif: false\n",
+        "new": "      upload-sarif: true\n",
+        "test": "test_osv_scanner_reads_every_pinned_requirements_file",
+    },
+    {
         # The gap the pairing exists for: `--select` on the command line REPLACES
         # the list in pyproject.toml, so a rule can stay configured, stay visible
         # to `ruff check` on a developer machine, and stop blocking anything.
