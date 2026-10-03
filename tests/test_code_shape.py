@@ -129,7 +129,8 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # Lowered 2026-10-03 from 1109: the port -> process map moved to the one page
 # that reads it (performance review W-B3, five lines out) and the engine banner
 # reads the tick's own snapshot (W-C6, one out); the root <Configure> filter
-# took two back. The band falls to 773.5; `engine.py` is 761, twelve lines clear.
+# took two back. The band falls to 773.5; `engine.py` is 766 after taking
+# `connections_settled` (W-C1), seven lines clear.
 FILE_CEILING = 1105             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
