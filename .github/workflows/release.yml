@@ -43,6 +43,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       # 🔴 "CI was green on this commit" does NOT include this question, and that
       # was the gap. The `audit` job in ci.yml runs on the schedule and on a pull
       # request that moves a requirements file - neither of which is a tag push.
@@ -161,6 +162,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
           cache: pip
 
       - name: Install dependencies

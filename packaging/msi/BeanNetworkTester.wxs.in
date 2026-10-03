@@ -3,9 +3,11 @@
   Rendered by tools/build_packages.py - do not edit the generated copy.
 
   This is the MSI corporate deployment wants: one file, silent, per-machine, and
-  visible to Group Policy, SCCM and Intune. The zip stays the primary download and
-  the WinGet and Chocolatey packages keep using it; this is an ADDITIONAL asset,
-  not a replacement for either.
+  visible to Group Policy, SCCM and Intune. It is also what a fresh WinGet install
+  gets, because it is the only installer that gives the program a Start Menu entry
+  (packaging/winget/installer.yaml.in says why it comes first there). The zip stays
+  the primary download, Chocolatey keeps using it, and WinGet keeps it for the
+  installs that already came from it.
 
   Why an MSI is even possible here, and it was not always:
   ADR 2026-08-12 moved profiles, window state and CSV exports out of the install

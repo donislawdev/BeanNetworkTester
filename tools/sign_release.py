@@ -206,9 +206,13 @@ def build_msi(work, unpacked, tag, sums_path):
     # tool with a documented interface, the runbook calls it exactly this way, and
     # importing it would give the same file two module names - which is an error
     # mypy reports at whoever changes this file next, for no benefit here.
+    #
+    # `--only msi`, because this render happens BEFORE the MSI exists: the sums file
+    # holds the zip alone, and the WinGet manifest (which installs the MSI first) can
+    # only be rendered from the published release's sums, after this ritual.
     version = tag[1:] if tag.startswith("v") else tag
     run([sys.executable, os.path.join(ROOT, "tools", "build_packages.py"),
-         "--sums", sums_path, "--version", version])
+         "--sums", sums_path, "--version", version, "--only", "msi"])
     wxs = os.path.join(ROOT, "build", "packaging", "msi", "BeanNetworkTester.wxs")
     if not os.path.exists(wxs):
         raise SystemExit("sign_release: %s was not rendered - nothing uploaded" % wxs)

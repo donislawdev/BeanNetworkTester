@@ -49,6 +49,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Built with the newest Python 3.14 update.** The release build now takes the latest Python
+  3.14 release at build time, with its security fixes, instead of an older one the build
+  machine had at hand.
+
 - **A big Connections table no longer holds packets back.** With a latency set and a very
   large table on the **Connections** page, each refresh of the table stopped packet handling
   for up to 30 ms. The table is now sorted in smaller pieces, refreshed less often the larger
@@ -89,6 +93,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   before the window appeared. It is loaded at the first **START**, as before.
 
 ### Fixed
+
+- **Installing with WinGet or Chocolatey now puts Bean Network Tester in the Start Menu.**
+  Before, it could only be started from a terminal. WinGet now installs the `.msi`, which asks
+  for administrator rights once. Chocolatey adds the entry on install and on `choco upgrade`,
+  and removes it on uninstall. Installed with WinGet before? Run
+  `winget uninstall DonislawDev.BeanNetworkTester`, then
+  `winget install DonislawDev.BeanNetworkTester`; your profiles stay.
 
 - **Targeting a program by name no longer takes in programs through a parent that has
   closed.** A program belongs to the target when one of its parent processes does. When such a

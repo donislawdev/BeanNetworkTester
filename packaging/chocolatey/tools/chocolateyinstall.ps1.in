@@ -21,6 +21,38 @@ Install-ChocolateyZipPackage `
     -ChecksumType64 'sha256' `
     -UnzipLocation $toolsDir
 
+# The Start Menu entry. Chocolatey itself only puts a shim on PATH, so without this
+# the program could be started from a console and from nowhere else. It points at
+# the exe where it lies, beside _internal, and it carries the MSI's entry name on
+# purpose: one program, one entry. chocolateyuninstall.ps1 takes it away again.
+#
+# 🔴 An entry that belongs to another install is left alone. With the MSI installed
+# as well, that file is the MSI's: overwriting it would hand it to this package, and
+# this package's uninstall would then delete the only entry the MSI has. An entry
+# whose target no longer exists belongs to nobody and is replaced. Measured on
+# Windows Server 2025, both ways.
+$exe = Join-Path $toolsDir '{{TOOL_ID}}\{{EXE_NAME}}'
+$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) '{{APP_NAME}}.lnk'
+$owner = $null
+if (Test-Path -LiteralPath $shortcut) {
+    try {
+        $target = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath
+    } catch {
+        $target = $null
+    }
+    $ours = $target -and $target.StartsWith($toolsDir + '\', [System.StringComparison]::OrdinalIgnoreCase)
+    if ($target -and -not $ours -and (Test-Path -LiteralPath $target)) { $owner = $target }
+}
+if ($owner) {
+    Write-Host "The Start Menu already has $shortcut for another install ($owner) - left as it is."
+} else {
+    Install-ChocolateyShortcut `
+        -ShortcutFilePath $shortcut `
+        -TargetPath $exe `
+        -WorkingDirectory (Split-Path -Parent $exe) `
+        -Description '{{TAGLINE_PS}}'
+}
+
 Write-Host ''
 Write-Host '{{APP_NAME}} needs Administrator rights to capture traffic, and asks for them itself.'
 Write-Host 'Your profiles, window state and CSV exports live in %LOCALAPPDATA%\{{TOOL_ID}},'
