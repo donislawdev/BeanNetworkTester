@@ -36,9 +36,14 @@ class ConnectionLog:
     * ``credit_delivered`` deliberately does NOT - see its docstring.
     """
 
-    # A connection row is ~350 B, so the cap IS the memory budget: 200k flows is
-    # roughly 70-100 MB, which is what a long capture on a busy machine needs if
-    # the tables are to show the session honestly instead of an arbitrary slice.
+    # The cap IS the memory budget: 200k flows is what a long capture on a busy
+    # machine needs if the tables are to show the session honestly instead of an
+    # arbitrary slice. A row costs ~800 B with its key and address strings, so the
+    # full log is ~150 MiB - MEASURED 2026-10-03 (CPython 3.14.7, tracemalloc,
+    # rows made by log() itself: 785 B/row at 10k, 809 at 100k and 200k). It was
+    # documented as ~350 B / 70-100 MB, and the cap was chosen on that figure
+    # (performance review W-D7). A slotted row class would be smaller, but every
+    # reader takes these rows as dicts (tables, CSV, repro, CLI).
     MAX_CONNS = 200_000
     EVICT_KEEP = 0.9                    # trim back to this fraction of the cap
     EVICT_SAMPLES = 2000                # stamps sampled to estimate the cutoff
