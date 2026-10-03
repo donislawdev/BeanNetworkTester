@@ -948,7 +948,7 @@ MUTATIONS = [
         # reasons, and an entry that reddens both proves neither.
         "label": "ratchet: the class attribute ceiling is raised above the truth",
         "file": "tests/test_code_shape.py",
-        "old": "CLASS_ATTR_CEILING = 77         # gui/app.py::App",
+        "old": "CLASS_ATTR_CEILING = 76         # gui/app.py::App",
         "new": "CLASS_ATTR_CEILING = 86         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
@@ -6768,6 +6768,288 @@ MUTATIONS = [
         "old": "            elif not c[\"proc\"] and local_port is not None:\n",
         "new": "            elif not c[\"proc\"] and local_port is None:\n",
         "test": "test_a_portless_row_asks_for_its_owner_once",
+    },
+    {
+        # R-4 (W-C2/W-C4): the helper every skipped configure goes through.
+        "label": "configure (R-4): an option that already holds is configured again",
+        "file": "beantester/gui/configure.py",
+        "old": ("    if str(widget.cget(name)) != str(value):\n"
+                "        return False\n"),
+        "new": ("    if True:\n"
+                "        return False\n"),
+        "test": "test_configure_changed_leaves_an_unchanged_option_alone",
+    },
+    {
+        "label": "configure (R-4): a ttk state is judged by its option alone",
+        "file": "beantester/gui/configure.py",
+        "old": "    if name != \"state\" or not hasattr(widget, \"instate\"):\n",
+        "new": "    if True:\n",
+        "test": "test_configure_changed_does_not_trust_the_state_option_alone",
+    },
+    {
+        "label": "stats (R-4, W-C2): the live counters are rewritten every tick",
+        "file": "beantester/gui/pages/stats.py",
+        "old": ("            configure_changed(self.stat_labels[key],\n"
+                "                              text=str(self.app.scoped_stat(snap, key)))\n"),
+        "new": ("            self.stat_labels[key].configure(\n"
+                "                              text=str(self.app.scoped_stat(snap, key)))\n"),
+        "test": "test_the_live_counters_are_not_rewritten_when_nothing_moved",
+    },
+    {
+        "label": "stats (R-4, W-C2): the chart is redrawn from the same data",
+        "file": "beantester/gui/pages/stats.py",
+        "old": ("            if source == self._chart_drawn:\n"
+                "                return\n"),
+        "new": ("            if False:\n"
+                "                return\n"),
+        "test": "test_the_chart_is_not_redrawn_from_the_same_data",
+    },
+    {
+        "label": "form (R-4, W-C4): a keystroke re-marks every field it validates",
+        "file": "beantester/gui/form.py",
+        "old": "            configure_changed(entry, style=\"TEntry\" if ok else \"Bad.TEntry\")\n",
+        "new": "            entry.config(style=\"TEntry\" if ok else \"Bad.TEntry\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
+    {
+        "label": "form (R-4, W-C4): a keystroke re-sets the state of every overridable field",
+        "file": "beantester/gui/form.py",
+        "old": "                        configure_changed(entry, state=\"disabled\" if dead else \"normal\")\n",
+        "new": "                        entry.config(state=\"disabled\" if dead else \"normal\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
+    {
+        "label": "app (R-4, W-C4): a keystroke re-sets the START button's state",
+        "file": "beantester/gui/app.py",
+        "old": "            configure.configure_changed(btn, state=\"disabled\" if blocked else \"normal\")\n",
+        "new": "            btn.config(state=\"disabled\" if blocked else \"normal\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
+    {
+        "label": "icon (R-4, W-D6): every pixel of the dot is its own put again",
+        "file": "beantester/gui/icon.py",
+        "old": "        if runs and runs[-1][0] + len(runs[-1][1]) == x:\n",
+        "new": "        if False:\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
+    {
+        "label": "icon (R-4, W-D6): a row of the dot lands one pixel to the right",
+        "file": "beantester/gui/icon.py",
+        "old": "            img.put(\"{%s}\" % \" \".join(colours), to=(x0, y))\n",
+        "new": "            img.put(\"{%s}\" % \" \".join(colours), to=(x0 + 1, y))\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
+    {
+        "label": "icon (R-4, W-D6): the dot's box loses its right-hand column",
+        "file": "beantester/gui/icon.py",
+        "old": "    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr) + 2))\n",
+        "new": "    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr)))\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
+    {
+        "label": "app (R-4, W-C6): the engine banner takes a stats snapshot of its own",
+        "file": "beantester/gui/app.py",
+        "old": "        snap = self.last_snapshot or {}\n        # Overflow first",
+        "new": "        snap = self.engine.stats_snapshot()\n        # Overflow first",
+        "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
+    },
+    {
+        "label": "app (R-4, W-C6): the engine banner reads the previous tick's snapshot",
+        "file": "beantester/gui/app.py",
+        "old": ("            self._sample()                 # BEFORE the banner: it reads this snapshot\n"
+                "            self._drain_engine_warning()   # \"the tool itself is dropping packets\"\n"),
+        "new": ("            self._drain_engine_warning()   # \"the tool itself is dropping packets\"\n"
+                "            self._sample()                 # BEFORE the banner: it reads this snapshot\n"),
+        "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
+    },
+    {
+        "label": "app (R-4, W-C6): every child's resize rewraps the root labels",
+        "file": "beantester/gui/app.py",
+        "old": "        if event is not None and event.widget not in (\n",
+        "new": "        if False and event.widget not in (\n",
+        "test": "test_a_resize_inside_the_window_does_not_rewrap_the_root_labels",
+    },
+    {
+        "label": "logview (R-4, W-C3): queued lines are written one by one",
+        "file": "beantester/gui/logview.py",
+        "old": ("        if batch:\n"
+                "            self._write_lines(batch)\n"),
+        "new": ("        for line in batch:\n"
+                "            self._write_lines([line])\n"),
+        "test": "test_queued_log_lines_reach_the_box_in_one_write",
+    },
+    {
+        "label": "stats (R-4, W-C5): the host identity is asked on every tick",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        if self._host is None or now - self._host_at >= self.HOST_IDENTITY_S:\n",
+        "new": "        if True:\n",
+        "test": "test_the_session_page_asks_for_the_host_once_per_half_minute",
+    },
+    {
+        "label": "stats (R-4, W-C5): coming back to the sub-page keeps an old host answer",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        self._host = None               # coming back to Session asks the OS again\n",
+        "new": "        pass\n",
+        "test": "test_the_session_page_asks_for_the_host_once_per_half_minute",
+    },
+    {
+        "label": "processes (R-4, W-B3): the port map verifies a name once per port",
+        "file": "beantester/processes.py",
+        "old": ("        names = {pid: (table.name_of(pid) or str(pid)) for pid in set(ports.values())}\n"
+                "        return {port: names[pid] for port, pid in ports.items()}\n"),
+        "new": "        return {port: (table.name_of(pid) or str(pid)) for port, pid in ports.items()}\n",
+        "test": "test_port_process_map_asks_once_per_process_not_once_per_port",
+    },
+    {
+        "label": "processes (R-4, W-B3): refresh=False still refreshes the socket table",
+        "file": "beantester/processes.py",
+        "old": ("        if refresh:\n"
+                "            table.refresh_if_stale()\n"),
+        "new": ("        if True:\n"
+                "            table.refresh_if_stale()\n"),
+        "test": "test_port_process_map_asks_once_per_process_not_once_per_port",
+    },
+    {
+        "label": "conns (R-4, W-B3): the page refreshes the socket table on the UI thread",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            app.proc_map = port_process_map(refresh=False) or app.proc_map\n",
+        "new": "            app.proc_map = port_process_map() or app.proc_map\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
+    },
+    {
+        "label": "conns (R-4, W-B3): a stopped session keeps rebuilding the process map",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if self._proc_t is None or now - self._proc_t > PROC_MAP_S:\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
+    },
+    {
+        "label": "conns (R-4, W-B3): the process map is rebuilt on every refresh",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if self._proc_t is None or app.running:\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
+    },
+    {
+        # review of PR #251: a session run on another page, the page opened after STOP
+        "label": "conns (R-4, W-B3): the page opened after STOP never reads the process map",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if app.running and (self._proc_t is None or now - self._proc_t > PROC_MAP_S):\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a stop never says its connection log is final",
+        "file": "beantester/engine.py",
+        "old": "        self._conns_settled = True      # after the last write to the log: the charges\n",
+        "new": "",
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a running session claims a final connection log",
+        "file": "beantester/engine.py",
+        "old": "        self._conns_settled = False     # the log moves from here until STOP is over\n",
+        "new": "",
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): the log is called final before the stop charges its rows",
+        "file": "beantester/engine.py",
+        "old": ("        self._running = False\n"
+                "        self._session.live = False\n"),
+        "new": ("        self._running = False\n"
+                "        self._conns_settled = True\n"
+                "        self._session.live = False\n"),
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a start that never ran unsettles the log",
+        "file": "beantester/engine.py",
+        "old": ("        # changing a single packet - the kind of cosmetic lie this project hunts.\n"
+                "        self._narrowed = False\n"),
+        "new": ("        # changing a single packet - the kind of cosmetic lie this project hunts.\n"
+                "        self._narrowed = False\n"
+                "        self._conns_settled = False\n"),
+        "test": "test_a_start_that_fails_before_running_leaves_the_log_settled",
+    },
+    {
+        "label": "conns (R-4, W-C1a): a final log is rebuilt every interval after STOP",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not force and made_from is not None and made_from == self._built_from:\n",
+        "new": "        if False:\n",
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1a): a log that can still move is treated as final",
+        "file": "beantester/gui/pages/conns.py",
+        "old": ("        if not engine.connections_settled():\n"
+                "            return None\n"),
+        "new": ("        if False:\n"
+                "            return None\n"),
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1a): the page forgets what it built from",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        self._built_from = result.get(\"made_from\")\n",
+        "new": "        self._built_from = None\n",
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the rebuild gap ignores what the rebuild took",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, DUTY * took))\n",
+        "new": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, took))\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the rebuild gap has no upper bound",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, DUTY * took))\n",
+        "new": "    return max(REBUILD_MS / 1000.0, DUTY * took)\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the page keeps the fixed one-second gap",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not force and (now - self._last_build) < rebuild_interval(self._took):\n",
+        "new": "        if not force and (now - self._last_build) < REBUILD_MS / 1000.0:\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the page never learns what a rebuild took",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        self._took = result.get(\"took\", self._took)\n",
+        "new": "        pass\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "views (R-4, W-C1b): the chunks are merged in ascending order whatever is asked",
+        "file": "beantester/views.py",
+        "old": "    merged = heapq.merge(*parts, key=key, reverse=reverse)\n",
+        "new": "    merged = heapq.merge(*parts, key=key)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): a chunk is sorted ascending whatever is asked",
+        "file": "beantester/views.py",
+        "old": "        part.sort(key=key, reverse=reverse)\n",
+        "new": "        part.sort(key=key)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): the chunked sort ignores the row limit",
+        "file": "beantester/views.py",
+        "old": "    return list(itertools.islice(merged, limit or None))\n",
+        "new": "    return list(merged)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): a big table is sorted in one piece again",
+        "file": "beantester/views.py",
+        "old": "    if len(out) > 2 * SORT_CHUNK:\n",
+        "new": "    if len(out) > 2 * SORT_CHUNK * 10 ** 9:\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
     },
 ]
 

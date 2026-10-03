@@ -219,6 +219,7 @@ class BeanEngine:
         self._duration = 0.0        # the requested session length, for reports
         self._stop_mono = None      # session clock, frozen at STOP (see now_ref)
         self._stop_wall = None
+        self._conns_settled = True  # see connections_settled
         self._targeting = None      # live ProcessTargeting, when a target is set
         self._target_lock = threading.Lock()
         # Resolves the targeted port set OFF the capture thread (see
@@ -718,6 +719,27 @@ class BeanEngine:
         """
         return self._conns_log.snapshot(limit)
 
+    def connections_settled(self):
+        """True when the connection log cannot change before the next START.
+
+        What a reader of the log needs in order to stop re-reading it: the
+        Connections page rebuilt a 200 000-row table every second after STOP for
+        nothing (performance review W-C1). ``is_running()`` is not that answer -
+        it goes False at the START of a stop, and the stop writes to the log at
+        its END: the packets still queued for delayed delivery are charged to
+        their rows as dropped once the workers are joined, up to ``JOIN_S``
+        later. A table read in between and never again would say "dropped 0" for
+        flows that lost thousands. So this is False from the moment a session
+        runs until its stop has finished, and True otherwise - including after a
+        START that failed before running, which leaves the log as it was.
+
+        The one thing it cannot speak for is a worker that outlived the join; the
+        next START reports those (``_Session.stuck``). A plain attribute, read
+        without a lock: it is written by one stop or start at a time, under
+        ``_stop_lock``, after everything it vouches for.
+        """
+        return self._conns_settled
+
     def _log_delivered(self, key, size, is_out):
         """Credit delivered bytes to the session, to their flow's row, and to the
         scoped totals.
@@ -967,6 +989,7 @@ class BeanEngine:
             self._stop_socketwatch()
             raise
         self._running = True
+        self._conns_settled = False     # the log moves from here until STOP is over
         session = self._session = _Session(divert, stuck)
         # From here a failure stops the session (the except below), because the
         # handle is open. The try used to begin only where the workers were built,
@@ -1467,6 +1490,7 @@ class BeanEngine:
             # them instead of letting them vanish from the seen/delivered/dropped
             # balance - they were dropped BY the shutdown, not lost in transit.
             self._bump("drop_shutdown", discarded)
+        self._conns_settled = True      # after the last write to the log: the charges
         _LIVE_ENGINES.discard(self)
         # Only now, with nothing of the session left: see the docstring. Said at the
         # divert close, a held log kept the rest of the teardown waiting behind it -

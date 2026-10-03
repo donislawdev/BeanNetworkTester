@@ -721,6 +721,48 @@ def test_port_process_map_records_a_failure_instead_of_swallowing_it(monkeypatch
           recorded[0].get("subsystem") == "processes.port_map", f"({recorded})")
 
 
+def test_port_process_map_asks_once_per_process_not_once_per_port(monkeypatch):
+    """Each name is a VERIFIED lookup (an identity check against the start time),
+    and asking it per port repeated that check for every socket a process holds -
+    linear in ports, up to 2 s of frozen window at 50 000 of them (performance
+    review W-B3). One per pid, same map; and the GUI's refresh=False leaves the
+    table to the engine's watchdog."""
+    from beantester import portmap
+    from beantester.processes import port_process_map
+
+    class _Table:
+        def __init__(self):
+            self.asked, self.refreshed = [], 0
+            # 3 processes, 300 ports; pid 30 has no name to give
+            self.ports = {1000 + i: (10, 20, 30)[i % 3] for i in range(300)}
+
+        def refresh_if_stale(self, *a, **k):
+            self.refreshed += 1
+
+        def snapshot(self):
+            return dict(self.ports)
+
+        def name_of(self, pid, cheap=False):
+            self.asked.append(pid)
+            return {10: "chrome.exe", 20: "steam.exe"}.get(pid, "")
+
+    table = _Table()
+    monkeypatch.setattr(portmap, "default_table", lambda: table)
+
+    mapping = port_process_map()
+    check("one lookup per process, not per port",
+          sorted(table.asked) == [10, 20, 30], f"({len(table.asked)} lookups)")
+    check("the map is the per-port one",
+          mapping == {port: {10: "chrome.exe", 20: "steam.exe", 30: "30"}[pid]
+                      for port, pid in table.ports.items()})
+    check("the default still refreshes a stale table", table.refreshed == 1)
+
+    table.asked.clear()
+    port_process_map(refresh=False)
+    check("refresh=False leaves the table to the watchdog", table.refreshed == 1)
+    check("...and still asks once per process", len(table.asked) == 3)
+
+
 def test_a_partial_socket_table_is_reported_not_silently_trusted(monkeypatch):
     """One table of four failing used to leave `ok` True and cache a map with holes.
 

@@ -100,6 +100,57 @@ def test_packets_queued_at_stop_are_counted_as_drop_shutdown():
           f"(seen={s['seen']}, sent={len(fake.sent)}, shutdown={s['drop_shutdown']})")
 
 
+def test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows():
+    """``connections_settled`` lets the Connections page stop re-reading the log
+    after STOP (performance review W-C1(a)). It must not say so before the stop's
+    LAST write to the rows - the packets stranded in the delay queue, charged to
+    their flows as dropped once the workers are joined - or a table read in
+    between keeps "dropped 0" for flows that lost everything."""
+    n = 50
+    packets = [FakePacket(size=100, is_outbound=False, port=3000 + i) for i in range(n)]
+    fake = FakeDivert(packets)
+    sh = BeanEngine()
+    check("a fresh engine has a log that cannot move", sh.connections_settled())
+    sh.set_params(0, 0, 0, 60000, 0, 0, 0)   # 60 s latency: everything is stranded
+    sh.start("test", divert=fake)
+    check("a running session's log can move", not sh.connections_settled())
+    check("every packet is waiting in the delay queue",
+          wait_until(lambda: sh.stats_snapshot()["queue"] >= n, timeout=15))
+
+    said_at_charge = []
+    real_charge = sh._conns_log.charge
+
+    def charge(key, field):
+        said_at_charge.append(sh.connections_settled())
+        return real_charge(key, field)
+
+    sh._conns_log.charge = charge
+    sh.stop()
+    check("the stop charged every stranded row", len(said_at_charge) == n,
+          f"({len(said_at_charge)} charges)")
+    check("...while the log still said it could move", not any(said_at_charge))
+    check("settled once the stop is over", sh.connections_settled())
+    dropped = sum(r.get("dropped", 0) for r in sh.connections_snapshot(limit=None))
+    check("the rows carry the charges", dropped == n, f"(dropped={dropped})")
+
+
+def test_a_start_that_fails_before_running_leaves_the_log_settled():
+    """A START whose handle will not open never runs and never touches the log -
+    "a start that failed leaves the facts of the session before it" - so the log
+    is exactly as final as it was, and a reader may go on skipping it."""
+    class Refusing(FakeDivert):
+        def open(self):
+            raise RuntimeError("the driver said no")
+
+    sh = BeanEngine()
+    sh.start("test", divert=FakeDivert([FakePacket(size=100, port=4000)]))
+    sh.stop()
+    check("settled after an ordinary session", sh.connections_settled())
+    with pytest.raises(RuntimeError):
+        sh.start("test", divert=Refusing([]))
+    check("still settled after a start that never ran", sh.connections_settled())
+
+
 # --- tests for newer options (NAT / connections) --------------------------- #
 
 

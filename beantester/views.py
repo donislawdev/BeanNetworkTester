@@ -5,12 +5,16 @@ so they never copy a row and never materialise a derived column: the tables are
 virtualised and format only what is on screen.
 """
 import heapq
+import itertools
 from typing import Any, Callable, Dict
 
 from .i18n import T, event_kind_label
 from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS, parse_matcher
 
 PARTIAL_SORT_RATIO = 10     # use a heap only when the limit is this much smaller
+# The most rows one list.sort() may take before the sort goes in chunks. Measured,
+# not chosen: see _chunked_sort.
+SORT_CHUNK = 16384
 
 # -- field-qualified search ----------------------------------------------------- #
 #
@@ -325,7 +329,8 @@ def sort_connections(out, sort_col="bytes", reverse=True, now=None, limit=0):
     passes, because it came out of ``filter_connections``.
 
     See ``filter_sort_connections`` above for what ``limit`` buys and the
-    measurement behind the crossover.
+    measurement behind the crossover. A full sort of more than ``2 * SORT_CHUNK``
+    rows goes in chunks (``_chunked_sort``) and leaves ``out`` as it was.
     """
     numeric = sort_col in ("remote_port", "local_port", "packets", "bytes",
                            "bytes_in", "bytes_out", "sent", "sent_in", "sent_out",
@@ -348,5 +353,35 @@ def sort_connections(out, sort_col="bytes", reverse=True, now=None, limit=0):
     if limit and limit * PARTIAL_SORT_RATIO <= len(out):
         picker = heapq.nlargest if reverse else heapq.nsmallest
         return picker(limit, out, key=key)
+    if len(out) > 2 * SORT_CHUNK:
+        return _chunked_sort(out, key, reverse, limit)
     out.sort(key=key, reverse=reverse)
     return out[:limit] if limit else out
+
+
+def _chunked_sort(out, key, reverse, limit):
+    """``sorted(out, key=key, reverse=reverse)[:limit]``, without one long sort.
+
+    The comparison phase of ``list.sort`` is C that never lets go of the
+    interpreter lock, and this runs on a worker beside the CAPTURE thread: at
+    200 000 rows one sort held the lock for 28-33 ms, so packets waiting out a
+    precise delay waited that much longer, once per table rebuild (performance
+    review W-C1, owner decision D-4). Sorted ``SORT_CHUNK`` rows at a time and
+    merged by ``heapq.merge`` - a Python generator, so the lock changes hands
+    between rows - the longest hold measured 1.9-4.4 ms. The price is the
+    worker's time: 114 -> 138 ms at the default 50 000-row limit, 2.1x with no
+    limit (2026-10-03, CPython 3.14.7, paired runs).
+
+    The ORDER is identical, ties included, and that rests on two facts the tests
+    pin: ``list.sort`` is stable in both directions, and on a tie ``heapq.merge``
+    hands out the earlier chunk first (its heap entries carry the chunk's index,
+    negated with ``reverse`` - CPython since 3.5). Each chunk is a contiguous
+    slice in the original order, so an earlier chunk holds the earlier rows.
+    """
+    parts = []
+    for start in range(0, len(out), SORT_CHUNK):
+        part = out[start:start + SORT_CHUNK]
+        part.sort(key=key, reverse=reverse)
+        parts.append(part)
+    merged = heapq.merge(*parts, key=key, reverse=reverse)
+    return list(itertools.islice(merged, limit or None))

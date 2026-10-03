@@ -48,6 +48,7 @@ class W:
         self.grid_info = None
         self.bindings = {}
         self.states = set()         # ttk widget state flags (active, focus, ...)
+        self._mirror_state(kw)
         self.alive = True
         self._yview = (0.0, 1.0)    # everything fits until a test says otherwise
         self.scrolled = []          # every scroll the widget was asked to do
@@ -74,8 +75,28 @@ class W:
     def configure(self, *a, **kw):
         self._alive_or_raise()
         self.kw.update(kw)
+        self._mirror_state(kw)
 
     config = configure
+
+    def _mirror_state(self, kw):
+        """ttk keeps "disabled" twice: the ``-state`` option AND a state flag.
+
+        Configuring ``state`` sets both; ``state(["!disabled"])`` clears only the
+        flag, so the option can then name a state the widget no longer shows.
+        ``gui/configure.py`` asks both before it skips a ``state``, and a double
+        that kept only the option could not show that check doing anything.
+        """
+        if "state" in kw:
+            if str(kw["state"]) == "disabled":
+                self.states.add("disabled")
+            else:
+                self.states.discard("disabled")
+
+    def instate(self, spec):
+        """ttk ``instate``: every flag in ``spec`` set (``!flag``: every one clear)."""
+        return all((str(f)[1:] not in self.states) if str(f).startswith("!")
+                   else (str(f) in self.states) for f in spec)
 
     def cget(self, key):
         return self.kw.get(key, "")

@@ -11,20 +11,49 @@ from ..paths import resource_path
 from .. import crashlog
 
 
+def _dot_colour(x, y, dcx, dcy, dr):
+    """The recording dot's colour at pixel ``(x, y)``, or None outside it."""
+    d = ((x - dcx) / dr) ** 2 + ((y - dcy) / dr) ** 2
+    if d > 1.0:
+        return None
+    return "#8a1010" if d > 0.62 else "#e53935"     # ring + fill
+
+
+def _runs(cells):
+    """``[(x, colour or None), ...]`` -> ``[(x0, [colour, ...]), ...]``, one per
+    unbroken stretch of coloured pixels."""
+    runs = []
+    for x, colour in cells:
+        if colour is None:
+            continue
+        if runs and runs[-1][0] + len(runs[-1][1]) == x:
+            runs[-1][1].append(colour)
+        else:
+            runs.append((x, [colour]))
+    return runs
+
+
 def _put_dot(img, size):
     """Stamp a red "recording" dot in the lower-right corner of ``img``.
 
     Pure ``PhotoImage.put`` (no PIL): signals a live capture at a glance and
     stays visible even at 16 px taskbar size.
+
+    One ``put`` per stretch of a row, inside the dot's bounding box only. It was
+    one ``put`` per PIXEL over the whole image - for the shipped 256 px
+    ``bean.png`` a 65 536-step loop and ~8 000 Tk calls, **265-311 ms** of the
+    window's start on real Tk (2026-10-03, performance review W-D6), against
+    6.4 ms now with every one of the 65 536 pixels identical. The colour of each
+    pixel is still decided one pixel at a time (``_dot_colour``), so the picture
+    is the same by construction, not by an argument about the shape of a circle.
     """
     dcx, dcy = size * 0.76, size * 0.76
     dr = max(2.0, size * 0.20)
-    for y in range(size):
-        for x in range(size):
-            d = ((x - dcx) / dr) ** 2 + ((y - dcy) / dr) ** 2
-            if d > 1.0:
-                continue
-            img.put("#8a1010" if d > 0.62 else "#e53935", to=(x, y))  # ring + fill
+    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr) + 2))
+    for y in range(max(0, int(dcy - dr)), min(size, int(dcy + dr) + 2)):
+        row = [(x, _dot_colour(x, y, dcx, dcy, dr)) for x in columns]
+        for x0, colours in _runs(row):
+            img.put("{%s}" % " ".join(colours), to=(x0, y))
 
 
 def make_bean_icon(size=64, active=False):

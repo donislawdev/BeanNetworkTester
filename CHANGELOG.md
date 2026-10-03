@@ -49,6 +49,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **A big Connections table no longer holds packets back.** With a latency set and a very
+  large table on the **Connections** page, each refresh of the table stopped packet handling
+  for up to 30 ms. The table is now sorted in smaller pieces, refreshed less often the larger
+  it is (every 1 to 5 seconds), and not at all after **STOP**. With 170 000 connections, 8000
+  packets a second and 500 ms, the slowest packet in a hundred was 24 ms late and is now 6 to
+  7 ms late. Sorting and searching still update the table at once.
+
+- **The window opens sooner and reacts faster.** Drawing the red dot of the "running" icon
+  took about a quarter of a second before the window appeared; it now takes a few
+  milliseconds. Typing in a setting, the counters on **Statistics** and the log at the bottom
+  now redraw only what changed. The program names in **Connections** are looked up once per
+  program instead of once per connection, and only while that page is open.
+
 - **Address filters and long speed schedules take less time per packet.** With a destination
   IP or port, a block, LAN mode or **Internet only**, the program worked the answer out again
   for every packet, even for an address it had just seen. It now remembers it for each

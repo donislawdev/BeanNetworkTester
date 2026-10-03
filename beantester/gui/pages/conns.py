@@ -26,6 +26,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
+from ...processes import port_process_map
 from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
@@ -122,6 +123,29 @@ SEARCH_DEBOUNCE_MS = 250
 # but re-sorting 200 000 rows on every 700 ms tick would burn ~15% of a core for
 # nothing. A user-visible action (sorting, searching) always refreshes at once.
 REBUILD_MS = 1000
+# How often, while a session runs, the port -> process fallback is read again.
+PROC_MAP_S = 3.0
+# A timed rebuild may use at most 1/DUTY of the wall clock, and is never further
+# apart than MAX_REBUILD_S (see rebuild_interval).
+DUTY = 20
+MAX_REBUILD_S = 5.0
+
+
+def rebuild_interval(took):
+    """Seconds until the next TIMED rebuild, after one that took ``took`` seconds.
+
+    A fixed second was right for a small table and wrong for a big one: at
+    200 000 rows a rebuild is ~140 ms of a worker sharing the interpreter with
+    the capture thread, every second (performance review W-C1(c)). Scaled by
+    DUTY, a big table refreshes every ~2.8 s and anything up to ~50 000 rows
+    stays at the second it had. Wall time, not CPU: a rebuild that waited for the
+    interpreter because packets were busy stretches the gap, which is the
+    direction that gives way to the packets. Capped, so one rebuild slowed by
+    something passing - a suspended machine - cannot park the table for minutes;
+    the next one measures again. Sorting and searching do not wait for any of
+    this (``refresh(force=True)``).
+    """
+    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, DUTY * took))
 
 
 class ConnsPage:
@@ -133,6 +157,9 @@ class ConnsPage:
         self.frame = ttk.Frame(parent)
         self._search_job = None
         self._last_build = 0.0          # throttle for the heavy filter+sort
+        self._took = 0.0                # how long the last rebuild took (worker)
+        self._built_from = None         # what it was made from, once nothing moves
+        self._proc_t = None             # when app.proc_map was last read (None: never)
         self._now = 0.0                 # session clock used by _render
         self._scope_active = False      # True when a target is narrowing traffic now
         # the filter+sort runs OFF the UI thread (see gui/model_worker.py)
@@ -381,8 +408,6 @@ class ConnsPage:
         self._poll_soon()
 
     # -- refresh ------------------------------------------------------------- #
-    DUTY = 5                    # a rebuild may use at most 1/DUTY of the time
-
     def _render(self, c):
         """Format ONE connection row. Called only for the rows on screen."""
         now = self._now
@@ -502,8 +527,12 @@ class ConnsPage:
         # 3) ask for a new rebuild, throttled - unless the user did something, in
         #    which case they get one now
         now = time.monotonic()
-        if not force and (now - self._last_build) < REBUILD_MS / 1000.0:
+        self._refresh_proc_map(now)
+        if not force and (now - self._last_build) < rebuild_interval(self._took):
             return
+        made_from = self._settled_inputs()
+        if not force and made_from is not None and made_from == self._built_from:
+            return                      # the log is final and nothing else moved
         self._last_build = now
         self._model.request({
             # The ENGINE goes to the worker, not a snapshot of it - but NOT because
@@ -521,15 +550,70 @@ class ConnsPage:
             "sort": dict(self.table.sort),
             "limit": app.row_limit(),
             "now": self._now,
-            "proc_map": dict(app.proc_map),
+            # Not copied: proc_map is only ever REPLACED (_refresh_proc_map assigns
+            # a new dict), never changed in place, so the one handed over describes
+            # one moment for as long as the worker holds it. The CSV export has
+            # always taken it the same way.
+            "proc_map": app.proc_map,
             # Read on the UI thread and carried across, like every other input
             # here: the worker must not reach back into App (convention 26).
             "scoped_only": app.scoped_view(),
+            # Handed back with the result: _apply remembers it only for a build
+            # that actually finished (see _settled_inputs).
+            "made_from": made_from,
         })
         # The tick is 700 ms apart, and a user who just hit a header or typed a
         # search should not wait that long to see the answer they asked for. Poll
         # the worker briskly until it lands, then stop.
         self._poll_soon()
+
+    def _settled_inputs(self):
+        """What a rebuild is made from - once nothing else can change it; else None.
+
+        After STOP the rows cannot move, and the page still rebuilt the whole
+        table every second: ~114 ms of a worker per second at 200 000 rows, for
+        an answer already on screen (performance review W-C1(a)). Once the engine
+        says its log is final (``connections_settled`` - NOT ``is_running``,
+        which goes False before the stop's last writes to the rows), a rebuild
+        from the same inputs is skipped. The inputs are everything the build
+        reads besides the log; the clock is among them, and a stopped session's
+        clock stands still. ``proc_map`` goes in as the dict itself, not its
+        ``id()``: the tuple keeps it alive and ``==`` compares what it says.
+
+        A request made while the log could still move carries None, so the first
+        one after it is final always differs from what was built before; and only
+        a build that FINISHED is remembered (``_apply``), so one that failed is
+        simply asked for again.
+        """
+        app = self.app
+        engine = app.engine
+        if not engine.connections_settled():
+            return None
+        return (app.conn_query, self.table.sort.get("col"), self.table.sort.get("reverse"),
+                app.row_limit(), app.scoped_view(), app.proc_map, self._now,
+                engine.targeting_active())
+
+    def _refresh_proc_map(self, now):
+        """Read the port -> process fallback again, every ``PROC_MAP_S`` of a session.
+
+        It lived in ``App._tick``, which built it on EVERY page - and only this
+        page and the CSV export behind its button ever read it. Built here, it is
+        built while somebody is looking at the rows it names, and the first
+        refresh after coming back to the page reads it at once. ``refresh=False``:
+        while a session runs, the engine's watchdog keeps the socket table fresh
+        (see ``processes.port_process_map``).
+
+        The FIRST refresh of the page reads it whatever the state. A session run
+        entirely on another page and stopped before this one was opened left the
+        map empty - ``App._tick`` used to fill it on every page - so every row
+        captured without a name showed "?" (review of PR #251). After STOP the
+        table holds the session's last walk, which is what the map always fell
+        back to; later refreshes of a stopped session leave it alone.
+        """
+        app = self.app
+        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):
+            self._proc_t = now
+            app.proc_map = port_process_map(refresh=False) or app.proc_map
 
     POLL_MS = 40
 
@@ -577,6 +661,7 @@ class ConnsPage:
                                                request["sort"]["col"],
                                                request["sort"]["reverse"],
                                                now=request["now"])}
+        started = time.perf_counter()       # the wall time rebuild_interval scales
         # limit=None: the raw rows, unsorted - the engine no longer sorts a table
         # this page is about to sort by the user's column anyway
         conns = request["engine"].connections_snapshot(limit=None)
@@ -617,7 +702,9 @@ class ConnsPage:
         # cheap lock instead of the old O(n) any_scoped/any_unscoped scan.
         scope_active = request["engine"].targeting_active()
         return {"rows": shown, "total": len(conns), "limit": request["limit"],
-                "totals": totals, "scope_active": scope_active}
+                "totals": totals, "scope_active": scope_active,
+                "made_from": request.get("made_from"),
+                "took": time.perf_counter() - started}
 
     def _apply(self, result):
         """Main thread: swap the finished model in whole."""
@@ -627,6 +714,8 @@ class ConnsPage:
             return
         rows, total, limit = result["rows"], result["total"], result["limit"]
         self._scope_active = result.get("scope_active", False)
+        self._built_from = result.get("made_from")
+        self._took = result.get("took", self._took)
         # WHY it would be empty, before handing the rows over: an empty table
         # with nothing typed means no traffic yet, and telling that user that
         # "nothing matches what you are looking for" is a lie about a search

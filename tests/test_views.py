@@ -451,6 +451,61 @@ def test_summing_before_the_sort_is_why_the_split_is_worth_making():
           all(any(r is k for k in kept) for r in rows))
 
 
+def test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order(monkeypatch):
+    """Above 2 * SORT_CHUNK rows a full sort goes in chunks merged by heapq.merge,
+    so no single C-level sort holds the interpreter lock for long (28-33 ms at
+    200 000 rows before; performance review W-C1(b), owner decision D-4).
+
+    The promise is the SAME rows in the SAME order, ties included - and a test of
+    that is only worth something if the chunked path really runs. So the chunk is
+    shrunk to 7 rows (the same code paths on small data), the chunked answer is
+    compared with the plain one from the same function, and the chunked path is
+    counted. Ties are most of the data: a third of the rows deliver nothing.
+    """
+    import itertools
+    import random
+    from beantester import views
+
+    rnd = random.Random(11)
+
+    def rows_of(n):
+        return [{"_i": i, "sent": rnd.choice((0, 0, 0, 512, 1024, rnd.randrange(1, 10 ** 6))),
+                 "packets": rnd.choice((1, 1, 2, rnd.randrange(1, 50))),
+                 "proc": rnd.choice(("chrome.exe", "Steam.exe", "steam.exe", "")),
+                 "first": 0.0, "last": rnd.choice((1.0, 2.0, 3.0))} for i in range(n)]
+
+    def order(rows):
+        return [r["_i"] for r in rows]
+
+    chunked = []
+    real = views._chunked_sort
+
+    def counting(*a, **k):
+        chunked.append(1)
+        return real(*a, **k)
+
+    def case(rows, col, reverse, limit):
+        n = len(rows)
+        monkeypatch.setattr(views, "SORT_CHUNK", 10 ** 9)               # plain sort
+        want = order(views.sort_connections(list(rows), col, reverse, now=5.0, limit=limit))
+        monkeypatch.setattr(views, "SORT_CHUNK", 7)
+        before, given = len(chunked), list(rows)
+        got = order(views.sort_connections(given, col, reverse, now=5.0, limit=limit))
+        where = f"(n={n}, {col}, reverse={reverse}, limit={limit})"
+        assert got == want, f"the chunked order differs {where}"
+        heap = bool(limit and limit * views.PARTIAL_SORT_RATIO <= n)
+        should_chunk = n > 14 and not heap
+        assert len(chunked) == before + should_chunk, f"chunked={not should_chunk} {where}"
+        if should_chunk:
+            assert order(given) == order(rows), f"the input was reordered {where}"
+
+    monkeypatch.setattr(views, "_chunked_sort", counting)
+    tables = {n: rows_of(n) for n in (14, 15, 50, 203)}
+    for n, col, reverse, share in itertools.product(
+            tables, ("kb", "proc", "packets", "idle"), (True, False), (0, 0.5, 1, 1.1)):
+        case(tables[n], col, reverse, int(n * share))
+
+
 def test_events_sort_by_what_their_columns_show():
     """External review, P3-34: the Type column sorted by the stored code and the
     Description column by the language key, so in Polish neither order matched

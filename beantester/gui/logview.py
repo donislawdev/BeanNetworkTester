@@ -81,15 +81,24 @@ class LogView:
             crashlog.note(_exc, "gui.logview")
 
     def drain(self):
-        """Apply queued lines to the widget. Main thread only."""
+        """Apply queued lines to the widget, all of them in ONE write. Main thread only.
+
+        Line by line, each one cost two state changes, an insert, an index, a
+        scroll and a preference read: 13.0-13.1 ms for 50 queued lines on real
+        Tk, against 1.1-1.3 ms for the same 50 written at once (2026-10-03,
+        performance review W-C3). Bursts come from worker threads - a session
+        starting or stopping says several things at once.
+        """
         if not self._usable():
             return                  # UI not built yet; lines stay queued
+        batch = []
         while True:
             try:
-                line = self._queue.get_nowait()
+                batch.append(self._queue.get_nowait())
             except queue.Empty:
                 break
-            self._append(line)
+        if batch:
+            self._write_lines(batch)
 
     def _usable(self):
         """Is there a widget, and does it still exist?
@@ -111,13 +120,22 @@ class LogView:
             crashlog.note(_exc, "gui.logview")
             return False
 
-    def _append(self, line):
+    def _write_lines(self, batch):
+        """A LIST of lines, in one insert, one trim, one scroll (see ``drain``).
+
+        It was ``_append(line)``, one line, until it started taking a batch - and
+        it was renamed for that, not just retyped. A ``str`` is iterable, so an old
+        one-line caller handed to a list-taking method does not fail: it writes
+        the line one CHARACTER per line, which is what a test calling the old name
+        did on the first push of performance review R-4. Under a new name such a
+        caller stops at an AttributeError instead.
+        """
         keep = self.app.pref("log_lines")
-        self.lines.append(line)
+        self.lines.extend(batch)
         if len(self.lines) > keep + HYSTERESIS:
             self.lines = self.lines[-keep:]
         self.box.config(state="normal")
-        self.box.insert("end", line + "\n")
+        self.box.insert("end", "\n".join(batch) + "\n")
         try:            # keep the widget bounded too, not just the in-memory list
             count = int(self.box.index("end-1c").split(".")[0])
             if count > keep + HYSTERESIS:

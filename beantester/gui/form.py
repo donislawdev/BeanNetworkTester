@@ -29,6 +29,7 @@ from ..utils import number_string
 from ..validators import parse_number, parse_seed
 from . import dialogs
 from .accordion import CollapsibleSection
+from .configure import configure_changed
 from .labels import wrapping_label
 from .rates import DEFAULT_UNIT, RATE_FIELD_KEYS, rate_with_unit
 from .scaling import scaled
@@ -546,6 +547,12 @@ class ControlForm:
         time"). Either way it must LOOK dead: ttk will not do that for free, and
         an editable field that changes nothing is a lie about what the tool is
         doing.
+
+        It runs on EVERY keystroke, for every section, and almost nothing it sets
+        has moved since the last one - so each option goes through
+        ``configure_changed``. Configured regardless, one keystroke cost 1.63 ms
+        of re-layout on real Tk, 0.08 ms with the unchanged ones left alone
+        (2026-10-03, performance review W-C4).
         """
         for sec in self._sections:
             note_keys = []
@@ -563,13 +570,14 @@ class ControlForm:
                 entry = self.entries.get(key)
                 if entry is not None and field.kind != F.CHOICE:   # the combobox
                     try:                                           # is owned by App
-                        entry.config(state="disabled" if dead else "normal")
+                        configure_changed(entry, state="disabled" if dead else "normal")
                     except tk.TclError as _exc:
                         crashlog.note(_exc, "gui.form")
                 label = self.labels.get(key)
                 if label is not None:
                     try:
-                        label.config(style="CardOff.TLabel" if dead else "Card.TLabel")
+                        configure_changed(label, style="CardOff.TLabel" if dead
+                                          else "Card.TLabel")
                     except tk.TclError as _exc:
                         crashlog.note(_exc, "gui.form")
             if self._lock_extras(sec.id):
@@ -580,7 +588,7 @@ class ControlForm:
             # The label stays mapped (see _place_fields); only its text changes, so
             # the section keeps a constant height and the form does not jump.
             try:
-                note.config(text=T(note_keys[0]) if note_keys else "")
+                configure_changed(note, text=T(note_keys[0]) if note_keys else "")
             except tk.TclError as _exc:
                 crashlog.note(_exc, "gui.form")
 
@@ -599,7 +607,7 @@ class ControlForm:
         locked = bool(widgets) and bool(getattr(self.app, "running", False))
         for widget in widgets:
             try:
-                widget.config(state="disabled" if locked else "normal")
+                configure_changed(widget, state="disabled" if locked else "normal")
             except tk.TclError as _exc:
                 crashlog.note(_exc, "gui.form")
         return locked
@@ -637,11 +645,11 @@ class ControlForm:
                 messages.append(str(e))
         try:
             if messages:
-                err_label.config(text="  \u2022  ".join(messages))
+                configure_changed(err_label, text="  \u2022  ".join(messages))
                 if not err_label.winfo_ismapped():
                     err_label.pack(fill="x", pady=(scaled(5), 0))
             else:
-                err_label.config(text="")
+                configure_changed(err_label, text="")
                 err_label.pack_forget()
         except tk.TclError as _exc:
             crashlog.note(_exc, "gui.form")
@@ -675,7 +683,7 @@ class ControlForm:
     @staticmethod
     def _mark(entry, ok):
         try:
-            entry.config(style="TEntry" if ok else "Bad.TEntry")
+            configure_changed(entry, style="TEntry" if ok else "Bad.TEntry")
         except tk.TclError as _exc:
             crashlog.note(_exc, "gui.form")
 

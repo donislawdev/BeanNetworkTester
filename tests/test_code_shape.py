@@ -126,7 +126,12 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # five lines become one. The band falls to 776.3, and `engine.py` paid in advance:
 # its header-cache drop (W-A1) cost four lines, the packet reads moved to
 # `BeanCore.packet_meta` gave back 24, so it is 755 - 21 lines clear.
-FILE_CEILING = 1109             # beantester/gui/app.py
+# Lowered 2026-10-03 from 1109: the port -> process map moved to the one page
+# that reads it (performance review W-B3, five lines out) and the engine banner
+# reads the tick's own snapshot (W-C6, one out); the root <Configure> filter
+# took two back. The band falls to 773.5; `engine.py` is 766 after taking
+# `connections_settled` (W-C1), seven lines clear.
+FILE_CEILING = 1105             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -828,10 +833,10 @@ def test_the_strictly_typed_modules_only_ever_grow():
 # BE the measurement rather than sit above it (two tests below enforce that, the
 # same pair that guards the ceilings).
 CLASS_METHOD_CEILING = 93       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
-CLASS_ATTR_CEILING = 77         # gui/app.py::App (79 until 2026-09-29: peak_down, peak_up)
+CLASS_ATTR_CEILING = 76         # gui/app.py::App (77 until 2026-10-03: _proc_refresh_t)
 # The crowd counts, on the same 70% band as the sizes. Methods: App (93) and
-# BeanEngine (69) against a band of 65.1. Attributes: App (77) and BeanCore (57)
-# against a band of 53.9 - and BeanCore is the interesting one, because it is a
+# BeanEngine (69) against a band of 65.1. Attributes: App (76) and BeanCore (57)
+# against a band of 53.2 - and BeanCore is the interesting one, because it is a
 # 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
 # attributes is what a decision core with twelve pipeline steps accumulates.
 CLASSES_NEAR_METHOD_CEILING = 2     # App, BeanEngine
