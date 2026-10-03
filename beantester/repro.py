@@ -20,6 +20,10 @@ from . import crashlog
 # core truncates it anyway (core.set_advanced), so the whole part is the setting.
 WHOLE_NUMBER_FLAGS = frozenset({"max_size"})
 
+# How many connection rows a report carries: the most recently active flows. The
+# CLI reads it to size the one snapshot it takes at the end of a run.
+REPORT_CONNECTIONS = 50
+
 # What an argument may hold and still be pasted into cmd.exe and PowerShell alike
 # without quotes. Everything else is quoted - a list of the characters that break
 # a shell is the list that goes missing (`^` did: cmd drops it, so `re:^edge`
@@ -173,8 +177,17 @@ def session_command(engine, settings):
                                   loop=bool(info.get("scenario_loop")))
 
 
-def build_repro_report(engine, settings):
-    """Return the full data needed to reproduce the session (to save as JSON)."""
+def build_repro_report(engine, settings, connections=None):
+    """Return the full data needed to reproduce the session (to save as JSON).
+
+    ``connections``: rows the caller already took, as
+    ``engine.connections_snapshot(limit=n)`` returns them (newest first) with
+    ``n >= REPORT_CONNECTIONS``; the report keeps the first ``REPORT_CONNECTIONS``.
+    None takes its own snapshot. The CLI passes the ONE snapshot it takes at the
+    end of a run, so the console listing, the JSON summary and this report show the
+    same rows and a 200 000-row log is walked once, not three times (performance
+    review W-D9: ~50 ms a walk at the cap).
+    """
     info = engine.session_info()
     stats = engine.stats_snapshot()
     seed = engine.effective_seed()
@@ -231,13 +244,16 @@ def build_repro_report(engine, settings):
         # the whole report is shareable regardless of the UI language
         events=[dict(t=e[0], time=e[1], type=e[2],
                      description=translate(e[3], "en")) for e in engine.events_snapshot()],
-        connections=engine.connections_snapshot(limit=50),
+        connections=(engine.connections_snapshot(limit=REPORT_CONNECTIONS)
+                     if connections is None else connections[:REPORT_CONNECTIONS]),
         cli_command=session_command(engine, settings),
     )
 
 
-def save_repro_report(path, engine, settings):
+def save_repro_report(path, engine, settings, connections=None):
     """Write the report atomically. RAISES on failure - both callers rely on that.
+
+    ``connections``: see ``build_repro_report``.
 
     Deliberately not ``jsonfile.write_json``, which is the same write and would be
     the obvious reuse: it RETURNS an error string instead of raising, and both
@@ -252,7 +268,7 @@ def save_repro_report(path, engine, settings):
     a truncated report sitting where a whole one is expected, which is the half
     that matters for an artefact people attach to bug reports.
     """
-    rep = build_repro_report(engine, settings)
+    rep = build_repro_report(engine, settings, connections)
     tmp = temp_beside(path)
     try:
         with open(tmp, "w", encoding="utf-8") as f:

@@ -31,7 +31,7 @@ from .i18n import T
 from .paths import is_frozen, user_data_dir
 from .presets import (PRESETS, closest_preset, preset_to_settings,
                       resolve_preset)
-from .repro import save_repro_report, session_command
+from .repro import REPORT_CONNECTIONS, save_repro_report, session_command
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
@@ -444,12 +444,30 @@ def apply_config(engine, cfg, log=print):
 
 
 # -- output helpers ---------------------------------------------------------- #
-def _conn_records(engine, limit=30):
-    return engine.connections_snapshot(limit=limit)
+CONSOLE_CONNECTIONS = 30   # rows --log-conns lists and puts in the summary
 
 
-def _print_conns(engine, log):
-    conns = _conn_records(engine)
+def _final_connections(engine, cfg):
+    """The ONE snapshot every artefact of a finished run is cut from (None: nobody asks).
+
+    --log-conns lists the newest ``CONSOLE_CONNECTIONS`` flows and puts them in the
+    summary; --repro-out keeps ``REPORT_CONNECTIONS``. Each used to take its own
+    snapshot: up to three walks of a log that may hold 200 000 rows (~50 ms each,
+    performance review W-D9), and three answers a run ended by a fault could let
+    drift apart. ``heapq.nlargest(n)`` is ``sorted(...)[:n]``, so a shorter list is
+    a prefix of a longer one, ties included - cutting changes no row and no order.
+    """
+    if cfg["repro_out"]:
+        return engine.connections_snapshot(
+            limit=max(REPORT_CONNECTIONS, CONSOLE_CONNECTIONS))
+    if cfg["log_conns"]:
+        return engine.connections_snapshot(limit=CONSOLE_CONNECTIONS)
+    return None
+
+
+def _print_conn_rows(conns, log):
+    """List rows already taken. A new name, not ``_print_conns(engine, log)`` with a
+    new meaning: a caller still passing the engine now fails loudly."""
     if not conns:
         log.info("No observed connections.")
         return
@@ -1078,13 +1096,15 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     # run cannot disagree: `--simulate` and the scenario come from the engine.
     repro = session_command(engine, cfg["settings"]) if eff is not None else None
 
+    conns = _final_connections(engine, cfg)
     if cfg["log_conns"] and log.fmt == clilog.TEXT:
-        _print_conns(engine, log)
+        _print_conn_rows(conns[:CONSOLE_CONNECTIONS], log)
 
     report_path = None
     if cfg["repro_out"]:
         try:
-            save_repro_report(cfg["repro_out"], engine, cfg["settings"])
+            save_repro_report(cfg["repro_out"], engine, cfg["settings"],
+                              connections=conns)
             report_path = cfg["repro_out"]
             log.info(f"Repro report saved: {cfg['repro_out']}")
         except OSError as e:                    # an unwritable artifact IS a failure
@@ -1126,7 +1146,7 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
                   total_mb=round(down_mb + up_mb, 2), counters=stats,
                   fault=engine.fault, repro_command=repro, repro_report=report_path)
     if cfg["log_conns"]:
-        record["connections"] = _conn_records(engine)
+        record["connections"] = conns[:CONSOLE_CONNECTIONS]
     lines = [f"Data usage: downloaded {down_mb} MB, uploaded {up_mb} MB, "
              f"total {round(down_mb + up_mb, 2)} MB."]
     if target:
