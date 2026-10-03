@@ -6,11 +6,17 @@ packaging: a version number written into a manifest by hand is a second source o
 truth for ``VERSION.txt``, and it goes stale in the release where somebody forgets
 it - quietly, because a manifest with the wrong version still parses.
 
-The checksum and the asset name come from ONE input, the release's own
-``SHA256SUMS.txt``. It carries both (``<hash> *<file>``), so there is nothing to
-retype and nothing to keep in step.
+The checksums and the asset names come from ONE input, the release's own
+``SHA256SUMS.txt``. It carries both (``<hash> *<file>``) for the zip and for the
+MSI, so there is nothing to retype and nothing to keep in step.
 
     python tools/build_packages.py --sums SHA256SUMS.txt
+
+The WinGet manifest installs the MSI first, so a full render needs the MSI's line.
+The one render that happens BEFORE the MSI exists - ``tools/sign_release.py``
+rendering the MSI's own source - asks for that template alone:
+
+    python tools/build_packages.py --sums SHA256SUMS.txt --only msi
 
 Output goes to ``build/packaging/`` (git-ignored, like the website's build). What
 this script does NOT do is submit anything: pushing to the Chocolatey feed or
@@ -74,8 +80,17 @@ def _read_json(*parts):
         return json.load(f)
 
 
+PACKAGED_ASSETS = (".zip", ".msi")
+
+
 def parse_sums(path):
-    """``<hash> *<file>`` -> (hash, file). The star is sha256sum's binary marker."""
+    """``<hash> *<file>`` lines -> {".zip": (hash, file), ".msi": (hash, file)}.
+
+    The star is sha256sum's binary marker. Only the two assets a package installs
+    are kept; a release candidate has no MSI, so that key may be missing, and the
+    caller decides whether that is an error.
+    """
+    found = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -86,9 +101,17 @@ def parse_sums(path):
             # marker, so stripping the star first leaves it attached to a leading
             # space and it rides into the URL. Measured, not imagined - it did.
             name = name.strip().lstrip("*").strip()
-            if name.lower().endswith(".zip"):
-                return digest.strip(), name
-    raise SystemExit(f"{path}: no .zip line found")
+            suffix = os.path.splitext(name)[1].lower()
+            if suffix not in PACKAGED_ASSETS:
+                continue
+            # Two lines for one kind of asset means two files were concatenated, and
+            # picking either one would publish a checksum nobody chose.
+            if suffix in found:
+                raise SystemExit(f"{path}: two {suffix} lines ({found[suffix][1]}, {name})")
+            found[suffix] = (digest.strip(), name)
+    if ".zip" not in found:
+        raise SystemExit(f"{path}: no .zip line found")
+    return found
 
 
 def release_date(version):
@@ -107,8 +130,13 @@ def release_date(version):
     raise SystemExit(f"CHANGELOG.md has no dated section for {version} - close it first")
 
 
-def values(version, digest, asset):
-    """Every placeholder, each read from the one place that owns it."""
+def values(version, digest, asset, msi=None):
+    """Every placeholder, each read from the one place that owns it.
+
+    ``msi`` is the MSI's ``(hash, file)``, or None before the MSI exists - and then
+    the MSI's own placeholders are simply absent, so a template that needs them is
+    refused by name in ``build`` instead of rendering with a hole.
+    """
     site = _read_json("site", "site.json")
     home = _read_json("site", "pages", "home", "page.json")["languages"]["en"]
     tagline = _read_json("site", "i18n", "en.json")["site.tagline"]
@@ -118,7 +146,7 @@ def values(version, digest, asset):
     # Every entry here is used by a template, and a test keeps it that way in both
     # directions: an unknown placeholder is a typo, a dead entry is a manifest that
     # quietly stopped carrying a field.
-    return {
+    table = {
         "VERSION": version,
         "URL": f"{repo}/releases/download/{tag}/{asset}",
         "SHA256": digest.lower(),
@@ -127,6 +155,9 @@ def values(version, digest, asset):
         "WINGET_ID": WINGET_ID,
         "WINGET_SCHEMA": WINGET_SCHEMA,
         "UPGRADE_CODE": MSI_UPGRADE_CODE,
+        # The registry's spelling, braces included. WinGet matches an installed MSI
+        # against it EXACTLY - its log says `Include:UpgradeCode='{...}'[Exact]`.
+        "UPGRADE_CODE_BRACED": "{" + MSI_UPGRADE_CODE + "}",
         "APP_NAME": appinfo.APP_NAME,
         "TOOL_ID": appinfo.TOOL_ID,          # the data folder's name, which has no spaces
         "EXE_NAME": appinfo.EXE_NAME,
@@ -147,11 +178,20 @@ def values(version, digest, asset):
         "ICON_URL": f"https://cdn.jsdelivr.net/gh/{slug}@{tag}/bean.png",
         "RELEASE_DATE": release_date(version),
         "TAGLINE": tagline,
+        # The same words inside a single-quoted PowerShell string, where an apostrophe
+        # is written twice. The tagline is website copy and is edited as such; one
+        # "don't" in it must not turn into a syntax error in Chocolatey's install.
+        "TAGLINE_PS": tagline.replace("'", "''"),
         "DESCRIPTION": home["description"],
         # Where the exe sits inside the archive: one top-level directory, named
         # after the tool, exactly as `release.yml` zips `dist/BeanNetworkTester`.
         "NESTED_EXE": f"{appinfo.TOOL_ID}/{appinfo.EXE_NAME}",
     }
+    if msi is not None:
+        msi_digest, msi_asset = msi
+        table["MSI_URL"] = f"{repo}/releases/download/{tag}/{msi_asset}"
+        table["MSI_SHA256_UPPER"] = msi_digest.upper()
+    return table
 
 
 def display_path(path):
@@ -170,10 +210,24 @@ def display_path(path):
 
 
 def templates():
-    for base, _, names in os.walk(PACKAGING_DIR):
+    # Sorted directories as well as files: os.walk lists them in whatever order the
+    # file system keeps, which is alphabetical on NTFS and not on ext4, and a render
+    # (or a refusal half-way through one) should not depend on the machine.
+    for base, dirs, names in os.walk(PACKAGING_DIR):
+        dirs.sort()
         for name in sorted(names):
             path = os.path.join(base, name)
             yield path, os.path.relpath(path, PACKAGING_DIR)
+
+
+def package_kind(relative):
+    """The top directory of a template - ``chocolatey``, ``msi`` or ``winget``."""
+    return relative.replace(os.sep, "/").split("/", 1)[0]
+
+
+def kinds():
+    return sorted({package_kind(rel) for _, rel in templates()
+                   if rel.endswith(TEMPLATE_SUFFIX)})
 
 
 def render(text, table, where):
@@ -183,37 +237,60 @@ def render(text, table, where):
     return PLACEHOLDER.sub(lambda m: str(table[m.group(1)]), text)
 
 
-def build(sums_path, version=None):
+def build(sums_path, version=None, only=None):
+    """Render every template, or only the ``only`` kind (see ``kinds``)."""
     version = version or appinfo.__version__
-    digest, asset = parse_sums(sums_path)
+    assets = parse_sums(sums_path)
     # The commonest way to get this wrong is to feed the PREVIOUS release's file.
     # The asset name carries the tag, so the mismatch is catchable, and silently
     # publishing a manifest that points at the wrong build is not recoverable.
-    if f"v{version}" not in asset:
-        raise SystemExit(f"{asset} is not the asset for v{version} - wrong SHA256SUMS.txt?")
-    table = values(version, digest, asset)
+    for _, asset in assets.values():
+        if f"v{version}" not in asset:
+            raise SystemExit(f"{asset} is not the asset for v{version} - wrong SHA256SUMS.txt?")
+    digest, asset = assets[".zip"]
+    msi = assets.get(".msi")
+    table = values(version, digest, asset, msi=msi)
 
-    found = [rel for _, rel in templates() if rel.endswith(TEMPLATE_SUFFIX)]
-    if not found:
+    selected = [(path, rel) for path, rel in templates()
+                # Only templates become package files. Everything else under
+                # packaging/ is for the person reading the repository - README.md
+                # talks ABOUT placeholders, and copying it would both ship it and
+                # trip the check below.
+                if rel.endswith(TEMPLATE_SUFFIX)
+                and (only is None or package_kind(rel) == only)]
+    if not selected:
         # Saying this out loud beats writing nothing and letting the caller wonder.
         # The way to get here is a checkout without packaging/ - which is why a test
-        # keeps those files tracked.
-        raise SystemExit(f"{PACKAGING_DIR}: no {TEMPLATE_SUFFIX} templates found")
+        # keeps those files tracked - or an `only` that names no kind.
+        raise SystemExit(f"{PACKAGING_DIR}: no {TEMPLATE_SUFFIX} templates found"
+                         + (f" for '{only}' (kinds: {', '.join(kinds())})" if only else ""))
 
-    written = []
-    for path, relative in templates():
-        # Only templates become package files. Everything else under packaging/ is
-        # for the person reading the repository - README.md talks ABOUT placeholders,
-        # and copying it would both ship it and trip the check below.
-        if not relative.endswith(TEMPLATE_SUFFIX):
-            continue
+    # Everything is rendered before anything is written. A refusal half-way through
+    # used to leave the packages rendered so far in OUT_DIR, which looks like a
+    # finished render to whoever packs it next.
+    rendered = []
+    for path, relative in selected:
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        target = os.path.join(OUT_DIR, relative)[: -len(TEMPLATE_SUFFIX)]
+        # 🔴 Said by name, because the generic "unknown placeholder" would send the
+        # reader hunting for a typo. The WinGet manifest installs the MSI first - it
+        # is the only installer that gives the program a Start Menu entry - so a
+        # sums file without the MSI cannot produce it. A release candidate has no
+        # MSI and is never submitted; the render before signing uses `--only msi`.
+        wanted = {m.group(1) for m in PLACEHOLDER.finditer(text)}
+        if msi is None and any(name.startswith("MSI_") for name in wanted):
+            raise SystemExit(
+                f"{sums_path}: no .msi line, and {relative} installs the MSI. Render "
+                f"from the published release's SHA256SUMS.txt, or pass --only msi for "
+                f"the render that happens before the MSI is built.")
         text = render(text, table, relative)
         left = PLACEHOLDER.search(text)
         if left:
             raise SystemExit(f"{relative}: {left.group(0)} survived rendering")
+        rendered.append((os.path.join(OUT_DIR, relative)[: -len(TEMPLATE_SUFFIX)], text))
+
+    written = []
+    for target, text in rendered:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
@@ -227,8 +304,11 @@ def main(argv=None):
                         help="the release's SHA256SUMS.txt (carries hash AND asset name)")
     parser.add_argument("--version", default=None,
                         help="override VERSION.txt (for trying a past release)")
+    parser.add_argument("--only", default=None, choices=kinds(),
+                        help="render one kind of package; 'msi' is the render that "
+                             "happens before the MSI exists (tools/sign_release.py)")
     args = parser.parse_args(argv)
-    for name in build(args.sums, args.version):
+    for name in build(args.sums, args.version, args.only):
         print(name)
     return 0
 

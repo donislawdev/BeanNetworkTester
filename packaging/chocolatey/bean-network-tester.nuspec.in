@@ -28,6 +28,8 @@ every outcome as an exit code, which is what makes it usable from a pipeline.
 
 Notes for this package:
 
+* It adds {{APP_NAME}} to the Start Menu for every user of the computer, and the
+  command line to PATH.
 * It needs Administrator rights to capture traffic, and it asks for them itself.
 * It carries the WinDivert driver, which is what lets it intervene in real traffic.
 * Your profiles, window state and CSV exports are kept in %LOCALAPPDATA%\{{TOOL_ID}},

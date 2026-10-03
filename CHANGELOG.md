@@ -90,6 +90,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Installing with WinGet or Chocolatey now puts Bean Network Tester in the Start Menu.**
+  Before, it could only be started from a terminal. WinGet now installs the `.msi`, which asks
+  for administrator rights once. Chocolatey adds the entry on install and on `choco upgrade`,
+  and removes it on uninstall. Installed with WinGet before? Run
+  `winget uninstall DonislawDev.BeanNetworkTester`, then
+  `winget install DonislawDev.BeanNetworkTester`; your profiles stay.
+
 - **Targeting a program by name no longer takes in programs through a parent that has
   closed.** A program belongs to the target when one of its parent processes does. When such a
   parent had closed and Windows gave its process number to a new process with the target's

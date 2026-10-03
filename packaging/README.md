@@ -9,7 +9,11 @@ why nothing here can go stale on its own.
 
     python tools/build_packages.py --sums SHA256SUMS.txt
 
-The rendered files land in `build/packaging/` and are not tracked.
+The rendered files land in `build/packaging/` and are not tracked. A full render needs
+both lines of a final release's `SHA256SUMS.txt`, the zip's and the MSI's, because the
+WinGet manifest installs the MSI; without the MSI line the renderer refuses and writes
+nothing. The one render that happens before the MSI exists - inside the signing
+ritual, to build the MSI from its source - is `--only msi`.
 
 ## The order these steps have to happen in
 
@@ -40,8 +44,8 @@ after the fact is somebody else's review time.
 **The MSI is the exception, and not because it is special.** It is built and signed by
 `tools/sign_release.py` during the release itself, because it carries the executable:
 building it anywhere else would either wrap an unsigned program in a signed installer,
-or require the signing card to be somewhere it will never be. Nothing is submitted -
-the MSI is simply an asset on the release.
+or require the signing card to be somewhere it will never be. It is never submitted on
+its own: it is an asset on the release, and the WinGet manifest points at it.
 
 ## What each package has to get right
 
@@ -56,11 +60,36 @@ pinned to the release tag, and both halves are load-bearing: moderation refuses
 and an icon pointing at a branch would keep changing under a package that is already
 approved.
 
-**WinGet.** `ArchiveBinariesDependOnPath: true` is the line that matters. The default
+Chocolatey itself puts a shim on `PATH` and nothing in the Start Menu, so
+`chocolateyinstall.ps1` makes the Start Menu entry and `chocolateyuninstall.ps1` takes
+it away. The entry has the MSI's name on purpose - one program, one entry - and neither
+script touches an entry that points somewhere else: with the MSI installed as well,
+that entry is the MSI's, and deleting it on a Chocolatey uninstall would leave the MSI
+without one. An entry whose target is gone belongs to nobody and is replaced.
+
+**WinGet.** The manifest offers **two installers, and their order is the fix**. A
+portable package cannot have a Start Menu entry: the manifest schema has no field for
+one, winget's portable installer creates none, and
+[microsoft/winget-cli#2299](https://github.com/microsoft/winget-cli/issues/2299) has
+asked for it since 2022. So the MSI comes first. Clients from v1.29.240 prefer msi/wix
+over portable when the user has set no preference
+([microsoft/winget-cli#6123](https://github.com/microsoft/winget-cli/pull/6123)), and
+older ones keep the first applicable installer when nothing else separates two - either
+way a fresh install gets the MSI. Its `AppsAndFeaturesEntries` carries the UpgradeCode,
+braces included, which is what winget matches the installed MSI against from one
+release to the next; the ProductCode changes with every build.
+
+The zip stays second, for the installs that already came from it: an upgrade only
+considers installers of the kind already installed, and portable is compatible with
+nothing but portable. Measured with the MSI alone, upgrading a portable install ends in
+"No applicable installer found". `--scope user` gets the zip too.
+
+For the zip, `ArchiveBinariesDependOnPath: true` is the line that matters. The default
 for a portable inside an archive is a symlink, and this executable cannot be reached
 through one - it needs the `_internal` directory beside it. The field puts the
 directory holding the nested file on `PATH` instead, which is what winget's source
-does with it rather than what the field's one-line description implies.
+does with it rather than what the field's one-line description implies. It sits inside
+the zip's entry, not at the root, where the MSI would inherit it.
 
 **The MSI.** Three things carry it. `UpgradeCode` is the identity of the product and can
 never be regenerated - Windows Installer finds a machine's previous version through that

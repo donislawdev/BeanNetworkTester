@@ -1,0 +1,30 @@
+# Rendered by tools/build_packages.py - do not edit the generated copy.
+#
+# Chocolatey runs this on an uninstall, and not on an upgrade - an upgrade runs
+# chocolateybeforemodify.ps1 and then the new package's install script, which writes
+# the entry again (measured). It exists for the one thing Chocolatey does not undo by
+# itself: the Start Menu entry chocolateyinstall.ps1 made outside the package folder.
+#
+# 🔴 It removes that entry only when it points into THIS package. With the MSI
+# installed as well, a file of the same name is the MSI's entry, and deleting it would
+# take the Start Menu away from an install this package does not own.
+#
+# Nothing here may throw: refusing an uninstall over a leftover shortcut would be
+# worse than the leftover. Windows PowerShell 5.1 syntax only - that is what
+# Chocolatey runs.
+$ErrorActionPreference = 'Continue'
+$toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) '{{APP_NAME}}.lnk'
+
+if (Test-Path -LiteralPath $shortcut) {
+    try {
+        $target = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath
+    } catch {
+        $target = $null
+    }
+    if ($target -and $target.StartsWith($toolsDir + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $shortcut -Force
+    } else {
+        Write-Host "Leaving $shortcut in place: it belongs to another install ($target)."
+    }
+}

@@ -16,11 +16,17 @@ What is guarded here is what a reviewer cannot catch for us:
   rather than typed a second time;
 * the Chocolatey scripts release the WinDivert driver before an upgrade, because
   the kernel holds the loaded `.sys` open and an open file cannot be deleted;
-* the renderer refuses the two inputs that would look fine and be wrong: an unknown
-  placeholder, and the previous release's `SHA256SUMS.txt`.
+* both package managers put the program in the Start Menu: WinGet by installing the
+  MSI FIRST (a portable package cannot have a Start Menu entry at all) while keeping
+  the zip for the installs that already came from it, Chocolatey by a shortcut its
+  scripts make and take away - never touching an entry another install owns;
+* the renderer refuses the inputs that would look fine and be wrong: an unknown
+  placeholder, the previous release's `SHA256SUMS.txt`, and a sums file without the
+  MSI for a manifest that installs it.
 """
 import os
 import re
+import shutil
 import sys
 
 import pytest
@@ -30,26 +36,23 @@ sys.path.insert(0, ROOT)
 from beantester import appinfo                                    # noqa: E402
 from tools import build_packages as bp                            # noqa: E402
 
-# A real line from a real release, binary marker and all.
+# Real lines from a real release, binary marker and all. The MSI line is missing
+# from a release candidate's file and from the one sign_release.py holds before it
+# builds the MSI, which is what `msi=False` stands for.
 SUMS_LINE = ("94359ea633e2e9fbe10e02b81070208a7209de2c4c48b003d8ce4feb30876bed"
              "  *BeanNetworkTester-v{version}-windows-x64.zip\n")
+SUMS_MSI_LINE = ("854736d5fed824aa73e42f998d531baa6303e6ebbf62e4413ee9f0626833130d"
+                 " *BeanNetworkTester-v{version}-windows-x64.msi\n")
 
 
-def _sums(tmp_path, version):
+def _sums(tmp_path, version, msi=True):
     path = tmp_path / "SHA256SUMS.txt"
-    path.write_text(SUMS_LINE.format(version=version), encoding="utf-8")
+    text = SUMS_LINE + (SUMS_MSI_LINE if msi else "")
+    path.write_text(text.format(version=version), encoding="utf-8")
     return str(path)
 
 
-def _rendered(tmp_path, monkeypatch):
-    """Render into a throwaway directory and return {relative name: text}."""
-    out = tmp_path / "out"
-    monkeypatch.setattr(bp, "OUT_DIR", str(out))
-    # A fixed date, so these tests answer "does it render" and not "is the changelog
-    # closed for this version". The changelog reader has its own test below, which is
-    # the one that should redden when a version is bumped before its section is dated.
-    monkeypatch.setattr(bp, "release_date", lambda version: "2026-01-01")
-    bp.build(_sums(tmp_path, appinfo.__version__))
+def _read_tree(out):
     files = {}
     for base, _, names in os.walk(out):
         for name in names:
@@ -57,6 +60,51 @@ def _rendered(tmp_path, monkeypatch):
             files[os.path.relpath(path, out).replace(os.sep, "/")] = \
                 open(path, encoding="utf-8").read()
     return files
+
+
+def _rendered(tmp_path, monkeypatch, msi=True, only=None):
+    """Render into a throwaway directory and return {relative name: text}."""
+    out = tmp_path / "out"
+    monkeypatch.setattr(bp, "OUT_DIR", str(out))
+    # A fixed date, so these tests answer "does it render" and not "is the changelog
+    # closed for this version". The changelog reader has its own test below, which is
+    # the one that should redden when a version is bumped before its section is dated.
+    monkeypatch.setattr(bp, "release_date", lambda version: "2026-01-01")
+    bp.build(_sums(tmp_path, appinfo.__version__, msi=msi), only=only)
+    return _read_tree(out)
+
+
+def _code(text):
+    """The lines that DO something - comments explain, and must not satisfy a check."""
+    return [line for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def _winget_installers(installer):
+    """(root lines, [installer entries as lists of lines]) of a rendered manifest.
+
+    Text, not a YAML parser: the repository carries no YAML library, and the shapes
+    asked about here - which entry comes first, what sits at the root - are visible in
+    the indentation this template is written with.
+    """
+    lines = _code(installer)
+    start = lines.index("Installers:")
+    root = lines[:start] + [line for line in lines[start:] if not line.startswith(("-", " "))]
+    entries = []
+    for line in lines[start + 1:]:
+        if line.startswith("- "):
+            entries.append([line])
+        elif line.startswith(" ") and entries:
+            entries[-1].append(line)
+    return root, entries
+
+
+def _field(entry, name):
+    for line in entry:
+        stripped = line.lstrip("- ").strip()
+        if stripped.startswith(name + ":"):
+            return stripped.split(":", 1)[1].strip()
+    return None
 
 
 def _sources():
@@ -72,7 +120,7 @@ def test_no_package_source_carries_a_version_number():
 
 
 def test_every_placeholder_is_known_and_every_known_placeholder_is_used():
-    table = set(bp.values(appinfo.__version__, "abc", "x-v1.zip"))
+    table = set(bp.values(appinfo.__version__, "abc", "x-v1.zip", msi=("def", "x-v1.msi")))
     used = set()
     for _, text in _sources():
         used |= {m.group(1) for m in bp.PLACEHOLDER.finditer(text)}
@@ -136,6 +184,269 @@ def test_the_chocolatey_icon_is_a_pinned_cdn_url(tmp_path, monkeypatch):
         check(f"the icon is not served from {host}", host not in url, f"({url})")
     check("the icon is pinned to the tag being packaged, not to a branch",
           f"@v{appinfo.__version__}/" in url, f"({url})")
+
+
+# -- the Start Menu entry: a program nobody can find is not installed ----------- #
+def test_a_fresh_winget_install_gets_the_msi(tmp_path, monkeypatch):
+    """The MSI is the only installer that gives the program a Start Menu entry.
+
+    Until this was fixed the manifest carried the zip alone, and a portable package
+    cannot have a Start Menu entry at all - no schema field, no code in winget's
+    portable installer (microsoft/winget-cli#2299, open since 2022). Everyone who
+    installed with winget could start the program from a console and nowhere else.
+
+    FIRST, not merely present: clients since v1.29.240 prefer msi/wix over portable
+    when the user set no preference (winget-cli#6123), and older ones keep the first
+    applicable installer when nothing else separates two. Measured 2026-10-03 on
+    Windows 11 and Windows Server 2025 (winget v1.29.380): a fresh install picks it.
+    """
+    _, entries = _winget_installers(_rendered(tmp_path, monkeypatch)["winget/installer.yaml"])
+    check("the manifest offers two installers", len(entries) == 2, f"({len(entries)})")
+    first = entries[0] if entries else []
+    check("the first one is the MSI", _field(first, "InstallerType") == "wix",
+          f"({_field(first, 'InstallerType')})")
+    check("installed for the whole computer, as the MSI itself is built",
+          _field(first, "Scope") == "machine", f"({_field(first, 'Scope')})")
+    msi = (f"/v{appinfo.__version__}/"
+           f"BeanNetworkTester-v{appinfo.__version__}-windows-x64.msi")
+    check("it downloads this release's MSI", (_field(first, "InstallerUrl") or "").endswith(msi),
+          f"({_field(first, 'InstallerUrl')})")
+    check("and checks it against this release's own hash",
+          _field(first, "InstallerSha256") == SUMS_MSI_LINE.split()[0].upper(),
+          f"({_field(first, 'InstallerSha256')})")
+
+
+def test_winget_recognises_its_msi_by_the_code_that_never_changes(tmp_path, monkeypatch):
+    """Every build gets a fresh ProductCode; the UpgradeCode is the product's identity.
+
+    Measured on Windows Server 2025: after installing, winget looked for the new
+    Programs-and-Features entry with `Include:UpgradeCode='{...}'[Exact]` and found
+    it. Exact means the registry's spelling, braces included.
+    """
+    _, entries = _winget_installers(_rendered(tmp_path, monkeypatch)["winget/installer.yaml"])
+    msi = entries[0] if entries else []
+    check("the MSI entry names the pinned UpgradeCode, braces and all",
+          _field(msi, "UpgradeCode") == "'{" + bp.MSI_UPGRADE_CODE + "}'",
+          f"({_field(msi, 'UpgradeCode')})")
+
+
+def test_existing_winget_installs_keep_their_upgrade_path(tmp_path, monkeypatch):
+    """Dropping the zip would strand everyone who installed before the MSI came first.
+
+    An upgrade only considers installers of the kind already installed, and portable
+    is compatible with nothing but portable. Measured with a manifest carrying the MSI
+    alone: upgrading a portable install ends in "No applicable installer found"
+    (0x8A150010). With both entries it upgrades as portable - same machine, same day.
+    """
+    root, entries = _winget_installers(
+        _rendered(tmp_path, monkeypatch)["winget/installer.yaml"])
+    check("the zip is still offered", len(entries) >= 2)
+    zip_entry = entries[1] if len(entries) >= 2 else []
+    check("as the second installer", _field(zip_entry, "InstallerType") == "zip",
+          f"({_field(zip_entry, 'InstallerType')})")
+    check("unpacked as the portable it always was",
+          _field(zip_entry, "NestedInstallerType") == "portable")
+    check("with the exe kept beside _internal",
+          _field(zip_entry, "ArchiveBinariesDependOnPath") == "true")
+    # At the root these would be inherited by EVERY installer, the MSI included.
+    portable_only = ("InstallerType", "NestedInstallerType", "NestedInstallerFiles",
+                     "ArchiveBinariesDependOnPath")
+    leaked = [line for line in root if line.split(":", 1)[0] in portable_only]
+    check("nothing portable-only sits at the root, where the MSI would inherit it",
+          not leaked, f"({leaked})")
+
+
+def test_a_sums_file_without_the_msi_cannot_make_the_winget_manifest(tmp_path, monkeypatch):
+    """A release candidate has no MSI, and a manifest without one would be half a fix.
+
+    Refused by NAME, so the reader looks for the missing line and not for a typo -
+    and refused before anything is written: the renderer used to write each package
+    as it went, so a refusal half-way left a render that looked finished.
+    """
+    out = tmp_path / "out"
+    monkeypatch.setattr(bp, "OUT_DIR", str(out))
+    monkeypatch.setattr(bp, "release_date", lambda version: "2026-01-01")
+    with pytest.raises(SystemExit) as refused:
+        bp.build(_sums(tmp_path, appinfo.__version__, msi=False))
+    check("the refusal says the MSI line is missing", ".msi" in str(refused.value),
+          f"({refused.value})")
+    check("and names the way out for the render before signing",
+          "--only msi" in str(refused.value), f"({refused.value})")
+    check("and nothing was written", not _read_tree(out), f"({sorted(_read_tree(out))})")
+
+
+def test_the_render_before_signing_needs_no_msi(tmp_path, monkeypatch):
+    """`tools/sign_release.py` renders the MSI's source BEFORE the MSI exists.
+
+    So the very command it runs is executed here, on the sums file it holds at that
+    moment - the zip's line alone. Without `--only msi` the WinGet manifest would
+    refuse, and phase B of a release would stop with the card in the reader.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "sign_release", os.path.join(ROOT, "tools", "sign_release.py"))
+    ritual = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ritual)
+
+    class _Stop(Exception):
+        pass
+
+    calls = []
+
+    def capture(argv, **kw):
+        calls.append(argv)
+        raise _Stop
+
+    monkeypatch.setattr(ritual, "run", capture)
+    sums = _sums(tmp_path, appinfo.__version__, msi=False)
+    with pytest.raises(_Stop):
+        ritual.build_msi(str(tmp_path), str(tmp_path), f"v{appinfo.__version__}", sums)
+    argv = calls[0] if calls else []
+    check("the ritual's first command is the renderer",
+          any(str(part).endswith("build_packages.py") for part in argv), f"({argv})")
+
+    out = tmp_path / "out"
+    monkeypatch.setattr(bp, "OUT_DIR", str(out))
+    monkeypatch.setattr(bp, "release_date", lambda version: "2026-01-01")
+    script = [str(part) for part in argv]
+    index = next((i for i, part in enumerate(script) if part.endswith("build_packages.py")), 0)
+    bp.main(script[index + 1:])
+    check("and on the zip's line alone it renders the MSI's source, and only that",
+          sorted(_read_tree(out)) == ["msi/BeanNetworkTester.wxs"], f"({sorted(_read_tree(out))})")
+
+
+def test_two_lines_for_one_asset_are_refused(tmp_path):
+    """Two zip lines means two sums files were concatenated; neither is chosen."""
+    path = tmp_path / "SHA256SUMS.txt"
+    path.write_text(SUMS_LINE.format(version="1.0.0") + SUMS_LINE.format(version="1.0.1"),
+                    encoding="utf-8")
+    with pytest.raises(SystemExit) as refused:
+        bp.parse_sums(str(path))
+    check("the refusal names both files", "1.0.0" in str(refused.value)
+          and "1.0.1" in str(refused.value), f"({refused.value})")
+
+
+def test_the_chocolatey_package_adds_a_start_menu_entry(tmp_path, monkeypatch):
+    """Chocolatey puts a shim on PATH and nothing in the Start Menu by itself.
+
+    Measured on Windows Server 2025 from the public feed: 0.7.0 installed, zero new
+    shortcuts. The entry points at the exe where it lies, beside `_internal` - the
+    shim is a console program and would open a console window first.
+    """
+    files = _rendered(tmp_path, monkeypatch)
+    install = _code(files["chocolatey/tools/chocolateyinstall.ps1"])
+    exe = f"Join-Path $toolsDir '{appinfo.TOOL_ID}\\{appinfo.EXE_NAME}'"
+    check("the target is the exe inside the unpacked archive",
+          any(line.startswith("$exe = ") and exe in line for line in install), f"({exe})")
+    check("the entry is made", any("Install-ChocolateyShortcut" in line for line in install))
+    check("for every user of the computer, as Chocolatey installs",
+          any("GetFolderPath('CommonPrograms')" in line for line in install))
+    check("pointing at that exe", any(line.strip() == "-TargetPath $exe `" for line in install))
+    uninstall = _code(files["chocolatey/tools/chocolateyuninstall.ps1"])
+    check("and the uninstall takes it away again",
+          any(line.strip().startswith("Remove-Item -LiteralPath $shortcut") for line in uninstall))
+
+
+def test_the_start_menu_entry_has_one_name_for_every_installer(tmp_path, monkeypatch):
+    """One program, one entry - and the foreign-entry rule below depends on it.
+
+    The Chocolatey scripts recognise the MSI's entry because it is the SAME file. An
+    entry with a name of its own would sit beside the MSI's as a second "Bean Network
+    Tester", and neither package would know about the other.
+    """
+    files = _rendered(tmp_path, monkeypatch)
+    wxs = files["msi/BeanNetworkTester.wxs"]
+    check("the MSI's entry is named after the program",
+          re.search(r'<Shortcut\s[^>]*Name="' + re.escape(appinfo.APP_NAME) + '"', wxs, re.S)
+          is not None)
+    name = f"'{appinfo.APP_NAME}.lnk'"
+    for script in ("chocolateyinstall.ps1", "chocolateyuninstall.ps1"):
+        code = _code(files[f"chocolatey/tools/{script}"])
+        check(f"{script} uses the same file name",
+              any(line.startswith("$shortcut = ") and line.endswith(name) for line in code),
+              f"({name})")
+
+
+def test_neither_chocolatey_script_touches_an_entry_it_does_not_own(tmp_path, monkeypatch):
+    """With the MSI installed too, the Start Menu entry is the MSI's.
+
+    Overwriting it would hand it to Chocolatey, and Chocolatey's uninstall would then
+    delete the only entry the MSI has. Measured on Windows Server 2025: with the MSI
+    installed, a Chocolatey install and uninstall both leave its entry pointing at
+    Program Files; an entry whose target is gone is replaced.
+
+    These are text checks on the shape that measurement proved, and the mutation
+    registry holds the proof that they can fail.
+    """
+    files = _rendered(tmp_path, monkeypatch)
+    install = _code(files["chocolatey/tools/chocolateyinstall.ps1"])
+    ours = "$target.StartsWith($toolsDir + '\\', [System.StringComparison]::OrdinalIgnoreCase)"
+    check("the install asks whether an existing entry is its own",
+          any(ours in line for line in install))
+    check("and whether its target still exists",
+          any("Test-Path -LiteralPath $target" in line for line in install))
+    branch = [line.strip() for line in install]
+    guarded = ("if ($owner) {" in branch and "} else {" in branch
+               and "Install-ChocolateyShortcut `" in branch
+               and branch.index("if ($owner) {") < branch.index("} else {")
+               < branch.index("Install-ChocolateyShortcut `"))
+    check("and makes the entry only when nobody else owns it", guarded)
+
+    uninstall = _code(files["chocolatey/tools/chocolateyuninstall.ps1"])
+    removal = [i for i, line in enumerate(uninstall) if "Remove-Item" in line]
+    guard = [i for i, line in enumerate(uninstall) if line.strip().startswith("if (") and ours in line]
+    check("the uninstall removes the entry only when it points into this package",
+          len(removal) == 1 and len(guard) == 1 and guard[0] == removal[0] - 1,
+          f"(guard {guard}, removal {removal})")
+
+
+def test_an_apostrophe_in_the_tagline_cannot_break_the_install_script(tmp_path, monkeypatch):
+    """The tagline is website copy, and it lands inside a single-quoted PowerShell string.
+
+    One "don't" in it would have been a syntax error in Chocolatey's install - the
+    install would fail before it unpacked anything.
+    """
+    real = bp._read_json
+
+    def with_apostrophe(*parts):
+        data = real(*parts)
+        if parts[-1] == "en.json":
+            data = dict(data, **{"site.tagline": "Don't trust the network"})
+        return data
+
+    monkeypatch.setattr(bp, "_read_json", with_apostrophe)
+    install = _rendered(tmp_path, monkeypatch)["chocolatey/tools/chocolateyinstall.ps1"]
+    check("the apostrophe is written twice, PowerShell's escape inside single quotes",
+          "-Description 'Don''t trust the network'" in install)
+
+
+@pytest.mark.skipif(not shutil.which("powershell.exe"),
+                    reason="Windows PowerShell 5.1 exists on Windows only")
+def test_the_rendered_chocolatey_scripts_parse_in_windows_powershell(tmp_path, monkeypatch):
+    """Chocolatey runs package scripts with Windows PowerShell 5.1, so 5.1 parses them.
+
+    This is the one place convention 46 points the other way: the shell is not ours
+    to choose. A parse error here is an install that fails on every machine, and the
+    text checks above cannot see one.
+    """
+    import subprocess
+
+    files = _rendered(tmp_path, monkeypatch)
+    for name in ("chocolateyinstall.ps1", "chocolateyuninstall.ps1",
+                 "chocolateybeforemodify.ps1"):
+        path = tmp_path / "out" / "chocolatey" / "tools" / name
+        command = ("$e = $null; $t = $null; "
+                   "[System.Management.Automation.Language.Parser]::ParseFile("
+                   f"'{path}', [ref]$t, [ref]$e) | Out-Null; "
+                   "$e | ForEach-Object { $_.Message }")
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive",
+                                 "-Command", command],
+                                capture_output=True, text=True, timeout=120)
+        check(f"{name} exists", f"chocolatey/tools/{name}" in files)
+        check(f"{name} parses without errors",
+              result.returncode == 0 and not result.stdout.strip(),
+              f"(exit {result.returncode}: {result.stdout.strip()} {result.stderr.strip()})")
 
 
 # -- the MSI, whose mistakes are the ones that cannot be taken back ------------- #

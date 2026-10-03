@@ -704,6 +704,141 @@ MUTATIONS = [
         "test": "test_the_chocolatey_scripts_release_the_driver_before_a_change",
     },
     {
+        # The Start Menu entry, WinGet half. Older clients keep the FIRST applicable
+        # installer, so a zip listed ahead of the MSI is a fresh install with no
+        # Start Menu entry again - the fault this whole change exists to remove.
+        "label": "packaging: winget offers the zip ahead of the MSI again",
+        "file": "packaging/winget/installer.yaml.in",
+        "old": "Installers:\n- Architecture: x64\n  InstallerType: wix\n",
+        "new": "Installers:\n- Architecture: x64\n  InstallerType: zip\n"
+               "  NestedInstallerType: portable\n  InstallerUrl: {{URL}}\n"
+               "  InstallerSha256: {{SHA256_UPPER}}\n"
+               "- Architecture: x64\n  InstallerType: wix\n",
+        "test": "test_a_fresh_winget_install_gets_the_msi",
+    },
+    {
+        # Measured: with the MSI alone, upgrading a portable install ends in "No
+        # applicable installer found". The zip entry is what existing installs
+        # upgrade through.
+        "label": "packaging: winget drops the portable installer existing installs need",
+        "file": "packaging/winget/installer.yaml.in",
+        "old": "  InstallerType: zip\n  NestedInstallerType: portable\n",
+        "new": "  InstallerType: wix\n",
+        "test": "test_existing_winget_installs_keep_their_upgrade_path",
+    },
+    {
+        # At the root a field is inherited by every installer, the MSI included.
+        "label": "packaging: a portable-only field moves back to the manifest root",
+        "file": "packaging/winget/installer.yaml.in",
+        "old": "ReleaseDate: {{RELEASE_DATE}}\n",
+        "new": "ReleaseDate: {{RELEASE_DATE}}\nNestedInstallerType: portable\n",
+        "test": "test_existing_winget_installs_keep_their_upgrade_path",
+    },
+    {
+        # WinGet matches the installed MSI against this value EXACTLY, and the
+        # registry spells it with braces. Without them the match fails quietly.
+        "label": "packaging: the MSI's UpgradeCode reaches winget without its braces",
+        "file": "tools/build_packages.py",
+        "old": '        "UPGRADE_CODE_BRACED": "{" + MSI_UPGRADE_CODE + "}",\n',
+        "new": '        "UPGRADE_CODE_BRACED": MSI_UPGRADE_CODE,\n',
+        "test": "test_winget_recognises_its_msi_by_the_code_that_never_changes",
+    },
+    {
+        # Without the named refusal the generic "unknown placeholder" fires, which
+        # sends the reader looking for a typo instead of the missing MSI line.
+        "label": "packaging: a sums file without the MSI is not refused by name",
+        "file": "tools/build_packages.py",
+        "old": '        if msi is None and any(name.startswith("MSI_") for name in wanted):\n',
+        "new": "        if False:\n",
+        "test": "test_a_sums_file_without_the_msi_cannot_make_the_winget_manifest",
+    },
+    {
+        # The renderer used to write each package as it went; a refusal half-way
+        # left the earlier ones on disk, looking like a finished render.
+        "label": "packaging: a refused render leaves the packages written so far",
+        "file": "tools/build_packages.py",
+        "old": "        rendered.append((os.path.join(OUT_DIR, relative)"
+               "[: -len(TEMPLATE_SUFFIX)], text))\n",
+        "new": "        early = os.path.join(OUT_DIR, relative)[: -len(TEMPLATE_SUFFIX)]\n"
+               "        os.makedirs(os.path.dirname(early), exist_ok=True)\n"
+               "        with open(early, \"w\", encoding=\"utf-8\") as f:\n"
+               "            f.write(text)\n"
+               "        rendered.append((early, text))\n",
+        "test": "test_a_sums_file_without_the_msi_cannot_make_the_winget_manifest",
+    },
+    {
+        # Two lines for one asset means two sums files were concatenated.
+        "label": "packaging: a second zip line silently replaces the first",
+        "file": "tools/build_packages.py",
+        "old": "            if suffix in found:\n",
+        "new": "            if False:\n",
+        "test": "test_two_lines_for_one_asset_are_refused",
+    },
+    {
+        # Phase B renders the MSI's source BEFORE the MSI exists, from a sums file
+        # holding the zip alone - and the WinGet manifest refuses that file.
+        "label": "release: the signing ritual renders every package before the MSI exists",
+        "file": "tools/sign_release.py",
+        "old": '"--sums", sums_path, "--version", version, "--only", "msi"])',
+        "new": '"--sums", sums_path, "--version", version])',
+        "test": "test_the_render_before_signing_needs_no_msi",
+    },
+    {
+        # The Start Menu entry, Chocolatey half: Chocolatey itself adds a shim to
+        # PATH and nothing to the Start Menu (measured from the public feed).
+        "label": "packaging: chocolatey stops adding the Start Menu entry",
+        "file": "packaging/chocolatey/tools/chocolateyinstall.ps1.in",
+        "old": "    Install-ChocolateyShortcut `\n",
+        "new": "    Write-Verbose `\n",
+        "test": "test_the_chocolatey_package_adds_a_start_menu_entry",
+    },
+    {
+        # With the MSI installed too, the entry is the MSI's: overwriting it hands it
+        # to Chocolatey, whose uninstall then deletes the MSI's only entry.
+        "label": "packaging: chocolatey overwrites the Start Menu entry of another install",
+        "file": "packaging/chocolatey/tools/chocolateyinstall.ps1.in",
+        "old": "if ($owner) {\n",
+        "new": "if ($false) {\n",
+        "test": "test_neither_chocolatey_script_touches_an_entry_it_does_not_own",
+    },
+    {
+        "label": "packaging: chocolatey's uninstall deletes an entry it does not own",
+        "file": "packaging/chocolatey/tools/chocolateyuninstall.ps1.in",
+        "old": "    if ($target -and $target.StartsWith($toolsDir + '\\', "
+               "[System.StringComparison]::OrdinalIgnoreCase)) {\n",
+        "new": "    if ($true) {\n",
+        "test": "test_neither_chocolatey_script_touches_an_entry_it_does_not_own",
+    },
+    {
+        # A name of its own would be a second "Bean Network Tester" beside the MSI's
+        # entry, and the foreign-entry rule would never see the MSI's file.
+        "label": "packaging: chocolatey's Start Menu entry gets a name of its own",
+        "file": "packaging/chocolatey/tools/chocolateyinstall.ps1.in",
+        "old": "$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "
+               "'{{APP_NAME}}.lnk'\n",
+        "new": "$shortcut = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "
+               "'{{APP_NAME}} (Chocolatey).lnk'\n",
+        "test": "test_the_start_menu_entry_has_one_name_for_every_installer",
+    },
+    {
+        # The tagline is website copy inside a single-quoted PowerShell string.
+        "label": "packaging: an apostrophe in the tagline reaches PowerShell undoubled",
+        "file": "tools/build_packages.py",
+        "old": "        \"TAGLINE_PS\": tagline.replace(\"'\", \"''\"),\n",
+        "new": "        \"TAGLINE_PS\": tagline,\n",
+        "test": "test_an_apostrophe_in_the_tagline_cannot_break_the_install_script",
+    },
+    {
+        # A parse error is an install that fails on every machine, and no text check
+        # sees one. Windows PowerShell 5.1 is what Chocolatey runs - and what the
+        # mutation job's windows runner has.
+        "label": "packaging: a chocolatey script stops parsing",
+        "file": "packaging/chocolatey/tools/chocolateyinstall.ps1.in",
+        "old": "    $ours = $target -and",
+        "new": "    $ours = ($target -and",
+        "test": "test_the_rendered_chocolatey_scripts_parse_in_windows_powershell",
+    },
+    {
         # The message that answers "where is my file". It was the basename while the
         # file sat next to the exe, and nothing else on screen names the directory.
         "label": "csv: the export log names the file but not where it went",
