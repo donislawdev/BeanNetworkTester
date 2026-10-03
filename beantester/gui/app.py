@@ -46,7 +46,7 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import applied, clipboard, dialogs, session_repro
+from . import applied, clipboard, configure, dialogs, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
@@ -845,8 +845,8 @@ class App:
         if self._transition is not None:
             return                      # a start/stop is in flight: button stays transitional
         blocked = form.has_errors() and not self.running
-        try:
-            btn.config(state="disabled" if blocked else "normal")
+        try:                            # every keystroke: unchanged = no re-layout
+            configure.configure_changed(btn, state="disabled" if blocked else "normal")
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 

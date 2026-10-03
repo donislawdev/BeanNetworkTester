@@ -18,6 +18,7 @@ from ...i18n import T
 from ...views import event_cells, sort_events
 from ..chart import draw_throughput_chart
 from ..clipboard import copy_confirmed
+from ..configure import configure_changed
 from ..labels import sync_note, wrapping_label
 from ..rates import average_kbps, format_rate, rate_with_unit, RATE_FIELD_KEYS, UNIT_LABEL
 from ..scaling import scaled
@@ -144,6 +145,7 @@ class StatsPage:
         self._cells = []
         self._grid_cols = 0
         self._chart_job = None
+        self._chart_drawn = None        # what the chart on screen was drawn from
 
         self._build_live(self.tabs["live"])
         self._build_session(self.tabs["session"])
@@ -431,11 +433,25 @@ class StatsPage:
         return T(THROUGHPUT_TITLES[self.app.coverage().state], s=f"{secs:.0f}")
 
     def draw_chart(self):
+        """Redraw the chart, unless what it is drawn from has not changed.
+
+        Every tick asked for a full redraw - ``delete("all")`` and ~19 new items,
+        1.7 ms on real Tk (2026-10-03) - and on a stopped session the picture is
+        the same one for as long as the window stays open. The size is part of
+        what it is drawn from, so a resize still redraws; the language is not,
+        because a language switch builds a new page.
+        """
         self._chart_job = None
+        app = self.app
         try:
-            draw_throughput_chart(self.canvas, self.app.down_hist, self.app.up_hist,
-                                  sample_interval_s=self.app.TICK_MS / 1000.0,
-                                  unit=self.app.pref("rate_unit"))
+            source = (self.canvas.winfo_width(), self.canvas.winfo_height(),
+                      app.pref("rate_unit"), tuple(app.down_hist), tuple(app.up_hist))
+            if source == self._chart_drawn:
+                return
+            draw_throughput_chart(self.canvas, app.down_hist, app.up_hist,
+                                  sample_interval_s=app.TICK_MS / 1000.0,
+                                  unit=source[2])
+            self._chart_drawn = source      # after the draw: a failed one is retried
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.stats")
 
@@ -504,13 +520,19 @@ class StatsPage:
                     caption.config(text=T(cap) + (f" ({label})" if label else ""))
 
     def refresh_counters(self):
+        """Rewrite the counters - only those whose text moved (``configure_changed``).
+
+        Writing all 22 back every tick, changed or not, was 3.7-4.0 ms of re-layout
+        on real Tk (2026-10-03, performance review W-C2); most of them sit still for
+        a whole session.
+        """
         self._sync_scope_note()
-        self._chart_frame.config(text=self._throughput_title())
+        configure_changed(self._chart_frame, text=self._throughput_title())
         snap = self.app.last_snapshot or {}
         rates = self.app.last_rates
         unit = self.app.pref("rate_unit")
-        self.stat_labels["down"].config(text=format_rate(rates[0], unit))
-        self.stat_labels["up"].config(text=format_rate(rates[1], unit))
+        configure_changed(self.stat_labels["down"], text=format_rate(rates[0], unit))
+        configure_changed(self.stat_labels["up"], text=format_rate(rates[1], unit))
         self._sync_rate_captions(unit)
         # `seen` is the only counter here with a scoped twin. The impairment
         # counters are already scoped by construction (nothing outside the target
@@ -523,7 +545,8 @@ class StatsPage:
                     "drop_rate", "drop_syn", "drop_mtu",
                     "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",
                     "drop_block", "drop_flap", "rst_sent"):
-            self.stat_labels[key].config(text=str(self.app.scoped_stat(snap, key)))
+            configure_changed(self.stat_labels[key],
+                              text=str(self.app.scoped_stat(snap, key)))
 
     def refresh_session(self):
         from ...utils import bytes_to_mb, human_duration, host_identity

@@ -6769,6 +6769,62 @@ MUTATIONS = [
         "new": "            elif not c[\"proc\"] and local_port is None:\n",
         "test": "test_a_portless_row_asks_for_its_owner_once",
     },
+    {
+        # R-4 (W-C2/W-C4): the helper every skipped configure goes through.
+        "label": "configure (R-4): an option that already holds is configured again",
+        "file": "beantester/gui/configure.py",
+        "old": ("    if str(widget.cget(name)) != str(value):\n"
+                "        return False\n"),
+        "new": ("    if True:\n"
+                "        return False\n"),
+        "test": "test_configure_changed_leaves_an_unchanged_option_alone",
+    },
+    {
+        "label": "configure (R-4): a ttk state is judged by its option alone",
+        "file": "beantester/gui/configure.py",
+        "old": "    if name != \"state\" or not hasattr(widget, \"instate\"):\n",
+        "new": "    if True:\n",
+        "test": "test_configure_changed_does_not_trust_the_state_option_alone",
+    },
+    {
+        "label": "stats (R-4, W-C2): the live counters are rewritten every tick",
+        "file": "beantester/gui/pages/stats.py",
+        "old": ("            configure_changed(self.stat_labels[key],\n"
+                "                              text=str(self.app.scoped_stat(snap, key)))\n"),
+        "new": ("            self.stat_labels[key].configure(\n"
+                "                              text=str(self.app.scoped_stat(snap, key)))\n"),
+        "test": "test_the_live_counters_are_not_rewritten_when_nothing_moved",
+    },
+    {
+        "label": "stats (R-4, W-C2): the chart is redrawn from the same data",
+        "file": "beantester/gui/pages/stats.py",
+        "old": ("            if source == self._chart_drawn:\n"
+                "                return\n"),
+        "new": ("            if False:\n"
+                "                return\n"),
+        "test": "test_the_chart_is_not_redrawn_from_the_same_data",
+    },
+    {
+        "label": "form (R-4, W-C4): a keystroke re-marks every field it validates",
+        "file": "beantester/gui/form.py",
+        "old": "            configure_changed(entry, style=\"TEntry\" if ok else \"Bad.TEntry\")\n",
+        "new": "            entry.config(style=\"TEntry\" if ok else \"Bad.TEntry\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
+    {
+        "label": "form (R-4, W-C4): a keystroke re-sets the state of every overridable field",
+        "file": "beantester/gui/form.py",
+        "old": "                        configure_changed(entry, state=\"disabled\" if dead else \"normal\")\n",
+        "new": "                        entry.config(state=\"disabled\" if dead else \"normal\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
+    {
+        "label": "app (R-4, W-C4): a keystroke re-sets the START button's state",
+        "file": "beantester/gui/app.py",
+        "old": "            configure.configure_changed(btn, state=\"disabled\" if blocked else \"normal\")\n",
+        "new": "            btn.config(state=\"disabled\" if blocked else \"normal\")\n",
+        "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

@@ -1457,6 +1457,7 @@ beantester/              the implementation package
     toolbox/             the Tools tab: its registry of tools and one panel per tool
     field_actions.py     filling a Control-page field from elsewhere (table row menus, Tools tab)
     clipboard.py         copying a whole text, confirmed by reading the clipboard back
+    configure.py         configuring a widget with only the options that really change
     panels/              secondary windows: "About", "Settings" and the pop-out event log
     widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap, row menu)
     model_worker.py      rebuilds a table's model on a worker thread (UI never blocks)
