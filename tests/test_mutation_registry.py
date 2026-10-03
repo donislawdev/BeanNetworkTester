@@ -4053,6 +4053,38 @@ MUTATIONS = [
         "test": "test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine",
     },
     {
+        # Performance review W-D9: one snapshot at the end of a CLI run, cut for
+        # the listing, the summary and the report. Each of these four puts back a
+        # second walk of the log or a wrong cut.
+        "label": "repro: the report keeps every row it is handed, uncut",
+        "file": "beantester/repro.py",
+        "old": "                     if connections is None else connections[:REPORT_CONNECTIONS]),",
+        "new": "                     if connections is None else connections),",
+        "test": "test_the_report_cuts_the_rows_it_is_given_instead_of_walking_the_log_again",
+    },
+    {
+        "label": "cli: the repro report walks the connection log again",
+        "file": "beantester/cli.py",
+        "old": "            save_repro_report(cfg[\"repro_out\"], engine, cfg[\"settings\"],\n"
+               "                              connections=conns)",
+        "new": "            save_repro_report(cfg[\"repro_out\"], engine, cfg[\"settings\"])",
+        "test": "test_a_finished_run_takes_one_connection_snapshot_for_every_artefact",
+    },
+    {
+        "label": "cli: the summary walks the connection log again",
+        "file": "beantester/cli.py",
+        "old": "        record[\"connections\"] = conns[:CONSOLE_CONNECTIONS]",
+        "new": "        record[\"connections\"] = engine.connections_snapshot(limit=CONSOLE_CONNECTIONS)",
+        "test": "test_a_finished_run_takes_one_connection_snapshot_for_every_artefact",
+    },
+    {
+        "label": "cli: the one snapshot is sized for the listing, not the report",
+        "file": "beantester/cli.py",
+        "old": "            limit=max(REPORT_CONNECTIONS, CONSOLE_CONNECTIONS))",
+        "new": "            limit=CONSOLE_CONNECTIONS)",
+        "test": "test_a_finished_run_takes_one_connection_snapshot_for_every_artefact",
+    },
+    {
         "label": "repro: the command drops the scenario",
         "file": "beantester/repro.py",
         "old": "    if scenario:\n        args += [\"--scenario\", str(scenario)]\n",

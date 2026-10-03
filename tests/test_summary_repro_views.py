@@ -556,6 +556,31 @@ def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine
           "--scenario" not in after and "--loop" not in after, f"({after})")
 
 
+def test_the_report_cuts_the_rows_it_is_given_instead_of_walking_the_log_again():
+    """The CLI hands the report its one end-of-run snapshot (performance review W-D9).
+
+    Rows given: the newest 50 of them, and the log is not walked a second time.
+    None given (the GUI's call): the report takes its own 50, as it always did.
+    """
+    from beantester import DEFAULT_SETTINGS, build_repro_report
+
+    eng = BeanEngine()
+    asked = []
+
+    def snapshot(limit=200):
+        asked.append(limit)
+        return []
+
+    eng.connections_snapshot = snapshot
+    rows = [dict(remote_ip="10.0.0.%d" % i, last=1000.0 - i) for i in range(70)]
+    given = build_repro_report(eng, dict(DEFAULT_SETTINGS), connections=rows)
+    check("report: the given rows, cut to the newest 50",
+          given["connections"] == rows[:50], f"({len(given['connections'])} rows)")
+    check("report: and the log is not walked again", asked == [], f"({asked})")
+    build_repro_report(eng, dict(DEFAULT_SETTINGS))
+    check("report: with none given it takes its own 50", asked == [50], f"({asked})")
+
+
 def test_the_command_survives_the_shell_it_is_pasted_into():
     """The command is pasted into cmd.exe; what arrives is what was meant (P3-14).
 

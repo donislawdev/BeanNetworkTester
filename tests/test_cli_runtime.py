@@ -16,8 +16,9 @@ import time
 
 from beantester import cli as cli_module
 from beantester import exitcodes, winenv
-from beantester.cli import (_Terminated, _print_conns, build_arg_parser,
+from beantester.cli import (_Terminated, _print_conn_rows, build_arg_parser,
                             config_from_args, run_cli)
+from beantester.engine import BeanEngine
 from fakes import check
 
 
@@ -191,20 +192,70 @@ def test_the_connection_listing_survives_a_row_with_no_ports():
         def info(self, msg):
             lines.append(msg)
 
-    class _Engine:
-        def connections_snapshot(self, limit=30):
-            return [dict(remote_ip="8.8.8.8", remote_port=None, local_port=None,
-                         packets=7, bytes=686, dir="out", proto="ICMP"),
-                    dict(remote_ip="1.1.1.1", remote_port=443, local_port=5000,
-                         packets=2, bytes=200, dir="out", proto="TCP")]
+    rows = [dict(remote_ip="8.8.8.8", remote_port=None, local_port=None,
+                 packets=7, bytes=686, dir="out", proto="ICMP"),
+            dict(remote_ip="1.1.1.1", remote_port=443, local_port=5000,
+                 packets=2, bytes=200, dir="out", proto="TCP")]
 
-    _print_conns(_Engine(), _Log())
+    _print_conn_rows(rows, _Log())
     body = "\n".join(lines)
     check("conns listing: both rows printed", len(lines) == 3, f"({lines})")
     check("conns listing: the portless row shows a placeholder, not None",
           "8.8.8.8:-" in body and "None" not in body, f"({body})")
     check("conns listing: a normal row still shows its ports",
           "1.1.1.1:443" in body and "local:5000" in body, f"({body})")
+
+
+def test_a_finished_run_takes_one_connection_snapshot_for_every_artefact(
+        tmp_path, monkeypatch):
+    """--log-conns and --repro-out are cut from ONE snapshot (performance review W-D9).
+
+    Each took its own: up to three walks of a log that may hold 200 000 rows
+    (~50 ms each), and three answers a run ended by a fault could let drift apart.
+    The rows are made up and plentiful, so the cut shows: the newest 30 in the
+    listing and the summary, the newest 50 in the report, all from one list.
+    """
+    rows = [dict(remote_ip="10.0.0.%d" % i, remote_port=443, local_port=5000 + i,
+                 packets=i, bytes=100 * i, dir="out", proto="TCP", last=1000.0 - i)
+            for i in range(80)]
+    asked = []
+
+    def snapshot(self, limit=200):
+        asked.append(limit)
+        return rows[:limit]
+
+    monkeypatch.setattr(BeanEngine, "connections_snapshot", snapshot)
+    report = str(tmp_path / "rep.json")
+
+    code, _, err = cli(["--simulate", "--duration", "1", "--log-conns",
+                        "--repro-out", report])
+    listed = [line for line in err.splitlines() if " local:" in line]   # the log channel
+    with open(report, encoding="utf-8") as f:
+        kept = json.load(f)["connections"]
+    check("one snapshot: the text run ends OK", code == exitcodes.OK, f"({code})")
+    check("one snapshot: the text run asks the log once", asked == [50], f"({asked})")
+    check("one snapshot: the listing shows the newest 30",
+          len(listed) == 30 and "10.0.0.0:" in listed[0], f"({len(listed)})")
+    check("one snapshot: the report keeps the newest 50", kept == rows[:50],
+          f"({len(kept)} rows)")
+
+    asked.clear()
+    code, out, _ = cli(["--simulate", "--duration", "1", "--log-conns",
+                        "--format", "json", "--repro-out", report])
+    records = [json.loads(line) for line in out.splitlines() if line.strip()]
+    summary = [r for r in records if r.get("event") == "summary"][-1]
+    check("one snapshot: the JSON run asks the log once", asked == [50], f"({asked})")
+    check("one snapshot: the summary carries the report's first 30",
+          summary["connections"] == rows[:30], f"({len(summary['connections'])} rows)")
+
+    asked.clear()
+    cli(["--simulate", "--duration", "1", "--log-conns", "--format", "json"])
+    check("one snapshot: without a report, only the 30 it lists", asked == [30],
+          f"({asked})")
+
+    asked.clear()
+    cli(["--simulate", "--duration", "1"])
+    check("one snapshot: nobody asks for rows, no snapshot", asked == [], f"({asked})")
 
 
 # --- targeting: a target that stops matching must not be silent ------------- #
