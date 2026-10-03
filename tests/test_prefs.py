@@ -186,7 +186,7 @@ def test_log_length_follows_the_preference():
     run_gui("""
         app.set_pref("log_lines", 50)
         for i in range(400):
-            app._logview._append(f"line {i}")
+            app._logview._write_lines([f"line {i}"])
         # kept list is bounded to the preference (plus a small hysteresis margin)
         assert len(app._log_lines) <= 50 + 100, len(app._log_lines)
         assert app._log_lines[-1] == "line 399"

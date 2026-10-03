@@ -6873,9 +6873,9 @@ MUTATIONS = [
         "label": "logview (R-4, W-C3): queued lines are written one by one",
         "file": "beantester/gui/logview.py",
         "old": ("        if batch:\n"
-                "            self._append(batch)\n"),
+                "            self._write_lines(batch)\n"),
         "new": ("        for line in batch:\n"
-                "            self._append([line])\n"),
+                "            self._write_lines([line])\n"),
         "test": "test_queued_log_lines_reach_the_box_in_one_write",
     },
     {
@@ -6914,21 +6914,29 @@ MUTATIONS = [
         "file": "beantester/gui/pages/conns.py",
         "old": "            app.proc_map = port_process_map(refresh=False) or app.proc_map\n",
         "new": "            app.proc_map = port_process_map() or app.proc_map\n",
-        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
     },
     {
         "label": "conns (R-4, W-B3): a stopped session keeps rebuilding the process map",
         "file": "beantester/gui/pages/conns.py",
-        "old": "        if app.running and (now - self._proc_t) > PROC_MAP_S:\n",
-        "new": "        if (now - self._proc_t) > PROC_MAP_S:\n",
-        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if self._proc_t is None or now - self._proc_t > PROC_MAP_S:\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
     },
     {
         "label": "conns (R-4, W-B3): the process map is rebuilt on every refresh",
         "file": "beantester/gui/pages/conns.py",
-        "old": "        if app.running and (now - self._proc_t) > PROC_MAP_S:\n",
-        "new": "        if app.running:\n",
-        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if self._proc_t is None or app.running:\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
+    },
+    {
+        # review of PR #251: a session run on another page, the page opened after STOP
+        "label": "conns (R-4, W-B3): the page opened after STOP never reads the process map",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):\n",
+        "new": "        if app.running and (self._proc_t is None or now - self._proc_t > PROC_MAP_S):\n",
+        "test": "test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session",
     },
     {
         "label": "engine (R-4, W-C1a): a stop never says its connection log is final",

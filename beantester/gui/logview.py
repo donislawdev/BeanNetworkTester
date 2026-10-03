@@ -98,7 +98,7 @@ class LogView:
             except queue.Empty:
                 break
         if batch:
-            self._append(batch)
+            self._write_lines(batch)
 
     def _usable(self):
         """Is there a widget, and does it still exist?
@@ -120,7 +120,16 @@ class LogView:
             crashlog.note(_exc, "gui.logview")
             return False
 
-    def _append(self, batch):
+    def _write_lines(self, batch):
+        """A LIST of lines, in one insert, one trim, one scroll (see ``drain``).
+
+        It was ``_append(line)``, one line, until it started taking a batch - and
+        it was renamed for that, not just retyped. A ``str`` is iterable, so an old
+        one-line caller handed to a list-taking method does not fail: it writes
+        the line one CHARACTER per line, which is what a test calling the old name
+        did on the first push of performance review R-4. Under a new name such a
+        caller stops at an AttributeError instead.
+        """
         keep = self.app.pref("log_lines")
         self.lines.extend(batch)
         if len(self.lines) > keep + HYSTERESIS:

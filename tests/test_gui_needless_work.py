@@ -310,11 +310,14 @@ def test_the_session_page_asks_for_the_host_once_per_half_minute():
 
 
 # -- the port -> process fallback ---------------------------------------------- #
-def test_the_process_map_is_built_by_the_connections_page_in_a_session_only():
+def test_the_process_map_is_read_by_the_connections_page_on_sight_and_in_a_session():
     """App._tick built the port -> process map every 3 s on EVERY page; only the
     Connections page and the CSV export behind its button read it. The page builds
-    it now - in a session, every PROC_MAP_S, without refreshing the socket table
-    on the UI thread - and no other page does."""
+    it now - on its first refresh whatever the state, then in a session every
+    PROC_MAP_S, never refreshing the socket table on the UI thread - and no other
+    page does. The first-sight read is the review of PR #251: a session run on
+    another page and stopped before this page was opened left the map empty, and
+    every row captured without a name showed "?"."""
     run_gui("""
         from beantester import portmap
         from beantester.gui.pages import conns as conns_mod
@@ -358,6 +361,15 @@ def test_the_process_map_is_built_by_the_connections_page_in_a_session_only():
         page._proc_t -= conns_mod.PROC_MAP_S + 0.1
         page.refresh()
         assert len(BUILT) == 2, "a stopped session rebuilt the map"
+
+        # a page that has never read the map, opened after STOP: it reads it once
+        page._proc_t = None
+        app.proc_map = {}
+        page.refresh()
+        assert len(BUILT) == 3 and app.proc_map == {5001: "chrome.exe"}, BUILT
+        page._proc_t -= conns_mod.PROC_MAP_S + 0.1
+        page.refresh()
+        assert len(BUILT) == 3, "a stopped session read the map more than once"
     """)
 
 

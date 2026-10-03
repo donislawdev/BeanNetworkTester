@@ -159,7 +159,7 @@ class ConnsPage:
         self._last_build = 0.0          # throttle for the heavy filter+sort
         self._took = 0.0                # how long the last rebuild took (worker)
         self._built_from = None         # what it was made from, once nothing moves
-        self._proc_t = 0.0              # when app.proc_map was last read
+        self._proc_t = None             # when app.proc_map was last read (None: never)
         self._now = 0.0                 # session clock used by _render
         self._scope_active = False      # True when a target is narrowing traffic now
         # the filter+sort runs OFF the UI thread (see gui/model_worker.py)
@@ -602,9 +602,16 @@ class ConnsPage:
         refresh after coming back to the page reads it at once. ``refresh=False``:
         while a session runs, the engine's watchdog keeps the socket table fresh
         (see ``processes.port_process_map``).
+
+        The FIRST refresh of the page reads it whatever the state. A session run
+        entirely on another page and stopped before this one was opened left the
+        map empty - ``App._tick`` used to fill it on every page - so every row
+        captured without a name showed "?" (review of PR #251). After STOP the
+        table holds the session's last walk, which is what the map always fell
+        back to; later refreshes of a stopped session leave it alone.
         """
         app = self.app
-        if app.running and (now - self._proc_t) > PROC_MAP_S:
+        if self._proc_t is None or (app.running and now - self._proc_t > PROC_MAP_S):
             self._proc_t = now
             app.proc_map = port_process_map(refresh=False) or app.proc_map
 
