@@ -542,7 +542,18 @@ class App:
         switch. The two root banners wrap here for the same reason: as
         wrapping_label they each bound their own <Configure> on that same
         persistent root and multiplied identically.
+
+        Bound on the root, it hears the <Configure> of EVERY widget inside it:
+        394 calls while the window was built, 3 of them about a widget whose
+        width this reads (measured 2026-10-03, performance review W-C6). The
+        rest are skipped - exactly, not approximately: an event arrives for a
+        widget whenever ITS geometry changes, so only the root's or the
+        holder's own event can change what is computed here. (Filtering to the
+        root alone left the summary ~10 px stale; the holder is why.)
         """
+        if event is not None and event.widget not in (
+                self.root, getattr(self, "summary_holder", None)):
+            return
         try:
             width = self.summary_holder.winfo_width()
             if width and width > scaled(80):
@@ -1207,18 +1218,23 @@ class App:
             crashlog.note(_exc, "gui.app")
 
     def _drain_engine_warning(self):
-        """Show (or clear) "the tool is losing packets on its own". Main thread only."""
+        """Show (or clear) "the tool is losing packets on its own". Main thread only.
+
+        Reads the snapshot ``_sample`` took on this tick (``last_snapshot``). It
+        used to take a second one of its own - ``stats_snapshot`` takes the stats
+        lock AND ``_cv``, the injector's heap lock, so every tick queued twice
+        behind the packet path for the same numbers (performance review W-C6).
+        """
         text = ""
-        with crashlog.quiet("gui.app"):
-            snap = self.engine.stats_snapshot()
-            # Overflow first: it is the one the user can act on by lowering the
-            # latency or the rate. A failed injection means the tool cannot reach
-            # the wire at all, which is worth saying whenever it is the only thing
-            # wrong - both mean "the packets you are missing are on us".
-            if snap.get("drop_overflow", 0) > 0:
-                text = T("warn.queue_overflow")
-            elif snap.get("drop_send", 0) > 0:
-                text = T("warn.send_failed")
+        snap = self.last_snapshot or {}
+        # Overflow first: it is the one the user can act on by lowering the
+        # latency or the rate. A failed injection means the tool cannot reach
+        # the wire at all, which is worth saying whenever it is the only thing
+        # wrong - both mean "the packets you are missing are on us".
+        if snap.get("drop_overflow", 0) > 0:
+            text = T("warn.queue_overflow")
+        elif snap.get("drop_send", 0) > 0:
+            text = T("warn.send_failed")
         if text == self._shown_engine_warning:
             return                      # unchanged: no widget work at all
         self._shown_engine_warning = text
@@ -1752,8 +1768,8 @@ class App:
             gui_crash.leave_breadcrumb(self)   # state a NATIVE crash cannot write
             self._logview.drain()       # worker-thread log lines (main thread only)
             self._drain_target_warning()   # render the target verdict (main thread)
+            self._sample()                 # BEFORE the banner: it reads this snapshot
             self._drain_engine_warning()   # "the tool itself is dropping packets"
-            self._sample()
             if self.running:
                 # Reads the verdict on what START / "Apply changes" applied and
                 # never applies anything itself (convention 15, see the method).

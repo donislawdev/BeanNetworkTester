@@ -6846,6 +6846,52 @@ MUTATIONS = [
         "new": "    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr)))\n",
         "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
     },
+    {
+        "label": "app (R-4, W-C6): the engine banner takes a stats snapshot of its own",
+        "file": "beantester/gui/app.py",
+        "old": "        snap = self.last_snapshot or {}\n        # Overflow first",
+        "new": "        snap = self.engine.stats_snapshot()\n        # Overflow first",
+        "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
+    },
+    {
+        "label": "app (R-4, W-C6): the engine banner reads the previous tick's snapshot",
+        "file": "beantester/gui/app.py",
+        "old": ("            self._sample()                 # BEFORE the banner: it reads this snapshot\n"
+                "            self._drain_engine_warning()   # \"the tool itself is dropping packets\"\n"),
+        "new": ("            self._drain_engine_warning()   # \"the tool itself is dropping packets\"\n"
+                "            self._sample()                 # BEFORE the banner: it reads this snapshot\n"),
+        "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
+    },
+    {
+        "label": "app (R-4, W-C6): every child's resize rewraps the root labels",
+        "file": "beantester/gui/app.py",
+        "old": "        if event is not None and event.widget not in (\n",
+        "new": "        if False and event.widget not in (\n",
+        "test": "test_a_resize_inside_the_window_does_not_rewrap_the_root_labels",
+    },
+    {
+        "label": "logview (R-4, W-C3): queued lines are written one by one",
+        "file": "beantester/gui/logview.py",
+        "old": ("        if batch:\n"
+                "            self._append(batch)\n"),
+        "new": ("        for line in batch:\n"
+                "            self._append([line])\n"),
+        "test": "test_queued_log_lines_reach_the_box_in_one_write",
+    },
+    {
+        "label": "stats (R-4, W-C5): the host identity is asked on every tick",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        if self._host is None or now - self._host_at >= self.HOST_IDENTITY_S:\n",
+        "new": "        if True:\n",
+        "test": "test_the_session_page_asks_for_the_host_once_per_half_minute",
+    },
+    {
+        "label": "stats (R-4, W-C5): coming back to the sub-page keeps an old host answer",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        self._host = None               # coming back to Session asks the OS again\n",
+        "new": "        pass\n",
+        "test": "test_the_session_page_asks_for_the_host_once_per_half_minute",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

@@ -81,15 +81,24 @@ class LogView:
             crashlog.note(_exc, "gui.logview")
 
     def drain(self):
-        """Apply queued lines to the widget. Main thread only."""
+        """Apply queued lines to the widget, all of them in ONE write. Main thread only.
+
+        Line by line, each one cost two state changes, an insert, an index, a
+        scroll and a preference read: 13.0-13.1 ms for 50 queued lines on real
+        Tk, against 1.1-1.3 ms for the same 50 written at once (2026-10-03,
+        performance review W-C3). Bursts come from worker threads - a session
+        starting or stopping says several things at once.
+        """
         if not self._usable():
             return                  # UI not built yet; lines stay queued
+        batch = []
         while True:
             try:
-                line = self._queue.get_nowait()
+                batch.append(self._queue.get_nowait())
             except queue.Empty:
                 break
-            self._append(line)
+        if batch:
+            self._append(batch)
 
     def _usable(self):
         """Is there a widget, and does it still exist?
@@ -111,13 +120,13 @@ class LogView:
             crashlog.note(_exc, "gui.logview")
             return False
 
-    def _append(self, line):
+    def _append(self, batch):
         keep = self.app.pref("log_lines")
-        self.lines.append(line)
+        self.lines.extend(batch)
         if len(self.lines) > keep + HYSTERESIS:
             self.lines = self.lines[-keep:]
         self.box.config(state="normal")
-        self.box.insert("end", line + "\n")
+        self.box.insert("end", "\n".join(batch) + "\n")
         try:            # keep the widget bounded too, not just the in-memory list
             count = int(self.box.index("end-1c").split(".")[0])
             if count > keep + HYSTERESIS:

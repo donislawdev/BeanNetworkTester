@@ -10,6 +10,7 @@ down to 1366x768 and lets each grow independently.
 The counter grid reflows its column count with the window width, so a maximised
 window on a 4K screen no longer shows four narrow cells and a lot of nothing.
 """
+import time
 import tkinter as tk
 from tkinter import ttk
 
@@ -146,6 +147,7 @@ class StatsPage:
         self._grid_cols = 0
         self._chart_job = None
         self._chart_drawn = None        # what the chart on screen was drawn from
+        self._host, self._host_at = None, 0.0   # host_identity(), and when asked
 
         self._build_live(self.tabs["live"])
         self._build_session(self.tabs["session"])
@@ -458,6 +460,7 @@ class StatsPage:
     # -- refresh ------------------------------------------------------------- #
     def _on_subpage(self):
         self.app.ui.set("stats_page", self.current())
+        self._host = None               # coming back to Session asks the OS again
         self.refresh()
 
     def current(self):
@@ -548,13 +551,30 @@ class StatsPage:
             configure_changed(self.stat_labels[key],
                               text=str(self.app.scoped_stat(snap, key)))
 
+    HOST_IDENTITY_S = 30.0
+
+    def _host_identity(self):
+        """``utils.host_identity()``, asked at most every ``HOST_IDENTITY_S``.
+
+        Asked on every tick it opened two UDP sockets each time, and on Windows
+        every one of them is a SOCKET-layer event that the engine's watcher parses
+        in Python - work made for the thread that shares the interpreter with the
+        packets, to repeat an answer that changes when the network does
+        (performance review W-C5). Entering the sub-page asks afresh.
+        """
+        from ...utils import host_identity
+        now = time.monotonic()
+        if self._host is None or now - self._host_at >= self.HOST_IDENTITY_S:
+            self._host, self._host_at = host_identity(), now
+        return self._host
+
     def refresh_session(self):
-        from ...utils import bytes_to_mb, human_duration, host_identity
+        from ...utils import bytes_to_mb, human_duration
         app = self.app
         snap = app.last_snapshot or {}
         info = app.engine.session_info()
         unit = app.pref("rate_unit")
-        host, ipv4, ipv6 = host_identity()
+        host, ipv4, ipv6 = self._host_identity()
         self.sess_labels["host"].config(text=host)
         self.sess_labels["private_ipv4"].config(text=ipv4)
         self.sess_labels["private_ipv6"].config(text=ipv6)

@@ -202,6 +202,113 @@ def test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls():
     """)
 
 
+# -- one tick ------------------------------------------------------------------ #
+def test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it():
+    """The banner took a second snapshot of its own - the stats lock and the
+    injector's heap lock, twice a tick, for the same numbers. One snapshot now, and
+    the banner must still speak about THIS tick, not the one before."""
+    run_gui("""
+        TAKEN = []
+        real = app.engine.stats_snapshot
+        def counting(*a, **k):
+            TAKEN.append(1)
+            return real(*a, **k)
+        app.engine.stats_snapshot = counting
+
+        app.engine.st["drop_overflow"] = 3
+        app._tick()
+        assert len(TAKEN) == 1, "one tick took %d stats snapshots" % len(TAKEN)
+        assert app.engine_warning.kw.get("text") == bnt.T("warn.queue_overflow"), (
+            "the banner did not see the snapshot of the tick it ran in")
+    """)
+
+
+def test_a_resize_inside_the_window_does_not_rewrap_the_root_labels():
+    """Bound on the root, the handler heard every widget's <Configure> (394 while
+    the window was built). Only the root's and the summary holder's own events can
+    change what it computes, so only those reach it."""
+    run_gui(_counting("""
+        class Event:
+            def __init__(self, widget):
+                self.widget = widget
+
+        for name in ("summary", "admin_warning", "engine_warning"):
+            if getattr(app, name) is not None:
+                counting(getattr(app, name), name)
+
+        app._on_root_configure(Event(next(iter(app.form.entries.values()))))
+        app._on_root_configure(Event(".a.widget.tkinter.never.named"))
+        assert CALLS == [], "a child's resize rewrapped the root labels: %r" % CALLS
+
+        app._on_root_configure(Event(app.root))
+        assert {"summary", "engine_warning"} <= {name for name, _ in CALLS}, CALLS
+        CALLS.clear()
+        app._on_root_configure(Event(app.summary_holder))
+        assert "summary" in {name for name, _ in CALLS}, CALLS
+        CALLS.clear()
+        app._on_root_configure()                 # called directly: as before
+        assert "summary" in {name for name, _ in CALLS}, CALLS
+    """))
+
+
+# -- the log box --------------------------------------------------------------- #
+def test_queued_log_lines_reach_the_box_in_one_write():
+    """Fifty queued lines were fifty inserts, scrolls and state changes (13 ms on
+    real Tk); they are one write now, in the same order."""
+    run_gui("""
+        import threading
+        app._logview.drain()
+        box = app.log_box
+        WRITES = []
+        real_insert = box.insert
+        def counting(where, text):
+            WRITES.append(text)
+            return real_insert(where, text)
+        box.insert = counting
+
+        lines = ["line %d" % i for i in range(50)]
+        worker = threading.Thread(target=lambda: [app.log(x) for x in lines])
+        worker.start()
+        worker.join()                            # a worker queues, it never drains
+        assert WRITES == [], "a worker thread wrote into the widget"
+
+        app._logview.drain()
+        assert len(WRITES) == 1, "%d writes for one drain" % len(WRITES)
+        stamped = app._log_lines[-50:]
+        assert [line.split("] ", 1)[1] for line in stamped] == lines
+        assert WRITES[0] == "\\n".join(stamped) + "\\n"
+    """)
+
+
+# -- Statistics > Session ------------------------------------------------------ #
+def test_the_session_page_asks_for_the_host_once_per_half_minute():
+    """Every tick opened two UDP sockets to find this machine's addresses - on
+    Windows each one a SOCKET-layer event for the engine's watcher to parse."""
+    run_gui("""
+        import beantester.utils as utils
+        ASKED = []
+        def counting():
+            ASKED.append(1)
+            return ("host", "10.0.0.2", "-")
+        utils.host_identity = counting
+
+        app.select_page("statistics")
+        page = app.current_page()
+        page.refresh_session()
+        page.refresh_session()
+        assert len(ASKED) == 1, ASKED
+        assert page.sess_labels["private_ipv4"].cget("text") == "10.0.0.2"
+
+        page._host_at -= page.HOST_IDENTITY_S    # half a minute later
+        page.refresh_session()
+        assert len(ASKED) == 2, ASKED
+
+        page._on_subpage()                       # coming back asks afresh
+        page.refresh_session()
+        assert len(ASKED) == 3, ASKED
+    """)
+
+
 # -- the Control form, one keystroke ----------------------------------------- #
 def test_a_keystroke_reconfigures_nothing_that_did_not_change():
     """A keystroke re-ran every override, mark and note in the form and configured

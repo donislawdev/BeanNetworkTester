@@ -571,6 +571,7 @@ def test_the_queue_overflow_banner_is_actually_in_the_layout():
     run_gui("""
         # the tool is dropping the user's own packets
         app.engine.st["drop_overflow"] = 500
+        app._sample()                  # the tick's snapshot, read by the banner
         app._drain_engine_warning()
 
         assert app.engine_warning.kw.get("text") == bnt.T("warn.queue_overflow")
@@ -580,6 +581,7 @@ def test_the_queue_overflow_banner_is_actually_in_the_layout():
 
         # and it goes away again when the numbers are clean
         app.engine.st["drop_overflow"] = 0
+        app._sample()                  # the tick's snapshot, read by the banner
         app._drain_engine_warning()
         assert app.engine_warning not in app.root.pack_slaves()
         assert app.engine_warning.kw.get("text") == ""
@@ -592,6 +594,7 @@ def test_the_banner_also_fires_when_the_tool_cannot_re_inject():
     can act on by lowering the latency or the rate."""
     run_gui("""
         app.engine.st["drop_send"] = 12
+        app._sample()                  # the tick's snapshot, read by the banner
         app._drain_engine_warning()
         assert app.engine_warning.kw.get("text") == bnt.T("warn.send_failed")
         assert app.engine_warning in app.root.pack_slaves(), (
@@ -599,11 +602,13 @@ def test_the_banner_also_fires_when_the_tool_cannot_re_inject():
 
         # both at once: the overflow message wins, and neither is silent
         app.engine.st["drop_overflow"] = 3
+        app._sample()                  # the tick's snapshot, read by the banner
         app._drain_engine_warning()
         assert app.engine_warning.kw.get("text") == bnt.T("warn.queue_overflow")
 
         app.engine.st["drop_overflow"] = 0
         app.engine.st["drop_send"] = 0
+        app._sample()                  # the tick's snapshot, read by the banner
         app._drain_engine_warning()
         assert app.engine_warning.kw.get("text") == ""
     """)
