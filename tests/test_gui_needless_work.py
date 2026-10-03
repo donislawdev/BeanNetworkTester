@@ -361,6 +361,95 @@ def test_the_process_map_is_built_by_the_connections_page_in_a_session_only():
     """)
 
 
+# -- the Connections table ----------------------------------------------------- #
+def test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap():
+    """A fixed second between timed rebuilds was ~140 ms of a worker every second
+    at 200 000 rows. The gap now scales with what the last rebuild took (DUTY),
+    is never shorter than the old second nor longer than MAX_REBUILD_S, and a
+    user's sort or search never waits for it."""
+    run_gui("""
+        import time
+        from beantester.gui.pages import conns
+        floor = conns.REBUILD_MS / 1000.0
+        assert conns.rebuild_interval(0.0) == floor
+        assert conns.rebuild_interval(0.02) == floor          # ~50 000 rows: as before
+        assert abs(conns.rebuild_interval(0.14) - 0.14 * conns.DUTY) < 1e-9
+        assert conns.rebuild_interval(60.0) == conns.MAX_REBUILD_S
+
+        app.select_page("connections")
+        page = app.current_page()
+        REQ = []
+        def request(payload):
+            REQ.append(payload)
+            page._apply(page._build_model(payload))   # the worker, synchronously
+        page._model.request = request
+        page.refresh(force=True)
+        assert len(REQ) == 1 and page._took > 0, "the build's own time is kept"
+
+        page._took = 0.14                               # a 200 000-row rebuild
+        page._last_build = time.monotonic() - 2.0       # 2 s ago, under 2.8 s
+        page.refresh()
+        assert len(REQ) == 1, "rebuilt before its share of the time had passed"
+        page._took = 0.14
+        page._last_build -= 1.0                         # 3 s ago
+        page.refresh()
+        assert len(REQ) == 2
+        page.refresh(force=True)                        # the user does not wait
+        assert len(REQ) == 3
+    """)
+
+
+def test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it():
+    """After STOP the page rebuilt the whole table every second for an answer
+    already on screen. Once the engine says its log is final, one rebuild lands and
+    the next ones are skipped - until something the table is made from moves, the
+    user asks, or the log can move again."""
+    run_gui("""
+        import time
+        app.select_page("connections")
+        page = app.current_page()
+        engine = app.engine
+        REQ = []
+        def request(payload):
+            REQ.append(payload)
+            page._apply(page._build_model(payload))   # the worker, synchronously
+        page._model.request = request
+
+        def tick():                                     # a tick, a second later
+            page._last_build = 0.0
+            page.refresh()
+
+        engine._stop_mono = time.monotonic()            # a session that stopped
+        assert engine.connections_settled()
+        tick()
+        tick()
+        tick()
+        assert len(REQ) == 1, "a final log was rebuilt %d times" % len(REQ)
+
+        app.conn_query = "chrome"                       # something it is made from
+        tick()
+        tick()
+        assert len(REQ) == 2, len(REQ)
+        page.refresh(force=True)                        # the user asked
+        assert len(REQ) == 3, len(REQ)
+
+        engine._conns_settled = False                   # the log can move again
+        tick()
+        tick()
+        assert len(REQ) == 5, "a moving log must be rebuilt every interval"
+        engine._conns_settled = True                    # ...and that stop is over
+        tick()
+        tick()
+        assert len(REQ) == 6, len(REQ)
+
+        page._model.request = lambda payload: REQ.append(payload)   # never lands
+        app.conn_query = "steam"
+        tick()
+        tick()
+        assert len(REQ) == 8, "a rebuild that never came back must be asked again"
+    """)
+
+
 # -- the Control form, one keystroke ----------------------------------------- #
 def test_a_keystroke_reconfigures_nothing_that_did_not_change():
     """A keystroke re-ran every override, mark and note in the form and configured

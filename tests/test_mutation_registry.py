@@ -948,7 +948,7 @@ MUTATIONS = [
         # reasons, and an entry that reddens both proves neither.
         "label": "ratchet: the class attribute ceiling is raised above the truth",
         "file": "tests/test_code_shape.py",
-        "old": "CLASS_ATTR_CEILING = 77         # gui/app.py::App",
+        "old": "CLASS_ATTR_CEILING = 76         # gui/app.py::App",
         "new": "CLASS_ATTR_CEILING = 86         # gui/app.py::App",
         "test": "test_the_class_numbers_are_the_measurement_not_a_number_above_them",
     },
@@ -6929,6 +6929,119 @@ MUTATIONS = [
         "old": "        if app.running and (now - self._proc_t) > PROC_MAP_S:\n",
         "new": "        if app.running:\n",
         "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a stop never says its connection log is final",
+        "file": "beantester/engine.py",
+        "old": "        self._conns_settled = True      # after the last write to the log: the charges\n",
+        "new": "",
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a running session claims a final connection log",
+        "file": "beantester/engine.py",
+        "old": "        self._conns_settled = False     # the log moves from here until STOP is over\n",
+        "new": "",
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): the log is called final before the stop charges its rows",
+        "file": "beantester/engine.py",
+        "old": ("        self._running = False\n"
+                "        self._session.live = False\n"),
+        "new": ("        self._running = False\n"
+                "        self._conns_settled = True\n"
+                "        self._session.live = False\n"),
+        "test": "test_the_connection_log_settles_only_after_the_stop_has_charged_its_rows",
+    },
+    {
+        "label": "engine (R-4, W-C1a): a start that never ran unsettles the log",
+        "file": "beantester/engine.py",
+        "old": ("        # changing a single packet - the kind of cosmetic lie this project hunts.\n"
+                "        self._narrowed = False\n"),
+        "new": ("        # changing a single packet - the kind of cosmetic lie this project hunts.\n"
+                "        self._narrowed = False\n"
+                "        self._conns_settled = False\n"),
+        "test": "test_a_start_that_fails_before_running_leaves_the_log_settled",
+    },
+    {
+        "label": "conns (R-4, W-C1a): a final log is rebuilt every interval after STOP",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not force and made_from is not None and made_from == self._built_from:\n",
+        "new": "        if False:\n",
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1a): a log that can still move is treated as final",
+        "file": "beantester/gui/pages/conns.py",
+        "old": ("        if not engine.connections_settled():\n"
+                "            return None\n"),
+        "new": ("        if False:\n"
+                "            return None\n"),
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1a): the page forgets what it built from",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        self._built_from = result.get(\"made_from\")\n",
+        "new": "        self._built_from = None\n",
+        "test": "test_a_stopped_session_rebuilds_the_table_once_and_then_leaves_it",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the rebuild gap ignores what the rebuild took",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, DUTY * took))\n",
+        "new": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, took))\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the rebuild gap has no upper bound",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return min(MAX_REBUILD_S, max(REBUILD_MS / 1000.0, DUTY * took))\n",
+        "new": "    return max(REBUILD_MS / 1000.0, DUTY * took)\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the page keeps the fixed one-second gap",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not force and (now - self._last_build) < rebuild_interval(self._took):\n",
+        "new": "        if not force and (now - self._last_build) < REBUILD_MS / 1000.0:\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "conns (R-4, W-C1c): the page never learns what a rebuild took",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        self._took = result.get(\"took\", self._took)\n",
+        "new": "        pass\n",
+        "test": "test_a_big_table_is_rebuilt_less_often_and_never_rarer_than_the_cap",
+    },
+    {
+        "label": "views (R-4, W-C1b): the chunks are merged in ascending order whatever is asked",
+        "file": "beantester/views.py",
+        "old": "    merged = heapq.merge(*parts, key=key, reverse=reverse)\n",
+        "new": "    merged = heapq.merge(*parts, key=key)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): a chunk is sorted ascending whatever is asked",
+        "file": "beantester/views.py",
+        "old": "        part.sort(key=key, reverse=reverse)\n",
+        "new": "        part.sort(key=key)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): the chunked sort ignores the row limit",
+        "file": "beantester/views.py",
+        "old": "    return list(itertools.islice(merged, limit or None))\n",
+        "new": "    return list(merged)\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    {
+        "label": "views (R-4, W-C1b): a big table is sorted in one piece again",
+        "file": "beantester/views.py",
+        "old": "    if len(out) > 2 * SORT_CHUNK:\n",
+        "new": "    if len(out) > 2 * SORT_CHUNK * 10 ** 9:\n",
+        "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
     },
 ]
 
