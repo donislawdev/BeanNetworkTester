@@ -1309,3 +1309,70 @@ def test_the_release_audits_its_pins_before_it_builds():
           "--path audit-env" in text)
     check("the audited set is installed with its hashes checked",
           "--require-hashes -r requirements.txt -r requirements-build.txt" in text)
+
+
+def test_osv_scanner_reads_every_pinned_requirements_file():
+    """OSV-Scanner is told which files to read, so a new pin file has to be told too.
+
+    `osv-scanner.yml` names each requirements file instead of letting the scanner
+    discover them (the comment there says why). The price of naming is that a NEW
+    pinned file - a fifth requirements set - would sit outside the scan while every
+    run stayed green. So every `requirements*.txt` that pins a version must be named
+    in BOTH jobs, and the only file allowed to stay out is one that pins nothing.
+
+    The pull-request job also keeps its SARIF to itself: a pull request from a fork
+    runs with a read-only token, and an upload would turn every outside
+    contribution red.
+
+    Two more, each paid for on the first run (pull request #255, 2026-10-03):
+
+    * `--no-resolve` in both jobs. Without it v2.6.0 resolved the unhashed scan
+      set to versions far below what pip installs (pip 9.0.3 against 26.2.1) and
+      reported 35 advisory ids that apply to nothing CI runs.
+    * the pull-request scan waits for `result-paths`. It writes its two results
+      under fixed names in the checkout and checks the pull request out over them,
+      so a pull request carrying either name - or a symlink between them - would
+      replace the baseline and pass whatever it added.
+    """
+    import glob
+    path = os.path.join(ROOT, ".github", "workflows", "osv-scanner.yml")
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+
+    def job_block(name):
+        """The lines of one top-level job, up to the next 2-space key."""
+        match = re.search(r"^  %s:\n(.*?)(?=^  [a-z][a-z0-9-]*:\s*$|\Z)" % re.escape(name),
+                          text, re.S | re.M)
+        return match.group(1) if match else None
+
+    pinned, unpinned = [], []
+    for requirements in sorted(glob.glob(os.path.join(ROOT, "requirements*.txt"))):
+        with open(requirements, encoding="utf-8") as handle:
+            pins = re.search(r"^[A-Za-z0-9._-]+(\[[^\]]*\])?==", handle.read(), re.M)
+        (pinned if pins else unpinned).append(os.path.basename(requirements))
+    # A pattern that stopped matching pins would leave nothing to demand.
+    check("the pinned requirements files are found", len(pinned) >= 4, f"({pinned})")
+
+    for job in ("scan", "scan-pr"):
+        body = job_block(job)
+        check(f"osv-scanner.yml has a {job} job", body is not None)
+        if body is None:
+            continue
+        named = set(re.findall(r"^\s+--lockfile=requirements\.txt:\./(\S+)\s*$", body, re.M))
+        check(f"{job} reads every requirements file that pins a version",
+              not set(pinned) - named, f"(missing: {sorted(set(pinned) - named)})")
+        check(f"{job} names no file that is not there",
+              named <= set(pinned) | set(unpinned),
+              f"(unknown: {sorted(named - set(pinned) - set(unpinned))})")
+        check(f"{job} does not let the scanner guess transitive versions",
+              re.search(r"^\s+--no-resolve\s*$", body, re.M) is not None)
+
+    pull_request = job_block("scan-pr") or ""
+    check("the pull-request job uploads no SARIF",
+          re.search(r"^\s+upload-sarif:\s*false\s*$", pull_request, re.M) is not None)
+    check("the pull-request scan waits for the result-path check",
+          re.search(r"^    needs:\s*\[?\s*result-paths\s*\]?\s*$", pull_request, re.M) is not None)
+    paths = job_block("result-paths") or ""
+    check("the result-path check refuses both names the comparison reads",
+          "old-results.json" in paths and "new-results.json" in paths
+          and "exit \"$found\"" in paths, "(names or the failing exit are gone)")

@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Docs
+
+- **The README says how the program's dependencies are checked for known vulnerabilities.**
+  They are now also scanned against the OSV vulnerability database every week, on every change
+  to the main branch and on every pull request. Findings on the main branch appear in the
+  repository's Security tab, and a pull request that brings in a new one fails its check.
+
 ## [0.8.0] - 2026-10-03
 
 ### BREAKING
