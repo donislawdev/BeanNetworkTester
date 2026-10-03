@@ -327,6 +327,22 @@ def test_two_lines_for_one_asset_are_refused(tmp_path):
           and "1.0.1" in str(refused.value), f"({refused.value})")
 
 
+def test_a_damaged_checksum_is_refused(tmp_path):
+    """A digest that is not 64 hex digits would ride into InstallerSha256 unchanged.
+
+    Raised in review (CodeRabbit, PR #253): the first to notice would otherwise be a
+    user whose install fails the hash check.
+    """
+    for bad in ("94359ea6", "x" * 64, "94359ea6" * 8 + "00"):
+        path = tmp_path / "SHA256SUMS.txt"
+        path.write_text(f"{bad} *BeanNetworkTester-v1.0.0-windows-x64.zip\n", encoding="utf-8")
+        with pytest.raises(SystemExit) as refused:
+            bp.parse_sums(str(path))
+        check(f"{bad[:12]}... is refused, naming the file",
+              "BeanNetworkTester-v1.0.0-windows-x64.zip" in str(refused.value),
+              f"({refused.value})")
+
+
 def test_the_chocolatey_package_adds_a_start_menu_entry(tmp_path, monkeypatch):
     """Chocolatey puts a shim on PATH and nothing in the Start Menu by itself.
 

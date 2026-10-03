@@ -767,6 +767,15 @@ MUTATIONS = [
         "test": "test_a_sums_file_without_the_msi_cannot_make_the_winget_manifest",
     },
     {
+        # Raised by CodeRabbit on PR #253: a digest that is not 64 hex digits rode
+        # straight into InstallerSha256 and the Chocolatey checksum.
+        "label": "packaging: a damaged checksum reaches the manifests",
+        "file": "tools/build_packages.py",
+        "old": "            if not SHA256_HEX.fullmatch(digest):\n",
+        "new": "            if False:\n",
+        "test": "test_a_damaged_checksum_is_refused",
+    },
+    {
         # Two lines for one asset means two sums files were concatenated.
         "label": "packaging: a second zip line silently replaces the first",
         "file": "tools/build_packages.py",

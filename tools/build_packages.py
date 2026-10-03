@@ -81,6 +81,7 @@ def _read_json(*parts):
 
 
 PACKAGED_ASSETS = (".zip", ".msi")
+SHA256_HEX = re.compile(r"[0-9A-Fa-f]{64}")
 
 
 def parse_sums(path):
@@ -108,7 +109,13 @@ def parse_sums(path):
             # picking either one would publish a checksum nobody chose.
             if suffix in found:
                 raise SystemExit(f"{path}: two {suffix} lines ({found[suffix][1]}, {name})")
-            found[suffix] = (digest.strip(), name)
+            # A SHA-256 is 64 hex digits and nothing else. A damaged line would
+            # otherwise ride straight into InstallerSha256 and the Chocolatey checksum,
+            # and the first to notice would be a user whose install fails.
+            digest = digest.strip()
+            if not SHA256_HEX.fullmatch(digest):
+                raise SystemExit(f"{path}: {name} has no valid SHA-256 ({digest!r})")
+            found[suffix] = (digest, name)
     if ".zip" not in found:
         raise SystemExit(f"{path}: no .zip line found")
     return found
