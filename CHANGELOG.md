@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-03
+
 ### BREAKING
 
 - **A config or scenario file with a value of the wrong kind is now an error.** A switch took
@@ -60,11 +62,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   packets a second and 500 ms, the slowest packet in a hundred was 24 ms late and is now 6 to
   7 ms late. Sorting and searching still update the table at once.
 
-- **The window opens sooner and reacts faster.** Drawing the red dot of the "running" icon
-  took about a quarter of a second before the window appeared; it now takes a few
-  milliseconds. Typing in a setting, the counters on **Statistics** and the log at the bottom
-  now redraw only what changed. The program names in **Connections** are looked up once per
-  program instead of once per connection, and only while that page is open.
+- **The window opens sooner and reacts faster.** Before the window appeared, drawing the red
+  dot of the "running" icon took about a quarter of a second and loading the `pydivert`
+  package about a tenth. The icon now takes a few milliseconds, and `pydivert` is loaded at
+  the first **START**. Typing in a setting, the counters on **Statistics** and the log at the
+  bottom now redraw only what changed. The program names in **Connections** are looked up
+  once per program instead of once per connection, and only while that page is open.
 
 - **Address filters and long speed schedules take less time per packet.** With a destination
   IP or port, a block, LAN mode or **Internet only**, the program worked the answer out again
@@ -87,10 +90,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Windows reports as closed: with 36 programs holding connections, an update makes a third of
   the checks and takes a third of the time. A scenario step keeping the same target no longer
   looks it up.
-
-- **The window opens a little sooner.** At start the program now only checks that the
-  `pydivert` package is installed instead of loading it, which took about a tenth of a second
-  before the window appeared. It is loaded at the first **START**, as before.
 
 ### Fixed
 
@@ -281,10 +280,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **START no longer holds your traffic while it looks up the target process.** The
   lookup ran after the WinDivert driver had started catching packets, and nothing passed
-  them on until it finished, which took tens of milliseconds. It now runs first. The first packets also no longer count as waiting in the driver's queue, so a
-  slow START does not raise `driver_wait_peak_ms` or show the warning that WinDivert
-  held a packet. A console paused by selecting text at START no longer holds the
-  traffic either.
+  them on until it finished, which took tens of milliseconds. It now runs first. The first
+  packets also no longer count as waiting in the driver's queue, so a slow START does not
+  raise `driver_wait_peak_ms` or show the warning that WinDivert held a packet. A console
+  paused by selecting text at START no longer holds the traffic either.
 
 - **A session stuck while sending a packet back out now ends on its own.** If putting
   one packet back on the wire got stuck, for example because the WinDivert driver stopped
