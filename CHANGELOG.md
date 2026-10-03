@@ -49,6 +49,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Built with the newest Python 3.14 update.** The release build now takes the latest Python
+  3.14 release at build time, with its security fixes, instead of an older one the build
+  machine had at hand.
+
 - **A big Connections table no longer holds packets back.** With a latency set and a very
   large table on the **Connections** page, each refresh of the table stopped packet handling
   for up to 30 ms. The table is now sorted in smaller pieces, refreshed less often the larger

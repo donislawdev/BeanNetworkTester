@@ -70,6 +70,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: check the commit messages
         # Through the environment, for the same reason as the step below: a
         # `${{ }}` is pasted into the script BEFORE any shell sees it, so a
@@ -103,6 +104,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Install the linter
         run: pip install --require-hashes -r requirements-lint.txt
       # The gate. `--select` on the command line replaces the families named in
@@ -137,6 +139,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Install the type checker
         run: pip install --require-hashes -r requirements-lint.txt
       # No project dependencies installed on purpose: `pydivert` is Windows-only
@@ -161,6 +164,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Install the scanner
         run: pip install -r requirements-scan.txt
       # No --error and no --severity here: the scan reports, and tools/semgrep_gate.py
@@ -224,6 +228,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       # 🔴 The cheap question, and the one place this job can go quietly wrong.
       # If the base cannot be fetched, `git diff` fails and so does this step -
       # deliberately. The alternative shape ("could not tell, so assume nothing
@@ -338,6 +343,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Install dependencies
         run: |
           pip install --require-hashes -r requirements.txt
@@ -418,6 +424,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
           cache: pip
       - name: Install dependencies
         # 🔴 No `pip install --upgrade pip`, here or anywhere else in this repository.
@@ -610,6 +617,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
           cache: pip
       - name: Install dependencies
         run: |
@@ -720,6 +728,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.14"
+          check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Say which jobs went red, once
         shell: bash
         # Every context value travels through the environment, never into the
