@@ -206,6 +206,41 @@ class ProcessTargeting:
                 return True
         return False
 
+    def _judge(self, candidates, table):
+        """``(matched, names, judged)``: the rule run over ``candidates``.
+
+        ``judged`` are the pids that resolved to a name and are not ours. The walk
+        for ``refresh`` and ``adopt_new_pids`` alike - one loop, for the reason
+        ``_pid_matches`` is one function.
+
+        One question per pid for the whole pass: owners share their ancestors, so
+        the same few were asked about once per child (``portmap.lookup_scope``,
+        performance review W-B1).
+        """
+        matched, names, judged = set(), set(), set()
+        with portmap.lookup_scope(table):
+            for pid in candidates:
+                # Names must resolve even for HARDENED processes (Chrome's network
+                # service refuses OpenProcess), or targeting `chrome` by NAME matches
+                # nothing while targeting its PID works. That is why the name lookup
+                # is allowed its snapshot fallback - now a ~6 ms native toolhelp
+                # snapshot, not the ~2 s psutil.process_iter that used to make the
+                # first target-start crawl (see portmap._process_table).
+                name = table.name_of(pid)
+                if self._pid_matches(pid, name, table):
+                    matched.add(pid)
+                    names.add(name or str(pid))
+                elif name:
+                    judged.add(pid)
+                # An EMPTY name is "I could not tell", not "not ours", and the two
+                # must not share an answer (the same distinction driver.py draws
+                # between NO_ACCESS and "not installed"). A process that has just
+                # started does not always resolve on the first ask, and caching that
+                # as a refusal would ignore every later socket it opens until the
+                # next full rebuild - which is the exact window adoption exists to
+                # close. Left unjudged, it is asked again at its next socket.
+        return matched, names, judged
+
     def refresh(self, now=None, force=True):
         """Rebuild the port set from the current socket table.
 
@@ -243,18 +278,7 @@ class ProcessTargeting:
             table.refresh(force=force)
             port_pid = table.snapshot()
             seen = set(port_pid.values())           # every pid this walk judges
-            pids, names = set(), set()
-            for pid in seen:
-                # Names must resolve even for HARDENED processes (Chrome's network
-                # service refuses OpenProcess), or targeting `chrome` by NAME matches
-                # nothing while targeting its PID works. That is why the name lookup is
-                # allowed its snapshot fallback - now a ~6 ms native toolhelp snapshot,
-                # not the ~2 s psutil.process_iter that used to make the first
-                # target-start crawl (see portmap._process_table).
-                name = table.name_of(pid)
-                if self._pid_matches(pid, name, table):
-                    pids.add(pid)
-                    names.add(name or str(pid))
+            pids, names, _judged = self._judge(seen, table)
             resolved = {port for port, pid in port_pid.items() if pid in pids}
             with self._ports_lock:
                 # A late port is rescued only if the owner its EVENT named still
@@ -373,21 +397,7 @@ class ProcessTargeting:
             return False
         with self._lock:              # serialise with refresh(): same table reads
             table = self.table        # one table for the pass, as in refresh()
-            matched, names, judged = set(), set(), set()
-            for pid in pending:
-                name = table.name_of(pid)
-                if self._pid_matches(pid, name, table):
-                    matched.add(pid)
-                    names.add(name or str(pid))
-                elif name:
-                    judged.add(pid)
-                # An EMPTY name is "I could not tell", not "not ours", and the two
-                # must not share an answer (the same distinction driver.py draws
-                # between NO_ACCESS and "not installed"). A process that has just
-                # started does not always resolve on the first ask, and caching that
-                # as a refusal would ignore every later socket it opens until the
-                # next full rebuild - which is the exact window this path exists to
-                # close. Left unjudged, it is asked again at its next socket.
+            matched, names, judged = self._judge(pending, table)
             if not matched:
                 with self._ports_lock:
                     self._not_ours = self._not_ours | judged

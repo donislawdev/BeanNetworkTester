@@ -1593,7 +1593,9 @@ class BeanEngine:
                 # Half of these ticks hand over a snapshot the PREVIOUS tick already
                 # applied (measured: 10 of 20, because refresh_if_stale rebuilds every
                 # 0.30 s while this loop runs every 0.20 s), so the collection time
-                # travels with the data - see SocketWatcher.reconcile.
+                # travels with the data, and both halves skip a collection they have
+                # already been through: warm_names by the map, SocketWatcher.reconcile
+                # by its time (performance review W-B4). collected() is a reference.
                 #
                 # Read ONCE into a local, like _live_pid does: stop() clears this
                 # attribute from another thread, and reading it twice lets the

@@ -5531,10 +5531,10 @@ MUTATIONS = [
         "file": "beantester/targeting.py",
         "old": ("                name = table.name_of(pid)\n"
                 "                if self._pid_matches(pid, name, table):\n"
-                "                    pids.add(pid)"),
+                "                    matched.add(pid)"),
         "new": ("                name = self.table.name_of(pid)\n"
                 "                if self._pid_matches(pid, name, table):\n"
-                "                    pids.add(pid)"),
+                "                    matched.add(pid)"),
         "test": "test_a_table_swap_does_not_wait_for_a_walk_nor_change_the_one_under_way",
     },
     {
@@ -5719,6 +5719,174 @@ MUTATIONS = [
         "old": "        if (old is None or old[2] is None or old[0].lower() != name.lower()\n",
         "new": "        if (old is None or old[2] is None or False\n",
         "test": "test_a_snapshot_still_replaces_an_entry_about_another_process",
+    },
+    {
+        # Performance review NOWE-1: a snapshot entry is never stamped.
+        "label": "portmap: an entry with no start time is never given one",
+        "file": "beantester/portmap.py",
+        "old": ("            if entry[2] is None:\n"
+                "                return self._stamped(pid, entry, now)\n"),
+        "new": ("            if False:\n"
+                "                return self._stamped(pid, entry, now)\n"),
+        "test": "test_a_younger_parent_is_caught_after_a_snapshot_wrote_both_entries",
+    },
+    {
+        # D-3 = B: one handle, never psutil behind it.
+        "label": "portmap: a snapshot entry is stamped through psutil as well",
+        "file": "beantester/portmap.py",
+        "old": "        read = _native_process_info(pid)\n",
+        "new": "        read = _process_info(pid)\n",
+        "test": "test_a_snapshot_entry_that_will_not_open_keeps_what_the_snapshot_said",
+    },
+    {
+        # "Cannot tell" is not "another process": a refusal keeps the entry.
+        "label": "portmap: a snapshot entry that will not open is blanked",
+        "file": "beantester/portmap.py",
+        "old": ("        if read is None or read is _GONE:\n"
+                "            return (entry[0], entry[1])\n"),
+        "new": ("        if read is None or read is _GONE:\n"
+                "            return (\"\", None)\n"),
+        "test": "test_a_snapshot_entry_that_will_not_open_keeps_what_the_snapshot_said",
+    },
+    {
+        # NOWE-1: the rule that tells "nobody holds it" from "it refuses".
+        "label": "portmap: no refused OpenProcess is ever called gone",
+        "file": "beantester/portmap.py",
+        "old": "    return _GONE if pid > 0 and error == _ERROR_INVALID_PARAMETER else None\n",
+        "new": "    return None\n",
+        "test": "test_only_a_number_nobody_holds_is_called_gone",
+    },
+    {
+        "label": "portmap: the idle process is called gone",
+        "file": "beantester/portmap.py",
+        "old": "    return _GONE if pid > 0 and error == _ERROR_INVALID_PARAMETER else None\n",
+        "new": "    return _GONE if error == _ERROR_INVALID_PARAMETER else None\n",
+        "test": "test_only_a_number_nobody_holds_is_called_gone",
+    },
+    {
+        "label": "portmap: the handle read never asks why OpenProcess refused",
+        "file": "beantester/portmap.py",
+        "old": "        return _open_failure(int(pid), ctypes.get_last_error())\n",
+        "new": "        return None\n",
+        "test": "test_only_a_number_nobody_holds_is_called_gone",
+    },
+    {
+        "label": "portmap: psutil is asked about a pid the kernel says is gone",
+        "file": "beantester/portmap.py",
+        "old": "    return resolved if resolved is not None else _psutil_process_info(pid)\n",
+        "new": ("    return (resolved if resolved is not None and resolved is not _GONE\n"
+                "            else _psutil_process_info(pid))\n"),
+        "test": "test_only_a_number_nobody_holds_is_called_gone",
+    },
+    {
+        "label": "portmap: a pid the kernel says is gone runs the whole-system snapshot",
+        "file": "beantester/portmap.py",
+        "old": "            return self._unresolved(pid, now, scan=resolved is None)\n",
+        "new": "            return self._unresolved(pid, now, scan=True)\n",
+        "test": "test_a_targeting_walk_asks_the_os_once_per_pid",
+    },
+    {
+        # Performance review W-B1(a): one answer per pid per walk.
+        "label": "portmap: a walk's block answers nothing from its memo",
+        "file": "beantester/portmap.py",
+        "old": "        answer = memo.get(pid)\n",
+        "new": "        answer = None\n",
+        "test": "test_a_targeting_walk_asks_the_os_once_per_pid",
+    },
+    {
+        "label": "portmap: the walk's memo is shared by every thread",
+        "file": "beantester/portmap.py",
+        "old": "        self._pass = threading.local()\n",
+        "new": "        self._pass = type(\"Shared\", (), {})()\n",
+        "test": "test_one_lookup_per_pid_is_one_walk_on_one_thread",
+    },
+    {
+        "label": "portmap: the walk's memo outlives its block",
+        "file": "beantester/portmap.py",
+        "old": ("        finally:\n"
+                "            local.memo = None\n"),
+        "new": ("        finally:\n"
+                "            pass\n"),
+        "test": "test_one_lookup_per_pid_is_one_walk_on_one_thread",
+    },
+    {
+        "label": "portmap: a nested block throws the outer answers away",
+        "file": "beantester/portmap.py",
+        "old": ("        if getattr(local, \"memo\", None) is not None:\n"
+                "            yield\n"
+                "            return\n"),
+        "new": "",
+        "test": "test_one_lookup_per_pid_is_one_walk_on_one_thread",
+    },
+    {
+        "label": "targeting: a rebuild walks without one lookup per pid",
+        "file": "beantester/targeting.py",
+        "old": ("        with portmap.lookup_scope(table):\n"
+                "            for pid in candidates:\n"),
+        "new": ("        with portmap.lookup_scope(None):\n"
+                "            for pid in candidates:\n"),
+        "test": "test_a_targeting_walk_asks_the_os_once_per_pid",
+    },
+    {
+        "label": "socketwatch: the live map does not hand the walk's block on",
+        "file": "beantester/socketwatch.py",
+        "old": "        return portmap.lookup_scope(self._names)\n",
+        "new": "        return portmap.lookup_scope(None)\n",
+        "test": "test_a_walk_over_the_live_socket_map_asks_once_per_pid_too",
+    },
+    {
+        # Performance review W-B4.
+        "label": "portmap: warm_names goes through the same map again",
+        "file": "beantester/portmap.py",
+        "old": ("        if ports is self._warmed:\n"
+                "            return\n"),
+        "new": "",
+        "test": "test_warm_names_does_not_go_through_the_same_map_twice",
+    },
+    {
+        "label": "portmap: collected() copies the map again",
+        "file": "beantester/portmap.py",
+        "old": "            return self._ports, self._last\n",
+        "new": "            return dict(self._ports), self._last\n",
+        "test": "test_collected_hands_out_the_installed_map_not_a_copy",
+    },
+    {
+        "label": "socketwatch: one walk handed over twice is two absences",
+        "file": "beantester/socketwatch.py",
+        "old": "            if collected_at <= self._reconciled_at:\n",
+        "new": "            if collected_at < self._reconciled_at:\n",
+        "test": "test_one_walk_handed_over_twice_is_one_absence_not_two",
+    },
+    {
+        "label": "socketwatch: reconcile never records what it applied",
+        "file": "beantester/socketwatch.py",
+        "old": "            self._reconciled_at = collected_at\n",
+        "new": "",
+        "test": "test_an_older_walk_than_one_applied_changes_nothing",
+    },
+    {
+        # Performance review W-B8.
+        "label": "settings: an unchanged running target is rebuilt on every apply",
+        "file": "beantester/settings.py",
+        "old": "    if announce and not _kept_fresh(engine, targeting):\n",
+        "new": "    if announce:\n",
+        "test": "test_an_unchanged_target_is_left_to_the_running_resolver",
+    },
+    {
+        "label": "resolver: the same target again wakes it",
+        "file": "beantester/target_resolver.py",
+        "old": ("        if targeting is not previous:\n"
+                "            self._wake.set()\n"),
+        "new": ("        if True:\n"
+                "            self._wake.set()\n"),
+        "test": "test_the_same_target_again_neither_wakes_nor_needs_a_rebuild",
+    },
+    {
+        "label": "resolver: a stopped resolver claims to keep its target fresh",
+        "file": "beantester/target_resolver.py",
+        "old": "        return self.is_running() and self._targeting is targeting\n",
+        "new": "        return self._targeting is targeting\n",
+        "test": "test_the_same_target_again_neither_wakes_nor_needs_a_rebuild",
     },
     {
         # P2-9: a verified entry survives a start time that proves another process.

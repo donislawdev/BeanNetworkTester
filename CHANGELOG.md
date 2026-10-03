@@ -63,11 +63,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   sooner than before, and the average packet up to 0.1 ms later, as a packet on a quiet link
   always did.
 
+- **A process target takes less processor time.** The program updates the target's
+  connections up to 20 times a second. Each update asked about a parent process once for every
+  one of its children, and once a second it read the whole process list looking for parents
+  that had already closed. It now asks about each process once per update and skips processes
+  Windows reports as closed: with 36 programs holding connections, an update makes a third of
+  the checks and takes a third of the time. A scenario step keeping the same target no longer
+  looks it up.
+
 - **The window opens a little sooner.** At start the program now only checks that the
   `pydivert` package is installed instead of loading it, which took about a tenth of a second
   before the window appeared. It is loaded at the first **START**, as before.
 
 ### Fixed
+
+- **Targeting a program by name no longer takes in programs through a parent that has
+  closed.** A program belongs to the target when one of its parent processes does. When such a
+  parent had closed and Windows gave its process number to a new process with the target's
+  name, the old parent's other programs were counted in. The program checks for exactly this,
+  but the check could run on only about one parent in five; it now runs on all of them.
+
+- **A connection that has just opened is no longer forgotten too early.** The program drops a
+  connection from its own list only when two readings of the Windows connection list in a row
+  miss it. One reading could be counted twice, so a single reading that missed a brand-new
+  connection dropped it, and its traffic could leave the target until a later reading listed
+  it again.
 
 - **The latency you set is the latency packets get, also on a busy link.** With a long
   **Latency** and many packets waiting, the program paused every few seconds to free memory,
