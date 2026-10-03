@@ -154,6 +154,54 @@ def test_the_chart_is_not_redrawn_from_the_same_data():
     """)
 
 
+# -- the running icon -------------------------------------------------------- #
+def test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls():
+    """The dot was one PhotoImage.put per pixel over the whole image - ~8 000 Tk
+    calls and 265-311 ms of the window's start for the shipped 256 px icon. It is
+    one put per stretch of a row now, and the pixels must be exactly the ones the
+    per-pixel version painted (the rule is restated here, not imported, so a change
+    to the drawing cannot quietly agree with itself)."""
+    run_gui("""
+        from beantester.gui import icon
+
+        class Recording:
+            def __init__(self):
+                self.pixels, self.puts = {}, 0
+            def put(self, data, to):
+                self.puts += 1
+                if data.startswith("{"):            # one row: "{#c #c ...}"
+                    colours = data.strip("{}").split()
+                else:                               # one pixel: "#c"
+                    colours = [data]
+                x0, y = to
+                for i, colour in enumerate(colours):
+                    assert (x0 + i, y) not in self.pixels, "painted twice"
+                    self.pixels[(x0 + i, y)] = colour
+
+        def reference(size):
+            dcx = dcy = size * 0.76
+            dr = max(2.0, size * 0.20)
+            out = {}
+            for y in range(size):
+                for x in range(size):
+                    d = ((x - dcx) / dr) ** 2 + ((y - dcy) / dr) ** 2
+                    if d <= 1.0:
+                        out[(x, y)] = "#8a1010" if d > 0.62 else "#e53935"
+            return out
+
+        for size in (2, 3, 7, 16, 64, 256):
+            img = Recording()
+            icon._put_dot(img, size)
+            want = reference(size)
+            assert img.pixels == want, "size %d: %d pixels differ" % (
+                size, len(set(img.pixels.items()) ^ set(want.items())))
+            rows = len({y for _, y in want})
+            assert img.puts == rows, (
+                "size %d: %d puts for %d rows - one per row is the point"
+                % (size, img.puts, rows))
+    """)
+
+
 # -- the Control form, one keystroke ----------------------------------------- #
 def test_a_keystroke_reconfigures_nothing_that_did_not_change():
     """A keystroke re-ran every override, mark and note in the form and configured

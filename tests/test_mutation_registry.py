@@ -6825,6 +6825,27 @@ MUTATIONS = [
         "new": "            btn.config(state=\"disabled\" if blocked else \"normal\")\n",
         "test": "test_a_keystroke_reconfigures_nothing_that_did_not_change",
     },
+    {
+        "label": "icon (R-4, W-D6): every pixel of the dot is its own put again",
+        "file": "beantester/gui/icon.py",
+        "old": "        if runs and runs[-1][0] + len(runs[-1][1]) == x:\n",
+        "new": "        if False:\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
+    {
+        "label": "icon (R-4, W-D6): a row of the dot lands one pixel to the right",
+        "file": "beantester/gui/icon.py",
+        "old": "            img.put(\"{%s}\" % \" \".join(colours), to=(x0, y))\n",
+        "new": "            img.put(\"{%s}\" % \" \".join(colours), to=(x0 + 1, y))\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
+    {
+        "label": "icon (R-4, W-D6): the dot's box loses its right-hand column",
+        "file": "beantester/gui/icon.py",
+        "old": "    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr) + 2))\n",
+        "new": "    columns = range(max(0, int(dcx - dr)), min(size, int(dcx + dr)))\n",
+        "test": "test_the_running_dot_is_the_same_picture_in_far_fewer_tk_calls",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
