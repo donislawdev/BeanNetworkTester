@@ -6892,6 +6892,44 @@ MUTATIONS = [
         "new": "        pass\n",
         "test": "test_the_session_page_asks_for_the_host_once_per_half_minute",
     },
+    {
+        "label": "processes (R-4, W-B3): the port map verifies a name once per port",
+        "file": "beantester/processes.py",
+        "old": ("        names = {pid: (table.name_of(pid) or str(pid)) for pid in set(ports.values())}\n"
+                "        return {port: names[pid] for port, pid in ports.items()}\n"),
+        "new": "        return {port: (table.name_of(pid) or str(pid)) for port, pid in ports.items()}\n",
+        "test": "test_port_process_map_asks_once_per_process_not_once_per_port",
+    },
+    {
+        "label": "processes (R-4, W-B3): refresh=False still refreshes the socket table",
+        "file": "beantester/processes.py",
+        "old": ("        if refresh:\n"
+                "            table.refresh_if_stale()\n"),
+        "new": ("        if True:\n"
+                "            table.refresh_if_stale()\n"),
+        "test": "test_port_process_map_asks_once_per_process_not_once_per_port",
+    },
+    {
+        "label": "conns (R-4, W-B3): the page refreshes the socket table on the UI thread",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            app.proc_map = port_process_map(refresh=False) or app.proc_map\n",
+        "new": "            app.proc_map = port_process_map() or app.proc_map\n",
+        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+    },
+    {
+        "label": "conns (R-4, W-B3): a stopped session keeps rebuilding the process map",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if app.running and (now - self._proc_t) > PROC_MAP_S:\n",
+        "new": "        if (now - self._proc_t) > PROC_MAP_S:\n",
+        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+    },
+    {
+        "label": "conns (R-4, W-B3): the process map is rebuilt on every refresh",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if app.running and (now - self._proc_t) > PROC_MAP_S:\n",
+        "new": "        if app.running:\n",
+        "test": "test_the_process_map_is_built_by_the_connections_page_in_a_session_only",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

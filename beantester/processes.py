@@ -54,14 +54,29 @@ def find_process_ports(target):
     return resolve_ports(matcher)
 
 
-def port_process_map():
-    """Best-effort map of local port -> process name (empty when unavailable)."""
+def port_process_map(refresh=True):
+    """Best-effort map of local port -> process name (empty when unavailable).
+
+    One name per PROCESS, not per port. Each name is a verified lookup (an
+    identity check against the process's start time), and asking it once per
+    port did that check again for every socket a process holds: 106 checks for
+    33 processes on this desktop, linear in the PORTS - the performance review
+    measured a 50 000-port machine freezing the window for up to 2 s every 3 s
+    (W-B3). Asked per pid, the same map costs one check per process.
+
+    ``refresh=False`` takes the socket table as it stands. The GUI asks that way
+    while a session runs, because the engine's watchdog keeps the table fresh
+    then (every 0.2 s) and a refresh here would be a synchronous rebuild on the
+    UI thread whenever the two happened to cross.
+    """
     table = portmap.default_table()
     # Best-effort stays best-effort for the CALLER (an empty map just means the
     # process column shows "?"), but the failure itself is recorded: a lookup that
     # silently stops working looked identical to a machine with nothing to report.
     with crashlog.quiet("processes.port_map"):
-        table.refresh_if_stale()
-        return {port: (table.name_of(pid) or str(pid))
-                for port, pid in table.snapshot().items()}
+        if refresh:
+            table.refresh_if_stale()
+        ports = table.snapshot()
+        names = {pid: (table.name_of(pid) or str(pid)) for pid in set(ports.values())}
+        return {port: names[pid] for port, pid in ports.items()}
     return {}

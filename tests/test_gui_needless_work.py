@@ -309,6 +309,58 @@ def test_the_session_page_asks_for_the_host_once_per_half_minute():
     """)
 
 
+# -- the port -> process fallback ---------------------------------------------- #
+def test_the_process_map_is_built_by_the_connections_page_in_a_session_only():
+    """App._tick built the port -> process map every 3 s on EVERY page; only the
+    Connections page and the CSV export behind its button read it. The page builds
+    it now - in a session, every PROC_MAP_S, without refreshing the socket table
+    on the UI thread - and no other page does."""
+    run_gui("""
+        from beantester import portmap
+        from beantester.gui.pages import conns as conns_mod
+
+        class Table:
+            reads = 0
+            def refresh_if_stale(self, *a, **k):
+                pass
+            def snapshot(self):
+                Table.reads += 1
+                return {5001: 10}
+            def name_of(self, pid, cheap=False):
+                return "chrome.exe"
+        portmap.default_table = lambda: Table()
+
+        # another page, a running session: nobody builds the map
+        app.select_page("control")
+        app.running = True
+        app.engine.is_running = lambda: True
+        app._tick()
+        assert Table.reads == 0, "the map was built on a page that does not show it"
+
+        BUILT = []
+        real = conns_mod.port_process_map
+        def counting(*a, **k):
+            BUILT.append(k)
+            return real(*a, **k)
+        conns_mod.port_process_map = counting
+        app.select_page("connections")
+        page = app.current_page()
+        page.refresh()
+        assert BUILT == [{"refresh": False}], BUILT
+        assert app.proc_map == {5001: "chrome.exe"}
+        page.refresh()
+        assert len(BUILT) == 1, "read again before PROC_MAP_S passed"
+        page._proc_t -= conns_mod.PROC_MAP_S + 0.1
+        page.refresh()
+        assert len(BUILT) == 2, BUILT
+
+        app.running = False                      # stopped: the map stays as it was
+        page._proc_t -= conns_mod.PROC_MAP_S + 0.1
+        page.refresh()
+        assert len(BUILT) == 2, "a stopped session rebuilt the map"
+    """)
+
+
 # -- the Control form, one keystroke ----------------------------------------- #
 def test_a_keystroke_reconfigures_nothing_that_did_not_change():
     """A keystroke re-ran every override, mark and note in the form and configured

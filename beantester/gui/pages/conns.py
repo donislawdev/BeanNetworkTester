@@ -26,6 +26,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
+from ...processes import port_process_map
 from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       sort_connections, sum_traffic)
@@ -122,6 +123,8 @@ SEARCH_DEBOUNCE_MS = 250
 # but re-sorting 200 000 rows on every 700 ms tick would burn ~15% of a core for
 # nothing. A user-visible action (sorting, searching) always refreshes at once.
 REBUILD_MS = 1000
+# How often, while a session runs, the port -> process fallback is read again.
+PROC_MAP_S = 3.0
 
 
 class ConnsPage:
@@ -133,6 +136,7 @@ class ConnsPage:
         self.frame = ttk.Frame(parent)
         self._search_job = None
         self._last_build = 0.0          # throttle for the heavy filter+sort
+        self._proc_t = 0.0              # when app.proc_map was last read
         self._now = 0.0                 # session clock used by _render
         self._scope_active = False      # True when a target is narrowing traffic now
         # the filter+sort runs OFF the UI thread (see gui/model_worker.py)
@@ -502,6 +506,7 @@ class ConnsPage:
         # 3) ask for a new rebuild, throttled - unless the user did something, in
         #    which case they get one now
         now = time.monotonic()
+        self._refresh_proc_map(now)
         if not force and (now - self._last_build) < REBUILD_MS / 1000.0:
             return
         self._last_build = now
@@ -521,7 +526,11 @@ class ConnsPage:
             "sort": dict(self.table.sort),
             "limit": app.row_limit(),
             "now": self._now,
-            "proc_map": dict(app.proc_map),
+            # Not copied: proc_map is only ever REPLACED (_refresh_proc_map assigns
+            # a new dict), never changed in place, so the one handed over describes
+            # one moment for as long as the worker holds it. The CSV export has
+            # always taken it the same way.
+            "proc_map": app.proc_map,
             # Read on the UI thread and carried across, like every other input
             # here: the worker must not reach back into App (convention 26).
             "scoped_only": app.scoped_view(),
@@ -530,6 +539,21 @@ class ConnsPage:
         # search should not wait that long to see the answer they asked for. Poll
         # the worker briskly until it lands, then stop.
         self._poll_soon()
+
+    def _refresh_proc_map(self, now):
+        """Read the port -> process fallback again, every ``PROC_MAP_S`` of a session.
+
+        It lived in ``App._tick``, which built it on EVERY page - and only this
+        page and the CSV export behind its button ever read it. Built here, it is
+        built while somebody is looking at the rows it names, and the first
+        refresh after coming back to the page reads it at once. ``refresh=False``:
+        while a session runs, the engine's watchdog keeps the socket table fresh
+        (see ``processes.port_process_map``).
+        """
+        app = self.app
+        if app.running and (now - self._proc_t) > PROC_MAP_S:
+            self._proc_t = now
+            app.proc_map = port_process_map(refresh=False) or app.proc_map
 
     POLL_MS = 40
 

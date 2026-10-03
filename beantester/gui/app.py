@@ -39,7 +39,6 @@ from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
 from ..paths import prepare_user_data, scenarios_dir
 from ..presets import (PRESETS, preset_to_settings, resolve_preset,
                        settings_to_preset)
-from ..processes import port_process_map
 from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
                         non_profile_active, save_config_file, settings_from_raw,
                         warn_if_unbounded)
@@ -161,8 +160,10 @@ class App:
         self.peaks = SessionPeaks()        # "peak download / upload", one per view
         self.last_snapshot = None
         self.last_rates = (0.0, 0.0)
+        # port -> process name, the fallback for a connection row captured with
+        # no name. Refreshed by the Connections page, its only reader besides the
+        # CSV export behind that page's button (performance review W-B3).
         self.proc_map = {}
-        self._proc_refresh_t = 0.0
         self._last_t = time.monotonic()
 
         # form state (survives a UI rebuild - a language switch must not reset it)
@@ -1785,10 +1786,6 @@ class App:
                 self.windows.refresh()      # open secondary windows tick too
                 self._refresh_summary()
                 self._refresh_dirty()
-                now = time.monotonic()
-                if self.running and (now - self._proc_refresh_t) > 3.0:
-                    self._proc_refresh_t = now
-                    self.proc_map = port_process_map() or self.proc_map
         except Exception as e:                 # pragma: no cover - defensive
             self.log(T("log.ui_error", e=e))
         finally:
