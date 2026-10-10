@@ -664,7 +664,7 @@ jobs:
       # found at PR time is cheaper than one found while publishing. Syft is pinned
       # by SHA; the tag it stood at is in the comment.
       - name: Scan the bundle and hold the licence registry to it
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           path: dist/BeanNetworkTester
           format: syft-json
