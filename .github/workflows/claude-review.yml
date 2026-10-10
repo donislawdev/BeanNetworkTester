@@ -96,7 +96,7 @@ jobs:
       # Ask for what you want in the comment - "@claude review this" for the whole
       # change, or a narrower question when only one part worries you.
       - name: Answer the comment
-        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790  # v1.0.235
+        uses: anthropics/claude-code-action@cab360f6565aa35a51d6ce9e43f1f4287c0a32ea  # v1.0.241
         with:
           # The subscription token, not an API key: runs bill against the
           # maintainer's Claude subscription instead of opening a second meter.
