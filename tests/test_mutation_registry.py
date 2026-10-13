@@ -7306,9 +7306,45 @@ MUTATIONS = [
     {
         "label": "adapters: a name is read past its bound",
         "file": "beantester/adapters.py",
-        "old": "    for i in range(MAX_TEXT):\n",
-        "new": "    for i in range(10 ** 4):\n",
+        "old": "    for i in range(min(MAX_TEXT, room)):\n",
+        "new": "    for i in range(min(10 ** 4, room)):\n",
         "test": "test_a_name_is_read_up_to_its_bound",
+    },
+    {
+        "label": "adapters: a record outside the answer is followed",
+        "file": "beantester/adapters.py",
+        "old": "        answer.room(ctypes.cast(node, ctypes.c_void_p).value, "
+               "ctypes.sizeof(node._type_))\n",
+        "new": "        pass\n",
+        "test": "test_a_pointer_outside_the_answer_is_refused_not_followed",
+    },
+    {
+        "label": "adapters: an address outside the answer is read",
+        "file": "beantester/adapters.py",
+        "old": "    answer.room(address.lpSockaddr, length)\n",
+        "new": "    pass\n",
+        "test": "test_a_pointer_outside_the_answer_is_refused_not_followed",
+    },
+    {
+        "label": "adapters: a record that ends past the answer is read",
+        "file": "beantester/adapters.py",
+        "old": "        if not (self.start <= pointer and pointer + need <= self.end):\n",
+        "new": "        if not (self.start <= pointer < self.end):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
+    },
+    {
+        "label": "adapters: a pointer before the answer is followed",
+        "file": "beantester/adapters.py",
+        "old": "        if not (self.start <= pointer and pointer + need <= self.end):\n",
+        "new": "        if not (pointer + need <= self.end):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
+    },
+    {
+        "label": "adapters: a string is read past the end of the answer",
+        "file": "beantester/adapters.py",
+        "old": "    for i in range(min(MAX_TEXT, room)):\n",
+        "new": "    for i in range(MAX_TEXT):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
     },
     {
         "label": "adapters: the buffer is not grown to what the system asks for",

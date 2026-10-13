@@ -23,6 +23,12 @@ The structure grew three times (Microsoft Learn, ``IP_ADAPTER_ADDRESSES_LH``:
 XP SP1, Vista, Vista SP1) and ``Length`` says which one the system wrote. A field
 is read only when it lies inside that length - the rule Learn gives - so an older
 layout costs the newer fields, never a read past the record.
+
+Where a record itself sits is checked too. The system writes the whole answer -
+records, strings, addresses - into the caller's buffer (86 pointers of 86 inside
+it, measured 2026-10-14), so a pointer is followed only when what it points at lies
+inside that buffer (``_Answer``). One pointing elsewhere is a broken answer: the
+list is refused as unreadable instead of read from memory nobody vouched for.
 """
 import ctypes
 import ipaddress
@@ -175,19 +181,40 @@ class AdaptersUnavailable(Exception):
 
 
 # -- reading the record ------------------------------------------------------------- #
+class _Answer(NamedTuple):
+    """The bytes the call filled: ``[start, end)`` of the caller's buffer."""
+    start: int
+    end: int
+
+    @classmethod
+    def of(cls, buffer):
+        start = ctypes.addressof(buffer)
+        return cls(start, start + ctypes.sizeof(buffer))
+
+    def room(self, pointer, need):
+        """Bytes from ``pointer`` to the end of the answer. Raises
+        ``AdaptersUnavailable`` unless ``need`` bytes from ``pointer`` lie inside it."""
+        if not (self.start <= pointer and pointer + need <= self.end):
+            raise AdaptersUnavailable("", "GetAdaptersAddresses: a pointer outside its answer")
+        return self.end - pointer
+
+
 def _has(record, cls, field):
     """``field`` lies inside the ``Length`` the system wrote for this record."""
     spec = getattr(cls, field)
     return spec.offset + spec.size <= record.Length
 
 
-def _text_at(pointer, unit, encoding):
-    """The NUL-terminated string at ``pointer``, read ``unit`` by unit, at most MAX_TEXT."""
+def _text_at(pointer, unit, encoding, answer):
+    """The NUL-terminated string at ``pointer``, read ``unit`` by unit: at most
+    MAX_TEXT of them, and none past the end of the answer."""
     if not pointer:
         return ""
+    width = ctypes.sizeof(unit)
+    room = answer.room(pointer, width) // width
     cells = ctypes.cast(pointer, ctypes.POINTER(unit))
     out = []
-    for i in range(MAX_TEXT):
+    for i in range(min(MAX_TEXT, room)):
         value = cells[i]
         if not value:
             break
@@ -196,20 +223,22 @@ def _text_at(pointer, unit, encoding):
     return raw.decode(encoding, errors="replace")
 
 
-def _wide(pointer):
-    return _text_at(pointer, ctypes.c_uint16, "utf-16-le")
+def _wide(pointer, answer):
+    return _text_at(pointer, ctypes.c_uint16, "utf-16-le", answer)
 
 
-def _narrow(pointer):
-    return _text_at(pointer, ctypes.c_uint8, "ascii")
+def _narrow(pointer, answer):
+    return _text_at(pointer, ctypes.c_uint8, "ascii", answer)
 
 
-def _sockaddr(address):
+def _sockaddr(address, answer):
     """``(text, version)`` of a SOCKET_ADDRESS, or ``("", 0)`` for none or an unknown family."""
     length = int(address.iSockaddrLength)
     if not address.lpSockaddr or length < 2:
         return "", 0
-    raw = ctypes.string_at(address.lpSockaddr, min(length, 128))
+    length = min(length, 128)
+    answer.room(address.lpSockaddr, length)
+    raw = ctypes.string_at(address.lpSockaddr, length)
     family = struct.unpack_from("<H", raw)[0]
     if family == AF_INET and len(raw) >= 8:
         return str(ipaddress.IPv4Address(raw[4:8])), 4
@@ -220,8 +249,9 @@ def _sockaddr(address):
     return "", 0
 
 
-def _chain(first, limit=None):
-    """The records of a C linked list, at most ``limit`` (MAX_ENTRIES) of them.
+def _chain(first, answer, limit=None):
+    """The records of a C linked list, at most ``limit`` (MAX_ENTRIES) of them, each
+    one whole inside ``answer`` before it is read.
 
     The bound is read at the call, not baked into a default argument when the
     module loads - a default would keep the value it had then.
@@ -230,13 +260,14 @@ def _chain(first, limit=None):
     for _ in range(MAX_ENTRIES if limit is None else limit):
         if not node:
             return
+        answer.room(ctypes.cast(node, ctypes.c_void_p).value, ctypes.sizeof(node._type_))
         record = node.contents
         yield record
         node = record.Next
 
 
-def _address_row(unicast):
-    ip, version = _sockaddr(unicast.Address)
+def _address_row(unicast, answer):
+    ip, version = _sockaddr(unicast.Address, answer)
     prefix = None
     if _has(unicast, _Unicast, "OnLinkPrefixLength"):
         prefix = int(unicast.OnLinkPrefixLength)
@@ -246,32 +277,32 @@ def _address_row(unicast):
                       int(unicast.SuffixOrigin), int(unicast.DadState))
 
 
-def _addresses(first):
-    return tuple(text for text, version in (_sockaddr(node.Address) for node in _chain(first))
-                 if version)
+def _addresses(first, answer):
+    return tuple(text for text, version in
+                 (_sockaddr(node.Address, answer) for node in _chain(first, answer)) if version)
 
 
 def _optional(record, field, convert=int):
     return convert(getattr(record, field)) if _has(record, _Adapter, field) else None
 
 
-def _adapter_row(record):
+def _adapter_row(record, answer):
     """One ``_Adapter`` as an ``AdapterRow`` - every field copied out of the buffer."""
     mac_length = min(int(record.PhysicalAddressLength), 8)
     mac = "-".join(f"{b:02X}" for b in bytes(record.PhysicalAddress)[:mac_length])
-    unicast = tuple(_address_row(u) for u in _chain(record.FirstUnicastAddress))
-    gateways = (_addresses(record.FirstGatewayAddress)
+    unicast = tuple(_address_row(u, answer) for u in _chain(record.FirstUnicastAddress, answer))
+    gateways = (_addresses(record.FirstGatewayAddress, answer)
                 if _has(record, _Adapter, "FirstGatewayAddress") else ())
-    dhcp_server = (_sockaddr(record.Dhcpv4Server)[0]
+    dhcp_server = (_sockaddr(record.Dhcpv4Server, answer)[0]
                    if _has(record, _Adapter, "Dhcpv4Server") else "")
     ipv6_index = _optional(record, "Ipv6IfIndex") or 0
     return AdapterRow(
-        _narrow(record.AdapterName), int(record.IfIndex), ipv6_index,
-        _wide(record.FriendlyName), _wide(record.Description), int(record.IfType),
-        int(record.OperStatus), mac, int(record.Mtu),
+        _narrow(record.AdapterName, answer), int(record.IfIndex), ipv6_index,
+        _wide(record.FriendlyName, answer), _wide(record.Description, answer),
+        int(record.IfType), int(record.OperStatus), mac, int(record.Mtu),
         _optional(record, "ReceiveLinkSpeed"), _optional(record, "TransmitLinkSpeed"),
         bool(record.Flags & IP_ADAPTER_DHCP_ENABLED), dhcp_server, unicast, gateways,
-        _addresses(record.FirstDnsServerAddress), _wide(record.DnsSuffix),
+        _addresses(record.FirstDnsServerAddress, answer), _wide(record.DnsSuffix, answer),
         _optional(record, "Ipv4Metric"), _optional(record, "Ipv6Metric"))
 
 
@@ -330,9 +361,12 @@ class _Native:
         if rc:
             raise AdaptersUnavailable("", f"GetAdaptersAddresses answered {rc}")
         # Every record is copied out before `buffer` goes: the list, its addresses
-        # and its strings all live inside it (see portmap._Native._fetch).
+        # and its strings all live inside it (see portmap._Native._fetch), and each
+        # pointer is checked against it before it is followed (`_Answer`).
+        answer = _Answer.of(buffer)
         first = ctypes.cast(buffer, ctypes.POINTER(_Adapter))
-        return tuple(_adapter_row(record) for record in _chain(first, MAX_ADAPTERS))
+        return tuple(_adapter_row(record, answer)
+                     for record in _chain(first, answer, MAX_ADAPTERS))
 
     def best_interface(self, version):
         """The interface index the route to the internet leaves through; 0 for none.

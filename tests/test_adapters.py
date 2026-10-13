@@ -240,7 +240,8 @@ def test_an_address_of_a_family_this_does_not_know_is_left_out():
     for name, raw in cases.items():
         data = ctypes.create_string_buffer(raw, max(len(raw), 1))
         address = adapters._SocketAddress(ctypes.addressof(data) if raw else 0, len(raw))
-        check(name, adapters._sockaddr(address) == ("", 0), f"({adapters._sockaddr(address)})")
+        got = adapters._sockaddr(address, adapters._Answer.of(data))
+        check(name, got == ("", 0), f"({got})")
 
 
 def test_both_calls_are_declared_with_their_prototypes():
@@ -347,6 +348,103 @@ def test_a_name_is_read_up_to_its_bound(monkeypatch):
     check("cut at the bound, never read past it", row.name == "Eth", f"({row.name!r})")
 
 
+class _Elsewhere(FakeIphlpapi):
+    """Writes the list, then points one pointer of it at a copy OUTSIDE the caller's
+    buffer. The copy is real memory, so a walk that skipped the check would read it
+    and answer - the test sees a wrong result, never a crash."""
+
+    def __init__(self, specs, redirect):
+        super().__init__(specs)
+        self.redirect = redirect
+        self.kept = []                  # the outside copies, alive for the walk
+
+    def outside(self, data):
+        block = ctypes.create_string_buffer(data, len(data))
+        self.kept.append(block)
+        return ctypes.addressof(block)
+
+    def GetAdaptersAddresses(self, *args):
+        rc = super().GetAdaptersAddresses(*args)
+        if rc == 0:
+            self.redirect(self, ctypes.cast(args[3], ctypes.POINTER(_Adapter)).contents)
+        return rc
+
+
+def _away(fake, record, field, data, cls=None):
+    """Point ``record.field`` at a copy of ``data`` outside the caller's buffer."""
+    address = fake.outside(data)
+    setattr(record, field, ctypes.cast(address, ctypes.POINTER(cls)) if cls else address)
+
+
+# Each pointer kind the walk follows: the next record, a list's first record, a
+# narrow and a wide string, an address.
+ELSEWHERE = {
+    "the next adapter": lambda fake, a: _away(fake, a, "Next", bytes(a), _Adapter),
+    "the address list": lambda fake, a: _away(
+        fake, a, "FirstUnicastAddress", bytes(a.FirstUnicastAddress.contents), _Unicast),
+    "the DNS server list": lambda fake, a: _away(
+        fake, a, "FirstDnsServerAddress", bytes(a.FirstDnsServerAddress.contents), _AddressNode),
+    "the adapter's key": lambda fake, a: _away(fake, a, "AdapterName", b"{X}\0"),
+    "the adapter's name": lambda fake, a: _away(
+        fake, a, "FriendlyName", "Elsewhere".encode("utf-16-le") + b"\0\0"),
+    "an address": lambda fake, a: _away(
+        fake, a.FirstUnicastAddress.contents.Address, "lpSockaddr", _sockaddr("10.9.9.9")),
+    "the DHCP server": lambda fake, a: _away(
+        fake, a.Dhcpv4Server, "lpSockaddr", _sockaddr("10.9.9.9")),
+}
+
+
+def test_a_pointer_outside_the_answer_is_refused_not_followed():
+    """Windows writes the whole answer into the caller's buffer (measured: every
+    pointer of this machine's list, see the module). So a pointer to anywhere else is
+    a broken answer: the list is refused as unreadable, never read from there."""
+    for name, redirect in ELSEWHERE.items():
+        try:
+            rows = _native(_Elsewhere([ETHERNET], redirect)).adapters()
+        except adapters.AdaptersUnavailable as exc:
+            check(f"{name}: refused, as a failure without a reason a person can act on",
+                  exc.reason == "", f"({exc.reason!r})")
+        else:
+            check(f"{name}: refused", False, f"(read {rows})")
+
+
+def _refused(call, *args):
+    """``call(*args)``, walked to its end, raises ``AdaptersUnavailable``."""
+    try:
+        list(call(*args))
+    except adapters.AdaptersUnavailable:
+        return True
+    return False
+
+
+def test_nothing_is_read_past_the_end_of_the_answer():
+    """The "answer" here is the first part of a bigger buffer, so what lies past its
+    end is real memory: a read past the end shows as a wrong result, not a crash."""
+    memory = ctypes.create_string_buffer(256)
+    base = ctypes.addressof(memory)
+    node = ctypes.cast(base, ctypes.POINTER(_AddressNode))
+    size = ctypes.sizeof(_AddressNode)
+    check("a record that ends exactly at the end is read",
+          len(list(adapters._chain(node, adapters._Answer(base, base + size)))) == 1)
+    check("a record that ends past the end is refused",
+          _refused(adapters._chain, node, adapters._Answer(base, base + size - 1)))
+    check("a record that starts before the answer is refused",
+          _refused(adapters._chain, node, adapters._Answer(base + 8, base + 256)))
+
+    ctypes.memmove(base, "TailMore".encode("utf-16-le") + b"\0\0", 18)
+    text = adapters._wide(base, adapters._Answer(base, base + 8))
+    check("a string without its end inside the answer stops at the end", text == "Tail",
+          f"({text!r})")
+
+    raw = _sockaddr("10.1.2.3")
+    ctypes.memmove(base, raw, len(raw))
+    address = adapters._SocketAddress(base, len(raw))
+    got = adapters._sockaddr(address, adapters._Answer(base, base + len(raw)))
+    check("an address that fits is read", got == ("10.1.2.3", 4), f"({got})")
+    check("an address that ends past the end is refused",
+          _refused(adapters._sockaddr, address, adapters._Answer(base, base + len(raw) - 1)))
+
+
 def test_the_route_out_is_an_index_and_a_failure_is_none():
     """Measured 2026-10-13: without an IPv6 route the call fails with 1231 and leaves
     the index 0. That 0 must never be read as an index."""
@@ -401,8 +499,10 @@ def _records():                         # pragma: no cover - Windows only (the r
             break
     assert rc == 0, rc
     out = []
-    for record in adapters._chain(ctypes.cast(buffer, ctypes.POINTER(_Adapter))):
-        out.append((record.Length, [u.Length for u in adapters._chain(record.FirstUnicastAddress)]))
+    answer = adapters._Answer.of(buffer)
+    for record in adapters._chain(ctypes.cast(buffer, ctypes.POINTER(_Adapter)), answer):
+        out.append((record.Length,
+                    [u.Length for u in adapters._chain(record.FirstUnicastAddress, answer)]))
     return out
 
 
