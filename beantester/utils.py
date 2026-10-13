@@ -199,6 +199,15 @@ def is_lan_ip(ip: Any) -> bool:
         return False
 
 
+# Where "the internet" is, for a route lookup. The Session panel's own address
+# (``host_identity``) and the adapter the Tools tab marks as the way out
+# (``adapters._Native.best_interface``) ask the routing table about the same two,
+# so they can never disagree. Public DNS resolvers, never contacted. Kept here and
+# not in ``adapters``: that module loads ctypes, and on Linux importing ctypes alone
+# opens a library, which ``tests/test_no_telemetry.py`` sees in this function's run.
+INTERNET_PROBES = {4: "8.8.8.8", 6: "2001:4860:4860::8888"}
+
+
 def _route_source_ip(family: int, probe: str) -> str:
     """The local address the OS would use to reach ``probe`` - no packet is sent.
 
@@ -226,10 +235,6 @@ def host_identity() -> tuple[str, str, str]:
     unavailable degrades to ``"-"``.
     """
     import socket
-
-    # The adapters tool asks the routing table about the same two destinations, so
-    # the address shown here and the adapter it marks as "internet" agree.
-    from .adapters import INTERNET_PROBES
     try:
         host = socket.gethostname() or "-"
     except OSError:

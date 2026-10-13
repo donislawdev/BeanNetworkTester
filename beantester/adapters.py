@@ -37,12 +37,7 @@ import sys
 from typing import NamedTuple
 
 from . import crashlog
-
-# Where "the internet" is, for the route lookup. The Session panel's own-address
-# lookup routes to the same two (``utils.host_identity``), read from here so the
-# two can never disagree about which adapter that is. Public DNS resolvers, never
-# contacted: only the routing table is asked.
-INTERNET_PROBES = {4: "8.8.8.8", 6: "2001:4860:4860::8888"}
+from .utils import INTERNET_PROBES   # where "the internet" is, shared with host_identity
 
 # Address families as Windows numbers them (AF_INET6 is 23 there, not POSIX 10).
 AF_UNSPEC, AF_INET, AF_INET6 = 0, 2, 23
