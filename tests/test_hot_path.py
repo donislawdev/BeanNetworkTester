@@ -22,10 +22,14 @@ has already bitten this project once:
 * **it only knows about the socket table.** Targeting is one route to the OS;
   ``_log_conn`` is a second, independent one. A third would be invisible to it.
 
-So this file watches the ROUTES instead of an object. ``portmap`` is the only
-module in the package that touches ``psutil`` or ``iphlpapi``, and it does so
-through a handful of entry points (``OS_FUNCTIONS`` and ``NATIVE_METHODS``);
-wrapping every one catches any caller, including one nobody has written yet. Threads are compared by IDENTITY against the engine's own
+So this file watches the ROUTES instead of an object. ``portmap`` and, since the
+Tools tab's adapter list (2026-10-13), ``adapters`` are the only modules in the
+package that touch ``psutil`` or ``iphlpapi``, and they do so through a handful of
+entry points (``OS_FUNCTIONS``, ``NATIVE_METHODS``, ``ADAPTER_METHODS``); wrapping
+every one catches any caller, including one nobody has written yet. A THIRD module
+that loads iphlpapi is the one thing that would walk past all of them, so
+``test_every_module_that_loads_iphlpapi_is_watched`` finds them by reading the
+source. Threads are compared by IDENTITY against the engine's own
 handles rather than by name substring, so it does not depend on how CPython
 happens to name a thread.
 
@@ -87,14 +91,17 @@ shared CI runner it measures the runner, and the first thing anybody does with a
 test like that is widen the bound until it stops failing.
 """
 import contextlib
+import glob
+import os
+import re
 import threading
 import time
 
-from beantester import portmap
+from beantester import adapters, portmap
 from beantester.engine import BeanEngine
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
-from fakes import check
+from fakes import ROOT, check
 
 # Every route out of the package and into the operating system. They are module
 # level functions called through module globals, so replacing the attribute is
@@ -108,6 +115,17 @@ OS_FUNCTIONS = ("_psutil_port_pid_map", "_psutil_process_table",
 # The two walks over iphlpapi's tables, methods of the native binding: the port map
 # the capture side reads, and the full table of the Tools tab.
 NATIVE_METHODS = ("_table", "socket_rows")
+# The Tools tab's adapter list and its route lookup (``adapters._Native``): read on a
+# click by a worker, never by a packet thread.
+ADAPTER_METHODS = ("adapters", "best_interface")
+
+# Every module that loads iphlpapi, and the binding class whose methods are its only
+# road to it. ``test_every_module_that_loads_iphlpapi_is_watched`` keeps this whole.
+WATCHED_IPHLPAPI = {"beantester/portmap.py": portmap._Native,
+                    "beantester/adapters.py": adapters._Native}
+# `ctypes.WinDLL("iphlpapi.dll")`, `windll.iphlpapi` and `WinDLL('iphlpapi')`.
+_LOADS_IPHLPAPI = re.compile(r"""(?:WinDLL|LoadLibrary\w*)\(\s*['"]iphlpapi|windll\.iphlpapi""",
+                             re.IGNORECASE)
 
 
 @contextlib.contextmanager
@@ -116,7 +134,10 @@ def os_calls_recorded():
     calls = []
     lock = threading.Lock()
     originals = {name: getattr(portmap, name) for name in OS_FUNCTIONS}
-    native = {name: getattr(portmap._Native, name) for name in NATIVE_METHODS}
+    native = {(portmap._Native, name, "_Native." + name): getattr(portmap._Native, name)
+              for name in NATIVE_METHODS}
+    native.update({(adapters._Native, name, "adapters." + name):
+                   getattr(adapters._Native, name) for name in ADAPTER_METHODS})
 
     def wrap(name, original):
         def spy(*a, **kw):
@@ -127,15 +148,15 @@ def os_calls_recorded():
 
     for name, original in originals.items():
         setattr(portmap, name, wrap(name, original))
-    for name, original in native.items():
-        setattr(portmap._Native, name, wrap("_Native." + name, original))
+    for (owner, name, label), original in native.items():
+        setattr(owner, name, wrap(label, original))
     try:
         yield calls
     finally:
         for name, original in originals.items():
             setattr(portmap, name, original)
-        for name, original in native.items():
-            setattr(portmap._Native, name, original)
+        for (owner, name, _label), original in native.items():
+            setattr(owner, name, original)
 
 
 def test_no_packet_thread_ever_reaches_the_operating_system():
@@ -257,3 +278,38 @@ def test_the_recorder_sees_what_it_claims_to_see():
     check("the wrappers were removed again",
           portmap._psutil_created.__name__ != "spy",
           f"({portmap._psutil_created!r})")
+
+    # The adapter list's road too: a route lookup through a fake binding.
+    class Routes:
+        def GetBestInterfaceEx(self, _destination, _index):
+            return 1231
+    with os_calls_recorded() as calls:
+        adapters._Native(iphlpapi=Routes()).best_interface(4)
+        names = [name for name, _ in calls]
+    check("the adapters' route lookup is recorded too", names == ["adapters.best_interface"],
+          f"({names})")
+    check("and unwrapped after", adapters._Native.best_interface.__name__ == "best_interface")
+
+
+def _iphlpapi_loaders(root=ROOT):
+    """The package modules whose source loads iphlpapi, as repo-relative paths."""
+    found = set()
+    for path in glob.glob(os.path.join(root, "beantester", "**", "*.py"), recursive=True):
+        with open(path, encoding="utf-8") as handle:
+            if _LOADS_IPHLPAPI.search(handle.read()):
+                found.add(os.path.relpath(path, root).replace(os.sep, "/"))
+    return found
+
+
+def test_every_module_that_loads_iphlpapi_is_watched():
+    """The recorder above wraps named methods. A third module that loads iphlpapi
+    would reach the OS around every one of them, with this file green - so the set
+    of modules is read from the source and must be the set the recorder knows."""
+    loaders = _iphlpapi_loaders()
+    check("the modules that load iphlpapi are the ones the recorder watches",
+          loaders == set(WATCHED_IPHLPAPI), f"({sorted(loaders)} vs {sorted(WATCHED_IPHLPAPI)})")
+    # The canary: a scan that finds nothing satisfies an equality with nothing.
+    for shape in ('ctypes.WinDLL("iphlpapi.dll")', "lib = WinDLL('iphlpapi')",
+                  "ctypes.windll.iphlpapi.GetIfTable2(p)"):
+        check(f"the scan sees {shape}", _LOADS_IPHLPAPI.search(shape))
+    check("and not a mention in prose", not _LOADS_IPHLPAPI.search("reads iphlpapi tables"))

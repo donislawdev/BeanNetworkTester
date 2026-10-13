@@ -523,6 +523,38 @@ def test_a_cleared_selection_leaves_no_anchor_behind():
     """)
 
 
+def test_a_person_choosing_rows_is_told_to_the_page_and_the_pages_own_write_is_not():
+    """``on_select`` is how a page shows what belongs to the chosen row (the adapters
+    tool's details). A page that wrote the selection itself already knows it, and
+    Tk's queued echo of that write must not come back as a choice."""
+    run_gui("""
+        table = app.pages["connections"].table
+        table.sync([(f"k{i}", (str(i), "", "", "", "", "", "", "", ""))
+                    for i in range(50)])
+    """ + INJECT_FITS + """
+        told = []
+        table.bind_select(lambda: told.append(table.selected_keys()))
+        table.select_keys(["k3"])
+        table._on_select()              # Tk's queued echo of that write
+        assert told == [], ("the page's own write is not a choice", told)
+        key("<Down>")
+        assert told == [["k4"]], told
+        key("<Home>")
+        key("<Home>")                   # pressed again: nothing changed, nothing said
+        assert told == [["k4"], ["k0"]], told
+        # a selection ttk made itself, delivered as Tk delivers it
+        table.tree.selection_set(table._slots[2])
+        table._on_select()
+        assert told[-1] == ["k2"], told
+
+        def broken():
+            raise RuntimeError("the page failed on purpose")
+        table.bind_select(broken)
+        key("<Down>")                   # the keyboard goes on from its cursor, k0
+        assert table.selected_keys() == ["k1"], "a failing page does not stop the table"
+    """, allow_faults=("on purpose",))
+
+
 def test_a_huge_selection_does_not_make_every_scroll_pay_for_it():
     """A scroll costs the rows on screen, however many rows are selected.
 

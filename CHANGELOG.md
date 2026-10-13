@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **The Tools tab lists the network adapters.** The new **Adapters** tool shows every network
+  adapter on this computer (Windows only): the one your internet traffic leaves through first,
+  then the ones that are up. Choose one to see its addresses, gateway, DNS servers, DHCP, MAC
+  address, MTU and link speed. A note warns when another device uses the same address.
+  Right-click a gateway or a DNS server to put its address into the destination IP field on
+  the Control page. **Copy report** copies every adapter in English.
+
+- **Diagnostics can add the network adapters to the environment report.** Tick **Add network
+  adapters** before **Copy environment report**. It is off until you tick it, because the
+  addresses and MAC addresses say which network this computer is on, and the report is meant
+  for public bug reports.
+
 ### Docs
 
 - **The README says how the program's dependencies are checked for known vulnerabilities.**

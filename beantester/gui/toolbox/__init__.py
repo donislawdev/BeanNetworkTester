@@ -19,6 +19,7 @@ fitting (around seven) and the page starts rendering a tab per group instead.
 """
 from typing import NamedTuple
 
+from .adapters import AdaptersPanel
 from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
 from .portcheck import PortCheckPanel
@@ -38,6 +39,7 @@ TOOLS = (
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel),
     Tool(PortCheckPanel.ID, PortCheckPanel.LABEL, PortCheckPanel),
     Tool(ExprTestPanel.ID, ExprTestPanel.LABEL, ExprTestPanel),
+    Tool(AdaptersPanel.ID, AdaptersPanel.LABEL, AdaptersPanel),
     Tool(DiagnosticsPanel.ID, DiagnosticsPanel.LABEL, DiagnosticsPanel),
 )
 

@@ -117,6 +117,67 @@ def test_a_section_that_fails_costs_its_own_block_and_nothing_else(monkeypatch):
           f"({notes})")
 
 
+def _snapshot():
+    from beantester.adapters import AdapterRow, Reading
+    from beantester.nettools import adapters
+    row = AdapterRow("{E}", 9, 0, "Ethernet", "Intel", 6, 1, "AA-BB-CC-DD-EE-FF", 1500,
+                     None, None, False, "", (), ("192.168.1.1",), (), "", None, None)
+    return adapters.Snapshot(adapters.rank(Reading((row,), {4: 9})), 0.0, 3, 1)
+
+
+def test_the_network_adapters_are_in_the_report_only_when_asked_for():
+    """The bug report template asks for this report in a PUBLIC issue, and the
+    adapters carry this machine's addresses and MAC: off until the person ticks
+    the box (the owner's decision, 2026-10-13)."""
+    diagnosis = diagnostics.Diagnosis(True, (diagnostics.Check("python", "ok", "3.14"),),
+                                      "D:", _snapshot())
+    plain = diagnostics.report(diagnosis)
+    check("not in the report by default", "AA-BB-CC-DD-EE-FF" not in plain
+          and "network adapters" not in plain and len(plain.split("\n\n")) == 3, f"({plain})")
+    asked = diagnostics.report(diagnosis, include=("adapters",)).split("\n\n")
+    check("asked for: one more block, after the others", len(asked) == 4, f"({asked})")
+    from beantester.nettools import adapters
+    check("the same text the adapters tool copies",
+          asked[3] == adapters.report(diagnosis.adapters), f"({asked[3]!r})")
+    check("the section is the only optional one, and it is the adapters",
+          [s.id for s in diagnostics.REPORT_SECTIONS if s.optional] == ["adapters"])
+
+
+def test_an_adapter_list_that_cannot_be_read_costs_its_own_section(monkeypatch):
+    from beantester.nettools import adapters
+    monkeypatch.setattr(driver, "doctor", lambda: (True, [("python", "ok", "3.14")]))
+    monkeypatch.setattr(adapters, "supported", lambda: True)
+    notes = []
+    monkeypatch.setattr(diagnostics.crashlog, "note", lambda exc, area, *a: notes.append(area))
+
+    def refused():
+        raise OSError("the adapter list refused on purpose")
+    monkeypatch.setattr(adapters, "read", refused)
+    diagnosis = diagnostics.diagnose()
+    check("the checks are still there", diagnosis.ok and len(diagnosis.checks) == 1)
+    check("the adapters are not, and why is kept",
+          diagnosis.adapters is None and "refused on purpose" in diagnosis.adapters_error,
+          f"({diagnosis.adapters_error!r})")
+    check("a fault of the program is recorded", notes == ["nettools.diagnostics.adapters"],
+          f"({notes})")
+    block = diagnostics.report(diagnosis, include=("adapters",)).split("\n\n")[-1]
+    check("the section says it could not be read", block.startswith(
+        "network adapters: could not be read (OSError: "), f"({block!r})")
+
+    def not_ready():
+        raise adapters.Unreadable("tools.adapters.error_not_ready", "answered 1228")
+    monkeypatch.setattr(adapters, "read", not_ready)
+    notes.clear()
+    diagnosis = diagnostics.diagnose()
+    check("a reason the person can wait out is not a fault", notes == [], f"({notes})")
+
+    monkeypatch.setattr(adapters, "supported", lambda: False)
+    diagnosis = diagnostics.diagnose()
+    block = diagnostics.report(diagnosis, include=("adapters",)).split("\n\n")[-1]
+    check("off Windows the section says so", diagnosis.adapters is None
+          and block == "network adapters: not read on this system", f"({block!r})")
+
+
 def test_why_the_driver_cannot_be_cleaned_up_from_here(monkeypatch):
     cases = {(False, False): "tools.diagnostics.clean_windows_only",
              (False, True): "tools.diagnostics.clean_windows_only",

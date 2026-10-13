@@ -213,13 +213,25 @@ monitor is gone it returns to the centre of the current screen.
     port or a PID is reported as that, not as "does not match". **"Use in the Control
     field"** puts the expression into that field, replacing what is there. What you type
     stays until you close the program, even if you switch the language.
+  - **Adapters** - every network adapter on this computer and the settings a test depends
+    on, the kind `ipconfig /all` prints (Windows only). The adapter your internet traffic
+    leaves through is at the top,
+    then the ones that are up. Choose one to see its addresses with their prefixes, the
+    gateway, the DNS servers, DHCP, the MAC address, the MTU and the link speed. A note
+    warns when another device uses the same address. The list is read when you open the tab
+    and when you press **Refresh**. Right-click a gateway or a DNS server to put its address
+    into the destination IP field on the Control page (the port there stays). **"Copy
+    report"** copies every adapter in English - the text contains this computer's addresses
+    and MAC addresses.
   - **Diagnostics** - why START will not work, without a console. It runs the same checks
     as `--doctor` (administrator rights, the WinDivert driver, leftovers in the temp
     folder...) and marks each one OK, Warning or Problem. **"Clean up the driver"** unloads
     a WinDivert driver that was left loaded (administrator only, never during a session).
     **"Copy environment report"** copies the `--version` line and the `--doctor` output,
     ready to paste into a bug report. The report includes folder paths, and a path can
-    contain your Windows user name.
+    contain your Windows user name. Tick **"Add network adapters"** to put the adapters into
+    the report too - it is off until you tick it, because their addresses say which network
+    this computer is on.
 - At the bottom: **START/STOP**, **Apply changes** and **Load/Save file**, with the log beneath.
   This bar is anchored to the bottom edge - no tab can cover it.
 
@@ -1440,6 +1452,7 @@ beantester/              the implementation package
   validators.py          number and range validation (shared by GUI, CLI and config file)
   portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback),
                          and every socket with its state for the Tools tab
+  adapters.py            network adapters and the route out (iphlpapi/ctypes), for the Tools tab
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)

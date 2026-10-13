@@ -226,17 +226,21 @@ def host_identity() -> tuple[str, str, str]:
     unavailable degrades to ``"-"``.
     """
     import socket
+
+    # The adapters tool asks the routing table about the same two destinations, so
+    # the address shown here and the adapter it marks as "internet" agree.
+    from .adapters import INTERNET_PROBES
     try:
         host = socket.gethostname() or "-"
     except OSError:
         host = "-"
-    ipv4 = _route_source_ip(socket.AF_INET, "8.8.8.8")
+    ipv4 = _route_source_ip(socket.AF_INET, INTERNET_PROBES[4])
     if ipv4 == "-":
         try:
             ipv4 = socket.gethostbyname(socket.gethostname()) or "-"
         except OSError:
             ipv4 = "-"
-    ipv6 = _route_source_ip(socket.AF_INET6, "2001:4860:4860::8888")
+    ipv6 = _route_source_ip(socket.AF_INET6, INTERNET_PROBES[6])
     return host, ipv4, ipv6
 
 

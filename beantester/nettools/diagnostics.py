@@ -17,6 +17,7 @@ from typing import Callable, NamedTuple
 from .. import crashlog, driver
 from ..appinfo import version_line
 from ..paths import user_data_dir
+from . import adapters
 
 # The states ``driver.doctor()`` gives a check. FAIL is the one a session cannot
 # start past; WARN is worth reading and does not stop anything.
@@ -45,12 +46,36 @@ class Diagnosis(NamedTuple):
     ok: bool            # no check failed: nothing here stops a session
     checks: tuple       # of Check, in doctor's order
     data_dir: str       # where this account's own files are - a line, not a check
+    # The network adapters, for the report section a person may ADD (see
+    # OPTIONAL_SECTIONS). Read with the checks so the report is still built from
+    # what is already known, at a click, on the UI thread.
+    adapters: object = None     # nettools.adapters.Snapshot; None when not read
+    adapters_error: str = ""    # why they could not be read, program text
 
 
 def diagnose():
     """Run the checks. Blocking: the first call imports pydivert (~160 ms measured)."""
     ok, rows = driver.doctor()
-    return Diagnosis(ok, tuple(Check(*row) for row in rows), user_data_dir())
+    snapshot, error = _read_adapters()
+    return Diagnosis(ok, tuple(Check(*row) for row in rows), user_data_dir(),
+                     snapshot, error)
+
+
+def _read_adapters():
+    """The adapter list for the optional section - its failure costs that section only.
+
+    About 3 ms on a worker (measured 2026-10-13), so it is read with every check
+    rather than when the box is ticked: the report stays a text built from what the
+    last check found, at a click.
+    """
+    if not adapters.supported():
+        return None, ""
+    try:
+        return adapters.read(), ""
+    except Exception as exc:
+        if not isinstance(exc, adapters.Unreadable):
+            crashlog.note(exc, "nettools.diagnostics.adapters")
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 # -- cleaning up the driver ---------------------------------------------------- #
@@ -94,6 +119,8 @@ def clean_up(opens_seen):
 class Section(NamedTuple):
     id: str
     lines: Callable     # (Diagnosis) -> list of lines, program text
+    # In the report only when the person asks for it (``report(include=...)``).
+    optional: bool = False
 
 
 def _program(_diagnosis):
@@ -110,21 +137,37 @@ def _crash_log(_diagnosis):
             f"{counts['distinct']} distinct, in this run"]
 
 
+def _adapters(diagnosis):
+    if diagnosis.adapters is not None:
+        return adapters.report_lines(diagnosis.adapters)
+    if diagnosis.adapters_error:
+        return [f"network adapters: could not be read ({diagnosis.adapters_error})"]
+    return ["network adapters: not read on this system"]
+
+
 # The report is a registry, not a function body, so the next tool that knows
-# something about this machine (adapters, the system proxy) adds a section here
-# and the copied text grows by itself. A section works from what is already
-# known - today every line comes from the last check or from memory, so the text
-# is built on the UI thread at a click. A section that has to ask the system is
-# the day the report moves to the worker, not the day it grows a stall.
+# something about this machine (the system proxy) adds a section here and the
+# copied text grows by itself. A section works from what is already known - every
+# line comes from the last check or from memory, so the text is built on the UI
+# thread at a click. A section that has to ask the system at the click is the day
+# the report moves to the worker, not the day it grows a stall.
+#
+# 🔴 A section that names this machine's network - addresses, MAC, DNS servers -
+# is OPTIONAL: the bug report template asks for this report in a PUBLIC issue
+# (`.github/ISSUE_TEMPLATE/bug_report.yml`, "Environment report"). The person adds
+# it with a tick box, which is off until ticked (the owner's decision, 2026-10-13).
 REPORT_SECTIONS = (
     Section("program", _program),              # exactly what --version prints
     Section("environment", _environment),      # exactly what --doctor prints
     Section("crash log", _crash_log),
+    Section("adapters", _adapters, optional=True),
 )
 
 
-def report(diagnosis, sections=REPORT_SECTIONS):
+def report(diagnosis, sections=REPORT_SECTIONS, include=()):
     """The text a person pastes into a bug report, one block per section.
+
+    An optional section is in it only when its id is in ``include``.
 
     A section that fails costs its own block and nothing else: a report missing
     the one line that broke is still the report, while no report at all is what
@@ -132,6 +175,8 @@ def report(diagnosis, sections=REPORT_SECTIONS):
     """
     blocks = []
     for section in sections:
+        if section.optional and section.id not in include:
+            continue
         try:
             lines = [str(line) for line in section.lines(diagnosis)]
         except Exception as exc:
