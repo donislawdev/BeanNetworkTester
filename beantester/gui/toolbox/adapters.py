@@ -1,10 +1,17 @@
-"""Tools tab: network adapters. The rows and the report are made in ``nettools/adapters.py``.
+"""Tools tab: network adapters and the proxy. The rows and the report are made in
+``nettools/adapters.py`` and ``nettools/proxy.py``.
 
 "Which adapter does my traffic leave through, which address does it have, which
 gateway and DNS server does it use?" - asked before a test is set up, and asked
 again when a VPN or a virtual switch is in the way. What ``ipconfig /all`` prints,
 as two tables: every adapter above (the one the internet goes through first, then
 the ones that are up), and the chosen adapter's details below.
+
+The proxy is the first row of the list, whatever the sort (the owner's choice of
+the two rendered layouts, 2026-10-14): "which way does my traffic go" is the same
+question, and its details reuse the table and the row menu below - a program that
+uses a proxy connects to IT, so its address is offered to the Control page like a
+gateway's.
 
 A snapshot, read when the tab is first looked at and then when asked - the
 pattern of the socket table: a list that re-read itself on every tick would move
@@ -19,9 +26,10 @@ another one.
 import time
 import tkinter as tk
 from tkinter import ttk
+from typing import NamedTuple
 
 from ...i18n import T
-from ...nettools import adapters
+from ...nettools import adapters, proxy
 from .. import dialogs
 from ..clipboard import copy_confirmed
 from ..field_actions import fill_field
@@ -59,8 +67,31 @@ def say(part):
     return "" if part is None else str(part)
 
 
+class Read(NamedTuple):
+    """One Refresh: the adapters and the proxy, read together on the worker."""
+    adapters: object            # nettools.adapters.Snapshot
+    proxy: object               # proxy.Reading; None where it is not read
+
+
+def read_all():
+    """The adapters and, where supported, the proxy. ONE job, so a second Refresh
+    cannot drop half of it (the worker keeps only the newest request), and the proxy
+    read never raises - it cannot cost the adapter list."""
+    return Read(adapters.read(), proxy.read() if proxy.supported() else None)
+
+
+class ProxyEntry(NamedTuple):
+    """The proxy as a row of the adapter list."""
+    reading: object
+    key: str = "proxy"
+    up: bool = True
+
+
 def render(adapter):
     """One adapter's cells, in ``COLUMNS`` order."""
+    if isinstance(adapter, ProxyEntry):
+        return (T("tools.adapters.proxy.row"), say(proxy.state_words(adapter.reading)),
+                T("tools.adapters.kind.proxy"), proxy.first_server(adapter.reading), "")
     row = adapter.row
     return (row.name, say(adapters.status_words(row.status)),
             say(adapters.kind_words(row.kind)), adapter.first_ipv4(),
@@ -129,9 +160,9 @@ class AdaptersPanel:
         self.poller = Poller(self.frame, self.job, self._on_outcome)
         # What this window already knows is shown as it is. The FIRST read waits for
         # the tab to be on screen (refresh / pending), as the socket table's does.
-        snapshot = self.job.value.get(READ)
-        if snapshot is not None:
-            self._show(snapshot)
+        known = self.job.value.get(READ)
+        if known is not None:
+            self._show(known)
         last = self.job.last.get(READ)
         if last is not None:
             self.status.show(last)
@@ -172,9 +203,9 @@ class AdaptersPanel:
 
     # -- asking -------------------------------------------------------------- #
     def read(self):
-        """Read the adapters again (the Refresh button)."""
+        """Read the adapters and the proxy again (the Refresh button)."""
         if self.supported and not self.job.busy():
-            self.job.run(READ, adapters.read)
+            self.job.run(READ, read_all)
             self.status.working()
             self._sync_buttons()
             self.poller.start()
@@ -186,10 +217,12 @@ class AdaptersPanel:
             self.read()
 
     def copy_report(self):
-        snapshot = self.job.value.get(READ)
-        if snapshot is not None:
-            copy_confirmed(self.app, adapters.report(snapshot),
-                           T("tools.adapters.report_logged"), AREA)
+        known = self.job.value.get(READ)
+        if known is not None:
+            text = adapters.report(known.adapters)
+            if known.proxy is not None:
+                text += "\n\n" + proxy.report(known.proxy)
+            copy_confirmed(self.app, text, T("tools.adapters.report_logged"), AREA)
 
     # -- sorting: kept per window, like the socket table's ------------------- #
     def _sort(self, name):
@@ -205,9 +238,9 @@ class AdaptersPanel:
 
     def _on_sort(self, sort):
         self._remember_sort("sort", sort)
-        snapshot = self.job.value.get(READ)
-        if snapshot is not None:
-            self._show(snapshot)
+        known = self.job.value.get(READ)
+        if known is not None:
+            self._show(known)
 
     def _on_detail_sort(self, sort):
         self._remember_sort("detail_sort", sort)
@@ -223,14 +256,18 @@ class AdaptersPanel:
             self._show(outcome.value)
         self._sync_buttons()
 
-    def _show(self, snapshot):
+    def _show(self, known):
+        snapshot = known.adapters
         sort = self._sort("sort")
         rows = adapters.sort(snapshot.adapters, sort["col"], sort["reverse"])
+        if known.proxy is not None:
+            rows = [ProxyEntry(known.proxy), *rows]     # first, whatever the sort
         self.table.set_empty_text("tools.adapters.empty")
         self.table.set_model(rows, render=render, key_of=lambda a: a.key, tag_of=adapter_tag)
         # The adapter chosen before is chosen again; one that is gone gives way to
-        # the top of the ranking - the adapter the internet goes through.
-        keys = {a.key for a in snapshot.adapters}
+        # the top of the ranking - the adapter the internet goes through, not the
+        # proxy row above it. The keys come from the ROWS, the proxy's among them.
+        keys = {a.key for a in rows}
         chosen = self.memory.get("adapter")
         if chosen not in keys:
             chosen = snapshot.adapters[0].key if snapshot.adapters else None
@@ -251,7 +288,10 @@ class AdaptersPanel:
 
     def _show_details(self):
         adapter = self._chosen()
-        rows = adapters.details(adapter) if adapter is not None else []
+        if isinstance(adapter, ProxyEntry):
+            rows = proxy.details(adapter.reading)
+        else:
+            rows = adapters.details(adapter) if adapter is not None else []
         sort = self._sort("detail_sort")
         column = sort["col"]
         if column in DETAIL_COLUMNS:
@@ -264,13 +304,13 @@ class AdaptersPanel:
 
     def _show_failure(self):
         """The read failed: say so, and keep the last good rows with their age."""
-        snapshot = self.job.value.get(READ)
-        if snapshot is None:
+        known = self.job.value.get(READ)
+        if known is None:
             self.table.set_empty_text("tools.adapters.empty_failed")
             self.table.set_model([], render=render, key_of=lambda a: a.key)
             self._show_details()
             return
-        at = time.strftime("%H:%M:%S", time.localtime(snapshot.read_at))
+        at = time.strftime("%H:%M:%S", time.localtime(known.adapters.read_at))
         self.note.config(text=T("tools.adapters.note_stale", time=at))
 
     def _sync_buttons(self):
@@ -304,9 +344,9 @@ class AdaptersPanel:
             copy_confirmed(self.app, text, text, AREA)
 
     def _limit(self):
-        """The gateway's or DNS server's address into the Control page's destination
-        field - the address only: the port the person set there stays (the owner's
-        decision, 2026-10-13; ``set_destination`` would have emptied it)."""
+        """The gateway's, DNS server's or proxy's address into the Control page's
+        destination field - the address only: the port the person set there stays
+        (the owner's decision, 2026-10-13; ``set_destination`` would have emptied it)."""
         detail = self._selected_detail()
         if detail and detail.address:
             fill_field(self.app, "dst_ip", detail.address, "tools.adapters.log_limited")

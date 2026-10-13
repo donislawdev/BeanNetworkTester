@@ -12,12 +12,13 @@ are the program's own output, exactly as ``--doctor`` prints it, and the bug
 report template asks for that output by name - a translated copy would be a
 second report the maintainer has to read back into the first.
 """
-from typing import Callable, NamedTuple
+from types import MappingProxyType
+from typing import Callable, Mapping, NamedTuple
 
 from .. import crashlog, driver
 from ..appinfo import version_line
 from ..paths import user_data_dir
-from . import adapters
+from . import adapters, proxy
 
 # The states ``driver.doctor()`` gives a check. FAIL is the one a session cannot
 # start past; WARN is worth reading and does not stop anything.
@@ -42,40 +43,51 @@ class Check(NamedTuple):
     detail: str         # program text, exactly as --doctor prints it
 
 
+class Found(NamedTuple):
+    """What one report section's ``read`` gave."""
+    value: object = None        # None: not read on this system, or the read failed
+    error: str = ""             # why it failed, program text
+
+
 class Diagnosis(NamedTuple):
     ok: bool            # no check failed: nothing here stops a session
     checks: tuple       # of Check, in doctor's order
     data_dir: str       # where this account's own files are - a line, not a check
-    # The network adapters, for the report section a person may ADD (see
-    # OPTIONAL_SECTIONS). Read with the checks so the report is still built from
-    # what is already known, at a click, on the UI thread.
-    adapters: object = None     # nettools.adapters.Snapshot; None when not read
-    adapters_error: str = ""    # why they could not be read, program text
+    # What the sections that ask the system (``Section.read``) found, by section id.
+    # Read with the checks, so the report is still built from what is already known,
+    # at a click, on the UI thread.
+    found: Mapping = MappingProxyType({})
 
 
 def diagnose():
-    """Run the checks. Blocking: the first call imports pydivert (~160 ms measured)."""
+    """Run the checks and every section's read. Blocking: the first call imports
+    pydivert (~160 ms measured); the adapters add ~3 ms and the proxy ~2 ms (measured
+    2026-10-13 and 2026-10-14), so they are read with every check rather than when a
+    box is ticked."""
     ok, rows = driver.doctor()
-    snapshot, error = _read_adapters()
+    found = {section.id: _found(section) for section in REPORT_SECTIONS if section.read}
     return Diagnosis(ok, tuple(Check(*row) for row in rows), user_data_dir(),
-                     snapshot, error)
+                     MappingProxyType(found))
+
+
+def _found(section):
+    """One section's read - its failure costs that section only. A failure the
+    person can act on (it carries a ``user_key``) is an answer, not a fault, and stays
+    out of the crash log."""
+    try:
+        return Found(section.read(), "")
+    except Exception as exc:
+        if getattr(exc, "user_key", None) is None:
+            crashlog.note(exc, f"nettools.diagnostics.{section.id}")
+        return Found(None, f"{type(exc).__name__}: {exc}")
 
 
 def _read_adapters():
-    """The adapter list for the optional section - its failure costs that section only.
+    return adapters.read() if adapters.supported() else None
 
-    About 3 ms on a worker (measured 2026-10-13), so it is read with every check
-    rather than when the box is ticked: the report stays a text built from what the
-    last check found, at a click.
-    """
-    if not adapters.supported():
-        return None, ""
-    try:
-        return adapters.read(), ""
-    except Exception as exc:
-        if not isinstance(exc, adapters.Unreadable):
-            crashlog.note(exc, "nettools.diagnostics.adapters")
-        return None, f"{type(exc).__name__}: {exc}"
+
+def _read_proxy():
+    return proxy.read() if proxy.supported() else None
 
 
 # -- cleaning up the driver ---------------------------------------------------- #
@@ -121,6 +133,9 @@ class Section(NamedTuple):
     lines: Callable     # (Diagnosis) -> list of lines, program text
     # In the report only when the person asks for it (``report(include=...)``).
     optional: bool = False
+    # () -> what ``lines`` needs from the system, run by ``diagnose()`` on the worker
+    # and kept in ``Diagnosis.found[id]``; None for a section that asks nothing.
+    read: Callable | None = None
 
 
 def _program(_diagnosis):
@@ -137,30 +152,39 @@ def _crash_log(_diagnosis):
             f"{counts['distinct']} distinct, in this run"]
 
 
+def _found_lines(diagnosis, section_id, what, lines):
+    found = diagnosis.found.get(section_id, Found())
+    if found.value is not None:
+        return lines(found.value)
+    if found.error:
+        return [f"{what}: could not be read ({found.error})"]
+    return [f"{what}: not read on this system"]
+
+
 def _adapters(diagnosis):
-    if diagnosis.adapters is not None:
-        return adapters.report_lines(diagnosis.adapters)
-    if diagnosis.adapters_error:
-        return [f"network adapters: could not be read ({diagnosis.adapters_error})"]
-    return ["network adapters: not read on this system"]
+    return _found_lines(diagnosis, "adapters", "network adapters", adapters.report_lines)
 
 
-# The report is a registry, not a function body, so the next tool that knows
-# something about this machine (the system proxy) adds a section here and the
-# copied text grows by itself. A section works from what is already known - every
-# line comes from the last check or from memory, so the text is built on the UI
-# thread at a click. A section that has to ask the system at the click is the day
-# the report moves to the worker, not the day it grows a stall.
+def _proxy(diagnosis):
+    return _found_lines(diagnosis, "proxy", "proxy", proxy.report_lines)
+
+
+# The report is a registry, not a function body: a tool that knows something about
+# this machine adds a section here - with a ``read`` when it has to ask the system -
+# and the copied text grows by itself. Every line comes from what ``diagnose()``
+# found on the worker, so the text is built on the UI thread at a click.
 #
-# 🔴 A section that names this machine's network - addresses, MAC, DNS servers -
-# is OPTIONAL: the bug report template asks for this report in a PUBLIC issue
-# (`.github/ISSUE_TEMPLATE/bug_report.yml`, "Environment report"). The person adds
-# it with a tick box, which is off until ticked (the owner's decision, 2026-10-13).
+# 🔴 A section that names this machine's network - addresses, MAC, DNS servers, a
+# proxy - is OPTIONAL: the bug report template asks for this report in a PUBLIC
+# issue (`.github/ISSUE_TEMPLATE/bug_report.yml`, "Environment report"). The person
+# adds it with a tick box, which is off until ticked (the owner's decisions,
+# 2026-10-13 for the adapters, 2026-10-14 for the proxy - a box of its own).
 REPORT_SECTIONS = (
     Section("program", _program),              # exactly what --version prints
     Section("environment", _environment),      # exactly what --doctor prints
     Section("crash log", _crash_log),
-    Section("adapters", _adapters, optional=True),
+    Section("adapters", _adapters, optional=True, read=_read_adapters),
+    Section("proxy", _proxy, optional=True, read=_read_proxy),
 )
 
 

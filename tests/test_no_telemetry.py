@@ -154,9 +154,18 @@ ALLOWED_CALLS = {
         "the same support page, from the About window",
 }
 
-# Every library the package loads through ctypes. All ten are local Windows APIs.
+# Every library the package loads through ctypes. All eleven are local Windows APIs.
 # This is the check that closes the hole a module-name scan cannot see -
 # `windll.wininet` needs no import statement.
+#
+# `winhttp` (2026-10-14, the owner's choice for the Adapters tool's proxy row) IS an
+# HTTP client library, and is here for two of its READS only:
+# WinHttpGetIEProxyConfigForCurrentUser and WinHttpGetDefaultProxyConfiguration
+# (`beantester/proxy.py`). Measured on a VM with Windows Filtering Platform
+# auditing: 1000 reads with automatic detection, a setup script and a manual proxy
+# set raised no event from the reading program, while a control datagram did. Its
+# sending functions are in WIRE_FUNCTIONS, so the library is allowed and the
+# requests are not - the same arrangement as iphlpapi.
 #
 # 🔴 This used to say "none of them speaks a network protocol", and that was
 # false for `iphlpapi`: the socket-table reader (`portmap.py`) needs it, and the
@@ -167,7 +176,7 @@ ALLOWED_CALLS = {
 # FUNCTIONS are watched too, in WIRE_FUNCTIONS below.
 ALLOWED_LIBRARIES = {
     "advapi32", "dwmapi", "iphlpapi", "kernel32", "ntdll", "shcore", "shell32",
-    "user32", "uxtheme", "winmm",
+    "user32", "uxtheme", "winhttp", "winmm",
 }
 
 # Exports of an ALLOWED library that send something. Each name with what it puts
@@ -187,6 +196,14 @@ ALLOWED_LIBRARIES = {
 # Not claimed complete: iphlpapi has hundreds of exports and this lists the ones
 # the documentation says transmit. Adding one here is a decision, removing one is
 # a hole - and NONE of them is used today, so there is no allowlist beside it.
+#
+# winhttp's, from Microsoft Learn (read 2026-10-14): WinHttpSendRequest "sends the
+# specified request to the HTTP server", WinHttpWriteData "writes request data to
+# an HTTP server", the WebSocket send, shutdown ("sends a close frame") and close;
+# and the proxy discovery calls - WinHttpGetProxyForUrl(Ex) "downloads a Proxy
+# Auto-Configuration (PAC) file" and can find it, like
+# WinHttpDetectAutoProxyConfigUrl, "using DHCP and DNS". The two READS
+# `beantester/proxy.py` makes are none of these.
 WIRE_FUNCTIONS = {
     "IcmpSendEcho": "an IPv4 ICMP echo request (a ping)",
     "IcmpSendEcho2": "the same, asynchronous form",
@@ -196,6 +213,14 @@ WIRE_FUNCTIONS = {
     "ResolveIpNetEntry2": "an ARP request or an IPv6 neighbour solicitation",
     "IpRenewAddress": "a DHCP renewal",
     "IpReleaseAddress": "a DHCP release",
+    "WinHttpSendRequest": "an HTTP request",
+    "WinHttpWriteData": "an HTTP request's body",
+    "WinHttpWebSocketSend": "WebSocket data",
+    "WinHttpWebSocketShutdown": "a WebSocket close frame",
+    "WinHttpWebSocketClose": "a WebSocket close",
+    "WinHttpGetProxyForUrl": "proxy discovery (DHCP, DNS) and a PAC download",
+    "WinHttpGetProxyForUrlEx": "the same, asynchronous form",
+    "WinHttpDetectAutoProxyConfigUrl": "proxy discovery over DHCP and DNS",
 }
 
 # A process is the other way out of a sandbox: `curl`, `powershell -c Invoke-
@@ -702,10 +727,12 @@ TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
 # ALLOWED_LIBRARIES, written out on purpose instead of referenced. Adding `dnsapi`
 # to the package allowlist for a DNS tool must not quietly extend it to this tab.
 # `iphlpapi` is here because its sending functions are watched one by one
-# (WIRE_FUNCTIONS) - it reads the socket table and the adapters for the tab.
+# (WIRE_FUNCTIONS) - it reads the socket table and the adapters for the tab - and
+# `winhttp` for the same reason: two reads of the proxy settings for the Adapters
+# tool, its requests and discovery watched by name (2026-10-14).
 TOOLS_TAB_QUIET_LIBRARIES = frozenset({
     "advapi32", "dwmapi", "iphlpapi", "kernel32", "ntdll", "shcore", "shell32",
-    "user32", "uxtheme", "winmm",
+    "user32", "uxtheme", "winhttp", "winmm",
 })
 
 
@@ -789,6 +816,12 @@ def test_the_tools_tab_check_sees_each_way_out():
     quiet = "import ctypes\nctypes.WinDLL('iphlpapi.dll').GetAdaptersAddresses\n"
     check("reading the adapters is not a way out", tools_tab_reach(quiet, rel) == [],
           f"({tools_tab_reach(quiet, rel)})")
+    proxy = "import ctypes\nctypes.WinDLL('winhttp.dll').WinHttpGetIEProxyConfigForCurrentUser\n"
+    check("reading the proxy settings is not a way out", tools_tab_reach(proxy, rel) == [],
+          f"({tools_tab_reach(proxy, rel)})")
+    request = "import ctypes\nctypes.WinDLL('winhttp.dll').WinHttpSendRequest\n"
+    check("a request through the same library is", tools_tab_reach(request, rel) != [],
+          f"({tools_tab_reach(request, rel)})")
 
 
 # -- the canary: the guard has to be shown able to fail ---------------------- #
@@ -802,8 +835,10 @@ BAD_CODE = (
     ("a from-import of one", "from http.client import HTTPConnection\n", "import"),
     ("a network library through ctypes",
      "import ctypes\nctypes.windll.wininet.InternetOpenW(0, 0, 0, 0, 0)\n", "library"),
+    # wininet, not winhttp: winhttp is allowed since 2026-10-14 for two reads, and
+    # this canary would have gone quiet with it - its requests are canaries below.
     ("the same one loaded by string",
-     "import ctypes\nctypes.WinDLL('winhttp')\n", "library"),
+     "import ctypes\nctypes.WinDLL('wininet')\n", "library"),
     ("the same one after from-importing the loader",
      "from ctypes import windll\nwindll.wininet.InternetOpenW(0)\n", "library"),
     ("shelling out to curl",
@@ -848,6 +883,12 @@ BAD_CODE = (
     ("the name split across two literals, which a text search never joins",
      "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\n"
      "getattr(lib, 'Icmp' + 'SendEcho2')(0)\n", "wire"),
+    # winhttp is allowed for two reads (2026-10-14); a request through it is not.
+    ("an HTTP request through the allowed winhttp",
+     "import ctypes\nlib = ctypes.WinDLL('winhttp.dll')\nlib.WinHttpSendRequest(h, 0, 0)\n",
+     "wire"),
+    ("proxy discovery through winhttp - DHCP and DNS on the wire",
+     "import ctypes\nctypes.windll.winhttp.WinHttpDetectAutoProxyConfigUrl(3, p)\n", "wire"),
 )
 
 

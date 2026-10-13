@@ -129,8 +129,9 @@ def test_the_network_adapters_are_in_the_report_only_when_asked_for():
     """The bug report template asks for this report in a PUBLIC issue, and the
     adapters carry this machine's addresses and MAC: off until the person ticks
     the box (the owner's decision, 2026-10-13)."""
+    snapshot = _snapshot()
     diagnosis = diagnostics.Diagnosis(True, (diagnostics.Check("python", "ok", "3.14"),),
-                                      "D:", _snapshot())
+                                      "D:", {"adapters": diagnostics.Found(snapshot)})
     plain = diagnostics.report(diagnosis)
     check("not in the report by default", "AA-BB-CC-DD-EE-FF" not in plain
           and "network adapters" not in plain and len(plain.split("\n\n")) == 3, f"({plain})")
@@ -138,15 +139,56 @@ def test_the_network_adapters_are_in_the_report_only_when_asked_for():
     check("asked for: one more block, after the others", len(asked) == 4, f"({asked})")
     from beantester.nettools import adapters
     check("the same text the adapters tool copies",
-          asked[3] == adapters.report(diagnosis.adapters), f"({asked[3]!r})")
-    check("the section is the only optional one, and it is the adapters",
-          [s.id for s in diagnostics.REPORT_SECTIONS if s.optional] == ["adapters"])
+          asked[3] == adapters.report(snapshot), f"({asked[3]!r})")
+    check("the optional sections are the adapters and the proxy, each its own box",
+          [s.id for s in diagnostics.REPORT_SECTIONS if s.optional] == ["adapters", "proxy"])
+
+
+def _proxy_reading():
+    from beantester.proxy import MachineProxy, Reading, UserProxy, Variable
+    return Reading(UserProxy(True, "", "192.0.2.10:8080", "<local>"), "",
+                   MachineProxy("", ""), "",
+                   (Variable("HTTP_PROXY", "http://user:secret@192.0.2.40:8080", "user"),), "")
+
+
+def test_the_proxy_is_in_the_report_only_when_asked_for(monkeypatch):
+    """The proxy's own box (the owner's decision, 2026-10-14): off until ticked, read
+    with the checks, and a failure costs its own block."""
+    from beantester.nettools import adapters, proxy
+    monkeypatch.setattr(driver, "doctor", lambda: (True, [("python", "ok", "3.14")]))
+    monkeypatch.setattr(adapters, "supported", lambda: False)
+    monkeypatch.setattr(proxy, "supported", lambda: True)
+    reading = _proxy_reading()
+    monkeypatch.setattr(proxy, "read", lambda native=None: reading)
+    diagnosis = diagnostics.diagnose()
+    check("read with the checks", diagnosis.found["proxy"] == diagnostics.Found(reading),
+          f"({dict(diagnosis.found)})")
+    plain = diagnostics.report(diagnosis)
+    check("not in the report by default", "192.0.2.10" not in plain, f"({plain})")
+    block = diagnostics.report(diagnosis, include=("proxy",)).split("\n\n")[-1]
+    check("asked for: the text the adapters tool copies", block == proxy.report(reading),
+          f"({block!r})")
+    check("with the password hidden", "secret" not in block and "***@192.0.2.40" in block,
+          f"({block!r})")
+
+    notes = []
+    monkeypatch.setattr(diagnostics.crashlog, "note", lambda exc, area, *a: notes.append(area))
+
+    def refused(native=None):
+        raise OSError("the proxy read refused on purpose")
+    monkeypatch.setattr(proxy, "read", refused)
+    diagnosis = diagnostics.diagnose()
+    block = diagnostics.report(diagnosis, include=("proxy",)).split("\n\n")[-1]
+    check("a failed read costs its own block", block.startswith(
+        "proxy: could not be read (OSError: "), f"({block!r})")
+    check("and is recorded", notes == ["nettools.diagnostics.proxy"], f"({notes})")
 
 
 def test_an_adapter_list_that_cannot_be_read_costs_its_own_section(monkeypatch):
-    from beantester.nettools import adapters
+    from beantester.nettools import adapters, proxy
     monkeypatch.setattr(driver, "doctor", lambda: (True, [("python", "ok", "3.14")]))
     monkeypatch.setattr(adapters, "supported", lambda: True)
+    monkeypatch.setattr(proxy, "supported", lambda: False)
     notes = []
     monkeypatch.setattr(diagnostics.crashlog, "note", lambda exc, area, *a: notes.append(area))
 
@@ -155,9 +197,9 @@ def test_an_adapter_list_that_cannot_be_read_costs_its_own_section(monkeypatch):
     monkeypatch.setattr(adapters, "read", refused)
     diagnosis = diagnostics.diagnose()
     check("the checks are still there", diagnosis.ok and len(diagnosis.checks) == 1)
+    found = diagnosis.found["adapters"]
     check("the adapters are not, and why is kept",
-          diagnosis.adapters is None and "refused on purpose" in diagnosis.adapters_error,
-          f"({diagnosis.adapters_error!r})")
+          found.value is None and "refused on purpose" in found.error, f"({found})")
     check("a fault of the program is recorded", notes == ["nettools.diagnostics.adapters"],
           f"({notes})")
     block = diagnostics.report(diagnosis, include=("adapters",)).split("\n\n")[-1]
@@ -174,7 +216,7 @@ def test_an_adapter_list_that_cannot_be_read_costs_its_own_section(monkeypatch):
     monkeypatch.setattr(adapters, "supported", lambda: False)
     diagnosis = diagnostics.diagnose()
     block = diagnostics.report(diagnosis, include=("adapters",)).split("\n\n")[-1]
-    check("off Windows the section says so", diagnosis.adapters is None
+    check("off Windows the section says so", diagnosis.found["adapters"].value is None
           and block == "network adapters: not read on this system", f"({block!r})")
 
 
