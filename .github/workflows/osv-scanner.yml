@@ -90,6 +90,10 @@ jobs:
   # reusable workflow cannot be changed from here, so the names are refused
   # before it starts. Raised by review on pull request #255.
   result-paths:
+    # 🔴 A CONTRACT with the branch ruleset since 2026-10-03, like the job names in
+    # ci.yml: the rule requires a status check by this exact string. Do not edit it
+    # without editing the ruleset first - renamed, every merge would wait for a
+    # check that never comes, while all the checks it can see are green.
     name: OSV-Scanner (result paths are free)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -115,6 +119,11 @@ jobs:
   # database a minute apart, so only what the pull request CHANGED can tell them
   # apart - a newly published advisory shows up on both sides and cancels out.
   scan-pr:
+    # 🔴 A CONTRACT with the branch ruleset since 2026-10-03, and required together
+    # with `result-paths`: a red `result-paths` only SKIPS this job. The check the
+    # rule names is this string plus " / osv-scan", the job id inside the reusable
+    # workflow - so moving the pin below to a version that renames that job breaks
+    # every merge just as renaming this one would. Edit the ruleset first.
     name: OSV-Scanner (what this pull request adds)
     if: github.event_name == 'pull_request'
     needs: result-paths

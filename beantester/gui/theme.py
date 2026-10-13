@@ -91,6 +91,16 @@ PORT_COLORS = {
     "unsure": {"foreground": CAUTION},
 }
 
+# Adapter rows. An adapter that is not up is muted: on a machine with virtual
+# adapters (two of seven on the development machine) the ones that carry traffic
+# are what the eye looks for, and the status column says "down" in words. An
+# address another device also claims (DAD state "duplicate") is a fault's red, and
+# its note column says so in words (WCAG 1.4.1).
+ADAPTER_COLORS = {
+    "down": {"foreground": MUT},
+    "duplicate": {"foreground": WARN},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators
@@ -156,6 +166,12 @@ SPACE = {
 # the three languages, MEASURED on real Tk: Polish "Zarezerwowany przez Windows" is
 # 164 px in the table's Segoe UI 9, and 23 gives 183 (``scaling.column_width``
 # counts 7 px a character plus 22). 28 at first, and PID went past the right edge.
+# The adapters tool: `adapter` fits most adapter names as Windows gives them (8 to
+# 34 characters on the development machine, measured 2026-10-13 - a longer one is
+# cut in the list and shown whole in the details below it); `if_status` and
+# `if_kind` the longest status and type word in the three languages; `internet`
+# fits "IPv4, IPv6"; `item` the longest row name of the details table; `note` an
+# address's origin and its duplicate-address warning side by side.
 CHARS = {
     "help_button": 2,
     "value": 26,
@@ -169,11 +185,24 @@ CHARS = {
     "process": 16,
     "tcp_state": 12,
     "verdict": 23,
+    "adapter": 24,
+    "if_status": 14,
+    "if_kind": 10,
+    "internet": 10,
+    "item": 20,
+    "note": 24,
 }
 
-# How many rows a table shows before it scrolls: the connection table's 18.
+# How many rows a table shows before it scrolls: the connection table's 18. The
+# adapters tool has two tables in that height, and the window a 1366x768 screen
+# opens is 678 px tall: the list of adapters above keeps 4 rows (it scrolls - 7 on
+# the development machine) so the chosen adapter's details below, which take
+# whatever height is left, show about five at that size (rendered 2026-10-13; 6
+# rows above left the details 2).
 ROWS = {
     "table": 18,
+    "adapters": 4,
+    "details": 8,
 }
 
 

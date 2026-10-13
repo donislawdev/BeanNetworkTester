@@ -1068,3 +1068,285 @@ def test_a_header_click_sorts_the_port_check_without_checking_again():
         assert ports == sorted(ports, reverse=True), ports
         assert len(checks) == 1, checks
     """))
+
+
+# -- network adapters ------------------------------------------------------------- #
+# The system is stood in for at the logic's `read`: the real one asks Windows, whose
+# adapters differ on every runner (and do not exist on the Linux one). The ranking
+# and the details run for real on top of three made-up adapters. `gate` holds a
+# read back for the tests that need one still running.
+ADAPT = """
+import threading, time
+from beantester.i18n import T
+from beantester.adapters import AdapterRow, AddressRow, Reading
+from beantester.nettools import adapters as ad
+
+def row(key, index, status=1, kind=6, addresses=(), gateways=(), dns=()):
+    return AdapterRow(key, index, 0, key.title(), "", kind, status, "", 1500, None, None,
+                      False, "", tuple(addresses), tuple(gateways), tuple(dns), "", None, None)
+
+ROWS = [row("down", 21, status=2, kind=53),
+        row("eth", 9, addresses=[AddressRow("192.168.1.5", 4, 24, 3, 3, 4)],
+            gateways=["192.168.1.1"], dns=["fe80::53%9", "fec0:0:0:ffff::1%1"]),
+        row("wifi", 12, kind=71)]
+gate = threading.Event()
+gate.set()
+reads, supported = [], [True]
+
+def fake_read(native=None):
+    reads.append(1)
+    gate.wait(5)
+    return ad.Snapshot(ad.rank(Reading(tuple(ROWS), {4: 9, 6: 0})), time.time(), 2,
+                       next(ad._MADE))
+
+ad.read = fake_read
+ad.supported = lambda: supported[0]
+
+def open_adapters():
+    app.select_page("tools")
+    page = app.pages["tools"]
+    page.select("adapters")
+    return page.panels["adapters"]
+
+def settle(panel):
+    deadline = time.monotonic() + 5
+    while panel.pending():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def shown(panel):
+    return [a.key for a in panel.table.items]
+
+def details(panel):
+    return {d.key: d for d in panel.details.items}
+
+def choose(panel, key):
+    # what a click does: through the table's own route, so on_select is told
+    panel.table._choose(shown(panel).index(key))
+"""
+
+
+def test_the_adapters_are_read_when_first_looked_at_and_the_way_out_comes_first():
+    run_gui(ADAPT + START_UP + textwrap.dedent("""
+        app.ui.set("tools_page", "adapters")
+        app._build_ui()                  # the window, opening on a remembered tool
+        assert "adapters" in app.pages["tools"].panels, "the remembered tool is built"
+        opened_on_start_up()
+        assert reads == [], "and reads nothing until it is on screen"
+
+        panel = open_adapters()
+        settle(panel)
+        assert reads == [1], reads
+        assert shown(panel) == ["eth", "wifi", "down"], shown(panel)
+        assert panel.table.selected_keys() == ["eth"], "the way out is chosen first"
+        assert details(panel)["name"].value == "Eth"
+        assert panel.table.items[2].up is False and panel.table._tag_of(
+            panel.table.items[2]) == "down", "an adapter that is down is muted"
+        from beantester.gui.toolbox.adapters import COLUMNS, render
+        cells = dict(zip(COLUMNS, render(panel.table.items[0]), strict=True))
+        assert cells == {"name": "Eth", "status": T("tools.adapters.status.up"),
+                         "kind": T("tools.adapters.kind.ethernet"),
+                         "ipv4": "192.168.1.5/24", "internet": "IPv4"}, cells
+        app._tick()
+        panel.refresh()
+        settle(panel)
+        assert reads == [1], "after that, only Refresh reads"
+        panel.read()
+        settle(panel)
+        assert reads == [1, 1], reads
+    """))
+
+
+def test_the_chosen_adapter_shows_its_details_and_outlives_a_refresh_and_a_rebuild():
+    run_gui(ADAPT + textwrap.dedent("""
+        panel = open_adapters()
+        settle(panel)
+        choose(panel, "wifi")
+        assert details(panel)["name"].value == "Wifi", details(panel)["name"]
+        panel.read()
+        settle(panel)
+        assert panel.table.selected_keys() == ["wifi"], "a refresh keeps the choice"
+        assert details(panel)["name"].value == "Wifi"
+        app._build_ui()
+        again = open_adapters()
+        assert again is not panel
+        assert again.table.selected_keys() == ["wifi"], "so does a rebuild"
+        assert details(again)["name"].value == "Wifi"
+        assert reads == [1, 1], "a rebuild shows what the window read, it does not read again"
+        # the chosen adapter is gone (unplugged): the way out takes its place
+        ROWS.pop()
+        again.read()
+        settle(again)
+        assert again.table.selected_keys() == ["eth"], again.table.selected_keys()
+        assert details(again)["name"].value == "Eth"
+    """))
+
+
+def test_a_header_click_sorts_each_table_and_the_order_outlives_a_rebuild():
+    run_gui(ADAPT + textwrap.dedent("""
+        panel = open_adapters()
+        settle(panel)
+        panel.table._clicked("kind")
+        assert shown(panel) == ["eth", "down", "wifi"], shown(panel)
+        assert panel.table.selected_keys() == ["eth"], "sorting keeps the choice"
+        items = [T(d.item.key) for d in panel.details.items]
+        panel.details._clicked("item")
+        assert [T(d.item.key) for d in panel.details.items] == sorted(
+            items, key=str.casefold), "the details sort by what the cell says"
+        app._build_ui()
+        again = open_adapters()
+        assert shown(again) == ["eth", "down", "wifi"], shown(again)
+        assert again.details.sort == {"col": "item", "reverse": False}, again.details.sort
+        assert reads == [1], reads
+    """))
+
+
+def test_an_adapter_read_that_fails_says_why_and_keeps_the_rows_it_had():
+    run_gui(ADAPT + textwrap.dedent("""
+        panel = open_adapters()
+        settle(panel)
+        def refused(native=None):
+            raise OSError("the adapter list refused on purpose")
+        ad.read = refused
+        panel.read()
+        settle(panel)
+        status = panel.status.label
+        assert "refused on purpose" in status.cget("text"), status.cget("text")
+        assert status.cget("style") == "Status.Bad.TLabel"
+        assert shown(panel) == ["eth", "wifi", "down"], "the last good rows stay"
+        at = time.strftime("%H:%M:%S", time.localtime(panel.job.value["read"].read_at))
+        assert panel.note.cget("text") == T("tools.adapters.note_stale", time=at)
+        ad.read = fake_read
+        panel.read()
+        settle(panel)
+        assert panel.note.cget("text") == "", "a read that works clears the note"
+    """), allow_faults=("on purpose",))
+
+
+def test_a_first_read_that_fails_is_not_an_empty_list_and_is_not_retried_by_itself():
+    run_gui(ADAPT + textwrap.dedent("""
+        calls = []
+        def refused(native=None):
+            calls.append(1)
+            raise ad.Unreadable("tools.adapters.error_not_ready", "answered 1228 on purpose")
+        ad.read = refused
+        panel = open_adapters()
+        settle(panel)
+        text = panel.status.label.cget("text")
+        assert text == T("tools.common.failed", error=T("tools.adapters.error_not_ready")), text
+        assert panel.table.items == []
+        assert panel.table._empty_text == "tools.adapters.empty_failed", panel.table._empty_text
+        assert "disabled" in panel.copy_btn.state(), "no rows, no report to copy"
+        for _ in range(3):
+            app._tick()
+            panel.refresh()
+        settle(panel)
+        assert calls == [1], "a failed read waits for Refresh, not for the next tick"
+    """), allow_faults=("on purpose",))
+
+
+def test_a_rebuild_keeps_a_failed_read_and_hands_a_running_one_to_the_new_panel():
+    """A language change after a failed first read, and another during a read."""
+    run_gui(ADAPT + textwrap.dedent("""
+        def refused(native=None):
+            raise OSError("the adapter list refused on purpose")
+        ad.read = refused
+        panel = open_adapters()
+        settle(panel)
+        app._build_ui()
+        again = open_adapters()
+        assert "refused on purpose" in again.status.label.cget("text"), "the failure is kept"
+        assert again.table._empty_text == "tools.adapters.empty_failed"
+
+        ad.read = fake_read
+        gate.clear()
+        again.read()
+        assert again.job.busy()
+        app._build_ui()
+        third = open_adapters()
+        assert third.status.label.cget("text") == T("tools.common.working")
+        assert "disabled" in third.refresh_btn.state(), "one read at a time"
+        gate.set()
+        settle(third)
+        assert shown(third) == ["eth", "wifi", "down"], shown(third)
+        assert reads == [1], "the answer reached the new panel without asking again"
+    """), allow_faults=("on purpose",))
+
+
+def test_off_windows_the_tool_says_so_and_asks_nothing():
+    run_gui(ADAPT + textwrap.dedent("""
+        supported[0] = False
+        panel = open_adapters()
+        settle(panel)
+        app._tick()
+        panel.refresh()
+        assert reads == [], reads
+        assert panel.table._empty_text == "tools.adapters.windows_only"
+        assert "disabled" in panel.refresh_btn.state()
+        assert "disabled" in panel.copy_btn.state()
+    """))
+
+
+def test_the_details_menu_copies_a_value_and_limits_to_a_gateway_keeping_the_port():
+    run_gui(ADAPT + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.adapters import COPY_VALUE, LIMIT
+        app.vars["dst_port"].set("443")
+        panel = open_adapters()
+        settle(panel)
+        menu = panel.menu
+        for key, can_limit in (("gateway|0", True), ("dns|0", True), ("dns|1", False),
+                               ("name", False)):
+            panel.details.select_keys([key])
+            panel._show_menu(0, 0)
+            assert menu.entry_states[COPY_VALUE] == MENU_ENTRY_LIVE, key
+            want = MENU_ENTRY_LIVE if can_limit else MENU_ENTRY_INERT
+            assert menu.entry_states[LIMIT] == want, (key, menu.entry_states[LIMIT])
+
+        panel.details.select_keys(["dns|0"])
+        panel._limit()
+        assert app.vars["dst_ip"].get() == "fe80::53", "the address, without its zone"
+        panel.details.select_keys(["gateway|0"])
+        panel._limit()
+        limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
+        assert limited == ("192.168.1.1", "443"), ("the port stays", limited)
+        assert any(T("tools.adapters.log_limited") in line for line in app._log_lines)
+        panel.details.select_keys(["dns|1"])
+        panel._limit()
+        assert app.vars["dst_ip"].get() == "192.168.1.1", "a placeholder is not offered"
+
+        panel.details.select_keys(["name"])
+        panel._copy_value()
+        assert root.clipboard_get() == "Eth", root.clipboard_get()
+    """))
+
+
+def test_the_adapters_report_is_copied_whole():
+    run_gui(ADAPT + textwrap.dedent("""
+        panel = open_adapters()
+        settle(panel)
+        panel.copy_report()
+        assert root.clipboard_get() == ad.report(panel.job.value["read"]), root.clipboard_get()
+        assert any(T("log.copied") in line and T("tools.adapters.report_logged") in line
+                   for line in app._log_lines), app._log_lines[-3:]
+    """))
+
+
+def test_the_environment_report_adds_the_adapters_only_when_ticked():
+    """Off until ticked, and kept across a rebuild like every tool's input."""
+    run_gui(DIAG + textwrap.dedent("""
+        blank = chr(10) * 2
+        panel = open_diag()
+        settle(panel)
+        assert panel.with_adapters.get() is False, "off until ticked"
+        panel.copy_report()
+        assert "network adapters" not in root.clipboard_get(), root.clipboard_get()
+        panel.with_adapters.set(True)
+        panel._ticked()
+        panel.copy_report()
+        last = root.clipboard_get().split(blank)[-1]
+        assert last.startswith("network adapters"), last
+        app._build_ui()
+        again = open_diag()
+        assert again.with_adapters.get() is True, "the tick outlives a rebuild"
+    """))

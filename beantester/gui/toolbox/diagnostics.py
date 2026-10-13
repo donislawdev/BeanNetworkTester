@@ -10,6 +10,7 @@ which on the UI thread is a window that stops answering - and STOP lives in that
 window. The check runs by itself the first time the tab is shown; after that only
 when asked, and the status line says when the rows on screen were taken.
 """
+import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
@@ -20,7 +21,7 @@ from ..labels import wrapping_label
 from ..scrollable import ScrollableFrame
 from ..theme import CHARS, space
 from ..tooltip import add_tooltip
-from .base import Poller, StatusLine, job
+from .base import Poller, StatusLine, job, remembered
 
 AREA = "gui.toolbox.diagnostics"
 
@@ -54,6 +55,7 @@ class DiagnosticsPanel:
     def __init__(self, app, parent):
         self.app = app
         self.job = job(app, self.ID)
+        self.memory = remembered(app, self.ID)
         self.frame = ttk.Frame(parent)
         # Asked once: a running process does not gain or lose administrator rights.
         self.blocker = diagnostics.cleanup_blocker()
@@ -66,6 +68,14 @@ class DiagnosticsPanel:
                                       "tips.tools_diagnostics_clean", self.clean)
         self.copy_btn = self._button(bar, "tools.diagnostics.copy_report",
                                      "tips.tools_diagnostics_copy", self.copy_report)
+        # The network adapters in the report: off until ticked, because the report
+        # goes into a PUBLIC bug report and the adapters carry this machine's
+        # addresses and MAC (nettools/diagnostics.py, REPORT_SECTIONS).
+        self.with_adapters = tk.BooleanVar(value=self.memory.get("adapters") == "1")
+        box = ttk.Checkbutton(bar, text=T("tools.diagnostics.with_adapters"),
+                              variable=self.with_adapters, command=self._ticked)
+        box.pack(side="left", padx=(0, space("inline")))
+        add_tooltip(box, "tips.tools_diagnostics_adapters")
         dialogs.help_button(bar, self.app.root, "tools.diagnostics.help_title",
                             "tools.diagnostics.help_body",
                             "tips.tools_diagnostics_help").pack(side="right")
@@ -155,8 +165,15 @@ class DiagnosticsPanel:
         diagnosis = self.job.value.get(CHECK)
         if diagnosis is None:
             return
-        copy_confirmed(self.app, diagnostics.report(diagnosis),
+        include = ("adapters",) if self.with_adapters.get() else ()
+        copy_confirmed(self.app, diagnostics.report(diagnosis, include=include),
                        T("tools.diagnostics.report_logged"), AREA)
+
+    def _ticked(self):
+        # Kept until the program closes and never in ui.json - the rule for every
+        # tool's inputs (gui/toolbox/base.py): a rebuild after a language change
+        # keeps the tick, the next start begins with it off again.
+        self.memory["adapters"] = "1" if self.with_adapters.get() else ""
 
     def _run(self, kind, work):
         self.job.run(kind, work)

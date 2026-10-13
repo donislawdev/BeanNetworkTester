@@ -188,6 +188,7 @@ class SortableTree:
                  tips=None, tags=None, selectmode="extended", numeric=(),
                  centered=(), empty_text=""):
         self.columns = dict(columns)            # column id -> i18n key of its header
+        self.on_select = None                   # the page's, through bind_select
         # Alignment is a property of the COLUMN, so it is declared by the page
         # that owns the registry and never guessed from a value here. Numbers go
         # right, because that is what lines up their orders of magnitude - the
@@ -622,6 +623,7 @@ class SortableTree:
             # dropped for good, and Ctrl+C then copied nothing (external review,
             # P2-18). The model keys are the truth; the widget only mirrors them.
             return
+        before = tuple(self._selected)
         keys, wanted = [], []
         for iid in chosen:
             slot = self._slot_of(iid)
@@ -645,6 +647,18 @@ class SortableTree:
                     self.tree.selection_remove(*chosen)
             except Exception as _exc:
                 crashlog.note(_exc, "gui.widgets.sortable_tree")
+        self._selection_moved(before)
+
+    def _selection_moved(self, before):
+        """Tell the page (``on_select``) that a person changed the selection.
+
+        Only when it really changed: pressing the selected row again changes
+        nothing, and a page redrawing its details for it would flicker. A callback
+        that raises is the page's fault, recorded, never a Tk background error.
+        """
+        if self.on_select is not None and tuple(self._selected) != before:
+            with crashlog.quiet("gui.widgets.sortable_tree"):
+                self.on_select()
 
     def _restore_selection(self):
         # A dict, asked as it is and never copied: a range may hold every row of the
@@ -699,6 +713,7 @@ class SortableTree:
         pages and survives every scroll in between. Without an anchor still in
         the model, Shift selects the one row, like a plain press.
         """
+        before = tuple(self._selected)
         key = str(self._key_of(self.items[position]))
         anchor = self._position_of(self._anchor) if self._multi and extend else None
         if anchor is not None:
@@ -717,6 +732,7 @@ class SortableTree:
         self._cursor = key
         self._reveal(position)
         self._restore_selection()
+        self._selection_moved(before)
 
     def _on_key(self, step, extend):
         """Up/Down, PageUp/PageDown and Home/End move the cursor through the MODEL.
@@ -774,9 +790,11 @@ class SortableTree:
             # A blank slot below the rows selects nothing and, like select_keys(()),
             # leaves no cursor or anchor behind - written out, because select_keys
             # builds the key index and a click should not cost O(rows).
+            before = tuple(self._selected)
             self._selected = {}
             self._cursor = self._anchor = None
             self._restore_selection()
+            self._selection_moved(before)
         return "break"
 
     def _on_extend_press(self, event):
@@ -822,6 +840,18 @@ class SortableTree:
         return rows[0] if rows else None
 
     # -- a menu on a row -------------------------------------------------------- #
+    def bind_select(self, chosen):
+        """Call ``chosen()`` when a PERSON changes which rows are selected.
+
+        A click, the keyboard or a selection ttk made itself - so a page can show
+        what belongs to the chosen row (the adapters tool's details below its list).
+        Not for the page's own ``select_keys``: the page knows what it wrote, and
+        Tk's queued echo of that write must not come back looking like a choice.
+        A method beside ``bind_row_menu`` rather than another constructor argument:
+        the constructor is at the argument limit the linter holds.
+        """
+        self.on_select = chosen
+
     def bind_row_menu(self, show):
         """Call ``show(x_root, y_root)`` for a menu on a row: right click or keyboard.
 

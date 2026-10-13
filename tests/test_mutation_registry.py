@@ -3992,9 +3992,9 @@ MUTATIONS = [
     {
         "label": "tables: a click lets ttk's own press run after it",
         "file": "beantester/gui/widgets/sortable_tree.py",
-        "old": "            self._restore_selection()\n        return \"break\"\n\n"
+        "old": "            self._selection_moved(before)\n        return \"break\"\n\n"
                "    def _on_extend_press",
-        "new": "            self._restore_selection()\n        return None\n\n"
+        "new": "            self._selection_moved(before)\n        return None\n\n"
                "    def _on_extend_press",
         "test": "test_a_click_chooses_by_model_row_and_brings_the_half_row_into_view",
     },
@@ -7280,6 +7280,171 @@ MUTATIONS = [
         "old": "    if len(out) > 2 * SORT_CHUNK:\n",
         "new": "    if len(out) > 2 * SORT_CHUNK * 10 ** 9:\n",
         "test": "test_a_big_sort_goes_in_chunks_and_keeps_the_exact_order",
+    },
+    # -- the Tools tab's network adapters (T-4, 2026-10-13) ----------------------- #
+    {
+        "label": "adapters: a field past the record's Length is read anyway",
+        "file": "beantester/adapters.py",
+        "old": "    return spec.offset + spec.size <= record.Length\n",
+        "new": "    return True\n",
+        "test": "test_a_field_past_the_records_length_is_not_read",
+    },
+    {
+        "label": "adapters: a prefix Learn calls illegal is shown",
+        "file": "beantester/adapters.py",
+        "old": "            prefix = None               # Learn: 255 \"is commonly used\" for illegal\n",
+        "new": "            pass\n",
+        "test": "test_a_prefix_the_system_calls_illegal_is_not_shown",
+    },
+    {
+        "label": "adapters: an address list is walked past its bound",
+        "file": "beantester/adapters.py",
+        "old": "    for _ in range(MAX_ENTRIES if limit is None else limit):\n",
+        "new": "    for _ in range(limit or 10 ** 4):\n",
+        "test": "test_a_list_that_never_ends_stops_at_its_bound",
+    },
+    {
+        "label": "adapters: a name is read past its bound",
+        "file": "beantester/adapters.py",
+        "old": "    for i in range(min(MAX_TEXT, room)):\n",
+        "new": "    for i in range(min(10 ** 4, room)):\n",
+        "test": "test_a_name_is_read_up_to_its_bound",
+    },
+    {
+        "label": "adapters: a record outside the answer is followed",
+        "file": "beantester/adapters.py",
+        "old": "        answer.room(ctypes.cast(node, ctypes.c_void_p).value, "
+               "ctypes.sizeof(node._type_))\n",
+        "new": "        pass\n",
+        "test": "test_a_pointer_outside_the_answer_is_refused_not_followed",
+    },
+    {
+        "label": "adapters: an address outside the answer is read",
+        "file": "beantester/adapters.py",
+        "old": "    answer.room(address.lpSockaddr, length)\n",
+        "new": "    pass\n",
+        "test": "test_a_pointer_outside_the_answer_is_refused_not_followed",
+    },
+    {
+        "label": "adapters: a record that ends past the answer is read",
+        "file": "beantester/adapters.py",
+        "old": "        if not (self.start <= pointer and pointer + need <= self.end):\n",
+        "new": "        if not (self.start <= pointer < self.end):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
+    },
+    {
+        "label": "adapters: a pointer before the answer is followed",
+        "file": "beantester/adapters.py",
+        "old": "        if not (self.start <= pointer and pointer + need <= self.end):\n",
+        "new": "        if not (pointer + need <= self.end):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
+    },
+    {
+        "label": "adapters: a string is read past the end of the answer",
+        "file": "beantester/adapters.py",
+        "old": "    for i in range(min(MAX_TEXT, room)):\n",
+        "new": "    for i in range(MAX_TEXT):\n",
+        "test": "test_nothing_is_read_past_the_end_of_the_answer",
+    },
+    {
+        "label": "adapters: the buffer is not grown to what the system asks for",
+        "file": "beantester/adapters.py",
+        "old": "            if rc != ERROR_BUFFER_OVERFLOW:\n                break\n",
+        "new": "            break\n",
+        "test": "test_the_buffer_grows_to_what_the_system_asks_for",
+    },
+    {
+        "label": "adapters: no adapters to list reads as a failure",
+        "file": "beantester/adapters.py",
+        "old": "        if rc == ERROR_NO_DATA:\n",
+        "new": "        if rc == -1:\n",
+        "test": "test_the_documented_answers_of_the_call",
+    },
+    {
+        "label": "adapters: an index of 0 marks every adapter without IPv6 as the way out",
+        "file": "beantester/nettools/adapters.py",
+        "old": "    if routes.get(6) and row.ipv6_index == routes[6]:\n",
+        "new": "    if row.ipv6_index == routes.get(6, 0):\n",
+        "test": "test_an_index_of_zero_never_marks_an_adapter",
+    },
+    {
+        "label": "adapters: the ranking puts adapters that are down among the rest",
+        "file": "beantester/nettools/adapters.py",
+        "old": "key=lambda i: (not found[i].internet, not found[i].up, i))",
+        "new": "key=lambda i: (not found[i].internet, i))",
+        "test": "test_the_list_opens_with_the_way_out_then_what_is_up_then_the_rest",
+    },
+    {
+        "label": "adapters: Windows' placeholder DNS is offered as a server",
+        "file": "beantester/nettools/adapters.py",
+        "old": "        if _bare(server) in PLACEHOLDER_DNS:\n",
+        "new": "        if False:\n",
+        "test": "test_the_details_say_what_ipconfig_says_and_what_each_address_is",
+    },
+    {
+        "label": "adapters: a duplicate address is not coloured",
+        "file": "beantester/nettools/adapters.py",
+        "old": "tag=\"duplicate\" if address.dad == DUPLICATE else \"\"",
+        "new": "tag=\"\"",
+        "test": "test_the_details_say_what_ipconfig_says_and_what_each_address_is",
+    },
+    {
+        "label": "adapters: the network adapters go into every environment report",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "        if section.optional and section.id not in include:\n            continue\n",
+        "new": "",
+        "test": "test_the_network_adapters_are_in_the_report_only_when_asked_for",
+    },
+    {
+        "label": "adapters: an adapter list that cannot be read fails the whole check",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "    snapshot, error = _read_adapters()\n",
+        "new": "    snapshot, error = adapters.read(), \"\"\n",
+        "test": "test_an_adapter_list_that_cannot_be_read_costs_its_own_section",
+    },
+    {
+        "label": "adapters: the tick for the adapters is forgotten in a rebuild",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        self.memory[\"adapters\"] = \"1\" if self.with_adapters.get() else \"\"\n",
+        "new": "        pass\n",
+        "test": "test_the_environment_report_adds_the_adapters_only_when_ticked",
+    },
+    {
+        "label": "adapters: the tool reads the system when the window opens",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "        self._sync_buttons()\n\n    # -- building",
+        "new": "        self._sync_buttons()\n        self.read()\n\n    # -- building",
+        "test": "test_the_adapters_are_read_when_first_looked_at_and_the_way_out_comes_first",
+    },
+    {
+        "label": "adapters: a refresh forgets the chosen adapter",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "        chosen = self.memory.get(\"adapter\")\n",
+        "new": "        chosen = None\n",
+        "test": "test_the_chosen_adapter_shows_its_details_and_outlives_a_refresh_and_a_rebuild",
+    },
+    {
+        "label": "adapters: limiting to a gateway empties the port the person set",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "            fill_field(self.app, \"dst_ip\", detail.address, "
+               "\"tools.adapters.log_limited\")\n",
+        "new": "            self.app.set_destination(detail.address, \"\")\n",
+        "test": "test_the_details_menu_copies_a_value_and_limits_to_a_gateway_keeping_the_port",
+    },
+    {
+        "label": "sortable tree: pressing the chosen row again tells the page again",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        if self.on_select is not None and tuple(self._selected) != before:\n",
+        "new": "        if self.on_select is not None:\n",
+        "test": "test_a_person_choosing_rows_is_told_to_the_page_and_the_pages_own_write_is_not",
+    },
+    {
+        "label": "sortable tree: a keyboard choice is not told to the page",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        self._restore_selection()\n        self._selection_moved(before)\n\n"
+               "    def _on_key",
+        "new": "        self._restore_selection()\n\n    def _on_key",
+        "test": "test_a_person_choosing_rows_is_told_to_the_page_and_the_pages_own_write_is_not",
     },
 ]
 
