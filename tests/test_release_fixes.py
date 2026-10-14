@@ -362,6 +362,27 @@ def test_the_support_link_is_https():
           bnt.SUPPORT_URL == "https://donislawdev.com/support/", f"({bnt.SUPPORT_URL})")
 
 
+def test_the_github_button_opens_the_repository_the_site_and_packages_name():
+    """The GitHub button and the website must not point at two different places.
+
+    ``site/site.json``'s ``repo_url`` is where the website's source link, its
+    download button and every package manifest (WinGet, Chocolatey, MSI) get the
+    address from. The program cannot read that file - it is not shipped - so it
+    carries its own copy in ``appinfo.REPO_URL``, and this is what keeps the two
+    one address. A repository rename that updates one of them goes red here.
+    """
+    import json
+    from beantester.appinfo import REPO_URL
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "site", "site.json"), encoding="utf-8") as f:
+        site = json.load(f)
+    check("the GitHub button opens an https URL", REPO_URL.startswith("https://"),
+          f"({REPO_URL})")
+    check("it is the repository the website and the packages name",
+          REPO_URL == site["repo_url"].rstrip("/"),
+          f"(appinfo {REPO_URL!r}, site.json {site['repo_url']!r})")
+
+
 def test_the_driver_is_only_unloaded_when_it_was_actually_loaded():
     """A --simulate run never loads a driver, so exiting must not pay for one.
 

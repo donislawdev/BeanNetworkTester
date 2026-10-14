@@ -12,6 +12,10 @@ import re
 APP_NAME = "Bean Network Tester"     # human-readable window / product name
 AUTHOR = "DonislawDev"               # shown in the GUI, the exe metadata and --version
 SUPPORT_URL = "https://donislawdev.com/support/"   # voluntary support for the project
+# The project's source, releases and issues. The same address as `repo_url` in
+# site/site.json, which the website and the package manifests are built from -
+# tests/test_release_fixes.py holds the two together.
+REPO_URL = "https://github.com/donislawdev/BeanNetworkTester"
 TOOL_ID = "BeanNetworkTester"        # machine-readable id used in reports
 LAUNCHER = "bean_network_tester.py"  # entry script name (running from sources)
 EXE_NAME = "BeanNetworkTester.exe"   # the shipped executable - CLI *and* GUI

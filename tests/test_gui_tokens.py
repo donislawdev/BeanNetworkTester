@@ -8,7 +8,7 @@ little wider" is two hundred edits and a guess about which 8 was which.
 
 This guard covers the files that FOLLOW the rule today - the Tools tab, which was
 written against the tokens in ``gui/theme.py`` (``SPACE``, ``CHARS``, ``space()``)
-from its first line. It is a glob, not a list: a new tool panel is covered the day
+from its first line, and ``gui/links.py`` (the page buttons), written the same way. It is a glob, not a list: a new tool panel is covered the day
 it is created. The older pages are not in scope; they move over in their own change
 and join the glob then. One rule is already kept everywhere - no hex colour outside
 ``theme.py`` - so that one alone holds the whole ``beantester/gui`` package.
@@ -31,7 +31,9 @@ import re
 
 from fakes import ROOT, check
 
-SCOPE = ("beantester/gui/toolbox/**/*.py", "beantester/gui/pages/toolbox.py")
+SCOPE = ("beantester/gui/toolbox/**/*.py", "beantester/gui/pages/toolbox.py",
+         # the page buttons (Donate, GitHub), written against the tokens from the start
+         "beantester/gui/links.py")
 
 SIZE_OPTIONS = {"padx", "pady", "ipadx", "ipady", "width", "height", "wraplength",
                 "pad", "minsize", "borderwidth", "highlightthickness", "length"}

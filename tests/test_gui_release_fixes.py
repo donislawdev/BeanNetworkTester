@@ -523,38 +523,132 @@ def test_the_connection_table_has_no_stretch_columns():
     """)
 
 
-def test_the_header_never_clips_the_donate_button():
+def test_the_header_never_clips_a_page_button():
     """At 1366x768 - the minimum resolution this tool documents - the Polish
     "Wesprzyj projekt" rendered as "Wesp".
 
-    Tk's pack hands the LAST widget packed whatever space is left, and the donate
-    button is last, so it is the one that gets cut off. English "Donate" fits,
+    Tk's pack hands the LAST widget packed whatever space is left, and the page
+    buttons are last, so one of them is what gets cut off. English "Donate" fits,
     which is exactly why no test caught it: the bug only exists in the language
     most of the users speak. The author line - the only decorative thing in the
     header - gives way instead.
+
+    BOTH buttons are checked, one at a time. With GitHub added it is GitHub that
+    is packed last, and MEASURED on real Tk at the minimum window (620 px) it was
+    cut to 8 px in English while the author line stayed - the check had only ever
+    looked at Donate.
     """
     run_gui("""
-        header = app.donate_btn.master
-        donate = app.donate_btn
+        donate, github = app.link_btns
+        header = donate.master
 
         # the fake tkinter reports fixed sizes, so state the situation outright:
         # a button that ASKS for 143 px and is only GIVEN 64 is a button with its
         # text cut off - which is exactly what "Wesprzyj projekt" -> "Wesp" was.
-        donate.winfo_reqwidth = lambda: 143
-        donate.winfo_width = lambda: 64
+        for button in (donate, github):
+            button.winfo_reqwidth = lambda: 143
+            button.winfo_width = lambda: 143
+        for cut in (donate, github):
+            cut.winfo_width = lambda: 64
+            app._author_shown = True
+            app._fit_header(header, 762)
+            assert not app._author_shown, (
+                "the author line must give way, not " + cut.kw["text"])
+            cut.winfo_width = lambda: 143
 
-        app._author_shown = True
-        app._fit_header(header, 762)
-        assert not app._author_shown, "the author line must give way, not the button"
-
-        # once the button is whole again and there is room to spare, it comes back
-        donate.winfo_width = lambda: 143
-        app.author_label.winfo_reqwidth = lambda: 117
+        # Once the buttons are whole again it comes back when the room the header
+        # does not ASK for holds it. Real-Tk numbers at 760 px, English: with the
+        # line hidden the header asks 560 of its 732 px and the line is 115 - it
+        # fits. The old rule summed every child's request, the hidden line's too,
+        # and then wanted its width again on top, so it never came back.
+        for button in (donate, github):
+            button.winfo_reqwidth = lambda: 103
+            button.winfo_width = lambda: 103
         for child in header.winfo_children():
-            if child is not app.author_label:
-                child.winfo_reqwidth = lambda: 50
-        app._fit_header(header, 4000)
-        assert app._author_shown, "the author line must return on a wide window"
+            if child not in (app.author_label, donate, github):
+                child.winfo_reqwidth = lambda: 105      # title, status, gear
+        app.author_label.winfo_reqwidth = lambda: 115
+        header.winfo_reqwidth = lambda: 560
+        app._fit_header(header, 600)
+        assert not app._author_shown, "no room for it at 600 px - it stays hidden"
+        app._fit_header(header, 732)
+        assert app._author_shown, "the author line must return when it fits"
+    """)
+
+
+def test_a_page_button_opens_its_page_and_the_log_says_whether_it_did():
+    """Donate and GitHub: one click, one page, one log line that tells the truth.
+
+    ``webbrowser`` is replaced - nothing here opens a real browser. On Windows it
+    does not raise when the browser fails to start, it returns False (it catches
+    ``os.startfile``'s OSError itself), and the log used to say "Support page
+    opened" anyway. A False now reads "could not open the browser" with the
+    address, and a raise is an error line - never a success.
+    """
+    run_gui("""
+        import webbrowser
+        from beantester.appinfo import REPO_URL, SUPPORT_URL
+
+        opened, answer = [], [True]
+
+        def fake_open(url):
+            opened.append(url)
+            return answer[0]
+
+        def last_line():
+            app._logview.drain()
+            return app._log_lines[-1]
+
+        webbrowser.open_new_tab = fake_open
+        donate, github = app.link_btns
+        assert donate.kw["text"] == bnt.T("buttons.donate"), donate.kw
+        assert github.kw["text"] == bnt.T("buttons.github"), github.kw
+
+        github.kw["command"]()
+        assert opened == [REPO_URL], opened
+        assert last_line().endswith(bnt.T("log.github_opened") + ": " + REPO_URL), last_line()
+        donate.kw["command"]()
+        assert opened[-1] == SUPPORT_URL, opened
+        assert last_line().endswith(bnt.T("log.donate_opened") + ": " + SUPPORT_URL)
+
+        answer[0] = False                       # no browser started
+        github.kw["command"]()
+        assert last_line().endswith(bnt.T("log.page_not_opened") + ": " + REPO_URL), (
+            "a browser that did not open must not be reported as opened: " + last_line())
+
+        def broken(url):
+            raise OSError("no handler for https")
+
+        webbrowser.open_new_tab = broken
+        donate.kw["command"]()
+        assert "no handler for https" in last_line(), last_line()
+        assert bnt.T("log.donate_opened") not in last_line(), last_line()
+    """, allow_faults=("no handler for https",))
+
+
+def test_the_about_window_carries_both_page_buttons():
+    """The About window has Donate AND GitHub, with the same pages as the header."""
+    run_gui("""
+        import webbrowser
+        from beantester.appinfo import REPO_URL, SUPPORT_URL
+
+        opened = []
+        webbrowser.open_new_tab = lambda url: opened.append(url) or True
+        panel = app.open_window("about")
+
+        def buttons(widget, found):
+            for child in widget.winfo_children():
+                if child.kw.get("style") in ("Donate.TButton", "GitHub.TButton"):
+                    found.append(child)
+                buttons(child, found)
+            return found
+
+        found = buttons(panel.body, [])
+        texts = [b.kw["text"] for b in found]
+        assert texts == [bnt.T("buttons.donate"), bnt.T("buttons.github")], texts
+        for button in found:
+            button.kw["command"]()
+        assert opened == [SUPPORT_URL, REPO_URL], opened
     """)
 
 

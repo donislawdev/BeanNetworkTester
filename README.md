@@ -1492,6 +1492,7 @@ beantester/              the implementation package
     toolbox/             the Tools tab: its registry of tools and one panel per tool
     field_actions.py     filling a Control-page field from elsewhere (table row menus, Tools tab)
     clipboard.py         copying a whole text, confirmed by reading the clipboard back
+    links.py             the Donate and GitHub buttons - the only code that opens a web page
     configure.py         configuring a widget with only the options that really change
     panels/              secondary windows: "About", "Settings" and the pop-out event log
     widgets/             SortableTree (sorting, row diff, Ctrl+C, column-width cap, row menu)
@@ -1670,8 +1671,9 @@ more features to appear, you can **voluntarily** support its development:
 
 **https://donislawdev.com/support/**
 
-Support is entirely optional - the full functionality works without it. In the program a
-**"Support the project"** button leads there (the window header).
+Support is entirely optional - the full functionality works without it. In the program the
+**Donate** button leads there (the window header and the About window). The **GitHub** button next
+to it opens this project's page.
 
 ## Author
 
@@ -1733,8 +1735,8 @@ rights arising from them.
 
 Bean Network Tester **sends no data anywhere**. It has no telemetry, no update checks and no network
 client of any kind. The tool captures network traffic on your computer - and that data **never leaves
-it**. The only outbound connection the program can make is opening the support page in your browser,
-and only when you click the corresponding button yourself.
+it**. The only outbound connection the program can make is opening a page in your browser - the
+support page or the project's page on GitHub - and only when you click the button for it yourself.
 
 ## A note on SmartScreen and antivirus
 

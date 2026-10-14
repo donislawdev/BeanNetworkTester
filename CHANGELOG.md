@@ -38,6 +38,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   it. Only TCP over IPv4 can be reset (Windows cannot reset an IPv6 connection), so the entry
   is greyed out on other rows. It needs administrator rights.
 
+- **A GitHub button opens the project's page.** It sits next to **Donate** in the window header
+  and in the About window, and opens the project's page on GitHub in your browser: the source
+  code, the releases and the place to report a bug. Like Donate, it opens a page only when you
+  click it. The program itself still sends nothing.
+
+### Fixed
+
+- **The log no longer says a page opened when no browser started.** After a click on **Donate**
+  the log said the support page was opened even when the browser did not start. It now says the
+  browser could not be opened and shows the address, so you can copy it from the log.
+
+- **The window header fits itself after a resize in one step.** After maximizing, restoring or
+  snapping the window, the header could keep the author line and cut the **Donate** button
+  short, or hide the author line on a wide window. It now makes room as soon as the window has
+  its new size.
+
 ### Docs
 
 - **The README says how the program's dependencies are checked for known vulnerabilities.**
