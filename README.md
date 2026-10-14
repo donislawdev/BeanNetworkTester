@@ -181,7 +181,12 @@ monitor is gone it returns to the centre of the current screen.
     headings that meant delivered: a row could read 5 MB received while its application got 0.4 MB.) Plus a search box (debounced, so it does not churn the table on every keystroke),
   click-to-sort headers, **"Freeze"** (rows stop escaping from under the cursor) and a
   **right-click menu**: copy row / IP, **"Target this process"**, **"Limit to this IP:port"** -
-  fills the filter fields with one click.
+  fills the filter fields with one click. **"Reset this connection"** breaks that one
+  connection at once, with or without a session running: the program using it gets an error,
+  and the other end gets a TCP reset. During a session that reset goes through the impairments
+  like any other packet, so heavy loss can drop it on the way. It works for TCP over IPv4 only -
+  Windows has no way to reset an IPv6 connection - so the entry is greyed out on other rows, and
+  it needs administrator rights.
   The table is **virtualised**: it draws only the rows actually on screen, so scrolling is instant
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
@@ -1461,6 +1466,8 @@ beantester/              the implementation package
   adapters.py            network adapters and the route out (iphlpapi/ctypes), for the Tools tab
   proxy.py               the proxy this account and this machine use (winhttp/ctypes and the
                          registry), read only, for the Tools tab
+  tcpreset.py            reset one TCP connection (iphlpapi/ctypes), for the Connections
+                         page's row menu
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)

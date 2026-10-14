@@ -21,10 +21,12 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
+import threading
 import time
 import tkinter as tk
 from tkinter import ttk
 
+from ... import tcpreset
 from ...i18n import T
 from ...processes import port_process_map
 from ...utils import human_bytes
@@ -115,6 +117,40 @@ def port_cell(port):
     started reaching it.
     """
     return "" if port is None else port
+
+
+# What the log says for each way "Reset this connection" can end (tcpreset.Outcome).
+RESET_LOG = {tcpreset.RESET: "log.conn_reset_done", tcpreset.GONE: "log.conn_reset_gone",
+             tcpreset.AMBIGUOUS: "log.conn_reset_ambiguous",
+             tcpreset.REFUSED: "log.conn_reset_refused",
+             tcpreset.NEEDS_ADMIN: "log.conn_reset_needs_admin",
+             tcpreset.UNREADABLE: "log.conn_reset_unreadable",
+             tcpreset.NOT_IPV4: "log.conn_reset_not_ipv4",
+             tcpreset.FAILED: "log.conn_reset_failed"}
+
+
+def reset_connection(app, row):
+    """Reset the connection a row names: the row is read HERE, as plain data, and
+    the reset runs on a worker - it reads the socket table - which says how it ended
+    in one log line (``app.log`` is thread-safe; the same shape as
+    ``csv_export.export_connections``). Returns the worker, or None for a row with
+    no ports to reset."""
+    try:
+        target = tcpreset.Target(int(row["local_port"]), str(row["remote_ip"]),
+                                 int(row["remote_port"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    worker = threading.Thread(target=_reset_and_say, args=(app, target),
+                              name="conn-reset", daemon=True)
+    worker.start()
+    return worker
+
+
+def _reset_and_say(app, target):
+    outcome = tcpreset.reset(target)
+    app.log(T(RESET_LOG.get(outcome.kind, "log.conn_reset_failed"),
+              address=f"{target.remote_ip}:{target.remote_port}", state=outcome.state or "?",
+              code=outcome.code, detail=outcome.detail))
 
 
 SEARCH_DEBOUNCE_MS = 250
@@ -249,6 +285,7 @@ class ConnsPage:
 
     # -- context menu -------------------------------------------------------- #
     TARGET_INDEX = 3           # "Target this process" (after the separator)
+    RESET_INDEX = 7            # "Reset this connection" (after "Block this IP address")
 
     def _build_menu(self):
         self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
@@ -260,6 +297,8 @@ class ConnsPage:
                               command=self._leave_process_alone)
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit_dest)
         self.menu.add_command(label=T("menu.block_ip"), command=self._block_ip)
+        self.menu.add_command(label=T("menu.reset_connection"),
+                              command=self._reset_connection)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.choose_columns"),
                               command=self._choose_columns)
@@ -277,6 +316,9 @@ class ConnsPage:
         name = str(selected.get("proc") or "").strip()
         try:
             set_menu_entry_available(self.menu, self.TARGET_INDEX, bool(name and name != "?"))
+            # TCP over IPv4 only: Windows has no IPv6 form of the call (tcpreset).
+            set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(
+                selected.get("proto"), selected.get("remote_ip")))
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
         try:
@@ -362,6 +404,10 @@ class ConnsPage:
         if not row:
             return
         block_ip_address(self.app, str(row.get("remote_ip") or ""))
+
+    def _reset_connection(self):
+        row = self._selected()
+        return reset_connection(self.app, row) if row else None
 
     # -- search -------------------------------------------------------------- #
     def _schedule_search(self):
