@@ -38,9 +38,10 @@ class FakeIphlpapi:
         return self.code
 
 
-def system(rows=(OPEN,), code=0, admin=True):
+def system(rows=(OPEN,), code=0, admin=True, failed=()):
+    """A fake system; ``rows`` answers as ``portmap.socket_rows`` does."""
     lib = FakeIphlpapi(code)
-    return lib, tcpreset._System(iphlpapi=lib, rows=lambda: list(rows),
+    return lib, tcpreset._System(iphlpapi=lib, rows=lambda: (list(rows), list(failed)),
                                  is_admin=lambda: admin)
 
 
@@ -142,10 +143,22 @@ def test_what_cannot_be_asked_ends_in_an_outcome_never_a_raise(monkeypatch):
     check("Windows was asked nothing", lib.rows == [])
 
 
-def test_the_binding_declares_the_call_and_reads_the_whole_table(monkeypatch):
+def test_a_table_that_did_not_answer_is_said_and_not_taken_for_closed():
+    """Review of #265. ``portmap.socket_rows`` names the tables that would not answer
+    while others did. With the IPv4 TCP one among them a missing row says nothing,
+    and "already closed" would be a guess; any other table costs nothing."""
+    lib, sys_ = system(rows=(), failed=("tcp/v4",))
+    check("the IPv4 TCP table failed: unreadable, not gone",
+          tcpreset.reset(TARGET, sys_) == Outcome(tcpreset.UNREADABLE))
+    check("and Windows was asked nothing", lib.rows == [])
+    lib, sys_ = system(failed=("udp/v6", "tcp/v6"))
+    check("another table failed: the reset goes ahead",
+          tcpreset.reset(TARGET, sys_) == Outcome(tcpreset.RESET) and len(lib.rows) == 1)
+
+
+def test_the_binding_declares_the_call_and_reads_the_real_table_by_default(monkeypatch):
     """The prototype, checked off Windows too (``test_native_prototypes`` walks the
-    real DLL on Windows only), and the table read: a table that would not answer
-    alongside the others costs nothing - the rows are still the rows."""
+    real DLL on Windows only), and the default table read is portmap's own."""
     class Lib:
         class SetTcpEntry:
             argtypes = restype = None
@@ -153,8 +166,11 @@ def test_the_binding_declares_the_call_and_reads_the_whole_table(monkeypatch):
     check("a pointer to the 20-byte row, a DWORD back",
           lib.SetTcpEntry.argtypes == [ctypes.POINTER(tcpreset._TcpRow)]
           and lib.SetTcpEntry.restype is ctypes.c_uint32, f"({lib.SetTcpEntry.argtypes})")
-    monkeypatch.setattr(portmap, "socket_rows", lambda: ([OPEN], ["udp6"]))
-    check("the rows, whatever else failed", tcpreset._socket_rows() == [OPEN])
+    monkeypatch.setattr(portmap, "socket_rows", lambda: ([OPEN], ["tcp/v4"]))
+    got = tcpreset.reset(TARGET, tcpreset._System(iphlpapi=FakeIphlpapi(),
+                                                  is_admin=lambda: True))
+    check("portmap's answer, failed tables included", got == Outcome(tcpreset.UNREADABLE),
+          f"({got})")
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="SetTcpEntry is Windows'")

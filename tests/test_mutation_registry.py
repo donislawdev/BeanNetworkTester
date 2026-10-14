@@ -7609,9 +7609,16 @@ MUTATIONS = [
     {
         "label": "tcpreset: an unreadable table reads as a closed connection",
         "file": "beantester/tcpreset.py",
-        "old": "        return Outcome(UNREADABLE)\n",
-        "new": "        return Outcome(GONE)\n",
+        "old": "    except portmap.SocketTableUnavailable:\n        return Outcome(UNREADABLE)\n",
+        "new": "    except portmap.SocketTableUnavailable:\n        return Outcome(GONE)\n",
         "test": "test_what_cannot_be_asked_ends_in_an_outcome_never_a_raise",
+    },
+    {
+        "label": "tcpreset: a table that did not answer reads as a closed connection",
+        "file": "beantester/tcpreset.py",
+        "old": "    if IPV4_TCP in failed:\n",
+        "new": "    if False:\n",
+        "test": "test_a_table_that_did_not_answer_is_said_and_not_taken_for_closed",
     },
     {
         "label": "tcpreset: a fault escapes onto a thread nobody watches",

@@ -42,6 +42,8 @@ from typing import NamedTuple
 from . import crashlog, portmap, winenv
 
 MIB_TCP_STATE_DELETE_TCB = 12
+# portmap.socket_rows' name for the one table a reset reads (its ``failed`` list).
+IPV4_TCP = "tcp/v4"
 
 # How a reset ended. RESET is the one that did something.
 RESET = "reset"
@@ -115,18 +117,13 @@ def _declared(lib):
     return lib
 
 
-def _socket_rows():
-    rows, _failed = portmap.socket_rows()
-    return rows
-
-
 class _System:
     """What a reset asks of Windows. Everything is injectable, so it runs in tests
-    anywhere."""
+    anywhere. ``rows`` answers as ``portmap.socket_rows`` does: ``(rows, failed)``."""
 
     def __init__(self, iphlpapi=None, rows=None, is_admin=None):
         self.iphlpapi = iphlpapi if iphlpapi is not None else _iphlpapi()
-        self.rows = rows or _socket_rows
+        self.rows = rows or portmap.socket_rows
         self.is_admin = is_admin or winenv.is_admin
 
     def delete(self, row):
@@ -145,8 +142,12 @@ def _reset(target, system):
     if not resettable("TCP", target.remote_ip):
         return Outcome(NOT_IPV4)
     try:
-        rows = system.rows()
+        rows, failed = system.rows()
     except portmap.SocketTableUnavailable:
+        return Outcome(UNREADABLE)
+    if IPV4_TCP in failed:
+        # The one table this needs did not answer while others did: a missing row
+        # says nothing about the connection, and "already closed" would be a guess.
         return Outcome(UNREADABLE)
     found = _matching(rows, target)
     if not found:
