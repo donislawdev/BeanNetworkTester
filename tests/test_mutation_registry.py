@@ -7469,8 +7469,22 @@ MUTATIONS = [
     {
         "label": "proxy: a password in a URL reaches the screen",
         "file": "beantester/nettools/proxy.py",
-        "old": "    return _USERINFO.sub(\"***@\", value)\n",
+        "old": "    return _USERINFO.sub(r\"\\1\\2***@\", value)\n",
         "new": "    return value\n",
+        "test": "test_a_password_never_survives_and_the_report_drops_a_query",
+    },
+    {
+        "label": "proxy: a password without scheme:// reaches the screen",
+        "file": "beantester/nettools/proxy.py",
+        "old": "_USERINFO = re.compile(rf\"(^|[;\\s])((?:{_SCHEME}=)?(?:{_SCHEME}://)?)[^/\\s;]*@\")\n",
+        "new": "_USERINFO = re.compile(rf\"(^|[;\\s])((?:{_SCHEME}=)?(?:{_SCHEME}://))[^/\\s;]*@\")\n",
+        "test": "test_a_password_never_survives_and_the_report_drops_a_query",
+    },
+    {
+        "label": "proxy: a password holding an @ leaves its tail on screen",
+        "file": "beantester/nettools/proxy.py",
+        "old": "_USERINFO = re.compile(rf\"(^|[;\\s])((?:{_SCHEME}=)?(?:{_SCHEME}://)?)[^/\\s;]*@\")\n",
+        "new": "_USERINFO = re.compile(rf\"(^|[;\\s])((?:{_SCHEME}=)?(?:{_SCHEME}://)?)[^/@\\s;]*@\")\n",
         "test": "test_a_password_never_survives_and_the_report_drops_a_query",
     },
     {

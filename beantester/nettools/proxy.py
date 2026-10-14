@@ -11,8 +11,9 @@ whitespace; the bypass list holds names, and ``<local>`` stands for every name
 without a dot. A server given as a NAME is shown, never looked up: a name lookup
 is a DNS query, and nothing on this tab sends anything.
 
-Passwords in a URL (``http://user:secret@proxy:8080``, common in ``HTTP_PROXY``) are
-hidden everywhere, the window included - screenshots end up in public bug reports.
+Passwords in an address (``http://user:secret@proxy:8080``, or ``user:secret@proxy:8080``
+with no scheme - both common in ``HTTP_PROXY``) are hidden everywhere, the window
+included - screenshots end up in public bug reports.
 The report also drops a setup script address's query (``?token=...``).
 """
 import ipaddress
@@ -23,7 +24,11 @@ from .adapters import Detail, Words
 
 # The variables that send a program to a proxy; NO_PROXY lists what goes around it.
 PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
-_USERINFO = re.compile(r"(?<=//)[^/@\s]*@")
+# A user and password: from the start of an entry (the text's start, or ";" or
+# whitespace before it), past an optional "scheme=" and "scheme://", up to the LAST
+# "@" before the host - a password may hold "@" or "=". Groups 1 and 2 stay on screen.
+_SCHEME = r"[A-Za-z][A-Za-z0-9+.-]*"
+_USERINFO = re.compile(rf"(^|[;\s])((?:{_SCHEME}=)?(?:{_SCHEME}://)?)[^/\s;]*@")
 _SEPARATORS = re.compile(r"[;\s]+")
 
 
@@ -38,8 +43,9 @@ def read(native=None):
 
 # -- reading a value ---------------------------------------------------------------- #
 def masked(value):
-    """``value`` with every URL's user and password replaced: ``http://***@host``."""
-    return _USERINFO.sub("***@", value)
+    """``value`` with every entry's user and password replaced: ``http://***@host``,
+    ``***@host``."""
+    return _USERINFO.sub(r"\1\2***@", value)
 
 
 def for_report(value):

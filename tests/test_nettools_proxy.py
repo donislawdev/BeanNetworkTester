@@ -53,6 +53,29 @@ def test_a_password_never_survives_and_the_report_drops_a_query():
     two = proxy.masked("http=http://a:b@h1:1;https=https://c@h2:2")
     check("every URL in a list", two == "http=http://***@h1:1;https=https://***@h2:2", f"({two})")
     check("nothing to hide is left alone", proxy.masked("192.0.2.10:8080") == "192.0.2.10:8080")
+    cases = {
+        "no scheme, as a variable often holds it": (
+            "user:secret@192.0.2.40:8080", "***@192.0.2.40:8080"),
+        "a scheme= without //": ("http=user:secret@192.0.2.40:8080", "http=***@192.0.2.40:8080"),
+        "the second entry of a list": (
+            "http=192.0.2.10:8080;https=user:secret@h2:2", "http=192.0.2.10:8080;https=***@h2:2"),
+        "entries split by whitespace": (
+            "192.0.2.10:8080 user:secret@h2:2", "192.0.2.10:8080 ***@h2:2"),
+        "an @ in the password, in a URL": (
+            "http://user:p@ss@192.0.2.40:8080", "http://***@192.0.2.40:8080"),
+        "an @ in the password, no scheme": ("user:p@ss@192.0.2.40:8080", "***@192.0.2.40:8080"),
+        "an = in the password": ("user:pa=ss@192.0.2.40:8080", "***@192.0.2.40:8080"),
+        "an IPv6 server": (
+            "http://user:secret@[2001:db8::1]:8080", "http://***@[2001:db8::1]:8080"),
+        "an @ in a setup script's query is no password": (
+            "http://192.0.2.20/proxy.pac?u=a@b", "http://192.0.2.20/proxy.pac?u=a@b"),
+        "nor one in its path": (
+            "http://192.0.2.20/x@y/proxy.pac", "http://192.0.2.20/x@y/proxy.pac"),
+        "a bypass list is left alone": ("*.example.com;<local>;10.*", "*.example.com;<local>;10.*"),
+    }
+    for name, (value, shown) in cases.items():
+        got = proxy.masked(value)
+        check(name, got == shown, f"({got})")
     report = proxy.for_report("http://u:p@192.0.2.20/proxy.pac?token=abc#frag")
     check("the report: no password, no query, no fragment",
           report == "http://***@192.0.2.20/proxy.pac", f"({report})")
@@ -112,6 +135,11 @@ def test_the_details_say_what_each_setting_is_and_offer_only_addresses():
           in _keys(rows["env|NO_PROXY"].note), rows["env|NO_PROXY"])
     around = proxy.details(NOTHING._replace(env=(Variable("NO_PROXY", "192.0.2.50", "user"),)))
     check("not even when it holds a bare address", around[-1].address == "", around[-1])
+    bare = proxy.details(NOTHING._replace(
+        env=(Variable("HTTP_PROXY", "user:secret@192.0.2.40:8080", "machine"),)))[-1]
+    check("a variable with no scheme: masked, said so, and still offered",
+          bare.value == "***@192.0.2.40:8080" and bare.address == "192.0.2.40"
+          and "tools.adapters.proxy.note.masked" in _keys(bare.note), bare)
     empty = {d.key: d for d in proxy.details(NOTHING)}
     check("nothing set: one row each, saying none", list(empty) ==
           ["detect", "script", "server", "winhttp", "env"], f"({list(empty)})")
@@ -142,6 +170,10 @@ def test_the_report_hides_passwords_and_says_none_or_why():
         "proxy for services (WinHTTP): could not be read (OSError: machine part)",
         "proxy variables: could not be read (OSError: env part)"])
     check("report() is the lines", proxy.report(EVERYTHING) == text)
+    bare = proxy.report_lines(NOTHING._replace(
+        env=(Variable("ALL_PROXY", "user:secret@192.0.2.40:1080", "user"),)))
+    check("a variable with no scheme loses its password too",
+          bare[-1] == "proxy variables: ALL_PROXY=***@192.0.2.40:1080 (user)", f"({bare})")
 
 
 def test_the_tool_reads_through_the_binding_and_on_windows_only():
