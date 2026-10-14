@@ -933,7 +933,10 @@ MUTATIONS = [
         # silence - which is the drift it exists to catch, wearing its badge.
         "label": "ratchet: the crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "FILES_NEAR_CEILING = 1          # beantester/gui/app.py",
+        # Re-anchored 2026-10-14 (1 -> 2, engine.py joined the band when the
+        # page buttons left app.py - the owner's decision). Same proof: a count
+        # frozen looser than the measurement is caught by the equality half.
+        "old": "FILES_NEAR_CEILING = 2          # beantester/gui/app.py",
         "new": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
@@ -7684,6 +7687,62 @@ MUTATIONS = [
                "    def _on_key",
         "new": "        self._restore_selection()\n\n    def _on_key",
         "test": "test_a_person_choosing_rows_is_told_to_the_page_and_the_pages_own_write_is_not",
+    },
+    {
+        "label": "links: a cut page button is not seen unless it is the first one",
+        "file": "beantester/gui/links.py",
+        "old": "               for button in buttons)\n",
+        "new": "               for button in buttons[:1])\n",
+        "test": "test_the_header_never_clips_a_page_button",
+    },
+    {
+        "label": "links: the header watches only Donate, as it did before GitHub",
+        "file": "beantester/gui/app.py",
+        "old": "            clipped = links.clipped(buttons)\n",
+        "new": "            clipped = links.clipped(buttons[:1])\n",
+        "test": "test_the_header_never_clips_a_page_button",
+    },
+    {
+        "label": "links: the header counts the hidden author line twice",
+        "file": "beantester/gui/app.py",
+        "old": "                spare = width - header.winfo_reqwidth()\n",
+        "new": "                spare = width - sum(child.winfo_reqwidth() for child in header.winfo_children())\n",
+        "test": "test_the_header_never_clips_a_page_button",
+    },
+    {
+        "label": "links: a browser that did not start is reported as opened",
+        "file": "beantester/gui/links.py",
+        "old": "    log(f\"{T(page.opened if opened else 'log.page_not_opened')}: {page.url}\")\n",
+        "new": "    log(f\"{T(page.opened)}: {page.url}\")\n",
+        "test": "test_a_page_button_opens_its_page_and_the_log_says_whether_it_did",
+    },
+    {
+        "label": "links: a browser that raised is reported as opened",
+        "file": "beantester/gui/links.py",
+        "old": "        log(f\"{T('log.page_not_opened')}: {page.url}\")\n",
+        "new": "        log(f\"{T(page.opened)}: {page.url}\")\n",
+        "test": "test_a_page_button_opens_its_page_and_the_log_says_whether_it_did",
+    },
+    {
+        "label": "links: the GitHub button opens the support page",
+        "file": "beantester/gui/links.py",
+        "old": "GITHUB = Page(REPO_URL, \"buttons.github\", \"tips.github\", \"log.github_opened\",\n",
+        "new": "GITHUB = Page(SUPPORT_URL, \"buttons.github\", \"tips.github\", \"log.github_opened\",\n",
+        "test": "test_a_page_button_opens_its_page_and_the_log_says_whether_it_did",
+    },
+    {
+        "label": "links: the About window has no GitHub button",
+        "file": "beantester/gui/panels/about.py",
+        "old": "        links.footer_buttons(foot, self.app.log)\n",
+        "new": "        links.page_button(foot, links.DONATE, self.app.log).pack(side=\"left\")\n",
+        "test": "test_the_about_window_carries_both_page_buttons",
+    },
+    {
+        "label": "appinfo: the GitHub address drifts from the one the site and packages use",
+        "file": "beantester/appinfo.py",
+        "old": "REPO_URL = \"https://github.com/donislawdev/BeanNetworkTester\"\n",
+        "new": "REPO_URL = \"https://github.com/donislawdev/BeanNetworkTester-old\"\n",
+        "test": "test_the_github_button_opens_the_repository_the_site_and_packages_name",
     },
 ]
 

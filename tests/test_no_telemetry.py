@@ -39,8 +39,9 @@ What this CANNOT prove, said plainly
   does show up as ``ctypes.dlopen`` - but the distinction is real and must not be
   smoothed over: the audit hook covers third-party PYTHON, not third-party C.
 * The runtime layer only sees what it runs. It drives the CLI, not the GUI - the
-  GUI's one network primitive is ``webbrowser`` behind a click, which no test
-  clicks, and the static layer holds that instead.
+  GUI's one network primitive is ``webbrowser`` behind a click (``gui/links.py``),
+  which the GUI tests click only with ``webbrowser`` replaced, and the static
+  layer holds that instead.
 * Data can leave a machine without a socket (a file written into a synced
   folder). Nothing here looks at that.
 * 🔴 **The one gap BOTH layers share, found by mutating rather than by thinking:**
@@ -109,10 +110,8 @@ ALLOWED_IMPORTS = {
         "the machine's own services file, for port labels",
     ("beantester/nettools/portcheck.py", "socket"):
         "the port check: bind on a loopback address and close, nothing sent",
-    ("beantester/gui/app.py", "webbrowser"):
-        "the support page, opened on a click",
-    ("beantester/gui/panels/about.py", "webbrowser"):
-        "the support page, from the About window",
+    ("beantester/gui/links.py", "webbrowser"):
+        "the page buttons (support page, GitHub page), opened on a click",
     ("beantester/winenv.py", "subprocess"):
         "list2cmdline, a pure string helper - nothing here spawns anything",
 }
@@ -148,10 +147,9 @@ ALLOWED_CALLS = {
         "to see whether the system hands the port out. No listen, no connect, no send - "
         "test_nettools_portcheck.py::test_a_port_check_only_creates_and_binds_sockets_"
         "on_loopback runs it under an audit hook",
-    ("beantester/gui/app.py", "webbrowser", "open_new_tab"):
-        "opens the support page in the user's browser, only when they click it",
-    ("beantester/gui/panels/about.py", "webbrowser", "open_new_tab"):
-        "the same support page, from the About window",
+    ("beantester/gui/links.py", "webbrowser", "open_new_tab"):
+        "opens the support page or the project's GitHub page in the user's browser, "
+        "only when they click its button (header or About window)",
 }
 
 # Every library the package loads through ctypes. All eleven are local Windows APIs.
@@ -562,8 +560,8 @@ def test_the_shipped_package_never_spawns_a_process():
 def test_a_url_literal_lives_only_where_the_licence_needs_one():
     """An address in the code is an endpoint waiting for a caller.
 
-    Allowed in exactly two files: ``appinfo.py`` holds the support page the About
-    window opens, and ``legal.py`` holds the component source URLs that
+    Allowed in exactly two files: ``appinfo.py`` holds the two pages the page
+    buttons open (support, GitHub), and ``legal.py`` holds the component source URLs that
     convention 35 obliges us to publish. Docstrings are exempt - prose about a
     URL is not a URL.
     """
@@ -749,8 +747,13 @@ TOOLS_TAB_PROMISE = "Nothing on this tab sends anything over the network."
 TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
     ("beantester/appinfo.py", "url", "https://donislawdev.com/support/"):
         "a constant. The diagnostics import appinfo for the version line of the "
-        "report; the address is the About window's support link, opened in the "
-        "browser on a click there, and nothing on this tab reads it.",
+        "report; the address is the Donate button's page (gui/links.py), opened in "
+        "the browser on a click in the header or the About window, and nothing on "
+        "this tab reads it.",
+    ("beantester/appinfo.py", "url", "https://github.com/donislawdev/BeanNetworkTester"):
+        "a constant, in the same module for the same reason: the GitHub button's "
+        "page (gui/links.py), opened in the browser on a click in the header or the "
+        "About window. Nothing on this tab reads it.",
     # The port check. How it was checked that it sends nothing, three ways: the
     # probe is bind + close on a LOOPBACK address (`nettools/portcheck.py::probe`,
     # read in full); an audit hook in a subprocess sees only

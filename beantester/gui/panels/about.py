@@ -12,24 +12,23 @@ This is not decoration. Two of the things it shows are obligations, not niceties
   first question a security-minded tester or an IT department asks is where that
   goes. The answer is "nowhere", and the answer belongs where they are looking.
 
-The donate button is here as well as in the header - deliberately. Being in two
-places is not clutter for a voluntary ask that funds the work; being nowhere near
-the "who made this" screen would be strange.
+The page buttons (Donate, GitHub - ``gui/links.py``) are here as well as in the
+header - deliberately. Being in two places is not clutter for a voluntary ask that
+funds the work, or for the address of the source the licence notice is about;
+being nowhere near the "who made this" screen would be strange.
 """
 from functools import partial
 import tkinter as tk
 from tkinter import ttk
-import webbrowser
 
-from ... import crashlog, legal
-from ...appinfo import (APP_NAME, AUTHOR, COPYRIGHT, LICENSE_NAME, SUPPORT_URL,
-                        __version__)
+from ... import legal
+from ...appinfo import APP_NAME, AUTHOR, COPYRIGHT, LICENSE_NAME, __version__
 from ...i18n import T
 from ...paths import user_data_dir
+from .. import links
 from ..labels import wrapping_label
 from ..scaling import scaled
 from ..theme import FIELD, FG, MONO_FONT, MUT
-from ..tooltip import add_tooltip
 from ..windows import PanelWindow, register_window
 
 
@@ -51,10 +50,7 @@ class AboutWindow(PanelWindow):
         # from the same bug.
         foot = ttk.Frame(body)
         foot.pack(side="bottom", fill="x", padx=pad, pady=pad)
-        donate = ttk.Button(foot, text=T("buttons.donate"), style="Donate.TButton",
-                            command=self._donate)
-        donate.pack(side="left")
-        add_tooltip(donate, "tips.donate")
+        links.footer_buttons(foot, self.app.log)
         ttk.Button(foot, text=T("buttons.close"), command=self.close).pack(side="right")
 
         head = ttk.Frame(body)
@@ -118,9 +114,3 @@ class AboutWindow(PanelWindow):
         text.insert("end", "\n" + T("about.data_dir", path=user_data_dir()) + "\n")
         text.insert("end", T("about.licenses_dir", path=legal.licenses_dir()) + "\n")
         text.config(state="disabled")
-
-    def _donate(self):
-        """Open the support page in the user's browser - the app opens no sockets."""
-        with crashlog.quiet("gui.about"):
-            webbrowser.open_new_tab(SUPPORT_URL)
-            self.app.log(f"{T('log.donate_opened')}: {SUPPORT_URL}")

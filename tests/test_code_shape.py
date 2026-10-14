@@ -83,7 +83,11 @@ from fakes import ROOT, check
 # function that can be split, it is the 80-attribute god object showing through.
 # So this ceiling is unblocked by narrowing `App`'s contract and by nothing else -
 # it is the same work as H2.3, wearing a different hat.
-FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
+# Lowered 2026-10-14 from 123: the header's donate button (five lines) became one
+# call that builds both page buttons (`gui/links.py`, with GitHub). The band falls
+# to 83.3 and `App.__init__` is 82 - 1.3 lines clear, so the arithmetic above now
+# bites at the next line `__init__` gains, not the next `_build_ui` loses.
+FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
 # needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
 # own bookkeeping moved to `gui/logview.py` and the fixes went in under the number
@@ -131,7 +135,15 @@ FUNCTION_CEILING = 123          # beantester/gui/app.py::_build_ui
 # reads the tick's own snapshot (W-C6, one out); the root <Configure> filter
 # took two back. The band falls to 773.5; `engine.py` is 766 after taking
 # `connections_settled` (W-C1), seven lines clear.
-FILE_CEILING = 1105             # beantester/gui/app.py
+# Lowered 2026-10-14 from 1105: the donate button and `open_donate` moved to
+# `gui/links.py` with the new GitHub button, and `_fit_header` asks it whether a
+# page button is cut and Tk how wide the header asks to be. Fourteen lines out,
+# and the band falls to 763.7 - UNDER
+# `engine.py` (766), which joins the crowd. FILES_NEAR_CEILING went from 1 to 2 for
+# that, by the OWNER's decision of the same day, over the alternative of keeping
+# three lines in `app.py` written longer than they need to be to hold the count.
+# `cli.py` is 757, seven lines under the band.
+FILE_CEILING = 1091             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -147,7 +159,7 @@ FILE_CEILING = 1105             # beantester/gui/app.py
 # counts are small and the next candidate is real - `engine.py` has about 130
 # lines of headroom before it joins the count.
 CROWD_BAND = 0.70
-FILES_NEAR_CEILING = 1          # beantester/gui/app.py
+FILES_NEAR_CEILING = 2          # beantester/gui/app.py, beantester/engine.py (since 2026-10-14)
 FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
 
 # 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph
@@ -832,10 +844,13 @@ def test_the_strictly_typed_modules_only_ever_grow():
 # in this file: down is routine, up is the owner's decision, and the numbers must
 # BE the measurement rather than sit above it (two tests below enforce that, the
 # same pair that guards the ceilings).
-CLASS_METHOD_CEILING = 93       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
+# Lowered 2026-10-14 from 93: `App.open_donate` went to `gui/links.py` with the
+# GitHub button. The band falls to 64.4 and `SortableTree` is 64 - it has NO method
+# left to gain before it joins the crowd.
+CLASS_METHOD_CEILING = 92       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
 CLASS_ATTR_CEILING = 76         # gui/app.py::App (77 until 2026-10-03: _proc_refresh_t)
-# The crowd counts, on the same 70% band as the sizes. Methods: App (93) and
-# BeanEngine (69) against a band of 65.1. Attributes: App (76) and BeanCore (57)
+# The crowd counts, on the same 70% band as the sizes. Methods: App (92) and
+# BeanEngine (75) against a band of 64.4. Attributes: App (76) and BeanCore (57)
 # against a band of 53.2 - and BeanCore is the interesting one, because it is a
 # 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
 # attributes is what a decision core with twelve pipeline steps accumulates.

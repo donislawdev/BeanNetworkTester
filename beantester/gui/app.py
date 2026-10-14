@@ -24,7 +24,7 @@ from collections import deque
 import tkinter as tk
 from tkinter import ttk, filedialog
 
-from ..appinfo import APP_NAME, AUTHOR, SUPPORT_URL
+from ..appinfo import APP_NAME, AUTHOR
 from ..engine import BeanEngine
 from ..fields import BOOL as F_BOOL
 from ..fields import CHOICE as F_CHOICE
@@ -45,7 +45,7 @@ from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import applied, clipboard, configure, dialogs, session_repro
+from . import applied, clipboard, configure, dialogs, links, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .logview import LogView
@@ -374,21 +374,22 @@ class App:
                               command=lambda: self.open_window("settings"))
         gear.pack(side="right", padx=(0, scaled(10)))
         add_tooltip(gear, "tips.settings")
-        # Visible, but deliberately NOT next to the language box: a mis-click on a
-        # button that opens a browser is worse than one that changes a combobox.
-        donate = self.donate_btn = ttk.Button(header, text=T("buttons.donate"),
-                                              style="Donate.TButton",
-                                              command=self.open_donate)
-        donate.pack(side="right", padx=(0, scaled(22)))
-        add_tooltip(donate, "tips.donate")
+        # Donate and GitHub (gui/links.py). Visible, but deliberately NOT next to
+        # the language box: a mis-click on a button that opens a browser is worse
+        # than one that changes a combobox.
+        self.link_btns = links.header_buttons(header, self.log)
         # Tk's pack gives the LAST widget packed whatever space is left, so on a
-        # narrow header the donate button was the one that got clipped: at 1366x768
+        # narrow header a page button is the one that gets clipped: at 1366x768
         # - the minimum resolution this tool documents - the Polish "Wesprzyj
         # projekt" rendered as "Wesp". (English "Donate" fits, which is why nothing
         # caught it.) Rather than pick a width per language, drop the one element
         # that is purely decorative: the author line. See _fit_header.
-        header.bind("<Configure>", lambda e: self._fit_header(header, e.width),
-                    add="+")
+        # ...once pack has laid the children out at the new width. Handled in the
+        # event itself, the buttons still reported the OLD layout's widths: MEASURED
+        # on real Tk, one jump from 760 to 620 px left the author line up and the
+        # Polish "Wesprzyj projekt" cut to 107/121, and the jump back hid the line.
+        header.bind("<Configure>", lambda e: self.root.after_idle(
+            self._fit_header, header, e.width), add="+")
         # ...and once more when the geometry has actually settled: the first
         # <Configure> arrives before anything is laid out
         self.root.after_idle(
@@ -638,38 +639,43 @@ class App:
         """Hide the author line when the header cannot fit everything else.
 
         Tk's pack gives the LAST widget packed whatever space is left over, and the
-        donate button is last - so on a narrow header IT is the one that gets
-        clipped. At 1366x768 (the minimum resolution this tool documents) the
-        Polish "Wesprzyj projekt" rendered as "Wesp": the button asked for 143 px
-        and was given 64. English "Donate" fits, which is why nothing caught it.
+        page buttons (Donate, GitHub) are last - so on a narrow header one of THEM
+        is what gets clipped. At 1366x768 (the minimum resolution this tool
+        documents) the Polish "Wesprzyj projekt" rendered as "Wesp": the button
+        asked for 143 px and was given 64. English "Donate" fits, which is why
+        nothing caught it. With GitHub added, the one cut is GitHub (packed last),
+        so the check covers every page button, not the first.
 
         The fix drops the one element up there that is purely decorative - the
         author line. Two things make this fiddly, and both were bugs first:
 
-        * "does it fit" is not arithmetic. Padding, fonts and DPI all get a vote,
-          so the test is the widget itself: a button whose actual width is under
-          the width it ASKED for is a button with its text cut off.
+        * "does it fit" is not arithmetic - ``links.clipped`` asks the widgets.
         * ``winfo_ismapped()`` is NOT the state to branch on. The first
           ``<Configure>`` arrives before the header has been laid out - the button
           reports a width of 1 and the label is not mapped yet - so a check for
           "is the label showing" answers *no* and the hide branch never runs. We
           track it ourselves.
+
+        That first ``<Configure>`` therefore always hides the line, and getting it
+        BACK is the half that went wrong with the second button. The room left over
+        is what the header ASKS Tk for (``winfo_reqwidth`` of the frame: the packed
+        children with their padding - the hidden line is not one of them) against
+        what it has. It used to be the sum of every child's request, which counted
+        the hidden line too and then asked for its width again on top: MEASURED on
+        real Tk at 760 px, the line never came back in any language once GitHub
+        was there, though it fits with 15 px (pl), 47 (en) and 66 (zh) to spare.
         """
         label = getattr(self, "author_label", None)
-        donate = getattr(self, "donate_btn", None)
-        if label is None or donate is None or width <= 1:
+        buttons = getattr(self, "link_btns", None)
+        if label is None or not buttons or width <= 1:
             return
         with crashlog.quiet("gui.header"):
-            wanted = donate.winfo_reqwidth()
-            actual = donate.winfo_width()
-            # width 1 == "not laid out yet": trust the request, not the reality
-            clipped = actual <= 1 or actual < wanted
+            clipped = links.clipped(buttons)
             if clipped and self._author_shown:
                 label.pack_forget()
                 self._author_shown = False
             elif not self._author_shown and not clipped:
-                spare = width - sum(child.winfo_reqwidth()
-                                    for child in header.winfo_children())
+                spare = width - header.winfo_reqwidth()
                 if spare > label.winfo_reqwidth() + scaled(24):
                     label.pack(side="left", padx=(scaled(10), 0), anchor="s",
                                pady=(0, scaled(3)), before=self.status)
@@ -1075,15 +1081,6 @@ class App:
 
     def copy_repro_cli(self):
         session_repro.copy_command(self)
-
-    def open_donate(self):
-        """Open the support page (voluntary - it funds the project's development)."""
-        try:
-            import webbrowser
-            webbrowser.open_new_tab(SUPPORT_URL)
-            self.log(f"{T('log.donate_opened')}: {SUPPORT_URL}")
-        except Exception as e:
-            self.log(f"{T('log.error')}: {e}")
 
     def copy_to_clipboard(self, text):
         clipboard.put(self, text)

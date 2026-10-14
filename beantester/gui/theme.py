@@ -142,6 +142,11 @@ SPACE = {
     "inline": 8,        # after a control, before the next one in the same row
     "tight": 4,         # between a label and the control it names
     "hair": 2,          # between a line and the line it belongs to
+    # Between a control and a neighbour that does something else entirely: the
+    # header's page buttons from the settings gear, where a mis-click opens a
+    # browser instead of a window. The 22 the donate button stood off by in
+    # `gui/app.py` before it moved to `gui/links.py`.
+    "apart": 22,
 }
 
 # Entry widths in CHARACTERS (Tk's own unit for them - they follow the font, so
@@ -259,6 +264,21 @@ def _style_surfaces(s):
     s.configure("TLabelframe.Label", background=BG, foreground=ACC, font=(FONT, 9, "bold"))
 
 
+def _outline_button(s, name, ink, hover):
+    """An outline button in ``ink``, filled with ``hover`` under the pointer.
+
+    The shape of the page buttons (``gui/links.py``). One recipe with the colour as
+    its parameter, so a second page button is a line here and not a copied style.
+    """
+    s.configure(name, background=BG, foreground=ink, bordercolor=ink, lightcolor=BG,
+                darkcolor=BG, focuscolor=ink, font=(FONT, 9, "bold"), borderwidth=1,
+                padding=(scaled(10), scaled(4)))
+    s.map(name,
+          background=[("active", hover), ("disabled", DIS_BG)],
+          foreground=[("disabled", DIS_FG)],
+          bordercolor=[("active", ink)])
+
+
 def _style_buttons(s):
     """Every button variant, and the checkbutton indicator built from images.
 
@@ -312,15 +332,11 @@ def _style_buttons(s):
           background=[("active", BTN_BG), ("disabled", BG2)],
           foreground=[("disabled", DIS_FG)])
 
-    # Donate: visible, but an outline button - it must not compete with START,
-    # nor look like one of the session controls
-    s.configure("Donate.TButton", background=BG, foreground=DONATE_C,
-                bordercolor=DONATE_C, lightcolor=BG, darkcolor=BG, focuscolor=DONATE_C,
-                font=(FONT, 9, "bold"), borderwidth=1, padding=(scaled(10), scaled(4)))
-    s.map("Donate.TButton",
-          background=[("active", "#3a2b33"), ("disabled", DIS_BG)],
-          foreground=[("disabled", DIS_FG)],
-          bordercolor=[("active", DONATE_C)])
+    # The page buttons (gui/links.py): visible, but outline buttons - they must not
+    # compete with START, nor look like one of the session controls. Donate has its
+    # own pink; GitHub is in the muted ink, the quieter of the two.
+    _outline_button(s, "Donate.TButton", DONATE_C, "#3a2b33")
+    _outline_button(s, "GitHub.TButton", MUT, BG2)
 
     # collapsible section header
     s.configure("Section.TButton", background=BG, foreground=ACC,

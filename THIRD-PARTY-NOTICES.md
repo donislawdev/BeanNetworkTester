@@ -207,5 +207,7 @@ None. Bean Network Tester does not phone home. It contains no analytics, no cras
 reporting service, no update check and no network client of any kind: the only
 network traffic it touches is the traffic it is capturing on your own machine, and
 that data never leaves the machine. The only outbound connection the program can
-ever make is opening `https://donislawdev.com/` in **your** browser, and only when
-you click the support button yourself.
+ever make is opening a page in **your** browser - the support page
+(`https://donislawdev.com/support/`) or the project's page on GitHub
+(`https://github.com/donislawdev/BeanNetworkTester`) - and only when you click the
+button for it yourself.
