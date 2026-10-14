@@ -621,8 +621,10 @@ def test_a_page_button_opens_its_page_and_the_log_says_whether_it_did():
 
         webbrowser.open_new_tab = broken
         donate.kw["command"]()
-        assert "no handler for https" in last_line(), last_line()
-        assert bnt.T("log.donate_opened") not in last_line(), last_line()
+        # the same sentence and the address - the raw exception goes to crashlog only
+        assert last_line().endswith(bnt.T("log.page_not_opened") + ": " + SUPPORT_URL), (
+            last_line())
+        assert "no handler for https" not in last_line(), last_line()
     """, allow_faults=("no handler for https",))
 
 

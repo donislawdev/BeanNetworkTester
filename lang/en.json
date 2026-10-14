@@ -335,7 +335,7 @@
   "log.note_admin": "NOTE: run as ADMINISTRATOR.",
   "log.note_windows": "NOTE: capture works only on Windows (WinDivert).",
   "log.once": "once",
-  "log.page_not_opened": "Could not open the browser. The address",
+  "log.page_not_opened": "Could not open the browser. Copy this address into your browser",
   "log.ports": "ports",
   "log.previous_session_stuck": "WARNING: part of the previous session is still stuck and could not be stopped. It does not stop this session from working, but it may keep using the processor until you restart the program.",
   "log.process_excluded": "Target",

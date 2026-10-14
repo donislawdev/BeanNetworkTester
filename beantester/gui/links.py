@@ -52,9 +52,9 @@ def open_page(page, log):
     """Open ``page`` in the user's browser and say in the log whether it opened."""
     try:
         opened = webbrowser.open_new_tab(page.url)
-    except Exception as e:
+    except Exception as e:              # the reason goes to the crash log, the address to the user
         crashlog.note(e, "gui.links")
-        log(f"{T('log.error')}: {e}")
+        log(f"{T('log.page_not_opened')}: {page.url}")
         return False
     log(f"{T(page.opened if opened else 'log.page_not_opened')}: {page.url}")
     return bool(opened)

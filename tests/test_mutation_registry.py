@@ -7719,8 +7719,8 @@ MUTATIONS = [
     {
         "label": "links: a browser that raised is reported as opened",
         "file": "beantester/gui/links.py",
-        "old": "        log(f\"{T('log.error')}: {e}\")\n",
-        "new": "        log(f\"{T(page.opened)}: {e}\")\n",
+        "old": "        log(f\"{T('log.page_not_opened')}: {page.url}\")\n",
+        "new": "        log(f\"{T(page.opened)}: {page.url}\")\n",
         "test": "test_a_page_button_opens_its_page_and_the_log_says_whether_it_did",
     },
     {
