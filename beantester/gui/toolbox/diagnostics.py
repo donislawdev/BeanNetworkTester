@@ -35,6 +35,13 @@ STATE_TEXT = {
 
 CHECK, CLEAN = "check", "clean"
 
+# The report's optional sections, as the person ticks them: (section id in
+# nettools/diagnostics.REPORT_SECTIONS, box text, tooltip).
+OPTIONAL_BOXES = (
+    ("adapters", "tools.diagnostics.with_adapters", "tips.tools_diagnostics_adapters"),
+    ("proxy", "tools.diagnostics.with_proxy", "tips.tools_diagnostics_proxy"),
+)
+
 
 def check_name(name):
     """A check's name in the current language - doctor's own name if it has no key yet."""
@@ -68,17 +75,24 @@ class DiagnosticsPanel:
                                       "tips.tools_diagnostics_clean", self.clean)
         self.copy_btn = self._button(bar, "tools.diagnostics.copy_report",
                                      "tips.tools_diagnostics_copy", self.copy_report)
-        # The network adapters in the report: off until ticked, because the report
-        # goes into a PUBLIC bug report and the adapters carry this machine's
-        # addresses and MAC (nettools/diagnostics.py, REPORT_SECTIONS).
-        self.with_adapters = tk.BooleanVar(value=self.memory.get("adapters") == "1")
-        box = ttk.Checkbutton(bar, text=T("tools.diagnostics.with_adapters"),
-                              variable=self.with_adapters, command=self._ticked)
-        box.pack(side="left", padx=(0, space("inline")))
-        add_tooltip(box, "tips.tools_diagnostics_adapters")
         dialogs.help_button(bar, self.app.root, "tools.diagnostics.help_title",
                             "tools.diagnostics.help_body",
                             "tips.tools_diagnostics_help").pack(side="right")
+        # The report's optional sections, one box each: off until ticked, because the
+        # report goes into a PUBLIC bug report and these carry this machine's
+        # addresses, MAC and proxy (nettools/diagnostics.py, REPORT_SECTIONS). On a
+        # line of their own: with the second box the Polish bar outgrew the 760 px
+        # window a 1366x768 screen opens and pushed the help button out (rendered
+        # 2026-10-14).
+        boxes = ttk.Frame(self.frame)
+        boxes.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))
+        self.include = {}
+        for section_id, text_key, tip_key in OPTIONAL_BOXES:
+            ticked = tk.BooleanVar(value=self.memory.get(section_id) == "1")
+            box = ttk.Checkbutton(boxes, text=T(text_key), variable=ticked, command=self._ticked)
+            box.pack(side="left", padx=(0, space("inline")))
+            add_tooltip(box, tip_key)
+            self.include[section_id] = ticked
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
@@ -165,7 +179,7 @@ class DiagnosticsPanel:
         diagnosis = self.job.value.get(CHECK)
         if diagnosis is None:
             return
-        include = ("adapters",) if self.with_adapters.get() else ()
+        include = tuple(section_id for section_id, ticked in self.include.items() if ticked.get())
         copy_confirmed(self.app, diagnostics.report(diagnosis, include=include),
                        T("tools.diagnostics.report_logged"), AREA)
 
@@ -173,7 +187,8 @@ class DiagnosticsPanel:
         # Kept until the program closes and never in ui.json - the rule for every
         # tool's inputs (gui/toolbox/base.py): a rebuild after a language change
         # keeps the tick, the next start begins with it off again.
-        self.memory["adapters"] = "1" if self.with_adapters.get() else ""
+        for section_id, ticked in self.include.items():
+            self.memory[section_id] = "1" if ticked.get() else ""
 
     def _run(self, kind, work):
         self.job.run(kind, work)

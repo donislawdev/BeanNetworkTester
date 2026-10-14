@@ -19,6 +19,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   addresses and MAC addresses say which network this computer is on, and the report is meant
   for public bug reports.
 
+- **The Adapters tool shows the proxy.** Its first row, **Proxy**, says whether programs on
+  this computer go through a proxy: this account's proxy settings (automatic detection, a
+  setup script, a proxy server and the names that go around it), the proxy Windows services
+  use (WinHTTP) and the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` variables. A
+  program that uses a proxy connects to the proxy, not to your target - right-click the proxy
+  server to limit the impairments to its address. Passwords in an address are hidden, and a
+  proxy given as a name is not looked up. Nothing is sent.
+
+- **Diagnostics can add the proxy settings to the environment report.** Tick **Add proxy
+  settings**. It is off until you tick it, like the adapters, and passwords are hidden. Both
+  boxes are now on a line of their own under the buttons.
+
 ### Docs
 
 - **The README says how the program's dependencies are checked for known vulnerabilities.**

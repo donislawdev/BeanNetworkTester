@@ -1102,6 +1102,25 @@ def fake_read(native=None):
 ad.read = fake_read
 ad.supported = lambda: supported[0]
 
+# The proxy, read in the same job: never this machine's own settings in a test.
+from beantester.nettools import proxy as px
+from beantester.proxy import MachineProxy, UserProxy, Variable
+from beantester.proxy import Reading as ProxyReading
+NO_PROXY = ProxyReading(UserProxy(False, "", "", ""), "", MachineProxy("", ""), "", (), "")
+SET_PROXY = ProxyReading(
+    UserProxy(True, "", "http=192.0.2.10:8080;https=proxy.example.com:8443", "<local>"), "",
+    MachineProxy("192.0.2.30:3128", ""), "",
+    (Variable("HTTP_PROXY", "http://user:secret@192.0.2.40:8080", "user"),), "")
+PROXY = [NO_PROXY]
+proxy_reads = []
+
+def fake_proxy_read(native=None):
+    proxy_reads.append(1)
+    return PROXY[0]
+
+px.read = fake_proxy_read
+px.supported = lambda: supported[0]
+
 def open_adapters():
     app.select_page("tools")
     page = app.pages["tools"]
@@ -1136,17 +1155,23 @@ def test_the_adapters_are_read_when_first_looked_at_and_the_way_out_comes_first(
 
         panel = open_adapters()
         settle(panel)
-        assert reads == [1], reads
-        assert shown(panel) == ["eth", "wifi", "down"], shown(panel)
+        assert reads == [1] and proxy_reads == [1], (reads, proxy_reads)
+        assert shown(panel) == ["proxy", "eth", "wifi", "down"], shown(panel)
         assert panel.table.selected_keys() == ["eth"], "the way out is chosen first"
         assert details(panel)["name"].value == "Eth"
-        assert panel.table.items[2].up is False and panel.table._tag_of(
-            panel.table.items[2]) == "down", "an adapter that is down is muted"
+        assert panel.table.items[3].up is False and panel.table._tag_of(
+            panel.table.items[3]) == "down", "an adapter that is down is muted"
         from beantester.gui.toolbox.adapters import COLUMNS, render
-        cells = dict(zip(COLUMNS, render(panel.table.items[0]), strict=True))
+        cells = dict(zip(COLUMNS, render(panel.table.items[1]), strict=True))
         assert cells == {"name": "Eth", "status": T("tools.adapters.status.up"),
                          "kind": T("tools.adapters.kind.ethernet"),
                          "ipv4": "192.168.1.5/24", "internet": "IPv4"}, cells
+        cells = dict(zip(COLUMNS, render(panel.table.items[0]), strict=True))
+        assert cells == {"name": T("tools.adapters.proxy.row"),
+                         "status": T("tools.adapters.proxy.state.not_set"),
+                         "kind": T("tools.adapters.kind.proxy"), "ipv4": "",
+                         "internet": ""}, cells
+        assert panel.table._tag_of(panel.table.items[0]) == "", "the proxy row is not muted"
         app._tick()
         panel.refresh()
         settle(panel)
@@ -1187,7 +1212,11 @@ def test_a_header_click_sorts_each_table_and_the_order_outlives_a_rebuild():
         panel = open_adapters()
         settle(panel)
         panel.table._clicked("kind")
-        assert shown(panel) == ["eth", "down", "wifi"], shown(panel)
+        assert shown(panel) == ["proxy", "eth", "down", "wifi"], "the proxy stays first"
+        panel.table._clicked("kind")
+        assert shown(panel) == ["proxy", "wifi", "down", "eth"], "reversed too"
+        panel.table._clicked("kind")
+        assert shown(panel) == ["proxy", "eth", "down", "wifi"], shown(panel)
         assert panel.table.selected_keys() == ["eth"], "sorting keeps the choice"
         items = [T(d.item.key) for d in panel.details.items]
         panel.details._clicked("item")
@@ -1195,7 +1224,7 @@ def test_a_header_click_sorts_each_table_and_the_order_outlives_a_rebuild():
             items, key=str.casefold), "the details sort by what the cell says"
         app._build_ui()
         again = open_adapters()
-        assert shown(again) == ["eth", "down", "wifi"], shown(again)
+        assert shown(again) == ["proxy", "eth", "down", "wifi"], shown(again)
         assert again.details.sort == {"col": "item", "reverse": False}, again.details.sort
         assert reads == [1], reads
     """))
@@ -1213,8 +1242,9 @@ def test_an_adapter_read_that_fails_says_why_and_keeps_the_rows_it_had():
         status = panel.status.label
         assert "refused on purpose" in status.cget("text"), status.cget("text")
         assert status.cget("style") == "Status.Bad.TLabel"
-        assert shown(panel) == ["eth", "wifi", "down"], "the last good rows stay"
-        at = time.strftime("%H:%M:%S", time.localtime(panel.job.value["read"].read_at))
+        assert shown(panel) == ["proxy", "eth", "wifi", "down"], "the last good rows stay"
+        at = time.strftime("%H:%M:%S",
+                           time.localtime(panel.job.value["read"].adapters.read_at))
         assert panel.note.cget("text") == T("tools.adapters.note_stale", time=at)
         ad.read = fake_read
         panel.read()
@@ -1268,7 +1298,7 @@ def test_a_rebuild_keeps_a_failed_read_and_hands_a_running_one_to_the_new_panel(
         assert "disabled" in third.refresh_btn.state(), "one read at a time"
         gate.set()
         settle(third)
-        assert shown(third) == ["eth", "wifi", "down"], shown(third)
+        assert shown(third) == ["proxy", "eth", "wifi", "down"], shown(third)
         assert reads == [1], "the answer reached the new panel without asking again"
     """), allow_faults=("on purpose",))
 
@@ -1326,9 +1356,68 @@ def test_the_adapters_report_is_copied_whole():
         panel = open_adapters()
         settle(panel)
         panel.copy_report()
-        assert root.clipboard_get() == ad.report(panel.job.value["read"]), root.clipboard_get()
+        known = panel.job.value["read"]
+        want = ad.report(known.adapters) + chr(10) * 2 + px.report(known.proxy)
+        assert root.clipboard_get() == want, root.clipboard_get()
         assert any(T("log.copied") in line and T("tools.adapters.report_logged") in line
                    for line in app._log_lines), app._log_lines[-3:]
+    """))
+
+
+def test_the_proxy_row_comes_first_and_offers_its_address_like_a_gateway():
+    """T-13 (the owner's choice of the rendered layouts, 2026-10-14): the proxy is the
+    first row whatever the sort, its details reuse the table and the row menu, a
+    password never reaches the screen, and a server given as a name is not offered."""
+    run_gui(ADAPT + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.adapters import COLUMNS, LIMIT, render
+        PROXY[0] = SET_PROXY
+        app.vars["dst_port"].set("443")
+        panel = open_adapters()
+        settle(panel)
+        cells = dict(zip(COLUMNS, render(panel.table.items[0]), strict=True))
+        assert cells["status"] == T("tools.adapters.proxy.state.in_use"), cells
+        assert cells["ipv4"] == "192.0.2.10", "the first server, as the list shows an address"
+        assert panel.table.selected_keys() == ["eth"], "the way out is still chosen first"
+        choose(panel, "proxy")
+        rows = details(panel)
+        assert list(rows) == ["detect", "script", "server|0", "server|1", "bypass",
+                              "winhttp|0", "env|HTTP_PROXY"], list(rows)
+        assert rows["env|HTTP_PROXY"].value == "http://***@192.0.2.40:8080", rows["env|HTTP_PROXY"]
+        from beantester.gui.toolbox.adapters import render_detail
+        assert not any("secret" in cell for d in panel.details.items for cell in render_detail(d))
+        for key, can_limit in (("server|0", True), ("server|1", False), ("winhttp|0", True),
+                               ("env|HTTP_PROXY", True), ("detect", False)):
+            panel.details.select_keys([key])
+            panel._show_menu(0, 0)
+            want = MENU_ENTRY_LIVE if can_limit else MENU_ENTRY_INERT
+            assert panel.menu.entry_states[LIMIT] == want, (key, panel.menu.entry_states[LIMIT])
+        panel.details.select_keys(["server|0"])
+        panel._limit()
+        limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
+        assert limited == ("192.0.2.10", "443"), ("the proxy's address, the port stays", limited)
+        panel.read()
+        settle(panel)
+        assert panel.table.selected_keys() == ["proxy"], "a refresh keeps the proxy chosen"
+        app._build_ui()
+        again = open_adapters()
+        assert again.table.selected_keys() == ["proxy"], "so does a rebuild"
+        assert "server|0" in details(again)
+    """))
+
+
+def test_a_proxy_that_cannot_be_read_says_so_and_the_adapters_stay():
+    run_gui(ADAPT + textwrap.dedent("""
+        PROXY[0] = ProxyReading(None, "OSError: refused on purpose", MachineProxy("", ""), "",
+                                (), "")
+        panel = open_adapters()
+        settle(panel)
+        assert shown(panel) == ["proxy", "eth", "wifi", "down"], shown(panel)
+        from beantester.gui.toolbox.adapters import render
+        assert render(panel.table.items[0])[1] == T("tools.adapters.proxy.state.unreadable")
+        choose(panel, "proxy")
+        row = details(panel)["user"]
+        assert row.note == ("OSError: refused on purpose",), row
     """))
 
 
@@ -1338,15 +1427,23 @@ def test_the_environment_report_adds_the_adapters_only_when_ticked():
         blank = chr(10) * 2
         panel = open_diag()
         settle(panel)
-        assert panel.with_adapters.get() is False, "off until ticked"
+        assert panel.include["adapters"].get() is False, "off until ticked"
+        assert panel.include["proxy"].get() is False, "the proxy too, a box of its own"
         panel.copy_report()
-        assert "network adapters" not in root.clipboard_get(), root.clipboard_get()
-        panel.with_adapters.set(True)
+        text = root.clipboard_get()
+        assert "network adapters" not in text and "proxy" not in text, text
+        panel.include["adapters"].set(True)
         panel._ticked()
         panel.copy_report()
         last = root.clipboard_get().split(blank)[-1]
         assert last.startswith("network adapters"), last
+        panel.include["proxy"].set(True)
+        panel._ticked()
+        panel.copy_report()
+        last = root.clipboard_get().split(blank)[-1]
+        assert last.startswith("proxy"), last
         app._build_ui()
         again = open_diag()
-        assert again.with_adapters.get() is True, "the tick outlives a rebuild"
+        assert again.include["adapters"].get() is True, "the tick outlives a rebuild"
+        assert again.include["proxy"].get() is True
     """))

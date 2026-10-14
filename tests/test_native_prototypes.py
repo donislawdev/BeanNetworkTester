@@ -34,16 +34,18 @@ import ast
 import os
 import re
 
-from beantester import adapters, driver, winenv
+from beantester import adapters, driver, proxy, winenv
 from fakes import ROOT, check
 
 # Factories that hand out a prepared binding. `driver._advapi` is here as well as
 # in test_driver_windows.py on purpose: that test asserts one specific restype is
 # a HANDLE (the actual historical bug), this one asserts the general property.
 # `adapters._iphlpapi` is the Tools tab's adapter list (2026-10-13): both its
-# calls take pointers.
+# calls take pointers. `proxy._winhttp` and `proxy._kernel32` are its proxy row
+# (2026-10-14): two reads that fill a structure of pointers, and GlobalFree.
 FACTORIES = dict(winenv.NATIVE_FACTORIES, advapi32=driver._advapi,
-                 iphlpapi=adapters._iphlpapi)
+                 iphlpapi=adapters._iphlpapi, winhttp=proxy._winhttp,
+                 proxy_kernel32=proxy._kernel32)
 
 # The three do NOT fail the same way off Windows, and assuming they did is what
 # made the first version of this file red on the Linux runner and green here:
@@ -53,7 +55,7 @@ FACTORIES = dict(winenv.NATIVE_FACTORIES, advapi32=driver._advapi,
 # guard of its own, which `test_driver_windows.py` asserts - but it means the
 # off-Windows branch here has to check the right property per factory instead of
 # one property for all three.
-SELF_GUARDING = tuple(winenv.NATIVE_FACTORIES) + ("iphlpapi",)
+SELF_GUARDING = tuple(winenv.NATIVE_FACTORIES) + ("iphlpapi", "winhttp", "proxy_kernel32")
 
 # Direct `ctypes.windll.<lib>.<Func>` uses that predate this guard, with the
 # reason each is harmless. Adding a line here is a decision, not a formality:
