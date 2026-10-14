@@ -97,7 +97,7 @@ import re
 import threading
 import time
 
-from beantester import adapters, portmap
+from beantester import adapters, portmap, tcpreset
 from beantester.engine import BeanEngine
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
@@ -118,11 +118,15 @@ NATIVE_METHODS = ("_table", "socket_rows")
 # The Tools tab's adapter list and its route lookup (``adapters._Native``): read on a
 # click by a worker, never by a packet thread.
 ADAPTER_METHODS = ("adapters", "best_interface")
+# "Reset this connection" on the Connections page (``tcpreset._System``): one call, on
+# a click, by a worker - never by a packet thread.
+RESET_METHODS = ("delete",)
 
 # Every module that loads iphlpapi, and the binding class whose methods are its only
 # road to it. ``test_every_module_that_loads_iphlpapi_is_watched`` keeps this whole.
 WATCHED_IPHLPAPI = {"beantester/portmap.py": portmap._Native,
-                    "beantester/adapters.py": adapters._Native}
+                    "beantester/adapters.py": adapters._Native,
+                    "beantester/tcpreset.py": tcpreset._System}
 # `ctypes.WinDLL("iphlpapi.dll")`, `windll.iphlpapi` and `WinDLL('iphlpapi')`.
 _LOADS_IPHLPAPI = re.compile(r"""(?:WinDLL|LoadLibrary\w*)\(\s*['"]iphlpapi|windll\.iphlpapi""",
                              re.IGNORECASE)
@@ -138,6 +142,8 @@ def os_calls_recorded():
               for name in NATIVE_METHODS}
     native.update({(adapters._Native, name, "adapters." + name):
                    getattr(adapters._Native, name) for name in ADAPTER_METHODS})
+    native.update({(tcpreset._System, name, "tcpreset." + name):
+                   getattr(tcpreset._System, name) for name in RESET_METHODS})
 
     def wrap(name, original):
         def spy(*a, **kw):
@@ -289,6 +295,17 @@ def test_the_recorder_sees_what_it_claims_to_see():
     check("the adapters' route lookup is recorded too", names == ["adapters.best_interface"],
           f"({names})")
     check("and unwrapped after", adapters._Native.best_interface.__name__ == "best_interface")
+
+    # And the connection reset's: one SetTcpEntry through a fake binding.
+    class Reset:
+        def SetTcpEntry(self, _row):
+            return 0
+    with os_calls_recorded() as calls:
+        tcpreset._System(iphlpapi=Reset(), rows=list, is_admin=bool).delete(
+            tcpreset.row_for("192.0.2.10", tcpreset.Target(1, "192.0.2.20", 2)))
+        names = [name for name, _ in calls]
+    check("the connection reset is recorded too", names == ["tcpreset.delete"], f"({names})")
+    check("and unwrapped after", tcpreset._System.delete.__name__ == "delete")
 
 
 def _iphlpapi_loaders(root=ROOT):

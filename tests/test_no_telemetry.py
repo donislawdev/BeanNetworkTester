@@ -195,7 +195,12 @@ ALLOWED_LIBRARIES = {
 #
 # Not claimed complete: iphlpapi has hundreds of exports and this lists the ones
 # the documentation says transmit. Adding one here is a decision, removing one is
-# a hole - and NONE of them is used today, so there is no allowlist beside it.
+# a hole. A use arrives with an entry in WIRE_ALLOWED below and its reason.
+#
+# SetTcpEntry is here by MEASUREMENT, not by Learn's words (Learn says only that it
+# "sets the state of a TCP connection"): 2026-10-14, deleting an open connection's
+# TCB made Windows send a RST to the far end - seen there 1 ms later over a real
+# adapter, and over loopback.
 #
 # winhttp's, from Microsoft Learn (read 2026-10-14): WinHttpSendRequest "sends the
 # specified request to the HTTP server", WinHttpWriteData "writes request data to
@@ -221,6 +226,21 @@ WIRE_FUNCTIONS = {
     "WinHttpGetProxyForUrl": "proxy discovery (DHCP, DNS) and a PAC download",
     "WinHttpGetProxyForUrlEx": "the same, asynchronous form",
     "WinHttpDetectAutoProxyConfigUrl": "proxy discovery over DHCP and DNS",
+    "SetTcpEntry": "a TCP reset to the far end of the connection it deletes",
+}
+
+# The one place each sending function may be named, with why that is the product
+# working as promised rather than a way out. Exact in both directions, like the
+# registries above: an entry nothing matches any more fails.
+#
+# SetTcpEntry (2026-10-14, the owner's decision for "Reset this connection" on the
+# Connections page): the tester picks one of THEIR connections and asks for it to
+# break; the reset goes to the far end of that connection and nowhere else - the
+# same thing the engine's own RST impairment does on that page. The module is not
+# imported by the Tools tab, whose promise stays (test below).
+WIRE_ALLOWED = {
+    ("beantester/tcpreset.py", "SetTcpEntry"):
+        "resets the one connection the tester chose in the Connections row menu",
 }
 
 # A process is the other way out of a sandbox: `curl`, `powershell -c Invoke-
@@ -496,16 +516,40 @@ def test_ctypes_opens_only_local_windows_libraries():
           f"(a library that can speak a protocol has no business here: {bad})")
 
 
+def unallowed_wire(wire):
+    """The ``(rel, detail, line)`` wire findings WIRE_ALLOWED does not name."""
+    return [(rel, detail, line) for rel, detail, line in wire
+            if (rel, detail) not in WIRE_ALLOWED]
+
+
 def test_no_allowed_library_is_used_to_send_a_packet():
-    """The function-level half of the library check, for the one library that
-    can do both. `iphlpapi` reads the socket table for us and would ping for
-    anybody: the name on the allowlist says nothing about which. No use exists
-    today, so this is a floor - the day a sending feature is wanted, it arrives
-    with an allowlist entry and a reason, not by passing this in silence."""
+    """The function-level half of the library check, for the libraries that can
+    do both. `iphlpapi` reads the socket table for us and would ping for anybody:
+    the name on the allowlist says nothing about which. A sending feature arrives
+    with a WIRE_ALLOWED entry and a reason, not by passing this in silence."""
+    wire = _scan().get("wire", [])
     bad = ["%s:%d %s (%s)" % (rel, line, detail, WIRE_FUNCTIONS[detail])
-           for rel, detail, line in _scan().get("wire", [])]
+           for rel, detail, line in unallowed_wire(wire)]
     check("no shipped module reaches for a function that sends", not bad,
           f"(a function that puts a packet on the wire, through an allowed library: {bad})")
+    seen = {(rel, detail) for rel, detail, _line in wire}
+    stale = sorted(str(key) for key in WIRE_ALLOWED if key not in seen)
+    check("every allowed sending function is still used where it is allowed", not stale,
+          f"({stale})")
+
+
+def test_the_wire_allowlist_names_a_place_not_a_function():
+    """The canary for WIRE_ALLOWED: the allowed function anywhere ELSE is still
+    caught, and the allowed place is not let off for a different function."""
+    reset = "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\nlib.SetTcpEntry(row)\n"
+    ping = "import ctypes\nctypes.windll.iphlpapi.IcmpSendEcho2(h, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n"
+    cases = {"the allowed call in its own module": (reset, "beantester/tcpreset.py", False),
+             "the same call in any other module": (reset, "beantester/gui/pages/conns.py", True),
+             "a ping in the allowed module": (ping, "beantester/tcpreset.py", True)}
+    for name, (source, rel, caught) in cases.items():
+        wire = [(rel, detail, line) for kind, detail, line in findings(source, rel)
+                if kind == "wire"]
+        check(name, bool(unallowed_wire(wire)) == caught, f"({wire})")
 
 
 def test_the_shipped_package_never_spawns_a_process():
@@ -880,6 +924,8 @@ BAD_CODE = (
      "wire"),
     ("an ARP request - not ICMP, same library, same silence",
      "import ctypes\nctypes.windll.iphlpapi.SendARP(1, 0, buf, n)\n", "wire"),
+    ("a TCP reset, which makes Windows send a RST (measured 2026-10-14)",
+     "import ctypes\nctypes.windll.iphlpapi.SetTcpEntry(row)\n", "wire"),
     ("the name split across two literals, which a text search never joins",
      "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\n"
      "getattr(lib, 'Icmp' + 'SendEcho2')(0)\n", "wire"),

@@ -31,6 +31,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   settings**. It is off until you tick it, like the adapters, and passwords are hidden. Both
   boxes are now on a line of their own under the buttons.
 
+- **Reset one connection from the Connections page.** Right-click a row and choose **Reset this
+  connection** to break it at once and see what your program does. The program gets an error
+  right away and the other end gets a TCP reset, with or without a session running. During a
+  session the reset goes through the impairments like any other packet, so heavy loss can drop
+  it. Only TCP over IPv4 can be reset (Windows cannot reset an IPv6 connection), so the entry
+  is greyed out on other rows. It needs administrator rights.
+
 ### Docs
 
 - **The README says how the program's dependencies are checked for known vulnerabilities.**

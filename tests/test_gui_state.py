@@ -420,6 +420,65 @@ def test_connection_menu_needs_a_row_to_act_on():
     """)
 
 
+def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
+    """Windows resets TCP over IPv4 only (``tcpreset``): every other row gets the
+    entry greyed, the way a row with no process gets "Target this process"."""
+    run_gui("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        page = app.pages["connections"]
+        tree = page.table.tree
+        keys = list(page.table.columns)
+
+        class Ev:
+            x_root = y_root = 10
+            y = 10
+
+        def row(proto, ip):
+            values = ["-"] * len(keys)
+            values[keys.index("proto")], values[keys.index("remote_ip")] = proto, ip
+            return values
+
+        for proto, ip, state in (("TCP", "198.51.100.7", MENU_ENTRY_LIVE),
+                                 ("UDP", "198.51.100.7", MENU_ENTRY_INERT),
+                                 ("ICMP", "198.51.100.7", MENU_ENTRY_INERT),
+                                 ("TCP", "2001:db8::7", MENU_ENTRY_INERT)):
+            page.table.sync([("r", row(proto, ip))])
+            tree.row_at = page.table._slots[0]
+            page.table.row_menu_at_pointer(Ev())
+            got = page.menu.entry_states[page.RESET_INDEX]
+            assert got == state, (proto, ip, got)
+        assert page._reset_connection() is None, "a row with no port numbers starts nothing"
+    """)
+
+
+def test_a_connection_reset_runs_off_the_ui_thread_and_says_how_it_ended():
+    run_gui("""
+        import threading
+        from beantester import tcpreset
+        from beantester.gui.pages import conns
+        asked = []
+
+        def fake_reset(target):
+            asked.append((target, threading.current_thread().name))
+            return tcpreset.Outcome(tcpreset.REFUSED, "TIME_WAIT", 317)
+
+        tcpreset.reset = fake_reset
+        row = {"proto": "TCP", "remote_ip": "198.51.100.7", "remote_port": 443,
+               "local_port": 51000}
+        conns.reset_connection(app, row).join(20)
+        app._logview.drain()   # a worker's log line lands on the next tick
+        assert asked == [(tcpreset.Target(51000, "198.51.100.7", 443), "conn-reset")], asked
+        assert any("198.51.100.7:443" in line and "TIME_WAIT" in line
+                   for line in app._log_lines), app._log_lines[-3:]
+        assert conns.reset_connection(app, dict(row, local_port="")) is None, \\
+            "a row with no ports must start nothing"
+        assert set(conns.RESET_LOG) == {tcpreset.RESET, tcpreset.GONE, tcpreset.AMBIGUOUS,
+                                        tcpreset.REFUSED, tcpreset.NEEDS_ADMIN,
+                                        tcpreset.UNREADABLE, tcpreset.NOT_IPV4,
+                                        tcpreset.FAILED}, "an outcome with no sentence"
+    """)
+
+
 def test_dialogs_are_in_app_and_translated():
     """Native message boxes are white AND take their buttons from the OS - an
     English UI still asked "Tak / Nie" on a Polish Windows."""
