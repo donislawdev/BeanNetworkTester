@@ -1,5 +1,4 @@
-# Bean Network Tester 🫘 - bad network conditions simulator (Windows) 
-<p align="center">
+# Bean Network Tester 🫘 - bad network conditions simulator (Windows) <p align="center">
   <b>Follow me:</b>
   &nbsp
   <a href="https://discord.gg/bDTu8HX"><img src="https://cdn.simpleicons.org/discord/5865F2" alt="Discord" height="26" align="absmiddle"></a>
