@@ -61,6 +61,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   to the main branch and on every pull request. Findings on the main branch appear in the
   repository's Security tab, and a pull request that brings in a new one fails its check.
 
+- **The README in seven more languages.** Simplified Chinese (`README.zh-Hans.md`), Japanese
+  (`README.ja.md`), German (`README.de.md`), Korean (`README.ko.md`), French (`README.fr.md`),
+  Brazilian Portuguese (`README.pt-BR.md`) and Spanish (`README.es.md`). A language bar at the
+  top of every README links between them, and the link to the website in each translation opens
+  the website in that language. The command line and the program's own labels stay in English,
+  as the program shows them.
+
 ## [0.8.0] - 2026-10-03
 
 ### BREAKING
