@@ -11,9 +11,11 @@
 # deliberately - `pydivert` carries the WinDivert DLL and the kernel driver, so
 # bumping it changes what we ship to users and what THIRD-PARTY-NOTICES.md has to
 # say. Check the notices and `beantester/legal.py` in the same change.
-pydivert==3.1.3; sys_platform == "win32" \
-    --hash=sha256:74ae83a5d1b4a31db8f84a55c1cf875eb4e7a0d2bc2e4730ef171819bc5e9008 \
-    --hash=sha256:e5cba087f3f17eb66cf50965cf9670c55691c580f81dcad20549a0ef49af8e06
+pydivert==4.0.0; sys_platform == "win32" \
+    --hash=sha256:06272d935efe7489cba5558bf6f7de5b68a2fdbd9fa0521ee04120b22fdeb73a \
+    --hash=sha256:3736e19922b12a8d3839c6fecbc6faa0ce7ac0b62507368432542cb559bce907 \
+    --hash=sha256:a507ad3fa5efef95147595d9486d84fc9118b149d5ec6ed140c30283f9151602 \
+    --hash=sha256:a642f745c7168b9449fbcfb8fbeedf948e6739c608b92faff0caf80c098540ff
 psutil==7.2.2 \
     --hash=sha256:0746f5f8d406af344fd547f1c8daa5f5c33dbc293bb8d6a16d80b4bb88f59372 \
     --hash=sha256:076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9 \
