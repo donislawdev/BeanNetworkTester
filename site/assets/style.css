@@ -335,29 +335,10 @@ h3 {
   * { animation: none !important; transition: none !important; }
 }
 
-/* -- guides and the footer's page list ----------------------------------- */
-/* Both lists are GENERATED from the page registry (see tools/build_site.py):
-   a hand-written list forgets the page added after it, and a page nothing links
-   to is reachable only through the sitemap. */
-.guides {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: .75rem;
-}
-.guides li a {
-  display: block;
-  padding: 1rem 1.15rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  text-decoration: none;
-  font-weight: 600;
-}
-.guides li a:hover { background: color-mix(in srgb, var(--bg-card) 80%, var(--fg)); }
-
+/* -- the footer's page list ---------------------------------------------- */
+/* GENERATED from the page registry (see tools/build_site.py): a hand-written
+   list forgets the page added after it, and a page nothing links to is
+   reachable only through the sitemap. It lives here and not in the page text. */
 .foot-nav {
   list-style: none;
   margin: 0 0 1.25rem;
