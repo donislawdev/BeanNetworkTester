@@ -203,7 +203,8 @@ monitor is gone it returns to the centre of the current screen.
   and the other end gets a TCP reset. During a session that reset goes through the impairments
   like any other packet, so heavy loss can drop it on the way. It works for TCP over IPv4 only -
   Windows has no way to reset an IPv6 connection - so the entry is greyed out on other rows, and
-  it needs administrator rights.
+  it needs administrator rights. **"Show TCP health"** opens **TCP health** on the Tools tab
+  for that connection (TCP over IPv4 and IPv6).
   The table is **virtualised**: it draws only the rows actually on screen, so scrolling is instant
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
@@ -216,8 +217,26 @@ monitor is gone it returns to the centre of the current screen.
     application listens on before you impair it, or which program holds a port. The table
     is read when you open the tab and when you press **Refresh**. Search it the way you
     search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
-    right-click a row to target its program, leave it alone, or limit to or block its
-    remote address. Program names are shown without administrator rights.
+    right-click a row to target its program, leave it alone, limit to or block its
+    remote address, or watch a TCP connection in **TCP health**. Program names are shown
+    without administrator rights.
+  - **TCP health** - what Windows measures for a TCP connection: the round-trip time
+    (smoothed, newest, lowest and highest, charted for the last minute), resent segments,
+    timeouts, duplicate ACKs, the segment size and the bytes sent and received. Windows
+    does not measure every round trip: on this project's test machine it followed round
+    trips made up to about 120 ms longer, and while they were 200 ms longer or more it took
+    no new measurement at all - the details then say for how long the round trip has not
+    been measured while data goes out. Put a
+    connection on the list from the row menu of **Sockets** or of the Connections page
+    (**"Show TCP health"**), up to 20 at a time. A connection stays on the list after it
+    ends, with its last numbers, until you press **Stop watching**. The numbers are read
+    once a second while the tool is on screen, or all the time with **Keep reading when
+    hidden** ticked. Counters count from the moment watching began. Watching needs
+    administrator rights: Windows counts for a connection only when a program with those
+    rights asks it to, and keeps counting until the connection closes. Windows measures a
+    round trip when this computer's data is confirmed, in whole milliseconds, so a
+    connection that only receives has few measurements and one inside this computer
+    (127.0.0.1) shows 0 ms. **"Copy report"** copies every watched connection in English.
   - **Port check** - can your program use a port? Type one port, a list or a range, the
     way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`, up to 1000 at a
     time), and press **Check** (or Enter). Each port is checked for TCP and UDP, on IPv4 and
@@ -250,7 +269,8 @@ monitor is gone it returns to the centre of the current screen.
     your target - right-click the proxy server to limit the impairments to its address.
     A proxy given as a name is not looked up, and passwords in an address are hidden.
     **"Copy report"** copies every adapter and the proxy settings in English - the text
-    contains this computer's addresses and MAC addresses.
+    contains this computer's addresses and MAC addresses. Right-click an adapter in the
+    list to copy only that one, in the same words.
   - **Diagnostics** - why START will not work, without a console. It runs the same checks
     as `--doctor` (administrator rights, the WinDivert driver, leftovers in the temp
     folder...) and marks each one OK, Warning or Problem. **"Clean up the driver"** unloads
@@ -1483,8 +1503,12 @@ beantester/              the implementation package
   adapters.py            network adapters and the route out (iphlpapi/ctypes), for the Tools tab
   proxy.py               the proxy this account and this machine use (winhttp/ctypes and the
                          registry), read only, for the Tools tab
+  tcpestats.py           what Windows' TCP stack measures for one connection (EStats,
+                         iphlpapi/ctypes), for the Tools tab's TCP health
   tcpreset.py            reset one TCP connection (iphlpapi/ctypes), for the Connections
                          page's row menu
+  tcprow.py              one TCP connection the way Windows names it: the row layouts and
+                         finding it in the socket table, without calling Windows
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)

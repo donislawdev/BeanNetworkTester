@@ -31,15 +31,14 @@ has closed since the row was drawn. More than one: the same port on two local
 addresses - nothing is guessed.
 
 ``tests/test_no_telemetry.py`` lists ``SetTcpEntry`` among the functions that put
-something on the wire, with this module as the one place allowed to call it.
+something on the wire, with this module as the one place allowed to call it. The row
+layout and the search in the socket table are ``tcprow``'s, shared with "TCP health".
 """
 import ctypes
-import ipaddress
-import struct
 import sys
 from typing import NamedTuple
 
-from . import crashlog, portmap, winenv
+from . import crashlog, portmap, tcprow, winenv
 
 MIB_TCP_STATE_DELETE_TCB = 12
 # portmap.socket_rows' name for the one table a reset reads (its ``failed`` list).
@@ -56,13 +55,6 @@ NOT_IPV4 = "not_ipv4"           # IPv6, or not an address at all
 FAILED = "failed"               # anything else; ``detail`` is the program's own words
 
 
-class Target(NamedTuple):
-    """The connection as a Connections row names it."""
-    local_port: int
-    remote_ip: str
-    remote_port: int
-
-
 class Outcome(NamedTuple):
     kind: str
     state: str = ""             # the TCP state the table showed (REFUSED, NEEDS_ADMIN)
@@ -70,36 +62,20 @@ class Outcome(NamedTuple):
     detail: str = ""            # FAILED: the exception, program text
 
 
-class _TcpRow(ctypes.Structure):
-    """``MIB_TCPROW`` (Learn): five DWORDs, addresses and ports in network byte order."""
-    _fields_ = [("dwState", ctypes.c_uint32), ("dwLocalAddr", ctypes.c_uint32),
-                ("dwLocalPort", ctypes.c_uint32), ("dwRemoteAddr", ctypes.c_uint32),
-                ("dwRemotePort", ctypes.c_uint32)]
-
-
-def _dword(raw):
-    """Four bytes, as they must lie in memory, as the DWORD ctypes stores. Windows
-    is little-endian on every processor it runs on."""
-    return struct.unpack("<I", raw)[0]
+Target = tcprow.Target          # what the Connections page builds from a row
+_TcpRow = tcprow.TcpRow
 
 
 def row_for(local_ip, target):
     """The ``MIB_TCPROW`` that deletes ``target``'s TCB on ``local_ip``."""
-    return _TcpRow(MIB_TCP_STATE_DELETE_TCB,
-                   _dword(ipaddress.IPv4Address(local_ip).packed),
-                   _dword(struct.pack(">HH", target.local_port, 0)),
-                   _dword(ipaddress.IPv4Address(target.remote_ip).packed),
-                   _dword(struct.pack(">HH", target.remote_port, 0)))
+    return tcprow.row_for(tcprow.Connection(local_ip, *target), MIB_TCP_STATE_DELETE_TCB)
 
 
 def resettable(proto, remote_ip):
     """A Connections row Windows can reset: TCP over IPv4 (there is no IPv6 form)."""
     if proto != "TCP":
         return False
-    try:
-        return ipaddress.ip_address(str(remote_ip)).version == 4
-    except ValueError:
-        return False
+    return tcprow.family(remote_ip) == 4
 
 
 # -- the binding --------------------------------------------------------------------- #
@@ -130,14 +106,6 @@ class _System:
         return int(self.iphlpapi.SetTcpEntry(ctypes.byref(row)))
 
 
-def _matching(rows, target):
-    """The table's TCP rows for ``target``. An IPv4 ``remote_ip`` is the family check:
-    the IPv6 table spells every address its own way."""
-    return [row for row in rows
-            if row.proto == "TCP" and row.local_port == target.local_port
-            and row.remote_ip == target.remote_ip and row.remote_port == target.remote_port]
-
-
 def _reset(target, system):
     if not resettable("TCP", target.remote_ip):
         return Outcome(NOT_IPV4)
@@ -149,7 +117,7 @@ def _reset(target, system):
         # The one table this needs did not answer while others did: a missing row
         # says nothing about the connection, and "already closed" would be a guess.
         return Outcome(UNREADABLE)
-    found = _matching(rows, target)
+    found = tcprow.matching(rows, target)
     if not found:
         return Outcome(GONE)
     if len(found) > 1:

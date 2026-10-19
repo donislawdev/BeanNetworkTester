@@ -32,12 +32,11 @@ from ...i18n import T
 from ...nettools import adapters, proxy
 from .. import dialogs
 from ..clipboard import copy_confirmed
-from ..field_actions import fill_field
-from ..theme import ADAPTER_COLORS, CHARS, ROWS, set_menu_entry_available, space, style_menu
+from ..theme import ADAPTER_COLORS, CHARS, ROWS, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Poller, StatusLine, job, remembered
-from ... import crashlog
+from .details import DetailsMenu, popup, render_detail, say
 
 AREA = "gui.toolbox.adapters"
 
@@ -56,15 +55,8 @@ DETAIL_MIN_CHARS = {"item": CHARS["item"], "value": CHARS["address"], "note": CH
 
 READ = "read"
 
-# Entries of the details menu, by position: "Copy value" and "Limit to this address".
-COPY_VALUE, LIMIT = 0, 1
-
-
-def say(part):
-    """A cell's text: ``Words`` in the window's language, anything else as it is."""
-    if isinstance(part, adapters.Words):
-        return T(part.key, code=part.code)
-    return "" if part is None else str(part)
+# The list's menu: "Copy all of this adapter's details" (the owner's request, 2026-10-19).
+COPY_ADAPTER = 0
 
 
 class Read(NamedTuple):
@@ -100,10 +92,6 @@ def render(adapter):
 
 def adapter_tag(adapter):
     return "" if adapter.up else "down"
-
-
-def render_detail(detail):
-    return (say(detail.item), say(detail.value), ", ".join(say(w) for w in detail.note))
 
 
 class AdaptersPanel:
@@ -182,10 +170,12 @@ class AdaptersPanel:
         return button
 
     def _build_menu(self):
-        self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
-        self.menu.add_command(label=T("menu.copy_value"), command=self._copy_value)
-        self.menu.add_command(label=T("tools.adapters.limit"), command=self._limit)
-        self.details.bind_row_menu(self._show_menu)
+        self.details_menu = DetailsMenu(self.app, self.frame, self.details,
+                                        "tools.adapters.log_limited", AREA)
+        self.list_menu = style_menu(tk.Menu(self.frame, tearoff=0))
+        self.list_menu.add_command(label=T("tools.adapters.copy_adapter"),
+                                   command=self._copy_adapter)
+        self.table.bind_row_menu(self._show_list_menu)
 
     # -- the page calls ------------------------------------------------------ #
     def refresh(self):
@@ -319,34 +309,26 @@ class AdaptersPanel:
         has_rows = self.job.value.get(READ) is not None
         self.copy_btn.state(["!disabled"] if has_rows else ["disabled"])
 
-    # -- the menu on a details row --------------------------------------------- #
-    def _selected_detail(self):
-        keys = self.details.selected_keys()
-        return self.details.item_for_key(keys[0]) if keys else None
+    # -- the list's menu (the details' is ``DetailsMenu``) --------------------- #
+    def _show_list_menu(self, x_root, y_root):
+        """The right click selected the row under the pointer, but the table does not
+        report its own writes as a choice - so the choice is taken here, and the
+        details below show the adapter the menu copies."""
+        keys = self.table.selected_keys()
+        if keys and keys[0] != self.memory.get("adapter"):
+            self._on_select()
+        popup(self.list_menu, {COPY_ADAPTER: self._chosen() is not None}, x_root, y_root,
+              AREA)
 
-    def _show_menu(self, x_root, y_root):
-        detail = self._selected_detail()
-        allowed = {COPY_VALUE: bool(detail and say(detail.value)),
-                   LIMIT: bool(detail and detail.address)}
-        for index, available in allowed.items():
-            with crashlog.quiet(AREA):
-                set_menu_entry_available(self.menu, index, available)
-        try:
-            self.menu.tk_popup(x_root, y_root)
-        finally:
-            with crashlog.quiet(AREA):
-                self.menu.grab_release()
-
-    def _copy_value(self):
-        detail = self._selected_detail()
-        text = say(detail.value) if detail else ""
-        if text:
-            copy_confirmed(self.app, text, text, AREA)
-
-    def _limit(self):
-        """The gateway's, DNS server's or proxy's address into the Control page's
-        destination field - the address only: the port the person set there stays
-        (the owner's decision, 2026-10-13; ``set_destination`` would have emptied it)."""
-        detail = self._selected_detail()
-        if detail and detail.address:
-            fill_field(self.app, "dst_ip", detail.address, "tools.adapters.log_limited")
+    def _copy_adapter(self):
+        """Everything about the chosen row in the report's words (the owner's choice,
+        2026-10-19): the adapter's lines under the time they were read, or the proxy's."""
+        known, chosen = self.job.value.get(READ), self._chosen()
+        if known is None or chosen is None:
+            return
+        if isinstance(chosen, ProxyEntry):
+            text, name = proxy.report(chosen.reading), T("tools.adapters.proxy.row")
+        else:
+            text = adapters.adapter_report(chosen, known.adapters.read_at)
+            name = chosen.row.name
+        copy_confirmed(self.app, text, T("tools.adapters.adapter_logged", name=name), AREA)

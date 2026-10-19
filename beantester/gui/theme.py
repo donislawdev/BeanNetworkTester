@@ -101,6 +101,13 @@ ADAPTER_COLORS = {
     "duplicate": {"foreground": WARN},
 }
 
+# TCP health's details. A round trip Windows has not measured for a while although
+# data went out is the caution colour - the number is old, not wrong - and its note
+# says for how long in words (WCAG 1.4.1).
+HEALTH_COLORS = {
+    "stale": {"foreground": CAUTION},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators
@@ -176,7 +183,8 @@ SPACE = {
 # cut in the list and shown whole in the details below it); `if_status` and
 # `if_kind` the longest status and type word in the three languages; `internet`
 # fits "IPv4, IPv6"; `item` the longest row name of the details table; `note` an
-# address's origin and its duplicate-address warning side by side.
+# address's origin and its duplicate-address warning side by side. TCP health:
+# `rtt` fits "1234 ms", `resent` the column's header in the three languages.
 CHARS = {
     "help_button": 2,
     "value": 26,
@@ -196,6 +204,8 @@ CHARS = {
     "internet": 10,
     "item": 20,
     "note": 24,
+    "rtt": 7,
+    "resent": 10,
 }
 
 # How many rows a table shows before it scrolls: the connection table's 18. The
@@ -203,17 +213,36 @@ CHARS = {
 # opens is 678 px tall: the list of adapters above keeps 4 rows (it scrolls - 7 on
 # the development machine) so the chosen adapter's details below, which take
 # whatever height is left, show about five at that size (rendered 2026-10-13; 6
-# rows above left the details 2).
+# rows above left the details 2). TCP health's list of watched connections keeps 3:
+# its details share the height with nothing but sit beside the RTT chart.
 ROWS = {
     "table": 18,
     "adapters": 4,
     "details": 8,
+    "watched": 3,
+}
+
+# Sizes that are neither a gap nor a run of characters, in design pixels at 100 %.
+# `side_chart`: the TCP health RTT chart beside its details table - room for the
+# axis numbers, "-60 s" and "now", while the details keep three readable columns in
+# the 760 px window a 1366x768 screen opens (rendered 2026-10-19 in en/pl/zh: about
+# six detail rows, nothing cut but the table's own sideways scroll). Stacked under
+# the details instead, the chart left them ONE pixel. `chart`: the least height of
+# a chart's canvas.
+SIZE = {
+    "side_chart": 230,
+    "chart": 110,
 }
 
 
 def space(role):
     """Pixels for a spacing ROLE at the current DPI (``SPACE`` above)."""
     return scaled(SPACE[role])
+
+
+def size(role):
+    """Pixels for a SIZE role at the current DPI."""
+    return scaled(SIZE[role])
 
 
 def _style_surfaces(s):
@@ -230,6 +259,10 @@ def _style_surfaces(s):
     s.configure("Status.Warn.TLabel", background=BG, foreground=CAUTION,
                 font=(FONT, 10, "bold"))
     s.configure("Muted.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
+    # A chart legend's colour swatches (the TCP health RTT chart): the colour of the
+    # line each one names.
+    s.configure("Swatch.Down.TLabel", background=DOWN_C)
+    s.configure("Swatch.Up.TLabel", background=UP_C)
     s.configure("Author.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
     s.configure("Stat.TLabel", background=BG2, foreground=FG, font=(FONT, 11, "bold"))
     s.configure("StatCap.TLabel", background=BG2, foreground=MUT, font=(FONT, 9))

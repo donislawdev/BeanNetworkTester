@@ -24,6 +24,7 @@ from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
 from .portcheck import PortCheckPanel
 from .sockets import SocketsPanel
+from .tcphealth import TcpHealthPanel
 
 
 class Tool(NamedTuple):
@@ -34,9 +35,11 @@ class Tool(NamedTuple):
 
 # The owner's order (2026-09-23), most useful to someone testing an application
 # first: sockets, is-this-port-free, expression tester, adapters, diagnostics.
-# Each tool takes its final place the day it lands.
+# Each tool takes its final place the day it lands: TCP health right after the
+# sockets, whose row menu puts a connection on its list (the owner, 2026-10-19).
 TOOLS = (
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel),
+    Tool(TcpHealthPanel.ID, TcpHealthPanel.LABEL, TcpHealthPanel),
     Tool(PortCheckPanel.ID, PortCheckPanel.LABEL, PortCheckPanel),
     Tool(ExprTestPanel.ID, ExprTestPanel.LABEL, ExprTestPanel),
     Tool(AdaptersPanel.ID, AdaptersPanel.LABEL, AdaptersPanel),

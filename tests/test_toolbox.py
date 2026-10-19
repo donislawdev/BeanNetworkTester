@@ -866,6 +866,201 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
     """))
 
 
+# -- TCP health ---------------------------------------------------------------------- #
+# The socket table above, and Windows' EStats stood in for at ``tcpestats.watch`` and
+# ``tcpestats.read`` - what those answer is test_tcpestats.py's. ``ANSWER[0]`` is what
+# every reading says; ``admin`` what the process's token says.
+TCPH = SOCK + """
+from beantester import driver, tcpestats
+from beantester.nettools import tcphealth as th
+from beantester.tcprow import Connection
+from beantester.gui.toolbox.tcphealth import render as health_cells
+
+SAMPLE = tcpestats.Sample(214, 231, 18, 402, 31, 342, 12, 16488, 1, 9, 27, 1460, 2400, 18100)
+ANSWER = [tcpestats.Reading(tcpestats.OK, SAMPLE)]
+LINKED = Connection("fe80::1%12", 50001, "fe80::5%12", 443)
+admin = [True]
+watched, readings = [], []
+
+def est_watch(connection, system=None):
+    watched.append(connection)
+    return ANSWER[0]
+
+def est_read(connection, system=None):
+    readings.append(connection)
+    return ANSWER[0]
+
+tcpestats.supported = lambda: True
+tcpestats.watch = est_watch
+tcpestats.read = est_read
+driver.is_admin = lambda: admin[0]
+
+def health():
+    return app.pages["tools"].panels["tcphealth"]
+
+def watch_linked():
+    sockets_panel = open_sockets()
+    settle(sockets_panel)
+    select_port(sockets_panel, 50001)
+    sockets_panel._health()
+    panel = health()
+    settle(panel)
+    return panel
+"""
+
+
+def test_show_tcp_health_from_the_socket_table_watches_that_connection():
+    """The owner's choice (2026-10-19): a connection comes from a row menu, here the
+    socket table's. Only a TCP row with a connection behind it is offered."""
+    run_gui(TCPH + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.sockets import HEALTH
+        sockets_panel = open_sockets()
+        settle(sockets_panel)
+        for port, offered in ((8080, False), (13882, False), (5353, False), (50001, True)):
+            select_port(sockets_panel, port)
+            sockets_panel._show_menu(0, 0)
+            want = MENU_ENTRY_LIVE if offered else MENU_ENTRY_INERT
+            assert sockets_panel.menu.entry_states[HEALTH] == want, (port, want)
+        panel = watch_linked()
+        assert app.pages["tools"].current() == "tcphealth", "the tool is put on screen"
+        assert watched == [LINKED], ("counting turned on for that one", watched)
+        cells = health_cells(panel.table.items[0])
+        assert cells == ("chrome.exe", "[fe80::1%12]:50001", "[fe80::5%12]:443",
+                         T("tools.tcphealth.state.open"), "214 ms", "0"), cells
+        assert panel.table.selected_keys() == [th.key_of(LINKED)], "and chosen"
+        rows = {d.key: d for d in panel.details.items}
+        assert rows["srtt"].value == "214 ms" and rows["mss"].value == "1460 B", rows["srtt"]
+        at = time.strftime("%H:%M:%S", time.localtime(panel.job.last["cycle"].finished))
+        assert panel.status.label.cget("text") == T("tools.tcphealth.status", time=at)
+        assert panel.admin_note is None, "an elevated window has nothing to explain"
+    """))
+
+
+def test_the_numbers_are_read_while_on_screen_or_in_the_background_and_never_after_the_end():
+    """The owner's answer (2026-10-19): read while the tool is on screen by default,
+    and also in the background when the box is ticked. An ended connection keeps its
+    last numbers and is not asked about again - and the timer stops with it."""
+    run_gui(TCPH + textwrap.dedent("""
+        panel = watch_linked()
+        assert readings == [], "the first run only turned counting on (and read once)"
+        panel._tick()
+        settle(panel)
+        assert readings == [LINKED], "on screen: read"
+        app.select_page("control")
+        panel._tick()
+        settle(panel)
+        assert readings == [LINKED], "another page on screen: not read"
+        panel.background.set(True)
+        panel._background_ticked()
+        assert panel.memory["background"] == "1"
+        panel._tick()
+        settle(panel)
+        assert len(readings) == 2, "asked to keep reading in the background"
+        ANSWER[0] = tcpestats.Reading(tcpestats.ENDED, code=1168)
+        panel._tick()
+        settle(panel)
+        cells = health_cells(panel.table.items[0])
+        assert cells[3] == T("tools.tcphealth.state.ended") and cells[4] == "214 ms", cells
+        panel._tick()
+        settle(panel)
+        assert len(readings) == 3, "an ended connection is read no more"
+        assert panel._timer is None, "and nothing is left to time"
+    """))
+
+
+def test_show_tcp_health_from_the_connections_page_looks_the_local_address_up():
+    """A Connections row names no local address: it is looked up in the socket table
+    on the tool's worker. Closed since the row was drawn: said in the log."""
+    run_gui(TCPH + textwrap.dedent("""
+        from beantester import portmap
+        from beantester.gui.pages import conns
+        table = [[SocketRow("TCP", 4, "192.0.2.10", 51000, "198.51.100.7", 443,
+                            "ESTABLISHED", 7)]]
+        portmap.socket_rows = lambda: (table[0], [])
+        row = {"proc": "app.exe", "pid": 7, "proto": "TCP", "local_port": 51000,
+               "remote_ip": "198.51.100.7", "remote_port": 443}
+        assert conns.show_health(app, row) is True
+        panel = health()
+        settle(panel)
+        found = Connection("192.0.2.10", 51000, "198.51.100.7", 443)
+        assert [w.connection for w in panel.table.items] == [found]
+        assert panel.table.selected_keys() == [th.key_of(found)], "the new one is chosen"
+        table[0] = []
+        conns.show_health(app, dict(row, local_port=51001))
+        settle(panel)
+        app._logview.drain()
+        gone = T("tools.tcphealth.log_gone", address="198.51.100.7:443")
+        assert any(gone in line for line in app._log_lines), app._log_lines[-3:]
+        assert len(panel.table.items) == 1, "and nothing was added"
+        assert conns.show_health(app, {"proto": "TCP"}) is False, "a row with no ports"
+    """))
+
+
+def test_connections_asked_in_quick_succession_all_reach_the_list():
+    """A worker run waiting behind another is REPLACED by a newer one (ToolJob): asked
+    while a run is out, a second run would wait and a third replace it - the second
+    request lost. So requests wait on the list and go out together when the run
+    that is out answers."""
+    run_gui(TCPH + textwrap.dedent("""
+        hold = threading.Event()
+        def slow_watch(connection, system=None):
+            hold.wait(5)
+            return est_watch(connection)
+        tcpestats.watch = slow_watch
+        sockets_panel = open_sockets()
+        settle(sockets_panel)
+        select_port(sockets_panel, 50001)
+        sockets_panel._health()
+        panel = health()
+        assert panel.job.busy()
+        others = [Connection("192.0.2.10", port, "198.51.100.7", 2) for port in (1, 2)]
+        for other in others:
+            panel.ask(th.Request("b.exe", 9, connection=other))
+        hold.set()
+        settle(panel)
+        assert sorted(watched) == sorted([LINKED, *others]), watched
+        assert len(panel.table.items) == 3, [w.key for w in panel.table.items]
+    """))
+
+
+def test_without_administrator_rights_the_tool_says_why_and_the_list_outlives_a_rebuild():
+    run_gui(TCPH + textwrap.dedent("""
+        admin[0] = False
+        ANSWER[0] = tcpestats.Reading(tcpestats.NEEDS_ADMIN, code=5)
+        panel = watch_linked()
+        assert panel.admin_note is not None
+        assert panel.admin_note.cget("text") == T("tools.tcphealth.needs_admin")
+        cells = health_cells(panel.table.items[0])
+        assert cells[3] == T("tools.tcphealth.state.needs_admin") and cells[4] == "", cells
+        assert panel._timer is None, "refused: nothing to read again"
+        app._build_ui()
+        app.select_page("tools")
+        app.pages["tools"].select("tcphealth")
+        again = health()
+        assert again is not panel
+        assert [w.key for w in again.table.items] == [th.key_of(LINKED)], "the list stays"
+        again.stop()
+        assert again.table.items == [], "taken off the list"
+        assert "disabled" in again.copy_btn.state() and "disabled" in again.stop_btn.state()
+    """))
+
+
+def test_the_report_is_copied_and_the_far_end_goes_to_the_control_page():
+    run_gui(TCPH + textwrap.dedent("""
+        app.vars["dst_port"].set("443")
+        panel = watch_linked()
+        panel.copy_report()
+        assert root.clipboard_get() == th.report(panel.list), root.clipboard_get()
+        assert any(T("log.copied") in line and T("tools.tcphealth.report_logged") in line
+                   for line in app._log_lines), app._log_lines[-3:]
+        panel.details.select_keys(["remote"])
+        panel.details_menu.limit()
+        limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
+        assert limited == ("fe80::5", "443"), ("the address, without its zone", limited)
+    """))
+
+
 # -- the port check ------------------------------------------------------------------ #
 # The machine is stood in for: a bind that refuses TCP 9010 the way a Windows
 # reservation does (WSAEACCES), and a socket table with one server on 8080. The
@@ -1320,33 +1515,35 @@ def test_off_windows_the_tool_says_so_and_asks_nothing():
 def test_the_details_menu_copies_a_value_and_limits_to_a_gateway_keeping_the_port():
     run_gui(ADAPT + textwrap.dedent("""
         from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
-        from beantester.gui.toolbox.adapters import COPY_VALUE, LIMIT
+        from beantester.gui.toolbox.details import DetailsMenu
+        COPY_VALUE, LIMIT = DetailsMenu.COPY_VALUE, DetailsMenu.LIMIT
         app.vars["dst_port"].set("443")
         panel = open_adapters()
         settle(panel)
-        menu = panel.menu
+        details_menu = panel.details_menu
+        menu = details_menu.menu
         for key, can_limit in (("gateway|0", True), ("dns|0", True), ("dns|1", False),
                                ("name", False)):
             panel.details.select_keys([key])
-            panel._show_menu(0, 0)
+            details_menu.show(0, 0)
             assert menu.entry_states[COPY_VALUE] == MENU_ENTRY_LIVE, key
             want = MENU_ENTRY_LIVE if can_limit else MENU_ENTRY_INERT
             assert menu.entry_states[LIMIT] == want, (key, menu.entry_states[LIMIT])
 
         panel.details.select_keys(["dns|0"])
-        panel._limit()
+        details_menu.limit()
         assert app.vars["dst_ip"].get() == "fe80::53", "the address, without its zone"
         panel.details.select_keys(["gateway|0"])
-        panel._limit()
+        details_menu.limit()
         limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
         assert limited == ("192.168.1.1", "443"), ("the port stays", limited)
         assert any(T("tools.adapters.log_limited") in line for line in app._log_lines)
         panel.details.select_keys(["dns|1"])
-        panel._limit()
+        details_menu.limit()
         assert app.vars["dst_ip"].get() == "192.168.1.1", "a placeholder is not offered"
 
         panel.details.select_keys(["name"])
-        panel._copy_value()
+        details_menu.copy_value()
         assert root.clipboard_get() == "Eth", root.clipboard_get()
     """))
 
@@ -1364,13 +1561,48 @@ def test_the_adapters_report_is_copied_whole():
     """))
 
 
+def test_the_list_menu_copies_the_one_adapter_the_right_click_chose():
+    """The owner's request (2026-10-19): everything about ONE adapter, in the report's
+    words. A right click selects through the table's own write, which does not tell
+    ``on_select`` - so the menu takes the choice itself, and the details below show
+    the adapter that is copied."""
+    run_gui(ADAPT + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.adapters import COPY_ADAPTER
+        PROXY[0] = SET_PROXY
+        panel = open_adapters()
+        settle(panel)
+        assert panel.table.selected_keys() == ["eth"]
+        panel.table.select_keys(["wifi"])       # what a right click on "wifi" does
+        panel._show_list_menu(0, 0)
+        assert panel.list_menu.entry_states[COPY_ADAPTER] == MENU_ENTRY_LIVE
+        assert details(panel)["name"].value == "Wifi", "the details follow the right click"
+        panel._copy_adapter()
+        known = panel.job.value["read"]
+        wifi = next(a for a in known.adapters.adapters if a.key == "wifi")
+        text = root.clipboard_get()
+        assert text == ad.adapter_report(wifi, known.adapters.read_at), text
+        assert text.split(chr(10))[1] == "Wifi", "that adapter, not the one chosen before"
+        logged = T("tools.adapters.adapter_logged", name="Wifi")
+        assert any(T("log.copied") in line and logged in line for line in app._log_lines)
+
+        panel.table.select_keys(["proxy"])
+        panel._show_list_menu(0, 0)
+        panel._copy_adapter()
+        assert root.clipboard_get() == px.report(known.proxy), root.clipboard_get()
+        assert "secret" not in root.clipboard_get(), "a password is not copied either"
+    """))
+
+
 def test_the_proxy_row_comes_first_and_offers_its_address_like_a_gateway():
     """T-13 (the owner's choice of the rendered layouts, 2026-10-14): the proxy is the
     first row whatever the sort, its details reuse the table and the row menu, a
     password never reaches the screen, and a server given as a name is not offered."""
     run_gui(ADAPT + textwrap.dedent("""
         from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
-        from beantester.gui.toolbox.adapters import COLUMNS, LIMIT, render
+        from beantester.gui.toolbox.adapters import COLUMNS, render
+        from beantester.gui.toolbox.details import DetailsMenu, render_detail
+        LIMIT = DetailsMenu.LIMIT
         PROXY[0] = SET_PROXY
         app.vars["dst_port"].set("443")
         panel = open_adapters()
@@ -1384,16 +1616,16 @@ def test_the_proxy_row_comes_first_and_offers_its_address_like_a_gateway():
         assert list(rows) == ["detect", "script", "server|0", "server|1", "bypass",
                               "winhttp|0", "env|HTTP_PROXY"], list(rows)
         assert rows["env|HTTP_PROXY"].value == "http://***@192.0.2.40:8080", rows["env|HTTP_PROXY"]
-        from beantester.gui.toolbox.adapters import render_detail
         assert not any("secret" in cell for d in panel.details.items for cell in render_detail(d))
+        menu = panel.details_menu
         for key, can_limit in (("server|0", True), ("server|1", False), ("winhttp|0", True),
                                ("env|HTTP_PROXY", True), ("detect", False)):
             panel.details.select_keys([key])
-            panel._show_menu(0, 0)
+            menu.show(0, 0)
             want = MENU_ENTRY_LIVE if can_limit else MENU_ENTRY_INERT
-            assert panel.menu.entry_states[LIMIT] == want, (key, panel.menu.entry_states[LIMIT])
+            assert menu.menu.entry_states[LIMIT] == want, (key, menu.menu.entry_states[LIMIT])
         panel.details.select_keys(["server|0"])
-        panel._limit()
+        menu.limit()
         limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
         assert limited == ("192.0.2.10", "443"), ("the proxy's address, the port stays", limited)
         panel.read()

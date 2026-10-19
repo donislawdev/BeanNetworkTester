@@ -306,10 +306,13 @@ def adapter_lines(adapter):
     return lines
 
 
+def _read_at(read_at):
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(read_at))
+
+
 def report_lines(snapshot):
     """Every adapter, as the Copy button and the optional diagnostics section write it."""
-    at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(snapshot.read_at))
-    lines = [f"network adapters: {len(snapshot.adapters)}, read {at}"]
+    lines = [f"network adapters: {len(snapshot.adapters)}, read {_read_at(snapshot.read_at)}"]
     for adapter in snapshot.adapters:
         lines += adapter_lines(adapter)
     return lines
@@ -317,3 +320,10 @@ def report_lines(snapshot):
 
 def report(snapshot):
     return "\n".join(report_lines(snapshot))
+
+
+def adapter_report(adapter, read_at):
+    """ONE adapter, as its row menu copies it: the report's own lines for it, under
+    the time they were read - the same words as the whole report, so a pasted part
+    reads like the whole."""
+    return "\n".join([f"network adapter, read {_read_at(read_at)}", *adapter_lines(adapter)])
