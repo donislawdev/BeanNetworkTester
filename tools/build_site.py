@@ -775,16 +775,18 @@ def _relative_url(from_dir, to_dir):
     return rel if rel.endswith("/") else rel + "/"
 
 
-def page_links(pages, current, code, css_class, skip_home=False, root_prefix=None):
-    """Links to the site's other pages, as HTML.
+def page_links(pages, current, code, css_class, root_prefix=None):
+    """Links to the site's other pages, as HTML - the footer's list, and only there.
 
     Generated from the page registry for the same reason the language row is: a
     hand-written list is a list that forgets the page added after it. This is also
     what keeps a page from becoming an orphan - a page nothing links to is a page a
     crawler reaches only through the sitemap, and a reader never.
 
-    ``skip_home`` is for the landing page's own list of guides, where a link back to
-    the page you are standing on is noise.
+    The list is not repeated inside a page's text. Every guide used to end with it,
+    so each page carried the same links as content; the sister sites built the same
+    way keep it in the footer and are indexed, and this one was not (2026-10-19).
+    ``tests/test_site.py::test_the_list_of_every_page_stays_out_of_the_page_text``.
 
     ``root_prefix`` exists for the error document, and it is not a detail: 404.html is
     served AT the address that missed, so a relative link from it resolves against a
@@ -797,8 +799,6 @@ def page_links(pages, current, code, css_class, skip_home=False, root_prefix=Non
     items = []
     for page in pages:
         if page["output"] or page["id"] == current["id"]:
-            continue
-        if skip_home and page["id"] == "home":
             continue
         entry = page["languages"][code]
         if root_prefix is not None:
@@ -1083,9 +1083,6 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.nav_links": page_links(pages, page, code, "foot-nav",
                                      root_prefix=_root_prefix(registry) if page["output"]
                                      else None),
-        "page.guide_links": page_links(pages, page, code, "guides", skip_home=True,
-                                       root_prefix=_root_prefix(registry) if page["output"]
-                                       else None),
         "page.head_meta": head_meta(page, code, registry, texts, entry["description"], root,
                                     home),
     }, "page %s [%s]" % (page["id"], code))

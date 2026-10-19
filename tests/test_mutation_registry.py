@@ -1661,6 +1661,16 @@ MUTATIONS = [
         "test": "test_every_flag_a_page_names_is_one_the_command_line_has",
     },
     {
+        # Every page carrying the same list of every other page as its own text: the
+        # sister sites keep that list in the footer and are indexed, and this one,
+        # with it in the text, was not.
+        "label": "site: the list of every page is back inside the page text",
+        "file": "site/templates/base.html",
+        "old": "<main id=\"main\">\n{{page.body}}\n</main>",
+        "new": "<main id=\"main\">\n{{page.body}}\n{{page.nav_links}}\n</main>",
+        "test": "test_the_list_of_every_page_stays_out_of_the_page_text",
+    },
+    {
         # The regression this feature could most easily cause: a search that
         # unfolds the page FOR GOOD. `toggle` runs the accordion's callback, which
         # persists the fold state through App.on_sections_changed; `set_open` does

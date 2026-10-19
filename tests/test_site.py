@@ -17,12 +17,14 @@ on the two failure modes that are invisible:
   the URLs out of one registry, and these check that it stayed that way.
 """
 import glob
+import html
 import os
 import posixpath
 import re
 import shutil
 import subprocess
 import sys
+import urllib.parse
 
 from fakes import ROOT, check
 
@@ -307,6 +309,44 @@ def test_no_page_is_an_orphan(tmp_path):
                 label = other["languages"][code]["link_text"]
                 check(f"{rel} links to {other['id']} ({label})",
                       f">{label}</a>" in text, "(missing from the footer list)")
+
+
+def test_the_list_of_every_page_stays_out_of_the_page_text(tmp_path):
+    """The list of every page is in the footer, once, and not inside ``<main>``.
+
+    Every guide used to end with a list of all the others inside its text, so each
+    page carried the same fifteen links as content. The two sister sites built the
+    same way keep that list in the footer only and are indexed; this one, measured
+    2026-10-19, was not. A page's text links to the pages it talks about. A list of
+    half the site or more is the site map, and the footer already has it.
+    """
+    out, written = _build(tmp_path)
+    registry = build_site.load_registry(ROOT)
+    pages = build_site.load_pages(ROOT, registry)
+    indexable = [p for p in pages if not p["output"]]
+
+    for code in build_site.language_codes(registry):
+        page_at = {}
+        for page in indexable:
+            dir_path = page["languages"][code]["dir_path"]
+            page_at[dir_path + "/" if dir_path else ""] = page["id"]
+        for page in indexable:
+            dir_path = page["languages"][code]["dir_path"]
+            rel = posixpath.join(dir_path, "index.html").lstrip("/")
+            main = re.search(r"<main\b[^>]*>(.*?)</main>",
+                             _read(os.path.join(out, rel.replace("/", os.sep))), re.S)
+            check(f"{rel} has its text in <main>", main is not None)
+            # Resolved against the page's own address: "../latency-and-jitter/" means
+            # nothing on its own (the orphan check once got this wrong).
+            base = "https://site.invalid/" + (dir_path + "/" if dir_path else "")
+            linked = set()
+            for href in re.findall(r'<a\b[^>]*\bhref="([^"]*)"', main.group(1)):
+                target = urllib.parse.urljoin(base, html.unescape(href))
+                path = urllib.parse.urlsplit(target).path.lstrip("/")
+                if page_at.get(path, page["id"]) != page["id"]:
+                    linked.add(page_at[path])
+            check(f"{rel} links to fewer than half the site from its text",
+                  len(linked) < len(indexable) // 2, f"({len(linked)}: {sorted(linked)})")
 
 
 def test_no_two_pages_claim_the_same_title_or_description(tmp_path):
