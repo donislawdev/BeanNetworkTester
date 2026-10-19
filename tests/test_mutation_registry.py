@@ -7548,9 +7548,9 @@ MUTATIONS = [
     },
     {
         "label": "tcpreset: a port goes to Windows in host byte order",
-        "file": "beantester/tcpreset.py",
-        "old": "                   _dword(struct.pack(\">HH\", target.local_port, 0)),\n",
-        "new": "                   _dword(struct.pack(\"<HH\", target.local_port, 0)),\n",
+        "file": "beantester/tcprow.py",
+        "old": "    return _dword(struct.pack(\">HH\", port, 0))\n",
+        "new": "    return _dword(struct.pack(\"<HH\", port, 0))\n",
         "test": "test_the_row_is_the_one_learn_describes",
     },
     {
@@ -7563,23 +7563,38 @@ MUTATIONS = [
     {
         "label": "tcpreset: an IPv6 row is offered a reset Windows cannot do",
         "file": "beantester/tcpreset.py",
-        "old": "        return ipaddress.ip_address(str(remote_ip)).version == 4\n",
-        "new": "        return ipaddress.ip_address(str(remote_ip)).version in (4, 6)\n",
+        "old": "    return tcprow.family(remote_ip) == 4\n",
+        "new": "    return tcprow.family(remote_ip) in (4, 6)\n",
         "test": "test_only_tcp_over_ipv4_is_offered",
     },
     {
         "label": "tcpreset: a UDP socket on the same ports is taken for the connection",
-        "file": "beantester/tcpreset.py",
+        "file": "beantester/tcprow.py",
         "old": "            if row.proto == \"TCP\" and row.local_port == target.local_port\n",
         "new": "            if row.local_port == target.local_port\n",
         "test": "test_the_one_matching_connection_is_reset_with_its_local_address",
     },
     {
         "label": "tcpreset: a connection on another remote port is taken for this one",
-        "file": "beantester/tcpreset.py",
-        "old": "            and row.remote_ip == target.remote_ip and row.remote_port == target.remote_port]\n",
-        "new": "            and row.remote_ip == target.remote_ip]\n",
+        "file": "beantester/tcprow.py",
+        "old": "            and _same(row.remote_ip, target.remote_ip) and row.remote_port == target.remote_port]\n",
+        "new": "            and _same(row.remote_ip, target.remote_ip)]\n",
         "test": "test_the_one_matching_connection_is_reset_with_its_local_address",
+    },
+    {
+        # The socket table writes IPv6 its own way; a Connections row may not.
+        "label": "tcprow: an IPv6 address is matched by its spelling",
+        "file": "beantester/tcprow.py",
+        "old": "        return _bare(a) == _bare(b)\n",
+        "new": "        return str(a) == str(b)\n",
+        "test": "test_a_connections_row_finds_its_socket_by_the_address_not_by_its_spelling",
+    },
+    {
+        "label": "tcprow: a link-local IPv6 row loses its zone",
+        "file": "beantester/tcprow.py",
+        "old": "    row.dwLocalScopeId, row.dwRemoteScopeId = _scope(local), _scope(remote)\n",
+        "new": "    row.dwLocalScopeId, row.dwRemoteScopeId = 0, 0\n",
+        "test": "test_a_zone_becomes_the_scope_id_as_the_socket_table_read_it",
     },
     {
         "label": "tcpreset: two matching connections are guessed between",

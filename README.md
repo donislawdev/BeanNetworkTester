@@ -1486,6 +1486,8 @@ beantester/              the implementation package
                          registry), read only, for the Tools tab
   tcpreset.py            reset one TCP connection (iphlpapi/ctypes), for the Connections
                          page's row menu
+  tcprow.py              one TCP connection the way Windows names it: the row layouts and
+                         finding it in the socket table, without calling Windows
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)
