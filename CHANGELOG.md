@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
+  name and press **Start**: each ping is a row with its round trip and what came back, the last
+  60 are charted, and the totals say what was lost. The ping goes on while another tab is in
+  front. A line says what the running session does to these pings. **Ping this address** in
+  the row menu of Sockets and Connections pings the far end. It sends echo requests only to
+  the address you type, from Start to Stop.
+
 - **TCP health on the Tools tab.** Shows what Windows measures for a TCP connection: the
   round-trip time and its chart, data sent again, timeouts and bytes. Windows stops measuring
   a connection whose round trip suddenly grows by 200 ms or more, and the tool says so: start
@@ -50,7 +57,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **A GitHub button opens the project's page.** It sits next to **Donate** in the window header
   and in the About window, and opens the project's page on GitHub in your browser: the source
   code, the releases and the place to report a bug. Like Donate, it opens a page only when you
-  click it. The program itself still sends nothing.
+  click it. The program itself sends nothing on its own.
+
+### Changed
+
+- **The privacy promise names the one tool that sends.** The program sends nothing on its own:
+  no telemetry, no update checks, no external services, and the traffic it captures never
+  leaves your computer. The About window, `--license`, the README and the third-party notices
+  now also say that the Ping tool sends echo requests to the address you type, from Start to
+  Stop, and that a name you type is looked up first, as for any program.
 
 ### Fixed
 

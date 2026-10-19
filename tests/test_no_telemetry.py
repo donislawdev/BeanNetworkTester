@@ -1,11 +1,15 @@
-"""Convention 36 says the shipped program reaches no network, and nothing checked it.
+"""Convention 36 says the shipped program sends nothing on its own, and nothing checked it.
 
-Four places SAY it - `THIRD-PARTY-NOTICES.md`, both READMEs, `--license` and the
-About window - and two tests guard those sentences (`test_license_surface.py`,
-`test_windows.py`). Every one of them checks that we CLAIM it. This file is the
-first thing that looks at the code, which matters more here than usual: this tool
-intercepts the user's network traffic, so "it sends nothing anywhere" is the one
-promise where being wrong is not a bug but a betrayal.
+Several places SAY it - `THIRD-PARTY-NOTICES.md`, the READMEs, `SECURITY.md`,
+`--license` and the About window - and two tests guard those sentences
+(`test_license_surface.py`, `test_windows.py`). Every one of them checks that we
+CLAIM it. This file is the first thing that looks at the code, which matters more
+here than usual: this tool intercepts the user's network traffic, so "it sends
+nothing on its own" is the one promise where being wrong is not a bug but a
+betrayal. Since 2026-10-19 the promise names its one exception - the Tools tab's
+Ping, which sends echo requests to the address the person typed, from Start to
+Stop - and every way that tool sends is a named entry below (WIRE_ALLOWED,
+ALLOWED_CALLS, TOOLS_TAB_SENDING), so nothing else can send under its cover.
 
 Two layers, and neither contains the other
 ------------------------------------------
@@ -110,6 +114,8 @@ ALLOWED_IMPORTS = {
         "the machine's own services file, for port labels",
     ("beantester/nettools/portcheck.py", "socket"):
         "the port check: bind on a loopback address and close, nothing sent",
+    ("beantester/nettools/ping.py", "socket"):
+        "Ping's name lookup (getaddrinfo, below) and the address family constants",
     ("beantester/gui/links.py", "webbrowser"):
         "the page buttons (support page, GitHub page), opened on a click",
     ("beantester/winenv.py", "subprocess"):
@@ -147,6 +153,12 @@ ALLOWED_CALLS = {
         "to see whether the system hands the port out. No listen, no connect, no send - "
         "test_nettools_portcheck.py::test_a_port_check_only_creates_and_binds_sockets_"
         "on_loopback runs it under an audit hook",
+    ("beantester/nettools/ping.py", "socket", "getaddrinfo"):
+        "the Tools tab's Ping: a NAME the person typed, looked up once when they press "
+        "Start, by Windows' own resolver (the hosts file, its cache, then its DNS "
+        "servers) - the lookup any program makes for a name. A text that is not plainly "
+        "an address or a host name is refused before it (nettools/ping.py::parse), so "
+        "nothing else reaches the resolver",
     ("beantester/gui/links.py", "webbrowser", "open_new_tab"):
         "opens the support page or the project's GitHub page in the user's browser, "
         "only when they click its button (header or About window)",
@@ -236,9 +248,18 @@ WIRE_FUNCTIONS = {
 # break; the reset goes to the far end of that connection and nowhere else - the
 # same thing the engine's own RST impairment does on that page. The module is not
 # imported by the Tools tab, whose promise stays (test below).
+#
+# The ICMP echo pair (2026-10-19, the owner's decision for the Tools tab's Ping, with
+# the promise reworded to say so): an echo request to the address the person typed,
+# one at a time, from Start to Stop - what `ping.exe` sends. `icmp.py` is the one
+# module allowed to make it, and the Tools tab's promise names the tool (below).
 WIRE_ALLOWED = {
     ("beantester/tcpreset.py", "SetTcpEntry"):
         "resets the one connection the tester chose in the Connections row menu",
+    ("beantester/icmp.py", "IcmpSendEcho2"):
+        "Ping on the Tools tab: an IPv4 echo request to the typed address, Start to Stop",
+    ("beantester/icmp.py", "Icmp6SendEcho2"):
+        "the same request for an IPv6 address",
 }
 
 # A process is the other way out of a sandbox: `curl`, `powershell -c Invoke-
@@ -724,22 +745,46 @@ def test_the_only_connection_goes_to_the_documented_route_probe():
 
 
 # -- the Tools tab's own promise ------------------------------------------------ #
-# README ("The window", the Tools entry) says in as many words that nothing on that
-# tab sends anything over the network. Every tool it was planned to hold would be
-# easiest to write with a socket - a port check, a ping, a DNS query - and the
-# analysis of the tab split them into a basket that sends and one that does not.
-# The registries above would let such a tool in with ONE entry and a reason, and
-# the README sentence would go on saying the opposite: prose nothing checks.
+# README ("The window", the Tools entry) says in as many words which tools on that
+# tab send anything over the network - and so that the others do not. Every tool it
+# was planned to hold would be easiest to write with a socket - a port check, a
+# ping, a DNS query - and the analysis of the tab split them into a basket that
+# sends and one that does not. The registries above would let such a tool in with
+# ONE entry and a reason, and the README sentence would go on saying the opposite:
+# prose nothing checks.
 #
-# So the sentence stands only while no file of the tab holds a way out, found by
-# the same `findings` the rest of this file uses (one scanner, canary-tested at the
-# bottom). A tool that reaches for a socket either proves it sends nothing and is
-# listed below with how, or the sentence is reworded - and rewording it means
+# So the sentence stands only while every way out in the tab's files is either
+# proved quiet (TOOLS_TAB_QUIET_EXCEPTIONS, with how) or belongs to a tool the
+# sentence names (TOOLS_TAB_SENDING, with where it goes), found by the same
+# `findings` the rest of this file uses (one scanner, canary-tested at the bottom).
+# The sentence names the sending tools in bold, by their English tab names, and
+# the tools in TOOLS_TAB_SENDING are exactly those with `sends` in the tab's own
+# registry (`gui/toolbox/__init__.py`, which shows each one's sentence above it).
+# A tool that starts to send therefore changes FOUR things or goes red: its code,
+# this registry, its `sends` and the promise - and rewording the promise means
 # editing TOOLS_TAB_PROMISE, because the README must carry this exact sentence:
 # the promise cannot be edited away from its check by a README change alone.
+#
+# 2026-10-19, the owner's decision: Ping, the first tool that sends (basket B), and
+# the promise reworded with it - before it the sentence was "Nothing on this tab
+# sends anything over the network."
 TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
                    "beantester/gui/pages/toolbox.py")
-TOOLS_TAB_PROMISE = "Nothing on this tab sends anything over the network."
+TOOLS_TAB_PROMISE = ("Only **Ping** on this tab sends anything over the network: echo "
+                     "requests to the address you type, from Start to Stop.")
+
+# What the tools named in the promise send, keyed exactly as TOOLS_TAB_QUIET_EXCEPTIONS:
+# finding -> (the tool's id, where it goes). Exact in both directions.
+TOOLS_TAB_SENDING = {
+    ("beantester/icmp.py", "wire", "IcmpSendEcho2"):
+        ("ping", "an IPv4 echo request to the typed address, one at a time, Start to Stop"),
+    ("beantester/icmp.py", "wire", "Icmp6SendEcho2"):
+        ("ping", "the same request for an IPv6 address"),
+    ("beantester/nettools/ping.py", "socket"):
+        ("ping", "import for the name lookup below"),
+    ("beantester/nettools/ping.py", "socket", "getaddrinfo"):
+        ("ping", "a typed NAME, looked up once at Start by Windows' own resolver"),
+}
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
 # exactly as ALLOWED_IMPORTS / ALLOWED_CALLS are. Exact in both directions: an
@@ -783,14 +828,20 @@ TOOLS_TAB_QUIET_LIBRARIES = frozenset({
 })
 
 
+def _tab_key(rel, kind, detail):
+    """A finding's key in the tab's two registries (the package registries' keys)."""
+    return detail if kind in ("watched-import", "call") else (rel, kind, detail)
+
+
 def tools_tab_reach(source, rel):
-    """What in one Tools-tab file could put something on the network."""
+    """What in one Tools-tab file could put something on the network, beyond what
+    is proved quiet and what the promise says the sending tools send."""
     out = []
     for kind, detail, line in findings(source, rel):
         if kind == "library" and detail in TOOLS_TAB_QUIET_LIBRARIES:
             continue
-        key = detail if kind in ("watched-import", "call") else (rel, kind, detail)
-        if key not in TOOLS_TAB_QUIET_EXCEPTIONS:
+        key = _tab_key(rel, kind, detail)
+        if key not in TOOLS_TAB_QUIET_EXCEPTIONS and key not in TOOLS_TAB_SENDING:
             out.append((kind, detail, line))
     return out
 
@@ -819,10 +870,12 @@ def tools_tab_files():
     return own, [(rel, path) for rel, path in reached if rel not in own_rels]
 
 
-def test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can():
+def test_the_tools_tab_promise_holds_for_everything_its_code_can_send():
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    # Whitespace folded: the README wraps its lines, and a sentence across two of
+    # them is still the sentence.
     check("README carries the exact promise this test guards",
-          readme.count(TOOLS_TAB_PROMISE) == 1,
+          " ".join(readme.split()).count(TOOLS_TAB_PROMISE) == 1,
           "(reworded? change TOOLS_TAB_PROMISE with it - and decide what it now promises)")
     own, reached = tools_tab_files()
     check("the Tools tab's files were found", len(own) >= 5, f"({[r for r, _ in own]})")
@@ -836,17 +889,43 @@ def test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can():
         with open(path, encoding="utf-8") as handle:
             source = handle.read()
         for kind, detail, _line in findings(source, rel):
-            seen.add(detail if kind in ("watched-import", "call") else (rel, kind, detail))
+            seen.add(_tab_key(rel, kind, detail))
         found = tools_tab_reach(source, rel)
         if found:
             reach[rel] = found
-    check("nothing on the Tools tab can reach the network while README says so",
-          not reach, f"(prove each sends nothing and list it, or reword the promise: {reach})")
+    check("nothing on the Tools tab reaches the network beyond what README says",
+          not reach, f"(prove each sends nothing and list it, or name its tool in the "
+                     f"promise: {reach})")
     stale = sorted(str(k) for k in TOOLS_TAB_QUIET_EXCEPTIONS if k not in seen)
     check("every quiet exception still matches code", not stale, f"({stale})")
+    stale = sorted(str(k) for k in TOOLS_TAB_SENDING if k not in seen)
+    check("every sending entry still matches code the tab reaches", not stale, f"({stale})")
     check("the tab may load only libraries the package may load at all",
           TOOLS_TAB_QUIET_LIBRARIES <= ALLOWED_LIBRARIES,
           f"({sorted(TOOLS_TAB_QUIET_LIBRARIES - ALLOWED_LIBRARIES)})")
+
+
+def test_the_promise_names_exactly_the_tools_that_send():
+    """The bold names in the promise, the tools of TOOLS_TAB_SENDING and the tools with
+    ``sends`` in the tab's registry are one set - so a tool cannot start sending while
+    the README goes on naming only the others, nor be named after it stopped."""
+    import json
+    import re
+    from beantester.gui.toolbox import TOOLS
+    english = json.load(open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8"))
+    flagged = {tool.id for tool in TOOLS if tool.sends}
+    sending = {tool for tool, _where in TOOLS_TAB_SENDING.values()}
+    check("the tools whose code sends are the tools marked as sending",
+          sending == flagged, f"(code: {sorted(sending)}, registry: {sorted(flagged)})")
+    check("a tool sends at all, or this test proves nothing", flagged, "(none marked)")
+    named = sorted(re.findall(r"\*\*(.+?)\*\*", TOOLS_TAB_PROMISE))
+    labels = sorted(english[tool.label] for tool in TOOLS if tool.sends)
+    check("the promise names each sending tool by its tab name, and no other",
+          named == labels, f"(named {named}, sending {labels})")
+    for tool in TOOLS:
+        if tool.sends:
+            check(f"{tool.id} says above it what it sends",
+                  bool(english.get(f"tools.{tool.id}.sends")), "(tools.<id>.sends missing)")
 
 
 def test_the_tools_tab_check_sees_each_way_out():
@@ -869,6 +948,17 @@ def test_the_tools_tab_check_sees_each_way_out():
     request = "import ctypes\nctypes.WinDLL('winhttp.dll').WinHttpSendRequest\n"
     check("a request through the same library is", tools_tab_reach(request, rel) != [],
           f"({tools_tab_reach(request, rel)})")
+    # The sending entries name a PLACE: Ping's echo in its own module is what the
+    # promise says, the same echo anywhere else on the tab is a way out.
+    echo = "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\nlib.IcmpSendEcho2(h)\n"
+    check("Ping's echo in its own module is what the promise names",
+          tools_tab_reach(echo, "beantester/icmp.py") == [],
+          f"({tools_tab_reach(echo, 'beantester/icmp.py')})")
+    check("the same echo in another tool is still a way out",
+          tools_tab_reach(echo, "beantester/nettools/adapters.py") != [])
+    lookup = "import socket\nsocket.getaddrinfo('example.com', None)\n"
+    check("a name lookup outside Ping's module is a way out",
+          tools_tab_reach(lookup, "beantester/nettools/sockets.py") != [])
 
 
 # -- the canary: the guard has to be shown able to fail ---------------------- #

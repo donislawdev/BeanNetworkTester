@@ -60,7 +60,8 @@ dele fica sabendo que existe.
   eventos.
 - **Exporta para CSV** - estatísticas da sessão e um instantâneo da tabela de conexões.
 - **Modo de linha de comando** - automatizável em CI, com códigos de saída e saída em JSON.
-- **Sem telemetria, totalmente offline** - não envia dados para lugar nenhum.
+- **Sem telemetria, totalmente offline** - não envia nada por conta própria. A ferramenta Ping só
+  faz ping no endereço que você digita.
 
 <p align="center">
   <img src="docs/demo.gif" alt="O Bean Network Tester adicionando lag e perda de pacotes a um ping ao vivo" width="820">
@@ -220,7 +221,8 @@ para o centro da tela atual.
   linhas acabou - quantas mostrar é definido no campo **"Row limit"** (seção *Tables*, 0 = sem
   limite, padrão 50 000).
 - **Tools** - pequenos auxiliares para dúvidas que surgem antes ou durante um teste, uma subaba para
-  cada. Nada nesta aba envia coisa alguma pela rede. Hoje:
+  cada. Só o **Ping** envia algo pela rede nesta aba: solicitações de eco para o endereço que você
+  digita, de Start a Stop. Hoje:
   - **Sockets** - todos os sockets TCP e UDP deste computador, como o `netstat -ano`, e sem
     precisar de sessão: o que está escutando, o que está conectado, o estado (LISTEN,
     ESTABLISHED, TIME_WAIT...) e o programa dono. Use para ver em qual porta o seu aplicativo
@@ -1817,11 +1819,13 @@ direitos que decorrem delas.
 
 ## Privacidade: sem telemetria
 
-O Bean Network Tester **não envia dados para lugar nenhum**. Não tem telemetria, nem verificação de
-atualizações, nem qualquer tipo de cliente de rede. A ferramenta captura o tráfego de rede no seu
-computador - e esses dados **nunca saem dele**. A única conexão de saída que o programa pode fazer é
-abrir uma página no seu navegador - a página de apoio ou a página do projeto no GitHub - e somente
-quando você mesmo clica no botão correspondente.
+O Bean Network Tester **não envia nada por conta própria**. Não tem telemetria, nem verificação de
+atualizações, nem serviços externos. A ferramenta captura o tráfego de rede no seu computador - e
+esses dados **nunca saem dele**. Só duas coisas saem, e só quando você pede: uma página aberta no seu
+navegador - a página de apoio ou a página do projeto no GitHub - quando você mesmo clica no botão
+correspondente, e as solicitações de eco da ferramenta **Ping** da aba Tools, que vão só para o
+endereço que você digita, de Start a Stop. Se você digitar um nome em vez de um endereço, o Windows
+o consulta primeiro, como para qualquer programa.
 
 ## Uma observação sobre o SmartScreen e o antivírus
 

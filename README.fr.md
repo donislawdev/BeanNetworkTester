@@ -64,7 +64,8 @@ en a besoin apprendra qu'il existe.
   d'événements.
 - **Exporter en CSV** - les statistiques de la session et un instantané de la table des connexions.
 - **Mode ligne de commande** - scriptable pour la CI, avec des codes de sortie et une sortie JSON.
-- **Aucune télémétrie, entièrement hors ligne** - n'envoie aucune donnée nulle part.
+- **Aucune télémétrie, entièrement hors ligne** - n'envoie rien de lui-même. L'outil Ping ne pingue
+  que l'adresse que vous saisissez.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester ajoutant du lag et de la perte de paquets à un ping en direct" width="820">
@@ -231,7 +232,8 @@ revient au centre de l'écran actuel.
   L'ancienne limite stricte de 400 lignes a disparu - le nombre de lignes à afficher se règle avec
   le champ **"Row limit"** (section *Tables*, 0 = aucune limite, 50 000 par défaut).
 - **Tools** - de petits utilitaires pour les questions qu'on se pose avant ou pendant un test, un
-  sous-onglet chacun. Rien dans cet onglet n'envoie quoi que ce soit sur le réseau. Aujourd'hui :
+  sous-onglet chacun. Seul **Ping** envoie quelque chose sur le réseau dans cet onglet : des
+  requêtes d'écho à l'adresse que vous saisissez, de Start à Stop. Aujourd'hui :
   - **Sockets** - tous les sockets TCP et UDP de cet ordinateur, comme `netstat -ano`, sans qu'aucune
     session soit nécessaire : ce qui écoute, ce qui est connecté, son état (LISTEN,
     ESTABLISHED, TIME_WAIT...) et le programme qui le possède. Servez-vous-en pour voir sur quel
@@ -1888,11 +1890,13 @@ restreint les droits qui en découlent.
 
 ## Vie privée : aucune télémétrie
 
-Bean Network Tester **n'envoie aucune donnée nulle part**. Il n'a ni télémétrie, ni vérification de
-mise à jour, ni client réseau d'aucune sorte. L'outil capture le trafic réseau sur votre ordinateur -
-et ces données **ne le quittent jamais**. La seule connexion sortante que le programme puisse établir
-est l'ouverture d'une page dans votre navigateur - la page de soutien ou la page du projet sur GitHub
-- et uniquement quand vous cliquez vous-même sur le bouton correspondant.
+Bean Network Tester **n'envoie rien de lui-même**. Il n'a ni télémétrie, ni vérification de mise à
+jour, ni service externe. L'outil capture le trafic réseau sur votre ordinateur - et ces données
+**ne le quittent jamais**. Deux choses sortent, et seulement quand vous les demandez : une page
+ouverte dans votre navigateur - la page de soutien ou la page du projet sur GitHub - quand vous
+cliquez vous-même sur le bouton correspondant, et les requêtes d'écho de l'outil **Ping** de
+l'onglet Tools, qui ne vont qu'à l'adresse que vous saisissez, de Start à Stop. Si vous saisissez un
+nom au lieu d'une adresse, Windows le résout d'abord, comme pour n'importe quel programme.
 
 ## À propos de SmartScreen et des antivirus
 

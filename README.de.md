@@ -64,7 +64,8 @@ der es braucht, dass es existiert.
   Ereignisprotokoll.
 - **Export nach CSV** - Sitzungsstatistik und ein Schnappschuss der Verbindungstabelle.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
-- **Keine Telemetrie, vollständig offline** - sendet keine Daten irgendwohin.
+- **Keine Telemetrie, vollständig offline** - sendet nichts von sich aus. Das Werkzeug Ping pingt
+  nur die Adresse, die Sie eingeben.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">
@@ -228,7 +229,8 @@ zurück.
   Grenze von 400 Zeilen ist weg - wie viele angezeigt werden, legt das Feld **"Row limit"** fest
   (Bereich *Tables*, 0 = keine Grenze, Standard 50 000).
 - **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, je ein Untertab.
-  Nichts auf diesem Tab sendet etwas über das Netzwerk. Derzeit:
+  Nur **Ping** auf diesem Tab sendet etwas über das Netzwerk: Echo-Anfragen an die Adresse, die Sie
+  eingeben, von Start bis Stop. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
     keine Sitzung nötig: was lauscht, was verbunden ist, sein Zustand (LISTEN,
     ESTABLISHED, TIME_WAIT ...) und das Programm, dem er gehört. Damit sehen Sie, auf welchem Port
@@ -1894,12 +1896,13 @@ Projekts schränkt die Rechte ein, die sich aus ihnen ergeben.
 
 ## Datenschutz: keine Telemetrie
 
-Bean Network Tester **sendet keine Daten irgendwohin**. Es hat keine Telemetrie, keine
-Update-Prüfungen und keinen Netzwerkclient irgendeiner Art. Das Werkzeug erfasst Netzwerkverkehr auf
-Ihrem Computer - und diese Daten **verlassen ihn nie**. Die einzige ausgehende Verbindung, die das
-Programm herstellen kann, ist das Öffnen einer Seite in Ihrem Browser - der Unterstützungsseite oder
-der Seite des Projekts auf GitHub - und nur, wenn Sie selbst auf die entsprechende Schaltfläche
-klicken.
+Bean Network Tester **sendet nichts von sich aus**. Es hat keine Telemetrie, keine Update-Prüfungen
+und keine externen Dienste. Das Werkzeug erfasst Netzwerkverkehr auf Ihrem Computer - und diese
+Daten **verlassen ihn nie**. Zwei Dinge gehen nur hinaus, wenn Sie darum bitten: eine Seite, die in
+Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf GitHub -, wenn
+Sie selbst auf die entsprechende Schaltfläche klicken, und die Echo-Anfragen des Werkzeugs **Ping**
+auf dem Tab Tools, die nur an die Adresse gehen, die Sie eingeben, von Start bis Stop. Wenn Sie statt
+einer Adresse einen Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
 
 ## Ein Hinweis zu SmartScreen und Antivirenprogrammen
 

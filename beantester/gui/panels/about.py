@@ -8,9 +8,11 @@ This is not decoration. Two of the things it shows are obligations, not niceties
   the user never sees does not discharge that; a window in the program they are
   actually holding does. (``BeanNetworkTester.exe --license`` prints the same thing
   for people who prefer a shell, and for licence audits, which are usually scripts.)
-* **"Sends no data anywhere".** The tool captures the user's network traffic. The
+* **"Sends nothing on its own".** The tool captures the user's network traffic. The
   first question a security-minded tester or an IT department asks is where that
-  goes. The answer is "nowhere", and the answer belongs where they are looking.
+  goes. The answer is "nowhere" - the one thing it sends is the Ping tool's echo
+  requests, to the address the person typed - and the answer belongs where they are
+  looking.
 
 The page buttons (Donate, GitHub - ``gui/links.py``) are here as well as in the
 header - deliberately. Being in two places is not clutter for a voluntary ask that
