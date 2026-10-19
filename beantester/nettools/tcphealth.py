@@ -148,8 +148,9 @@ class Watch:
     def unmeasured_for(self):
         """Whole seconds since Windows last measured a round trip, when data went out
         after it and that is ``STALE_S`` or more; else 0. A connection that only
-        receives is not stale: Windows measures on THIS computer's data."""
-        if self.last is None or self.measured_at is None:
+        receives is not stale: Windows measures on THIS computer's data. Nor is one
+        no longer read (ended, stopped): its last numbers are final, not old."""
+        if self.state != tcpestats.OK or self.last is None or self.measured_at is None:
             return 0
         waited = round(self.read_at - self.measured_at)
         sent = self.last.bytes_out != self.sent_when_measured

@@ -40,8 +40,7 @@ and loopback reads 0 ms.
 
 🔴 MEASURED 2026-10-19 against a Linux peer (WSL) and a Windows Server 2025 peer over the
 LAN, through this program's own narrow sessions, the application timing its own echo
-and tcpdump on the peer as the controls (`sondy/2026-10-19-t5-estats/`,
-`sondy/2026-10-19-t5-verify/`):
+and a packet capture on the peer as the controls:
 
 * It does not measure every round trip. A connection that is OPEN when its round trip
   jumps past about 200 ms (plus twice what Windows measured before) is measured no

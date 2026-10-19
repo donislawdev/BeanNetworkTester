@@ -1072,6 +1072,9 @@ def test_a_round_trip_not_measured_colours_its_row_on_the_list():
         watch.last = watch.last._replace(bytes_out=watch.last.bytes_out + 200)
         panel._show()
         assert panel.table._tag_of(watch) == "stale", panel.table._tag_of(watch)
+        iid = next(iid for iid, key in zip(panel.table._slots, panel.table._slot_keys)
+                   if key == str(watch.key))
+        assert panel.table.tree.tags[iid] == ("stale",), ("drawn", panel.table.tree.tags[iid])
     """))
 
 

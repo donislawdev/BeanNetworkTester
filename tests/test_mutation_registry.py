@@ -7743,6 +7743,13 @@ MUTATIONS = [
         "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
     },
     {
+        "label": "tcp health: an ended connection keeps the not-measured marker",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "        if self.state != tcpestats.OK or self.last is None or self.measured_at is None:\n",
+        "new": "        if self.last is None or self.measured_at is None:\n",
+        "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
+    },
+    {
         "label": "tcp health: the list is drawn without the rows' colours",
         "file": "beantester/gui/toolbox/tcphealth.py",
         "old": "                             tag_of=tcphealth.tag_of)\n",

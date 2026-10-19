@@ -219,6 +219,14 @@ def test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_b
     for second in range(6):
         quiet.take(ok(out=1000, received=5000 + 500 * second, measured=5), float(second))
     check("only receiving: not old", quiet.unmeasured_for() == 0)
+    ended = Watch(C, "app.exe", 7, 0.0)
+    for second in range(6):
+        ended.take(ok(out=1000 + 200 * second, measured=5), float(second))
+    check("old while open", ended.unmeasured_for() == 5)
+    ended.take(tcpestats.Reading(tcpestats.ENDED, code=1168), 6.0)
+    check("ended: its last numbers are final, not old - no marker, no colour",
+          ended.unmeasured_for() == 0 and tcphealth.tag_of(ended) == ""
+          and {d.key: d for d in tcphealth.details(ended)}["srtt"].tag == "")
 
 
 def _one(watch):
