@@ -876,7 +876,7 @@ from beantester.nettools import tcphealth as th
 from beantester.tcprow import Connection
 from beantester.gui.toolbox.tcphealth import render as health_cells
 
-SAMPLE = tcpestats.Sample(214, 231, 18, 402, 31, 342, 12, 16488, 1, 9, 27, 1460, 2400, 18100)
+SAMPLE = tcpestats.Sample(214, 231, 18, 402, 31, 342, 16488, 1, 9, 27, 1460, 2400, 18100)
 ANSWER = [tcpestats.Reading(tcpestats.OK, SAMPLE)]
 LINKED = Connection("fe80::1%12", 50001, "fe80::5%12", 443)
 admin = [True]
@@ -927,7 +927,7 @@ def test_show_tcp_health_from_the_socket_table_watches_that_connection():
         assert watched == [LINKED], ("counting turned on for that one", watched)
         cells = health_cells(panel.table.items[0])
         assert cells == ("chrome.exe", "[fe80::1%12]:50001", "[fe80::5%12]:443",
-                         T("tools.tcphealth.state.open"), "214 ms", "0"), cells
+                         T("tools.tcphealth.state.open"), "214 ms", "0 B"), cells
         assert panel.table.selected_keys() == [th.key_of(LINKED)], "and chosen"
         rows = {d.key: d for d in panel.details.items}
         assert rows["srtt"].value == "214 ms" and rows["mss"].value == "1460 B", rows["srtt"]
@@ -1058,6 +1058,20 @@ def test_the_report_is_copied_and_the_far_end_goes_to_the_control_page():
         panel.details_menu.limit()
         limited = (app.vars["dst_ip"].get(), app.vars["dst_port"].get())
         assert limited == ("fe80::5", "443"), ("the address, without its zone", limited)
+    """))
+
+
+def test_a_round_trip_not_measured_colours_its_row_on_the_list():
+    """The details say for how long; the list says which connection - in the caution
+    colour of the details' row (the owner's choice, 2026-10-19)."""
+    run_gui(TCPH + textwrap.dedent("""
+        panel = watch_linked()
+        watch = panel.table.items[0]
+        assert panel.table._tag_of(watch) == "", "measured: no colour"
+        watch.measured_at -= 10
+        watch.last = watch.last._replace(bytes_out=watch.last.bytes_out + 200)
+        panel._show()
+        assert panel.table._tag_of(watch) == "stale", panel.table._tag_of(watch)
     """))
 
 

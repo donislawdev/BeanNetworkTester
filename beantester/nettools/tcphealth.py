@@ -23,9 +23,10 @@ from .adapters import Detail, Words
 HISTORY = 60                    # chart points: a minute at one reading a second
 MAX_WATCHED = 20                # each costs two calls a second, ~50 us (measured)
 # Seconds without a new round-trip measurement, while data went out, before the details
-# say so. MEASURED 2026-10-19 (``tcpestats``): with 100 ms or more of latency each way,
-# Windows took no measurement for a whole session, and the smoothed value only looked
-# current. Three readings: one without a measurement is ordinary (a quiet second).
+# say so. MEASURED 2026-10-19 (``tcpestats``): an open connection whose round trip
+# jumped by 200 ms or more was measured no more for a whole session, and the smoothed
+# value only looked current. Three readings: one without a measurement is ordinary (a
+# quiet second).
 STALE_S = 3
 _U32, _U64 = 2 ** 32, 2 ** 64
 
@@ -279,9 +280,15 @@ def state_words(watch):
     return Words(STATE_WORDS.get(watch.state, "tools.tcphealth.state.failed"), watch.code)
 
 
+def rtt_number(value):
+    """A round trip's number: Windows counts whole milliseconds, so its 0 is a round
+    trip under one (0.4 ms to a WSL peer, measured), not none - ``< 1``."""
+    return "< 1" if value == 0 else str(value)
+
+
 def ms(value):
-    """A round trip: ``214 ms``, or ``Words`` for "not measured yet"."""
-    return Words("tools.tcphealth.value.no_rtt") if value is None else f"{value} ms"
+    """A round trip: ``214 ms``, ``< 1 ms``, or ``Words`` for "not measured yet"."""
+    return Words("tools.tcphealth.value.no_rtt") if value is None else f"{rtt_number(value)} ms"
 
 
 def process_text(watch):
@@ -291,32 +298,42 @@ def process_text(watch):
 
 
 def cells(watch):
-    """One list row: program, local, remote, state, RTT, resent since watching."""
+    """One list row: program, local, remote, state, RTT, bytes resent since watching
+    (in bytes: Windows never fills the segment count - ``tcpestats``)."""
     c = watch.connection
     last = watch.last
-    resent = watch.since_watching("resent_segments")
+    resent = watch.since_watching("resent_bytes")
     return (process_text(watch), endpoint(c.local_ip, c.local_port),
             endpoint(c.remote_ip, c.remote_port), state_words(watch),
-            ms(last.smoothed_rtt) if last else "", "" if resent is None else str(resent))
+            ms(last.smoothed_rtt) if last else "", "" if resent is None else f"{resent} B")
+
+
+def tag_of(watch):
+    """The list row's colour: the caution colour while the round trip is not measured
+    (the details' smoothed row says for how long)."""
+    return "stale" if watch.unmeasured_for() else ""
 
 
 def sort_key(watch, column):
     """What the list sorts by in ``cells`` column ``column``: the round trip and the
-    resent count as numbers (unmeasured first), the rest as text."""
+    resent bytes as numbers (unmeasured first), the rest as text."""
     if column == 4:
         last = watch.last
         return -1 if last is None or last.smoothed_rtt is None else last.smoothed_rtt
     if column == 5:
-        resent = watch.since_watching("resent_segments")
+        resent = watch.since_watching("resent_bytes")
         return -1 if resent is None else resent
     if column == 3:
         return watch.state
     return str(cells(watch)[column]).casefold()
 
 
-def _since_last(watch, field):
+def _counter(watch, field, unit=""):
+    """A counter since watching, and how much it grew since the last read in brackets:
+    ``4800 B (+400)``. No words - in the Note column they were cut at the smallest
+    window (133 px shown, measured 2026-10-19)."""
     step = watch.since_previous(field)
-    return (Words("tools.tcphealth.note.since_last", step),) if step else ()
+    return f"{watch.since_watching(field)}{unit}" + (f" (+{step})" if step else "")
 
 
 def details(watch):
@@ -332,35 +349,31 @@ def details(watch):
     last = watch.last
     if last is None:
         return out
-    since = (Words("tools.tcphealth.note.since_watching"),)
     sent, received = (watch.since_watching("bytes_out", _U64),
                       watch.since_watching("bytes_in", _U64))
     unmeasured = watch.unmeasured_for()
+    # The Note column says one thing: that the round trip is not measured. What a row
+    # means is the help's - every other note was cut at the smallest window.
     out += [Detail("srtt", Words("tools.tcphealth.item.srtt"), ms(last.smoothed_rtt),
                    (Words("tools.tcphealth.note.not_measured", unmeasured),) if unmeasured
-                   else (Words("tools.tcphealth.note.srtt"),),
-                   tag="stale" if unmeasured else ""),
+                   else (), tag="stale" if unmeasured else ""),
             Detail("sample", Words("tools.tcphealth.item.sample"), ms(last.sample_rtt)),
             Detail("range", Words("tools.tcphealth.item.range"),
-                   Words("tools.tcphealth.value.no_rtt") if last.min_rtt is None
-                   else f"{last.min_rtt} / {last.max_rtt} ms"),
+                   Words("tools.tcphealth.value.no_rtt")
+                   if last.min_rtt is None or last.max_rtt is None
+                   else f"{rtt_number(last.min_rtt)} / {rtt_number(last.max_rtt)} ms"),
             Detail("rttvar", Words("tools.tcphealth.item.rttvar"), ms(last.rtt_var)),
-            Detail("rto", Words("tools.tcphealth.item.rto"), f"{last.rto} ms",
-                   (Words("tools.tcphealth.note.rto"),)),
-            Detail("resent", Words("tools.tcphealth.item.resent"),
-                   str(watch.since_watching("resent_segments")),
-                   _since_last(watch, "resent_segments") or since),
+            Detail("rto", Words("tools.tcphealth.item.rto"), f"{last.rto} ms"),
             Detail("resent_bytes", Words("tools.tcphealth.item.resent_bytes"),
-                   str(watch.since_watching("resent_bytes")), since),
+                   _counter(watch, "resent_bytes", " B")),
             Detail("timeouts", Words("tools.tcphealth.item.timeouts"),
-                   str(watch.since_watching("timeouts")),
-                   _since_last(watch, "timeouts") or (Words("tools.tcphealth.note.timeouts"),)),
+                   _counter(watch, "timeouts")),
             Detail("fast_resends", Words("tools.tcphealth.item.fast_resends"),
-                   str(watch.since_watching("fast_resends")), since),
+                   _counter(watch, "fast_resends")),
             Detail("dupacks", Words("tools.tcphealth.item.dupacks"),
-                   str(watch.since_watching("duplicate_acks")), since),
+                   _counter(watch, "duplicate_acks")),
             Detail("mss", Words("tools.tcphealth.item.mss"), f"{last.mss} B"),
-            Detail("data", Words("tools.tcphealth.item.data"), f"{sent} / {received} B", since),
+            Detail("data", Words("tools.tcphealth.item.data"), f"{sent} / {received} B"),
             Detail("since", Words("tools.tcphealth.item.since"),
                    time.strftime("%H:%M:%S", time.localtime(watch.since)))]
     return out
@@ -376,7 +389,7 @@ def chart(watch, now=None):
 
 # -- the report (English, like the other tools') ------------------------------------- #
 def _rtt(value):
-    return "-" if value is None else f"{value} ms"
+    return "-" if value is None else f"{rtt_number(value)} ms"
 
 
 def report_lines(watchlist):
@@ -400,8 +413,7 @@ def report_lines(watchlist):
         lines.append(
             "  since watching ("
             + time.strftime("%H:%M:%S", time.localtime(watch.since)) + "): resent "
-            f"{watch.since_watching('resent_segments')} segments "
-            f"({watch.since_watching('resent_bytes')} B), timeouts "
+            f"{watch.since_watching('resent_bytes')} B, timeouts "
             f"{watch.since_watching('timeouts')}, fast resends "
             f"{watch.since_watching('fast_resends')}, duplicate ACKs "
             f"{watch.since_watching('duplicate_acks')}, sent "

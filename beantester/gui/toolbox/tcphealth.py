@@ -133,8 +133,8 @@ class TcpHealthPanel:
         top.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))
         self.table = SortableTree(
             top, COLUMNS, sort={"col": "", "reverse": False}, on_sort=lambda _s: self._show(),
-            height=ROWS["watched"], min_chars=MIN_CHARS, tips=TIPS, selectmode="browse",
-            empty_text="tools.tcphealth.empty" if self.supported
+            height=ROWS["watched"], min_chars=MIN_CHARS, tips=TIPS, tags=HEALTH_COLORS,
+            selectmode="browse", empty_text="tools.tcphealth.empty" if self.supported
             else "tools.tcphealth.windows_only")
         self.table.bind_select(self._on_select)
 
@@ -261,7 +261,8 @@ class TcpHealthPanel:
         if sort["col"] in COLUMNS:
             at = list(COLUMNS).index(sort["col"])
             watches.sort(key=lambda w: tcphealth.sort_key(w, at), reverse=sort["reverse"])
-        self.table.set_model(watches, render=render, key_of=lambda w: w.key)
+        self.table.set_model(watches, render=render, key_of=lambda w: w.key,
+                             tag_of=tcphealth.tag_of)
         chosen = self.memory.get("chosen")
         if chosen not in self.list.watches:
             chosen = next(iter(self.list.watches), None)

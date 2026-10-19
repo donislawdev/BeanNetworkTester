@@ -8,11 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Added
 
 - **TCP health on the Tools tab.** Shows what Windows measures for a TCP connection: the
-  round-trip time with a chart of the last minute, resent segments, timeouts and bytes.
-  Windows does not measure every round trip, and the tool says when it has not measured one
-  for a while as data goes out. Right-click a connection on the Sockets tab or the Connections
-  page, then **Show TCP health**. The numbers are read once a second while the tool is on
-  screen, or all the time when **Keep reading when hidden** is ticked. It needs administrator
+  round-trip time and its chart, data sent again, timeouts and bytes. Windows stops measuring
+  a connection whose round trip suddenly grows by 200 ms or more, and the tool says so: start
+  the session first, then open the connection. Right-click a connection on the Sockets tab or
+  the Connections page, then **Show TCP health**. The numbers are read once a second while the
+  tool is on screen, or always with **Keep reading when hidden**. It needs administrator
   rights and sends nothing.
 
 - **The Tools tab lists the network adapters.** The new **Adapters** tool shows every network
