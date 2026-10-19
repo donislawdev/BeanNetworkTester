@@ -250,7 +250,8 @@ monitor is gone it returns to the centre of the current screen.
     your target - right-click the proxy server to limit the impairments to its address.
     A proxy given as a name is not looked up, and passwords in an address are hidden.
     **"Copy report"** copies every adapter and the proxy settings in English - the text
-    contains this computer's addresses and MAC addresses.
+    contains this computer's addresses and MAC addresses. Right-click an adapter in the
+    list to copy only that one, in the same words.
   - **Diagnostics** - why START will not work, without a console. It runs the same checks
     as `--doctor` (administrator rights, the WinDivert driver, leftovers in the temp
     folder...) and marks each one OK, Warning or Problem. **"Clean up the driver"** unloads

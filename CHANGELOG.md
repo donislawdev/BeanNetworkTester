@@ -12,7 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   then the ones that are up. Choose one to see its addresses, gateway, DNS servers, DHCP, MAC
   address, MTU and link speed. A note warns when another device uses the same address.
   Right-click a gateway or a DNS server to put its address into the destination IP field on
-  the Control page. **Copy report** copies every adapter in English.
+  the Control page. **Copy report** copies every adapter in English. Right-click an adapter in
+  the list to copy everything about that one.
 
 - **Diagnostics can add the network adapters to the environment report.** Tick **Add network
   adapters** before **Copy environment report**. It is off until you tick it, because the

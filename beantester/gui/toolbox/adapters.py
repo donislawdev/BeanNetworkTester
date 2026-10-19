@@ -58,6 +58,8 @@ READ = "read"
 
 # Entries of the details menu, by position: "Copy value" and "Limit to this address".
 COPY_VALUE, LIMIT = 0, 1
+# The list's menu: "Copy all of this adapter's details" (the owner's request, 2026-10-19).
+COPY_ADAPTER = 0
 
 
 def say(part):
@@ -186,6 +188,10 @@ class AdaptersPanel:
         self.menu.add_command(label=T("menu.copy_value"), command=self._copy_value)
         self.menu.add_command(label=T("tools.adapters.limit"), command=self._limit)
         self.details.bind_row_menu(self._show_menu)
+        self.list_menu = style_menu(tk.Menu(self.frame, tearoff=0))
+        self.list_menu.add_command(label=T("tools.adapters.copy_adapter"),
+                                   command=self._copy_adapter)
+        self.table.bind_row_menu(self._show_list_menu)
 
     # -- the page calls ------------------------------------------------------ #
     def refresh(self):
@@ -319,23 +325,49 @@ class AdaptersPanel:
         has_rows = self.job.value.get(READ) is not None
         self.copy_btn.state(["!disabled"] if has_rows else ["disabled"])
 
-    # -- the menu on a details row --------------------------------------------- #
+    # -- the menus ---------------------------------------------------------- #
+    @staticmethod
+    def _popup(menu, allowed, x_root, y_root):
+        for index, available in allowed.items():
+            with crashlog.quiet(AREA):
+                set_menu_entry_available(menu, index, available)
+        try:
+            menu.tk_popup(x_root, y_root)
+        finally:
+            with crashlog.quiet(AREA):
+                menu.grab_release()
+
+    def _show_list_menu(self, x_root, y_root):
+        """The right click selected the row under the pointer, but the table does not
+        report its own writes as a choice - so the choice is taken here, and the
+        details below show the adapter the menu copies."""
+        keys = self.table.selected_keys()
+        if keys and keys[0] != self.memory.get("adapter"):
+            self._on_select()
+        self._popup(self.list_menu, {COPY_ADAPTER: self._chosen() is not None},
+                    x_root, y_root)
+
+    def _copy_adapter(self):
+        """Everything about the chosen row in the report's words (the owner's choice,
+        2026-10-19): the adapter's lines under the time they were read, or the proxy's."""
+        known, chosen = self.job.value.get(READ), self._chosen()
+        if known is None or chosen is None:
+            return
+        if isinstance(chosen, ProxyEntry):
+            text, name = proxy.report(chosen.reading), T("tools.adapters.proxy.row")
+        else:
+            text = adapters.adapter_report(chosen, known.adapters.read_at)
+            name = chosen.row.name
+        copy_confirmed(self.app, text, T("tools.adapters.adapter_logged", name=name), AREA)
+
     def _selected_detail(self):
         keys = self.details.selected_keys()
         return self.details.item_for_key(keys[0]) if keys else None
 
     def _show_menu(self, x_root, y_root):
         detail = self._selected_detail()
-        allowed = {COPY_VALUE: bool(detail and say(detail.value)),
-                   LIMIT: bool(detail and detail.address)}
-        for index, available in allowed.items():
-            with crashlog.quiet(AREA):
-                set_menu_entry_available(self.menu, index, available)
-        try:
-            self.menu.tk_popup(x_root, y_root)
-        finally:
-            with crashlog.quiet(AREA):
-                self.menu.grab_release()
+        self._popup(self.menu, {COPY_VALUE: bool(detail and say(detail.value)),
+                                LIMIT: bool(detail and detail.address)}, x_root, y_root)
 
     def _copy_value(self):
         detail = self._selected_detail()

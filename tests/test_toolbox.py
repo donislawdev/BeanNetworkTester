@@ -1364,6 +1364,39 @@ def test_the_adapters_report_is_copied_whole():
     """))
 
 
+def test_the_list_menu_copies_the_one_adapter_the_right_click_chose():
+    """The owner's request (2026-10-19): everything about ONE adapter, in the report's
+    words. A right click selects through the table's own write, which does not tell
+    ``on_select`` - so the menu takes the choice itself, and the details below show
+    the adapter that is copied."""
+    run_gui(ADAPT + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.adapters import COPY_ADAPTER
+        PROXY[0] = SET_PROXY
+        panel = open_adapters()
+        settle(panel)
+        assert panel.table.selected_keys() == ["eth"]
+        panel.table.select_keys(["wifi"])       # what a right click on "wifi" does
+        panel._show_list_menu(0, 0)
+        assert panel.list_menu.entry_states[COPY_ADAPTER] == MENU_ENTRY_LIVE
+        assert details(panel)["name"].value == "Wifi", "the details follow the right click"
+        panel._copy_adapter()
+        known = panel.job.value["read"]
+        wifi = next(a for a in known.adapters.adapters if a.key == "wifi")
+        text = root.clipboard_get()
+        assert text == ad.adapter_report(wifi, known.adapters.read_at), text
+        assert text.split(chr(10))[1] == "Wifi", "that adapter, not the one chosen before"
+        logged = T("tools.adapters.adapter_logged", name="Wifi")
+        assert any(T("log.copied") in line and logged in line for line in app._log_lines)
+
+        panel.table.select_keys(["proxy"])
+        panel._show_list_menu(0, 0)
+        panel._copy_adapter()
+        assert root.clipboard_get() == px.report(known.proxy), root.clipboard_get()
+        assert "secret" not in root.clipboard_get(), "a password is not copied either"
+    """))
+
+
 def test_the_proxy_row_comes_first_and_offers_its_address_like_a_gateway():
     """T-13 (the owner's choice of the rendered layouts, 2026-10-14): the proxy is the
     first row whatever the sort, its details reuse the table and the row menu, a

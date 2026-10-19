@@ -7666,6 +7666,23 @@ MUTATIONS = [
         "test": "test_the_chosen_adapter_shows_its_details_and_outlives_a_refresh_and_a_rebuild",
     },
     {
+        # The table does not report its own write as a choice: without this the menu
+        # copied the adapter chosen BEFORE the right click.
+        "label": "adapters: the list menu copies the adapter chosen before the right click",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "        if keys and keys[0] != self.memory.get(\"adapter\"):\n",
+        "new": "        if False:\n",
+        "test": "test_the_list_menu_copies_the_one_adapter_the_right_click_chose",
+    },
+    {
+        "label": "adapters: one adapter's copy loses the time it was read",
+        "file": "beantester/nettools/adapters.py",
+        "old": "    return \"\\n\".join([f\"network adapter, read {_read_at(read_at)}\", "
+               "*adapter_lines(adapter)])",
+        "new": "    return \"\\n\".join(adapter_lines(adapter))",
+        "test": "test_one_adapter_is_copied_in_the_reports_own_words_under_its_read_time",
+    },
+    {
         "label": "adapters: limiting to a gateway empties the port the person set",
         "file": "beantester/gui/toolbox/adapters.py",
         "old": "            fill_field(self.app, \"dst_ip\", detail.address, "

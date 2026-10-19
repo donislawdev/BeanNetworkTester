@@ -186,6 +186,20 @@ def test_the_report_is_one_block_per_adapter_in_plain_english():
     check("the text is the lines joined", adapters.report(snapshot) == "\n".join(lines))
 
 
+def test_one_adapter_is_copied_in_the_reports_own_words_under_its_read_time():
+    ranked = adapters.rank(Reading((DOWN, WIFI, ETH), {4: 9}))
+    snapshot = adapters.Snapshot(ranked, 0.0, 3, 1)
+    wifi = next(a for a in ranked if a.key == "wifi")
+    text = adapters.adapter_report(wifi, snapshot.read_at)
+    lines = text.split("\n")
+    at = adapters.report_lines(snapshot)[0].split(", read ")[1]
+    check("a head line naming one adapter and the same read time",
+          lines[0] == f"network adapter, read {at}", f"({lines[0]!r})")
+    check("then exactly that adapter's report lines",
+          lines[1:] == adapters.adapter_lines(wifi) and lines[1] == "wifi", "\n" + text)
+    check("and no other adapter's", not {"eth", "down"} & {line.strip() for line in lines})
+
+
 def test_a_list_the_system_cannot_give_is_said_in_the_windows_language(monkeypatch):
     def refused(native=None):
         raise system.AdaptersUnavailable("not_ready", "GetAdaptersAddresses answered 1228")
