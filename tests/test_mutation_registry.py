@@ -7582,6 +7582,13 @@ MUTATIONS = [
         "test": "test_the_one_matching_connection_is_reset_with_its_local_address",
     },
     {
+        "label": "chart: the readouts of two series are drawn on one line",
+        "file": "beantester/gui/chart.py",
+        "old": "        c.create_text(right, y0 + scaled(8 + 16 * row), anchor=\"e\", fill=line.color,\n",
+        "new": "        c.create_text(right, y0 + scaled(8), anchor=\"e\", fill=line.color,\n",
+        "test": "test_the_throughput_chart_draws_the_picture_it_drew_before_the_shared_chart",
+    },
+    {
         # The socket table writes IPv6 its own way; a Connections row may not.
         "label": "tcprow: an IPv6 address is matched by its spelling",
         "file": "beantester/tcprow.py",
