@@ -83,6 +83,20 @@ def _drawn(w, h, draw):
         i18n.set_language(lang)
 
 
+def test_the_rtt_chart_keeps_its_ticks_apart_near_zero_and_says_the_smoothed_value():
+    """Loopback reads 0 ms (whole milliseconds): an axis topped at 1 printed
+    "1 1 0 0 0" on real Tk (2026-10-19)."""
+    got = _drawn(230, 125, lambda c: chart.draw_rtt_chart(c, [0, 0, 0], [0, 1, 0], 3))
+    ticks = [item[6] for item in got if item[0] == "text" and item[1] == 44]   # left of the plot
+    check("five ticks, no number twice", len(ticks) == 5 and len(set(ticks)) == 5, f"({ticks})")
+    texts = [item[6] for item in got if item[0] == "text"]
+    check("the unit, the span and the smoothed value",
+          {"ms", "-3 s", "0 ms"} <= set(texts), f"({texts})")
+    lines = [item for item in got if item[0] == "line" and item[3] == 2]
+    check("the newest measurement under the smoothed value",
+          [line[2] for line in lines] == [UP_C, DOWN_C], f"({lines})")
+
+
 def test_the_throughput_chart_draws_the_picture_it_drew_before_the_shared_chart():
     got = _drawn(500, 200, lambda c: chart.draw_throughput_chart(
         c, [0, 10, 20, 40], [5, 5, 5, 6], sample_interval_s=0.7, unit="kb"))

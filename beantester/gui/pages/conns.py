@@ -28,6 +28,7 @@ from tkinter import ttk
 
 from ... import tcpreset
 from ...i18n import T
+from ...nettools.tcphealth import Request
 from ...processes import port_process_map
 from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
@@ -39,6 +40,7 @@ from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
 from ..theme import CONN_COLORS, set_menu_entry_available, space, style_menu
+from ..toolbox import tcphealth
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import crashlog
@@ -144,6 +146,22 @@ def reset_connection(app, row):
                               name="conn-reset", daemon=True)
     worker.start()
     return worker
+
+
+def show_health(app, row):
+    """"Show TCP health" for a row: the Tools tab's TCP health on screen, the
+    connection on its list. The row names no local address - it is looked up in the
+    socket table on that tool's worker, the way a reset looks it up. Returns whether
+    the row named a connection at all."""
+    try:
+        target = tcpreset.Target(int(row["local_port"]), str(row["remote_ip"]),
+                                 int(row["remote_port"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+    pid = row.get("pid")
+    tcphealth.watch_from(app, Request(str(row.get("proc") or ""), pid if pid else None,
+                                      target=target))
+    return True
 
 
 def _reset_and_say(app, target):
@@ -286,6 +304,7 @@ class ConnsPage:
     # -- context menu -------------------------------------------------------- #
     TARGET_INDEX = 3           # "Target this process" (after the separator)
     RESET_INDEX = 7            # "Reset this connection" (after "Block this IP address")
+    HEALTH_INDEX = 8           # "Show TCP health" (after it)
 
     def _build_menu(self):
         self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
@@ -299,6 +318,7 @@ class ConnsPage:
         self.menu.add_command(label=T("menu.block_ip"), command=self._block_ip)
         self.menu.add_command(label=T("menu.reset_connection"),
                               command=self._reset_connection)
+        self.menu.add_command(label=T("menu.show_tcp_health"), command=self._show_health)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.choose_columns"),
                               command=self._choose_columns)
@@ -318,6 +338,9 @@ class ConnsPage:
             set_menu_entry_available(self.menu, self.TARGET_INDEX, bool(name and name != "?"))
             # TCP over IPv4 only: Windows has no IPv6 form of the call (tcpreset).
             set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(
+                selected.get("proto"), selected.get("remote_ip")))
+            # TCP over both IPv4 and IPv6 (tcpestats has the IPv6 form).
+            set_menu_entry_available(self.menu, self.HEALTH_INDEX, tcphealth.offered(
                 selected.get("proto"), selected.get("remote_ip")))
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
@@ -408,6 +431,11 @@ class ConnsPage:
     def _reset_connection(self):
         row = self._selected()
         return reset_connection(self.app, row) if row else None
+
+    def _show_health(self):
+        row = self._selected()
+        if row:
+            show_health(self.app, row)
 
     # -- search -------------------------------------------------------------- #
     def _schedule_search(self):

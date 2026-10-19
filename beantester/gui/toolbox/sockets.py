@@ -22,6 +22,8 @@ from tkinter import ttk
 
 from ...i18n import T
 from ...nettools import sockets
+from ...nettools.tcphealth import Request
+from ...tcprow import Connection
 from .. import dialogs
 from ..field_actions import block_ip_address, leave_process_alone
 from ..labels import wrapping_label
@@ -29,6 +31,7 @@ from ..theme import CHARS, ROWS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Debounce, Poller, StatusLine, job, remembered
+from .tcphealth import offered, watch_from
 from ... import crashlog
 
 AREA = "gui.toolbox.sockets"
@@ -58,6 +61,7 @@ READ, VIEW = "read", "view"
 # Menu entries a row may be refused, by position (0 is "Copy", 1 the separator).
 NEEDS_NAME = (2, 3)         # target / leave alone: the process's name
 NEEDS_REMOTE = (4, 5)       # limit to / block: an address on the other end
+HEALTH = 6                  # "Show TCP health": a TCP connection (tcphealth.offered)
 
 
 def render(s):
@@ -146,6 +150,7 @@ class SocketsPanel:
         self.menu.add_command(label=T("menu.leave_process_alone"), command=self._leave_alone)
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit)
         self.menu.add_command(label=T("menu.block_ip"), command=self._block)
+        self.menu.add_command(label=T("menu.show_tcp_health"), command=self._health)
         self.table.bind_row_menu(self._show_menu)
 
     # -- the page calls ------------------------------------------------------ #
@@ -308,7 +313,9 @@ class SocketsPanel:
     def _show_menu(self, x_root, y_root):
         s = self._selected()
         named, remote = bool(s and s.proc), bool(s and s.remote_ip)
-        for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote)):
+        health = bool(s and offered(s.proto, s.remote_ip, s.state))
+        for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote),
+                                 ((HEALTH,), health)):
             for index in indexes:
                 with crashlog.quiet(AREA):
                     set_menu_entry_available(self.menu, index, allowed)
@@ -332,6 +339,14 @@ class SocketsPanel:
         s = self._selected()
         if s:
             leave_process_alone(self.app, s.proc)
+
+    def _health(self):
+        """The connection onto TCP health's list, that tool on screen. The row has
+        all four numbers, so nothing is looked up."""
+        s = self._selected()
+        if s and offered(s.proto, s.remote_ip, s.state):
+            watch_from(self.app, Request(s.proc, s.pid, connection=Connection(
+                s.local_ip, s.local_port, s.remote_ip, s.remote_port)))
 
     def _limit(self):
         s = self._selected()

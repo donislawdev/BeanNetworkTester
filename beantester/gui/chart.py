@@ -10,6 +10,7 @@ caller holds. The Y axis is LABELLED in whichever unit the reader picked (see
 change - the docstring used to say "Y axis in KB/s" and that stopped being
 true the moment the preference existed.
 """
+import tkinter as tk
 from collections.abc import Callable, Sequence
 from typing import NamedTuple
 
@@ -17,7 +18,10 @@ from ..i18n import T
 from ..utils import nice_ceiling
 from .rates import BASE_LABEL, DEFAULT_UNIT, UNIT_LABEL, in_unit
 from .scaling import chart_geometry, scaled
-from .theme import DOWN_C, FONT, GRID_C, MUT, UP_C
+from .theme import BG2, DOWN_C, FONT, GRID_C, MUT, UP_C
+
+
+RTT_LEAST_PEAK = 4      # ms: the lowest top of the round-trip axis
 
 
 class Series(NamedTuple):
@@ -61,6 +65,23 @@ def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7,
                     peak, lambda v: _axis_label(in_unit(v, unit), in_unit(peak, unit)),
                     UNIT_LABEL.get(unit, BASE_LABEL),
                     f"-{len(down_hist) * sample_interval_s:.0f} s")
+
+
+def chart_canvas(parent, width, height):
+    """A canvas for a line chart: the card colour, no focus ring. Here and not in the
+    view, because a tk.Canvas takes its colour as an option and a view names none."""
+    return tk.Canvas(parent, bg=BG2, highlightthickness=0, width=width, height=height)
+
+
+def draw_rtt_chart(canvas, smoothed, sample, span_s):
+    """TCP health: one connection's round trips in ms, the newest measurement under
+    the smoothed value Windows keeps - and the smoothed one said at the top right."""
+    # Whole milliseconds on an axis of five ticks: a top under 4 would print the same
+    # number twice ("1 1 0 0 0", rendered on loopback, 2026-10-19).
+    peak = nice_ceiling(max(max(smoothed, default=0), max(sample, default=0), RTT_LEAST_PEAK))
+    readout = T("tools.tcphealth.chart_now", v=f"{smoothed[-1]:.0f}") if len(smoothed) >= 2 else ""
+    draw_line_chart(canvas, (Series(sample, UP_C), Series(smoothed, DOWN_C, readout)),
+                    peak, lambda v: f"{v:.0f}", T("tools.tcphealth.unit_ms"), f"-{span_s} s")
 
 
 def draw_line_chart(canvas, series: Sequence[Series], peak: float,

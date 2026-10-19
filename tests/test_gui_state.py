@@ -451,6 +451,41 @@ def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
     """)
 
 
+def test_connection_menu_offers_tcp_health_for_tcp_over_both_families():
+    """TCP health has an IPv6 form (``tcpestats``), the reset does not - so the two
+    entries side by side answer differently for an IPv6 row."""
+    run_gui("""
+        from beantester import tcpestats
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.i18n import T
+        tcpestats.supported = lambda: True      # the Linux runner too
+        page = app.pages["connections"]
+        tree = page.table.tree
+        keys = list(page.table.columns)
+        entry = page.menu.commands[page.HEALTH_INDEX]
+        assert entry.get("label") == T("menu.show_tcp_health"), entry
+
+        class Ev:
+            x_root = y_root = 10
+            y = 10
+
+        def row(proto, ip):
+            values = ["-"] * len(keys)
+            values[keys.index("proto")], values[keys.index("remote_ip")] = proto, ip
+            return values
+
+        for proto, ip, state in (("TCP", "198.51.100.7", MENU_ENTRY_LIVE),
+                                 ("TCP", "2001:db8::7", MENU_ENTRY_LIVE),
+                                 ("UDP", "198.51.100.7", MENU_ENTRY_INERT),
+                                 ("ICMP", "198.51.100.7", MENU_ENTRY_INERT)):
+            page.table.sync([("r", row(proto, ip))])
+            tree.row_at = page.table._slots[0]
+            page.table.row_menu_at_pointer(Ev())
+            got = page.menu.entry_states[page.HEALTH_INDEX]
+            assert got == state, (proto, ip, got)
+    """)
+
+
 def test_a_connection_reset_runs_off_the_ui_thread_and_says_how_it_ended():
     run_gui("""
         import threading

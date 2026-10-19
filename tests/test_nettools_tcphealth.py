@@ -1,0 +1,229 @@
+"""``beantester/nettools/tcphealth.py``: the watched connections and what they say.
+
+Readings are made up here (``tcpestats.Reading``/``Sample``) - what Windows answers
+is ``test_tcpestats.py``'s; this file is about what the list does with the answers
+over time: differences from the first reading, counters that wrap, a connection
+that ended or whose port was taken again, and the one socket table read a cycle
+makes for the Connections rows.
+"""
+from beantester import portmap, tcpestats
+from beantester.nettools import tcphealth
+from beantester.nettools.tcphealth import Request, Watch, Watchlist
+from beantester.portmap import SocketRow
+from beantester.tcprow import Connection, Target
+from fakes import check
+
+C = Connection("192.0.2.10", 51000, "198.51.100.7", 443)
+
+
+def sample(srtt=200, rtt=210, resent=0, timeouts=0, out=1000, received=5000, count=True,
+           measured=0):
+    return tcpestats.Sample(srtt if count else None, rtt if count else None, 20, 400, 30, 300,
+                            resent, resent * 1460, timeouts, 0, 0, 1460, out, received, measured)
+
+
+def ok(**kw):
+    return tcpestats.Reading(tcpestats.OK, sample(**kw))
+
+
+def test_counters_are_differences_from_the_first_reading_and_wrap_at_32_bits():
+    """Learn: counting is never turned off, so a counter may hold what happened
+    before this program watched - the list says what happened since."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(resent=2 ** 32 - 3), 10.0)
+    watch.take(ok(resent=2), 11.0)
+    check("resent since watching, across the wrap", watch.since_watching("resent_segments")
+          == 5, f"({watch.since_watching('resent_segments')})")
+    check("and since the previous reading", watch.since_previous("resent_segments") == 5)
+    check("watched since the first reading with numbers", watch.since == 10.0)
+
+
+def test_an_ended_connection_keeps_its_last_numbers_and_is_read_no_more():
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(resent=3), 1.0)
+    watch.take(tcpestats.Reading(tcpestats.ENDED, code=1168), 2.0)
+    check("ended", watch.state == tcpestats.ENDED and not watch.reading)
+    check("the last numbers stay", watch.last.resent_segments == 3)
+    watch.take(ok(resent=9), 3.0)
+    check("a later answer changes nothing", watch.last.resent_segments == 3
+          and watch.state == tcpestats.ENDED)
+
+
+def test_a_port_taken_by_a_new_connection_stops_the_watch_instead_of_mixing_numbers():
+    """The same four numbers can name a new connection: its byte counters start
+    again (lower), or counting is off on it. Either way the numbers after that are
+    not this connection's."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(out=50000), 1.0)
+    watch.take(ok(out=120), 2.0)
+    check("bytes went back: stopped", watch.state == tcphealth.STOPPED and not watch.reading)
+    check("the numbers before it stay", watch.last.bytes_out == 50000)
+    other = Watch(C, "app.exe", 7, 0.0)
+    other.take(ok(), 1.0)
+    other.take(tcpestats.Reading(tcpestats.NOT_COUNTING), 2.0)
+    check("counting gone after it worked: stopped", other.state == tcphealth.STOPPED)
+    first = Watch(C, "app.exe", 7, 0.0)
+    first.take(tcpestats.Reading(tcpestats.NOT_COUNTING), 1.0)
+    check("not counting at the first reading is said as it is, and read again",
+          first.state == tcpestats.NOT_COUNTING and first.reading)
+
+
+def test_the_chart_keeps_a_minute_of_measured_round_trips_and_says_its_span():
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(count=False), 0.0)
+    check("nothing measured yet: nothing to draw", tcphealth.chart(watch, 1.0) == ([], [], 0))
+    for second in range(1, 70):
+        watch.take(ok(srtt=second, rtt=second + 1), float(second))
+    smoothed, raw, span = tcphealth.chart(watch, 70.0)
+    check("sixty points, the newest last", len(smoothed) == 60 and smoothed[-1] == 69
+          and raw[-1] == 70, f"({len(smoothed)}, {smoothed[-1]})")
+    check("the span is the time the points cover, not their count", span == 60, f"({span})")
+    check("no watch: nothing", tcphealth.chart(None, 1.0) == ([], [], 0))
+
+
+def test_the_list_takes_a_connection_once_and_at_most_twenty():
+    watchlist = Watchlist()
+    check("asked", watchlist.ask(Request("a", 1, connection=C)) == tcphealth.WATCHING)
+    result = tcphealth.Result(((watchlist.pending[0], C, tcphealth.WATCHING, ok()),), {})
+    watchlist.pending.clear()
+    watchlist.apply(result, 1.0)
+    check("on the list", list(watchlist.watches) == [tcphealth.key_of(C)])
+    check("asked again: it already is, nothing queued",
+          watchlist.ask(Request("a", 1, connection=C)) == tcphealth.WATCHING
+          and watchlist.pending == [])
+    for port in range(1, tcphealth.MAX_WATCHED):
+        watchlist.ask(Request("b", 2, connection=C._replace(local_port=port)))
+    check("the twenty-first is refused",
+          watchlist.ask(Request("c", 3, connection=C._replace(local_port=99))) == tcphealth.FULL)
+
+
+def test_a_reading_for_a_connection_taken_off_the_list_meanwhile_is_dropped():
+    watchlist = Watchlist()
+    watchlist.apply(tcphealth.Result(((Request("a", 1, connection=C), C, tcphealth.WATCHING,
+                                       ok()),), {}), 1.0)
+    key = tcphealth.key_of(C)
+    watchlist.remove(key)
+    watchlist.apply(tcphealth.Result((), {key: ok(resent=4)}), 2.0)
+    check("not back on the list", key not in watchlist.watches)
+
+
+def test_a_cycle_reads_the_socket_table_once_and_only_for_connections_rows():
+    calls = []
+
+    def rows():
+        calls.append(1)
+        return ([SocketRow("TCP", 4, "192.0.2.10", 51000, "198.51.100.7", 443, "ESTABLISHED",
+                           7)], [])
+    watched = []
+    result = tcphealth.cycle(
+        [Request("x", 1, target=Target(51000, "198.51.100.7", 443)),
+         Request("y", 2, target=Target(51001, "198.51.100.7", 443)),
+         Request("z", 3, connection=C._replace(local_port=60000))],
+        [C], watch=lambda c: watched.append(c) or ok(), read=lambda c: ok(resent=1), rows=rows)
+    check("one socket table read for two Connections rows", calls == [1], f"({calls})")
+    kinds = [(r.process, kind) for r, _c, kind, _reading in result.added]
+    check("found, gone, and a known connection that needed no lookup",
+          kinds == [("x", tcphealth.WATCHING), ("y", tcphealth.GONE),
+                    ("z", tcphealth.WATCHING)], f"({kinds})")
+    check("the found one with the table's local address",
+          result.added[0][1] == C and watched == [C, C._replace(local_port=60000)])
+    check("and what was on the list is read", list(result.readings) == [tcphealth.key_of(C)])
+    none = tcphealth.cycle([Request("z", 3, connection=C)], [], watch=lambda c: ok(),
+                           read=lambda c: ok(), rows=lambda: calls.append(2))
+    check("no Connections row: no table read", calls == [1] and len(none.added) == 1)
+
+
+def test_a_socket_table_that_does_not_answer_is_said_and_not_taken_for_closed(monkeypatch):
+    noted = []
+    monkeypatch.setattr(tcphealth.crashlog, "note", lambda exc, area: noted.append(area))
+
+    def unavailable():
+        raise portmap.SocketTableUnavailable("denied")
+    target = Request("x", 1, target=Target(51000, "198.51.100.7", 443))
+    for rows in (unavailable, lambda: ([], ["tcp/v6"]), lambda: (_ for _ in ()).throw(
+            RuntimeError("a fault in the table read on purpose"))):
+        result = tcphealth.cycle([target], [C], watch=lambda c: ok(), read=lambda c: ok(),
+                                 rows=rows)
+        check(f"{rows}: unreadable", result.added[0][2] == tcphealth.UNREADABLE,
+              f"({result.added})")
+        check("and what was watched is still read", list(result.readings) ==
+              [tcphealth.key_of(C)])
+    check("the fault, and only it, is noted", noted == ["nettools.tcphealth"], f"({noted})")
+
+
+def test_only_a_tcp_row_with_a_far_end_and_a_connection_behind_it_is_offered():
+    cases = {("TCP", "198.51.100.7", "ESTABLISHED"): True, ("TCP", "2001:db8::7", ""): True,
+             ("TCP", "fe80::7%12", "CLOSE_WAIT"): True, ("UDP", "198.51.100.7", ""): False,
+             ("TCP", "", "LISTEN"): False, ("TCP", "0.0.0.0", "LISTEN"): False,
+             ("TCP", "198.51.100.7", "TIME_WAIT"): False, ("TCP", "::", ""): False,
+             ("TCP", None, ""): False, ("ICMP", "198.51.100.7", ""): False}
+    for (proto, ip, state), wanted in cases.items():
+        check(f"{proto} {ip!r} {state}", tcphealth.watchable(proto, ip, state) is wanted)
+
+
+def test_the_details_and_the_report_say_the_numbers_since_watching():
+    watch = Watch(Connection("2001:db8::20", 52188, "2001:db8::7", 443), "app.exe", 7, 0.0)
+    watch.take(ok(resent=10, timeouts=1, out=1000, received=5000), 1.0)
+    watch.take(ok(resent=12, timeouts=1, out=3000, received=9000), 2.0)
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    check("the remote address offered to the Control page, without brackets",
+          rows["remote"].value == "[2001:db8::7]:443" and rows["remote"].address == "2001:db8::7")
+    check("resent since watching, and how many since the last read",
+          rows["resent"].value == "2"
+          and rows["resent"].note == (tcphealth.Words("tools.tcphealth.note.since_last", 2),))
+    check("bytes sent and received since watching", rows["data"].value == "2000 / 4000 B")
+    check("no timeout since the last read: the note says what one is",
+          rows["timeouts"].note == (tcphealth.Words("tools.tcphealth.note.timeouts"),))
+    lines = tcphealth.report_lines(Watchlist())
+    check("an empty report still says what and when", lines[0].startswith(
+        "TCP health: 0 connections, read "), f"({lines})")
+    watchlist = Watchlist()
+    watchlist.watches[watch.key] = watch
+    text = tcphealth.report(watchlist)
+    check("the report: the endpoints, the state, the round trips and the counters",
+          "app.exe [2001:db8::20]:52188 -> [2001:db8::7]:443: ok" in text
+          and "smoothed 200 ms" in text and "resent 2 segments" in text
+          and "sent 2000 B, received 4000 B" in text, "\n" + text)
+
+
+def test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old():
+    """MEASURED 2026-10-19: with 100 ms or more of latency each way Windows took no
+    round-trip measurement for a whole session, and the smoothed value only looked
+    current. Measured on THIS computer's data, so a connection that only receives is
+    not old."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    for second in range(6):
+        watch.take(ok(out=1000 + 200 * second, measured=5), float(second))
+        if second == tcphealth.STALE_S - 1:
+            check("two quiet seconds are ordinary", watch.unmeasured_for() == 0)
+    check("five seconds without a measurement while 1000 B went out",
+          watch.unmeasured_for() == 5, f"({watch.unmeasured_for()})")
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    check("said on the smoothed round trip, in the caution colour",
+          rows["srtt"].note == (tcphealth.Words("tools.tcphealth.note.not_measured", 5),)
+          and rows["srtt"].tag == "stale", f"({rows['srtt']})")
+    lines = tcphealth.report_lines(_one(watch))
+    check("and in the report", any("none for 5 s while data went out" in line for line in lines),
+          "\n" + "\n".join(lines))
+    watch.take(ok(out=3000, measured=6), 6.0)
+    check("a new measurement: current again", watch.unmeasured_for() == 0
+          and {d.key: d for d in tcphealth.details(watch)}["srtt"].tag == "")
+    quiet = Watch(C, "app.exe", 7, 0.0)
+    for second in range(6):
+        quiet.take(ok(out=1000, received=5000 + 500 * second, measured=5), float(second))
+    check("only receiving: not old", quiet.unmeasured_for() == 0)
+
+
+def _one(watch):
+    watchlist = Watchlist()
+    watchlist.watches[watch.key] = watch
+    return watchlist
+
+
+def test_the_list_sorts_round_trips_and_counts_as_numbers():
+    slow, fast, new = (Watch(C._replace(local_port=p), "a", 1, 0.0) for p in (1, 2, 3))
+    slow.take(ok(srtt=1000), 1.0)
+    fast.take(ok(srtt=90), 1.0)
+    order = sorted((slow, fast, new), key=lambda w: tcphealth.sort_key(w, 4))
+    check("unmeasured first, then 90 before 1000",
+          [w.connection.local_port for w in order] == [3, 2, 1])
