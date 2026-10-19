@@ -82,7 +82,7 @@ def test_watching_turns_counting_on_for_both_kinds_and_reads_them():
     lib = FakeIphlpapi()
     got = tcpestats.watch(V4, system(lib))
     check("ok, with the numbers", got.state == tcpestats.OK and got.sample == tcpestats.Sample(
-        214, 231, 18, 402, 31, 342, 12, 16488, 1, 9, 27, 1460, 2400, 18100, 3), f"({got})")
+        214, 231, 18, 402, 31, 342, 16488, 1, 9, 27, 1460, 2400, 18100, 3), f"({got})")
     sets = [c for c in lib.calls if c[0] == "Set"]
     check("Set for PATH and DATA, TRUE, version 0, the RW's size, offset 0",
           sets == [("Set", tcpestats.PATH, 20, 1, 0, 1, 0), ("Set", tcpestats.DATA, 20, 1, 0, 1, 0)],

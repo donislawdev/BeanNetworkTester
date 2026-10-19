@@ -17,9 +17,11 @@ C = Connection("192.0.2.10", 51000, "198.51.100.7", 443)
 
 
 def sample(srtt=200, rtt=210, resent=0, timeouts=0, out=1000, received=5000, count=True,
-           measured=0):
-    return tcpestats.Sample(srtt if count else None, rtt if count else None, 20, 400, 30, 300,
-                            resent, resent * 1460, timeouts, 0, 0, 1460, out, received, measured)
+           measured=0, low=20, dupacks=0):
+    """``resent``: bytes sent again (Windows never fills the segment count)."""
+    return tcpestats.Sample(srtt if count else None, rtt if count else None, low if count
+                            else None, 400 if count else None, 30, 300, resent, timeouts, 0,
+                            dupacks, 1460, out, received, measured)
 
 
 def ok(**kw):
@@ -32,9 +34,9 @@ def test_counters_are_differences_from_the_first_reading_and_wrap_at_32_bits():
     watch = Watch(C, "app.exe", 7, 0.0)
     watch.take(ok(resent=2 ** 32 - 3), 10.0)
     watch.take(ok(resent=2), 11.0)
-    check("resent since watching, across the wrap", watch.since_watching("resent_segments")
-          == 5, f"({watch.since_watching('resent_segments')})")
-    check("and since the previous reading", watch.since_previous("resent_segments") == 5)
+    check("resent since watching, across the wrap", watch.since_watching("resent_bytes")
+          == 5, f"({watch.since_watching('resent_bytes')})")
+    check("and since the previous reading", watch.since_previous("resent_bytes") == 5)
     check("watched since the first reading with numbers", watch.since == 10.0)
 
 
@@ -43,9 +45,9 @@ def test_an_ended_connection_keeps_its_last_numbers_and_is_read_no_more():
     watch.take(ok(resent=3), 1.0)
     watch.take(tcpestats.Reading(tcpestats.ENDED, code=1168), 2.0)
     check("ended", watch.state == tcpestats.ENDED and not watch.reading)
-    check("the last numbers stay", watch.last.resent_segments == 3)
+    check("the last numbers stay", watch.last.resent_bytes == 3)
     watch.take(ok(resent=9), 3.0)
-    check("a later answer changes nothing", watch.last.resent_segments == 3
+    check("a later answer changes nothing", watch.last.resent_bytes == 3
           and watch.state == tcpestats.ENDED)
 
 
@@ -163,17 +165,19 @@ def test_only_a_tcp_row_with_a_far_end_and_a_connection_behind_it_is_offered():
 
 def test_the_details_and_the_report_say_the_numbers_since_watching():
     watch = Watch(Connection("2001:db8::20", 52188, "2001:db8::7", 443), "app.exe", 7, 0.0)
-    watch.take(ok(resent=10, timeouts=1, out=1000, received=5000), 1.0)
-    watch.take(ok(resent=12, timeouts=1, out=3000, received=9000), 2.0)
+    watch.take(ok(resent=1460, timeouts=1, out=1000, received=5000, dupacks=4), 1.0)
+    watch.take(ok(resent=4380, timeouts=1, out=3000, received=9000, dupacks=7), 2.0)
     rows = {d.key: d for d in tcphealth.details(watch)}
     check("the remote address offered to the Control page, without brackets",
           rows["remote"].value == "[2001:db8::7]:443" and rows["remote"].address == "2001:db8::7")
-    check("resent since watching, and how many since the last read",
-          rows["resent"].value == "2"
-          and rows["resent"].note == (tcphealth.Words("tools.tcphealth.note.since_last", 2),))
+    check("resent in BYTES since watching, and the growth since the last read in brackets",
+          rows["resent_bytes"].value == "2920 B (+2920)", f"({rows['resent_bytes']})")
+    check("no row for the segment count Windows never fills", "resent" not in rows)
+    check("a counter that did not grow: no brackets", rows["timeouts"].value == "0"
+          and rows["dupacks"].value == "3 (+3)", f"({rows['timeouts']}, {rows['dupacks']})")
     check("bytes sent and received since watching", rows["data"].value == "2000 / 4000 B")
-    check("no timeout since the last read: the note says what one is",
-          rows["timeouts"].note == (tcphealth.Words("tools.tcphealth.note.timeouts"),))
+    check("the Note column says nothing but the marker (every other note was cut)",
+          all(d.note == () for d in rows.values()), [d for d in rows.values() if d.note])
     lines = tcphealth.report_lines(Watchlist())
     check("an empty report still says what and when", lines[0].startswith(
         "TCP health: 0 connections, read "), f"({lines})")
@@ -182,15 +186,16 @@ def test_the_details_and_the_report_say_the_numbers_since_watching():
     text = tcphealth.report(watchlist)
     check("the report: the endpoints, the state, the round trips and the counters",
           "app.exe [2001:db8::20]:52188 -> [2001:db8::7]:443: ok" in text
-          and "smoothed 200 ms" in text and "resent 2 segments" in text
+          and "smoothed 200 ms" in text and "resent 2920 B, timeouts 0" in text
+          and "segments" not in text
           and "sent 2000 B, received 4000 B" in text, "\n" + text)
 
 
 def test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old():
-    """MEASURED 2026-10-19: with 100 ms or more of latency each way Windows took no
-    round-trip measurement for a whole session, and the smoothed value only looked
-    current. Measured on THIS computer's data, so a connection that only receives is
-    not old."""
+    """MEASURED 2026-10-19: an open connection whose round trip jumped by 200 ms or more
+    was measured no more for a whole session (Windows resent each segment before its
+    ACK could come), and the smoothed value only looked current. Measured on THIS
+    computer's data, so a connection that only receives is not old."""
     watch = Watch(C, "app.exe", 7, 0.0)
     for second in range(6):
         watch.take(ok(out=1000 + 200 * second, measured=5), float(second))
@@ -202,16 +207,26 @@ def test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_b
     check("said on the smoothed round trip, in the caution colour",
           rows["srtt"].note == (tcphealth.Words("tools.tcphealth.note.not_measured", 5),)
           and rows["srtt"].tag == "stale", f"({rows['srtt']})")
+    check("and its row on the list in the same colour", tcphealth.tag_of(watch) == "stale")
     lines = tcphealth.report_lines(_one(watch))
     check("and in the report", any("none for 5 s while data went out" in line for line in lines),
           "\n" + "\n".join(lines))
     watch.take(ok(out=3000, measured=6), 6.0)
     check("a new measurement: current again", watch.unmeasured_for() == 0
-          and {d.key: d for d in tcphealth.details(watch)}["srtt"].tag == "")
+          and {d.key: d for d in tcphealth.details(watch)}["srtt"].tag == ""
+          and tcphealth.tag_of(watch) == "")
     quiet = Watch(C, "app.exe", 7, 0.0)
     for second in range(6):
         quiet.take(ok(out=1000, received=5000 + 500 * second, measured=5), float(second))
     check("only receiving: not old", quiet.unmeasured_for() == 0)
+    ended = Watch(C, "app.exe", 7, 0.0)
+    for second in range(6):
+        ended.take(ok(out=1000 + 200 * second, measured=5), float(second))
+    check("old while open", ended.unmeasured_for() == 5)
+    ended.take(tcpestats.Reading(tcpestats.ENDED, code=1168), 6.0)
+    check("ended: its last numbers are final, not old - no marker, no colour",
+          ended.unmeasured_for() == 0 and tcphealth.tag_of(ended) == ""
+          and {d.key: d for d in tcphealth.details(ended)}["srtt"].tag == "")
 
 
 def _one(watch):
@@ -227,3 +242,24 @@ def test_the_list_sorts_round_trips_and_counts_as_numbers():
     order = sorted((slow, fast, new), key=lambda w: tcphealth.sort_key(w, 4))
     check("unmeasured first, then 90 before 1000",
           [w.connection.local_port for w in order] == [3, 2, 1])
+    slow.take(ok(srtt=1000, resent=9000), 2.0)
+    fast.take(ok(srtt=90, resent=10000), 2.0)
+    order = sorted((slow, fast, new), key=lambda w: tcphealth.sort_key(w, 5))
+    check("resent bytes as numbers: 9000 before 10000",
+          [w.connection.local_port for w in order] == [3, 1, 2])
+
+
+def test_a_round_trip_under_a_millisecond_is_said_so_not_as_none():
+    """Windows counts whole milliseconds: its 0 is 0.4 ms to a WSL peer (measured
+    2026-10-19), and "0 ms" read as no round trip at all."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(srtt=0, rtt=0, low=0, measured=3), 1.0)
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    check("the list", tcphealth.cells(watch)[4] == "< 1 ms", f"({tcphealth.cells(watch)})")
+    check("the details", rows["srtt"].value == "< 1 ms" and rows["sample"].value == "< 1 ms"
+          and rows["range"].value == "< 1 / 400 ms", f"({rows['range']})")
+    check("the report", "smoothed < 1 ms" in tcphealth.report(_one(watch)))
+    check("the chart's readout number", tcphealth.rtt_number(0) == "< 1"
+          and tcphealth.rtt_number(214) == "214")
+    check("not measured stays not measured", tcphealth.ms(None) == tcphealth.Words(
+        "tools.tcphealth.value.no_rtt"))

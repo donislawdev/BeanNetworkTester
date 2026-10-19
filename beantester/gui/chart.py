@@ -15,6 +15,7 @@ from collections.abc import Callable, Sequence
 from typing import NamedTuple
 
 from ..i18n import T
+from ..nettools.tcphealth import rtt_number
 from ..utils import nice_ceiling
 from .rates import BASE_LABEL, DEFAULT_UNIT, UNIT_LABEL, in_unit
 from .scaling import chart_geometry, scaled
@@ -79,7 +80,8 @@ def draw_rtt_chart(canvas, smoothed, sample, span_s):
     # Whole milliseconds on an axis of five ticks: a top under 4 would print the same
     # number twice ("1 1 0 0 0", rendered on loopback, 2026-10-19).
     peak = nice_ceiling(max(max(smoothed, default=0), max(sample, default=0), RTT_LEAST_PEAK))
-    readout = T("tools.tcphealth.chart_now", v=f"{smoothed[-1]:.0f}") if len(smoothed) >= 2 else ""
+    readout = (T("tools.tcphealth.chart_now", v=rtt_number(round(smoothed[-1])))
+               if len(smoothed) >= 2 else "")
     draw_line_chart(canvas, (Series(sample, UP_C), Series(smoothed, DOWN_C, readout)),
                     peak, lambda v: f"{v:.0f}", T("tools.tcphealth.unit_ms"), f"-{span_s} s")
 

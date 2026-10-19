@@ -1,7 +1,7 @@
 """What Windows' TCP stack measures for one connection - the Tools tab's TCP health.
 
 "Does the stack see my 200 ms latency as 200 ms of round trip, and my 5% loss as
-resent segments?" A second opinion on the impairments, from the side of the program
+data sent again?" A second opinion on the impairments, from the side of the program
 under test, and without sending anything: Windows keeps these numbers for its own
 TCP (RFC 4898, "TCP Extended Statistics MIB").
 
@@ -35,19 +35,28 @@ each rule below:
   left nothing measurable behind once they closed.
 
 Windows measures a round trip when THIS computer's data is acknowledged, in whole
-milliseconds: a connection that only receives has few measurements, and loopback
-reads 0 ms.
+milliseconds: a connection that only receives has none (0 in 22 s of 28 MB received),
+and loopback reads 0 ms.
 
-🔴 And it does not measure every round trip - MEASURED 2026-10-19 against a WSL peer
-through this program's own sessions (`sondy/2026-10-19-t5-estats/probe_t5_m5b.py`, the
-application timing its own echo as the control): latency of 50 and 60 ms each way
-(round trips of 102 and 122 ms) was followed to the millisecond; at 100, 120, 160 and
-200 ms each way (202 to 402 ms) ``CountRtt`` STOOD STILL for the whole session, so the
-smoothed value stayed where it was. A session that impairs nothing changes nothing,
-and the engine delays every packet the same way - this is Windows, the reason unknown
-(it is not the resend timer: 242 ms < 300 stood still too). With 20% loss the
-timeouts were counted and ``PktsRetrans`` stayed 0. Hence ``rtt_samples``: the tool
-says when the round trip has not been measured for a while although data went out.
+🔴 MEASURED 2026-10-19 against a Linux peer (WSL) and a Windows Server 2025 peer over the
+LAN, through this program's own narrow sessions, the application timing its own echo
+and a packet capture on the peer as the controls:
+
+* It does not measure every round trip. A connection that is OPEN when its round trip
+  jumps past about 200 ms (plus twice what Windows measured before) is measured no
+  more: with one segment in flight Windows sends it again after 200 ms (the tail loss
+  probe - the peer saw every segment twice, 0.200 s apart), and the acknowledgement of
+  a segment sent twice is not measured (Karn). So ``CountRtt`` stands still and the
+  smoothed value keeps the old number. 90 ms each way (182 ms) was followed to the
+  millisecond; a connection OPENED under 150 ms each way was measured exactly (302 ms,
+  the application's own 302 ms). Hence ``rtt_samples``: the tool says when the round
+  trip has not been measured for a while although data went out.
+* ``PktsRetrans`` is never filled: 0 on Windows 11 and on Windows Server 2025 while 24
+  to 289 segments were sent again (on the wire, and the engine's drop count).
+  ``BytesRetrans`` is exact (24 x 200 B; 289 x MSS = 282 drops + 5 probes + 2 at the
+  session's end), so resends are said in bytes and the segment count is not read.
+* ``DataBytesOut`` / ``DataBytesIn`` count data sent again and received twice too
+  (19 800 B for 15 000 B the application sent).
 """
 import ctypes
 import sys
@@ -109,8 +118,7 @@ class Sample(NamedTuple):
     max_rtt: int | None
     rtt_var: int | None
     rto: int                    # the resend timer, ms
-    resent_segments: int        # counters: since counting was turned on, 32-bit
-    resent_bytes: int
+    resent_bytes: int           # counters: since counting was turned on, 32-bit
     timeouts: int
     fast_resends: int
     duplicate_acks: int
@@ -134,7 +142,7 @@ def _sample(path, data):
         return value if measured and value != UNSET else None
 
     return Sample(rtt(path.SmoothedRtt), rtt(path.SampleRtt), rtt(path.MinRtt),
-                  rtt(path.MaxRtt), rtt(path.RttVar), path.CurRto, path.PktsRetrans,
+                  rtt(path.MaxRtt), rtt(path.RttVar), path.CurRto,
                   path.BytesRetrans, path.Timeouts, path.FastRetran, path.DupAcksIn,
                   path.CurMss, data.DataBytesOut, data.DataBytesIn, path.CountRtt)
 

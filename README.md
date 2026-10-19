@@ -221,22 +221,26 @@ monitor is gone it returns to the centre of the current screen.
     remote address, or watch a TCP connection in **TCP health**. Program names are shown
     without administrator rights.
   - **TCP health** - what Windows measures for a TCP connection: the round-trip time
-    (smoothed, newest, lowest and highest, charted for the last minute), resent segments,
-    timeouts, duplicate ACKs, the segment size and the bytes sent and received. Windows
-    does not measure every round trip: on this project's test machine it followed round
-    trips made up to about 120 ms longer, and while they were 200 ms longer or more it took
-    no new measurement at all - the details then say for how long the round trip has not
-    been measured while data goes out. Put a
+    (smoothed, newest, lowest and highest, charted for the last minute), the bytes sent
+    again, timeouts, duplicate ACKs, the segment size and the bytes sent and received (data
+    sent again included). Windows measures a round trip only from data it sent once: when
+    the round trip of a connection that is already open suddenly grows by about 200 ms or
+    more - as when you start a session on it - Windows sends each piece of data again after
+    about 200 ms, before the confirmation can arrive, and measures nothing until the delay
+    goes down. The details then say for how long the round trip has not been measured, and
+    the connection's row is highlighted. A connection opened while the session runs is
+    measured exactly, so start the session first and then open the connection. Put a
     connection on the list from the row menu of **Sockets** or of the Connections page
     (**"Show TCP health"**), up to 20 at a time. A connection stays on the list after it
     ends, with its last numbers, until you press **Stop watching**. The numbers are read
     once a second while the tool is on screen, or all the time with **Keep reading when
-    hidden** ticked. Counters count from the moment watching began. Watching needs
-    administrator rights: Windows counts for a connection only when a program with those
-    rights asks it to, and keeps counting until the connection closes. Windows measures a
-    round trip when this computer's data is confirmed, in whole milliseconds, so a
-    connection that only receives has few measurements and one inside this computer
-    (127.0.0.1) shows 0 ms. **"Copy report"** copies every watched connection in English.
+    hidden** ticked. Counters count from the moment watching began, and a number in
+    brackets is how much one grew since the last read. Watching needs administrator
+    rights: Windows counts for a connection only when a program with those rights asks it
+    to, and keeps counting until the connection closes. Windows measures a round trip when
+    this computer's data is confirmed, in whole milliseconds, so a connection that only
+    receives has no measurements and one under a millisecond shows **< 1 ms**.
+    **"Copy report"** copies every watched connection in English.
   - **Port check** - can your program use a port? Type one port, a list or a range, the
     way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`, up to 1000 at a
     time), and press **Check** (or Enter). Each port is checked for TCP and UDP, on IPv4 and

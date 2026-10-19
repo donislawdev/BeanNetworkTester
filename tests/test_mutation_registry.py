@@ -7706,6 +7706,57 @@ MUTATIONS = [
         "test": "test_a_zone_becomes_the_scope_id_as_the_socket_table_read_it",
     },
     {
+        # The Note column was cut at the smallest window: the growth rides in the value.
+        "label": "tcp health: a counter's growth since the last read is not said",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "    return f\"{watch.since_watching(field)}{unit}\" + (f\" (+{step})\" if step else \"\")\n",
+        "new": "    return f\"{watch.since_watching(field)}{unit}\"\n",
+        "test": "test_the_details_and_the_report_say_the_numbers_since_watching",
+    },
+    {
+        "label": "tcp health: the resent column sorts as text",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "        resent = watch.since_watching(\"resent_bytes\")\n",
+        "new": "        resent = str(watch.since_watching(\"resent_bytes\"))\n",
+        "test": "test_the_list_sorts_round_trips_and_counts_as_numbers",
+    },
+    {
+        # Windows counts whole milliseconds: its 0 is a round trip under one.
+        "label": "tcp health: a round trip under a millisecond reads as 0 ms",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "    return \"< 1\" if value == 0 else str(value)\n",
+        "new": "    return str(value)\n",
+        "test": "test_a_round_trip_under_a_millisecond_is_said_so_not_as_none",
+    },
+    {
+        "label": "tcp health: the chart's readout says 0 ms",
+        "file": "beantester/gui/chart.py",
+        "old": "    readout = (T(\"tools.tcphealth.chart_now\", v=rtt_number(round(smoothed[-1])))\n",
+        "new": "    readout = (T(\"tools.tcphealth.chart_now\", v=f\"{smoothed[-1]:.0f}\")\n",
+        "test": "test_the_rtt_chart_keeps_its_ticks_apart_near_zero_and_says_the_smoothed_value",
+    },
+    {
+        "label": "tcp health: a round trip not measured leaves its list row uncoloured",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "    return \"stale\" if watch.unmeasured_for() else \"\"\n",
+        "new": "    return \"\"\n",
+        "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
+    },
+    {
+        "label": "tcp health: an ended connection keeps the not-measured marker",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "        if self.state != tcpestats.OK or self.last is None or self.measured_at is None:\n",
+        "new": "        if self.last is None or self.measured_at is None:\n",
+        "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
+    },
+    {
+        "label": "tcp health: the list is drawn without the rows' colours",
+        "file": "beantester/gui/toolbox/tcphealth.py",
+        "old": "                             tag_of=tcphealth.tag_of)\n",
+        "new": "                             tag_of=None)\n",
+        "test": "test_a_round_trip_not_measured_colours_its_row_on_the_list",
+    },
+    {
         "label": "tcpreset: two matching connections are guessed between",
         "file": "beantester/tcpreset.py",
         "old": "    if len(found) > 1:\n",
