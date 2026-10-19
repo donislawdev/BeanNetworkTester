@@ -719,6 +719,12 @@ class BeanEngine:
         """
         return self._conns_log.snapshot(limit)
 
+    def flow_scope(self, key):
+        """Whether the connection log's flow ``key`` was impaired: True / False, or
+        None when this session never captured it - ``connlog.ConnectionLog.scope_of``.
+        A ping is the row ``("ICMP", remote address)``."""
+        return self._conns_log.scope_of(key)
+
     def connections_settled(self):
         """True when the connection log cannot change before the next START.
 

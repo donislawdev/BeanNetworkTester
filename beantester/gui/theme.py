@@ -108,6 +108,16 @@ HEALTH_COLORS = {
     "stale": {"foreground": CAUTION},
 }
 
+# Ping rows. No reply - or an error said for the address - is a fault's red; a
+# reply whose data came back different (the session's corruption reaching it) is
+# worth reading, not a failure: the caution colour. The Result column says which
+# in words (WCAG 1.4.1).
+PING_COLORS = {
+    "lost": {"foreground": WARN},
+    "failed": {"foreground": WARN},
+    "changed": {"foreground": CAUTION},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators
@@ -184,7 +194,10 @@ SPACE = {
 # `if_kind` the longest status and type word in the three languages; `internet`
 # fits "IPv4, IPv6"; `item` the longest row name of the details table; `note` an
 # address's origin and its duplicate-address warning side by side. TCP health:
-# `rtt` fits "1234 ms", `resent` the column's header in the three languages.
+# `rtt` fits "1234 ms", `resent` the column's header in the three languages. Ping:
+# `host` is the port check's 24 - an address or a name, a longer one scrolls in the
+# box; `sent_at` fits "12:01:07" and the column's header; `result` its longest
+# word in the three languages ("Odpowiedź wróciła zmieniona"); `seq` five digits.
 CHARS = {
     "help_button": 2,
     "value": 26,
@@ -206,6 +219,10 @@ CHARS = {
     "note": 24,
     "rtt": 7,
     "resent": 10,
+    "host": 24,
+    "sent_at": 9,
+    "result": 24,
+    "seq": 6,
 }
 
 # How many rows a table shows before it scrolls: the connection table's 18. The
@@ -259,10 +276,11 @@ def _style_surfaces(s):
     s.configure("Status.Warn.TLabel", background=BG, foreground=CAUTION,
                 font=(FONT, 10, "bold"))
     s.configure("Muted.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
-    # A chart legend's colour swatches (the TCP health RTT chart): the colour of the
-    # line each one names.
+    # A chart legend's colour swatches (the TCP health and Ping charts): the colour of
+    # the line - or of the lost ping's mark - each one names.
     s.configure("Swatch.Down.TLabel", background=DOWN_C)
     s.configure("Swatch.Up.TLabel", background=UP_C)
+    s.configure("Swatch.Lost.TLabel", background=WARN)
     s.configure("Author.TLabel", background=BG, foreground=MUT, font=(FONT, 9))
     s.configure("Stat.TLabel", background=BG2, foreground=FG, font=(FONT, 11, "bold"))
     s.configure("StatCap.TLabel", background=BG2, foreground=MUT, font=(FONT, 9))

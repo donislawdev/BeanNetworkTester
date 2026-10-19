@@ -11,17 +11,25 @@ The ``id`` is stored in ``ui.json`` (the tab that was open) and prefixes the too
 i18n keys, so it is not renamed once shipped. The ORDER is free to change: the
 remembered tab is found by id, never by position.
 
-Deliberately three fields. More were sketched - whether a tool sends packets,
-which group it belongs to, whether it needs administrator rights - and each comes
-with the first code that READS it (a flag nothing reads is decoration nobody
-checks): sending with the first tool that sends, a group when the tabs stop
-fitting (around seven) and the page starts rendering a tab per group instead.
+Deliberately few fields. More were sketched - which group a tool belongs to,
+whether it needs administrator rights - and each comes with the first code that
+READS it (a flag nothing reads is decoration nobody checks): a group when the
+tabs stop fitting and the page starts rendering a tab per group instead. With
+Ping the strip holds seven, and in Polish it ends 15 px short of the window
+(rendered 2026-10-19 at 760 px): an eighth tool needs the groups first.
+
+``sends`` came with Ping, the first tool that sends anything (2026-10-19), and has
+two readers. The page puts the tool's own sentence of what it sends
+(``tools.<id>.sends``) above it. And ``tests/test_no_telemetry.py`` holds the README
+promise to it: the tools marked here are the ones whose code may send, and the
+promise names each of them.
 """
 from typing import NamedTuple
 
 from .adapters import AdaptersPanel
 from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
+from .ping import PingPanel
 from .portcheck import PortCheckPanel
 from .sockets import SocketsPanel
 from .tcphealth import TcpHealthPanel
@@ -31,13 +39,16 @@ class Tool(NamedTuple):
     id: str             # stable: ui.json and the i18n prefix tools.<id>.*
     label: str          # i18n key of the sub-tab
     factory: type       # the panel class: factory(app, parent) -> .frame
+    sends: bool = False  # puts something on the network (see the module's docstring)
 
 
 # The owner's order (2026-09-23), most useful to someone testing an application
 # first: sockets, is-this-port-free, expression tester, adapters, diagnostics.
 # Each tool takes its final place the day it lands: TCP health right after the
-# sockets, whose row menu puts a connection on its list (the owner, 2026-10-19).
+# sockets, whose row menu puts a connection on its list (the owner, 2026-10-19),
+# and Ping first - it shows whether the session works at all (the owner, 2026-10-19).
 TOOLS = (
+    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True),
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel),
     Tool(TcpHealthPanel.ID, TcpHealthPanel.LABEL, TcpHealthPanel),
     Tool(PortCheckPanel.ID, PortCheckPanel.LABEL, PortCheckPanel),

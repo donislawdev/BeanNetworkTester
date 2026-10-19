@@ -451,6 +451,59 @@ def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
     """)
 
 
+def test_connection_menu_pings_the_far_end_of_any_row_with_one_address():
+    """"Ping this address": any protocol (a ping row too), one address on the other end
+    - and the Tools tab's Ping on screen, pinging it."""
+    run_gui("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox import ping as pp
+        from beantester.i18n import T
+        from beantester.nettools import ping as pg
+        from beantester import icmp
+        sent = []
+        pg.send = lambda target, wait_s, system=None: (
+            sent.append(target.address), icmp.Echo(0, 1, 64, target.address))[1]
+        page = app.pages["connections"]
+        tree = page.table.tree
+        keys = list(page.table.columns)
+        entry = page.menu.commands[page.PING_INDEX]
+        assert entry.get("label") == T("menu.ping_address"), entry
+
+        class Ev:
+            x_root = y_root = 10
+            y = 10
+
+        def row(proto, ip):
+            values = ["-"] * len(keys)
+            values[keys.index("proto")], values[keys.index("remote_ip")] = proto, ip
+            return values
+
+        for proto, ip, state in (("TCP", "198.51.100.7", MENU_ENTRY_LIVE),
+                                 ("UDP", "2001:db8::7", MENU_ENTRY_LIVE),
+                                 ("ICMP", "198.51.100.7", MENU_ENTRY_LIVE),
+                                 ("TCP", "0.0.0.0", MENU_ENTRY_INERT),
+                                 ("TCP", "", MENU_ENTRY_INERT)):
+            page.table.sync([("r", row(proto, ip))])
+            tree.row_at = page.table._slots[0]
+            page.table.row_menu_at_pointer(Ev())
+            got = page.menu.entry_states[page.PING_INDEX]
+            assert got == state, (proto, ip, got)
+        page.table.sync([("r", row("ICMP", "198.51.100.7"))])
+        tree.row_at = page.table._slots[0]
+        page.table.row_menu_at_pointer(Ev())
+        page._ping()
+        assert app.pages["tools"].current() == "ping", "Ping is put on screen"
+        runner = pp.window_run(app)
+        import time
+        deadline = time.monotonic() + 5
+        while runner.poller.now():
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        assert sent == ["198.51.100.7"], sent
+        runner.stop()
+    """)
+
+
 def test_connection_menu_offers_tcp_health_for_tcp_over_both_families():
     """TCP health has an IPv6 form (``tcpestats``), the reset does not - so the two
     entries side by side answer differently for an IPv6 row."""

@@ -1032,6 +1032,21 @@ def test_portless_traffic_reaches_the_connection_log():
           f"(packets={row['packets']}, in={row['bytes_in']}, out={row['bytes_out']})")
 
 
+def test_the_ping_tool_reads_what_the_session_did_to_its_pings_from_the_log():
+    """``flow_scope``: the Tools tab's Ping says what the session does to ITS pings
+    from this log - impaired (True), seen but left alone (False), or never captured
+    (None) - rather than guessing from the settings. Sticky like the column."""
+    eng = BeanEngine()
+    ping = ("ICMP", "192.0.2.10")
+    check("never captured: no row", eng.flow_scope(ping) is None)
+    eng._conns_log.log(ping, "192.0.2.10", None, None, True, 60, 1.0, "ICMP", scoped=False)
+    check("captured, outside the target", eng.flow_scope(ping) is False)
+    eng._conns_log.log(ping, "192.0.2.10", None, None, False, 60, 2.0, "ICMP", scoped=True)
+    eng._conns_log.log(ping, "192.0.2.10", None, None, True, 60, 3.0, "ICMP", scoped=False)
+    check("impaired once is impaired for the session", eng.flow_scope(ping) is True)
+    check("another address is another row", eng.flow_scope(("ICMP", "192.0.2.11")) is None)
+
+
 def test_traffic_with_no_peer_address_still_gets_no_row():
     """The fallback key needs an address. Without one there is nothing to name,
     and inventing a row keyed on None would merge unrelated traffic into it."""

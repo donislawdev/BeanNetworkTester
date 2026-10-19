@@ -94,6 +94,19 @@ class ConnectionLog:
             return values
         return heapq.nlargest(limit, values, key=lambda c: c["last"])
 
+    def scope_of(self, key):
+        """Whether the flow ``key`` was in impairment scope: True or False, or None
+        when the log has no row for it (the capture never saw it).
+
+        For the Tools tab's Ping, which says what the session does to ITS packets
+        from this log rather than guessing from the settings - a guess is how two
+        surfaces came to contradict each other once (``gui/scope.py``). One lookup
+        under the lock, once per ping: nothing on the packet path waits for it.
+        """
+        with self._lock:
+            row = self.rows.get(key)
+            return None if row is None else bool(row.get("scoped"))
+
     def trim(self):
         """Evict the oldest flows once the log outgrows its cap.
 
