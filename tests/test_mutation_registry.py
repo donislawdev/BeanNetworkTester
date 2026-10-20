@@ -3274,8 +3274,9 @@ MUTATIONS = [
         # the echo named by a second module: WIRE_ALLOWED names a PLACE.
         "label": "telemetry: a module other than icmp.py names the echo request",
         "file": "beantester/nettools/ping.py",
-        "old": "def send(target, wait_s, system=None):\n",
-        "new": 'def send(target, wait_s, system=None):\n    _unused = "IcmpSendEcho2"\n',
+        "old": "def send(target, wait_s, system=None, size=DEFAULT_SIZE):\n",
+        "new": ('def send(target, wait_s, system=None, size=DEFAULT_SIZE):\n'
+                '    _unused = "IcmpSendEcho2"\n'),
         "test": "test_no_allowed_library_is_used_to_send_a_packet",
     },
     {
@@ -3327,6 +3328,142 @@ MUTATIONS = [
         "old": "        return self.running and self.run is run\n",
         "new": "        return self.running\n",
         "test": "test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it",
+    },
+    {
+        # a reset, a bug marker or a warning cut the Ping's run as if the session changed.
+        "label": "engine: every event kind moves the session mark",
+        "file": "beantester/engine.py",
+        "old": "            if kind in MARK_KINDS:\n",
+        "new": "            if True:\n",
+        "test": "test_the_session_mark_moves_only_when_the_impairing_changes",
+    },
+    {
+        # the ping out while the session changed counted in the part it went in.
+        "label": "ping: a ping across a change is counted in a part",
+        "file": "beantester/nettools/ping.py",
+        "old": "        counted = answered_mark == mark\n",
+        "new": "        counted = True\n",
+        "test": "test_a_run_is_cut_into_parts_where_the_session_changed",
+    },
+    {
+        # one part for the whole run: the average across the change again.
+        "label": "ping: a run is never cut into parts",
+        "file": "beantester/nettools/ping.py",
+        "old": "        if not self.parts or self.parts[-1].mark != mark:\n",
+        "new": "        if not self.parts:\n",
+        "test": "test_a_run_is_cut_into_parts_where_the_session_changed",
+    },
+    {
+        # jitter as the signed sum: a round trip going up and down cancels out.
+        "label": "ping: jitter sums signed moves",
+        "file": "beantester/nettools/ping.py",
+        "old": "            self._moved += abs(rtt - self._last)\n",
+        "new": "            self._moved += rtt - self._last\n",
+        "test": "test_jitter_the_95th_percentile_and_the_longest_run_of_losses",
+    },
+    {
+        # a reply does not end the run of losses: the longest run is all of them.
+        "label": "ping: a reply does not end a run of losses",
+        "file": "beantester/nettools/ping.py",
+        "old": "        self._lost_now = 0\n        self.replies += 1\n",
+        "new": "        self.replies += 1\n",
+        "test": "test_jitter_the_95th_percentile_and_the_longest_run_of_losses",
+    },
+    {
+        # the 95th percentile read as the highest.
+        "label": "ping: the 95th percentile is the highest",
+        "file": "beantester/nettools/ping.py",
+        "old": "        rank, seen = math.ceil(0.95 * self.replies), 0\n",
+        "new": "        rank, seen = self.replies, 0\n",
+        "test": "test_jitter_the_95th_percentile_and_the_longest_run_of_losses",
+    },
+    {
+        # a size past ping.exe's largest let through.
+        "label": "ping: a size over 65500 is let through",
+        "file": "beantester/nettools/ping.py",
+        "old": "    if not _SIZE.match(typed) or int(typed) > MAX_SIZE:\n",
+        "new": "    if not _SIZE.match(typed):\n",
+        "test": "test_a_size_that_is_not_whole_bytes_up_to_the_largest_is_refused",
+    },
+    {
+        # "until Stop" (0) done at once.
+        "label": "ping: a run without a number is done at once",
+        "file": "beantester/nettools/ping.py",
+        "old": "        return bool(self.count) and self.total.sent >= self.count\n",
+        "new": "        return self.total.sent >= self.count\n",
+        "test": "test_a_run_asked_for_a_number_of_pings_is_done_after_the_last",
+    },
+    {
+        # only the run's totals in the report, not each part's.
+        "label": "ping: the report leaves out the parts' numbers",
+        "file": "beantester/nettools/ping.py",
+        "old": "    if len(run.parts) > 1:\n",
+        "new": "    if False:\n",
+        "test": "test_a_run_is_cut_into_parts_where_the_session_changed",
+    },
+    {
+        # the mark read once, at the request: a change while it was out goes unseen.
+        "label": "ping: the session mark is not read again at the answer",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        run.add(sent_at, answer, mark, self._mark())\n",
+        "new": "        run.add(sent_at, answer, mark, mark)\n",
+        "test": "test_the_summary_splits_the_run_where_the_session_changed",
+    },
+    {
+        # the run goes on past the number of pings asked for.
+        "label": "ping: a run does not stop at its number",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        if self.running and run.done():\n",
+        "new": "        if False:\n",
+        "test": "test_ping_sends_the_size_typed_and_stops_by_itself_after_the_number_chosen",
+    },
+    {
+        # the summary averages across the change.
+        "label": "ping: the summary never says the parts",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    if len(run.parts) < 2:\n",
+        "new": "    if True:\n",
+        "test": "test_the_summary_splits_the_run_where_the_session_changed",
+    },
+    {
+        # the size changed during a run: the report would say one size over another.
+        "label": "ping: the size can change during a run",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        for widget in (self.entry, self.size_entry):\n",
+        "new": "        for widget in (self.entry,):\n",
+        "test": "test_ping_sends_the_size_typed_and_stops_by_itself_after_the_number_chosen",
+    },
+    {
+        # a big ping's reply in a buffer of the old fixed size.
+        "label": "icmp: the reply buffer does not grow with the size",
+        "file": "beantester/icmp.py",
+        "old": "    return REPLY_ROOM + size\n",
+        "new": "    return REPLY_ROOM\n",
+        "test": "test_a_ping_of_any_size_carries_ping_exes_pattern_and_compares_all_of_it",
+    },
+    {
+        # a size over 32 sends 32 bytes.
+        "label": "icmp: the pattern is not repeated",
+        "file": "beantester/icmp.py",
+        "old": "    return (PAYLOAD * (size // len(PAYLOAD) + 1))[:size]\n",
+        "new": "    return PAYLOAD[:size]\n",
+        "test": "test_a_ping_of_any_size_carries_ping_exes_pattern_and_compares_all_of_it",
+    },
+    {
+        # the change line's dashes a smear beside a line twice as thick at 200%.
+        "label": "chart: the Ping chart's dashes stay 4 and 3 px at any scale",
+        "file": "beantester/gui/chart.py",
+        "old": "    dash = tuple(scaled(px) for px in CHANGE_DASH)",
+        "new": "    dash = CHANGE_DASH",
+        "test": "test_the_ping_chart_draws_a_dashed_line_where_the_session_changed",
+    },
+    {
+        # the moment the session changed not drawn.
+        "label": "chart: the Ping chart draws no change line",
+        "file": "beantester/gui/chart.py",
+        "old": "    for i in changes:\n",
+        "new": "    for i in ():\n",
+        "test": "test_the_ping_chart_draws_a_dashed_line_where_the_session_changed",
     },
     {
         # the run tied to its panel: a language change would stop the ping.

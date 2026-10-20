@@ -28,6 +28,7 @@ RTT_LEAST_PEAK = 4      # ms: the lowest top of the round-trip axis
 PING_HEADROOM = 1.3     # the Ping chart's top: this much above its highest round trip
 LINE_PX = 2             # a series' line, and the Ping chart's lost-ping mark
 LOST_MARK_PX = 10       # how tall the lost-ping mark stands on the time axis
+CHANGE_DASH = (4, 3)    # the Ping chart's line where the session changed: dash, gap
 
 
 class Series(NamedTuple):
@@ -105,10 +106,11 @@ def _canvas_size(canvas):
     return width, height
 
 
-def draw_ping_chart(canvas, values):
+def draw_ping_chart(canvas, values, changes=()):
     """Ping: the round trip of each of the last pings in ms, oldest first, None for one
     that got no reply - a break in the line and a short mark on the time axis there,
-    so a lost ping is seen and never read as a 0 ms one."""
+    so a lost ping is seen and never read as a 0 ms one. ``changes`` are the indexes
+    of the first ping after the session changed: a dashed line across the plot."""
     trips = [v for v in values if v is not None]
     # Room above the highest round trip: the readout stands in the plot's top right
     # corner, and a steady 204 ms under a 250 ms top ran through it (rendered).
@@ -121,6 +123,10 @@ def draw_ping_chart(canvas, values):
         return
     g = chart_geometry(*_canvas_size(canvas))
     bottom = g["mt"] + g["ph"]
+    dash = tuple(scaled(px) for px in CHANGE_DASH)     # at 200% the line is twice as thick
+    for i in changes:
+        x = g["ml"] + g["pw"] * (i / (len(values) - 1))
+        canvas.create_line(x, g["mt"], x, bottom, fill=MUT, dash=dash)
     for i, value in enumerate(values):
         if value is None:
             x = g["ml"] + g["pw"] * (i / (len(values) - 1))

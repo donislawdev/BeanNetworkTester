@@ -36,6 +36,16 @@ each rule below:
   the outbound one; loopback behaves the same; a process target never covers a
   ping (no port); ``--corrupt 100`` brought 9 of 10 replies back with different
   data and ``Status`` 0 - hence ``Echo.changed``.
+
+MEASURED 2026-10-20 (the same peer, ``internal_tools`` probes ``2026-10-20-ping2``):
+
+* Any size of data from 0 to 65501 bytes goes out and comes back whole; 65535 gets
+  no reply (the IP packet would pass 64 KB). The tool offers up to ping.exe's 65500.
+* On the wire a request is its data plus 28 bytes (IPv4 and ICMP headers):
+  ``--max-size 1400`` let 1372 bytes of data through and lost 1373 and 4000.
+* ``--dup 100`` never shows: the call answers 1 for each request although the peer
+  answered both copies (30 packets for 10 pings). Windows hands over the first
+  reply and drops the others, so a ping cannot show duplication.
 """
 import ctypes
 import ipaddress
@@ -45,11 +55,13 @@ from typing import NamedTuple
 
 from . import crashlog
 
-# What every request carries: ping.exe's 32 bytes, so a capture shows the same thing.
+# What a request carries: ping.exe's 32 bytes, so a capture shows the same thing; a
+# request of another size repeats them (``payload``), as ping.exe does.
 PAYLOAD = b"abcdefghijklmnopqrstuvwabcdefghi"
-# Room for the reply structure, the echoed data, an ICMP error's 8 bytes and, for
-# IPv6, an IO_STATUS_BLOCK (Learn's minimum) - with plenty to spare.
-REPLY_BYTES = 512
+SIZE = len(PAYLOAD)
+# Room beside the echoed data for the reply structure, an ICMP error's 8 bytes and,
+# for IPv6, an IO_STATUS_BLOCK (Learn's minimum) - with plenty to spare.
+REPLY_ROOM = 512
 
 # IP_STATUS (Learn, ICMP_ECHO_REPLY) and the call's own errors this tool names.
 IP_SUCCESS = 0
@@ -86,6 +98,16 @@ class _SockaddrIn6(ctypes.Structure):
     _fields_ = [("sin6_family", ctypes.c_ushort), ("sin6_port", ctypes.c_ushort),
                 ("sin6_flowinfo", ctypes.c_uint32), ("sin6_addr", ctypes.c_ubyte * 16),
                 ("sin6_scope_id", ctypes.c_uint32)]
+
+
+def payload(size=SIZE):
+    """The data of a request of ``size`` bytes: ping.exe's pattern, repeated."""
+    return (PAYLOAD * (size // len(PAYLOAD) + 1))[:size]
+
+
+def reply_bytes(size):
+    """The reply buffer for a request of ``size`` bytes: the data comes back in it."""
+    return REPLY_ROOM + size
 
 
 # -- reading a reply (pure: the tests feed it bytes laid out as measured) ------------ #
@@ -171,53 +193,60 @@ class _System:
             raise OSError(self.last_error(), "no ICMP handle")
         return handle
 
-    def echo4(self, address, timeout_ms):
-        """One IPv4 request: ``(count, error, raw, base)``."""
+    @staticmethod
+    def _buffers(sent):
+        """The request's data and the reply buffer for it. The data buffer keeps a
+        byte even for an empty request (0 bytes went out and back, measured)."""
+        size = reply_bytes(len(sent))
+        return (ctypes.create_string_buffer(sent, max(1, len(sent))),
+                ctypes.create_string_buffer(size), size)
+
+    def echo4(self, address, timeout_ms, sent=PAYLOAD):
+        """One IPv4 request carrying ``sent``: ``(count, error, raw, base)``."""
         lib = self.iphlpapi
         handle = self._open(lib.IcmpCreateFile)
         try:
-            reply = ctypes.create_string_buffer(REPLY_BYTES)
-            data = ctypes.create_string_buffer(PAYLOAD, len(PAYLOAD))
+            data, reply, size = self._buffers(sent)
             count = lib.IcmpSendEcho2(handle, None, None, None,
                                       struct.unpack("<I", address.packed)[0], data,
-                                      len(PAYLOAD), None, reply, REPLY_BYTES, timeout_ms)
+                                      len(sent), None, reply, size, timeout_ms)
             error = self.last_error() if not count else 0
             return int(count), int(error), reply.raw, ctypes.addressof(reply)
         finally:
             lib.IcmpCloseHandle(handle)
 
-    def echo6(self, address, timeout_ms):
-        """One IPv6 request: ``(count, error, raw)``."""
+    def echo6(self, address, timeout_ms, sent=PAYLOAD):
+        """One IPv6 request carrying ``sent``: ``(count, error, raw)``."""
         lib = self.iphlpapi
         handle = self._open(lib.Icmp6CreateFile)
         try:
-            reply = ctypes.create_string_buffer(REPLY_BYTES)
-            data = ctypes.create_string_buffer(PAYLOAD, len(PAYLOAD))
+            data, reply, size = self._buffers(sent)
             source = _SockaddrIn6(sin6_family=AF_INET6)     # any address of this machine
             target = _SockaddrIn6(sin6_family=AF_INET6,
                                   sin6_scope_id=int(address.scope_id or 0))
             ctypes.memmove(target.sin6_addr, address.packed, 16)
             count = lib.Icmp6SendEcho2(handle, None, None, None, ctypes.byref(source),
-                                       ctypes.byref(target), data, len(PAYLOAD), None,
-                                       reply, REPLY_BYTES, timeout_ms)
+                                       ctypes.byref(target), data, len(sent), None,
+                                       reply, size, timeout_ms)
             error = self.last_error() if not count else 0
             return int(count), int(error), reply.raw
         finally:
             lib.IcmpCloseHandle(handle)
 
 
-def echo(address, timeout_ms, system=None):
-    """Send ONE echo request to ``address`` (an ``ipaddress`` object; an IPv6 one may
-    carry a numeric scope) and wait up to ``timeout_ms``. On a worker; never raises -
-    a failure of the call itself comes back as an Echo with its error code, -1 when
-    there is none."""
+def echo(address, timeout_ms, system=None, size=SIZE):
+    """Send ONE echo request of ``size`` bytes of data to ``address`` (an ``ipaddress``
+    object; an IPv6 one may carry a numeric scope) and wait up to ``timeout_ms``. On a
+    worker; never raises - a failure of the call itself comes back as an Echo with its
+    error code, -1 when there is none."""
     try:
         system = system or _System()
+        sent = payload(size)
         if address.version == 4:
-            count, error, raw, base = system.echo4(address, timeout_ms)
-            return parse_v4(raw, base, count, error)
-        count, error, raw = system.echo6(address, timeout_ms)
-        return parse_v6(raw, count, error)
+            count, error, raw, base = system.echo4(address, timeout_ms, sent)
+            return parse_v4(raw, base, count, error, sent)
+        count, error, raw = system.echo6(address, timeout_ms, sent)
+        return parse_v6(raw, count, error, sent)
     except Exception as exc:
         crashlog.note(exc, "icmp")
         return Echo(getattr(exc, "errno", None) or -1)

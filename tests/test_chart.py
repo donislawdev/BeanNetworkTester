@@ -30,8 +30,10 @@ class Canvas:
         self.items.clear()
 
     def create_line(self, *pts, **kw):
+        # A dash only when there is one: the golden pictures above have none.
         self.items.append(("line", tuple(round(p, 2) for p in pts), kw.get("fill"),
-                           kw.get("width"), kw.get("smooth")))
+                           kw.get("width"), kw.get("smooth"))
+                          + ((kw["dash"],) if "dash" in kw else ()))
 
     def create_text(self, x, y, **kw):
         self.items.append(("text", round(x, 2), round(y, 2), kw.get("anchor"), kw.get("fill"),
@@ -147,3 +149,28 @@ def test_the_ping_chart_marks_each_lost_ping_on_the_time_axis():
     check("nothing came back yet: marks, no line, no readout",
           len([i for i in got if i[0] == "line" and i[2] == WARN]) == 2
           and not [i for i in got if i[0] == "line" and i[2] == DOWN_C], f"({got})")
+
+
+def test_the_ping_chart_draws_a_dashed_line_where_the_session_changed():
+    from beantester.gui.theme import MUT
+    values = [200, None, 204, 201, None]
+    plain = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, values))
+    check("no change: nothing dashed", not [i for i in plain if len(i) == 6], f"({plain})")
+    got = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, values, [2]))
+    dashed = [item for item in got if item[0] == "line" and len(item) == 6]
+    # the third of five pings: halfway along the plot (the lost marks at 160 and 484)
+    check("one muted dashed line, upright, at the first ping after the change",
+          len(dashed) == 1 and dashed[0][1][0] == dashed[0][1][2] == 268.0
+          and dashed[0][1][3] == 170.0 and dashed[0][1][1] < 170.0
+          and dashed[0][2] == MUT and dashed[0][5] == chart.CHANGE_DASH, f"({dashed})")
+    check("and the rest as before", [i for i in got if len(i) != 6] == plain, f"({got})")
+    before = scaling.ui_scale()
+    scaling.set_scale(2.0)
+    try:
+        canvas = Canvas(500, 200)
+        chart.draw_ping_chart(canvas, values, [2])
+    finally:
+        scaling.set_scale(before)
+    big = [item for item in canvas.items if len(item) == 6]
+    check("at 200% the dashes and gaps are twice as long, like every pixel of the chart",
+          len(big) == 1 and big[0][5] == tuple(2 * px for px in chart.CHANGE_DASH), f"({big})")

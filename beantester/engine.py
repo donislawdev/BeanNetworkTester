@@ -116,6 +116,12 @@ from . import driverwait
 
 WATCHDOG_TICK_S = 0.2      # how often the deadline / worker health is checked
 
+# The event kinds after which the session impairs differently (``session_mark``): it
+# started, its settings were applied (the GUI's "Apply changes"), a scenario stepped,
+# it stopped. Not RESET - a cut of two seconds, then the same settings again, so what
+# it lost belongs to the part it happened in - nor BUG or WARN, which change nothing.
+MARK_KINDS = frozenset({"START", "CHANGE", "SCENARIO", "STOP"})
+
 # What pydivert's Packet must keep in __slots__ for the capture loop to drop its
 # header cache (`packet.__dict__.clear()`): the fields send() and the checksum
 # helper read, and the __dict__ that holds nothing but cached headers. Measured on
@@ -204,6 +210,7 @@ class BeanEngine:
         self._filter = ""
         self._events = []           # event log: (elapsed, iso, kind, text)
         self._elock = threading.Lock()
+        self._mark = None           # session_mark(): the last event that changed the impairing
         self._scenario_runner = None
         self._t_cap = None          # capture thread (joined on stop)
         self._t_inj = None          # inject thread (joined on stop)
@@ -294,10 +301,23 @@ class BeanEngine:
                                  time.strftime("%Y-%m-%d %H:%M:%S"), kind, text))
             if len(self._events) > 5000:
                 self._events = self._events[-4000:]
+            if kind in MARK_KINDS:
+                self._mark = ((self._mark[0] + 1) if self._mark else 1, kind, text)
 
     def events_snapshot(self):
         with self._elock:
             return list(self._events)
+
+    def session_mark(self):
+        """``(number, kind, text)`` of the last event that changed what the session does
+        to traffic (``MARK_KINDS``), or None before the first one - for a reader that
+        splits what it measured at those moments (the Tools tab's Ping).
+
+        The number counts every such event for the life of this engine: the event log
+        itself is emptied at START and cut at 5000 entries, and its times are whole
+        seconds, so neither its length nor a time tells two moments apart."""
+        with self._elock:
+            return self._mark
 
     def now_ref(self):
         """The session clock's "now": frozen at STOP.

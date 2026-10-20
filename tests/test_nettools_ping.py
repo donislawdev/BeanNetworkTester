@@ -91,21 +91,24 @@ def test_a_name_windows_cannot_find_is_said_in_words(answer):
 
 def test_the_first_request_looks_the_name_up_then_sends_to_that_address(monkeypatch):
     sent = []
-    monkeypatch.setattr(icmp, "echo", lambda address, timeout, system=None: (
-        sent.append((str(address), timeout)), REPLY)[1])
+    monkeypatch.setattr(icmp, "echo", lambda address, timeout, system=None, size=32: (
+        sent.append((str(address), timeout, size)), REPLY)[1])
     target, echo = ping.start_and_send(ping.parse("example.com"), 4,
                                        lookup=lambda n: [(socket.AF_INET, 0, 0, "",
-                                                          ("192.0.2.10", 0))])
-    check("pinged where the lookup said, waiting 4 s", sent == [("192.0.2.10", 4000)], f"({sent})")
+                                                          ("192.0.2.10", 0))], size=1372)
+    check("pinged where the lookup said, waiting 4 s, with the size asked for",
+          sent == [("192.0.2.10", 4000, 1372)], f"({sent})")
     check("and the address is kept for the next ones", target.address == "192.0.2.10")
     check("the answer comes back", echo == REPLY)
+    ping.send(target, 1)
+    check("ping.exe's 32 bytes unless asked", sent[-1] == ("192.0.2.10", 1000, 32), f"({sent})")
 
 
 def test_a_request_no_longer_wanted_before_or_after_the_lookup_sends_nothing(monkeypatch):
     """Stop pressed while the request waited for the worker: no lookup, no echo. Stop
     pressed during the lookup: the lookup was already asked, the echo is not."""
     sent, looked = [], []
-    monkeypatch.setattr(icmp, "echo", lambda address, timeout, system=None: (
+    monkeypatch.setattr(icmp, "echo", lambda address, timeout, system=None, size=32: (
         sent.append(str(address)), REPLY)[1])
 
     def lookup(name):
@@ -187,12 +190,118 @@ def test_the_copied_report_says_what_was_asked_and_what_came_back():
     run.add(4.0, icmp.Echo(0, 201, 64, "192.0.2.10", True))
     text = ping.report(run)
     lines = text.splitlines()
-    check("what and where", lines[0].startswith("Ping example.com (192.0.2.10): every 0.5 s, "
-                                                "waiting up to 4 s"), f"({lines[0]})")
+    check("what and where", lines[0].startswith(
+        "Ping example.com (192.0.2.10): 32 bytes every 0.5 s, waiting up to 4 s, started"),
+          f"({lines[0]})")
+    check("the one part it was", lines[1].startswith("--- from ")
+          and lines[1].endswith(", no session"), f"({lines[1]})")
     check("a row per ping", len([line for line in lines if line.lstrip()[:1].isdigit()]) == 4,
           text)
     check("in English, with who answered", "< 1 ms" in text and "no reply" in text
           and "TTL expired in transit  from 198.51.100.1" in text
           and "reply came back changed" in text, text)
-    check("the totals", "sent 4, replies 2, lost 2 (50.0%), 1 came back changed" in text, text)
-    check("the round trips", "round trip: lowest < 1, average 100, highest 201 ms" in text, text)
+    check("the totals", "sent 4, replies 2, lost 2 (50.0%), at most 2 lost in a row, "
+                        "1 came back changed" in text, text)
+    check("the round trips", "round trip: lowest < 1, average 100, highest 201 ms, "
+                             "jitter 201 ms, 95% within 201 ms" in text, text)
+    check("one part: no part's numbers apart from the run's", "the whole run" not in text, text)
+    asked = ping.Run(ping.parse("192.0.2.10"), every_s=1, wait_s=2, size=1372, count=100)
+    check("the size and the number asked for", ping.report(asked).startswith(
+        "Ping 192.0.2.10: 1372 bytes every 1 s, waiting up to 2 s, 100 pings, started"),
+          ping.report(asked))
+
+
+START = (1, "START", "filter=both, seed=7")
+CHANGE = (2, "CHANGE", "latency 100 ms")
+STOP = (3, "STOP", "events.stopped")
+
+
+def test_a_run_is_cut_into_parts_where_the_session_changed():
+    """Start, a session started, its settings applied, it stopped: four parts, each
+    with its own numbers - and the ping that was out while the session started is a
+    row and a ping of the run, but in no part."""
+    run = ping.Run(ping.parse("192.0.2.10"), started=0.0)
+    for i in range(3):
+        run.add(float(i), icmp.Echo(0, 1, 64, "192.0.2.10"))
+    run.add(3.0, icmp.Echo(0, 150, 64, "192.0.2.10"), None, START)       # out across it
+    for i in range(4, 7):
+        run.add(float(i), icmp.Echo(0, 201, 64, "192.0.2.10"), START, START)
+    run.add(7.0, LOST, START, START)
+    run.add(8.0, icmp.Echo(0, 401, 64, "192.0.2.10"), CHANGE, CHANGE)
+    run.add(9.0, icmp.Echo(0, 2, 64, "192.0.2.10"), STOP, STOP)
+    check("four parts, by what the session did",
+          [p.kind for p in run.parts] == ["none", "start", "change", "stop"],
+          f"({[p.kind for p in run.parts]})")
+    check("each counts its own", [p.stats.sent for p in run.parts] == [3, 4, 1, 1]
+          and run.parts[1].stats.round_trips() == (201, 201, 201)
+          and run.parts[1].stats.lost == 1, f"({[p.stats.sent for p in run.parts]})")
+    check("the ping across the change: a row of the run, in no part",
+          run.sent == 10 and not run.results[3].counted and run.results[3].part == 0
+          and all(r.counted for i, r in enumerate(run.results) if i != 3))
+    check("a part begins where its first ping went", run.parts[1].started == 4.0)
+    check("the chart marks the first ping of each part after the first",
+          run.chart_changes() == [4, 8, 9], f"({run.chart_changes()})")
+    check("the engine's words for the settings - never a STOP's reason name",
+          [p.settings for p in run.parts] == ["", "filter=both, seed=7", "latency 100 ms", ""])
+    text = ping.report(run)
+    check("the report heads each part and says its settings",
+          "session running: filter=both, seed=7" in text and "changes applied: latency 100 ms"
+          in text and ", session stopped" in text and "events.stopped" not in text, text)
+    check("and marks the ping that was out across the change",
+          "(the session changed while it was out: in no part)" in text, text)
+    check("then each part's numbers and the run's", text.count("part from ") == 4
+          and "the whole run:" in text and "sent 10, replies 9, lost 1 (10.0%)" in text, text)
+
+
+def test_jitter_the_95th_percentile_and_the_longest_run_of_losses():
+    stats = ping.Stats()
+    check("nothing yet: none of them", (stats.jitter(), stats.p95(), stats.round_trips(),
+                                        stats.longest_loss) == (None, None, None, 0))
+    stats.add(icmp.Echo(0, 100, 64, "x"))
+    check("one reply: a percentile, no jitter", (stats.jitter(), stats.p95()) == (None, 100))
+    for rtt in (110, 100, 130):         # moves of 10, 10 and 30: 50 / 3
+        stats.add(icmp.Echo(0, rtt, 64, "x"))
+    check("jitter: the mean move from one reply to the next", stats.jitter() == 17,
+          f"({stats.jitter()})")
+    for echo in (LOST, LOST, icmp.Echo(0, 120, 64, "x"), LOST):
+        stats.add(echo)
+    check("a lost ping between two replies does not part them (moves 10, 10, 30, 10)",
+          stats.jitter() == 15, f"({stats.jitter()})")
+    check("the longest run of losses, not the last", stats.longest_loss == 2)
+    spread = ping.Stats()
+    for rtt in range(1, 101):
+        spread.add(icmp.Echo(0, rtt, 64, "x"))
+    check("95 of 100 replies took 95 ms or less", spread.p95() == 95, f"({spread.p95()})")
+    spread.add(icmp.Echo(0, 5000, 64, "x"))
+    check("one slow reply moves the highest, not the 95th", spread.p95() == 96
+          and spread.round_trips()[2] == 5000, f"({spread.p95()})")
+
+
+@pytest.mark.parametrize("typed, size", [("32", 32), (" 0 ", 0), ("65500", 65500),
+                                         ("01372", 1372)])
+def test_a_size_is_whole_bytes_up_to_ping_exes_largest(typed, size):
+    check(f"{typed!r} -> {size}", ping.parse_size(typed) == size)
+
+
+@pytest.mark.parametrize("typed", ["", "-1", "1.5", "65501", "100000", "²", "abc", "1e3",
+                                   "+5"])
+def test_a_size_that_is_not_whole_bytes_up_to_the_largest_is_refused(typed):
+    with pytest.raises(Refused) as refused:
+        ping.parse_size(typed)
+    check("said with what was typed and the largest",
+          refused.value.user_key == "tools.ping.refused.size"
+          and refused.value.user_args == {"typed": typed.strip(), "most": ping.MAX_SIZE},
+          f"({refused.value.user_args})")
+
+
+def test_a_run_asked_for_a_number_of_pings_is_done_after_the_last():
+    run = ping.Run(ping.parse("192.0.2.10"), count=3)
+    for _ in range(2):
+        run.add(0.0, REPLY)
+    check("not before", not run.done())
+    run.add(0.0, LOST)
+    check("done on the third, lost or not", run.done())
+    endless = ping.Run(ping.parse("192.0.2.10"))
+    for _ in range(1001):
+        endless.add(0.0, REPLY)
+    check("until Stop: never done", not endless.done())

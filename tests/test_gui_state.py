@@ -461,7 +461,7 @@ def test_connection_menu_pings_the_far_end_of_any_row_with_one_address():
         from beantester.nettools import ping as pg
         from beantester import icmp
         sent = []
-        pg.send = lambda target, wait_s, system=None: (
+        pg.send = lambda target, wait_s, system=None, size=32: (
             sent.append(target.address), icmp.Echo(0, 1, 64, target.address))[1]
         page = app.pages["connections"]
         tree = page.table.tree

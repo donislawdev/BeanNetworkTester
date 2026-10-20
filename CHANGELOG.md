@@ -14,6 +14,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the row menu of Sockets and Connections pings the far end. It sends echo requests only to
   the address you type, from Start to Stop.
 
+- **Ping compares the time before and after a session change.** When the session starts,
+  stops or gets its changes applied during a ping, the numbers show the time since then and
+  how much the round trip and the loss moved, and the chart marks the moment. Ping also
+  shows the jitter, the round trip 95% of replies stayed within and the longest run of
+  losses. **Size** sets the bytes each ping carries, to see a speed limit or a packet size
+  limit at work, and **Pings** stops it after 10, 100 or 1000.
+
 - **TCP health on the Tools tab.** Shows what Windows measures for a TCP connection: the
   round-trip time and its chart, data sent again, timeouts and bytes. Windows stops measuring
   a connection whose round trip suddenly grows by 200 ms or more, and the tool says so: start

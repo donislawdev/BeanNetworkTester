@@ -215,25 +215,37 @@ monitor is gone it returns to the centre of the current screen.
   Only **Ping** on this tab sends anything over the network: echo requests to the address you
   type, from Start to Stop. Today:
   - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
-    address or a host name, choose how often to ping and how long to wait for a reply, and
-    press **Start**. Each ping is a row - when it went out, its round trip, its TTL and
-    what came back - the round trips of the last 60 are charted, and a line above the
-    table gives the totals: sent, replies, lost, and the lowest, average and highest round
-    trip. The ping goes on while another tab is in front, so you can start it, go to
-    Control, change the latency and come back to see it arrive. Another line says what the
-    running session does to these pings, from what the session itself captured: impairs
-    them, sees them but leaves them alone (outside its target), or does not capture them
-    (its traffic filter leaves them out). With the two-way filter a ping carries the
-    latency twice - 100 ms of latency adds about 200 ms to the round trip - and loss hits
-    the request and the reply separately, so 20% of loss loses about a third of the pings.
+    address or a host name, choose how often to ping, how long to wait for a reply, how
+    many bytes of data each ping carries (**Size**, 32 like ping.exe, up to 65 500) and how
+    many pings to send (**Pings**, or until Stop), and press **Start**. Each ping is a row -
+    when it went out, its round trip, its TTL and what came back - the round trips of the
+    last 60 are charted, and a line above the table gives the numbers: sent, replies, lost,
+    the longest run of losses, the lowest, average and highest round trip, the jitter (how
+    much the round trip moves from one reply to the next) and the round trip that 95% of
+    the replies stayed within. The ping goes on while another tab is in front, so you can
+    start it, go to Control, change the latency and come back to see it arrive. When the
+    session starts, stops, gets its changes applied or moves to a scenario's next step
+    during the run, the line shows the time since then and how it differs from the time
+    before - the average round trip and the share lost - and the chart marks the moment
+    with a dashed line. A ping that was out at that moment counts in neither. Another line
+    says what the running session does to these pings, from what the session itself
+    captured: impairs them, sees them but leaves them alone (outside its target), or does
+    not capture them (its traffic filter leaves them out). With the two-way filter a ping
+    carries the latency twice - 100 ms of latency adds about 200 ms to the round trip - and
+    loss hits the request and the reply separately, so 20% of loss loses about a third of
+    the pings.
     A session that targets a program never impairs a ping: a ping belongs to no program's
     connection. A reply whose data came back different (the session's corruption) says so.
+    A bigger ping shows the speed limit and the packet size limit: on the wire a ping is its
+    size plus 28 bytes (48 with IPv6), so with a 1400-byte limit 1372 bytes get through and
+    1373 are lost. Duplication does not show - Windows hands over the first reply and drops
+    the copies.
     Windows waits for a reply in steps of half a second, so the wait is offered in whole
     seconds, and a reply that comes later counts as lost - with a long latency, choose a
     longer wait. A name is looked up once, at Start, the way any program does, and the
     address it gave is shown. Right-click a row of **Sockets** or of the Connections page
     and choose **"Ping this address"** to ping its far end. **"Copy results"** copies the
-    rows and the totals in English.
+    rows, each part's numbers and the run's, in English.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
