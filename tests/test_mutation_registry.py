@@ -4524,8 +4524,9 @@ MUTATIONS = [
         # T() never raises on a missing argument: the whole line comes back raw.
         "label": "engine: the driver queue line stops passing the warning threshold",
         "file": "beantester/engine.py",
-        "old": "kb=q[\"queue_size\"] // 1024, warn=f\"{driverwait.WARN_MS:g}\"))",
-        "new": "kb=q[\"queue_size\"] // 1024))",
+        "old": ("t=q[\"queue_time\"], kb=q[\"queue_size\"] // 1024,\n"
+                "                           warn=f\"{driverwait.WARN_MS:g}\"))"),
+        "new": "t=q[\"queue_time\"], kb=q[\"queue_size\"] // 1024))",
         "test": "test_the_start_line_about_the_driver_queue_is_filled_in_to_the_last_number",
     },
     {
@@ -5880,9 +5881,16 @@ MUTATIONS = [
     {
         "label": "capture_backend: an empty filter is put to WinDivert's parser",
         "file": "beantester/capture_backend.py",
-        "old": "        if not text:\n            return False\n",
-        "new": "",
+        "old": "        direction.\n        \"\"\"\n        if not text:\n            return False\n",
+        "new": "        direction.\n        \"\"\"\n",
         "test": "test_the_windows_filter_check_asks_windivert_and_never_guesses",
+    },
+    {
+        "label": "capture_backend: an empty filter is put to eBPFDivert's compiler",
+        "file": "beantester/capture_backend.py",
+        "old": "        libebpfdivert - no handle and no root needed.\n        \"\"\"\n        if not text:\n            return False\n",
+        "new": "        libebpfdivert - no handle and no root needed.\n        \"\"\"\n",
+        "test": "test_the_linux_filter_check_asks_ebpfdivert_and_never_guesses",
     },
     {
         "label": "capture_backend: the Windows stamp clock is not QPC",
@@ -5911,6 +5919,124 @@ MUTATIONS = [
         "old": "    return current().filter_compiles(text)\n",
         "new": "    return False\n",
         "test": "test_the_filter_check_is_the_backends",
+    },
+    # -- the Linux backend (eBPFDivert) and what it changed around it ------------
+    {
+        "label": "capture_backend: Linux opens with an interface list (drops loopback)",
+        "file": "beantester/capture_backend.py",
+        "old": "        return pydivert.EBPFDivert(filt)\n",
+        "new": "        return pydivert.EBPFDivert(filt, interfaces=[\"lo\"])\n",
+        "test": "test_linux_opens_ebpfdivert_with_the_filter_and_nothing_else",
+    },
+    {
+        "label": "capture_backend: Linux listens to SOCKET events that carry no port",
+        "file": "beantester/capture_backend.py",
+        "old": ("        only through the poller); polling alone, for its first exchange only.\n"
+                "        \"\"\"\n        return None\n"),
+        "new": ("        only through the poller); polling alone, for its first exchange only.\n"
+                "        \"\"\"\n        from .socketwatch import windivert_socket_source\n"
+                "        return windivert_socket_source\n"),
+        "test": "test_linux_polls_the_socket_table_instead_of_the_socket_events",
+    },
+    {
+        "label": "capture_backend: Linux says every filter compiles",
+        "file": "beantester/capture_backend.py",
+        "old": "            return bool(EBPFDivert.check_filter(text)[0])\n",
+        "new": "            return True\n",
+        "test": "test_the_linux_filter_check_asks_ebpfdivert_and_never_guesses",
+    },
+    {
+        "label": "capture_backend: the Linux stamp clock runs at the wrong rate",
+        "file": "beantester/capture_backend.py",
+        "old": "        return 1_000_000_000\n",
+        "new": "        return 10_000_000\n",
+        "test": "test_the_linux_clock_is_clock_monotonic_in_nanoseconds",
+    },
+    {
+        "label": "capture_backend: Linux swaps let-past and dropped",
+        "file": "beantester/capture_backend.py",
+        "old": ("        return {\"bypassed\": int(counts.get(\"ringbuf_full\", 0)),\n"
+                "                \"dropped\": int(counts.get(\"queue_full\", 0))}\n"),
+        "new": ("        return {\"bypassed\": int(counts.get(\"queue_full\", 0)),\n"
+                "                \"dropped\": int(counts.get(\"ringbuf_full\", 0))}\n"),
+        "test": "test_only_the_linux_driver_counts_what_it_let_past_or_dropped",
+    },
+    {
+        "label": "capture_backend: Linux never reads EPERM as missing rights",
+        "file": "beantester/capture_backend.py",
+        "old": "        return getattr(exc, \"errno\", None) in (errno.EPERM, errno.EACCES)\n",
+        "new": "        return False\n",
+        "test": "test_linux_answers_an_unprivileged_open_with_permission",
+    },
+    {
+        "label": "capture_backend: doctor calls any kernel new enough",
+        "file": "beantester/capture_backend.py",
+        "old": "            new_enough = (major, minor) >= (5, 10)\n",
+        "new": "            new_enough = True\n",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_never_fail",
+    },
+    {
+        "label": "capture_backend: Linux gets the WinDivert backend",
+        "file": "beantester/capture_backend.py",
+        "old": "    return _EBPFDIVERT if platform.startswith(\"linux\") else _WINDIVERT\n",
+        "new": "    return _WINDIVERT\n",
+        "test": "test_linux_gets_the_ebpfdivert_backend",
+    },
+    {
+        "label": "cli: an EPERM open on Linux stays a RUNTIME failure",
+        "file": "beantester/cli.py",
+        "old": "        if backend.is_permission_error(e):\n",
+        "new": "        if False:\n",
+        "test": "test_linux_answers_an_unprivileged_open_with_permission",
+    },
+    {
+        "label": "driverwait: an overloaded driver is never said",
+        "file": "beantester/driverwait.py",
+        "old": "            if grew and now - self._overflow_warned >= WARN_S:\n",
+        "new": "            if False:\n",
+        "test": "test_an_overloaded_driver_is_said_once_per_window_and_totalled_at_stop",
+    },
+    {
+        "label": "driverwait: the overload is said on every tick",
+        "file": "beantester/driverwait.py",
+        "old": "            if grew and now - self._overflow_warned >= WARN_S:\n",
+        "new": "            if grew:\n",
+        "test": "test_an_overloaded_driver_is_said_once_per_window_and_totalled_at_stop",
+    },
+    {
+        "label": "driverwait: STOP never says the overload totals",
+        "file": "beantester/driverwait.py",
+        "old": "        if self.bypassed or self.dropped:\n",
+        "new": "        if False:\n",
+        "test": "test_an_overloaded_driver_is_said_once_per_window_and_totalled_at_stop",
+    },
+    {
+        "label": "driverwait: a stats reset forgets the driver's last reading",
+        "file": "beantester/driverwait.py",
+        "old": "        self._overflow_base = self._overflow_last\n",
+        "new": "        self._overflow_base = None\n",
+        "test": "test_a_stats_reset_counts_from_the_drivers_last_reading_not_from_zero",
+    },
+    {
+        "label": "engine: the watchdog never asks the driver's overload counters",
+        "file": "beantester/engine.py",
+        "old": "            self._driver_wait.watch_overflow(self._divert, time.monotonic())\n",
+        "new": "            pass\n",
+        "test": "test_the_engine_watches_the_drivers_counters_and_says_its_own_words",
+    },
+    {
+        "label": "engine: STOP leaves out the overload totals",
+        "file": "beantester/engine.py",
+        "old": "        self._driver_wait.say_overflow_total()   # said only when there were any\n",
+        "new": "        pass\n",
+        "test": "test_the_engine_watches_the_drivers_counters_and_says_its_own_words",
+    },
+    {
+        "label": "engine: the START queue line names WinDivert on every platform",
+        "file": "beantester/engine.py",
+        "old": "                self.log(T(capture_backend.current().text(\"driver_queue\"), n=q[\"queue_len\"],\n",
+        "new": "                self.log(T(\"log.driver_queue\", n=q[\"queue_len\"],\n",
+        "test": "test_the_engine_watches_the_drivers_counters_and_says_its_own_words",
     },
     {
         "label": "driverwait: the stamp frequency is not the backend's",

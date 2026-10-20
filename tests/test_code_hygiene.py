@@ -446,10 +446,12 @@ SILENT_BROAD_HANDLERS = {
     "gui/theme.py": 2,
     "i18n.py": 2,
     "utils.py": 2,
-    # filters.py held this one until 2026-10-20: the WinDivert filter compile check
-    # moved to the capture backend - moved, not new. A filter WinDivert cannot be
-    # asked about is "do not narrow", the safe answer, not a fault to record.
-    "capture_backend.py": 1,
+    # filters.py held the first until 2026-10-20: the WinDivert filter compile check
+    # moved to the capture backend - moved, not new. The second is eBPFDivert's
+    # check, the same rule on Linux. A filter the driver cannot be asked about is
+    # "do not narrow", the safe answer, not a fault to record - and recording it
+    # would note every check on a machine without pydivert.
+    "capture_backend.py": 2,
     "driver.py": 1,
     "gui/chart.py": 1,
     "gui/csv_export.py": 1,

@@ -39,6 +39,7 @@ import sys
 import tempfile
 import threading
 
+from . import capture_backend
 from . import crashlog
 from .paths import directory_is_writable, executable_dir, is_frozen
 from .winenv import is_admin, is_windows
@@ -762,10 +763,15 @@ def doctor():
     import platform
     import sys
 
+    # Off Windows the platform's capture backend says what it can (Linux:
+    # eBPFDivert); a platform with none keeps the words below.
+    backend = capture_backend.current()
+    note = None if is_windows() else backend.platform_note()
     checks = [("python", "ok", platform.python_version()),
               ("platform", "ok" if is_windows() else "warn",
                f"{platform.system()} {platform.release()}"
-               + ("" if is_windows() else " - capture needs Windows; use --simulate")),
+               + ("" if is_windows() else
+                  note if note is not None else " - capture needs Windows; use --simulate")),
               ("frozen", "ok", "yes" if getattr(sys, "frozen", False) else "no"),
               _clock_check()]
 
@@ -821,8 +827,12 @@ def doctor():
                        "'session.driver_queue'); needs an open handle, so --doctor "
                        "does not load the driver just to look"))
     else:
-        checks.append(("pydivert", "warn" if not pydivert_available() else "ok",
-                       "not required outside Windows (--simulate works)"))
+        rows = backend.doctor_rows()
+        if rows is None:
+            checks.append(("pydivert", "warn" if not pydivert_available() else "ok",
+                           "not required outside Windows (--simulate works)"))
+        else:
+            checks.extend(rows)
 
     ok = all(state != "fail" for _, state, _ in checks)
     return ok, checks

@@ -8,6 +8,7 @@ errors to stdout and crash with a traceback on an unwritable path.
 The report loop takes its clock and its sleep function as arguments, so the
 timing tests run in microseconds instead of seconds.
 """
+import errno
 import io
 import json
 import os
@@ -15,7 +16,8 @@ import threading
 import time
 
 from beantester import cli as cli_module
-from beantester import exitcodes, winenv
+from beantester import capture_backend, exitcodes, winenv
+from beantester.i18n import T
 from beantester.cli import (_Terminated, _print_conn_rows, build_arg_parser,
                             config_from_args, run_cli)
 from beantester.engine import BeanEngine
@@ -499,6 +501,37 @@ def test_exit_code_runtime_without_pydivert():
     # branch was unreachable and the user never learned it was, say, [WinError 5].
     check("exit: and it says WHY, not just that something failed",
           "WinDivert could not be opened" in err.getvalue(), f"({err.getvalue()!r})")
+
+
+def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
+    """eBPFDivert refuses an unprivileged open with EPERM: PERMISSION(7), and "sudo".
+
+    Linux checks nothing before the open - the open is the authority, and nothing
+    is captured yet - so the same exit a Windows run without elevation gets from
+    the check before it comes from here. Driven through each backend on any OS.
+    The Windows backend must answer the same failure exactly as before, RUNTIME:
+    on Windows the elevation check has already passed when an open fails.
+    """
+    monkeypatch.setattr(winenv, "is_admin", lambda: True)     # past the Windows check
+
+    class _RefusedOpen(_TargetedEngine):
+        def start(self, *_a, **_k):
+            raise PermissionError(errno.EPERM, "ebpfdivert_open: Operation not permitted")
+
+    errs = {}
+    for backend, want in ((capture_backend.EBPFDivertBackend(), exitcodes.PERMISSION),
+                          (capture_backend.WinDivertBackend(), exitcodes.RUNTIME)):
+        monkeypatch.setattr(capture_backend, "current", lambda b=backend: b)
+        out, err = io.StringIO(), io.StringIO()
+        clock = FakeClock()
+        code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                       engine=_RefusedOpen(), out=out, err=err)
+        errs[backend.name] = err.getvalue()
+        check(f"{backend.name}: EPERM at the open -> exit {want}", code == want, f"(code={code})")
+    check("Linux: it says to run with sudo", T("dialogs.ebpf_needs_root") in errs["ebpfdivert"],
+          f"({errs['ebpfdivert']!r})")
+    check("Linux: and keeps the driver's own words", "Operation not permitted" in errs["ebpfdivert"])
+    check("Windows: no sudo advice", "sudo" not in errs["windivert"], f"({errs['windivert']!r})")
 
 
 def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):

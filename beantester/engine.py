@@ -1140,8 +1140,9 @@ class BeanEngine:
                 # three values are CEILINGS, not a delay the tool always adds - the text
                 # says so, and takes the warning threshold from the constant it quotes.
                 q = self._driver_queue
-                self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
-                           kb=q["queue_size"] // 1024, warn=f"{driverwait.WARN_MS:g}"))
+                self.log(T(capture_backend.current().text("driver_queue"), n=q["queue_len"],
+                           t=q["queue_time"], kb=q["queue_size"] // 1024,
+                           warn=f"{driverwait.WARN_MS:g}"))
             self._t_wd.start()
         except BaseException as exc:
             # A worker (or the resolver) could not be spawned. Do NOT leave a running
@@ -1528,6 +1529,7 @@ class BeanEngine:
         # the system-wide timer request, the switch interval, the queued packets and
         # the atexit registration all stayed until the log moved (measured).
         self._say(say)
+        self._driver_wait.say_overflow_total()   # said only when there were any
         self.log(T("log.stop"))
 
     # How long the capture thread waits on _stop_lock before re-checking WHO holds
@@ -1673,6 +1675,9 @@ class BeanEngine:
                 self.core.drain_retired()
             except Exception as _exc:
                 crashlog.note(_exc, "engine")
+            # What an overloaded driver let past this tool or dropped (eBPFDivert
+            # counts both; a no-op where the driver counts neither, see driverwait).
+            self._driver_wait.watch_overflow(self._divert, time.monotonic())
             if deadline_reached(self._deadline, time.monotonic()):
                 # _worker_stop, not stop(): this runs on the watchdog thread, and a
                 # user pressing STOP at the same instant holds _stop_lock while joining
@@ -2029,7 +2034,7 @@ class BeanEngine:
         self._send_warned = now
         with self._slock:
             failed = self.st["drop_send"]
-        self.log(T("log.send_failed", n=failed, e=exc))
+        self.log(T(capture_backend.current().text("send_failed"), n=failed, e=exc))
         if first:
             # into the event log too, so it reaches the repro report: a session
             # whose delivered counts are short must say why in the artefact

@@ -9,7 +9,7 @@ and that the cleanup is always asked with the window's own marker let go first.
 import json
 import os
 
-from beantester import driver
+from beantester import capture_backend, driver
 from beantester.appinfo import version_line
 from beantester.nettools import diagnostics
 from fakes import ROOT, check
@@ -33,13 +33,24 @@ def _names_doctor_can_give(monkeypatch):
             monkeypatch.setattr(driver, "is_windows", lambda w=windows: w)
             monkeypatch.setattr(driver, "is_frozen", lambda f=frozen: f)
             names |= {row[0] for row in driver.doctor()[1]}
+
+    # ...and Linux's, whichever machine runs this: off Windows the rows are the
+    # capture backend's, and on a Windows runner that backend is WinDivert's.
+    class _Linux(capture_backend.EBPFDivertBackend):
+        @staticmethod
+        def doctor_rows():
+            return capture_backend.EBPFDivertBackend.doctor_rows(release="6.8.0", root=ROOT, euid=0)
+    monkeypatch.setattr(capture_backend, "current", lambda: _Linux())
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    names |= {row[0] for row in driver.doctor()[1]}
     return names
 
 
 def test_every_check_doctor_can_give_has_a_name_in_every_language(monkeypatch):
     names = _names_doctor_can_give(monkeypatch)
-    check("the branches were walked (Windows, frozen: program folder)",
-          {"python", "administrator", "program folder", "windivert driver"} <= names,
+    check("the branches were walked (Windows, frozen: program folder; Linux)",
+          {"python", "administrator", "program folder", "windivert driver",
+           "kernel", "btf", "privileges"} <= names,
           f"({sorted(names)})")
     for code in ("en", "pl", "zh"):
         with open(os.path.join(ROOT, "lang", f"{code}.json"), encoding="utf-8") as f:

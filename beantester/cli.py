@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import appinfo, clilog, driver, exitcodes, winenv
+from . import appinfo, capture_backend, clilog, driver, exitcodes, winenv
 from .appinfo import command_name, program_name, version_line
 from .clilog import CliLog
 from . import crashlog
@@ -984,7 +984,14 @@ def _open_session(cfg, log, engine):
         # print the raw Win32 error with nothing to do about it. Elevation is known
         # here for certain: a non-elevated run never reaches this line (it fails
         # above with PERMISSION), so the hint can only be about the driver itself.
-        hint = driver.open_failure_hint(e, elevated=True)
+        # On Linux nothing is checked beforehand: eBPFDivert answers an
+        # unprivileged open with EPERM/EACCES before anything is captured, and that
+        # answer earns the same exit a Windows run without elevation gets above.
+        backend = capture_backend.current()
+        if backend.is_permission_error(e):
+            _fail(exitcodes.PERMISSION, f"cannot start the capture: {e}\n"
+                  + T(backend.open_failure_hint(e)))
+        hint = backend.open_failure_hint(e, elevated=True)
         _fail(exitcodes.RUNTIME, f"cannot start the capture: {e}"
               + (f"\n{T(hint)}" if hint else ""))
 

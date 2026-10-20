@@ -186,6 +186,12 @@ KNOWN_LAZY_CYCLES = {
         "the reason is written at paths.py's lazy import. crashlog sits in the "
         "same knot because it writes THROUGH paths and stamps records with the "
         "version from appinfo.",
+    frozenset({"capture_backend", "driver"}):
+        "driver.py is WinDivert's lifecycle, and the Windows capture backend calls "
+        "it lazily, at START (the driver-used marker) and when an open fails (its "
+        "advice), exactly as the engine and the CLI used to; driver.doctor in turn "
+        "asks the platform's backend for the rows of a platform that is not Windows. "
+        "The deferred edge is the backend's, so either module can be imported first.",
     frozenset({"gui/pages", "gui/pages/conns", "gui/pages/control"}):
         "the Ctrl+F dispatcher. `focus_search` lives in the page registry, which "
         "imports every page to list them, and the two pages with a search box "

@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Linux, experimental: the command line impairs real traffic.** Run from source with
+  `sudo` on Linux 5.10 or newer built with BTF, it captures through pydivert's eBPFDivert.
+  `--doctor` shows what the machine still lacks, and without root the run stops with exit
+  code 7. When the tool cannot keep up, it says how many packets went around it unimpaired
+  and how many the driver dropped. `--target` reads the socket table, so the first exchange
+  of a new connection can pass before it applies. The window and the Tools tab are not on
+  Linux yet.
+
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last
   60 are charted, and the totals say what was lost. The ping goes on while another tab is in
