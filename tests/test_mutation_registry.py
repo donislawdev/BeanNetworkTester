@@ -3450,6 +3450,14 @@ MUTATIONS = [
         "test": "test_a_ping_of_any_size_carries_ping_exes_pattern_and_compares_all_of_it",
     },
     {
+        # the change line's dashes a smear beside a line twice as thick at 200%.
+        "label": "chart: the Ping chart's dashes stay 4 and 3 px at any scale",
+        "file": "beantester/gui/chart.py",
+        "old": "    dash = tuple(scaled(px) for px in CHANGE_DASH)",
+        "new": "    dash = CHANGE_DASH",
+        "test": "test_the_ping_chart_draws_a_dashed_line_where_the_session_changed",
+    },
+    {
         # the moment the session changed not drawn.
         "label": "chart: the Ping chart draws no change line",
         "file": "beantester/gui/chart.py",

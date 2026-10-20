@@ -123,9 +123,10 @@ def draw_ping_chart(canvas, values, changes=()):
         return
     g = chart_geometry(*_canvas_size(canvas))
     bottom = g["mt"] + g["ph"]
+    dash = tuple(scaled(px) for px in CHANGE_DASH)     # at 200% the line is twice as thick
     for i in changes:
         x = g["ml"] + g["pw"] * (i / (len(values) - 1))
-        canvas.create_line(x, g["mt"], x, bottom, fill=MUT, dash=CHANGE_DASH)
+        canvas.create_line(x, g["mt"], x, bottom, fill=MUT, dash=dash)
     for i, value in enumerate(values):
         if value is None:
             x = g["ml"] + g["pw"] * (i / (len(values) - 1))

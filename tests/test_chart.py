@@ -164,3 +164,13 @@ def test_the_ping_chart_draws_a_dashed_line_where_the_session_changed():
           and dashed[0][1][3] == 170.0 and dashed[0][1][1] < 170.0
           and dashed[0][2] == MUT and dashed[0][5] == chart.CHANGE_DASH, f"({dashed})")
     check("and the rest as before", [i for i in got if len(i) != 6] == plain, f"({got})")
+    before = scaling.ui_scale()
+    scaling.set_scale(2.0)
+    try:
+        canvas = Canvas(500, 200)
+        chart.draw_ping_chart(canvas, values, [2])
+    finally:
+        scaling.set_scale(before)
+    big = [item for item in canvas.items if len(item) == 6]
+    check("at 200% the dashes and gaps are twice as long, like every pixel of the chart",
+          len(big) == 1 and big[0][5] == tuple(2 * px for px in chart.CHANGE_DASH), f"({big})")
