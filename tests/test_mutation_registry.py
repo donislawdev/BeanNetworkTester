@@ -2561,6 +2561,14 @@ MUTATIONS = [
         "test": "test_gpl2_or_later_passes_because_it_can_be_taken_under_gpl3",
     },
     {
+        # Scorecard alert 20 (mcp pinned by semgrep): an ignore must expire.
+        "label": "deps: an advisory set aside in osv-scanner.toml has no end date",
+        "file": "osv-scanner.toml",
+        "old": "ignoreUntil = 2026-11-20\n",
+        "new": "# ignoreUntil = 2026-11-20\n",
+        "test": "test_every_ignored_advisory_says_why_and_until_when",
+    },
+    {
         "label": "deps: the build-time hooks lose their named exception",
         "file": "tools/dependency_gate.py",
         "old": "    \"pyinstaller-hooks-contrib\": \"build-time hooks (GPL-2.0-or-later, runtime \"\n",
