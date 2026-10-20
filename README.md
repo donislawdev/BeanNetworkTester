@@ -166,22 +166,29 @@ the socket table and the process names come straight from the OS, and targeting 
 for everything else, which is how the engine's tests run with no driver at all - and on
 Linux it is what `--target` reads.
 
-### Linux (experimental: the command line, from source)
+### Linux (experimental, from source)
 
-The command line also captures on Linux, through pydivert's eBPFDivert backend. It is experimental,
-and so is the pydivert Linux support it rests on.
+The command line and the window also capture on Linux, through pydivert's eBPFDivert backend. It
+is experimental, and so is the pydivert Linux support it rests on.
 
 - Linux 5.10 or newer built with BTF (`/sys/kernel/btf/vmlinux` exists), x86_64 or aarch64,
   glibc 2.28 or newer
 - root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW
-- run from a checkout, in a virtual environment:
+- run from a checkout, in a virtual environment (the window also needs Tk: `python3-tk` on
+  Ubuntu):
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements.txt
-sudo .venv/bin/python -m beantester --doctor
-sudo .venv/bin/python -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
+sudo .venv/bin/python -B -m beantester --doctor
+sudo .venv/bin/python -B -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
+sudo .venv/bin/python -B bean_network_tester.py
 ```
+
+The last line opens the window. `-B` keeps root from leaving Python's cache folders in your
+checkout, which you could then not delete without `sudo`. Plain `sudo` keeps the two settings
+the window needs to reach the desktop, `DISPLAY` and `XAUTHORITY`, on Ubuntu 24.04 and 26.04,
+also under Wayland. Ubuntu 26.04's `sudo` refuses `-E`, and nothing here needs it.
 
 `--doctor` lists what the machine still lacks, and while something stops a capture it ends with
 exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
@@ -191,11 +198,17 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   code 1 and says so.
 - `--target` reads the socket table, so the first exchange of a new connection can pass before the
   target applies.
-- When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log says how
-  many, and how many the driver dropped.
-- If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows again.
+- When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log, the
+  Statistics page, the JSON counters and the repro report say how many, and how many the driver
+  dropped.
+- If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows
+  again. There is nothing for `--cleanup-driver` to do: the kernel cleans up by itself.
 - IP fragments always pass through the tool, even those its filter does not match.
-- The window and the Tools tab are Windows only for now.
+- In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo`, and
+  GitHub and Donate print their address instead of starting a browser as root.
+- On the Tools tab, Sockets, Port check, Filter tester and Diagnostics work. Ping, TCP health and
+  Adapters say that they work on Windows only for now, and so do the row menu entries that open
+  them or reset a connection.
 
 ## The window
 
