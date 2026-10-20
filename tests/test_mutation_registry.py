@@ -943,10 +943,12 @@ MUTATIONS = [
         "label": "ratchet: the crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
         # Re-anchored 2026-10-14 (1 -> 2, engine.py joined the band when the
-        # page buttons left app.py - the owner's decision). Same proof: a count
-        # frozen looser than the measurement is caught by the equality half.
-        "old": "FILES_NEAR_CEILING = 2          # beantester/gui/app.py",
-        "new": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        # page buttons left app.py) and 2026-10-20 (2 -> 3, cli.py joined it when
+        # the window's rights questions left app.py) - the owner's decisions. Same
+        # proof: a count frozen looser than the measurement is caught by the
+        # equality half.
+        "old": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        "new": "FILES_NEAR_CEILING = 4          # beantester/gui/app.py",
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
     {
@@ -1901,7 +1903,7 @@ MUTATIONS = [
     {
         "label": "driver: a start failure goes back to blaming the user's rights",
         "file": "beantester/gui/dialogs.py",
-        "old": "    key = open_failure_hint(err, elevated)",
+        "old": "    key = current().open_failure_hint(err, elevated)",
         "new": "    key = \"dialogs.run_as_admin\"",
         "test": "test_the_start_failure_advice_fits_the_failure_not_every_failure",
     },
@@ -6056,6 +6058,61 @@ MUTATIONS = [
         "old": "    return _EBPFDIVERT if platform.startswith(\"linux\") else _WINDIVERT\n",
         "new": "    return _WINDIVERT\n",
         "test": "test_linux_gets_the_ebpfdivert_backend",
+    },
+    # -- the window asks the backend about rights (Linux stage 2a, 2026-10-20) ------- #
+    {
+        # MEASURED before: a Linux window logged "capture works only on Windows"
+        # over a session that was running.
+        "label": "gui rights: the startup note goes back to assuming Windows",
+        "file": "beantester/gui/app.py",
+        "old": "        note = capture_backend.current().startup_note(self._is_admin)\n",
+        "new": "        note = \"log.note_windows\"\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "gui rights: the red line keeps the Windows words everywhere",
+        "file": "beantester/gui/app.py",
+        "old": "                root, text=T(capture_backend.current().rights_banner()), style=\"Bad.TLabel\",\n",
+        "new": "                root, text=T(\"warn.not_admin\"), style=\"Bad.TLabel\",\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "gui rights: the window assumes it may capture",
+        "file": "beantester/gui/app.py",
+        "old": "            return capture_backend.current().has_capture_rights()\n",
+        "new": "            return True\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "capture_backend: Linux says any process may capture",
+        "file": "beantester/capture_backend.py",
+        "old": "        return _rights(_euid(), \"/\", None) is not None\n",
+        "new": "        return True\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: two of the three capabilities are enough",
+        "file": "beantester/capture_backend.py",
+        "old": "    if caps & needed == needed:\n",
+        "new": "    if caps & needed:\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: an unelevated Windows window is not told to elevate",
+        "file": "beantester/capture_backend.py",
+        "old": "        return None if has_rights else \"log.note_admin\"\n",
+        "new": "        return None\n",
+        "test": "test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did",
+    },
+    {
+        # The window decides what an unreadable token means; swallowed here, it would
+        # turn into "not elevated" - a banner on a window that may well be elevated.
+        "label": "capture_backend: an unreadable Windows token reads as not elevated",
+        "file": "beantester/capture_backend.py",
+        "old": "        import ctypes\n        return bool(ctypes.windll.shell32.IsUserAnAdmin())\n",
+        "new": "        import ctypes\n        try:\n            return bool(ctypes.windll.shell32.IsUserAnAdmin())\n"
+               "        except Exception:\n            return False\n",
+        "test": "test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did",
     },
     {
         "label": "cli: an EPERM open on Linux stays a RUNTIME failure",

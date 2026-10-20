@@ -366,10 +366,14 @@ def test_the_start_failure_advice_fits_the_failure_not_every_failure():
     was sent to do it again.
 
     Both directions are asserted, because keeping the advice for the error that
-    really means it is half the fix.
+    really means it is half the fix. WinDivert's table, so its backend is pinned:
+    the window asks the platform's backend (``capture_backend``), and the Linux
+    runner's has its own table (``test_capture_backend.py``).
     """
     run_gui("""
         import beantester.gui.dialogs as dialogs
+        from beantester import capture_backend
+        capture_backend._CURRENT = capture_backend._WINDIVERT
 
         shown = []
         dialogs.show_error = lambda parent, title, message: shown.append(message)
@@ -397,6 +401,51 @@ def test_the_start_failure_advice_fits_the_failure_not_every_failure():
         assert bnt.T("dialogs.run_as_admin") in shown[-1], shown[-1]
 
         # ...and the button comes back either way, or the window is stuck
+        assert app.running is False
+    """)
+
+
+def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
+    """The window asks the platform's backend, not Windows (``capture_backend``).
+    MEASURED before on Ubuntu 26.04: a Linux window logged "capture works only on
+    Windows" over a session that was running, showed no red line without root, and
+    met the kernel's refusal with the bare error while the console said "run it with
+    sudo". The status line is a fixed text here, so the machine's own rights do not
+    decide the test."""
+    run_gui("""
+        import beantester.gui.dialogs as dialogs
+        from beantester import capture_backend
+        capture_backend._CURRENT = capture_backend._EBPFDIVERT
+        real_rights = capture_backend._rights
+        capture_backend._rights = lambda e, r, s: real_rights(e, r, "CapEff:\\t0000000000000000\\n")
+        shown = []
+        dialogs.show_error = lambda parent, title, message: shown.append(message)
+        refused = PermissionError(1, "ebpfdivert_open: Operation not permitted")
+
+        capture_backend._euid = lambda: 1000
+        app._is_admin = app._detect_admin()
+        assert app._is_admin is False
+        app._build_ui()
+        assert app.admin_warning.kw.get("text") == bnt.T("warn.ebpf_not_root"), app.admin_warning.kw
+        app._check_environment()
+        app._logview.drain()
+        assert any(bnt.T("log.ebpf_note_root") in line for line in app._log_lines), app._log_lines
+        assert not any(bnt.T("log.note_windows") in line for line in app._log_lines)
+        app._finish_start(refused)
+        assert "Operation not permitted" in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.run_as_admin") not in shown[-1], shown[-1]
+
+        # root, refused all the same (lockdown, an LSM): not "use sudo"
+        capture_backend._euid = lambda: 0
+        app._is_admin = app._detect_admin()
+        assert app._is_admin is True
+        app._finish_start(refused)
+        assert bnt.T("dialogs.ebpf_refused_as_root") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root") not in shown[-1], shown[-1]
+        app._check_environment()
+        app._logview.drain()
+        assert any(bnt.T("log.ebpf_note_experimental") in line for line in app._log_lines)
         assert app.running is False
     """)
 

@@ -16,7 +16,6 @@ Notable behaviour (all deliberate, see PROJECT_NOTES):
 """
 import os
 import queue
-import sys
 import threading
 import time
 from collections import deque
@@ -32,7 +31,7 @@ from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
-from .. import crashlog, driver, winenv
+from .. import capture_backend, crashlog, driver, winenv
 from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     field_name, set_language)
@@ -424,7 +423,7 @@ class App:
         # wraplength refined on the first resize.
         if not self._is_admin:
             self.admin_warning = ttk.Label(
-                root, text=T("warn.not_admin"), style="Bad.TLabel",
+                root, text=T(capture_backend.current().rights_banner()), style="Bad.TLabel",
                 justify="left", anchor="w", wraplength=scaled(600))
             self.admin_warning.pack(side="top", fill="x", padx=pad,
                                     pady=(0, scaled(4)))
@@ -1360,7 +1359,7 @@ class App:
         """Apply the result of an async start. Main thread only (from _tick)."""
         if err is not None:
             # Which dialog, and what advice, is the dialogs' call (shared with the
-            # CLI through driver.open_failure_hint). `_is_admin` is the same flag
+            # CLI through the backend's open_failure_hint). `_is_admin` is the same flag
             # that drives the banner above - the one thing this object knows that
             # the message needs.
             dialogs.show_start_failure(self.root, err, self._is_admin)
@@ -1651,25 +1650,22 @@ class App:
                 store.problem = None
 
     def _detect_admin(self):
-        """Do we hold the rights WinDivert needs? True when the question is moot.
+        """Do we hold the rights a capture needs here? The backend's answer.
 
-        Off Windows there is no driver to elevate for (that is logged separately),
-        so we do not nag; on Windows we ask the OS. Unknown -> don't cry wolf.
+        An elevated token on Windows, root or three capabilities on Linux
+        (``capture_backend``); True where the question is moot. Unknown -> don't
+        cry wolf.
         """
-        if not sys.platform.startswith("win"):
-            return True
         try:
-            import ctypes
-            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+            return capture_backend.current().has_capture_rights()
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
             return True
 
     def _check_environment(self):
-        if not sys.platform.startswith("win"):
-            self.log(T("log.note_windows"))
-        elif not self._is_admin:
-            self.log(T("log.note_admin"))
+        note = capture_backend.current().startup_note(self._is_admin)
+        if note:
+            self.log(T(note))
         # Installed, not IMPORTED: this runs before the window is shown, and the
         # import was ~97 ms of it (see driver.pydivert_available).
         self.log(T("log.ready") if driver.pydivert_available(load=False) else T("log.no_pydivert"))

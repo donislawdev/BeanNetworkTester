@@ -135,6 +135,15 @@ class _FakeBackend:
     def platform_note(self):
         return None
 
+    def has_capture_rights(self):
+        return True
+
+    def startup_note(self, has_rights):
+        return None
+
+    def rights_banner(self):
+        return "warn.not_admin"
+
 
 # -- the choice ---------------------------------------------------------------- #
 def test_windows_gets_the_windivert_backend():
@@ -290,7 +299,8 @@ def test_every_backend_answers_the_whole_contract():
     check("the contract names what the call sites ask",
           {"open_network", "socket_source_factory", "filter_compiles", "stamp_now",
            "stamp_frequency", "text", "overload_counters", "is_permission_error",
-           "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS"} <= set(members),
+           "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS",
+           "has_capture_rights", "startup_note", "rights_banner"} <= set(members),
           f"({members})")
     for backend in (WinDivertBackend, EBPFDivertBackend, _FakeBackend):
         missing = [n for n in members if not hasattr(backend, n)]
@@ -434,6 +444,55 @@ def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
     err = OSError(5, "denied")
     check("Windows: the hint is driver.open_failure_hint's, asked the same way",
           WinDivertBackend.open_failure_hint(err, elevated=True) == "key" and seen == [(err, True)])
+
+
+def test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did(monkeypatch):
+    """MOVED from ``App._detect_admin``/``_check_environment``/the banner: shell32's
+    token on Windows (a failure raises - the window does not cry wolf), "nothing to
+    elevate" off it, and the same two notes and banner as before."""
+    import ctypes
+    monkeypatch.setattr(winenv, "is_windows", lambda: True)
+    shell32 = types.SimpleNamespace(IsUserAnAdmin=lambda: 1)
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(shell32=shell32), raising=False)
+    check("an elevated token", WinDivertBackend.has_capture_rights() is True)
+    shell32.IsUserAnAdmin = lambda: 0
+    check("and one that is not", WinDivertBackend.has_capture_rights() is False)
+
+    def unreadable():
+        raise OSError("no token")
+    shell32.IsUserAnAdmin = unreadable
+    with pytest.raises(OSError):
+        WinDivertBackend.has_capture_rights()
+    check("no note for an elevated window", WinDivertBackend.startup_note(True) is None)
+    check("'run as administrator' for one that is not",
+          WinDivertBackend.startup_note(False) == "log.note_admin")
+    check("the banner it always had", WinDivertBackend.rights_banner() == "warn.not_admin")
+    monkeypatch.setattr(winenv, "is_windows", lambda: False)
+    check("off Windows: nothing to elevate for", WinDivertBackend.has_capture_rights() is True)
+    check("and the note says where capture works",
+          WinDivertBackend.startup_note(True) == "log.note_windows")
+
+
+def test_the_linux_backend_reads_rights_the_way_the_doctor_row_does(monkeypatch):
+    """One answer (``_rights``) for the window's red line and ``--doctor``'s row."""
+    none, caps = "CapEff:\t0000000000000000\n", "CapEff:\t0000008000003000\n"   # bits 12, 13, 39
+    check("root", capture_backend._rights(0, "/", none) == "root")
+    check("the three capabilities", capture_backend._rights(1000, "/", caps).startswith("CAP_BPF"))
+    check("neither", capture_backend._rights(1000, "/", none) is None)
+    check("two of three is not enough",
+          capture_backend._rights(1000, "/", "CapEff:\t0000000000003000\n") is None)
+    real = capture_backend._rights
+    for status, euid, expected in ((none, 0, True), (none, 1000, False), (caps, 1000, True)):
+        monkeypatch.setattr(capture_backend, "_euid", lambda e=euid: e)
+        monkeypatch.setattr(capture_backend, "_rights", lambda e, r, s, st=status: real(e, r, st))
+        check(f"euid {euid}, {status.strip()}: has_capture_rights is {expected}",
+              EBPFDivertBackend.has_capture_rights() is expected)
+        row = capture_backend._privileges_row(euid, "/", status)
+        check("and the doctor row agrees", (row[1] == "ok") is expected, f"({row})")
+    check("the note for a window that can capture",
+          EBPFDivertBackend.startup_note(True) == "log.ebpf_note_experimental")
+    check("and for one that cannot", EBPFDivertBackend.startup_note(False) == "log.ebpf_note_root")
+    check("its own banner", EBPFDivertBackend.rights_banner() == "warn.ebpf_not_root")
 
 
 def _rows(**kw):

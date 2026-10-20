@@ -53,6 +53,9 @@ class CaptureBackend(Protocol):
     def open_failure_hint(self, exc: BaseException, elevated: Optional[bool] = None) -> str: ...
     def doctor_rows(self) -> Any: ...
     def platform_note(self) -> Optional[str]: ...
+    def has_capture_rights(self) -> bool: ...
+    def startup_note(self, has_rights: bool) -> Optional[str]: ...
+    def rights_banner(self) -> str: ...
 
 
 # The session lines every backend must have words for (``text``), and the ones
@@ -172,6 +175,34 @@ class WinDivertBackend:
     def platform_note():
         """What ``--doctor``'s platform row adds off Windows: ``None`` = its own words."""
         return None
+
+    # The window's three questions about rights (``gui/app.py``): MOVED from the
+    # window, where they used to be asked of Windows directly - so a Linux window
+    # said "capture works only on Windows" over a session that was running.
+    @staticmethod
+    def has_capture_rights():
+        """Does this process hold an elevated token? Yes off Windows: nothing to elevate.
+
+        Read from shell32 itself, and a failure RAISES: the window decides what a
+        token it cannot read means (it does not cry wolf). The command line keeps its
+        own question, ``winenv.is_admin``, which answers that case the other way.
+        """
+        if not winenv.is_windows():
+            return True
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+
+    @staticmethod
+    def startup_note(has_rights):
+        """The window's first log line about capturing here, or ``None``."""
+        if not winenv.is_windows():
+            return "log.note_windows"
+        return None if has_rights else "log.note_admin"
+
+    @staticmethod
+    def rights_banner():
+        """The red line over a window that cannot capture."""
+        return "warn.not_admin"
 
 
 class EBPFDivertBackend:
@@ -331,6 +362,23 @@ class EBPFDivertBackend:
     def platform_note(cls):
         return cls.PLATFORM_NOTE
 
+    @staticmethod
+    def has_capture_rights():
+        """Root, or CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW - the ``--doctor`` row's answer.
+
+        A hint, not the authority: the open itself decides (``is_permission_error``),
+        and the kernel can refuse root too. Asked by the window for its red line.
+        """
+        return _rights(_euid(), "/", None) is not None
+
+    @staticmethod
+    def startup_note(has_rights):
+        return "log.ebpf_note_experimental" if has_rights else "log.ebpf_note_root"
+
+    @staticmethod
+    def rights_banner():
+        return "warn.ebpf_not_root"
+
 
 # Capability bits (linux/capability.h) a capture needs without root.
 _CAP_NET_ADMIN, _CAP_NET_RAW, _CAP_BPF = 12, 13, 39
@@ -348,9 +396,14 @@ def _euid():
     return geteuid() if geteuid is not None else None
 
 
-def _privileges_row(euid, root, status):
+def _rights(euid, root, status):
+    """What lets this process capture - ``"root"`` or the three capabilities - or ``None``.
+
+    ONE answer for ``--doctor``'s row and the window's red line, so the two cannot
+    disagree about the same process.
+    """
     if euid == 0:
-        return ("privileges", "ok", "root")
+        return "root"
     if status is None:
         try:
             with open(os.path.join(root, "proc", "self", "status"), encoding="ascii") as f:
@@ -363,7 +416,14 @@ def _privileges_row(euid, root, status):
             caps = int(line.split(":", 1)[1].strip() or "0", 16)
     needed = (1 << _CAP_NET_ADMIN) | (1 << _CAP_NET_RAW) | (1 << _CAP_BPF)
     if caps & needed == needed:
-        return ("privileges", "ok", "CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW")
+        return "CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW"
+    return None
+
+
+def _privileges_row(euid, root, status):
+    how = _rights(euid, root, status)
+    if how is not None:
+        return ("privileges", "ok", how)
     return ("privileges", "warn", "not root, and without CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW - "
                                   "a capture needs sudo; --simulate works without it")
 

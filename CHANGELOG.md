@@ -14,9 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   around it unimpaired and how many the driver dropped. `--target` reads the socket table,
   so a new connection's first exchange can pass before it applies.
 
-- **Linux, experimental: the window.** On the Tools tab, Ping, TCP health and Adapters say
-  that they work on Windows only for now, and the row menus grey out Reset this connection,
-  Show TCP health and Ping this address.
+- **Linux, experimental: the window.** Start it with sudo. Without root a red line says so,
+  and a START the system refuses says what to do about it. On the Tools tab, Ping, TCP
+  health and Adapters say that they work on Windows only for now, and the row menus grey
+  out Reset this connection, Show TCP health and Ping this address.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

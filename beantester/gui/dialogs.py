@@ -157,14 +157,17 @@ def start_failure_message(err, elevated):
     """What the start-failed dialog says: the error, plus advice that FITS it.
 
     Here rather than in ``App`` because it is dialog CONTENT, and because the
-    advice comes from a table the command line reads too (``driver.py``) - the
-    window and the console must not grow two opinions about the same Win32 error.
-    The elevation hint is one entry in that table, not the answer to everything:
-    it used to be appended to every failure, including to a window that was
-    already elevated (WinError 433, which is about the driver, not about rights).
+    advice comes from the table the command line reads too - the platform's
+    backend's (``capture_backend``: WinDivert's in ``driver.py``, eBPFDivert's in
+    its own) - so the window and the console never hold two opinions about the
+    same error. Asked of ``driver`` directly, a Linux window showed a refusal of
+    the kernel with no advice at all, while the console said "run it with sudo"
+    (measured 2026-10-20). The elevation hint is one entry in that table, not the
+    answer to everything: it used to be appended to every failure, including to a
+    window that was already elevated (WinError 433, which is about the driver).
     """
-    from ..driver import open_failure_hint
-    key = open_failure_hint(err, elevated)
+    from ..capture_backend import current
+    key = current().open_failure_hint(err, elevated)
     return f"{err}\n\n{T(key)}" if key else str(err)
 
 

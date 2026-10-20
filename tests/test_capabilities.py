@@ -38,7 +38,7 @@ GATED_ITSELF = {
     "beantester/portmap.py": "the socket table; psutil off Windows (_Native is Windows only)",
     "beantester/crashlog.py": "the native crash hook; armed only on a real Windows capture",
     "beantester/gui/theme.py": "the dark title bar; sys.platform checked before uxtheme",
-    "beantester/gui/app.py": "IsUserAnAdmin; asked only on Windows",
+    "beantester/capture_backend.py": "IsUserAnAdmin in the Windows backend, after is_windows()",
 }
 
 
