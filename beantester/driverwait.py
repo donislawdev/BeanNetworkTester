@@ -16,7 +16,7 @@ for anywhere.
 """
 import time
 
-from . import winenv
+from . import capture_backend
 from .i18n import T
 
 SAMPLE_S = 0.05         # 20 samples a second, whatever the rate
@@ -44,7 +44,11 @@ class DriverWait:
 
     def __init__(self, log, log_event):
         self._log, self._log_event = log, log_event
-        self.qpc = winenv.qpc_now
+        # The clock the platform's driver stamps packets with (capture_backend):
+        # QueryPerformanceCounter on Windows.
+        backend = capture_backend.current()
+        self.qpc = backend.stamp_now
+        self._stamp_frequency = backend.stamp_frequency
         self.freq = None
         self.floor = 0          # QPC when the session's capture thread started
         self.reset()
@@ -73,7 +77,7 @@ class DriverWait:
         nobody was reading.
         """
         if self.freq is None:
-            self.freq = winenv.qpc_frequency()
+            self.freq = self._stamp_frequency()
         self.next_at = 0.0
         self.floor = (self.qpc() or 0) if self.freq else 0
 

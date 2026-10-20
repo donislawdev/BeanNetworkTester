@@ -68,30 +68,18 @@ def i18n_keys() -> List[str]:
 
 # -- narrowing the handle's filter to what could possibly be impaired ------------ #
 def filter_compiles(text: str) -> bool:
-    """Would WinDivert accept this filter? ``False`` when it cannot be asked.
+    """Would the capture driver accept this filter? ``False`` when it cannot be asked.
 
-    ``WinDivertHelperCompileFilter`` is a DLL helper - no handle, no admin - so
-    this is the driver's OWN parser, not a guess about its grammar. Off Windows
-    (or without ``pydivert``) there is nothing to ask, and ``False`` is the honest
-    answer: the caller then keeps the wide filter, which is the safe direction.
+    Asked of the driver's OWN parser, never of a guess about its grammar - which
+    parser that is belongs to the platform's capture backend
+    (``capture_backend.WinDivertBackend.filter_compiles`` says how and why). A
+    ``False`` keeps the wide filter, which is the safe direction.
 
-    ``pydivert`` is imported lazily on purpose - it is a win32-only dependency and
-    importing this module must work on the whole CI matrix.
+    Imported lazily: ``capture_backend`` is a layer above this module, and
+    importing ``filters`` must stay free of it.
     """
-    if not text:
-        return False
-    try:
-        import ctypes
-        from pydivert import windivert_dll as wd
-        err, pos = ctypes.c_char_p(), ctypes.c_uint(0)
-        buf = ctypes.create_string_buffer(64 * 1024)
-        return bool(wd.WinDivertHelperCompileFilter(
-            text.encode(), 0, buf, len(buf), ctypes.byref(err), ctypes.byref(pos)))
-    except Exception:
-        # A missing dll, a missing pydivert, a driver that will not answer: all of
-        # them mean "cannot prove this filter is usable", and the caller must not
-        # narrow on an unproven filter.
-        return False
+    from .capture_backend import current
+    return current().filter_compiles(text)
 
 
 def narrowed_filter(base: str, dst_ip_matcher: Optional[Any] = None,

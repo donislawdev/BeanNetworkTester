@@ -102,6 +102,7 @@ import threading
 import time
 import weakref
 
+from . import capture_backend
 from . import filters
 from . import portmap
 from . import winenv
@@ -955,12 +956,10 @@ class BeanEngine:
             filt, self._narrowed = filters.narrowed_filter(
                 filt, self.core.dst_ip_matcher, self.core.dst_port_matcher)
         if divert is None:
-            import pydivert
-            from . import driver
-            divert = pydivert.WinDivert(filt)
-            # a REAL driver was loaded: the kernel now holds its .sys file, so it
-            # has to be unloaded before the process leaves (see driver.py)
-            driver.mark_driver_used()
+            # The platform's capture driver, built where the choice is made once
+            # (capture_backend.py) - on Windows, pydivert.WinDivert plus the
+            # driver-used marker, exactly as this block used to do itself.
+            divert = capture_backend.current().open_network(filt)
             # ...and this is the ONLY moment a native (segfault) crash becomes
             # possible - the kernel driver is now in play - so arm native crash
             # capture now, not at launch (keeps crashes/ from appearing until it
@@ -1217,8 +1216,10 @@ class BeanEngine:
         if socket_source is not None:
             factory = socket_source if callable(socket_source) else (lambda: socket_source)
         elif real_windivert:
-            from .socketwatch import windivert_socket_source
-            factory = windivert_socket_source
+            # None when the platform's driver has no event source this map can
+            # rest on - then the session polls the table, as it does on any path
+            # without one (see capture_backend).
+            factory = capture_backend.current().socket_source_factory()
         if factory is None:
             self._socketwatch = None
             return None

@@ -5849,9 +5849,75 @@ MUTATIONS = [
         "label": "driverwait: a session start overwrites a supplied QPC frequency",
         "file": "beantester/driverwait.py",
         "old": ("        if self.freq is None:\n"
-                "            self.freq = winenv.qpc_frequency()\n"),
-        "new": "        self.freq = winenv.qpc_frequency()\n",
+                "            self.freq = self._stamp_frequency()\n"),
+        "new": "        self.freq = self._stamp_frequency()\n",
         "test": "test_the_capture_loop_actually_takes_the_sample",
+    },
+    # -- capture_backend: the ONE place that picks the platform's driver ----------
+    # Every test behind these runs on a stand-in pydivert, so no mutation here can
+    # reach this machine's real driver (test_capture_backend.py's docstring).
+    {
+        "label": "capture_backend: Windows opens a filter other than the session's",
+        "file": "beantester/capture_backend.py",
+        "old": "        divert = pydivert.WinDivert(filt)\n",
+        "new": "        divert = pydivert.WinDivert(\"false\")\n",
+        "test": "test_the_windows_backend_builds_windivert_with_the_filter_then_marks_the_driver",
+    },
+    {
+        "label": "capture_backend: Windows skips the driver-used marker",
+        "file": "beantester/capture_backend.py",
+        "old": "        driver.mark_driver_used()\n",
+        "new": "        pass\n",
+        "test": "test_the_windows_backend_builds_windivert_with_the_filter_then_marks_the_driver",
+    },
+    {
+        "label": "capture_backend: Windows offers no SOCKET event source",
+        "file": "beantester/capture_backend.py",
+        "old": "        return windivert_socket_source\n",
+        "new": "        return None\n",
+        "test": "test_the_windows_event_source_is_the_windivert_socket_layer",
+    },
+    {
+        "label": "capture_backend: an empty filter is put to WinDivert's parser",
+        "file": "beantester/capture_backend.py",
+        "old": "        if not text:\n            return False\n",
+        "new": "",
+        "test": "test_the_windows_filter_check_asks_windivert_and_never_guesses",
+    },
+    {
+        "label": "capture_backend: the Windows stamp clock is not QPC",
+        "file": "beantester/capture_backend.py",
+        "old": "        return winenv.qpc_now()\n",
+        "new": "        return 0\n",
+        "test": "test_the_windows_clock_is_the_qpc_winenv_reads",
+    },
+    {
+        "label": "engine: the capture handle is built without asking the backend",
+        "file": "beantester/engine.py",
+        "old": "            divert = capture_backend.current().open_network(filt)\n",
+        "new": "            divert = capture_backend._WINDIVERT.open_network(filt)\n",
+        "test": "test_the_engine_opens_its_capture_through_the_backend",
+    },
+    {
+        "label": "engine: the SOCKET event source is chosen without asking the backend",
+        "file": "beantester/engine.py",
+        "old": "            factory = capture_backend.current().socket_source_factory()\n",
+        "new": "            factory = capture_backend._WINDIVERT.socket_source_factory()\n",
+        "test": "test_the_engine_takes_its_event_source_from_the_backend",
+    },
+    {
+        "label": "filters: the filter compile check stops asking the backend",
+        "file": "beantester/filters.py",
+        "old": "    return current().filter_compiles(text)\n",
+        "new": "    return False\n",
+        "test": "test_the_filter_check_is_the_backends",
+    },
+    {
+        "label": "driverwait: the stamp frequency is not the backend's",
+        "file": "beantester/driverwait.py",
+        "old": "        self._stamp_frequency = backend.stamp_frequency\n",
+        "new": "        self._stamp_frequency = lambda: None\n",
+        "test": "test_the_driver_wait_reads_the_backends_clock",
     },
     {
         # The measurement exists and the packet path never reaches it.

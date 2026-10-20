@@ -1525,6 +1525,7 @@ beantester/              the implementation package
   engine.py              capture/inject threads, statistics (BeanEngine)
   connlog.py             the session's connection log: one row per flow, and its cap
   driverwait.py          how long packets waited in the driver's queue before the tool got them
+  capture_backend.py     which packet-capture driver this platform uses - the one place that knows
   matchers.py            filter expressions (list/range/!/>/</wildcard/re:) - shared
                          by the process, IP and port fields; a single source of truth
   settings.py            settings model, config file, apply_settings
