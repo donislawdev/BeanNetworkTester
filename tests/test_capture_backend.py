@@ -499,7 +499,11 @@ def _rows(**kw):
     return {row[0]: row for row in EBPFDivertBackend.doctor_rows(**kw)}
 
 
-def test_the_linux_doctor_rows_say_what_is_missing_and_never_fail(monkeypatch, tmp_path):
+def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture(monkeypatch,
+                                                                                 tmp_path):
+    """Each row without which a capture cannot start is a ``fail``, as on Windows
+    (owner, 2026-10-20). It was a ``warn``, and the Diagnostics tab said "Nothing here
+    stops a session from starting" under "a capture needs sudo"."""
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
     (tmp_path / "sys" / "kernel" / "btf").mkdir(parents=True)
     (tmp_path / "sys" / "kernel" / "btf" / "vmlinux").write_bytes(b"")
@@ -517,21 +521,27 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_never_fail(monkeypatch, t
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert(lib=False)[0])
     bare = _rows(release="5.4.0-42-generic", root=str(tmp_path / "nothing"), euid=1000,
                  status="CapEff:\t0000000000000000\n")
-    check("an old kernel, no BTF, no rights, no library: each one says so",
-          [bare[n][1] for n in ("kernel", "btf", "privileges", "pydivert")] == ["warn"] * 4,
+    check("an old kernel, no BTF, no rights, no library: each one fails",
+          [bare[n][1] for n in ("kernel", "btf", "privileges", "pydivert")] == ["fail"] * 4,
           f"({bare})")
     check("and says what to do", "5.10" in bare["kernel"][2] and "sudo" in bare["privileges"][2]
           and "reinstall" in bare["pydivert"][2], f"({bare})")
+    check("each in the words Windows uses for it",
+          all("cannot start" in bare[n][2] for n in ("kernel", "btf", "privileges")), f"({bare})")
     monkeypatch.setitem(sys.modules, "pydivert", None)
     gone = _rows(release="6.8.0", root=str(tmp_path), euid=0)
-    check("no pydivert: a warning with the install command", gone["pydivert"][1] == "warn"
+    check("no pydivert: a failure with the install command", gone["pydivert"][1] == "fail"
           and "pip install pydivert" in gone["pydivert"][2], f"({gone['pydivert']})")
-    check("never a 'fail': --doctor's verdict stays 'this box runs --simulate'",
-          all(row[1] != "fail" for rows in (ready, by_caps, bare, gone) for row in rows.values()))
+    check("a ready machine fails nothing, root or the three capabilities",
+          all(row[1] == "ok" for rows in (ready, by_caps) for row in rows.values()))
 
 
 def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
+    # A ready machine has BTF. Without the file this test's "healthy" verdict rested
+    # on a missing-BTF row being only a warning - which is what it no longer is.
+    (tmp_path / "sys" / "kernel" / "btf").mkdir(parents=True)
+    (tmp_path / "sys" / "kernel" / "btf" / "vmlinux").write_bytes(b"")
 
     class _Linux(EBPFDivertBackend):
         @staticmethod
@@ -542,12 +552,22 @@ def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path)
     ok, checks = driver.doctor()
     names = [c[0] for c in checks]
     platform_row = next(c for c in checks if c[0] == "platform")
-    check("the platform row says Linux capture is experimental and needs sudo",
-          "experimental" in platform_row[2] and "sudo" in platform_row[2], f"({platform_row})")
+    check("the platform row says Linux capture is experimental",
+          "experimental" in platform_row[2] and platform_row[1] == "warn", f"({platform_row})")
+    check("and does not tell root to use sudo", "sudo" not in platform_row[2], f"({platform_row})")
     check("the Linux rows follow", {"kernel", "btf", "privileges", "pydivert"} <= set(names),
           f"({names})")
     check("and nothing on the Windows path is asked", "windivert driver" not in names)
-    check("the verdict is still 'healthy' (warnings only)", ok)
+    check("a ready machine as root: the verdict is healthy (the platform warns only)", ok)
+
+    class _NotRoot(EBPFDivertBackend):
+        @staticmethod
+        def doctor_rows():
+            return EBPFDivertBackend.doctor_rows(release="6.8.0", root=str(tmp_path), euid=1000,
+                                                 status="CapEff:\t0000000000000000\n")
+    monkeypatch.setattr(capture_backend, "current", lambda: _NotRoot())
+    ok, checks = driver.doctor()
+    check("without root the verdict says a capture cannot start, as unelevated Windows", not ok)
 
 
 # -- the session's overload counters (driverwait.watch_overflow) ------------------ #

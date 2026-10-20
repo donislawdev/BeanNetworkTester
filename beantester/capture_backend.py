@@ -328,18 +328,20 @@ class EBPFDivertBackend:
             return cls.ROOT_REFUSED_HINT
         return cls.OPEN_ERROR_HINTS.get(code, "")
 
-    PLATFORM_NOTE = (" - capture is experimental and needs root (sudo) or CAP_BPF, CAP_NET_ADMIN"
-                     " and CAP_NET_RAW; --simulate works without it")
+    PLATFORM_NOTE = " - capture is experimental (eBPFDivert), and --simulate needs none of the rows below"
 
     @staticmethod
     def doctor_rows(release=None, root="/", euid=None, status=None):
         """``--doctor``'s rows for eBPFDivert. Reads files, opens no handle.
 
-        Every row that would stop a capture is a ``warn``, never a ``fail``: Linux
-        capture is experimental, and ``--doctor``'s verdict stays what it is on
-        every platform without a capture driver - "this box runs --simulate". The
-        arguments are seams for the tests (kernel release, filesystem root, euid,
-        the text of /proc/self/status).
+        A row without which a capture cannot start is a ``fail``, as Windows'
+        administrator and pydivert rows are (the owner's decision, 2026-10-20). It
+        used to be a ``warn``, and the Diagnostics tab printed "Nothing here stops a
+        session from starting" under "a capture needs sudo" (measured on Ubuntu
+        26.04): the verdict is about a real session, and without these one does not
+        start. ``--doctor`` then ends with exit 1 there, as it does on Windows
+        unelevated. The arguments are seams for the tests (kernel release,
+        filesystem root, euid, the text of /proc/self/status).
         """
         release = os.uname().release if release is None else release
         rows = []
@@ -348,12 +350,13 @@ class EBPFDivertBackend:
             new_enough = (major, minor) >= (5, 10)
         except ValueError:
             new_enough = False
-        rows.append(("kernel", "ok" if new_enough else "warn",
-                     release + ("" if new_enough else " - eBPFDivert needs Linux 5.10 or newer")))
+        rows.append(("kernel", "ok" if new_enough else "fail",
+                     release + ("" if new_enough else " - eBPFDivert needs Linux 5.10 or newer, "
+                                                      "so a capture session cannot start")))
         btf = os.path.exists(os.path.join(root, "sys", "kernel", "btf", "vmlinux"))
-        rows.append(("btf", "ok" if btf else "warn",
-                     "present" if btf else "missing - the kernel was built without BTF, "
-                                           "which eBPFDivert needs"))
+        rows.append(("btf", "ok" if btf else "fail",
+                     "present" if btf else "missing - the kernel was built without BTF, which "
+                                           "eBPFDivert needs, so a capture session cannot start"))
         rows.append(_privileges_row(_euid() if euid is None else euid, root, status))
         rows.append(_pydivert_row())
         return rows
@@ -424,19 +427,18 @@ def _privileges_row(euid, root, status):
     how = _rights(euid, root, status)
     if how is not None:
         return ("privileges", "ok", how)
-    return ("privileges", "warn", "not root, and without CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW - "
-                                  "a capture needs sudo; --simulate works without it")
+    return ("privileges", "fail", "not root, and without CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW - "
+                                  "a capture session cannot start. Run it with sudo")
 
 
 def _pydivert_row():
     try:
         from pydivert import bpf
     except ImportError:
-        return ("pydivert", "warn", "missing - pip install pydivert (capture only; "
-                                    "--simulate works without it)")
+        return ("pydivert", "fail", "missing - pip install pydivert")
     lib = bpf.libebpfdivert
     if lib is None:
-        return ("pydivert", "warn", "installed, but its libebpfdivert did not load - "
+        return ("pydivert", "fail", "installed, but its libebpfdivert did not load - "
                                     "reinstalling pydivert puts it back")
     return ("pydivert", "ok", "importable, eBPFDivert " + lib.ebpfdivert_version().decode())
 

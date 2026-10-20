@@ -10,9 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
   or newer built with BTF, it captures through pydivert's eBPFDivert. It needs root or
   CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW, otherwise it stops with exit code 7. `--doctor`
-  shows what the machine lacks. When the tool cannot keep up, it says how many packets went
-  around it unimpaired and how many the driver dropped. `--target` reads the socket table,
-  so a new connection's first exchange can pass before it applies.
+  shows what the machine lacks, and ends with exit code 1 while something stops a capture,
+  as on Windows without administrator rights. When the tool cannot keep up, it says how
+  many packets went around it unimpaired and how many the driver dropped. `--target` reads
+  the socket table, so a new connection's first exchange can pass before it applies.
 
 - **Linux, experimental: the window.** Start it with sudo. Without root a red line says so,
   and a START the system refuses says what to do about it. The files it saves stay yours,

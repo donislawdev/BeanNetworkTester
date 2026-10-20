@@ -6098,7 +6098,16 @@ MUTATIONS = [
         "file": "beantester/capture_backend.py",
         "old": "            new_enough = (major, minor) >= (5, 10)\n",
         "new": "            new_enough = True\n",
-        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_never_fail",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
+    },
+    {
+        # MEASURED before: the Diagnostics tab said "Nothing here stops a session from
+        # starting" under "a capture needs sudo" (owner, 2026-10-20: fail as Windows).
+        "label": "capture_backend: doctor calls a process without rights only a warning",
+        "file": "beantester/capture_backend.py",
+        "old": "    return (\"privileges\", \"fail\", \"not root, and without CAP_BPF,",
+        "new": "    return (\"privileges\", \"warn\", \"not root, and without CAP_BPF,",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
     },
     {
         "label": "capture_backend: Linux gets the WinDivert backend",

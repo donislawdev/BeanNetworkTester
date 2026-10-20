@@ -183,7 +183,8 @@ sudo .venv/bin/python -m beantester --doctor
 sudo .venv/bin/python -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
 ```
 
-`--doctor` lists what the machine still lacks. Where Linux differs from Windows:
+`--doctor` lists what the machine still lacks, and while something stops a capture it ends with
+exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
 
 - Without root or those capabilities a session stops with exit code 7 and says to use `sudo`.
   If the kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit

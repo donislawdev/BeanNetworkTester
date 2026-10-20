@@ -1673,6 +1673,15 @@ def test_doctor_reports_the_environment():
     # The VERDICT is not: without admin rights `driver.doctor()` reports a box
     # that cannot capture, and exit 1 is the right answer there, not a defect.
     _needs_permission_to_answer("--doctor's healthy-box verdict")
+    backend = capture_backend.current()
+    if backend.name == "ebpfdivert" and not backend.has_capture_rights():
+        # Linux without root (the CI runner): the same answer as unelevated Windows -
+        # a capture cannot start, said with what to do (owner's decision, 2026-10-20).
+        check("--doctor on Linux without root: exit 1, a capture cannot start",
+              code == exitcodes.RUNTIME, f"({code})")
+        check("and the privileges row names sudo", "privileges" in out and "sudo" in out,
+              f"({out[-400:]})")
+        return
     check("--doctor: exits OK on a healthy (simulate-capable) box",
           code == exitcodes.OK, f"({code})")
 
