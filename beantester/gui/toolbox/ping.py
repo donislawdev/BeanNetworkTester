@@ -33,8 +33,8 @@ from .. import dialogs
 from ..chart import chart_canvas, draw_ping_chart
 from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
-from ..theme import (CHARS, PING_COLORS, ROWS, SPACE, popdown_height, popdown_width, size,
-                     space)
+from ..theme import (CHARS, PAGE_WRAP_PAD, PING_COLORS, ROWS, popdown_height, popdown_width,
+                     size, space)
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Poller, StatusLine, job, remembered
@@ -124,9 +124,15 @@ class PingRun:
         if not self.running:
             return
         run = self.run
-        self.job.run(START if not run.target.address else ECHO, lambda: _one(run))
+        self.job.run(START if not run.target.address else ECHO,
+                     lambda: _one(run, lambda: self._wanted(run)))
         self.poller.start()
         self._changed()
+
+    def _wanted(self, run):
+        """WORKER: whether ``run`` may still send - it is this window's run and Stop has
+        not been pressed. Two reads of fields only the UI thread writes."""
+        return self.running and self.run is run
 
     def _on_outcome(self, outcome):
         if outcome.error:
@@ -140,6 +146,9 @@ class PingRun:
         if run is not self.run:
             # The answer to the last request of a run replaced since: the worker
             # delivers it before it starts the new run's first one.
+            return
+        if answer is None:
+            # Stopped before it went (``_one``): nothing was sent, nothing to show.
             return
         if isinstance(answer, Refused):
             # Only a name lookup refuses: no address, nothing sent, the run ends.
@@ -178,14 +187,16 @@ class PingRun:
                 panel.changed(problem)
 
 
-def _one(run):
+def _one(run, wanted):
     """WORKER: the run's next request - with the name looked up first, the first time.
     ``(run, sent_at, target, Echo or Refused)``; the time is taken here, the moment
     before the request goes, because a request asked for while the last one of a
-    replaced run still waits starts only when that one is answered."""
+    replaced run still waits starts only when that one is answered. The Echo is
+    ``None`` when ``wanted()`` said Stop came first (README, "Tools": from Start to
+    Stop)."""
     sent_at = time.time()
     try:
-        target, echo = ping.start_and_send(run.target, run.wait_s)
+        target, echo = ping.start_and_send(run.target, run.wait_s, wanted=wanted)
     except Refused as refused:
         return run, sent_at, run.target, refused
     return run, sent_at, target, echo
@@ -257,13 +268,11 @@ class PingPanel:
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
-        # Wrapped inside the page's margin on BOTH sides and the label's own padding: a
-        # Polish summary is longer than the 760 px window, and wrapped at the margins
-        # alone it asked for 707 px of 704 (measured 2026-10-19).
-        margins = 2 * SPACE["page"] + SPACE["tight"]
-        self.session = wrapping_label(self.frame, "", pad=margins)
+        # Wrapped inside both page margins: a Polish summary is longer than the 760 px
+        # window (``PAGE_WRAP_PAD``).
+        self.session = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.session.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
-        self.summary = wrapping_label(self.frame, "", style="TLabel", pad=margins)
+        self.summary = wrapping_label(self.frame, "", style="TLabel", pad=PAGE_WRAP_PAD)
         self.summary.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
 
         body = ttk.Frame(self.frame)
@@ -442,7 +451,7 @@ class PingPanel:
 
     def _sync_controls(self):
         running = self.runner.running
-        self.start_btn.config(text=T("tools.ping.stop" if running else "tools.ping.start"))
+        self.start_btn.config(text=T("tools.ping.stop") if running else T("tools.ping.start"))
         for widget in (self.entry,):
             widget.state(["disabled"] if running else ["!disabled"])
         for box in (self.every_box, self.wait_box):

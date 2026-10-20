@@ -138,10 +138,15 @@ class FakeIphlpapi:
 
 
 def test_a_handle_per_request_closed_whatever_the_request_did():
+    # The error is stood in for too: ctypes has get_last_error on Windows only, and a
+    # binding that called it here went red on the Linux runner.
     lib = FakeIphlpapi()
-    system = icmp._System(lib)
-    system.echo4(ipaddress.IPv4Address("192.0.2.10"), 4000)
-    system.echo6(ipaddress.IPv6Address("2001:db8::1"), 1000)
+    system = icmp._System(lib, last_error=lambda: icmp.IP_REQ_TIMED_OUT)
+    v4 = system.echo4(ipaddress.IPv4Address("192.0.2.10"), 4000)
+    v6 = system.echo6(ipaddress.IPv6Address("2001:db8::1"), 1000)
+    check("a request that answered 0 says the error Windows gave",
+          v4[:2] == (0, icmp.IP_REQ_TIMED_OUT) and v6[:2] == (0, icmp.IP_REQ_TIMED_OUT),
+          f"({v4[:2]}, {v6[:2]})")
     check("each request opened and closed its own handle", lib.closed == [42, 42])
     handle, event, apc, dest, size, reply_size, timeout = lib.sent[0]
     check("synchronous: no event, no callback", event is None and apc is None)
@@ -153,8 +158,10 @@ def test_a_handle_per_request_closed_whatever_the_request_did():
         icmp._System(raising).echo4(ipaddress.IPv4Address("192.0.2.10"), 1000)
     check("closed when the request raised too", raising.closed == [42])
     nothing = FakeIphlpapi(handle=None)
-    with pytest.raises(OSError):
-        icmp._System(nothing).echo4(ipaddress.IPv4Address("192.0.2.10"), 1000)
+    with pytest.raises(OSError) as refused:
+        icmp._System(nothing, last_error=lambda: 87).echo4(ipaddress.IPv4Address("192.0.2.10"),
+                                                           1000)
+    check("no handle: an OSError with the error", refused.value.errno == 87, f"({refused.value})")
     check("no handle, nothing to close", nothing.closed == [] and nothing.sent == [])
 
 

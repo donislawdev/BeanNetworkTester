@@ -1702,10 +1702,11 @@ def test_the_environment_report_adds_the_adapters_only_when_ticked():
 
 
 # -- ping ---------------------------------------------------------------------------- #
-# Nothing is sent: `ping.send` and the name lookup are stood in for, and `gate` holds
-# a request back for the tests that need one still out. The fake Tk fires no timer, so
-# a test asks for the next request itself (`runner._send()`), the way the run's timer
-# would, and `answered` collects what the worker said.
+# Nothing is sent: `ping.send` and the name lookup are stood in for, and `ping_gate`
+# holds a request back for the tests that need one still out - its own name, since
+# SOCK's `fake_read` waits on `gate`. The fake Tk fires no timer, so a test asks for
+# the next request itself (`runner._send()`), the way the run's timer would, and
+# `answered` collects what the worker said.
 PING = SOCK + """
 import threading
 from beantester import icmp
@@ -1714,11 +1715,11 @@ from beantester.gui.toolbox import ping as pp
 
 sent, looked = [], []
 ANSWERS = []
-gate = threading.Event()
-gate.set()
+ping_gate = threading.Event()
+ping_gate.set()
 
 def fake_send(target, wait_s, system=None):
-    gate.wait(5)
+    ping_gate.wait(5)
     sent.append((target.address, wait_s))
     return ANSWERS.pop(0) if ANSWERS else icmp.Echo(0, 201, 64, target.address)
 
@@ -1875,18 +1876,63 @@ def test_an_answer_for_a_replaced_run_is_dropped():
     and belongs to nobody on screen."""
     run_gui(PING + textwrap.dedent("""
         panel = open_ping()
-        gate.clear()
+        ping_gate.clear()
         panel.host.set("192.0.2.10")
         panel._start()                   # held back on the worker
         old = panel.runner.run
         panel._start_or_stop()           # Stop
         panel.host.set("198.51.100.7")
         panel._start()                   # the new run's first request waits behind it
-        gate.set()
+        ping_gate.set()
         answered(panel.runner)
         answered(panel.runner)
         assert panel.runner.run is not old and old.sent == 0, "the old answer was dropped"
         assert [r.echo.reply_from for r in panel.runner.run.results] == ["198.51.100.7"]
+    """))
+
+
+def test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it():
+    """README, "Tools": echo requests from Start to Stop. A name lookup can take
+    seconds, and a request can wait for the worker behind the last one of an old run:
+    Stop pressed meanwhile, no echo goes out once they are over."""
+    run_gui(PING + textwrap.dedent("""
+        held = threading.Event()
+
+        def slow_lookup(name):
+            held.wait(5)
+            looked.append(name)
+            return [(2, 1, 0, "", ("192.0.2.10", 0))]
+        pg._lookup = slow_lookup
+        panel = open_ping()
+        panel.host.set("example.com")
+        panel._start()                   # the lookup is held on the worker
+        panel._start_or_stop()           # Stop, before it answers
+        held.set()
+        answered(panel.runner)
+        assert looked == ["example.com"] and sent == [], ("no echo after Stop", sent)
+        assert not panel.runner.running and panel.runner.run.sent == 0
+        assert panel.start_btn.cget("text") == T("tools.ping.start")
+
+        ping_gate.clear()
+        panel.host.set("192.0.2.10")
+        panel._start()                   # out, its answer held
+        panel._start_or_stop()           # Stop
+        panel.host.set("198.51.100.7")
+        panel._start()                   # waits behind it for the worker
+        panel._start_or_stop()           # Stop, before its turn
+        ping_gate.set()
+        answered(panel.runner)
+        assert [a for a, _w in sent] == ["192.0.2.10"], ("only the one out before Stop", sent)
+        assert panel.runner.run.sent == 0 and not panel.runner.running
+
+        sent.clear()
+        held.clear()
+        panel.host.set("example.com")
+        panel._start()                   # the lookup is held again
+        panel.ping("198.51.100.7")       # "Ping this address" replaces the run meanwhile
+        held.set()
+        answered(panel.runner)
+        assert [a for a, _w in sent] == ["198.51.100.7"], ("not the replaced run's", sent)
     """))
 
 

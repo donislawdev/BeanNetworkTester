@@ -160,13 +160,15 @@ class _System:
     has no handle to close in flight.
     """
 
-    def __init__(self, iphlpapi=None):
+    def __init__(self, iphlpapi=None, last_error=None):
         self.iphlpapi = iphlpapi if iphlpapi is not None else _iphlpapi()
+        # get_last_error exists on Windows only; elsewhere a fake brings its own.
+        self.last_error = last_error or getattr(ctypes, "get_last_error", lambda: 0)
 
     def _open(self, create):
         handle = create()
         if not handle or handle == _INVALID_HANDLE:
-            raise OSError(ctypes.get_last_error(), "no ICMP handle")
+            raise OSError(self.last_error(), "no ICMP handle")
         return handle
 
     def echo4(self, address, timeout_ms):
@@ -179,7 +181,7 @@ class _System:
             count = lib.IcmpSendEcho2(handle, None, None, None,
                                       struct.unpack("<I", address.packed)[0], data,
                                       len(PAYLOAD), None, reply, REPLY_BYTES, timeout_ms)
-            error = ctypes.get_last_error() if not count else 0
+            error = self.last_error() if not count else 0
             return int(count), int(error), reply.raw, ctypes.addressof(reply)
         finally:
             lib.IcmpCloseHandle(handle)
@@ -198,7 +200,7 @@ class _System:
             count = lib.Icmp6SendEcho2(handle, None, None, None, ctypes.byref(source),
                                        ctypes.byref(target), data, len(PAYLOAD), None,
                                        reply, REPLY_BYTES, timeout_ms)
-            error = ctypes.get_last_error() if not count else 0
+            error = self.last_error() if not count else 0
             return int(count), int(error), reply.raw
         finally:
             lib.IcmpCloseHandle(handle)

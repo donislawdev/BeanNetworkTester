@@ -101,6 +101,29 @@ def test_the_first_request_looks_the_name_up_then_sends_to_that_address(monkeypa
     check("the answer comes back", echo == REPLY)
 
 
+def test_a_request_no_longer_wanted_before_or_after_the_lookup_sends_nothing(monkeypatch):
+    """Stop pressed while the request waited for the worker: no lookup, no echo. Stop
+    pressed during the lookup: the lookup was already asked, the echo is not."""
+    sent, looked = [], []
+    monkeypatch.setattr(icmp, "echo", lambda address, timeout, system=None: (
+        sent.append(str(address)), REPLY)[1])
+
+    def lookup(name):
+        looked.append(name)
+        return [(socket.AF_INET, 0, 0, "", ("192.0.2.10", 0))]
+    target, echo = ping.start_and_send(ping.parse("example.com"), 4, lookup=lookup,
+                                       wanted=lambda: False)
+    check("stopped before it began: nothing asked of anyone",
+          looked == [] and sent == [] and echo is None and not target.address,
+          f"({looked}, {sent}, {echo})")
+    answers = iter((True, False))
+    target, echo = ping.start_and_send(ping.parse("example.com"), 4, lookup=lookup,
+                                       wanted=lambda: next(answers))
+    check("stopped during the lookup: looked up, nothing sent",
+          looked == ["example.com"] and sent == [] and echo is None, f"({looked}, {sent})")
+    check("and the address it found is kept", target.address == "192.0.2.10")
+
+
 def test_a_run_counts_every_ping_and_keeps_the_last_ones():
     run = ping.Run(ping.parse("192.0.2.10"), every_s=1, wait_s=4, started=1000.0)
     for i in range(10):

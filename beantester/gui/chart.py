@@ -26,6 +26,8 @@ from .theme import BG2, DOWN_C, FONT, GRID_C, MUT, UP_C, WARN
 
 RTT_LEAST_PEAK = 4      # ms: the lowest top of the round-trip axis
 PING_HEADROOM = 1.3     # the Ping chart's top: this much above its highest round trip
+LINE_PX = 2             # a series' line, and the Ping chart's lost-ping mark
+LOST_MARK_PX = 10       # how tall the lost-ping mark stands on the time axis
 
 
 class Series(NamedTuple):
@@ -122,7 +124,8 @@ def draw_ping_chart(canvas, values):
     for i, value in enumerate(values):
         if value is None:
             x = g["ml"] + g["pw"] * (i / (len(values) - 1))
-            canvas.create_line(x, bottom, x, bottom - scaled(10), fill=WARN, width=scaled(2))
+            canvas.create_line(x, bottom, x, bottom - scaled(LOST_MARK_PX), fill=WARN,
+                               width=scaled(LINE_PX))
 
 
 def draw_line_chart(canvas, series: Sequence[Series], peak: float,
@@ -180,7 +183,7 @@ def draw_line_chart(canvas, series: Sequence[Series], peak: float,
             runs.append(pts)
         for run in runs:
             if len(run) >= 4:
-                c.create_line(*run, fill=color, width=scaled(2), smooth=True)
+                c.create_line(*run, fill=color, width=scaled(LINE_PX), smooth=True)
         if hist[-1] is not None and runs:
             r = scaled(3)
             last = runs[-1]

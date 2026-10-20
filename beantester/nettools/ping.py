@@ -135,11 +135,19 @@ def send(target, wait_s, system=None):
     return icmp.echo(ipaddress.ip_address(target.address), int(wait_s * 1000), system)
 
 
-def start_and_send(target, wait_s, system=None, lookup=None):
+def start_and_send(target, wait_s, system=None, lookup=None, wanted=None):
     """The first request of a run: the lookup (when a name was typed), then the ping.
     One worker run, so the address is known before anything is drawn. Returns
-    ``(target, echo)``."""
+    ``(target, echo)``.
+
+    ``wanted()`` is asked before the lookup and again before the ping: Stop pressed
+    while the request waited for the worker, or while a lookup took its seconds,
+    sends nothing after it - the echo comes back ``None``."""
+    if wanted is not None and not wanted():
+        return target, None
     target = resolve(target, lookup)
+    if wanted is not None and not wanted():
+        return target, None
     return target, send(target, wait_s, system)
 
 

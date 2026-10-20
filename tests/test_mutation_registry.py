@@ -3303,6 +3303,32 @@ MUTATIONS = [
         "test": "test_an_answer_for_a_replaced_run_is_dropped",
     },
     {
+        # a request asked for before Stop and started after it still looks the name up.
+        "label": "ping: a request stopped before it began still looks up",
+        "file": "beantester/nettools/ping.py",
+        "old": ("    if wanted is not None and not wanted():\n        return target, None\n"
+                "    target = resolve(target, lookup)\n"),
+        "new": "    target = resolve(target, lookup)\n",
+        "test": "test_a_request_no_longer_wanted_before_or_after_the_lookup_sends_nothing",
+    },
+    {
+        # Stop pressed during a lookup that takes seconds: the echo goes after it.
+        "label": "ping: Stop during the lookup still sends the echo",
+        "file": "beantester/nettools/ping.py",
+        "old": ("    target = resolve(target, lookup)\n    if wanted is not None and not wanted():\n"
+                "        return target, None\n"),
+        "new": "    target = resolve(target, lookup)\n",
+        "test": "test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it",
+    },
+    {
+        # a run replaced by "Ping this address" during its lookup still pings its address.
+        "label": "ping: a replaced run's lookup still sends",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        return self.running and self.run is run\n",
+        "new": "        return self.running\n",
+        "test": "test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it",
+    },
+    {
         # the run tied to its panel: a language change would stop the ping.
         "label": "ping: a rebuild of the window stops the run",
         "file": "beantester/gui/toolbox/ping.py",
