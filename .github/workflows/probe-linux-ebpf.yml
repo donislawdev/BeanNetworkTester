@@ -1,0 +1,58 @@
+name: linux-ebpf-probe
+
+# A throwaway probe on its own branch, never merged: does pydivert 4's Linux
+# backend (eBPFDivert) behave on stock Ubuntu runner kernels the way it measured
+# under WSL2? Everything that captures runs inside a network namespace of its own
+# (probe/linux_ebpf/run.sh), so no hook ever lands on the runner's real interfaces.
+on:
+  push:
+    branches: [probe/linux-ebpf]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-ebpf-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: probe (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Kernel facts
+        run: |
+          uname -a
+          ls -l /sys/kernel/btf/vmlinux || true
+          stat -fc %T /sys/fs/cgroup
+          grep -E '^(# )?CONFIG_(BPF_SYSCALL|DEBUG_INFO_BTF|CGROUP_BPF|NET_CLS_BPF|NET_ACT_BPF|NET_SCH_INGRESS|KPROBES|BPF_EVENTS|INET_DIAG_DESTROY|FPROBE)[ =]' "/boot/config-$(uname -r)" || true
+          ldd --version | head -1
+          readlink /proc/self/ns/pid /proc/1/ns/pid
+      - name: Venv with the hash-pinned Linux wheels
+        run: |
+          python -m venv "$RUNNER_TEMP/bnt-ebpf"
+          "$RUNNER_TEMP/bnt-ebpf/bin/python" -m pip install --disable-pip-version-check \
+            --no-deps --only-binary :all: --require-hashes -r probe/linux_ebpf/req-linux.txt
+      - name: Probe (inside its own network namespace)
+        run: |
+          set -o pipefail
+          sudo PY="$RUNNER_TEMP/bnt-ebpf/bin/python" BNT_SRC="$GITHUB_WORKSPACE" \
+            sh probe/linux_ebpf/run.sh \
+            env pass isolation drop delay modify rst socket superset filters crash rate rate:10000 \
+            product repro_loopback_interfaces repro_connect_local_port 2>&1 | tee probe-output.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: probe-${{ matrix.os }}
+          path: probe-output.txt
