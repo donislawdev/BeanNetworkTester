@@ -209,8 +209,8 @@ def _windivert_binaries():
     """Where the WinDivert files sit inside the installed pydivert package.
 
     Returns ``(relative directory, {filenames})`` using forward slashes, or
-    ``None`` when pydivert is absent (it is a Windows-only dependency, so the
-    Linux runner has nothing to check).
+    ``None`` when pydivert is absent or carries no WinDivert file (its Linux
+    wheel), so the Linux runner has nothing to check.
 
     Read from the INSTALLED package rather than from a path typed here, because
     the whole failure this guards is the package moving its files while our
@@ -228,6 +228,11 @@ def _windivert_binaries():
             if name.lower().startswith("windivert") and name.lower().endswith((".dll", ".sys")):
                 rel = os.path.relpath(dirpath, root).replace(os.sep, "/")
                 found.setdefault(rel, set()).add(name)
+    if not found:
+        # pydivert's Linux wheel carries libebpfdivert and no WinDivert file at
+        # all (installed on Linux since 2026-10-20): nothing of WinDivert ships
+        # from this machine, so there is nothing for the notices to point at.
+        return None
     return next(iter(found.items())) if len(found) == 1 else (None, found)
 
 

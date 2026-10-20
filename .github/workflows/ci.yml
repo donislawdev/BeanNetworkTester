@@ -185,9 +185,10 @@ jobs:
   # nothing else, which left a tag that moved a pin unchecked until the following
   # Monday, with a merge and possibly a release in between (2026-08-21).
   #
-  # windows-latest because that is where the shipped set actually exists:
-  # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
-  # skip the one dependency that puts a kernel driver on a user's machine.
+  # windows-latest because that is where the shipped set actually exists: the only
+  # build that ships is the Windows one, and its pydivert wheel is the one that puts
+  # a kernel driver on a user's machine (Linux installs another wheel of it, with
+  # no driver, since the experimental Linux capture).
   audit:
     # 🔴 A CONTRACT with the branch ruleset, like every other job name here: the
     # rule requires a status check by this exact string. Do not edit it without
@@ -326,10 +327,10 @@ jobs:
   # was true on the day somebody typed it and unverifiable afterwards. This is
   # that sentence, executed.
   #
-  # windows-latest, and not to be tidy: `pydivert` carries a win32 marker, and an
-  # entry whose test needs the driver would report SURVIVED on a Linux runner -
-  # the test passes there by returning early, which is indistinguishable from a
-  # guard that does not guard.
+  # windows-latest, and not to be tidy: the WinDivert DLL and driver exist only in
+  # pydivert's Windows wheel, and an entry whose test needs them would report
+  # SURVIVED on a Linux runner - the test passes there by returning early, which is
+  # indistinguishable from a guard that does not guard.
   mutations:
     name: mutation registry
     if: github.event_name != 'push'

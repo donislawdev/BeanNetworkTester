@@ -559,6 +559,9 @@ def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monk
         def stop(self, *_a, **_k): pass
 
     monkeypatch.setattr(cli_module.winenv, "is_admin", lambda: True)
+    # WinDivert's own error, so WinDivert's advice table, on every runner: on Linux
+    # the platform's backend is eBPFDivert, whose table does not know a WinError.
+    monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.WinDivertBackend())
     out, err = io.StringIO(), io.StringIO()
     clock = FakeClock()
     code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep,
