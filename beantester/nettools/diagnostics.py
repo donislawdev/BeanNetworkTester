@@ -15,7 +15,7 @@ second report the maintainer has to read back into the first.
 from types import MappingProxyType
 from typing import Callable, Mapping, NamedTuple
 
-from .. import crashlog, driver
+from .. import capture_backend, crashlog, driver
 from ..appinfo import version_line
 from ..paths import user_data_dir
 from . import adapters, proxy
@@ -101,7 +101,8 @@ def cleanup_blocker():
     part that lets a button say why before anyone presses it.
     """
     if not driver.is_windows():
-        return "tools.diagnostics.clean_windows_only"
+        # No WinDivert service here; the platform's backend says why that is fine.
+        return capture_backend.current().CLEANUP_BLOCKER
     if not driver.is_admin():
         return "tools.diagnostics.clean_needs_admin"
     return ""

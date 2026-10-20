@@ -6116,6 +6116,15 @@ MUTATIONS = [
         "new": "    return _WINDIVERT\n",
         "test": "test_linux_gets_the_ebpfdivert_backend",
     },
+    {
+        # MEASURED 2026-10-20: unregister() after a SIGKILL changed nothing (2.6 s
+        # either way), so Linux has no cleanup to offer - and must not say "Windows only".
+        "label": "cleanup: Linux says the cleanup works on Windows only",
+        "file": "beantester/capture_backend.py",
+        "old": "    CLEANUP_BLOCKER = \"tools.diagnostics.clean_linux\"\n",
+        "new": "    CLEANUP_BLOCKER = \"tools.diagnostics.clean_windows_only\"\n",
+        "test": "test_why_the_driver_cannot_be_cleaned_up_from_here",
+    },
     # -- what an overloaded driver did, in the statistics (Linux stage 2a) ----------- #
     {
         # MEASURED on Linux: told to drop everything, a session said 100% while a

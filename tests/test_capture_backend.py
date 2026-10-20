@@ -92,6 +92,8 @@ class _FakeBackend:
 
     name = "fake"
     counts_overload = False
+    CLEANUP_LINE = WinDivertBackend.CLEANUP_LINE
+    CLEANUP_BLOCKER = WinDivertBackend.CLEANUP_BLOCKER
 
     def __init__(self, source_factory=None):
         self.opened = []
@@ -301,7 +303,8 @@ def test_every_backend_answers_the_whole_contract():
           {"open_network", "socket_source_factory", "filter_compiles", "stamp_now",
            "stamp_frequency", "text", "overload_counters", "is_permission_error",
            "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS",
-           "has_capture_rights", "startup_note", "rights_banner", "counts_overload"} <= set(members),
+           "has_capture_rights", "startup_note", "rights_banner", "counts_overload",
+           "CLEANUP_LINE", "CLEANUP_BLOCKER"} <= set(members),
           f"({members})")
     for backend in (WinDivertBackend, EBPFDivertBackend, _FakeBackend):
         missing = [n for n in members if not hasattr(backend, n)]

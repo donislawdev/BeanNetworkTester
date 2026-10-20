@@ -557,7 +557,7 @@ def cleanup_driver(release_own=False, opens_seen=None, on_exit=False):
 def _cleanup_claimed(release_own, opens_seen, on_exit):
     lines = []
     if not is_windows():
-        return ["Not Windows - there is no WinDivert driver to clean up."]
+        return [capture_backend.current().CLEANUP_LINE]
     if not is_admin():
         return ["Administrator rights are required to unload the WinDivert driver."]
     if opens_seen is not None and _OPENS[0] != opens_seen:

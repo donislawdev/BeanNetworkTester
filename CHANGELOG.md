@@ -8,12 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Added
 
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
-  or newer built with BTF, it captures through pydivert's eBPFDivert. It needs root or
-  CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW, otherwise it stops with exit code 7. `--doctor`
-  shows what is missing and then ends with exit code 1, as on Windows. When the tool cannot
-  keep up, the log, the JSON counters and the repro report say how many packets went around
-  it unimpaired and how many the driver dropped. `--target` reads the socket table, so a
-  new connection's first exchange can pass first.
+  or newer with BTF, it captures through pydivert's eBPFDivert. It needs root or CAP_BPF,
+  CAP_NET_ADMIN and CAP_NET_RAW, or it stops with exit code 7. `--doctor` shows what is
+  missing and ends with exit code 1. Under overload, the log, the JSON counters and the
+  repro report count the packets that went around the tool and those the driver dropped.
+  `--target` reads the socket table, so a new connection's first exchange can pass first.
+  `--cleanup-driver` has nothing to do: the kernel cleans up.
 
 - **Linux, experimental: the window.** Start it with sudo, or a red line says it cannot
   capture, and a refused START says what to do. Statistics counts the packets that went

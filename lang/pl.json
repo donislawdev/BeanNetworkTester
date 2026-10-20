@@ -845,6 +845,7 @@
   "tools.diagnostics.check_again": "Sprawdź ponownie",
   "tools.diagnostics.clean": "Wyczyść sterownik",
   "tools.diagnostics.clean_confirm": "Sterownik WinDivert zostanie wyładowany z Windows. Następna sesja załaduje go ponownie, co trwa około sekundy.\n\nJeśli inna kopia Bean Network Tester albo inny program korzystający z WinDivert prowadzi teraz sesję, ta sesja zostanie przerwana.\n\nWyczyścić sterownik teraz?",
+  "tools.diagnostics.clean_linux": "Na Linuksie nie ma czego czyścić: jądro samo usuwa programy zatrzymanej albo zabitej sesji, w ciągu około 3 sekund.",
   "tools.diagnostics.clean_needs_admin": "Czyszczenie sterownika wymaga uprawnień administratora. Uruchom program jako administrator, żeby z niego skorzystać.",
   "tools.diagnostics.clean_title": "Wyczyść sterownik WinDivert",
   "tools.diagnostics.clean_windows_only": "Czyszczenie sterownika działa tylko w Windows.",

@@ -845,6 +845,7 @@
   "tools.diagnostics.check_again": "Check again",
   "tools.diagnostics.clean": "Clean up the driver",
   "tools.diagnostics.clean_confirm": "This unloads the WinDivert driver from Windows. The next session loads it again, which takes about a second.\n\nIf another copy of Bean Network Tester, or another program that uses WinDivert, is running a session right now, that session is interrupted.\n\nClean up the driver now?",
+  "tools.diagnostics.clean_linux": "On Linux there is nothing to clean up: the kernel removes a stopped or killed session's programs by itself, within about 3 seconds.",
   "tools.diagnostics.clean_needs_admin": "Cleaning up the driver needs administrator rights. Start the program as administrator to use it.",
   "tools.diagnostics.clean_title": "Clean up the WinDivert driver",
   "tools.diagnostics.clean_windows_only": "Cleaning up the driver works on Windows only.",

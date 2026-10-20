@@ -845,6 +845,7 @@
   "tools.diagnostics.check_again": "重新检查",
   "tools.diagnostics.clean": "清理驱动",
   "tools.diagnostics.clean_confirm": "这会从 Windows 中卸载 WinDivert 驱动。下一次会话会重新加载它，大约需要一秒。\n\n如果 Bean Network Tester 的另一个副本，或其他使用 WinDivert 的程序正在进行会话，该会话会被中断。\n\n现在清理驱动吗？",
+  "tools.diagnostics.clean_linux": "在 Linux 上无需清理：会话停止或被强制结束后，内核会在约 3 秒内自动移除其程序。",
   "tools.diagnostics.clean_needs_admin": "清理驱动需要管理员权限。请以管理员身份启动本程序后再使用。",
   "tools.diagnostics.clean_title": "清理 WinDivert 驱动",
   "tools.diagnostics.clean_windows_only": "清理驱动仅适用于 Windows。",

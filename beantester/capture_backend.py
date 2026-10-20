@@ -42,6 +42,8 @@ class CaptureBackend(Protocol):
     name: str
     TEXTS: Dict[str, str]
     counts_overload: bool
+    CLEANUP_LINE: str       # --cleanup-driver off Windows: why there is nothing to do
+    CLEANUP_BLOCKER: str    # the same, as the Diagnostics button's i18n key
 
     def open_network(self, filt: str) -> Any: ...
     def socket_source_factory(self) -> Any: ...
@@ -78,6 +80,9 @@ class WinDivertBackend:
 
     name = "windivert"
     counts_overload = False     # see overload_counters
+    # Off Windows (a platform with no capture driver) there is no WinDivert service.
+    CLEANUP_LINE = "Not Windows - there is no WinDivert driver to clean up."
+    CLEANUP_BLOCKER = "tools.diagnostics.clean_windows_only"
 
     @staticmethod
     def open_network(filt):
@@ -231,6 +236,13 @@ class EBPFDivertBackend:
 
     name = "ebpfdivert"
     counts_overload = True      # see overload_counters
+    # Nothing to clean up, MEASURED 2026-10-20 (Ubuntu 26.04): a SIGKILLed session's
+    # programs stopped holding traffic after 2.6 s, and EBPFDivert.unregister() right
+    # after the kill made it 2.6 s too - so a cleanup button would do nothing. (It
+    # did leave a LIVE handle of another process alone.) The kernel does it.
+    CLEANUP_LINE = ("Linux - nothing to clean up: the kernel removes a stopped or killed "
+                    "session's eBPF programs by itself, within about 3 seconds.")
+    CLEANUP_BLOCKER = "tools.diagnostics.clean_linux"
 
     @staticmethod
     def open_network(filt):

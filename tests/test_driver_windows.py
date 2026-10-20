@@ -37,9 +37,10 @@ def test_advapi_declares_pointer_sized_prototypes():
         # Not Windows: the whole native path is guarded by is_windows() and never
         # runs. Assert that guard is really there, which is the off-Windows safety.
         check("service_state is a no-op off Windows", driver.service_state("x") is None)
+        # ...in the words of this platform's backend (Linux: the kernel cleans up).
+        from beantester import capture_backend
         check("cleanup is a no-op off Windows",
-              driver.cleanup_driver() == [
-                  "Not Windows - there is no WinDivert driver to clean up."])
+              driver.cleanup_driver() == [capture_backend.current().CLEANUP_LINE])
         return
 
     lib = driver._advapi()                      # pragma: no cover - Windows only
