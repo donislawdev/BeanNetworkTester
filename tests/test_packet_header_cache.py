@@ -2,9 +2,10 @@
 
 What this guards (performance review 2026-09-26, W-A1/W-A3)
 ----------------------------------------------------------
-pydivert 3.1.3 caches every header it parses as a ``functools.cached_property``
-in the packet's ``__dict__``, and every header points back at its packet
-(``_packet``). That is a reference CYCLE: reference counting never frees it, only
+pydivert (3.1.3, and 4.0.0 the same way) caches every header it parses as a
+``functools.cached_property`` in the packet's ``__dict__``, and every header
+points back at its packet (``_packet``). That is a reference CYCLE: reference
+counting never frees it, only
 the cyclic collector does. A packet that waits out a configured delay survives
 the young collections, ages into the oldest generation and becomes garbage there,
 so only a FULL collection frees it - and a full collection stops both worker
@@ -56,17 +57,22 @@ class _StandInPacket:
     """pydivert's layout in miniature: real fields in slots, caches in __dict__.
 
     The slot NAMES are pydivert's (``engine.PYDIVERT_SLOTS``): the engine clears
-    only a class laid out that way.
+    only a class laid out that way. Since pydivert 4.0.0 the bytes live in
+    ``_raw`` behind a ``raw`` property, so this one does too.
     """
 
-    __slots__ = ("raw", "_wd_addr", "_direction", "_sport", "__dict__")
+    __slots__ = ("_raw", "_wd_addr", "_direction", "_sport", "__dict__")
     udp = icmp = icmpv6 = None
 
     def __init__(self, sport):
-        self.raw = b"\x00" * 60
+        self._raw = bytearray(60)
         self._wd_addr = None
         self._direction = 0             # pydivert's Direction.OUTBOUND
         self._sport = sport
+
+    @property
+    def raw(self):
+        return memoryview(self._raw)
 
     @property
     def is_outbound(self):
