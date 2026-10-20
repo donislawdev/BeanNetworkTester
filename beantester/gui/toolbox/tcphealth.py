@@ -25,7 +25,7 @@ import tkinter as tk
 import weakref
 from tkinter import ttk
 
-from ... import crashlog, tcpestats
+from ... import capabilities, crashlog
 from ...i18n import T
 from ...nettools import tcphealth
 from .. import dialogs
@@ -86,7 +86,7 @@ def watch_from(app, request):
 
 def offered(proto, remote_ip, state=""):
     """Whether a row menu offers "Show TCP health" for a row."""
-    return tcpestats.supported() and tcphealth.watchable(proto, remote_ip, state)
+    return capabilities.available("tcp_health") and tcphealth.watchable(proto, remote_ip, state)
 
 
 class TcpHealthPanel:
@@ -99,7 +99,6 @@ class TcpHealthPanel:
         self.memory = remembered(app, self.ID)
         self.list = watchlist(app)
         self.frame = ttk.Frame(parent)
-        self.supported = tcpestats.supported()
         self._timer = None
         self._drawn = None
 
@@ -134,8 +133,7 @@ class TcpHealthPanel:
         self.table = SortableTree(
             top, COLUMNS, sort={"col": "", "reverse": False}, on_sort=lambda _s: self._show(),
             height=ROWS["watched"], min_chars=MIN_CHARS, tips=TIPS, tags=HEALTH_COLORS,
-            selectmode="browse", empty_text="tools.tcphealth.empty" if self.supported
-            else "tools.tcphealth.windows_only")
+            selectmode="browse", empty_text="tools.tcphealth.empty")
         self.table.bind_select(self._on_select)
 
         bottom = ttk.Frame(self.frame)
@@ -211,7 +209,7 @@ class TcpHealthPanel:
     def _read(self):
         """One worker run: what was asked, and everything still being read. Never
         while a run is out - see the module's last paragraph."""
-        if not self.supported or self.job.busy() or not self.list.busy():
+        if self.job.busy() or not self.list.busy():
             return
         requests, self.list.pending = self.list.pending, []
         connections = self.list.to_read()
@@ -226,7 +224,7 @@ class TcpHealthPanel:
 
     def _arm(self):
         """Keep the once-a-second timer going while something is on the list."""
-        if self._timer is None and self.supported and self.list.busy():
+        if self._timer is None and self.list.busy():
             with crashlog.quiet(AREA):
                 self._timer = self.frame.after(READ_EVERY_MS, self._tick)
 

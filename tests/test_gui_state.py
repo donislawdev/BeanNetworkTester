@@ -424,7 +424,9 @@ def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
     """Windows resets TCP over IPv4 only (``tcpreset``): every other row gets the
     entry greyed, the way a row with no process gets "Target this process"."""
     run_gui("""
+        from beantester import tcpreset
         from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        tcpreset.supported = lambda: True       # the Linux runner too (capabilities)
         page = app.pages["connections"]
         tree = page.table.tree
         keys = list(page.table.columns)
@@ -460,6 +462,8 @@ def test_connection_menu_pings_the_far_end_of_any_row_with_one_address():
         from beantester.i18n import T
         from beantester.nettools import ping as pg
         from beantester import icmp
+        icmp.supported = lambda: True           # the Linux runner too (capabilities)
+        app._build_ui()                         # Ping's tab was built at start, before it
         sent = []
         pg.send = lambda target, wait_s, system=None, size=32: (
             sent.append(target.address), icmp.Echo(0, 1, 64, target.address))[1]
@@ -536,6 +540,39 @@ def test_connection_menu_offers_tcp_health_for_tcp_over_both_families():
             page.table.row_menu_at_pointer(Ev())
             got = page.menu.entry_states[page.HEALTH_INDEX]
             assert got == state, (proto, ip, got)
+    """)
+
+
+def test_a_row_menu_greys_out_what_this_system_lacks():
+    """Reset, TCP health and Ping on a TCP/IPv4 row, which each would offer - on a
+    system without their API (``capabilities``). Measured before this on Linux: the
+    reset entry was live and ended in an ``AttributeError`` recorded as a fault. The
+    socket table's menu asks the same two gates for its own entries."""
+    run_gui("""
+        from beantester import icmp, tcpestats, tcpreset
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox import ping as pp, tcphealth as th
+        page = app.pages["connections"]
+        tree = page.table.tree
+        keys = list(page.table.columns)
+
+        class Ev:
+            x_root = y_root = 10
+            y = 10
+
+        values = ["-"] * len(keys)
+        values[keys.index("proto")], values[keys.index("remote_ip")] = "TCP", "198.51.100.7"
+        page.table.sync([("r", values)])
+        tree.row_at = page.table._slots[0]
+        entries = (page.RESET_INDEX, page.HEALTH_INDEX, page.PING_INDEX)
+        for has_it, state in ((True, MENU_ENTRY_LIVE), (False, MENU_ENTRY_INERT)):
+            for module in (icmp, tcpestats, tcpreset):
+                module.supported = lambda has_it=has_it: has_it
+            page.table.row_menu_at_pointer(Ev())
+            got = [page.menu.entry_states[i] for i in entries]
+            assert got == [state] * 3, (has_it, got)
+            assert th.offered("TCP", "198.51.100.7", "ESTABLISHED") is has_it
+            assert pp.offered("198.51.100.7") is has_it
     """)
 
 

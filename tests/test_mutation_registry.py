@@ -3211,6 +3211,67 @@ MUTATIONS = [
         "new": "        if False:\n            tool_id = TOOLS[0].id",
         "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
     },
+    # -- what this system offers (capabilities, Linux stage 2, 2026-10-20) --------- #
+    {
+        # MEASURED on Linux before the gate: every ping "failed" with code -1, and the
+        # Adapters tab was two blank tables.
+        "label": "toolbox: a tool this system lacks gets its panel built anyway",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            if reason is not None:\n",
+        "new": "            if False:\n",
+        "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
+    },
+    {
+        "label": "capabilities: every system is said to have every API",
+        "file": "beantester/capabilities.py",
+        "old": "    return bool(CAPABILITIES[name].module.supported())\n",
+        "new": "    return True\n",
+        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+    },
+    {
+        # A tool that needs nothing would be hidden on every system, without a word.
+        "label": "capabilities: a tool that needs nothing is said to need something",
+        "file": "beantester/capabilities.py",
+        "old": "    if not name:\n        return True\n",
+        "new": "    if not name:\n        return False\n",
+        "test": "test_a_tool_that_needs_nothing_is_always_available_and_a_typo_is_loud",
+    },
+    {
+        "label": "capabilities: Ping forgets what it needs",
+        "file": "beantester/gui/toolbox/__init__.py",
+        "old": "PingPanel, sends=True, needs=\"ping\"),\n",
+        "new": "PingPanel, sends=True),\n",
+        "test": "test_every_tool_needs_a_real_capability_and_the_one_its_logic_imports",
+    },
+    {
+        "label": "capabilities: a reset is said to exist off Windows",
+        "file": "beantester/tcpreset.py",
+        "old": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n"
+               "    return sys.platform.startswith(\"win\")\n",
+        "new": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n    return True\n",
+        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+    },
+    {
+        "label": "capabilities: the row menus offer Ping on a system without it",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    if not capabilities.available(\"ping\"):\n        return False\n",
+        "new": "    if False:\n        return False\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "capabilities: the row menus offer TCP health on a system without it",
+        "file": "beantester/gui/toolbox/tcphealth.py",
+        "old": "    return capabilities.available(\"tcp_health\") and tcphealth.watchable(",
+        "new": "    return tcphealth.watchable(",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "capabilities: the Connections page offers a reset on a system without one",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "                self.menu, self.RESET_INDEX, capabilities.available(\"tcp_reset\")\n",
+        "new": "                self.menu, self.RESET_INDEX, True\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
     {
         # App._tick refreshes the page in one try with the summary bar and the
         # secondary windows: an unguarded panel would stop them every 700 ms.
@@ -3298,8 +3359,8 @@ MUTATIONS = [
         # a tool that sends is not marked as sending, so the promise would not name it.
         "label": "toolbox promise: Ping is not marked as sending",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True),\n",
-        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel),\n",
+        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True, needs=\"ping\"),\n",
+        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, needs=\"ping\"),\n",
         "test": "test_the_promise_names_exactly_the_tools_that_send",
     },
     {
@@ -8164,8 +8225,8 @@ MUTATIONS = [
         # A run waiting behind another is REPLACED (ToolJob): the request in it is lost.
         "label": "tcp health: a run is started while one is out",
         "file": "beantester/gui/toolbox/tcphealth.py",
-        "old": "        if not self.supported or self.job.busy() or not self.list.busy():\n",
-        "new": "        if not self.supported or not self.list.busy():\n",
+        "old": "        if self.job.busy() or not self.list.busy():\n",
+        "new": "        if not self.list.busy():\n",
         "test": "test_connections_asked_in_quick_succession_all_reach_the_list",
     },
     {
@@ -8330,8 +8391,8 @@ MUTATIONS = [
     {
         "label": "conns: the row menu offers a reset for a row Windows cannot reset",
         "file": "beantester/gui/pages/conns.py",
-        "old": "            set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(\n",
-        "new": "            set_menu_entry_available(self.menu, self.RESET_INDEX, True or tcpreset.resettable(\n",
+        "old": "                and tcpreset.resettable(selected.get(\"proto\"), selected.get(\"remote_ip\")))\n",
+        "new": "                and True)\n",
         "test": "test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4",
     },
     {

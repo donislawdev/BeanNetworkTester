@@ -19,15 +19,19 @@ Three decisions carry this file, each paid for somewhere else first:
   once, instead of being retried on every look.
 * **The tab that was open is remembered by id** (``ui.json``, ``tools_page``), so
   reordering the registry never reopens the wrong tool.
+* **A tool this system lacks is decided HERE** (``capabilities.why_not`` on the
+  registry's ``needs``), before its panel exists, so no panel asks the question
+  itself and no panel is built against an API that is not there.
 """
 import tkinter as tk
 from tkinter import ttk
 
 from ...i18n import T
+from .. import dialogs
 from ..labels import wrapping_label
 from ..theme import PAGE_WRAP_PAD, space
 from ..toolbox import TOOL_BY_ID, TOOLS
-from ... import crashlog
+from ... import capabilities, crashlog
 
 AREA = "gui.pages.toolbox"
 
@@ -38,6 +42,25 @@ class _Unavailable:
     def __init__(self, parent):
         self.frame = wrapping_label(parent, T("tools.unavailable"),
                                     style="Status.Bad.TLabel")
+
+
+class _NotHere:
+    """What a tab shows when this system lacks what its tool needs. No behaviour.
+
+    Not an error, so not ``_Unavailable``'s red: nothing failed, the tool has
+    nothing to work with here. It keeps the tool's "?" where every tool has it, so
+    each tab has the same skeleton and the sheet still says what the tool is for.
+    """
+
+    def __init__(self, app, parent, tool, reason):
+        self.frame = ttk.Frame(parent)
+        bar = ttk.Frame(self.frame)
+        bar.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
+        dialogs.help_button(bar, app.root, f"tools.{tool.id}.help_title",
+                            f"tools.{tool.id}.help_body",
+                            f"tips.tools_{tool.id}_help").pack(side="right")
+        wrapping_label(self.frame, T(reason), pad=PAGE_WRAP_PAD).pack(
+            fill="x", padx=space("page"), pady=(space("row"), 0))
 
 
 class ToolboxPage:
@@ -103,6 +126,13 @@ class ToolboxPage:
         tab = self.tabs[tool_id]
         tool = TOOL_BY_ID[tool_id]
         try:
+            reason = capabilities.why_not(tool.needs)
+            if reason is not None:
+                # Before the "what it sends" line: a tool that cannot run sends nothing.
+                panel = _NotHere(self.app, tab, tool, reason)
+                panel.frame.pack(fill="both", expand=True)
+                self.panels[tool_id] = panel
+                return panel
             if tool.sends:
                 # What the tool sends, above it and in its own words: the tab's other
                 # tools send nothing (README, "Tools"; the registry's ``sends``).

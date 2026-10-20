@@ -28,6 +28,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import NamedTuple
 
+from ... import capabilities
 from ...i18n import T
 from ...nettools import adapters, proxy
 from .. import dialogs
@@ -69,7 +70,7 @@ def read_all():
     """The adapters and, where supported, the proxy. ONE job, so a second Refresh
     cannot drop half of it (the worker keeps only the newest request), and the proxy
     read never raises - it cannot cost the adapter list."""
-    return Read(adapters.read(), proxy.read() if proxy.supported() else None)
+    return Read(adapters.read(), proxy.read() if capabilities.available("proxy") else None)
 
 
 class ProxyEntry(NamedTuple):
@@ -103,8 +104,6 @@ class AdaptersPanel:
         self.job = job(app, self.ID)
         self.memory = remembered(app, self.ID)
         self.frame = ttk.Frame(parent)
-        # Asked once: the platform does not change while the program runs.
-        self.supported = adapters.supported()
 
         bar = ttk.Frame(self.frame)
         bar.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
@@ -132,8 +131,7 @@ class AdaptersPanel:
         self.table = SortableTree(
             top, COLUMNS, sort=self._sort("sort"), on_sort=self._on_sort,
             height=ROWS["adapters"], min_chars=MIN_CHARS, tips=TIPS, tags=ADAPTER_COLORS,
-            selectmode="browse", empty_text="tools.common.working" if self.supported
-            else "tools.adapters.windows_only")
+            selectmode="browse", empty_text="tools.common.working")
         self.table.bind_select(self._on_select)
         bottom = ttk.Frame(self.frame)
         bottom.pack(fill="both", expand=True, padx=space("page"),
@@ -194,7 +192,7 @@ class AdaptersPanel:
     # -- asking -------------------------------------------------------------- #
     def read(self):
         """Read the adapters and the proxy again (the Refresh button)."""
-        if self.supported and not self.job.busy():
+        if not self.job.busy():
             self.job.run(READ, read_all)
             self.status.working()
             self._sync_buttons()
@@ -304,7 +302,7 @@ class AdaptersPanel:
         self.note.config(text=T("tools.adapters.note_stale", time=at))
 
     def _sync_buttons(self):
-        can_read = self.supported and not self.job.busy()
+        can_read = not self.job.busy()
         self.refresh_btn.state(["!disabled"] if can_read else ["disabled"])
         has_rows = self.job.value.get(READ) is not None
         self.copy_btn.state(["!disabled"] if has_rows else ["disabled"])

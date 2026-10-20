@@ -58,10 +58,16 @@ def opened_on_start_up():
 
 
 def test_the_tools_page_is_the_renderer_of_its_registry():
-    """Every registry entry is a tab, in order, and builds into its own panel class."""
+    """Every registry entry is a tab, in order, and builds into its own panel class -
+    on a system that offers every capability, so the Linux runner sees the panels too
+    (what a system without one shows is the test after this one)."""
     run_gui("""
+        from beantester import capabilities
         from beantester.gui.pages.toolbox import ToolboxPage
         from beantester.gui.toolbox import TOOLS
+        for cap in capabilities.CAPABILITIES.values():
+            cap.module.supported = lambda: True
+        app._build_ui()
 
         page = app.pages["tools"]
         assert isinstance(page, ToolboxPage), type(page)
@@ -75,6 +81,52 @@ def test_the_tools_page_is_the_renderer_of_its_registry():
             assert page.current() == tool.id, (tool.id, page.current())
             assert isinstance(page.panels[tool.id], tool.factory), \\
                 (tool.id, type(page.panels[tool.id]))
+    """)
+
+
+def test_a_tool_this_system_lacks_says_so_and_builds_nothing():
+    """The registry's ``needs``, asked by the page (``capabilities.why_not``): the tool's
+    panel is not built at all - nothing in it can reach the missing API - and the tab
+    says so in the shared words, keeps the tool's "?" and, for a tool that sends,
+    leaves out the line of what it sends. Measured before this on Linux: every ping
+    "failed" with code -1 and the Adapters tab was two blank tables."""
+    run_gui("""
+        from beantester import adapters as system_adapters, icmp
+        from beantester.gui.pages import toolbox as page_mod
+        from beantester.gui.toolbox import TOOL_BY_ID
+        from beantester.gui.toolbox import ping as pp
+        from beantester.i18n import T
+        icmp.supported = lambda: False
+        system_adapters.supported = lambda: False
+        built_anyway = []
+        real_init = pp.PingPanel.__init__
+        pp.PingPanel.__init__ = lambda self, *a, **k: built_anyway.append(1) or real_init(
+            self, *a, **k)
+        app._build_ui()
+        page = app.pages["tools"]
+        for tool_id in ("ping", "adapters"):
+            page.select(tool_id)
+            panel = page.panels[tool_id]
+            assert isinstance(panel, page_mod._NotHere), (tool_id, type(panel))
+            texts = [w.kw.get("text") for w in fake_tk.walk(page.tabs[tool_id])]
+            assert T("tools.not_here") in texts, (tool_id, texts)
+            helps = [w for w in fake_tk.walk(panel.frame) if w.kw.get("style") == "Help.TButton"]
+            assert len(helps) == 1, (tool_id, "the tool's own ? stays")
+        texts = [w.kw.get("text") for w in fake_tk.walk(page.tabs["ping"])]
+        assert T("tools.ping.sends") not in texts, "a tool that cannot run sends nothing"
+        assert built_anyway == [], "Ping's panel was built on a system without Ping"
+        page.refresh()                     # the page calls reach a panel with no behaviour
+        page.teardown()
+        pp.PingPanel.__init__ = real_init
+
+        # the same registry on a system that has it: the real panel, built on first view
+        icmp.supported = lambda: True
+        app._build_ui()
+        page = app.pages["tools"]
+        page.select("ping")
+        assert isinstance(page.panels["ping"], TOOL_BY_ID["ping"].factory)
+        page.select("exprtest")            # a tool that needs nothing, on either system
+        assert isinstance(page.panels["exprtest"], TOOL_BY_ID["exprtest"].factory)
     """)
 
 
@@ -1315,7 +1367,10 @@ def fake_read(native=None):
                        next(ad._MADE))
 
 ad.read = fake_read
-ad.supported = lambda: supported[0]
+# The SYSTEM module, which the Tools page's gate (capabilities) and the tool's own
+# logic both ask - so the Linux runner sees the tool, and a test can take it away.
+from beantester import adapters as system_adapters, proxy as system_proxy
+system_adapters.supported = lambda: supported[0]
 
 # The proxy, read in the same job: never this machine's own settings in a test.
 from beantester.nettools import proxy as px
@@ -1334,7 +1389,7 @@ def fake_proxy_read(native=None):
     return PROXY[0]
 
 px.read = fake_proxy_read
-px.supported = lambda: supported[0]
+system_proxy.supported = lambda: supported[0]
 
 def open_adapters():
     app.select_page("tools")
@@ -1519,16 +1574,18 @@ def test_a_rebuild_keeps_a_failed_read_and_hands_a_running_one_to_the_new_panel(
 
 
 def test_off_windows_the_tool_says_so_and_asks_nothing():
+    """The page's shared panel, not the tool's: before it, this tab was two blank
+    tables on Linux - its own sentence for the case was never drawn (measured
+    2026-10-20, Ubuntu 26.04 and WSL)."""
     run_gui(ADAPT + textwrap.dedent("""
+        from beantester.gui.pages import toolbox as page_mod
         supported[0] = False
+        app._build_ui()
         panel = open_adapters()
-        settle(panel)
+        assert isinstance(panel, page_mod._NotHere), type(panel)
         app._tick()
-        panel.refresh()
-        assert reads == [], reads
-        assert panel.table._empty_text == "tools.adapters.windows_only"
-        assert "disabled" in panel.refresh_btn.state()
-        assert "disabled" in panel.copy_btn.state()
+        app.pages["tools"].refresh()
+        assert reads == [] and proxy_reads == [], (reads, proxy_reads)
     """))
 
 
@@ -1730,6 +1787,10 @@ def fake_lookup(name):
 
 pg.send = fake_send
 pg._lookup = fake_lookup
+icmp.supported = lambda: True      # the Linux runner too (capabilities)
+# ...and built again: the window built the Tools page's first tab, Ping, at start -
+# before the line above - and a page keeps the panel a tab got.
+app._build_ui()
 
 def open_ping():
     app.select_page("tools")

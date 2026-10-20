@@ -78,6 +78,16 @@ def resettable(proto, remote_ip):
     return tcprow.family(remote_ip) == 4
 
 
+def supported():
+    """``SetTcpEntry`` is Windows'. Asked through ``capabilities``, like every tool's API.
+
+    Without it a reset on Linux reached ``None.SetTcpEntry``: an ``AttributeError``
+    reported as FAILED and recorded as a fault of the program (measured 2026-10-20 on
+    Ubuntu 26.04 and in WSL, as root and not).
+    """
+    return sys.platform.startswith("win")
+
+
 # -- the binding --------------------------------------------------------------------- #
 def _iphlpapi():
     """iphlpapi with ``SetTcpEntry``'s prototype; None off Windows."""

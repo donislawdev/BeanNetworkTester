@@ -12,8 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW, otherwise it stops with exit code 7. `--doctor`
   shows what the machine lacks. When the tool cannot keep up, it says how many packets went
   around it unimpaired and how many the driver dropped. `--target` reads the socket table,
-  so a new connection's first exchange can pass before it applies. The window and the Tools
-  tab are not on Linux yet.
+  so a new connection's first exchange can pass before it applies.
+
+- **Linux, experimental: the window.** On the Tools tab, Ping, TCP health and Adapters say
+  that they work on Windows only for now, and the row menus grey out Reset this connection,
+  Show TCP health and Ping this address.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

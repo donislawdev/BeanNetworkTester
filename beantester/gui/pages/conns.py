@@ -26,7 +26,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 
-from ... import tcpreset
+from ... import capabilities, tcpreset
 from ...i18n import T
 from ...nettools.tcphealth import Request
 from ...processes import port_process_map
@@ -339,9 +339,11 @@ class ConnsPage:
         name = str(selected.get("proc") or "").strip()
         try:
             set_menu_entry_available(self.menu, self.TARGET_INDEX, bool(name and name != "?"))
-            # TCP over IPv4 only: Windows has no IPv6 form of the call (tcpreset).
-            set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(
-                selected.get("proto"), selected.get("remote_ip")))
+            # TCP over IPv4 only: Windows has no IPv6 form of the call (tcpreset) -
+            # and nothing at all on a system without it (capabilities).
+            set_menu_entry_available(
+                self.menu, self.RESET_INDEX, capabilities.available("tcp_reset")
+                and tcpreset.resettable(selected.get("proto"), selected.get("remote_ip")))
             # TCP over both IPv4 and IPv6 (tcpestats has the IPv6 form).
             set_menu_entry_available(self.menu, self.HEALTH_INDEX, tcphealth.offered(
                 selected.get("proto"), selected.get("remote_ip")))
