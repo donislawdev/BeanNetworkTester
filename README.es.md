@@ -1487,6 +1487,7 @@ Todos los jobs de ese workflow, y qué significa que uno esté en rojo:
 | `mutations` | rompe cada comportamiento protegido y demuestra que su prueba se pone en rojo. Un pull request ejecuta las entradas que tocó, la ejecución semanal las hace todas |
 | `audit` | **pip-audit** contra el conjunto fijado. Semanal, para preguntar si el mundo se movió bajo versiones que no lo hicieron, y en un pull request que edita un archivo de requisitos, para preguntar si el conjunto se movió. La ejecución semanal abre un issue, y un pull request que fija algo vulnerable simplemente falla |
 | `tests` | el conjunto de pruebas, el smoke de la GUI, la comprobación de renderizado con Tk real y las aserciones de la CLI, en Linux y Windows |
+| `linux-capture` | la captura experimental en Linux sobre un kernel real: la línea de comandos como root, dentro de un espacio de nombres de red propio. La latencia y la pérdida deben llegar al objetivo y a nada más. No es obligatorio para fusionar |
 | `build` | el ejecutable de Windows, con prueba de humo, con la comprobación del controlador y el análisis del registro de licencias |
 | `cron-issue` | abre un issue cuando la ejecución semanal se pone en rojo, sin duplicados según qué jobs fallaron. Un cron es fácil de pasar por alto y nada más lo anuncia. También responde a una ejecución lanzada a mano, que es la única forma de ejercitarlo sin esperar a un lunes en rojo. Nunca se ejecuta en un pull request, y nunca cierra un issue por sí mismo |
 <!-- ci-jobs:end -->

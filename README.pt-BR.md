@@ -1463,6 +1463,7 @@ Todos os jobs desse workflow, e o que significa quando um deles fica vermelho:
 | `mutations` | quebra cada comportamento protegido e prova que o seu teste fica vermelho. Um pull request executa as entradas que tocou, a execução semanal executa todas |
 | `audit` | **pip-audit** contra o conjunto fixado. Semanalmente, para perguntar se o mundo se moveu sob versões que não mudaram, e em um pull request que edita um arquivo de requisitos, para perguntar se o conjunto se moveu. A execução semanal abre uma issue, e um pull request que fixa algo vulnerável simplesmente falha |
 | `tests` | a suíte, o smoke da interface gráfica, a verificação de renderização com o Tk real e as verificações da CLI, em Linux e Windows |
+| `linux-capture` | a captura experimental no Linux em um kernel real: a linha de comando como root, dentro de um namespace de rede próprio. A latência e a perda precisam chegar ao alvo e a nada mais. Não é obrigatório para o merge |
 | `build` | o executável do Windows, com smoke test, com a verificação do driver e a varredura do registro de licenças |
 | `cron-issue` | abre uma issue quando a execução semanal fica vermelha, sem duplicar conforme os jobs que falharam. Um cron é fácil de passar despercebido e nada mais anuncia um. Também responde a uma execução disparada à mão, que é a única forma de exercitá-lo sem esperar por uma segunda-feira vermelha. Nunca roda em um pull request e nunca fecha uma issue sozinho |
 <!-- ci-jobs:end -->

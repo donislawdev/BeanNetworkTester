@@ -1521,6 +1521,7 @@ Jeder Job dieses Workflows und was ein roter bedeutet:
 | `mutations` | zerstört jedes abgesicherte Verhalten und beweist, dass sein Test rot wird. Ein Pull Request führt die Einträge aus, die er berührt hat, der wöchentliche Lauf alle |
 | `audit` | **pip-audit** gegen den gepinnten Satz. Wöchentlich, um zu fragen, ob sich die Welt unter Versionen bewegt hat, die sich nicht bewegt haben, und bei einem Pull Request, der eine Requirements-Datei ändert, um zu fragen, ob sich der Satz bewegt hat. Der wöchentliche Lauf eröffnet ein Issue, und ein Pull Request, der etwas Verwundbares pinnt, scheitert einfach |
 | `tests` | die Suite, der GUI-Smoke, die Render-Prüfung mit echtem Tk und die CLI-Assertions, unter Linux und Windows |
+| `linux-capture` | die experimentelle Linux-Erfassung auf einem echten Kernel: die Kommandozeile als root, in einem eigenen Netzwerk-Namespace. Latenz und Verlust müssen das Ziel erreichen und sonst nichts. Für einen Merge nicht erforderlich |
 | `build` | die ausführbare Windows-Datei, per Smoke-Test geprüft, mit der Treiberprüfung und dem Scan der Lizenzregistry |
 | `cron-issue` | eröffnet ein Issue, wenn der wöchentliche Lauf rot wird, dedupliziert danach, welche Jobs gescheitert sind. Einen Cron übersieht man leicht, und sonst kündigt ihn nichts an. Er reagiert auch auf einen von Hand ausgelösten Lauf, die einzige Möglichkeit, ihn auszuprobieren, ohne auf einen roten Montag zu warten. Läuft nie bei einem Pull Request und schließt nie von selbst ein Issue |
 <!-- ci-jobs:end -->

@@ -1469,6 +1469,7 @@ Every job in that workflow, and what a red one means:
 | `mutations` | breaks each guarded behaviour and proves its test reddens. A pull request runs the entries it touched, the weekly run does all of them |
 | `audit` | **pip-audit** against the pinned set. Weekly, to ask whether the world moved under versions that did not, and on a pull request that edits a requirements file, to ask whether the set moved. The weekly run opens an issue, and a pull request that pins something vulnerable simply fails |
 | `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
+| `linux-capture` | the experimental Linux capture on a real kernel: the command line, as root, inside a network namespace of its own. The latency and the loss must reach the target and nothing else. Not required for a merge |
 | `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
 | `cron-issue` | opens an issue when the weekly run goes red, deduplicated by which jobs failed. A cron is easy to miss and nothing else announces one. It also answers to a hand-fired run, which is the only way to exercise it without waiting for a red Monday. Never runs on a pull request, and never closes an issue by itself |
 <!-- ci-jobs:end -->

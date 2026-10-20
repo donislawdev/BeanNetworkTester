@@ -991,8 +991,8 @@ MUTATIONS = [
         # the notice itself exists to cure, one level up.
         "label": "cron notice: a job drops out of what the weekly notice watches",
         "file": ".github/workflows/ci.yml",
-        "old": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]",
-        "new": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests]",
+        "old": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]",
+        "new": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]",
         "test": "test_the_cron_notice_watches_every_job_in_the_workflow",
     },
     {
@@ -6037,6 +6037,20 @@ MUTATIONS = [
         "old": "                self.log(T(capture_backend.current().text(\"driver_queue\"), n=q[\"queue_len\"],\n",
         "new": "                self.log(T(\"log.driver_queue\", n=q[\"queue_len\"],\n",
         "test": "test_the_engine_watches_the_drivers_counters_and_says_its_own_words",
+    },
+    {
+        "label": "linux smoke: the latency judge passes a session that added nothing",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "    if m[\"during\"] is not None and not 0.9 * added <= m[\"during\"] <= added + 100:\n",
+        "new": "    if False:\n",
+        "test": "test_every_broken_latency_session_is_named",
+    },
+    {
+        "label": "linux smoke: --require lets a machine that cannot run it pass",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "        return 1 if args.require else 0\n",
+        "new": "        return 0\n",
+        "test": "test_a_machine_that_cannot_run_it_skips_and_ci_turns_that_into_a_failure",
     },
     {
         "label": "driverwait: the stamp frequency is not the backend's",

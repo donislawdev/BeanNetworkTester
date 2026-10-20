@@ -605,6 +605,31 @@ jobs:
           print('NDJSON ok:', len(records), 'records')
           "
 
+  # The experimental Linux capture (eBPFDivert, chosen by capture_backend.py) on a
+  # real kernel - the one thing the suite cannot reach, since every other Linux test
+  # drives the backend through stand-ins. The capture is bounded by a network
+  # namespace the tool builds and deletes again (convention 6), so the runner's own
+  # interfaces are never handed to it. `--require` makes a runner that cannot run
+  # the check a failure, not a quiet SKIP. Not in the branch ruleset: a red one says
+  # Linux capture broke, and whether that blocks a merge is the owner's call.
+  linux-capture:
+    name: Linux capture (experimental, real kernel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Runtime dependencies (hash-pinned)
+        run: pip install --require-hashes -r requirements.txt
+      - name: The kernel the capture runs on
+        run: uname -r
+      - name: Real capture inside a network namespace of its own
+        run: sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require
+
   build:
     name: build the executable (Windows)
     runs-on: windows-latest
@@ -698,7 +723,7 @@ jobs:
   # case a second time, in tests/test_cron_issue.py.
   cron-issue:
     name: open an issue when the weekly run is red
-    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]
+    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]
     # 🔴 `workflow_dispatch` is here so this path can be PROVEN. Until it was
     # added, the only way to find out whether `gh issue create` works with these
     # permissions was a red Monday - which is to say, the notice that exists
