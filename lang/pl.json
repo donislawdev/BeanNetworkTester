@@ -349,6 +349,7 @@
   "log.note_windows": "UWAGA: przechwytywanie działa tylko na Windows i Linuksie.",
   "log.once": "jednorazowo",
   "log.page_not_opened": "Nie udało się otworzyć przeglądarki. Skopiuj ten adres do przeglądarki",
+  "log.page_open_yourself": "Aplikacja działa jako root, więc nie uruchamia przeglądarki. Skopiuj ten adres do przeglądarki",
   "log.ports": "portów",
   "log.previous_session_stuck": "UWAGA: część poprzedniej sesji wciąż wisi i nie dała się zatrzymać. Nie przeszkadza to tej sesji działać, ale może zajmować procesor do ponownego uruchomienia programu.",
   "log.process_excluded": "Cel",

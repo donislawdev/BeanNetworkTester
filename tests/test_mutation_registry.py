@@ -4773,6 +4773,54 @@ MUTATIONS = [
         "new": '_SHIPPED_SCENARIO_FOLDERS = (("scenarios",),)',
         "test": "test_the_command_path_and_its_reading_are_one_round_trip",
     },
+    # -- a run under sudo hands its files back (Linux stage 2a, 2026-10-20) ---------- #
+    {
+        # MEASURED before: ui.json root-owned 0600 in the person's folder, set aside
+        # as corrupt by their next start.
+        "label": "sudo files: an atomic write publishes root's temp file",
+        "file": "beantester/paths.py",
+        "old": "    os.close(fd)\n    hand_back(tmp)\n    return tmp\n",
+        "new": "    os.close(fd)\n    return tmp\n",
+        "test": "test_every_atomic_write_publishes_a_file_that_is_theirs",
+    },
+    {
+        "label": "sudo files: a file in root's own place is given away",
+        "file": "beantester/paths.py",
+        "old": "        if os.stat(os.path.dirname(os.path.abspath(path))).st_uid != uid:\n"
+               "            return False\n",
+        "new": "",
+        "test": "test_a_file_is_handed_back_only_inside_the_persons_own_directory",
+    },
+    {
+        "label": "sudo files: any process hands its files to SUDO_UID",
+        "file": "beantester/paths.py",
+        "old": "    if os.geteuid() != 0:\n        return None\n",
+        "new": "",
+        "test": "test_who_ran_it_is_read_from_sudo_and_only_by_root",
+    },
+    {
+        "label": "sudo files: new directories are handed back bottom up",
+        "file": "beantester/paths.py",
+        "old": "    for level in reversed(created):\n",
+        "new": "    for level in created:\n",
+        "test": "test_make_dirs_hands_back_only_the_levels_it_created_top_down",
+    },
+    {
+        "label": "sudo files: the stats CSV stays root's",
+        "file": "beantester/gui/csv_export.py",
+        "old": "        hand_back(CSV_FILE)             # a window run with sudo: the file stays theirs\n",
+        "new": "",
+        "test": "test_every_place_that_makes_a_file_hands_it_back",
+    },
+    {
+        # MEASURED before: webbrowser answered True through a background xdg-open,
+        # nothing opened, and the log said "opened".
+        "label": "sudo files: the page buttons start a browser as root",
+        "file": "beantester/gui/links.py",
+        "old": "    if invoking_user() is not None:\n",
+        "new": "    if False:\n",
+        "test": "test_the_page_buttons_start_no_browser_as_root",
+    },
     {
         # The dialog's absolute path carries the Windows account name into every
         # shared report (owner decision 2026-09-29).

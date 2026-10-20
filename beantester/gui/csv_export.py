@@ -15,7 +15,7 @@ import time
 
 from .. import crashlog
 from ..i18n import T
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE
+from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, hand_back
 from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
 
 # Internal stat keys are engine-speak ("seen"); a CSV is read by people and
@@ -119,6 +119,7 @@ def export_stats(app):
             writer.writerow([formula_safe(v) for v in
                              (time.strftime("%Y-%m-%d %H:%M:%S"),
                               *session_cells, *snap.values())])
+        hand_back(CSV_FILE)             # a window run with sudo: the file stays theirs
         # The WHOLE path, not just the file name: these files no longer sit next to
         # the executable, so the name alone would leave the user hunting for them.
         app.log(f"{T('log.stats_saved_to')} {CSV_FILE}")
@@ -237,6 +238,7 @@ def _write_connections_now(app, payload):
                     avg_packet_bytes(c),
                     f"{max(0.0, last - c.get('first', now)):.1f}",
                     f"{max(0.0, now - last):.1f}")])
+        hand_back(tmp)                  # before it takes the place of theirs
         os.replace(tmp, path)
         app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")
     except Exception as e:

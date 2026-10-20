@@ -349,6 +349,7 @@
   "log.note_windows": "注意：捕获功能仅支持 Windows 和 Linux。",
   "log.once": "一次",
   "log.page_not_opened": "无法打开浏览器。请将此地址复制到浏览器中",
+  "log.page_open_yourself": "本程序以 root 身份运行，因此不会启动浏览器。请将此地址复制到浏览器中",
   "log.ports": "端口",
   "log.previous_session_stuck": "警告：上一次会话的一部分仍然卡住，无法停止。这不会妨碍本次会话运行，但在重新启动程序之前可能会一直占用处理器。",
   "log.process_excluded": "目标",

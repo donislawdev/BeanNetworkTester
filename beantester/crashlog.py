@@ -76,7 +76,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from .appinfo import __version__
-from .paths import temp_beside, user_data_dir
+from .paths import hand_back, make_dirs, temp_beside, user_data_dir
 
 CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
@@ -131,7 +131,7 @@ def crash_dir():
 def _ensure_dir():
     path = crash_dir()
     try:
-        os.makedirs(path, exist_ok=True)
+        make_dirs(path)                 # under sudo, handed back like every file in it
     except OSError:
         return None
     return path
@@ -431,13 +431,15 @@ def _write(entry):
         _rotate_if_needed(path)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+        hand_back(path)
     except OSError:
         return
     if entry["severity"] == ERROR:
         try:
-            with open(os.path.join(directory, LATEST_NAME), "w",
-                      encoding="utf-8") as f:
+            latest = os.path.join(directory, LATEST_NAME)
+            with open(latest, "w", encoding="utf-8") as f:
                 f.write(format_report(entry))
+            hand_back(latest)
         except OSError:
             pass
 
@@ -665,6 +667,7 @@ def _install_faulthandler():
     try:
         path = os.path.join(directory, NATIVE_NAME)
         stream = open(path, "a", buffering=1)
+        hand_back(path)
         faulthandler.enable(file=stream, all_threads=True)
         _native_stream, _native_path = stream, path
     except Exception:
