@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester**는 테스터와 개발자를 위한 도구로, 나쁜 연결 환경에서 애플리케이션이 어떻게
 동작하는지 확인할 수 있습니다. Clumsy나 NetLimiter처럼 네트워크를 일부러 열화시킬 수 있습니다.
@@ -801,7 +802,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 시나리오 파일이 없거나 형식이 잘못되었습니다 |
 | `5` | io | 산출물을 쓸 수 없었습니다(재현 보고서, 저장한 설정) |
 | `6` | assertion | 실행은 성공했지만 `--min-packets` / `--fail-on-no-traffic`을 통과하지 못했습니다 |
-| `7` | permission | 관리자 권한이 필요한데 없습니다 |
+| `7` | permission | 관리자 권한(Windows) 또는 root(Linux)가 필요한데 없습니다 |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM(작업 취소, `docker stop`), Ctrl+Break 또는 콘솔 창 닫기 |
 

@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** は、テスターと開発者のためのツールです。回線の悪い環境で自分のアプリケーションがどう動くかを確かめられます。
 Clumsy や NetLimiter と同じように、ネットワークをわざと劣化させることができます。
@@ -472,7 +473,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | シナリオファイルがない、または形式が不正 |
 | `5` | io | 成果物を書き出せなかった (再現レポート、保存した設定) |
 | `6` | assertion | 実行は成功したが、`--min-packets` / `--fail-on-no-traffic` に合格しなかった |
-| `7` | permission | 管理者権限が必要だが、ない |
+| `7` | permission | 管理者権限 (Windows) または root (Linux) が必要だが、ない |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (ジョブのキャンセル、`docker stop`)、Ctrl+Break、またはコンソールウィンドウを閉じた |
 

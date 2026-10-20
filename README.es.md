@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** es una herramienta para testers y desarrolladores: permite comprobar cómo
 se comporta una aplicación con una mala conexión. Igual que Clumsy o NetLimiter, sirve para degradar
@@ -903,7 +904,7 @@ Cada forma de terminar tiene su propio código, así que un pipeline no necesita
 | `4` | scenario | el archivo de escenario no existe o está mal formado |
 | `5` | io | no se pudo escribir un artefacto (informe de reproducción, configuración guardada) |
 | `6` | assertion | la ejecución tuvo éxito, pero `--min-packets` / `--fail-on-no-traffic` no se cumplió |
-| `7` | permission | se necesitan derechos de administrador y faltan |
+| `7` | permission | se necesitan derechos de administrador (Windows) o root (Linux) y faltan |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (cancelación de un job, `docker stop`), Ctrl+Break o cierre de la ventana de la consola |
 

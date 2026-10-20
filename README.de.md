@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** ist ein Werkzeug für Tester und Entwickler: Prüfen Sie, wie sich Ihre
 Anwendung bei einer schlechten Verbindung verhält. Wie Clumsy oder NetLimiter lässt es Sie das
@@ -930,7 +931,7 @@ Jede Art des Endes hat ihren eigenen Code - eine Pipeline muss keinen Text auswe
 | `4` | scenario | die Szenario-Datei fehlt oder ist fehlerhaft |
 | `5` | io | ein Artefakt konnte nicht geschrieben werden (Reproduktionsbericht, gespeicherte Konfiguration) |
 | `6` | assertion | der Lauf war erfolgreich, aber `--min-packets` / `--fail-on-no-traffic` wurde nicht bestanden |
-| `7` | permission | Administratorrechte sind erforderlich und fehlen |
+| `7` | permission | Administratorrechte (Windows) bzw. root (Linux) sind erforderlich und fehlen |
 | `130` | interrupted | Strg+C (SIGINT) |
 | `143` | terminated | SIGTERM (Abbruch eines Jobs, `docker stop`), Strg+Break oder Schließen des Konsolenfensters |
 

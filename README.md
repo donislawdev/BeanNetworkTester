@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** is a tool for testers and developers: check how your application behaves
 on a poor connection. Like Clumsy or NetLimiter, it lets you deliberately degrade the network -
@@ -162,7 +163,34 @@ clock, so latency, jitter and speed limits finer than a step come out in whole s
 `psutil` is installed with the tool but is not what makes process targeting work on Windows. There
 the socket table and the process names come straight from the OS, and targeting keeps working with
 `psutil` removed entirely (measured: 310 ports mapped, 37 of 37 names resolved). It is the fallback
-for everything else, which is how the engine's tests run on Linux with no driver at all.
+for everything else, which is how the engine's tests run with no driver at all - and on
+Linux it is what `--target` reads.
+
+### Linux (experimental: the command line, from source)
+
+The command line also captures on Linux, through pydivert's eBPFDivert backend. It is experimental,
+and so is the pydivert Linux support it rests on.
+
+- Linux 5.10 or newer built with BTF (`/sys/kernel/btf/vmlinux` exists), x86_64 or aarch64,
+  glibc 2.28 or newer
+- root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW
+- from a checkout: `pip install --require-hashes -r requirements.txt`
+
+```bash
+sudo .venv/bin/python -m beantester --doctor
+sudo .venv/bin/python -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
+```
+
+`--doctor` lists what the machine still lacks. Where Linux differs from Windows:
+
+- Without root a session stops with exit code 7 and says to use `sudo`.
+- `--target` reads the socket table, so the first exchange of a new connection can pass before the
+  target applies.
+- When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log says how
+  many, and how many the driver dropped.
+- If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows again.
+- IP fragments always pass through the tool, even those its filter does not match.
+- The window and the Tools tab are Windows only for now.
 
 ## The window
 
@@ -906,7 +934,7 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 | `4` | scenario | the scenario file is missing or malformed |
 | `5` | io | an artifact could not be written (repro report, saved config) |
 | `6` | assertion | the run succeeded but `--min-packets` / `--fail-on-no-traffic` did not pass |
-| `7` | permission | administrator rights are required and missing |
+| `7` | permission | administrator rights (Windows) or root (Linux) are required and missing |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (job cancellation, `docker stop`), Ctrl+Break, or closing the console window |
 
