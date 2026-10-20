@@ -50,6 +50,21 @@ def test_gpl2_only_blocks_because_it_cannot_be_shipped_with_gpl3():
     check("GPL-2.0-only blocks", len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
 
 
+def test_gpl2_or_later_passes_because_it_can_be_taken_under_gpl3():
+    """The other side of the line above: "or any later version" includes GPL-3.0.
+
+    pydivert declares exactly this pair, and blocked on its 4.0.0 bump while the
+    3.1.3 before it carried the same expression (it entered before the gate).
+    """
+    for licence in ("GPL-2.0-or-later", "LGPL-3.0-or-later OR GPL-2.0-or-later"):
+        blocked, passed = dependency_gate.split([_dep(name="pydivert", licence=licence)])
+        check(f"{licence} passes", not blocked and len(passed) == 1, f"(blocked={blocked})")
+    blocked, _passed = dependency_gate.split(
+        [_dep(licence="GPL-2.0-or-later AND GPL-2.0-only")])
+    check("and GPL-2.0-only beside it still blocks",
+          len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
+
+
 def test_an_exception_is_a_named_package_with_a_reason_beside_it():
     """The escape hatch, and the two things that keep it from becoming a habit.
 
@@ -73,6 +88,17 @@ def test_an_exception_is_a_named_package_with_a_reason_beside_it():
     blocked, _passed = dependency_gate.split([_dep(name="something-else",
                                                    licence=licence)])
     check("the same licence on any other package still blocks",
+          len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
+
+    # What the review data says for pyinstaller-hooks-contrib, as GitHub spelled it.
+    licence = "Apache-2.0 AND GPL-1.0-or-later AND GPL-2.0-only AND GPL-2.0-or-later"
+    blocked, passed = dependency_gate.split(
+        [_dep(name="pyinstaller-hooks-contrib", licence=licence)])
+    check("the named build-time hooks pass", not blocked and len(passed) == 1,
+          f"(blocked={blocked})")
+    blocked, _passed = dependency_gate.split([_dep(name="something-else",
+                                                   licence=licence)])
+    check("and the same licence on any other package still blocks",
           len(blocked) == 1 and blocked[0][0] == "denied", f"({blocked})")
 
     # The other shape an entry covers: a licence GitHub could not determine at

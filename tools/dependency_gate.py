@@ -33,11 +33,18 @@ import sys
 # and a dependency under it would be exactly the kind of thing that looks fine in
 # a list of "open source licences" and is not. Anything not named here is a
 # decision for a person, which is what blocking means.
+#
+# GPL-2.0-or-later is the other side of that line, and it is here on purpose:
+# "or (at your option) any later version" lets the code be taken under GPL-3.0,
+# which is the licence this project distributes under. Added on 2026-10-20, when
+# pydivert 4.0.0 (LGPL-3.0-or-later OR GPL-2.0-or-later, the same expression as
+# the 3.1.3 that entered before this gate existed) was the first package to need
+# it - so the next one under it does not need a person.
 ALLOWED = frozenset({
     "0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC",
     "MIT", "MIT-0", "MPL-2.0", "PSF-2.0", "Python-2.0", "Unlicense", "Zlib",
     "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
-    "GPL-3.0-only", "GPL-3.0-or-later",
+    "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later",
 })
 
 # Packages whose licence GitHub cannot resolve and which a person has already
@@ -79,6 +86,19 @@ EXCEPTIONS = {
     "ast_serialize": "MIT at the source (LICENSE, pyproject.toml, PyPI "
                      "license_expression) that GitHub reads as null, and a "
                      "lint-only dependency of mypy that never ships",
+    # GitHub reports "Apache-2.0 AND GPL-1.0-or-later AND GPL-2.0-only AND
+    # GPL-2.0-or-later" for pyinstaller-hooks-contrib, and the GPL-2.0-only part
+    # is what blocks. Its LICENSE says something narrower: the hooks are
+    # GPL-2.0-or-later and the runtime hooks Apache-2.0, followed by the full text
+    # of GPL version 2, which is what licence detection reads as "only". Neither
+    # half reaches a user: the hooks run on the build runner and only decide which
+    # files PyInstaller collects, and none of its runtime hooks belongs to a
+    # package this program bundles (checked against its rthooks.dat). Recorded on
+    # 2026-10-20 for 2026.8 - its LICENSE is identical to 2026.7's, which the
+    # review data of #168 never listed at all.
+    "pyinstaller-hooks-contrib": "build-time hooks (GPL-2.0-or-later, runtime "
+                                 "hooks Apache-2.0) whose GPL-2 text GitHub reads "
+                                 "as GPL-2.0-only, and nothing of it ships",
 }
 
 
