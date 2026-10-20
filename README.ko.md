@@ -802,7 +802,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 시나리오 파일이 없거나 형식이 잘못되었습니다 |
 | `5` | io | 산출물을 쓸 수 없었습니다(재현 보고서, 저장한 설정) |
 | `6` | assertion | 실행은 성공했지만 `--min-packets` / `--fail-on-no-traffic`을 통과하지 못했습니다 |
-| `7` | permission | 관리자 권한(Windows) 또는 root(Linux)가 필요한데 없습니다 |
+| `7` | permission | 관리자 권한(Windows), 또는 root나 CAP_BPF, CAP_NET_ADMIN, CAP_NET_RAW(Linux)가 필요한데 없습니다 |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM(작업 취소, `docker stop`), Ctrl+Break 또는 콘솔 창 닫기 |
 

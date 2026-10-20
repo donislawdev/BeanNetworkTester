@@ -174,16 +174,20 @@ and so is the pydivert Linux support it rests on.
 - Linux 5.10 or newer built with BTF (`/sys/kernel/btf/vmlinux` exists), x86_64 or aarch64,
   glibc 2.28 or newer
 - root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW
-- from a checkout: `pip install --require-hashes -r requirements.txt`
+- run from a checkout, in a virtual environment:
 
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements.txt
 sudo .venv/bin/python -m beantester --doctor
 sudo .venv/bin/python -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
 ```
 
 `--doctor` lists what the machine still lacks. Where Linux differs from Windows:
 
-- Without root a session stops with exit code 7 and says to use `sudo`.
+- Without root or those capabilities a session stops with exit code 7 and says to use `sudo`.
+  If the kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit
+  code 1 and says so.
 - `--target` reads the socket table, so the first exchange of a new connection can pass before the
   target applies.
 - When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log says how
@@ -934,7 +938,7 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 | `4` | scenario | the scenario file is missing or malformed |
 | `5` | io | an artifact could not be written (repro report, saved config) |
 | `6` | assertion | the run succeeded but `--min-packets` / `--fail-on-no-traffic` did not pass |
-| `7` | permission | administrator rights (Windows) or root (Linux) are required and missing |
+| `7` | permission | administrator rights (Windows), or root or CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW (Linux), are required and missing |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (job cancellation, `docker stop`), Ctrl+Break, or closing the console window |
 

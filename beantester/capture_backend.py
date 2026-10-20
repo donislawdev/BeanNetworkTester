@@ -273,19 +273,32 @@ class EBPFDivertBackend:
     def is_permission_error(exc):
         """eBPFDivert refuses an unprivileged open with EPERM/EACCES (it needs root, or
         CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW). Asked of the open itself rather than
-        guessed beforehand: the open is the authority, and nothing is captured yet."""
-        return getattr(exc, "errno", None) in (errno.EPERM, errno.EACCES)
+        guessed beforehand: the open is the authority, and nothing is captured yet.
+
+        Not when the process IS root: the kernel can refuse root too (lockdown, an
+        LSM policy such as SELinux or AppArmor), and "run it with sudo" would then
+        be wrong advice next to ``--doctor``'s "privileges ok". That failure stays
+        a RUNTIME one, with the driver's own words and ``open_failure_hint``'s.
+        """
+        if getattr(exc, "errno", None) not in _REFUSED:
+            return False
+        return _euid() != 0
 
     OPEN_ERROR_HINTS = {errno.EPERM: "dialogs.ebpf_needs_root",
                         errno.EACCES: "dialogs.ebpf_needs_root",
                         errno.EOPNOTSUPP: "dialogs.ebpf_kernel",
                         errno.EINVAL: "dialogs.ebpf_filter_refused"}
+    ROOT_REFUSED_HINT = "dialogs.ebpf_refused_as_root"
 
     @classmethod
     def open_failure_hint(cls, exc, elevated=None):
-        return cls.OPEN_ERROR_HINTS.get(getattr(exc, "errno", None), "")
+        code = getattr(exc, "errno", None)
+        if code in _REFUSED and _euid() == 0:
+            return cls.ROOT_REFUSED_HINT
+        return cls.OPEN_ERROR_HINTS.get(code, "")
 
-    PLATFORM_NOTE = " - capture is experimental and needs root (sudo); --simulate works without it"
+    PLATFORM_NOTE = (" - capture is experimental and needs root (sudo) or CAP_BPF, CAP_NET_ADMIN"
+                     " and CAP_NET_RAW; --simulate works without it")
 
     @staticmethod
     def doctor_rows(release=None, root="/", euid=None, status=None):
@@ -310,7 +323,7 @@ class EBPFDivertBackend:
         rows.append(("btf", "ok" if btf else "warn",
                      "present" if btf else "missing - the kernel was built without BTF, "
                                            "which eBPFDivert needs"))
-        rows.append(_privileges_row(os.geteuid() if euid is None else euid, root, status))
+        rows.append(_privileges_row(_euid() if euid is None else euid, root, status))
         rows.append(_pydivert_row())
         return rows
 
@@ -321,6 +334,18 @@ class EBPFDivertBackend:
 
 # Capability bits (linux/capability.h) a capture needs without root.
 _CAP_NET_ADMIN, _CAP_NET_RAW, _CAP_BPF = 12, 13, 39
+
+# What eBPFDivert's open answers when it is not allowed.
+_REFUSED = (errno.EPERM, errno.EACCES)
+
+
+def _euid():
+    """The effective user id, or ``None`` where the platform has none (Windows).
+
+    One place, so a test can say "root" or "not root" on any machine.
+    """
+    geteuid = getattr(os, "geteuid", None)
+    return geteuid() if geteuid is not None else None
 
 
 def _privileges_row(euid, root, status):
@@ -339,7 +364,8 @@ def _privileges_row(euid, root, status):
     needed = (1 << _CAP_NET_ADMIN) | (1 << _CAP_NET_RAW) | (1 << _CAP_BPF)
     if caps & needed == needed:
         return ("privileges", "ok", "CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW")
-    return ("privileges", "warn", "not root - a capture needs sudo; --simulate works without it")
+    return ("privileges", "warn", "not root, and without CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW - "
+                                  "a capture needs sudo; --simulate works without it")
 
 
 def _pydivert_row():

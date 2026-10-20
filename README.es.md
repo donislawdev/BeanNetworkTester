@@ -904,7 +904,7 @@ Cada forma de terminar tiene su propio código, así que un pipeline no necesita
 | `4` | scenario | el archivo de escenario no existe o está mal formado |
 | `5` | io | no se pudo escribir un artefacto (informe de reproducción, configuración guardada) |
 | `6` | assertion | la ejecución tuvo éxito, pero `--min-packets` / `--fail-on-no-traffic` no se cumplió |
-| `7` | permission | se necesitan derechos de administrador (Windows) o root (Linux) y faltan |
+| `7` | permission | se necesitan derechos de administrador (Windows), o root o CAP_BPF, CAP_NET_ADMIN y CAP_NET_RAW (Linux), y faltan |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (cancelación de un job, `docker stop`), Ctrl+Break o cierre de la ventana de la consola |
 

@@ -387,7 +387,8 @@ def test_the_session_texts_name_the_platforms_own_driver():
         for backend in (WinDivertBackend, EBPFDivertBackend):
             missing = sorted(k for k in backend.TEXTS.values() if k not in texts)
             check(f"{code}: every {backend.name} text exists", not missing, f"({missing})")
-        hints = sorted(set(EBPFDivertBackend.OPEN_ERROR_HINTS.values()) - set(texts))
+        hints = sorted((set(EBPFDivertBackend.OPEN_ERROR_HINTS.values())
+                        | {EBPFDivertBackend.ROOT_REFUSED_HINT}) - set(texts))
         check(f"{code}: every Linux open-failure hint exists", not hints, f"({hints})")
         if code == "en":
             named = sorted(k for k in EBPFDivertBackend.TEXTS.values() if "WinDivert" in texts[k])
@@ -407,6 +408,7 @@ def test_only_the_linux_driver_counts_what_it_let_past_or_dropped():
 
 
 def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)       # not root, on any machine
     for code in (errno.EPERM, errno.EACCES):
         check(f"Linux: errno {code} at the open means 'not allowed'",
               EBPFDivertBackend.is_permission_error(OSError(code, "no")))
@@ -418,6 +420,14 @@ def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
           [EBPFDivertBackend.open_failure_hint(OSError(c, "x"))
            for c in (errno.EPERM, errno.EOPNOTSUPP, errno.EINVAL, errno.ENOENT)]
           == ["dialogs.ebpf_needs_root", "dialogs.ebpf_kernel", "dialogs.ebpf_filter_refused", ""])
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
+    refused = OSError(errno.EPERM, "Operation not permitted")
+    check("root refused by the kernel (lockdown, an LSM) is not 'missing rights'",
+          not EBPFDivertBackend.is_permission_error(refused))
+    check("and is told so, not to use sudo",
+          EBPFDivertBackend.open_failure_hint(refused) == "dialogs.ebpf_refused_as_root")
+    check("root's other failures keep their own hints",
+          EBPFDivertBackend.open_failure_hint(OSError(errno.EINVAL, "x")) == "dialogs.ebpf_filter_refused")
     seen = []
     monkeypatch.setattr(driver, "open_failure_hint",
                         lambda exc, elevated=None: seen.append((exc, elevated)) or "key")

@@ -933,7 +933,7 @@ Chaque façon de se terminer a son propre code - un pipeline n'a pas besoin d'an
 | `4` | scenario | le fichier de scénario est absent ou mal formé |
 | `5` | io | un artefact n'a pas pu être écrit (rapport de reproduction, configuration enregistrée) |
 | `6` | assertion | l'exécution a abouti mais `--min-packets` / `--fail-on-no-traffic` n'est pas passé |
-| `7` | permission | les droits d'administrateur (Windows) ou root (Linux) sont requis et absents |
+| `7` | permission | les droits d'administrateur (Windows), ou root ou CAP_BPF, CAP_NET_ADMIN et CAP_NET_RAW (Linux), sont requis et absents |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (annulation d'une tâche, `docker stop`), Ctrl+Break, ou fermeture de la fenêtre de la console |
 

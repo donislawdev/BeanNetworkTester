@@ -513,6 +513,7 @@ def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
     on Windows the elevation check has already passed when an open fails.
     """
     monkeypatch.setattr(winenv, "is_admin", lambda: True)     # past the Windows check
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)   # not root, on any runner
 
     class _RefusedOpen(_TargetedEngine):
         def start(self, *_a, **_k):
@@ -532,6 +533,18 @@ def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
           f"({errs['ebpfdivert']!r})")
     check("Linux: and keeps the driver's own words", "Operation not permitted" in errs["ebpfdivert"])
     check("Windows: no sudo advice", "sudo" not in errs["windivert"], f"({errs['windivert']!r})")
+
+    # Root refused by the kernel itself (lockdown, an LSM policy): sudo would change
+    # nothing, so it is a RUNTIME failure that says what it is.
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
+    monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.EBPFDivertBackend())
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                   engine=_RefusedOpen(), out=out, err=err)
+    check("Linux as root: EPERM at the open -> RUNTIME", code == exitcodes.RUNTIME, f"(code={code})")
+    check("and it names the refusal, not sudo", T("dialogs.ebpf_refused_as_root") in err.getvalue()
+          and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
 
 
 def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):

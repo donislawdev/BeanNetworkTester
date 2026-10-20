@@ -931,7 +931,7 @@ Jede Art des Endes hat ihren eigenen Code - eine Pipeline muss keinen Text auswe
 | `4` | scenario | die Szenario-Datei fehlt oder ist fehlerhaft |
 | `5` | io | ein Artefakt konnte nicht geschrieben werden (Reproduktionsbericht, gespeicherte Konfiguration) |
 | `6` | assertion | der Lauf war erfolgreich, aber `--min-packets` / `--fail-on-no-traffic` wurde nicht bestanden |
-| `7` | permission | Administratorrechte (Windows) bzw. root (Linux) sind erforderlich und fehlen |
+| `7` | permission | Administratorrechte (Windows) bzw. root oder CAP_BPF, CAP_NET_ADMIN und CAP_NET_RAW (Linux) sind erforderlich und fehlen |
 | `130` | interrupted | Strg+C (SIGINT) |
 | `143` | terminated | SIGTERM (Abbruch eines Jobs, `docker stop`), Strg+Break oder Schließen des Konsolenfensters |
 

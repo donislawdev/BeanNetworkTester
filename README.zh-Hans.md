@@ -751,7 +751,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 场景文件缺失或格式错误 |
 | `5` | io | 无法写入某个产物（复现报告、保存的配置） |
 | `6` | assertion | 运行成功，但 `--min-packets` / `--fail-on-no-traffic` 未通过 |
-| `7` | permission | 需要管理员权限（Windows）或 root（Linux），但没有 |
+| `7` | permission | 需要管理员权限（Windows），或 root 或 CAP_BPF、CAP_NET_ADMIN、CAP_NET_RAW（Linux），但没有 |
 | `130` | interrupted | Ctrl+C（SIGINT） |
 | `143` | terminated | SIGTERM（作业取消、`docker stop`）、Ctrl+Break，或关闭控制台窗口 |
 

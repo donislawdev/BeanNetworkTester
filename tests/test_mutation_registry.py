@@ -5964,9 +5964,23 @@ MUTATIONS = [
     {
         "label": "capture_backend: Linux never reads EPERM as missing rights",
         "file": "beantester/capture_backend.py",
-        "old": "        return getattr(exc, \"errno\", None) in (errno.EPERM, errno.EACCES)\n",
+        "old": "        return _euid() != 0\n",
         "new": "        return False\n",
         "test": "test_linux_answers_an_unprivileged_open_with_permission",
+    },
+    {
+        "label": "capture_backend: root refused by the kernel is told to use sudo",
+        "file": "beantester/capture_backend.py",
+        "old": "        return _euid() != 0\n",
+        "new": "        return True\n",
+        "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
+    },
+    {
+        "label": "capture_backend: root refused by the kernel gets the sudo hint",
+        "file": "beantester/capture_backend.py",
+        "old": "        if code in _REFUSED and _euid() == 0:\n",
+        "new": "        if False:\n",
+        "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
     },
     {
         "label": "capture_backend: doctor calls any kernel new enough",

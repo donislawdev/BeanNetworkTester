@@ -183,9 +183,18 @@ def run_session(args, during):
     reader.start()
     if not up.wait(20):
         p.kill()
+        p.wait(10)
         return None, lines, None
-    result = during()
-    code = p.wait(60)
+    try:
+        result = during()
+        code = p.wait(60)
+    except BaseException:
+        # A measurement that raised, or a session that outlived its --duration: the
+        # CLI still holds its eBPF programs, and the namespace is about to go -
+        # never leave it running behind this check.
+        p.kill()
+        p.wait(10)
+        raise
     reader.join(5)
     return result, lines, code
 

@@ -887,7 +887,7 @@ Cada forma de terminar tem o seu próprio código - um pipeline não precisa int
 | `4` | scenario | o arquivo de cenário não existe ou está malformado |
 | `5` | io | não foi possível gravar um artefato (relatório de reprodução, configuração salva) |
 | `6` | assertion | a execução teve êxito, mas `--min-packets` / `--fail-on-no-traffic` não passou |
-| `7` | permission | são necessárias permissões de administrador (Windows) ou root (Linux) e elas estão faltando |
+| `7` | permission | são necessárias permissões de administrador (Windows), ou root ou CAP_BPF, CAP_NET_ADMIN e CAP_NET_RAW (Linux), e elas estão faltando |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (cancelamento de job, `docker stop`), Ctrl+Break ou o fechamento da janela do console |
 
