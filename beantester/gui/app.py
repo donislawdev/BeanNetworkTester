@@ -1222,16 +1222,8 @@ class App:
         lock AND ``_cv``, the injector's heap lock, so every tick queued twice
         behind the packet path for the same numbers (performance review W-C6).
         """
-        text = ""
         snap = self.last_snapshot or {}
-        # Overflow first: it is the one the user can act on by lowering the
-        # latency or the rate. A failed injection means the tool cannot reach
-        # the wire at all, which is worth saying whenever it is the only thing
-        # wrong - both mean "the packets you are missing are on us".
-        if snap.get("drop_overflow", 0) > 0:
-            text = T("warn.queue_overflow")
-        elif snap.get("drop_send", 0) > 0:
-            text = T("warn.send_failed")
+        text = next((T(key) for name, key in self.ENGINE_WARNINGS if snap.get(name, 0) > 0), "")
         if text == self._shown_engine_warning:
             return                      # unchanged: no widget work at all
         self._shown_engine_warning = text
@@ -1690,6 +1682,18 @@ class App:
     SCOPED_TWIN = {"seen": "scoped_seen",
                    "bytes_in": "bytes_in_scoped",
                    "bytes_out": "bytes_out_scoped"}
+
+    # The red line over a run whose numbers are wrong (``_drain_engine_warning``): the
+    # first counter above zero names it. Overflow first - the user can act on it by
+    # lowering the latency or the rate. Then what an overloaded Linux driver did
+    # (``capture_backend.OVERLOAD_STATS``, absent on Windows): packets let PAST the tool
+    # unimpaired - the session did less than it says - and packets it dropped. A failed
+    # injection last: the tool cannot reach the wire, worth saying whenever it is the
+    # only thing wrong. Each means "what you are missing, or not losing, is on us".
+    ENGINE_WARNINGS = (("drop_overflow", "warn.queue_overflow"),
+                       ("kernel_bypassed", "warn.ebpf_bypassed"),
+                       ("driver_dropped", "warn.ebpf_driver_dropped"),
+                       ("drop_send", "warn.send_failed"))
 
     def scoped_view(self):
         """Does the user want the VIEWS narrowed to the targeted traffic?

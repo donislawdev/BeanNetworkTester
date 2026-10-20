@@ -6116,6 +6116,46 @@ MUTATIONS = [
         "new": "    return _WINDIVERT\n",
         "test": "test_linux_gets_the_ebpfdivert_backend",
     },
+    # -- what an overloaded driver did, in the statistics (Linux stage 2a) ----------- #
+    {
+        # MEASURED on Linux: told to drop everything, a session said 100% while a
+        # third of the traffic went around the tool.
+        "label": "overload: the driver's counters never reach the statistics",
+        "file": "beantester/engine.py",
+        "old": "        if capture_backend.current().counts_overload:\n",
+        "new": "        if False:\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
+    {
+        # Windows' snapshot is its CSV header and its JSON counters: two new keys
+        # there would rotate every stats CSV and change a frozen schema.
+        "label": "overload: every platform's snapshot grows the driver's counters",
+        "file": "beantester/engine.py",
+        "old": "        if capture_backend.current().counts_overload:\n",
+        "new": "        if True:\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
+    {
+        "label": "overload: the Statistics grid leaves the driver's counters out",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "    return CELLS + (OVERLOAD_CELLS if capture_backend.current().counts_overload else ())\n",
+        "new": "    return CELLS\n",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
+        "label": "overload: the banner stays quiet while packets go around the tool",
+        "file": "beantester/gui/app.py",
+        "old": "                       (\"kernel_bypassed\", \"warn.ebpf_bypassed\"),\n",
+        "new": "",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
+        "label": "overload: the repro report leaves the driver's counters out",
+        "file": "beantester/repro.py",
+        "old": "        if key in stats:\n            metrics[key] = stats[key]\n",
+        "new": "        if False:\n            metrics[key] = stats[key]\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
     # -- the window asks the backend about rights (Linux stage 2a, 2026-10-20) ------- #
     {
         # MEASURED before: a Linux window logged "capture works only on Windows"
@@ -7779,8 +7819,8 @@ MUTATIONS = [
     {
         "label": "app (R-4, W-C6): the engine banner takes a stats snapshot of its own",
         "file": "beantester/gui/app.py",
-        "old": "        snap = self.last_snapshot or {}\n        # Overflow first",
-        "new": "        snap = self.engine.stats_snapshot()\n        # Overflow first",
+        "old": "        snap = self.last_snapshot or {}\n        text = next((T(key)",
+        "new": "        snap = self.engine.stats_snapshot()\n        text = next((T(key)",
         "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
     },
     {

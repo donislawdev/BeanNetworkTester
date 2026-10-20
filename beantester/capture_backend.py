@@ -41,6 +41,7 @@ class CaptureBackend(Protocol):
 
     name: str
     TEXTS: Dict[str, str]
+    counts_overload: bool
 
     def open_network(self, filt: str) -> Any: ...
     def socket_source_factory(self) -> Any: ...
@@ -63,11 +64,20 @@ class CaptureBackend(Protocol):
 REQUIRED_TEXTS = ("driver_queue", "driver_wait", "driver_wait_event", "send_failed")
 OVERFLOW_TEXTS = ("overflow", "overflow_event", "overflow_total")
 
+# The counters a backend whose ``counts_overload`` is True adds to the session's
+# statistics (``engine.stats_snapshot``): packets the kernel let PAST this tool,
+# unimpaired, and packets the driver DROPPED before this tool saw them. Neither is
+# in ``seen``. One name each, read by the engine, the Statistics page, the banner
+# and the repro report - and absent where the driver counts nothing (Windows), so
+# that snapshot, its CSV columns and its JSON counters are what they were.
+OVERLOAD_STATS = ("kernel_bypassed", "driver_dropped")
+
 
 class WinDivertBackend:
     """Windows: WinDivert, through ``pydivert.WinDivert``."""
 
     name = "windivert"
+    counts_overload = False     # see overload_counters
 
     @staticmethod
     def open_network(filt):
@@ -220,6 +230,7 @@ class EBPFDivertBackend:
     """
 
     name = "ebpfdivert"
+    counts_overload = True      # see overload_counters
 
     @staticmethod
     def open_network(filt):

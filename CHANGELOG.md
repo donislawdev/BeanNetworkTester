@@ -10,16 +10,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
   or newer built with BTF, it captures through pydivert's eBPFDivert. It needs root or
   CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW, otherwise it stops with exit code 7. `--doctor`
-  shows what the machine lacks, and ends with exit code 1 while something stops a capture,
-  as on Windows without administrator rights. When the tool cannot keep up, it says how
-  many packets went around it unimpaired and how many the driver dropped. `--target` reads
-  the socket table, so a new connection's first exchange can pass before it applies.
+  shows what is missing and then ends with exit code 1, as on Windows. When the tool cannot
+  keep up, the log, the JSON counters and the repro report say how many packets went around
+  it unimpaired and how many the driver dropped. `--target` reads the socket table, so a
+  new connection's first exchange can pass first.
 
-- **Linux, experimental: the window.** Start it with sudo. Without root a red line says so,
-  and a START the system refuses says what to do about it. The files it saves stay yours,
-  and GitHub and Donate print the address instead of starting a browser as root. On the
-  Tools tab, Ping, TCP health and Adapters say that they work on Windows only for now, and
-  the row menus grey out Reset this connection, Show TCP health and Ping this address.
+- **Linux, experimental: the window.** Start it with sudo, or a red line says it cannot
+  capture, and a refused START says what to do. Statistics counts the packets that went
+  around the tool and the ones the driver dropped, and a red line warns while either grows.
+  Its files stay yours, and GitHub and Donate print the address instead of starting a
+  browser as root. On the Tools tab, Ping, TCP health and Adapters say they work on Windows
+  only for now, and the row menus grey out Reset this connection, Show TCP health and Ping
+  this address.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

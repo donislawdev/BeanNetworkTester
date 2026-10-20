@@ -91,6 +91,7 @@ class _FakeBackend:
     """Records what the engine asks of a backend."""
 
     name = "fake"
+    counts_overload = False
 
     def __init__(self, source_factory=None):
         self.opened = []
@@ -300,7 +301,7 @@ def test_every_backend_answers_the_whole_contract():
           {"open_network", "socket_source_factory", "filter_compiles", "stamp_now",
            "stamp_frequency", "text", "overload_counters", "is_permission_error",
            "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS",
-           "has_capture_rights", "startup_note", "rights_banner"} <= set(members),
+           "has_capture_rights", "startup_note", "rights_banner", "counts_overload"} <= set(members),
           f"({members})")
     for backend in (WinDivertBackend, EBPFDivertBackend, _FakeBackend):
         missing = [n for n in members if not hasattr(backend, n)]
@@ -575,6 +576,7 @@ class _CountingBackend(_FakeBackend):
     """A backend whose driver counts what it let past and dropped, as eBPFDivert does."""
 
     TEXTS = EBPFDivertBackend.TEXTS
+    counts_overload = True
 
     def __init__(self, readings):
         super().__init__()
@@ -665,3 +667,28 @@ def test_the_engine_watches_the_drivers_counters_and_says_its_own_words(monkeypa
     check("the watchdog asked the counters and said so", overflow in lines, f"({lines})")
     total = T("log.ebpf_overflow_total", bypassed=4, dropped=0)
     check("and STOP said the total", total in lines, f"({lines[-4:]})")
+
+
+def test_the_drivers_counters_reach_the_statistics_only_where_it_counts(monkeypatch):
+    """The snapshot behind the Statistics page, the CSV and the JSON counters carries
+    the driver's two numbers on a backend that counts them, and nothing new on one
+    that does not (Windows: its snapshot is what it was). The repro report follows."""
+    from beantester.repro import build_repro_report
+    from beantester.settings import DEFAULT_SETTINGS
+    keys = capture_backend.OVERLOAD_STATS
+    counting = _CountingBackend([_counts(0, 0)])
+    monkeypatch.setattr(capture_backend, "current", lambda: counting)
+    eng = BeanEngine(log_fn=lambda *_: None)
+    eng._driver_wait.bypassed, eng._driver_wait.dropped = 7, 3
+    snap = eng.stats_snapshot()
+    check("the driver's counters, under their names", [snap.get(k) for k in keys] == [7, 3],
+          f"({ {k: snap.get(k) for k in keys} })")
+    metrics = build_repro_report(eng, dict(DEFAULT_SETTINGS))["metrics"]
+    check("and in the repro report", [metrics.get(k) for k in keys] == [7, 3], f"({metrics})")
+    monkeypatch.setattr(capture_backend, "current", lambda: _FakeBackend())
+    snap = eng.stats_snapshot()
+    check("a driver that counts nothing adds nothing", not set(keys) & set(snap), f"({sorted(snap)})")
+    metrics = build_repro_report(eng, dict(DEFAULT_SETTINGS))["metrics"]
+    check("nor to the report", not set(keys) & set(metrics))
+    check("Windows counts nothing of the kind", WinDivertBackend.counts_overload is False
+          and EBPFDivertBackend.counts_overload is True)

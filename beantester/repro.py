@@ -7,6 +7,7 @@ import string
 import time
 
 from .appinfo import TOOL_ID, command_name
+from .capture_backend import OVERLOAD_STATS
 from .damage import corruption_pct, impairment_loss_pct
 from .i18n import translate
 from .paths import temp_beside
@@ -232,6 +233,13 @@ def build_repro_report(engine, settings, connections=None):
         rate_dropped=stats["drop_rate"],
         peak_queue=stats.get("peak_queue", stats["queue"]),
     )
+    # What an overloaded driver did, where it counts it (Linux, the keys of
+    # capture_backend.OVERLOAD_STATS): neither is in `packets`, and a session with
+    # either did less - or lost more - than its settings say. Added, never renamed,
+    # and absent where the driver counts nothing, so a Windows report is unchanged.
+    for key in OVERLOAD_STATS:
+        if key in stats:
+            metrics[key] = stats[key]
     return dict(
         tool=TOOL_ID,
         report_time=time.strftime("%Y-%m-%d %H:%M:%S"),
