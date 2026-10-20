@@ -37,8 +37,8 @@ jobs:
           ls -l /sys/kernel/btf/vmlinux || true
           stat -fc %T /sys/fs/cgroup
           grep -E '^(# )?CONFIG_(BPF_SYSCALL|DEBUG_INFO_BTF|CGROUP_BPF|NET_CLS_BPF|NET_ACT_BPF|NET_SCH_INGRESS|KPROBES|BPF_EVENTS|INET_DIAG_DESTROY|FPROBE)[ =]' "/boot/config-$(uname -r)" || true
-          ldd --version | head -1
-          readlink /proc/self/ns/pid /proc/1/ns/pid
+          ldd --version 2>/dev/null | head -1
+          echo "pid ns: self $(readlink /proc/self/ns/pid), pid 1 $(sudo readlink /proc/1/ns/pid)"
       - name: Venv with the hash-pinned Linux wheels
         run: |
           python -m venv "$RUNNER_TEMP/bnt-ebpf"
