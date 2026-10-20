@@ -43,6 +43,19 @@ from . import crashlog
 from .paths import directory_is_writable, executable_dir, is_frozen
 from .winenv import is_admin, is_windows
 
+# 🔴 pydivert 4.0.0 loads its Linux backend on Windows too, and `import pydivert`
+# hands `ctypes.CDLL` whatever path this variable names - MEASURED 2026-10-20: a
+# system DLL named there was loaded by the import, where 3.1.3 loaded nothing.
+# This process runs elevated, and a program running as the same user without
+# elevation can set the variable for the user's whole session: that would be its
+# code inside an elevated process. The variable only points pydivert's Linux
+# backend at its library, which this program never uses, so it is dropped here,
+# on every platform, before anything can import pydivert: every import of it goes
+# through this package, and `beantester/__init__.py` imports this module before
+# the engine or the CLI. tests/test_driver_windows.py holds both halves.
+_PYDIVERT_LIBRARY_VARIABLE = "PYDIVERT_EBPFDIVERT_LIB"
+os.environ.pop(_PYDIVERT_LIBRARY_VARIABLE, None)
+
 # Set once a session actually opened a REAL WinDivert handle (not --simulate and
 # not a test fake): only then is there a driver to unload at exit.
 _DRIVER_USED = [False]

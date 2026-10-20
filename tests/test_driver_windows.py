@@ -14,6 +14,8 @@ properties that keep it fixed and keep it safe off Windows.
 import builtins
 import ctypes
 import importlib.util
+import os
+import subprocess
 import sys
 import threading
 import types
@@ -21,7 +23,7 @@ import types
 import pytest
 
 from beantester import driver
-from fakes import LANGS, check, forget_the_driver_state
+from fakes import LANGS, ROOT, check, forget_the_driver_state
 
 
 def test_advapi_declares_pointer_sized_prototypes():
@@ -949,3 +951,82 @@ def test_the_gui_startup_line_does_not_import_pydivert(monkeypatch):
     lines.clear()
     app_module.App._check_environment(stub)
     check("a missing pydivert is still said", T("log.no_pydivert") in lines, f"({lines})")
+
+
+# -- pydivert 4.0.0 loads a library named by an environment variable ---------- #
+# pydivert's name for it, spelled here rather than read from `driver`, so taking
+# the line out of driver.py fails these tests on what they measure.
+PYDIVERT_LIBRARY_VARIABLE = "PYDIVERT_EBPFDIVERT_LIB"
+
+_DROP_PROBE = """
+import os, subprocess, sys
+name = sys.argv[1]
+print("BEFORE", os.environ.get(name))
+import beantester  # noqa: F401
+child = subprocess.run([sys.executable, "-c",
+                        "import os, sys; print(os.environ.get(sys.argv[1]))", name],
+                       capture_output=True, text=True, check=False).stdout.strip()
+print("AFTER", os.environ.get(name), child)
+"""
+
+_LOAD_PROBE = """
+import ctypes, os, sys
+dll = sys.argv[1]
+kernel32 = ctypes.WinDLL("kernel32")
+kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+def loaded():
+    return bool(kernel32.GetModuleHandleW(os.path.basename(dll)))
+before = loaded()
+import beantester  # noqa: F401
+import pydivert  # noqa: F401
+print("LOADED", before, loaded())
+"""
+
+
+def _probe(code, *args, env_value):
+    env = dict(os.environ)
+    env[PYDIVERT_LIBRARY_VARIABLE] = env_value
+    proc = subprocess.run([sys.executable, "-c", code, *args], cwd=ROOT, env=env,
+                          capture_output=True, text=True, timeout=120, check=False)
+    return proc.stdout, proc.stderr
+
+
+def test_importing_the_package_drops_the_variable_pydivert_loads_a_library_from():
+    """Gone before anything can import pydivert, and from the process too.
+
+    pydivert 4.0.0 hands ``ctypes.CDLL`` the path this variable names, at import,
+    in what is here an elevated process - and a program running as the same user
+    without elevation can set it. The child half is what says the variable left
+    the PROCESS environment, not just Python's copy of it: a relaunch or any other
+    child would otherwise still carry it.
+    """
+    value = os.path.join(ROOT, "not-a-library.dll")
+    out, err = _probe(_DROP_PROBE, PYDIVERT_LIBRARY_VARIABLE, env_value=value)
+    check("the probe ran", "AFTER" in out, f"({out[-400:]} {err[-400:]})")
+    check("the variable was there before the import (or this proves nothing)",
+          f"BEFORE {value}" in out, f"({out!r})")
+    check("importing the package dropped it, for this process and its children",
+          "AFTER None None" in out, f"({out!r})")
+
+
+def test_pydivert_imported_after_the_package_loads_no_library_the_variable_names():
+    """The end-to-end half: the import pydivert really does, with a real DLL named.
+
+    A harmless Windows DLL that a plain Python process never loads stands in for a
+    planted one. MEASURED 2026-10-20 without the line in driver.py: pydivert 4.0.0
+    loaded it, 3.1.3 did not.
+    """
+    if not hasattr(ctypes, "windll"):
+        pytest.skip("Windows only: GetModuleHandleW and pydivert")
+    pytest.importorskip("pydivert")
+    dll = os.path.join(os.environ.get("SystemRoot", ""), "System32", "msvfw32.dll")
+    if not os.path.isfile(dll):
+        pytest.skip("no msvfw32.dll on this machine to name")
+    out, err = _probe(_LOAD_PROBE, dll, env_value=dll)
+    check("the probe ran", "LOADED" in out, f"({out[-400:]} {err[-400:]})")
+    before, after = (out.split("LOADED", 1)[1].split() + ["?", "?"])[:2]
+    check("the DLL was not loaded before the import (or this proves nothing)",
+          before == "False", f"({out!r})")
+    check("importing pydivert after the package loaded nothing the variable names",
+          after == "False", f"({out!r})")
