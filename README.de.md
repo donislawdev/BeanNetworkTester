@@ -64,8 +64,8 @@ der es braucht, dass es existiert.
   Ereignisprotokoll.
 - **Export nach CSV** - Sitzungsstatistik und ein Schnappschuss der Verbindungstabelle.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
-- **Keine Telemetrie, vollständig offline** - sendet nichts von sich aus. Das Werkzeug Ping pingt
-  nur die Adresse, die Sie eingeben.
+- **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
+  Sie eingeben.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">

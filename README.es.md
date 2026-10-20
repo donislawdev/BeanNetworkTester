@@ -64,8 +64,8 @@ tester que lo necesite.
   eventos.
 - **Exportar a CSV** - estadísticas de la sesión e instantánea de la tabla de conexiones.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
-- **Sin telemetría, totalmente sin conexión** - no envía nada por su cuenta. La herramienta Ping
-  solo hace ping a la dirección que se escribe.
+- **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
+  dirección que se escribe.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">

@@ -57,8 +57,8 @@ exists.
 - **Watch it live** - chart, counters, a searchable connections table and an event log.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
-- **No telemetry, fully offline** - it sends nothing on its own. The Ping tool pings only the
-  address you type.
+- **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
+  from Start to Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">

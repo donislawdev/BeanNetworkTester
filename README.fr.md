@@ -64,8 +64,8 @@ en a besoin apprendra qu'il existe.
   d'événements.
 - **Exporter en CSV** - les statistiques de la session et un instantané de la table des connexions.
 - **Mode ligne de commande** - scriptable pour la CI, avec des codes de sortie et une sortie JSON.
-- **Aucune télémétrie, entièrement hors ligne** - n'envoie rien de lui-même. L'outil Ping ne pingue
-  que l'adresse que vous saisissez.
+- **Aucune télémétrie, n'envoie rien de lui-même** - l'outil Ping ne pingue que l'adresse que
+  vous saisissez.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester ajoutant du lag et de la perte de paquets à un ping en direct" width="820">

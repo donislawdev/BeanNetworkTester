@@ -60,8 +60,8 @@ dele fica sabendo que existe.
   eventos.
 - **Exporta para CSV** - estatísticas da sessão e um instantâneo da tabela de conexões.
 - **Modo de linha de comando** - automatizável em CI, com códigos de saída e saída em JSON.
-- **Sem telemetria, totalmente offline** - não envia nada por conta própria. A ferramenta Ping só
-  faz ping no endereço que você digita.
+- **Sem telemetria, não envia nada por conta própria** - a ferramenta Ping só faz ping no
+  endereço que você digita.
 
 <p align="center">
   <img src="docs/demo.gif" alt="O Bean Network Tester adicionando lag e perda de pacotes a um ping ao vivo" width="820">
