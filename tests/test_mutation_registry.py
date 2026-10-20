@@ -3249,9 +3249,9 @@ MUTATIONS = [
         # guard below it would go quiet while the reworded promise stood unchecked.
         "label": "toolbox promise: the README sentence is reworded behind the check",
         "file": "README.md",
-        "old": "  Nothing on this tab sends anything over the network. Today:",
-        "new": "  Nothing on this tab sends anything anywhere. Today:",
-        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+        "old": "  Only **Ping** on this tab sends anything over the network: echo requests to the address you\n",
+        "new": "  Only **Ping** on this tab sends anything over the network: echo requests to any address you\n",
+        "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
         # One allowlist entry and a reason would let a sending tool past the
@@ -3260,7 +3260,121 @@ MUTATIONS = [
         "file": "beantester/nettools/exprtest.py",
         "old": "import ipaddress\nimport re\n",
         "new": "import ipaddress\nimport re\nimport socket  # noqa: F401\n",
-        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+        "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
+    },
+    {
+        # a tool that sends is not marked as sending, so the promise would not name it.
+        "label": "toolbox promise: Ping is not marked as sending",
+        "file": "beantester/gui/toolbox/__init__.py",
+        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True),\n",
+        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel),\n",
+        "test": "test_the_promise_names_exactly_the_tools_that_send",
+    },
+    {
+        # the echo named by a second module: WIRE_ALLOWED names a PLACE.
+        "label": "telemetry: a module other than icmp.py names the echo request",
+        "file": "beantester/nettools/ping.py",
+        "old": "def send(target, wait_s, system=None):\n",
+        "new": 'def send(target, wait_s, system=None):\n    _unused = "IcmpSendEcho2"\n',
+        "test": "test_no_allowed_library_is_used_to_send_a_packet",
+    },
+    {
+        # Learn's other layout: the TTL read from a byte of the data pointer.
+        "label": "ping: the reply is read with the 32-bit layout",
+        "file": "beantester/icmp.py",
+        "old": "_V4_TTL = 24\n",
+        "new": "_V4_TTL = 20\n",
+        "test": "test_an_ipv4_reply_is_read_with_the_native_layout",
+    },
+    {
+        # a mistyped address handed to the name lookup puts a DNS query on the wire.
+        "label": "ping: a mistyped address goes to the name lookup",
+        "file": "beantester/nettools/ping.py",
+        "old": '    if ":" in name or "%" in name or _NUMERIC.match(name.rsplit(".", 1)[-1]):\n',
+        "new": '    if ":" in name or "%" in name:\n',
+        "test": "test_what_is_not_one_address_or_name_is_refused_before_any_lookup",
+    },
+    {
+        # the last answer of a replaced run counted as the new run's first.
+        "label": "ping: an answer for a replaced run lands on the new one",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        if run is not self.run:\n",
+        "new": "        if False:\n",
+        "test": "test_an_answer_for_a_replaced_run_is_dropped",
+    },
+    {
+        # a request asked for before Stop and started after it still looks the name up.
+        "label": "ping: a request stopped before it began still looks up",
+        "file": "beantester/nettools/ping.py",
+        "old": ("    if wanted is not None and not wanted():\n        return target, None\n"
+                "    target = resolve(target, lookup)\n"),
+        "new": "    target = resolve(target, lookup)\n",
+        "test": "test_a_request_no_longer_wanted_before_or_after_the_lookup_sends_nothing",
+    },
+    {
+        # Stop pressed during a lookup that takes seconds: the echo goes after it.
+        "label": "ping: Stop during the lookup still sends the echo",
+        "file": "beantester/nettools/ping.py",
+        "old": ("    target = resolve(target, lookup)\n    if wanted is not None and not wanted():\n"
+                "        return target, None\n"),
+        "new": "    target = resolve(target, lookup)\n",
+        "test": "test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it",
+    },
+    {
+        # a run replaced by "Ping this address" during its lookup still pings its address.
+        "label": "ping: a replaced run's lookup still sends",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        return self.running and self.run is run\n",
+        "new": "        return self.running\n",
+        "test": "test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it",
+    },
+    {
+        # the run tied to its panel: a language change would stop the ping.
+        "label": "ping: a rebuild of the window stops the run",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    def teardown(self):\n        self.runner.watch(None)\n",
+        "new": "    def teardown(self):\n        self.runner.watch(None)\n        self.runner.stop()\n",
+        "test": "test_the_ping_goes_on_behind_another_page_and_across_a_rebuild",
+    },
+    {
+        # a lost ping drawn as a 0 ms round trip.
+        "label": "chart: a value of None is drawn as zero",
+        "file": "beantester/gui/chart.py",
+        "old": "        for i, v in enumerate(hist):\n            if v is None:\n",
+        "new": "        for i, v in enumerate(hist):\n            v = 0 if v is None else v\n            if v is None:\n",
+        "test": "test_a_value_of_none_breaks_the_line_instead_of_drawing_a_zero",
+    },
+    {
+        # the session line said without asking the engine.
+        "label": "ping: the session line is said without a session",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": '        if not self.app.running:\n            return "tools.ping.session.none"\n',
+        "new": '        if not self.app.running:\n            return "tools.ping.session.impaired"\n',
+        "test": "test_the_session_line_says_what_the_engine_did_to_these_pings",
+    },
+    {
+        # the sentence of what a tool sends no longer shown above it.
+        "label": "toolbox: the sending tool's sentence is not shown",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            if tool.sends:\n",
+        "new": "            if False:\n",
+        "test": "test_the_tab_says_above_the_tool_what_it_sends_and_only_there",
+    },
+    {
+        # Ping offered for a row with no address on the other end.
+        "label": "conns: Ping this address is offered on every row",
+        "file": "beantester/gui/pages/conns.py",
+        "old": '            set_menu_entry_available(self.menu, self.PING_INDEX,\n                                     ping_tool.offered(selected.get("remote_ip")))\n',
+        "new": "            set_menu_entry_available(self.menu, self.PING_INDEX, True)\n",
+        "test": "test_connection_menu_pings_the_far_end_of_any_row_with_one_address",
+    },
+    {
+        # the log's sticky flag ignored: every captured ping read as impaired.
+        "label": "connlog: scope_of ignores what the row recorded",
+        "file": "beantester/connlog.py",
+        "old": '            return None if row is None else bool(row.get("scoped"))\n',
+        "new": "            return None if row is None else True\n",
+        "test": "test_the_ping_tool_reads_what_the_session_did_to_its_pings_from_the_log",
     },
     {
         # Only exclusions ("!chromedriver") must still match everything else - the
@@ -3685,7 +3799,7 @@ MUTATIONS = [
         "file": "tests/test_no_telemetry.py",
         "old": "        names |= eager | lazy\n",
         "new": "        names |= set()\n",
-        "test": "test_the_tools_tab_says_it_sends_nothing_only_while_nothing_on_it_can",
+        "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
         # The staged mid-tick stop detaches a watcher nobody stops: its thread parks

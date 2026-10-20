@@ -107,3 +107,43 @@ def test_the_throughput_chart_draws_the_picture_it_drew_before_the_shared_chart(
         c, [0.2, 0.4], [0.1, 0.3], sample_interval_s=0.7, unit="mbit"))
     check("a short plot: two ticks, decimals that stay apart", got == SHORT,
           "\n" + "\n".join(map(repr, got)))
+
+
+def test_a_value_of_none_breaks_the_line_instead_of_drawing_a_zero():
+    """A ping with no reply is None: the line stops there and starts again after it -
+    a 0 ms round trip that never happened was what the prototype drew (rendered)."""
+    got = _drawn(500, 200, lambda c: chart.draw_line_chart(
+        c, (chart.Series([10, 20, None, 30, 40], DOWN_C),), 40, str, "ms", "-5"))
+    lines = [item for item in got if item[0] == "line" and item[2] == DOWN_C]
+    check("two pieces of line, two points each", [len(line[1]) for line in lines] == [4, 4],
+          f"({lines})")
+    lows = [line[1][i] for line in lines for i in range(1, len(line[1]), 2)]
+    check("and none of them at the bottom of the plot", 170.0 not in lows, f"({lows})")
+    check("the newest value has its dot", [i for i in got if i[0] == "oval"])
+    got = _drawn(500, 200, lambda c: chart.draw_line_chart(
+        c, (chart.Series([10, 20, 30, None], DOWN_C),), 40, str, "ms", "-4"))
+    check("no dot on a newest value that is not there", not [i for i in got if i[0] == "oval"])
+    got = _drawn(500, 200, lambda c: chart.draw_line_chart(
+        c, (chart.Series([None, 10, None], DOWN_C),), 40, str, "ms", "-3"))
+    check("a single point between gaps is no line", not [
+        i for i in got if i[0] == "line" and i[2] == DOWN_C], f"({got})")
+
+
+def test_the_ping_chart_marks_each_lost_ping_on_the_time_axis():
+    from beantester.gui.theme import WARN
+    got = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, [200, None, 204, 201, None]))
+    marks = [item for item in got if item[0] == "line" and item[2] == WARN]
+    check("one mark per ping with no reply, at its place on the axis",
+          [mark[1][0] for mark in marks] == [160.0, 484.0], f"({marks})")
+    check("standing on the time axis", all(mark[1][1] == 170.0 for mark in marks), f"({marks})")
+    texts = [item[6] for item in got if item[0] == "text"]
+    check("the newest answer is the readout, the span counts pings",
+          "201 ms" in texts and "-5" in texts, f"({texts})")
+    ticks = [item[6] for item in got if item[0] == "text" and item[1] == 44]
+    # 204 x PING_HEADROOM = 265, to the next nice number: 500 (without the room: 250,
+    # and the 204 ms line ran through the readout)
+    check("room above the highest round trip for the readout", ticks[-1] == "500", f"({ticks})")
+    got = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, [None, None]))
+    check("nothing came back yet: marks, no line, no readout",
+          len([i for i in got if i[0] == "line" and i[2] == WARN]) == 2
+          and not [i for i in got if i[0] == "line" and i[2] == DOWN_C], f"({got})")

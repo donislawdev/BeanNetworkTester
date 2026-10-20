@@ -26,9 +26,11 @@
 
 <section>
   <h2>Does it send anything anywhere?</h2>
-  <p>No. There is no analytics, no crash reporting to a service and no update check. The program has
-  no network client at all. The only outgoing connection it can make is opening a page in your
-  browser - the support page or the project's page on GitHub - after you click its button. It
+  <p>Not on its own. There is no analytics, no crash reporting to a service and no update
+  check. The one tool that sends anything is {{app.tools.ping.tab}} on the {{app.app.tabs.tools}} tab: it
+  sends echo requests to the address you type, from {{app.tools.ping.start}} to
+  {{app.tools.ping.stop}}. The only other outgoing connection is opening a page in your browser -
+  the support page or the project's page on GitHub - after you click its button. It
   intercepts your traffic, so that traffic must never leave your machine, and this page you are
   reading loads nothing from anyone else either.</p>
 </section>

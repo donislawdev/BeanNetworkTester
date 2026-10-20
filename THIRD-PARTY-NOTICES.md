@@ -204,10 +204,11 @@ artwork is bundled: the interface uses the fonts already installed on the system
 ## Telemetry
 
 None. Bean Network Tester does not phone home. It contains no analytics, no crash
-reporting service, no update check and no network client of any kind: the only
-network traffic it touches is the traffic it is capturing on your own machine, and
-that data never leaves the machine. The only outbound connection the program can
-ever make is opening a page in **your** browser - the support page
+reporting service, no update check and nothing that sends on its own: the traffic it
+captures on your own machine never leaves the machine. Two things go out only when
+you ask for them. One is a page opened in **your** browser - the support page
 (`https://donislawdev.com/support/`) or the project's page on GitHub
-(`https://github.com/donislawdev/BeanNetworkTester`) - and only when you click the
-button for it yourself.
+(`https://github.com/donislawdev/BeanNetworkTester`) - when you click the button for
+it yourself. The other is the **Ping** tool on the Tools tab: ICMP echo requests to
+the address you type, from Start to Stop (a name you type is looked up first, as for
+any program).

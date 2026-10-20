@@ -40,6 +40,7 @@ from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
 from ..theme import CONN_COLORS, set_menu_entry_available, space, style_menu
+from ..toolbox import ping as ping_tool
 from ..toolbox import tcphealth
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
@@ -305,6 +306,7 @@ class ConnsPage:
     TARGET_INDEX = 3           # "Target this process" (after the separator)
     RESET_INDEX = 7            # "Reset this connection" (after "Block this IP address")
     HEALTH_INDEX = 8           # "Show TCP health" (after it)
+    PING_INDEX = 9             # "Ping this address" (after that)
 
     def _build_menu(self):
         self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
@@ -319,6 +321,7 @@ class ConnsPage:
         self.menu.add_command(label=T("menu.reset_connection"),
                               command=self._reset_connection)
         self.menu.add_command(label=T("menu.show_tcp_health"), command=self._show_health)
+        self.menu.add_command(label=T("menu.ping_address"), command=self._ping)
         self.menu.add_separator()
         self.menu.add_command(label=T("menu.choose_columns"),
                               command=self._choose_columns)
@@ -342,6 +345,9 @@ class ConnsPage:
             # TCP over both IPv4 and IPv6 (tcpestats has the IPv6 form).
             set_menu_entry_available(self.menu, self.HEALTH_INDEX, tcphealth.offered(
                 selected.get("proto"), selected.get("remote_ip")))
+            # Any one address on the other end, whatever the protocol.
+            set_menu_entry_available(self.menu, self.PING_INDEX,
+                                     ping_tool.offered(selected.get("remote_ip")))
         except Exception as _exc:
             crashlog.note(_exc, "gui.pages.conns")
         try:
@@ -436,6 +442,11 @@ class ConnsPage:
         row = self._selected()
         if row:
             show_health(self.app, row)
+
+    def _ping(self):
+        row = self._selected()
+        if row and ping_tool.offered(row.get("remote_ip")):
+            ping_tool.ping_from(self.app, str(row["remote_ip"]))
 
     # -- search -------------------------------------------------------------- #
     def _schedule_search(self):

@@ -57,7 +57,8 @@ exists.
 - **Watch it live** - chart, counters, a searchable connections table and an event log.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
-- **No telemetry, fully offline** - sends no data anywhere.
+- **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
+  from Start to Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -204,13 +205,35 @@ monitor is gone it returns to the centre of the current screen.
   like any other packet, so heavy loss can drop it on the way. It works for TCP over IPv4 only -
   Windows has no way to reset an IPv6 connection - so the entry is greyed out on other rows, and
   it needs administrator rights. **"Show TCP health"** opens **TCP health** on the Tools tab
-  for that connection (TCP over IPv4 and IPv6).
+  for that connection (TCP over IPv4 and IPv6), and **"Ping this address"** starts **Ping**
+  on the Tools tab for the row's remote address.
   The table is **virtualised**: it draws only the rows actually on screen, so scrolling is instant
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
 - **Tools** - small helpers for questions you have before or during a test, one sub-tab each.
-  Nothing on this tab sends anything over the network. Today:
+  Only **Ping** on this tab sends anything over the network: echo requests to the address you
+  type, from Start to Stop. Today:
+  - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
+    address or a host name, choose how often to ping and how long to wait for a reply, and
+    press **Start**. Each ping is a row - when it went out, its round trip, its TTL and
+    what came back - the round trips of the last 60 are charted, and a line above the
+    table gives the totals: sent, replies, lost, and the lowest, average and highest round
+    trip. The ping goes on while another tab is in front, so you can start it, go to
+    Control, change the latency and come back to see it arrive. Another line says what the
+    running session does to these pings, from what the session itself captured: impairs
+    them, sees them but leaves them alone (outside its target), or does not capture them
+    (its traffic filter leaves them out). With the two-way filter a ping carries the
+    latency twice - 100 ms of latency adds about 200 ms to the round trip - and loss hits
+    the request and the reply separately, so 20% of loss loses about a third of the pings.
+    A session that targets a program never impairs a ping: a ping belongs to no program's
+    connection. A reply whose data came back different (the session's corruption) says so.
+    Windows waits for a reply in steps of half a second, so the wait is offered in whole
+    seconds, and a reply that comes later counts as lost - with a long latency, choose a
+    longer wait. A name is looked up once, at Start, the way any program does, and the
+    address it gave is shown. Right-click a row of **Sockets** or of the Connections page
+    and choose **"Ping this address"** to ping its far end. **"Copy results"** copies the
+    rows and the totals in English.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
@@ -218,8 +241,8 @@ monitor is gone it returns to the centre of the current screen.
     is read when you open the tab and when you press **Refresh**. Search it the way you
     search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
     right-click a row to target its program, leave it alone, limit to or block its
-    remote address, or watch a TCP connection in **TCP health**. Program names are shown
-    without administrator rights.
+    remote address, watch a TCP connection in **TCP health** or ping its far end in
+    **Ping**. Program names are shown without administrator rights.
   - **TCP health** - what Windows measures for a TCP connection: the round-trip time
     (smoothed, newest, lowest and highest, charted for the last minute), the bytes sent
     again, timeouts, duplicate ACKs, the segment size and the bytes sent and received (data
@@ -1513,6 +1536,8 @@ beantester/              the implementation package
                          page's row menu
   tcprow.py              one TCP connection the way Windows names it: the row layouts and
                          finding it in the socket table, without calling Windows
+  icmp.py                one ICMP echo request (iphlpapi/ctypes), for the Tools tab's Ping -
+                         the only module that sends something of its own
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)
@@ -1778,10 +1803,12 @@ rights arising from them.
 
 ## Privacy: no telemetry
 
-Bean Network Tester **sends no data anywhere**. It has no telemetry, no update checks and no network
-client of any kind. The tool captures network traffic on your computer - and that data **never leaves
-it**. The only outbound connection the program can make is opening a page in your browser - the
-support page or the project's page on GitHub - and only when you click the button for it yourself.
+Bean Network Tester **sends nothing on its own**. It has no telemetry, no update checks and no
+external services. The tool captures network traffic on your computer - and that data **never leaves
+it**. Two things go out only when you ask for them: a page opened in your browser - the support page
+or the project's page on GitHub - when you click the button for it yourself, and the echo requests of
+the **Ping** tool on the Tools tab, which go only to the address you type, from Start to Stop. When you
+type a name instead of an address, Windows looks it up first, the way it does for any program.
 
 ## A note on SmartScreen and antivirus
 

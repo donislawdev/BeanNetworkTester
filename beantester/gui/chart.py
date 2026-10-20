@@ -1,8 +1,10 @@
 """Line charts: a grid, a Y axis, one line per series and live readouts.
 
-One drawing, two charts. The Statistics throughput chart came first; the Tools
-tab's TCP health draws round-trip times the same way, so the drawing is
+One drawing, three charts. The Statistics throughput chart came first; the Tools
+tab's TCP health and Ping draw round-trip times the same way, so the drawing is
 ``draw_line_chart`` and each chart is a caller that says what its numbers are.
+A value of None is "nothing here" - a ping that came back with no reply - and the
+line breaks there rather than diving to a zero that never happened.
 
 Throughput: the series are KB/s, which is what the engine counts and what the
 caller holds. The Y axis is LABELLED in whichever unit the reader picked (see
@@ -19,10 +21,13 @@ from ..nettools.tcphealth import rtt_number
 from ..utils import nice_ceiling
 from .rates import BASE_LABEL, DEFAULT_UNIT, UNIT_LABEL, in_unit
 from .scaling import chart_geometry, scaled
-from .theme import BG2, DOWN_C, FONT, GRID_C, MUT, UP_C
+from .theme import BG2, DOWN_C, FONT, GRID_C, MUT, UP_C, WARN
 
 
 RTT_LEAST_PEAK = 4      # ms: the lowest top of the round-trip axis
+PING_HEADROOM = 1.3     # the Ping chart's top: this much above its highest round trip
+LINE_PX = 2             # a series' line, and the Ping chart's lost-ping mark
+LOST_MARK_PX = 10       # how tall the lost-ping mark stands on the time axis
 
 
 class Series(NamedTuple):
@@ -86,6 +91,43 @@ def draw_rtt_chart(canvas, smoothed, sample, span_s):
                     peak, lambda v: f"{v:.0f}", T("tools.tcphealth.unit_ms"), f"-{span_s} s")
 
 
+def _canvas_size(canvas):
+    """The canvas's size, or a stand-in while it has none yet (not mapped)."""
+    try:
+        width = canvas.winfo_width()
+        height = canvas.winfo_height()
+    except Exception:
+        width = height = 0
+    if not width or width <= 1:
+        width = scaled(500)
+    if not height or height <= 1:
+        height = scaled(200)
+    return width, height
+
+
+def draw_ping_chart(canvas, values):
+    """Ping: the round trip of each of the last pings in ms, oldest first, None for one
+    that got no reply - a break in the line and a short mark on the time axis there,
+    so a lost ping is seen and never read as a 0 ms one."""
+    trips = [v for v in values if v is not None]
+    # Room above the highest round trip: the readout stands in the plot's top right
+    # corner, and a steady 204 ms under a 250 ms top ran through it (rendered).
+    peak = nice_ceiling(max(max(trips, default=0) * PING_HEADROOM, RTT_LEAST_PEAK))
+    newest = next((v for v in reversed(values) if v is not None), None)
+    readout = T("tools.ping.chart_now", v=rtt_number(newest)) if newest is not None else ""
+    draw_line_chart(canvas, (Series(values, DOWN_C, readout),), peak, lambda v: f"{v:.0f}",
+                    T("tools.tcphealth.unit_ms"), T("tools.ping.chart_span", n=len(values)))
+    if len(values) < 2:
+        return
+    g = chart_geometry(*_canvas_size(canvas))
+    bottom = g["mt"] + g["ph"]
+    for i, value in enumerate(values):
+        if value is None:
+            x = g["ml"] + g["pw"] * (i / (len(values) - 1))
+            canvas.create_line(x, bottom, x, bottom - scaled(LOST_MARK_PX), fill=WARN,
+                               width=scaled(LINE_PX))
+
+
 def draw_line_chart(canvas, series: Sequence[Series], peak: float,
                     axis_label: Callable[[float], str], caption: str, span: str):
     """Draw ``series`` on ``canvas``, everything that was on it gone.
@@ -97,16 +139,7 @@ def draw_line_chart(canvas, series: Sequence[Series], peak: float,
     goes to the top right, one under another in the same order.
     """
     c = canvas
-    try:
-        width = c.winfo_width()
-        height = c.winfo_height()
-    except Exception:
-        width = height = 0
-    if not width or width <= 1:
-        width = scaled(500)
-    if not height or height <= 1:
-        height = scaled(200)
-    g = chart_geometry(width, height)
+    g = chart_geometry(*_canvas_size(c))
     c.delete("all")
     x0, y0, pw, ph = g["ml"], g["mt"], g["pw"], g["ph"]
 
@@ -134,16 +167,29 @@ def draw_line_chart(canvas, series: Sequence[Series], peak: float,
     def plot(hist, color):
         if len(hist) < 2:
             return False
-        pts = []
+        # None is "no value here" (a lost ping): the line BREAKS there instead of
+        # diving to zero, which would draw a 0 ms round trip that never happened.
+        runs, pts = [], []
         for i, v in enumerate(hist):
+            if v is None:
+                if pts:
+                    runs.append(pts)
+                pts = []
+                continue
             x = x0 + pw * (i / (len(hist) - 1))
             y = y0 + ph - (min(v, peak) / peak) * ph
             pts += [x, y]
-        c.create_line(*pts, fill=color, width=scaled(2), smooth=True)
-        r = scaled(3)
-        c.create_oval(pts[-2] - r, pts[-1] - r, pts[-2] + r, pts[-1] + r,
-                      fill=color, outline="")
-        return True
+        if pts:
+            runs.append(pts)
+        for run in runs:
+            if len(run) >= 4:
+                c.create_line(*run, fill=color, width=scaled(LINE_PX), smooth=True)
+        if hist[-1] is not None and runs:
+            r = scaled(3)
+            last = runs[-1]
+            c.create_oval(last[-2] - r, last[-1] - r, last[-2] + r, last[-1] + r,
+                          fill=color, outline="")
+        return bool(runs)
 
     drawn = [line for line in series if plot(line.values, line.color)]
 

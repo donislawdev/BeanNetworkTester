@@ -97,7 +97,7 @@ import re
 import threading
 import time
 
-from beantester import adapters, portmap, tcpestats, tcpreset
+from beantester import adapters, icmp, portmap, tcpestats, tcpreset
 from beantester.engine import BeanEngine
 from beantester.settings import DEFAULT_SETTINGS, apply_settings
 from beantester.synthetic import SyntheticDivert
@@ -124,13 +124,17 @@ RESET_METHODS = ("delete",)
 # The Tools tab's TCP health (``tcpestats._System``): counting turned on and read, by
 # that tool's worker once a second - never by a packet thread.
 ESTATS_METHODS = ("enable", "read_stats")
+# The Tools tab's Ping (``icmp._System``): one echo request per call, by that tool's
+# worker at the pace the person chose - never by a packet thread.
+ICMP_METHODS = ("echo4", "echo6")
 
 # Every module that loads iphlpapi, and the binding class whose methods are its only
 # road to it. ``test_every_module_that_loads_iphlpapi_is_watched`` keeps this whole.
 WATCHED_IPHLPAPI = {"beantester/portmap.py": portmap._Native,
                     "beantester/adapters.py": adapters._Native,
                     "beantester/tcpreset.py": tcpreset._System,
-                    "beantester/tcpestats.py": tcpestats._System}
+                    "beantester/tcpestats.py": tcpestats._System,
+                    "beantester/icmp.py": icmp._System}
 # `ctypes.WinDLL("iphlpapi.dll")`, `windll.iphlpapi` and `WinDLL('iphlpapi')`.
 _LOADS_IPHLPAPI = re.compile(r"""(?:WinDLL|LoadLibrary\w*)\(\s*['"]iphlpapi|windll\.iphlpapi""",
                              re.IGNORECASE)
@@ -150,6 +154,8 @@ def os_calls_recorded():
                    getattr(tcpreset._System, name) for name in RESET_METHODS})
     native.update({(tcpestats._System, name, "tcpestats." + name):
                    getattr(tcpestats._System, name) for name in ESTATS_METHODS})
+    native.update({(icmp._System, name, "icmp." + name):
+                   getattr(icmp._System, name) for name in ICMP_METHODS})
 
     def wrap(name, original):
         def spy(*a, **kw):

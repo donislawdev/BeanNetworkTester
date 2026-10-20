@@ -64,7 +64,8 @@ tester que lo necesite.
   eventos.
 - **Exportar a CSV** - estadísticas de la sesión e instantánea de la tabla de conexiones.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
-- **Sin telemetría, totalmente sin conexión** - no envía datos a ninguna parte.
+- **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
+  dirección que se escribe.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -225,7 +226,8 @@ está, vuelve al centro de la pantalla actual.
   límite fijo de 400 filas ha desaparecido: cuántas se muestran se define en el campo **"Row limit"**
   (sección *Tables*, 0 = sin límite, 50 000 por defecto).
 - **Tools** - pequeñas utilidades para las preguntas que surgen antes o durante una prueba, una
-  subpestaña cada una. Nada de esta pestaña envía nada por la red. Hoy:
+  subpestaña cada una. Solo **Ping** envía algo por la red en esta pestaña: solicitudes de eco a la
+  dirección que se escribe, de Start a Stop. Hoy:
   - **Sockets** - todos los sockets TCP y UDP de este equipo, como `netstat -ano`, sin necesidad de
     sesión: qué está escuchando, qué está conectado, su estado (LISTEN, ESTABLISHED, TIME_WAIT...) y
     el programa que lo posee. Sirve para ver en qué puerto escucha la aplicación antes de
@@ -1845,11 +1847,13 @@ la licencia del proyecto restringe los derechos que se derivan de ellas.
 
 ## Privacidad: sin telemetría
 
-Bean Network Tester **no envía datos a ninguna parte**. No tiene telemetría, ni comprobación de
-actualizaciones, ni cliente de red de ningún tipo. La herramienta captura tráfico de red en su
-equipo, y esos datos **nunca salen de él**. La única conexión saliente que puede hacer el programa es
-abrir una página en el navegador (la página de apoyo o la página del proyecto en GitHub), y solo
-cuando se hace clic por cuenta propia en el botón correspondiente.
+Bean Network Tester **no envía nada por su cuenta**. No tiene telemetría, ni comprobación de
+actualizaciones, ni servicios externos. La herramienta captura tráfico de red en su equipo, y esos
+datos **nunca salen de él**. Solo salen dos cosas, y solo cuando se piden: una página abierta en el
+navegador (la página de apoyo o la página del proyecto en GitHub), cuando se hace clic por cuenta
+propia en el botón correspondiente, y las solicitudes de eco de la herramienta **Ping** de la
+pestaña Tools, que van solo a la dirección que se escribe, de Start a Stop. Si se escribe un nombre
+en lugar de una dirección, Windows lo busca primero, como para cualquier programa.
 
 ## Una nota sobre SmartScreen y el antivirus
 

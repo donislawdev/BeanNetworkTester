@@ -25,7 +25,7 @@ from tkinter import ttk
 
 from ...i18n import T
 from ..labels import wrapping_label
-from ..theme import space
+from ..theme import PAGE_WRAP_PAD, space
 from ..toolbox import TOOL_BY_ID, TOOLS
 from ... import crashlog
 
@@ -101,8 +101,14 @@ class ToolboxPage:
         if panel is not None:
             return panel
         tab = self.tabs[tool_id]
+        tool = TOOL_BY_ID[tool_id]
         try:
-            panel = TOOL_BY_ID[tool_id].factory(self.app, tab)
+            if tool.sends:
+                # What the tool sends, above it and in its own words: the tab's other
+                # tools send nothing (README, "Tools"; the registry's ``sends``).
+                wrapping_label(tab, T(f"tools.{tool.id}.sends"), pad=PAGE_WRAP_PAD).pack(
+                    fill="x", padx=space("page"), pady=(space("row"), 0))
+            panel = tool.factory(self.app, tab)
             panel.frame.pack(fill="both", expand=True)
         except Exception as exc:
             crashlog.note(exc, AREA)

@@ -678,11 +678,14 @@ def select_port(panel, port):
 
 
 def test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up():
-    """Every page is built when the window opens, and the Tools page builds its first
-    tool with it - so a read in the constructor would ask the system at every start
-    of the program, for a tab nobody may open."""
+    """Every page is built when the window opens, and the Tools page builds the tool
+    that was open with it - so a read in the constructor would ask the system at every
+    start of the program, for a tab nobody may open. (Ping is the first tab since
+    2026-10-19, so the window opens here on the remembered socket table.)"""
     run_gui(SOCK + START_UP + textwrap.dedent("""
-        assert "sockets" in app.pages["tools"].panels, "the first tool is built at start"
+        app.ui.set("tools_page", "sockets")
+        app._build_ui()                  # the window, opening on a remembered tool
+        assert "sockets" in app.pages["tools"].panels, "the open tool is built at start"
         opened_on_start_up()
         assert reads == [], "and reads nothing until it is on screen"
 
@@ -1695,4 +1698,270 @@ def test_the_environment_report_adds_the_adapters_only_when_ticked():
         again = open_diag()
         assert again.include["adapters"].get() is True, "the tick outlives a rebuild"
         assert again.include["proxy"].get() is True
+    """))
+
+
+# -- ping ---------------------------------------------------------------------------- #
+# Nothing is sent: `ping.send` and the name lookup are stood in for, and `ping_gate`
+# holds a request back for the tests that need one still out - its own name, since
+# SOCK's `fake_read` waits on `gate`. The fake Tk fires no timer, so a test asks for
+# the next request itself (`runner._send()`), the way the run's timer would, and
+# `answered` collects what the worker said.
+PING = SOCK + """
+import threading
+from beantester import icmp
+from beantester.nettools import ping as pg
+from beantester.gui.toolbox import ping as pp
+
+sent, looked = [], []
+ANSWERS = []
+ping_gate = threading.Event()
+ping_gate.set()
+
+def fake_send(target, wait_s, system=None):
+    ping_gate.wait(5)
+    sent.append((target.address, wait_s))
+    return ANSWERS.pop(0) if ANSWERS else icmp.Echo(0, 201, 64, target.address)
+
+def fake_lookup(name):
+    looked.append(name)
+    return [(2, 1, 0, "", ("192.0.2.10", 0))]
+
+pg.send = fake_send
+pg._lookup = fake_lookup
+
+def open_ping():
+    app.select_page("tools")
+    page = app.pages["tools"]
+    page.select("ping")
+    return page.panels["ping"]
+
+def answered(runner):
+    deadline = time.monotonic() + 5
+    while runner.poller.now():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def start(panel, text):
+    panel.host.set(text)
+    panel._start()
+    answered(panel.runner)
+"""
+
+
+def test_ping_refuses_what_is_not_one_address_and_sends_nothing():
+    """The promise is "to the address you type": a text that is not plainly an
+    address or a host name never reaches the worker, the lookup or the wire."""
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        for typed, key, args in (("999.1.1.1", "tools.ping.refused.bad_address",
+                                  {"typed": "999.1.1.1"}),
+                                 ("", "tools.ping.refused.empty", {}),
+                                 ("224.0.0.1", "tools.ping.refused.not_one",
+                                  {"typed": "224.0.0.1"})):
+            panel.host.set(typed)
+            panel._start()
+            assert panel.status.label.cget("text") == T(key, **args), typed
+            assert panel.status.label.cget("style") == "Status.Bad.TLabel"
+        assert sent == [] and looked == [], (sent, looked)
+        assert not panel.runner.running and panel.runner.run is None
+        assert not panel.runner.job.busy(), "nothing was asked of the worker"
+    """))
+
+
+def test_a_ping_runs_from_start_to_stop_one_row_per_answer():
+    run_gui(PING + textwrap.dedent("""
+        from beantester.gui.toolbox.ping import render
+        panel = open_ping()
+        start(panel, "192.0.2.10")
+        runner = panel.runner
+        assert sent == [("192.0.2.10", 4)], ("the default wait is ping.exe's 4 s", sent)
+        assert runner.running and panel.start_btn.cget("text") == T("tools.ping.stop")
+        assert "disabled" in panel.entry.states, "the address cannot change mid-run"
+        assert "disabled" in panel.every_box.states and "disabled" in panel.wait_box.states
+        ANSWERS.append(icmp.Echo(icmp.IP_REQ_TIMED_OUT))
+        runner._send()                   # what the run's timer does
+        answered(runner)
+        runner._send()
+        answered(runner)
+        rows = panel.table.items
+        assert [r.seq for r in rows] == [3, 2, 1], "the newest on top"
+        assert rows[1].kind == "lost", "the row's colour is its kind (PING_COLORS)"
+        cells = render(rows[0], runner.run.target)
+        assert cells[2:] == ("201 ms", 64, T("tools.ping.result.reply")), cells
+        assert render(rows[1], runner.run.target)[2:] == ("", "", T("tools.ping.result.lost"))
+        summary = panel.summary.cget("text")
+        assert summary.startswith(T("tools.ping.summary", sent=3, replies=2, lost=1,
+                                    pct="33.3")), summary
+        assert T("tools.ping.summary_rtt", low="201", avg="201", high="201") in summary
+        panel._start_or_stop()           # Stop
+        assert not runner.running and panel.start_btn.cget("text") == T("tools.ping.start")
+        assert "disabled" not in panel.entry.states
+        runner._send()                   # a timer that fired after Stop sends nothing
+        assert not runner.job.busy() and len(sent) == 3, sent
+        assert "disabled" not in panel.copy_btn.states
+        panel.copy_report()
+        assert root.clipboard_get().startswith("Ping 192.0.2.10: every 1 s"), root.clipboard_get()
+    """))
+
+
+def test_a_name_is_looked_up_once_and_the_address_it_gave_is_shown():
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        start(panel, "Example.com")
+        panel.runner._send()
+        answered(panel.runner)
+        assert looked == ["example.com"], ("once, at Start", looked)
+        assert [a for a, _w in sent] == ["192.0.2.10", "192.0.2.10"], sent
+        named = T("tools.ping.named", name="Example.com", address="192.0.2.10")
+        assert named in panel.status.label.cget("text"), panel.status.label.cget("text")
+
+        def nowhere(name):
+            looked.append(name)
+            return []
+        pg._lookup = nowhere
+        panel._start_or_stop()
+        start(panel, "nowhere.example")
+        assert not panel.runner.running, "no address, so the run ends where it began"
+        assert panel.status.label.cget("text") == T("tools.ping.refused.not_found",
+                                                    name="nowhere.example")
+        assert len(sent) == 2, "and nothing was sent for it"
+    """))
+
+
+def test_the_ping_goes_on_behind_another_page_and_across_a_rebuild():
+    """The scene it is for: Start, go to Control, change the latency, come back."""
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        start(panel, "192.0.2.10")
+        runner = panel.runner
+        app.select_page("control")
+        runner._send()
+        answered(runner)
+        assert runner.run.sent == 2, "pinged with another page in front"
+        app._build_ui()                  # a language change
+        assert pp.window_run(app) is runner and runner.running, "the run is the window's"
+        runner._send()
+        answered(runner)
+        again = open_ping()
+        again.refresh()
+        assert [r.seq for r in again.table.items] == [3, 2, 1], "all of it, on the new panel"
+        assert again.start_btn.cget("text") == T("tools.ping.stop")
+    """))
+
+
+def test_the_session_line_says_what_the_engine_did_to_these_pings():
+    """From the engine's own log of what it captured and impaired - never guessed."""
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        asked, verdict = [], [True]
+        app.engine.flow_scope = lambda key: (asked.append(key), verdict[0])[1]
+        start(panel, "192.0.2.10")
+        assert panel.session.cget("text") == T("tools.ping.session.none"), "no session"
+        assert asked == [], "and the log is not asked without one"
+        app.running = True
+        for value, key in ((True, "impaired"), (False, "outside"), (None, "not_captured")):
+            verdict[0] = value
+            panel.runner._send()
+            answered(panel.runner)
+            assert panel.session.cget("text") == T("tools.ping.session." + key), value
+        assert asked[-1] == ("ICMP", "192.0.2.10"), asked
+        app.running = False
+    """))
+
+
+def test_an_answer_for_a_replaced_run_is_dropped():
+    """A request of the old run still out when Start is pressed again: its answer
+    arrives first (the worker delivers it before the new run's first request starts)
+    and belongs to nobody on screen."""
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        ping_gate.clear()
+        panel.host.set("192.0.2.10")
+        panel._start()                   # held back on the worker
+        old = panel.runner.run
+        panel._start_or_stop()           # Stop
+        panel.host.set("198.51.100.7")
+        panel._start()                   # the new run's first request waits behind it
+        ping_gate.set()
+        answered(panel.runner)
+        answered(panel.runner)
+        assert panel.runner.run is not old and old.sent == 0, "the old answer was dropped"
+        assert [r.echo.reply_from for r in panel.runner.run.results] == ["198.51.100.7"]
+    """))
+
+
+def test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it():
+    """README, "Tools": echo requests from Start to Stop. A name lookup can take
+    seconds, and a request can wait for the worker behind the last one of an old run:
+    Stop pressed meanwhile, no echo goes out once they are over."""
+    run_gui(PING + textwrap.dedent("""
+        held = threading.Event()
+
+        def slow_lookup(name):
+            held.wait(5)
+            looked.append(name)
+            return [(2, 1, 0, "", ("192.0.2.10", 0))]
+        pg._lookup = slow_lookup
+        panel = open_ping()
+        panel.host.set("example.com")
+        panel._start()                   # the lookup is held on the worker
+        panel._start_or_stop()           # Stop, before it answers
+        held.set()
+        answered(panel.runner)
+        assert looked == ["example.com"] and sent == [], ("no echo after Stop", sent)
+        assert not panel.runner.running and panel.runner.run.sent == 0
+        assert panel.start_btn.cget("text") == T("tools.ping.start")
+
+        ping_gate.clear()
+        panel.host.set("192.0.2.10")
+        panel._start()                   # out, its answer held
+        panel._start_or_stop()           # Stop
+        panel.host.set("198.51.100.7")
+        panel._start()                   # waits behind it for the worker
+        panel._start_or_stop()           # Stop, before its turn
+        ping_gate.set()
+        answered(panel.runner)
+        assert [a for a, _w in sent] == ["192.0.2.10"], ("only the one out before Stop", sent)
+        assert panel.runner.run.sent == 0 and not panel.runner.running
+
+        sent.clear()
+        held.clear()
+        panel.host.set("example.com")
+        panel._start()                   # the lookup is held again
+        panel.ping("198.51.100.7")       # "Ping this address" replaces the run meanwhile
+        held.set()
+        answered(panel.runner)
+        assert [a for a, _w in sent] == ["198.51.100.7"], ("not the replaced run's", sent)
+    """))
+
+
+def test_the_tab_says_above_the_tool_what_it_sends_and_only_there():
+    run_gui(PING + textwrap.dedent("""
+        page = app.pages["tools"]
+        open_ping()
+        said = [w.kw.get("text") for w in fake_tk.walk(page.tabs["ping"]) if w.kw.get("text")]
+        assert T("tools.ping.sends") in said, "said above Ping"
+        page.select("sockets")
+        other = [w.kw.get("text") for w in fake_tk.walk(page.tabs["sockets"]) if w.kw.get("text")]
+        assert T("tools.ping.sends") not in other, "and nowhere else"
+    """))
+
+
+def test_ping_this_address_from_the_socket_table_pings_its_far_end_with_its_zone():
+    run_gui(PING + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.sockets import PING as PING_ENTRY
+        sockets_panel = open_sockets()
+        settle(sockets_panel)
+        for port, offered in ((8080, False), (5353, False), (50001, True), (13882, True)):
+            select_port(sockets_panel, port)
+            sockets_panel._show_menu(0, 0)
+            want = MENU_ENTRY_LIVE if offered else MENU_ENTRY_INERT
+            assert sockets_panel.menu.entry_states[PING_ENTRY] == want, (port, want)
+        select_port(sockets_panel, 50001)
+        sockets_panel._ping()
+        assert app.pages["tools"].current() == "ping", "the tool is put on screen"
+        answered(pp.window_run(app))
+        assert sent == [("fe80::5%12", 4)], ("the far end, with the zone it needs", sent)
     """))

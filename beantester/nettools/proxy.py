@@ -9,7 +9,8 @@ The proxy list grammar is Microsoft Learn's (WINHTTP_PROXY_INFO, Remarks): entri
 ``([<scheme>=][<scheme>"://"]<server>[":"<port>])`` separated by semicolons or
 whitespace; the bypass list holds names, and ``<local>`` stands for every name
 without a dot. A server given as a NAME is shown, never looked up: a name lookup
-is a DNS query, and nothing on this tab sends anything.
+is a DNS query, and on this tab only Ping sends anything - to the address the person
+typed, not to a proxy they did not ask about.
 
 Passwords in an address (``http://user:secret@proxy:8080``, or ``user:secret@proxy:8080``
 with no scheme - both common in ``HTTP_PROXY``) are hidden everywhere, the window

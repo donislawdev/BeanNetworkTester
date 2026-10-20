@@ -246,5 +246,6 @@ def cli_report():
               "Full licence texts: %s" % licenses_dir(),
               "Full notices:       %s" % resource_path(NOTICES_FILE),
               "",
-              "Telemetry: none. This program sends no data anywhere."]
+              "Telemetry: none. This program sends nothing on its own. Its Ping tool "
+              "pings only the address you type."]
     return "\n".join(lines)
