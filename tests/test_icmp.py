@@ -82,13 +82,13 @@ class FakeSystem:
     def __init__(self, fail=None):
         self.calls, self.fail = [], fail
 
-    def echo4(self, address, timeout_ms):
+    def echo4(self, address, timeout_ms, sent=PAYLOAD):
         self.calls.append(("v4", str(address), timeout_ms))
         if self.fail:
             raise self.fail
         return 1, 0, V4_REPLY_HEAD + PAYLOAD, V4_REPLY_BASE
 
-    def echo6(self, address, timeout_ms):
+    def echo6(self, address, timeout_ms, sent=PAYLOAD):
         self.calls.append(("v6", str(address), address.scope_id, timeout_ms))
         return 0, 0, V6_TIMEOUT
 
@@ -152,7 +152,8 @@ def test_a_handle_per_request_closed_whatever_the_request_did():
     check("synchronous: no event, no callback", event is None and apc is None)
     check("the address in network order, 32 bytes, the wait", (
         dest == struct.unpack("<I", ipaddress.IPv4Address("192.0.2.10").packed)[0]
-        and size == 32 and reply_size == icmp.REPLY_BYTES and timeout == 4000), f"({lib.sent})")
+        and size == 32 and reply_size == icmp.reply_bytes(32) and timeout == 4000),
+          f"({lib.sent})")
     raising = FakeIphlpapi(raises=RuntimeError("boom"))
     with pytest.raises(RuntimeError):
         icmp._System(raising).echo4(ipaddress.IPv4Address("192.0.2.10"), 1000)
@@ -163,6 +164,34 @@ def test_a_handle_per_request_closed_whatever_the_request_did():
                                                            1000)
     check("no handle: an OSError with the error", refused.value.errno == 87, f"({refused.value})")
     check("no handle, nothing to close", nothing.closed == [] and nothing.sent == [])
+
+
+def test_a_ping_of_any_size_carries_ping_exes_pattern_and_compares_all_of_it():
+    """The size the person typed: the data is ping.exe's 32 bytes repeated, the reply
+    buffer grows with it, and a change anywhere in what came back - its last byte
+    too - is a change."""
+    check("0 bytes: nothing", icmp.payload(0) == b"")
+    check("32: ping.exe's", icmp.payload(32) == PAYLOAD)
+    check("70: the pattern again, cut", icmp.payload(70) == PAYLOAD * 2 + PAYLOAD[:6])
+    check("the largest offered", len(icmp.payload(65500)) == 65500)
+    sent = icmp.payload(1372)
+    head = bytearray(V4_REPLY_HEAD)
+    struct.pack_into("<H", head, 12, len(sent))         # DataSize
+    check("a big reply that came back whole",
+          not icmp.parse_v4(bytes(head) + sent, V4_REPLY_BASE, 1, 0, sent).changed)
+    check("its last byte different",
+          icmp.parse_v4(bytes(head) + sent[:-1] + b"#", V4_REPLY_BASE, 1, 0, sent).changed)
+    check("IPv6 too", icmp.parse_v6(V6_REPLY[:36] + sent[:-1] + b"#", 1, 0, sent).changed)
+    lib = FakeIphlpapi()
+    system = icmp._System(lib, last_error=lambda: icmp.IP_REQ_TIMED_OUT)
+    icmp.echo(ipaddress.ip_address("192.0.2.10"), 1000, system, size=1372)
+    icmp.echo(ipaddress.ip_address("2001:db8::1"), 1000, system, size=0)
+    (_h, _e, _a, _d, size4, reply4, _t), (_h6, _e6, _a6, size6, reply6, _t6) = lib.sent
+    check("the size reaches the call, and the reply buffer has room for all of it",
+          size4 == 1372 and reply4 == icmp.reply_bytes(1372) and reply4 >= 1372 + 40,
+          f"({lib.sent})")
+    check("an empty request is 0 bytes", size6 == 0 and reply6 == icmp.reply_bytes(0),
+          f"({lib.sent})")
 
 
 def test_off_windows_there_is_no_binding():

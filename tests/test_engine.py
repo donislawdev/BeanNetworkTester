@@ -266,6 +266,36 @@ def test_event_log():
     check("event log: records RESET and BUG", "RESET" in kinds and "BUG" in kinds, f"({kinds})")
 
 
+def test_the_session_mark_moves_only_when_the_impairing_changes():
+    """``session_mark``: what the Tools tab's Ping cuts its run at. A START, an
+    applied change, a scenario step and a STOP move it; RESET, BUG and WARN do not.
+    Its number survives what the event log does not: the log emptied at the next
+    START and cut at 5000 entries."""
+    sh = BeanEngine()
+    check("no session yet: no mark", sh.session_mark() is None)
+    sh.start("test", divert=SyntheticDivert(gen_kbps=3000, seed=1))
+    started = sh.session_mark()
+    check("START", started is not None and started[0] == 1 and started[1] == "START",
+          f"({started})")
+    for kind in ("RESET", "BUG", "WARN"):
+        sh.log_event(kind, "x")
+    check("RESET, BUG and WARN leave it", sh.session_mark() == started, f"({sh.session_mark()})")
+    sh.log_event("CHANGE", "latency 100 ms")
+    check("an applied change: the next number, with the settings",
+          sh.session_mark() == (2, "CHANGE", "latency 100 ms"), f"({sh.session_mark()})")
+    sh.log_event("SCENARIO", "step 2")
+    sh.stop()
+    check("a scenario step, then STOP", sh.session_mark()[:2] == (4, "STOP"),
+          f"({sh.session_mark()})")
+    for _ in range(5001):
+        sh.log_event("BUG", "x")
+    sh.start("test", divert=SyntheticDivert(gen_kbps=3000, seed=1))
+    after = sh.session_mark()
+    sh.stop()
+    check("the log cut and emptied, the number goes on", after[:2] == (5, "START"),
+          f"({after})")
+
+
 def test_lan_mode_integration():
     # LAN mode gates on the REMOTE ip, which the engine reads from dst_addr for an
     # outbound packet and src_addr for an inbound one - so the internet must be cut

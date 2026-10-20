@@ -67,6 +67,11 @@ def pace_text(seconds):
     return T("tools.ping.seconds", n=f"{seconds:g}")
 
 
+def count_text(count):
+    """A choice of how many pings: "until Stop" for 0."""
+    return T("tools.ping.count_endless") if not count else T("tools.ping.count_n", n=count)
+
+
 def render(result, target):
     echo = result.echo
     rtt = "" if echo.rtt_ms is None else f"{ping.rtt_number(echo.rtt_ms)} ms"
@@ -75,6 +80,62 @@ def render(result, target):
         words = T("tools.ping.result.from", result=words, address=echo.reply_from)
     return (result.seq, time.strftime("%H:%M:%S", time.localtime(result.sent)), rtt,
             "" if echo.ttl is None else echo.ttl, words)
+
+
+def _stats_words(head, stats, short=False):
+    """``head`` and what ``stats`` adds to it: the longest run of losses (from two in a
+    row - one lost ping is no burst), the round trips, and the replies that came back
+    changed. ``short`` leaves the lowest and highest round trip to the copied results:
+    a part's line also says how it differs from the part before, and with them it took
+    three lines at 760 px in Polish and English (rendered)."""
+    words = [head]
+    if stats.longest_loss >= 2:
+        words.append(T("tools.ping.summary_streak", n=stats.longest_loss))
+    trips = stats.round_trips()
+    if trips:
+        low, avg, high = (ping.rtt_number(v) for v in trips)
+        jitter = stats.jitter()
+        said = {"avg": avg, "jitter": "-" if jitter is None else ping.rtt_number(jitter),
+                "p95": ping.rtt_number(stats.p95())}
+        words.append(T("tools.ping.part.rtt", **said) if short
+                     else T("tools.ping.summary_rtt", low=low, high=high, **said))
+    if stats.changed:
+        words.append(T("tools.ping.summary_changed", n=stats.changed))
+    return " ".join(words)
+
+
+def _against(now, before):
+    """How the part now differs from the one before it, or "" while either has nothing
+    counted to differ by."""
+    if not now.stats.sent or not before.stats.sent:
+        return ""
+    what = T(f"tools.ping.part.{before.kind}")
+    loss = f"{now.stats.lost_pct() - before.stats.lost_pct():+.1f}"
+    now_avg, before_avg = now.stats.average(), before.stats.average()
+    if now_avg is None or before_avg is None:
+        return T("tools.ping.part.against_loss", what=what, d_loss=loss)
+    return T("tools.ping.part.against", what=what, d_rtt=f"{round(now_avg - before_avg):+d}",
+             d_loss=loss)
+
+
+def summary_text(run):
+    """The line under the status: the run's numbers - or, once the session changed
+    during the run, the part it is in now and how it differs from the part before (an
+    average across a change says nothing; ``nettools/ping.py``)."""
+    if run is None or not run.sent:
+        return ""
+    if len(run.parts) < 2:
+        total = run.total
+        return _stats_words(T("tools.ping.summary", sent=total.sent, replies=total.replies,
+                              lost=total.lost, pct=f"{total.lost_pct():.1f}"), total)
+    now, before = run.parts[-1], run.parts[-2]
+    stats = now.stats
+    head = T("tools.ping.part.now",
+             time=time.strftime("%H:%M:%S", time.localtime(now.started)),
+             what=T(f"tools.ping.part.{now.kind}"), sent=stats.sent, lost=stats.lost,
+             pct=f"{stats.lost_pct():.1f}")
+    against = _against(now, before)
+    return _stats_words(head, stats, short=True) + (" " + against if against else "")
 
 
 def sort_key(result, column):
@@ -103,9 +164,9 @@ class PingRun:
     def watch(self, panel):
         self._view = weakref.ref(panel) if panel is not None else None
 
-    def start(self, target, every_s, wait_s):
+    def start(self, target, every_s, wait_s, size=ping.DEFAULT_SIZE, count=ping.DEFAULT_COUNT):
         self.stop()
-        self.run = ping.Run(target, every_s, wait_s)
+        self.run = ping.Run(target, every_s, wait_s, size=size, count=count)
         self.running = True
         self.session = None
         self.stopped_at = None
@@ -124,10 +185,17 @@ class PingRun:
         if not self.running:
             return
         run = self.run
+        mark = self._mark()
         self.job.run(START if not run.target.address else ECHO,
-                     lambda: _one(run, lambda: self._wanted(run)))
+                     lambda: _one(run, lambda: self._wanted(run), mark))
         self.poller.start()
         self._changed()
+
+    def _mark(self):
+        """The session's mark now (``engine.session_mark``): which part a ping is in."""
+        with crashlog.quiet(AREA):
+            return self.app.engine.session_mark()
+        return None
 
     def _wanted(self, run):
         """WORKER: whether ``run`` may still send - it is this window's run and Stop has
@@ -142,7 +210,7 @@ class PingRun:
             self._cancel()
             self._changed(outcome)
             return
-        run, sent_at, target, answer = outcome.value
+        run, sent_at, target, answer, mark = outcome.value
         if run is not self.run:
             # The answer to the last request of a run replaced since: the worker
             # delivers it before it starts the new run's first one.
@@ -156,8 +224,12 @@ class PingRun:
             self._changed(answer)
             return
         run.target = target
-        run.add(sent_at, answer)
+        run.add(sent_at, answer, mark, self._mark())
         self.session = self._session_words(target)
+        if self.running and run.done():
+            # The number of pings asked for: the run ends on its last answer.
+            self.running = False
+            self.stopped_at = time.time()
         if self.running:
             delay = run.next_at(sent_at, time.time()) - time.time()
             with crashlog.quiet(AREA):
@@ -187,19 +259,21 @@ class PingRun:
                 panel.changed(problem)
 
 
-def _one(run, wanted):
+def _one(run, wanted, mark):
     """WORKER: the run's next request - with the name looked up first, the first time.
-    ``(run, sent_at, target, Echo or Refused)``; the time is taken here, the moment
-    before the request goes, because a request asked for while the last one of a
-    replaced run still waits starts only when that one is answered. The Echo is
+    ``(run, sent_at, target, Echo or Refused, mark)``; the time is taken here, the
+    moment before the request goes, because a request asked for while the last one of
+    a replaced run still waits starts only when that one is answered. The Echo is
     ``None`` when ``wanted()`` said Stop came first (README, "Tools": from Start to
-    Stop)."""
+    Stop). ``mark`` - the session's when the request was asked for - only rides along
+    to the answer."""
     sent_at = time.time()
     try:
-        target, echo = ping.start_and_send(run.target, run.wait_s, wanted=wanted)
+        target, echo = ping.start_and_send(run.target, run.wait_s, wanted=wanted,
+                                           size=run.size)
     except Refused as refused:
-        return run, sent_at, run.target, refused
-    return run, sent_at, target, echo
+        return run, sent_at, run.target, refused, mark
+    return run, sent_at, target, echo, mark
 
 
 _RUNS: "weakref.WeakKeyDictionary[object, PingRun]" = weakref.WeakKeyDictionary()
@@ -265,6 +339,20 @@ class PingPanel:
         self.wait, self.wait_box = self._choice(
             options, "tools.ping.wait", ping.WAIT_S, "wait", ping.DEFAULT_WAIT_S,
             "tips.tools_ping_wait")
+        # The size is typed, not chosen: a packet size limit cuts at one byte (1372
+        # bytes of data passed --max-size 1400 and 1373 did not), so the person needs
+        # the exact number on either side of it. Checked at Start, like the address.
+        ttk.Label(options, text=T("tools.ping.size")).pack(side="left")
+        self.size = tk.StringVar(value=self.memory.get("size", str(ping.DEFAULT_SIZE)))
+        self.size_entry = ttk.Entry(options, textvariable=self.size, width=CHARS["port"])
+        self.size_entry.pack(side="left", padx=(space("tight"), 0))
+        self.size_entry.bind("<Return>", lambda _e: self._start_or_stop())
+        add_tooltip(self.size_entry, "tips.tools_ping_size")
+        ttk.Label(options, text=T("tools.ping.bytes")).pack(side="left",
+                                                             padx=(space("hair"), space("row")))
+        self.count, self.count_box = self._choice(
+            options, "tools.ping.count", ping.COUNTS, "count", ping.DEFAULT_COUNT,
+            "tips.tools_ping_count", text=count_text)
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
@@ -291,6 +379,10 @@ class PingPanel:
         self.canvas = chart_canvas(box, size("side_chart"), size("chart"))
         self.canvas.pack(fill="both", expand=True, padx=space("tight"), pady=space("tight"))
         self.canvas.bind("<Configure>", lambda _e: self._draw())
+        # The dashed line where the session changed has no legend entry: a third one
+        # widened the box past the chart (299 px) or, in a second row, left the chart
+        # 71 px tall at 760x678 (rendered). The tip and the help say what it is.
+        add_tooltip(self.canvas, "tips.tools_ping_chart")
         # Sideways scrolling: a router's answer ("TTL expired on the way (from ...)")
         # is longer than the Result column at 760 px; widened, it scrolls instead of
         # squeezing the numbers. The copied results always carry it whole.
@@ -311,12 +403,13 @@ class PingPanel:
         add_tooltip(button, tip_key)
         return button
 
-    def _choice(self, parent, label_key, values, name, default, tip_key):
+    def _choice(self, parent, label_key, values, name, default, tip_key, text=None):
         """A read-only box of fixed choices, remembered for the window."""
-        shown = [pace_text(v) for v in values]
+        text = text or pace_text
+        shown = [text(v) for v in values]
         by_text = dict(zip(shown, values, strict=True))
         chosen = self.memory.get(name, default)
-        var = tk.StringVar(value=pace_text(chosen if chosen in values else default))
+        var = tk.StringVar(value=text(chosen if chosen in values else default))
         ttk.Label(parent, text=T(label_key)).pack(side="left")
         box = ttk.Combobox(parent, textvariable=var, values=shown, state="readonly",
                            height=popdown_height(shown), width=popdown_width(shown, 0))
@@ -355,12 +448,14 @@ class PingPanel:
     def _start(self):
         text = self.host.get()
         self.memory["host"] = text
+        self.memory["size"] = self.size.get()
         try:
             target = ping.parse(text)
+            size = ping.parse_size(self.size.get())
         except Refused as refused:
             self.status.refused(T(refused.user_key, **refused.user_args))
             return
-        self.runner.start(target, self.every(), self.wait())
+        self.runner.start(target, self.every(), self.wait(), size, self.count())
 
     # -- answers ------------------------------------------------------------- #
     def changed(self, problem=None):
@@ -394,7 +489,7 @@ class PingPanel:
         if not keep_status:
             self._show_status()
         self.session.config(text=T(runner.session) if runner.session and run else "")
-        self.summary.config(text=self._summary_text(run))
+        self.summary.config(text=summary_text(run))
         results = list(run.results) if run else []
         sort = self.table.sort
         if sort["col"] in COLUMNS:
@@ -422,39 +517,28 @@ class PingPanel:
                                                          name=target.typed))
         else:
             at = time.strftime("%H:%M:%S", time.localtime(runner.stopped_at or time.time()))
-            text = T("tools.ping.status_stopped", target=named, time=at)
+            text = (T("tools.ping.status_done", n=run.sent, target=named, time=at)
+                    if run.done() else T("tools.ping.status_stopped", target=named, time=at))
         self.status.label.config(text=text, style="Muted.TLabel")
-
-    @staticmethod
-    def _summary_text(run):
-        if run is None or not run.sent:
-            return ""
-        text = T("tools.ping.summary", sent=run.sent, replies=run.replies, lost=run.lost,
-                 pct=f"{run.lost_pct():.1f}")
-        trips = run.round_trips()
-        if trips:
-            low, avg, high = (ping.rtt_number(v) for v in trips)
-            text += " " + T("tools.ping.summary_rtt", low=low, avg=avg, high=high)
-        if run.changed:
-            text += " " + T("tools.ping.summary_changed", n=run.changed)
-        return text
 
     def _draw(self):
         """The last pings' round trips - redrawn only when they or the size changed."""
         run = self.runner.run
         values = run.chart() if run else []
+        changes = run.chart_changes() if run else []
         with crashlog.quiet(AREA):
-            source = (self.canvas.winfo_width(), self.canvas.winfo_height(), tuple(values))
+            source = (self.canvas.winfo_width(), self.canvas.winfo_height(), tuple(values),
+                      tuple(changes))
             if source != self._chart_drawn:
-                draw_ping_chart(self.canvas, values)
+                draw_ping_chart(self.canvas, values, changes)
                 self._chart_drawn = source
 
     def _sync_controls(self):
         running = self.runner.running
         self.start_btn.config(text=T("tools.ping.stop") if running else T("tools.ping.start"))
-        for widget in (self.entry,):
+        for widget in (self.entry, self.size_entry):
             widget.state(["disabled"] if running else ["!disabled"])
-        for box in (self.every_box, self.wait_box):
+        for box in (self.every_box, self.wait_box, self.count_box):
             box.state(["disabled"] if running else ["!disabled", "readonly"])
         self.copy_btn.state(["!disabled"] if self.runner.run and self.runner.run.sent
                             else ["disabled"])

@@ -1713,14 +1713,15 @@ from beantester import icmp
 from beantester.nettools import ping as pg
 from beantester.gui.toolbox import ping as pp
 
-sent, looked = [], []
+sent, looked, sizes = [], [], []
 ANSWERS = []
 ping_gate = threading.Event()
 ping_gate.set()
 
-def fake_send(target, wait_s, system=None):
+def fake_send(target, wait_s, system=None, size=32):
     ping_gate.wait(5)
     sent.append((target.address, wait_s))
+    sizes.append(size)
     return ANSWERS.pop(0) if ANSWERS else icmp.Echo(0, 201, 64, target.address)
 
 def fake_lookup(name):
@@ -1793,7 +1794,8 @@ def test_a_ping_runs_from_start_to_stop_one_row_per_answer():
         summary = panel.summary.cget("text")
         assert summary.startswith(T("tools.ping.summary", sent=3, replies=2, lost=1,
                                     pct="33.3")), summary
-        assert T("tools.ping.summary_rtt", low="201", avg="201", high="201") in summary
+        assert T("tools.ping.summary_rtt", low="201", avg="201", high="201", jitter="< 1",
+                 p95="201") in summary, summary
         panel._start_or_stop()           # Stop
         assert not runner.running and panel.start_btn.cget("text") == T("tools.ping.start")
         assert "disabled" not in panel.entry.states
@@ -1801,7 +1803,8 @@ def test_a_ping_runs_from_start_to_stop_one_row_per_answer():
         assert not runner.job.busy() and len(sent) == 3, sent
         assert "disabled" not in panel.copy_btn.states
         panel.copy_report()
-        assert root.clipboard_get().startswith("Ping 192.0.2.10: every 1 s"), root.clipboard_get()
+        assert root.clipboard_get().startswith("Ping 192.0.2.10: 32 bytes every 1 s"), \
+            root.clipboard_get()
     """))
 
 
@@ -1933,6 +1936,72 @@ def test_nothing_is_sent_after_stop_even_by_a_request_asked_for_before_it():
         held.set()
         answered(panel.runner)
         assert [a for a, _w in sent] == ["198.51.100.7"], ("not the replaced run's", sent)
+    """))
+
+
+def test_ping_sends_the_size_typed_and_stops_by_itself_after_the_number_chosen():
+    run_gui(PING + textwrap.dedent("""
+        panel = open_ping()
+        panel.host.set("192.0.2.10")
+        panel.size.set("70000")
+        panel._start()
+        assert panel.status.label.cget("text") == T("tools.ping.refused.size", typed="70000",
+                                                    most=65500), panel.status.label.cget("text")
+        assert sent == [] and not panel.runner.running, "a size refused sends nothing"
+        panel.size.set("1372")
+        panel.count = lambda: 3              # the "Pings" box set to a number
+        start(panel, "192.0.2.10")
+        runner = panel.runner
+        assert sizes == [1372], ("the size typed reaches the request", sizes)
+        assert "disabled" in panel.size_entry.states and "disabled" in panel.count_box.states
+        for _ in range(2):
+            runner._send()
+            answered(runner)
+        assert not runner.running and len(sent) == 3, ("done after the third", sent)
+        at = time.strftime("%H:%M:%S", time.localtime(runner.stopped_at))
+        assert panel.status.label.cget("text") == T("tools.ping.status_done", n=3,
+                                                    target="192.0.2.10", time=at)
+        runner._send()                       # a timer that fired after the last one
+        assert not runner.job.busy() and len(sent) == 3, sent
+        assert "disabled" not in panel.size_entry.states
+    """))
+
+
+def test_the_summary_splits_the_run_where_the_session_changed():
+    """The scene the tool is for: ping, start a session, look. The line says the part
+    since then and how it differs from before - not an average of both; a ping that was
+    out while the session changed is in neither part."""
+    run_gui(PING + textwrap.dedent("""
+        marks = [None]
+        app.engine.session_mark = lambda: marks[0]
+        panel = open_ping()
+        ANSWERS.extend([icmp.Echo(0, 1, 64, "192.0.2.10")] * 2)
+        start(panel, "192.0.2.10")
+        runner = panel.runner
+        runner._send()
+        answered(runner)
+        assert panel.summary.cget("text").startswith(T("tools.ping.summary", sent=2, replies=2,
+                                                       lost=0, pct="0.0"))
+        marks[0] = (1, "START", "filter=ping, seed=1")
+        for _ in range(2):                   # 201 ms: the fake's answer
+            runner._send()
+            answered(runner)
+        part = runner.run.parts[-1]
+        at = time.strftime("%H:%M:%S", time.localtime(part.started))
+        text = panel.summary.cget("text")
+        assert text.startswith(T("tools.ping.part.now", time=at, what=T("tools.ping.part.start"),
+                                 sent=2, lost=0, pct="0.0")), text
+        assert T("tools.ping.part.against", what=T("tools.ping.part.none"), d_rtt="+200",
+                 d_loss="+0.0") in text, text
+        assert runner.run.chart_changes() == [2], runner.run.chart_changes()
+        assert panel._chart_drawn[-1] == (2,), "the chart is drawn with the change"
+        ping_gate.clear()
+        runner._send()                       # out...
+        marks[0] = (2, "CHANGE", "latency 100 ms")
+        ping_gate.set()                      # ...while the settings were applied
+        answered(runner)
+        assert not runner.run.results[-1].counted, "in no part"
+        assert runner.run.parts[-1].stats.sent == 2, "and not in the part it went in"
     """))
 
 
