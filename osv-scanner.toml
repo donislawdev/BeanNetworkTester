@@ -1,0 +1,19 @@
+# Advisories OSV-Scanner (and OpenSSF Scorecard's Vulnerabilities check, which
+# reads this file next to the requirements files) is told to set aside.
+#
+# An entry here is a decision with a reason AND an end date, never a way to make a
+# red check green: when `ignoreUntil` passes, the advisory comes back by itself and
+# has to be judged again. tests/test_repo_conventions.py refuses an entry without
+# all three.
+
+[[IgnoredVulns]]
+# MCP Python SDK: a Streamable HTTP server in stateful mode never reclaims its
+# sessions (fixed in mcp 1.30.0). `mcp` is not ours: semgrep pins `mcp==1.29.0`
+# exactly, in 1.180.0 (requirements-scan.txt) and in 1.181.0, the newest release
+# when this was written, so no pin of ours can move it. The CI job runs
+# `semgrep scan` on a throwaway runner and never starts semgrep's MCP server, and
+# nothing of semgrep reaches the program. Remove this entry when a semgrep
+# release allows mcp 1.30.0 or later, and raise the pin in the same change.
+id = "GHSA-84m7-p3x7-pcfv"
+ignoreUntil = 2026-11-20
+reason = "Pinned by semgrep (mcp==1.29.0) for a CI-only lint scan that never starts its MCP server; nothing of it ships"

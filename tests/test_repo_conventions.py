@@ -760,3 +760,34 @@ def test_no_menu_entry_is_greyed_out_with_tk_disabled_state():
     check("no menu entry is greyed out with Tk's state= (it renders blurred on "
           "Windows) - use theme.set_menu_entry_available",
           not offenders, f"({offenders})")
+
+
+def test_every_ignored_advisory_says_why_and_until_when():
+    """An advisory set aside in ``osv-scanner.toml`` carries a reason and an end date.
+
+    OSV-Scanner and Scorecard's Vulnerabilities check both read that file next to
+    the requirements files. A permanent ignore is how a real finding stays hidden
+    for years, so an entry needs an advisory id, a reason a reader can check and
+    ``ignoreUntil``, after which the advisory comes back by itself and is judged
+    again (Scorecard alert 20, the semgrep-pinned ``mcp``, 2026-10-20). Whole
+    packages are never set aside here: ``PackageOverrides`` would hide every
+    advisory a package will ever get. No file is fine; a file is judged.
+    """
+    import datetime
+    import tomllib
+
+    path = os.path.join(ROOT, "osv-scanner.toml")
+    if not os.path.exists(path):
+        return
+    with open(path, "rb") as handle:
+        config = tomllib.load(handle)
+    check("only single advisories are set aside, never whole packages",
+          set(config) <= {"IgnoredVulns"}, f"({sorted(config)})")
+    for entry in config.get("IgnoredVulns", []):
+        name = entry.get("id", "?")
+        check(f"{name}: names an advisory", isinstance(entry.get("id"), str)
+              and "-" in entry["id"], f"({entry})")
+        check(f"{name}: says why, in words a reader can check",
+              len(str(entry.get("reason", "")).strip()) > 40, f"({entry.get('reason')!r})")
+        check(f"{name}: says until when", isinstance(entry.get("ignoreUntil"), datetime.date),
+              f"({entry.get('ignoreUntil')!r})")

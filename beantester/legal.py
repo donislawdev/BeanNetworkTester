@@ -22,7 +22,8 @@ LICENSES_DIR = "licenses"
 WINDIVERT_VERSION = "2.2"
 
 # The exact bytes of the two files that version resolves to, as shipped by the
-# pinned `pydivert` wheel (sha256, recorded 2026-08-19 from pydivert 3.1.3).
+# pinned `pydivert` wheel (sha256, recorded 2026-08-19 from pydivert 3.1.3, and
+# compared against the 4.0.0 wheel on 2026-10-20: both files byte for byte the same).
 #
 # The version above answers "which WinDivert is this" for the licence notices.
 # These answer a different question, and it is the one an attacker cares about:

@@ -127,7 +127,11 @@ MARK_KINDS = frozenset({"START", "CHANGE", "SCENARIO", "STOP"})
 # helper read, and the __dict__ that holds nothing but cached headers. Measured on
 # pydivert 3.1.3 and pinned by tests/test_packet_header_cache.py; a version laid out
 # any other way is simply left alone - slower, never broken - whatever installed it.
-PYDIVERT_SLOTS = frozenset({"raw", "_wd_addr", "_direction", "__dict__"})
+# 🔴 pydivert 4.0.0 moved the bytes from a `raw` slot to `_raw` behind a `raw`
+# property, and that alone switched the clear OFF without a sound (CI caught it on
+# the bump). The clear is still safe there: every other field is a slot too, and
+# pydivert's own `raw` setter empties `__dict__` the same way.
+PYDIVERT_SLOTS = frozenset({"_raw", "_wd_addr", "_direction", "__dict__"})
 
 # Every running engine, so the interpreter can never exit with an open divert
 # (a leaked handle keeps the WinDivert driver - and its .sys file - loaded).
@@ -1893,7 +1897,7 @@ class BeanEngine:
             # not the collector. Here and not right after the reads, so a
             # corruption's payload write (which rebuilds the headers) is covered too.
             # Only pydivert's class, and that is the safety of it: pydivert keeps
-            # every real field in __slots__ (raw, _wd_addr, _direction...) and only
+            # every real field in __slots__ (_raw, _wd_addr, _direction...) and only
             # those caches in __dict__, so send() and the checksum helper lose
             # nothing; the synthetic packet and the test fakes keep their real
             # fields IN __dict__. tests/test_packet_header_cache.py pins both.

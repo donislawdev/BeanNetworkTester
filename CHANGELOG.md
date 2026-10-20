@@ -74,6 +74,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   now also say that the Ping tool sends echo requests to the address you type, from Start to
   Stop, and that a name you type is looked up first, as for any program.
 
+- **PyDivert, the library that captures the traffic, is updated to 4.0.0.** The WinDivert
+  driver that comes with it is the same version 2.2 as before, file for file. `--license`
+  names the new version.
+
 ### Fixed
 
 - **The log no longer says a page opened when no browser started.** After a click on **Donate**

@@ -89,6 +89,15 @@ MUTATIONS = [
         "test": "test_doctor_says_when_the_session_clock_is_too_coarse_to_time_an_impairment",
     },
     {
+        # pydivert 4.0.0 loads the library this variable names at `import pydivert`,
+        # inside an elevated process (measured 2026-10-20).
+        "label": "driver: the variable pydivert 4 loads a library from survives the import",
+        "file": "beantester/driver.py",
+        "old": "os.environ.pop(_PYDIVERT_LIBRARY_VARIABLE, None)\n",
+        "new": "pass\n",
+        "test": "test_importing_the_package_drops_the_variable_pydivert_loads_a_library_from",
+    },
+    {
         # The hand-rolled quoting, restored exactly as it shipped: an argument
         # ending in a backslash escapes its own closing quote.
         "label": "winenv: relaunch quoting goes back to wrapping each argument",
@@ -2542,6 +2551,29 @@ MUTATIONS = [
         "old": "    if licence is None or not str(licence).strip():",
         "new": "    if False and (licence is None or not str(licence).strip()):",
         "test": "test_an_unknown_licence_blocks",
+    },
+    {
+        # pydivert 4.0.0 blocked on a licence GPL-3.0 can take (2026-10-20).
+        "label": "deps: GPL-2.0-or-later blocks again",
+        "file": "tools/dependency_gate.py",
+        "old": "    \"GPL-2.0-or-later\", \"GPL-3.0-only\", \"GPL-3.0-or-later\",\n",
+        "new": "    \"GPL-3.0-only\", \"GPL-3.0-or-later\",\n",
+        "test": "test_gpl2_or_later_passes_because_it_can_be_taken_under_gpl3",
+    },
+    {
+        # Scorecard alert 20 (mcp pinned by semgrep): an ignore must expire.
+        "label": "deps: an advisory set aside in osv-scanner.toml has no end date",
+        "file": "osv-scanner.toml",
+        "old": "ignoreUntil = 2026-11-20\n",
+        "new": "# ignoreUntil = 2026-11-20\n",
+        "test": "test_every_ignored_advisory_says_why_and_until_when",
+    },
+    {
+        "label": "deps: the build-time hooks lose their named exception",
+        "file": "tools/dependency_gate.py",
+        "old": "    \"pyinstaller-hooks-contrib\": \"build-time hooks (GPL-2.0-or-later, runtime \"\n",
+        "new": "    \"pyinstaller-hooks-contrib-x\": \"build-time hooks (GPL-2.0-or-later, runtime \"\n",
+        "test": "test_an_exception_is_a_named_package_with_a_reason_beside_it",
     },
     {
         # A module quietly dropping out of the strict list. The check that
@@ -6962,6 +6994,15 @@ MUTATIONS = [
                "                packet.__dict__.clear()\n",
         "new": "            if type(packet) is real_packet:\n"
                "                pass\n",
+        "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
+    },
+    {
+        # pydivert 4.0.0 moved the bytes to `_raw`, and the old name switched the
+        # clear off without a sound (caught on the bump, 2026-10-20).
+        "label": "engine (W-A1): the layout check still names pydivert 3.1.3's raw slot",
+        "file": "beantester/engine.py",
+        "old": "PYDIVERT_SLOTS = frozenset({\"_raw\", \"_wd_addr\", \"_direction\", \"__dict__\"})\n",
+        "new": "PYDIVERT_SLOTS = frozenset({\"raw\", \"_wd_addr\", \"_direction\", \"__dict__\"})\n",
         "test": "test_a_queued_pydivert_packet_holds_no_header_cache",
     },
     {
