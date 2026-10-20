@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** es una herramienta para testers y desarrolladores: permite comprobar cómo
 se comporta una aplicación con una mala conexión. Igual que Clumsy o NetLimiter, sirve para degradar
@@ -903,7 +904,7 @@ Cada forma de terminar tiene su propio código, así que un pipeline no necesita
 | `4` | scenario | el archivo de escenario no existe o está mal formado |
 | `5` | io | no se pudo escribir un artefacto (informe de reproducción, configuración guardada) |
 | `6` | assertion | la ejecución tuvo éxito, pero `--min-packets` / `--fail-on-no-traffic` no se cumplió |
-| `7` | permission | se necesitan derechos de administrador y faltan |
+| `7` | permission | se necesitan derechos de administrador (Windows), o root o CAP_BPF, CAP_NET_ADMIN y CAP_NET_RAW (Linux), y faltan |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (cancelación de un job, `docker stop`), Ctrl+Break o cierre de la ventana de la consola |
 
@@ -1487,6 +1488,7 @@ Todos los jobs de ese workflow, y qué significa que uno esté en rojo:
 | `mutations` | rompe cada comportamiento protegido y demuestra que su prueba se pone en rojo. Un pull request ejecuta las entradas que tocó, la ejecución semanal las hace todas |
 | `audit` | **pip-audit** contra el conjunto fijado. Semanal, para preguntar si el mundo se movió bajo versiones que no lo hicieron, y en un pull request que edita un archivo de requisitos, para preguntar si el conjunto se movió. La ejecución semanal abre un issue, y un pull request que fija algo vulnerable simplemente falla |
 | `tests` | el conjunto de pruebas, el smoke de la GUI, la comprobación de renderizado con Tk real y las aserciones de la CLI, en Linux y Windows |
+| `linux-capture` | la captura experimental en Linux sobre un kernel real: la línea de comandos como root, dentro de un espacio de nombres de red propio. La latencia y la pérdida deben llegar al objetivo y a nada más. No es obligatorio para fusionar |
 | `build` | el ejecutable de Windows, con prueba de humo, con la comprobación del controlador y el análisis del registro de licencias |
 | `cron-issue` | abre un issue cuando la ejecución semanal se pone en rojo, sin duplicados según qué jobs fallaron. Un cron es fácil de pasar por alto y nada más lo anuncia. También responde a una ejecución lanzada a mano, que es la única forma de ejercitarlo sin esperar a un lunes en rojo. Nunca se ejecuta en un pull request, y nunca cierra un issue por sí mismo |
 <!-- ci-jobs:end -->

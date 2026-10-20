@@ -1,4 +1,4 @@
-# Runtime dependencies (traffic capture works only on Windows).
+# Runtime dependencies (traffic capture: Windows, and Linux experimentally).
 #
 # 🔴 PINNED, and the pin is the point. Measured 2026-08-11: with `pydivert` and
 # `psutil` unpinned, an SBOM scanner reads this file and reports NOTHING - not a
@@ -11,7 +11,12 @@
 # deliberately - `pydivert` carries the WinDivert DLL and the kernel driver, so
 # bumping it changes what we ship to users and what THIRD-PARTY-NOTICES.md has to
 # say. Check the notices and `beantester/legal.py` in the same change.
-pydivert==4.0.0; sys_platform == "win32" \
+#
+# Linux too since 2026-10-20 (stage 1 of Linux support, experimental): its wheel
+# carries libebpfdivert instead, with libbpf, libelf, zstd and zlib linked in. The
+# hashes already cover it - tools/pin_hashes.py writes every artefact of the
+# version. Nothing is shipped for Linux yet, so its notices wait for a Linux build.
+pydivert==4.0.0; sys_platform == "win32" or sys_platform == "linux" \
     --hash=sha256:06272d935efe7489cba5558bf6f7de5b68a2fdbd9fa0521ee04120b22fdeb73a \
     --hash=sha256:3736e19922b12a8d3839c6fecbc6faa0ce7ac0b62507368432542cb559bce907 \
     --hash=sha256:a507ad3fa5efef95147595d9486d84fc9118b149d5ec6ed140c30283f9151602 \

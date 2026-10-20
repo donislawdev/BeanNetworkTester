@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester**는 테스터와 개발자를 위한 도구로, 나쁜 연결 환경에서 애플리케이션이 어떻게
 동작하는지 확인할 수 있습니다. Clumsy나 NetLimiter처럼 네트워크를 일부러 열화시킬 수 있습니다.
@@ -801,7 +802,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 시나리오 파일이 없거나 형식이 잘못되었습니다 |
 | `5` | io | 산출물을 쓸 수 없었습니다(재현 보고서, 저장한 설정) |
 | `6` | assertion | 실행은 성공했지만 `--min-packets` / `--fail-on-no-traffic`을 통과하지 못했습니다 |
-| `7` | permission | 관리자 권한이 필요한데 없습니다 |
+| `7` | permission | 관리자 권한(Windows), 또는 root나 CAP_BPF, CAP_NET_ADMIN, CAP_NET_RAW(Linux)가 필요한데 없습니다 |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM(작업 취소, `docker stop`), Ctrl+Break 또는 콘솔 창 닫기 |
 
@@ -1346,6 +1347,7 @@ python -m pytest tests
 | `mutations` | 보호되는 동작을 하나씩 깨뜨려서 그 테스트가 빨간불이 되는지 증명합니다. 풀 리퀘스트는 건드린 항목만 실행하고, 주간 실행은 전부 실행합니다 |
 | `audit` | 고정된 집합에 대한 **pip-audit**. 주간으로 실행하여 바뀌지 않은 버전 아래에서 세상이 움직였는지 묻고, requirements 파일을 수정하는 풀 리퀘스트에서는 집합이 움직였는지 묻습니다. 주간 실행은 이슈를 열고, 취약한 것을 고정하는 풀 리퀘스트는 그냥 실패합니다 |
 | `tests` | Linux와 Windows에서 스위트, GUI 스모크, 실제 Tk 렌더 검사, CLI 검증 |
+| `linux-capture` | 실제 커널에서 실행하는 실험적 Linux 캡처: root 권한의 명령줄을 전용 네트워크 네임스페이스 안에서 실행하며, 지연과 손실이 대상에만 적용되어야 한다. 병합에 필수는 아님 |
 | `build` | 스모크 테스트를 거친 Windows 실행 파일과, 드라이버 검사 및 라이선스 레지스트리 스캔 |
 | `cron-issue` | 주간 실행이 빨간불이 되면 이슈를 열며, 어떤 작업이 실패했는지에 따라 중복을 제거합니다. 크론은 놓치기 쉽고 다른 어떤 것도 그것을 알려 주지 않습니다. 수동으로 실행한 경우에도 응답하는데, 빨간 월요일을 기다리지 않고 이 작업을 시험해 볼 수 있는 유일한 방법입니다. 풀 리퀘스트에서는 절대 실행되지 않고, 스스로 이슈를 닫지도 않습니다 |
 <!-- ci-jobs:end -->

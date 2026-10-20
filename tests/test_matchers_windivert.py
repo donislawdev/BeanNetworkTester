@@ -16,12 +16,13 @@ Two layers of guard, deliberately:
 
 * the tests here run EVERYWHERE and pin the structure - which forms narrow, which
   refuse to, and that both directions are covered;
-* the last test runs only where ``pydivert`` is importable (win32) and checks the
-  invariant against **the driver's own evaluator**, so it is not my reading of the
-  filter language checked against my reading of the matcher. It is skipped on the
-  Linux half of the CI matrix, which is worth knowing when reading a green run.
+* the last test runs where ``pydivert`` is importable (Windows, and Linux since
+  2026-10-20) and checks the invariant against **the driver's own evaluator** -
+  WinDivert's, or eBPFDivert's copy of the same code - so it is not my reading of
+  the filter language checked against my reading of the matcher.
 """
 import struct
+import sys
 
 import pytest
 
@@ -122,27 +123,40 @@ def _udp(src_ip, dst_ip, src_port, dst_port):
 
 
 def test_the_fragment_never_excludes_what_the_matcher_accepts():
-    """The invariant, checked against WinDivert's OWN evaluator.
+    """The invariant, checked against the capture driver's OWN evaluator.
 
     ``WinDivertHelperEvalFilter`` is the same code the driver runs, so this is not
-    two readings of the filter language agreeing with each other. Skipped without
-    ``pydivert`` (win32-only), which is half the CI matrix - so a green run on
-    Linux has NOT checked this.
+    two readings of the filter language agreeing with each other. On Linux it is
+    eBPFDivert's ``ebpfdivert_helper_eval_filter`` - the same WinDivert code,
+    built into libebpfdivert - so the Linux runner checks the evaluator a Linux
+    session narrows with. Skipped only without ``pydivert``.
 
     Run in full outside the suite over 27 648 packet views on 16 expressions with
     zero violations (2026-07-28); the sweep here is trimmed to keep the suite fast.
     """
     pytest.importorskip("pydivert")
     import ctypes
-    from pydivert import windivert_dll as w
     from pydivert.windivert_dll import WinDivertAddress
 
     addr = WinDivertAddress()
+    if sys.platform.startswith("linux"):
+        from pydivert.bpf import libebpfdivert
+        if libebpfdivert is None:
+            pytest.skip("pydivert is installed, but its libebpfdivert did not load")
 
-    def evaluates(text, raw):
-        buf = ctypes.create_string_buffer(raw, len(raw))
-        return bool(w.WinDivertHelperEvalFilter(text.encode(), buf, len(raw),
-                                                ctypes.byref(addr)))
+        def evaluates(text, raw):
+            # 1 = matches, 0 = does not, anything else is an error - which must not
+            # read as a match, or a broken evaluator would hide every violation.
+            buf = ctypes.create_string_buffer(raw, len(raw))
+            return libebpfdivert.ebpfdivert_helper_eval_filter(
+                text.encode(), buf, len(raw), ctypes.byref(addr)) == 1
+    else:
+        from pydivert import windivert_dll as w
+
+        def evaluates(text, raw):
+            buf = ctypes.create_string_buffer(raw, len(raw))
+            return bool(w.WinDivertHelperEvalFilter(text.encode(), buf, len(raw),
+                                                    ctypes.byref(addr)))
 
     ips = ["8.8.8.8", "8.8.4.4", "10.1.2.3", "192.168.1.25"]
     ports = [53, 80, 443, 1024, 8080, 8100]

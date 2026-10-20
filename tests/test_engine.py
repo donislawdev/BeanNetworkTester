@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from beantester import BeanEngine, driverwait
+from beantester import BeanEngine, capture_backend, driverwait
 from beantester.connlog import ConnectionLog
 from beantester.core import BeanCore
 from beantester.damage import (DROP_BY_REASON, IMPAIRMENT_DROP_KEYS, TOOL_DROP_KEYS,
@@ -1579,8 +1579,10 @@ def test_a_packet_queued_before_the_capture_thread_started_is_not_a_driver_wait(
     events = [e[3] for e in sh.events_snapshot()]
     sh.stop()
     check("driver wait: the start's own wait is not the peak", peak == 0.0, f"({peak})")
+    # The platform's own event key (capture_backend): a fixed Windows key would make
+    # this pass by construction on the Linux runner.
     check("driver wait: and it is not reported as the driver dropping packets",
-          "events.driver_wait" not in events, f"({events})")
+          capture_backend.current().text("driver_wait_event") not in events, f"({events})")
 
 
 def test_a_shorter_wait_never_lowers_the_recorded_peak():

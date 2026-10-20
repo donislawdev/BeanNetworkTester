@@ -15,7 +15,7 @@ CONFIG = 3        # invalid settings: expression, schedule, range, preset, confi
 SCENARIO = 4      # the scenario file is missing or malformed
 IO = 5            # an artifact could not be written (repro report, saved config)
 ASSERTION = 6     # the run finished but a --min-packets / --fail-on-no-traffic check failed
-PERMISSION = 7    # Administrator rights are required and missing
+PERMISSION = 7    # Administrator rights (Windows) or root (Linux) are required and missing
 INTERRUPTED = 130  # Ctrl+C  (128 + SIGINT)
 TERMINATED = 143   # SIGTERM (128 + SIGTERM), Ctrl+Break, and closing the console
 

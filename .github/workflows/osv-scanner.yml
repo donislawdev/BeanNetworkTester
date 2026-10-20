@@ -5,7 +5,7 @@ name: OSV-Scanner
 # the checks that already exist, not instead of them:
 #   * `pip-audit` (ci.yml `audit`, release.yml) installs the runtime and build set
 #     on Windows and audits what landed - the only check that sees what pip
-#     actually resolved, `pydivert` and its win32 marker included;
+#     actually resolved, `pydivert` and its platform marker included;
 #   * `review new dependencies` (dependency-review.yml) fails a pull request that
 #     adds a dependency GitHub's advisory database knows to be vulnerable;
 #   * Scorecard's Vulnerabilities check resolves the transitive closure.

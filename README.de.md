@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** ist ein Werkzeug für Tester und Entwickler: Prüfen Sie, wie sich Ihre
 Anwendung bei einer schlechten Verbindung verhält. Wie Clumsy oder NetLimiter lässt es Sie das
@@ -930,7 +931,7 @@ Jede Art des Endes hat ihren eigenen Code - eine Pipeline muss keinen Text auswe
 | `4` | scenario | die Szenario-Datei fehlt oder ist fehlerhaft |
 | `5` | io | ein Artefakt konnte nicht geschrieben werden (Reproduktionsbericht, gespeicherte Konfiguration) |
 | `6` | assertion | der Lauf war erfolgreich, aber `--min-packets` / `--fail-on-no-traffic` wurde nicht bestanden |
-| `7` | permission | Administratorrechte sind erforderlich und fehlen |
+| `7` | permission | Administratorrechte (Windows) bzw. root oder CAP_BPF, CAP_NET_ADMIN und CAP_NET_RAW (Linux) sind erforderlich und fehlen |
 | `130` | interrupted | Strg+C (SIGINT) |
 | `143` | terminated | SIGTERM (Abbruch eines Jobs, `docker stop`), Strg+Break oder Schließen des Konsolenfensters |
 
@@ -1521,6 +1522,7 @@ Jeder Job dieses Workflows und was ein roter bedeutet:
 | `mutations` | zerstört jedes abgesicherte Verhalten und beweist, dass sein Test rot wird. Ein Pull Request führt die Einträge aus, die er berührt hat, der wöchentliche Lauf alle |
 | `audit` | **pip-audit** gegen den gepinnten Satz. Wöchentlich, um zu fragen, ob sich die Welt unter Versionen bewegt hat, die sich nicht bewegt haben, und bei einem Pull Request, der eine Requirements-Datei ändert, um zu fragen, ob sich der Satz bewegt hat. Der wöchentliche Lauf eröffnet ein Issue, und ein Pull Request, der etwas Verwundbares pinnt, scheitert einfach |
 | `tests` | die Suite, der GUI-Smoke, die Render-Prüfung mit echtem Tk und die CLI-Assertions, unter Linux und Windows |
+| `linux-capture` | die experimentelle Linux-Erfassung auf einem echten Kernel: die Kommandozeile als root, in einem eigenen Netzwerk-Namespace. Latenz und Verlust müssen das Ziel erreichen und sonst nichts. Für einen Merge nicht erforderlich |
 | `build` | die ausführbare Windows-Datei, per Smoke-Test geprüft, mit der Treiberprüfung und dem Scan der Lizenzregistry |
 | `cron-issue` | eröffnet ein Issue, wenn der wöchentliche Lauf rot wird, dedupliziert danach, welche Jobs gescheitert sind. Einen Cron übersieht man leicht, und sonst kündigt ihn nichts an. Er reagiert auch auf einen von Hand ausgelösten Lauf, die einzige Möglichkeit, ihn auszuprobieren, ohne auf einen roten Montag zu warten. Läuft nie bei einem Pull Request und schließt nie von selbst ein Issue |
 <!-- ci-jobs:end -->

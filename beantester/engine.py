@@ -102,6 +102,7 @@ import threading
 import time
 import weakref
 
+from . import capture_backend
 from . import filters
 from . import portmap
 from . import winenv
@@ -955,12 +956,10 @@ class BeanEngine:
             filt, self._narrowed = filters.narrowed_filter(
                 filt, self.core.dst_ip_matcher, self.core.dst_port_matcher)
         if divert is None:
-            import pydivert
-            from . import driver
-            divert = pydivert.WinDivert(filt)
-            # a REAL driver was loaded: the kernel now holds its .sys file, so it
-            # has to be unloaded before the process leaves (see driver.py)
-            driver.mark_driver_used()
+            # The platform's capture driver, built where the choice is made once
+            # (capture_backend.py) - on Windows, pydivert.WinDivert plus the
+            # driver-used marker, exactly as this block used to do itself.
+            divert = capture_backend.current().open_network(filt)
             # ...and this is the ONLY moment a native (segfault) crash becomes
             # possible - the kernel driver is now in play - so arm native crash
             # capture now, not at launch (keeps crashes/ from appearing until it
@@ -1141,8 +1140,9 @@ class BeanEngine:
                 # three values are CEILINGS, not a delay the tool always adds - the text
                 # says so, and takes the warning threshold from the constant it quotes.
                 q = self._driver_queue
-                self.log(T("log.driver_queue", n=q["queue_len"], t=q["queue_time"],
-                           kb=q["queue_size"] // 1024, warn=f"{driverwait.WARN_MS:g}"))
+                self.log(T(capture_backend.current().text("driver_queue"), n=q["queue_len"],
+                           t=q["queue_time"], kb=q["queue_size"] // 1024,
+                           warn=f"{driverwait.WARN_MS:g}"))
             self._t_wd.start()
         except BaseException as exc:
             # A worker (or the resolver) could not be spawned. Do NOT leave a running
@@ -1217,8 +1217,10 @@ class BeanEngine:
         if socket_source is not None:
             factory = socket_source if callable(socket_source) else (lambda: socket_source)
         elif real_windivert:
-            from .socketwatch import windivert_socket_source
-            factory = windivert_socket_source
+            # None when the platform's driver has no event source this map can
+            # rest on - then the session polls the table, as it does on any path
+            # without one (see capture_backend).
+            factory = capture_backend.current().socket_source_factory()
         if factory is None:
             self._socketwatch = None
             return None
@@ -1527,6 +1529,7 @@ class BeanEngine:
         # the system-wide timer request, the switch interval, the queued packets and
         # the atexit registration all stayed until the log moved (measured).
         self._say(say)
+        self._driver_wait.say_overflow_total()   # said only when there were any
         self.log(T("log.stop"))
 
     # How long the capture thread waits on _stop_lock before re-checking WHO holds
@@ -1672,6 +1675,9 @@ class BeanEngine:
                 self.core.drain_retired()
             except Exception as _exc:
                 crashlog.note(_exc, "engine")
+            # What an overloaded driver let past this tool or dropped (eBPFDivert
+            # counts both; a no-op where the driver counts neither, see driverwait).
+            self._driver_wait.watch_overflow(self._divert, time.monotonic())
             if deadline_reached(self._deadline, time.monotonic()):
                 # _worker_stop, not stop(): this runs on the watchdog thread, and a
                 # user pressing STOP at the same instant holds _stop_lock while joining
@@ -2028,7 +2034,7 @@ class BeanEngine:
         self._send_warned = now
         with self._slock:
             failed = self.st["drop_send"]
-        self.log(T("log.send_failed", n=failed, e=exc))
+        self.log(T(capture_backend.current().text("send_failed"), n=failed, e=exc))
         if first:
             # into the event log too, so it reaches the repro report: a session
             # whose delivered counts are short must say why in the artefact

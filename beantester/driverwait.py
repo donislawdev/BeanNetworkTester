@@ -16,7 +16,8 @@ for anywhere.
 """
 import time
 
-from . import winenv
+from . import capture_backend
+from . import crashlog
 from .i18n import T
 
 SAMPLE_S = 0.05         # 20 samples a second, whatever the rate
@@ -44,7 +45,15 @@ class DriverWait:
 
     def __init__(self, log, log_event):
         self._log, self._log_event = log, log_event
-        self.qpc = winenv.qpc_now
+        # The clock the platform's driver stamps packets with (capture_backend):
+        # QueryPerformanceCounter on Windows, CLOCK_MONOTONIC on Linux - and the
+        # words its warnings use, which name that driver.
+        backend = capture_backend.current()
+        self.qpc = backend.stamp_now
+        self._stamp_frequency = backend.stamp_frequency
+        self._text = backend.text
+        self._overload_counters = backend.overload_counters
+        self._overflow_last = None
         self.freq = None
         self.floor = 0          # QPC when the session's capture thread started
         self.reset()
@@ -58,6 +67,12 @@ class DriverWait:
         self.peak_ms = 0.0
         self.next_at = 0.0
         self._warned = 0.0
+        # The overload counters (watch_overflow): a reset starts their window at
+        # the driver's count as last read, not at zero - the driver's count runs
+        # for the handle's whole life.
+        self._overflow_base = self._overflow_last
+        self.bypassed = self.dropped = 0
+        self._overflow_warned = 0.0
 
     def begin(self):
         """A session's capture thread is about to start.
@@ -73,9 +88,14 @@ class DriverWait:
         nobody was reading.
         """
         if self.freq is None:
-            self.freq = winenv.qpc_frequency()
+            self.freq = self._stamp_frequency()
         self.next_at = 0.0
         self.floor = (self.qpc() or 0) if self.freq else 0
+        # A new session is a new handle, whose overload counts start at zero.
+        self._overflow_last = None
+        self._overflow_base = None
+        self.bypassed = self.dropped = 0
+        self._overflow_warned = 0.0
 
     def sample(self, packet, now):
         """Record how long ``packet`` waited inside the driver before we saw it.
@@ -134,7 +154,49 @@ class DriverWait:
             return
         first = self._warned == 0.0
         self._warned = now
-        self._log(T("log.driver_wait", ms=f"{waited_ms:.0f}"))
+        self._log(T(self._text("driver_wait"), ms=f"{waited_ms:.0f}"))
         if first:
             # into the event log too, so it reaches the repro report
-            self._log_event("WARN", "events.driver_wait")
+            self._log_event("WARN", self._text("driver_wait_event"))
+
+    # -- what an overloaded driver did with packets this tool never got ---------- #
+    def watch_overflow(self, divert, now):
+        """Fold in the driver's count of packets it let past this tool or dropped.
+
+        Asked by the watchdog tick (5 times a second, off the packet path: one
+        ``stats()`` is ~0.1 ms, and calling it while another thread receives was
+        measured clean - 560 calls, no error, every packet delivered). A no-op
+        where the driver keeps no such count: WinDivert, the simulate path, test
+        doubles (``capture_backend.overload_counters`` says ``None``).
+
+        Warned the way the driver wait is - once every WARN_S, the first time into
+        the event log - because it is the same state seen from the other side: a
+        tool that is not keeping up. The bypassed packets are the reason it has to
+        be said at all: they were never impaired, and no other counter knows.
+        """
+        with crashlog.quiet("driverwait.overflow"):
+            counts = self._overload_counters(divert)
+            if counts is None:
+                return
+            if self._overflow_base is None:
+                self._overflow_base = counts
+            self._overflow_last = counts
+            bypassed = counts["bypassed"] - self._overflow_base["bypassed"]
+            dropped = counts["dropped"] - self._overflow_base["dropped"]
+            grew = bypassed > self.bypassed or dropped > self.dropped
+            self.bypassed, self.dropped = bypassed, dropped
+            if grew and now - self._overflow_warned >= WARN_S:
+                first = self._overflow_warned == 0.0
+                self._overflow_warned = now
+                self._log(T(self._text("overflow"), bypassed=bypassed, dropped=dropped))
+                if first:
+                    self._log_event("WARN", self._text("overflow_event"))
+
+    def say_overflow_total(self):
+        """At STOP: the session's totals, when there were any (never on Windows).
+
+        From the watchdog's last reading, so up to one tick (0.2 s) of the very end
+        may be missing - the handle is closed by then and cannot be asked again.
+        """
+        if self.bypassed or self.dropped:
+            self._log(T(self._text("overflow_total"), bypassed=self.bypassed, dropped=self.dropped))

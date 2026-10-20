@@ -185,9 +185,10 @@ jobs:
   # nothing else, which left a tag that moved a pin unchecked until the following
   # Monday, with a merge and possibly a release in between (2026-08-21).
   #
-  # windows-latest because that is where the shipped set actually exists:
-  # `pydivert` carries a `sys_platform == "win32"` marker, so a Linux runner would
-  # skip the one dependency that puts a kernel driver on a user's machine.
+  # windows-latest because that is where the shipped set actually exists: the only
+  # build that ships is the Windows one, and its pydivert wheel is the one that puts
+  # a kernel driver on a user's machine (Linux installs another wheel of it, with
+  # no driver, since the experimental Linux capture).
   audit:
     # 🔴 A CONTRACT with the branch ruleset, like every other job name here: the
     # rule requires a status check by this exact string. Do not edit it without
@@ -326,10 +327,10 @@ jobs:
   # was true on the day somebody typed it and unverifiable afterwards. This is
   # that sentence, executed.
   #
-  # windows-latest, and not to be tidy: `pydivert` carries a win32 marker, and an
-  # entry whose test needs the driver would report SURVIVED on a Linux runner -
-  # the test passes there by returning early, which is indistinguishable from a
-  # guard that does not guard.
+  # windows-latest, and not to be tidy: the WinDivert DLL and driver exist only in
+  # pydivert's Windows wheel, and an entry whose test needs them would report
+  # SURVIVED on a Linux runner - the test passes there by returning early, which is
+  # indistinguishable from a guard that does not guard.
   mutations:
     name: mutation registry
     if: github.event_name != 'push'
@@ -604,6 +605,31 @@ jobs:
           print('NDJSON ok:', len(records), 'records')
           "
 
+  # The experimental Linux capture (eBPFDivert, chosen by capture_backend.py) on a
+  # real kernel - the one thing the suite cannot reach, since every other Linux test
+  # drives the backend through stand-ins. The capture is bounded by a network
+  # namespace the tool builds and deletes again (convention 6), so the runner's own
+  # interfaces are never handed to it. `--require` makes a runner that cannot run
+  # the check a failure, not a quiet SKIP. Not in the branch ruleset: a red one says
+  # Linux capture broke, and whether that blocks a merge is the owner's call.
+  linux-capture:
+    name: Linux capture (experimental, real kernel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Runtime dependencies (hash-pinned)
+        run: pip install --require-hashes -r requirements.txt
+      - name: The kernel the capture runs on
+        run: uname -r
+      - name: Real capture inside a network namespace of its own
+        run: sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require
+
   build:
     name: build the executable (Windows)
     runs-on: windows-latest
@@ -697,7 +723,7 @@ jobs:
   # case a second time, in tests/test_cron_issue.py.
   cron-issue:
     name: open an issue when the weekly run is red
-    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]
+    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]
     # 🔴 `workflow_dispatch` is here so this path can be PROVEN. Until it was
     # added, the only way to find out whether `gh issue create` works with these
     # permissions was a red Monday - which is to say, the notice that exists

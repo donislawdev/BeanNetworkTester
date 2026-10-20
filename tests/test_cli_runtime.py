@@ -8,6 +8,7 @@ errors to stdout and crash with a traceback on an unwritable path.
 The report loop takes its clock and its sleep function as arguments, so the
 timing tests run in microseconds instead of seconds.
 """
+import errno
 import io
 import json
 import os
@@ -15,7 +16,8 @@ import threading
 import time
 
 from beantester import cli as cli_module
-from beantester import exitcodes, winenv
+from beantester import capture_backend, exitcodes, winenv
+from beantester.i18n import T
 from beantester.cli import (_Terminated, _print_conn_rows, build_arg_parser,
                             config_from_args, run_cli)
 from beantester.engine import BeanEngine
@@ -501,6 +503,50 @@ def test_exit_code_runtime_without_pydivert():
           "WinDivert could not be opened" in err.getvalue(), f"({err.getvalue()!r})")
 
 
+def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
+    """eBPFDivert refuses an unprivileged open with EPERM: PERMISSION(7), and "sudo".
+
+    Linux checks nothing before the open - the open is the authority, and nothing
+    is captured yet - so the same exit a Windows run without elevation gets from
+    the check before it comes from here. Driven through each backend on any OS.
+    The Windows backend must answer the same failure exactly as before, RUNTIME:
+    on Windows the elevation check has already passed when an open fails.
+    """
+    monkeypatch.setattr(winenv, "is_admin", lambda: True)     # past the Windows check
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)   # not root, on any runner
+
+    class _RefusedOpen(_TargetedEngine):
+        def start(self, *_a, **_k):
+            raise PermissionError(errno.EPERM, "ebpfdivert_open: Operation not permitted")
+
+    errs = {}
+    for backend, want in ((capture_backend.EBPFDivertBackend(), exitcodes.PERMISSION),
+                          (capture_backend.WinDivertBackend(), exitcodes.RUNTIME)):
+        monkeypatch.setattr(capture_backend, "current", lambda b=backend: b)
+        out, err = io.StringIO(), io.StringIO()
+        clock = FakeClock()
+        code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                       engine=_RefusedOpen(), out=out, err=err)
+        errs[backend.name] = err.getvalue()
+        check(f"{backend.name}: EPERM at the open -> exit {want}", code == want, f"(code={code})")
+    check("Linux: it says to run with sudo", T("dialogs.ebpf_needs_root") in errs["ebpfdivert"],
+          f"({errs['ebpfdivert']!r})")
+    check("Linux: and keeps the driver's own words", "Operation not permitted" in errs["ebpfdivert"])
+    check("Windows: no sudo advice", "sudo" not in errs["windivert"], f"({errs['windivert']!r})")
+
+    # Root refused by the kernel itself (lockdown, an LSM policy): sudo would change
+    # nothing, so it is a RUNTIME failure that says what it is.
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
+    monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.EBPFDivertBackend())
+    out, err = io.StringIO(), io.StringIO()
+    clock = FakeClock()
+    code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                   engine=_RefusedOpen(), out=out, err=err)
+    check("Linux as root: EPERM at the open -> RUNTIME", code == exitcodes.RUNTIME, f"(code={code})")
+    check("and it names the refusal, not sudo", T("dialogs.ebpf_refused_as_root") in err.getvalue()
+          and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
+
+
 def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):
     """The window and the console answer the same failure, from one table.
 
@@ -526,6 +572,9 @@ def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monk
         def stop(self, *_a, **_k): pass
 
     monkeypatch.setattr(cli_module.winenv, "is_admin", lambda: True)
+    # WinDivert's own error, so WinDivert's advice table, on every runner: on Linux
+    # the platform's backend is eBPFDivert, whose table does not know a WinError.
+    monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.WinDivertBackend())
     out, err = io.StringIO(), io.StringIO()
     clock = FakeClock()
     code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep,

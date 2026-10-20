@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** は、テスターと開発者のためのツールです。回線の悪い環境で自分のアプリケーションがどう動くかを確かめられます。
 Clumsy や NetLimiter と同じように、ネットワークをわざと劣化させることができます。
@@ -472,7 +473,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | シナリオファイルがない、または形式が不正 |
 | `5` | io | 成果物を書き出せなかった (再現レポート、保存した設定) |
 | `6` | assertion | 実行は成功したが、`--min-packets` / `--fail-on-no-traffic` に合格しなかった |
-| `7` | permission | 管理者権限が必要だが、ない |
+| `7` | permission | 管理者権限 (Windows)、または root か CAP_BPF・CAP_NET_ADMIN・CAP_NET_RAW (Linux) が必要だが、ない |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (ジョブのキャンセル、`docker stop`)、Ctrl+Break、またはコンソールウィンドウを閉じた |
 
@@ -922,6 +923,7 @@ python -m pytest tests
 | `mutations` | 守られている挙動を1つずつ壊して、そのテストが赤くなることを証明します。プルリクエストでは触れたエントリを実行し、週次の実行ではすべてを実行します |
 | `audit` | 固定されたセットに対する **pip-audit**。週次では、固定していないバージョンの下で世界が動いたかを確かめ、requirements ファイルを編集するプルリクエストでは、セットが動いたかを確かめます。週次の実行は issue を作成し、脆弱なものを固定するプルリクエストは、単に失敗します |
 | `tests` | Linux と Windows での、スイート、GUI スモークテスト、実際の Tk での描画チェック、CLI のアサーション |
+| `linux-capture` | 実際のカーネル上での実験的な Linux キャプチャ。root のコマンドラインを専用のネットワーク名前空間の中で動かし、遅延とパケットロスが対象にだけ届くことを確かめる。マージには必須ではない |
 | `build` | スモークテスト済みの Windows 実行ファイル。ドライバーのチェックと、ライセンスレジストリのスキャン付き |
 | `cron-issue` | 週次の実行が赤になったときに issue を作成し、どのジョブが失敗したかで重複を排除します。cron は見逃しやすく、ほかに知らせてくれるものがありません。手動で起動した実行にも応答し、赤い月曜日を待たずに動作を確かめる唯一の方法です。プルリクエストでは決して実行されず、issue を自分で閉じることもありません |
 <!-- ci-jobs:end -->

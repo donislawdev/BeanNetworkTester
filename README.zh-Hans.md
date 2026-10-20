@@ -24,6 +24,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/donislawdev/BeanNetworkTester/badge)](https://scorecard.dev/viewer/?uri=github.com/donislawdev/BeanNetworkTester)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14154/badge)](https://www.bestpractices.dev/projects/14154)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform: Linux (experimental)](https://img.shields.io/badge/platform-Linux%20%28experimental%29-FCC624)
 
 **Bean Network Tester** 是一款面向测试人员和开发者的工具：检验你的应用在糟糕的网络连接下表现如何。
 和 Clumsy、NetLimiter 一样，它能让你故意把网络变差：增加 ping、丢弃数据包、限制速度、
@@ -750,7 +751,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 场景文件缺失或格式错误 |
 | `5` | io | 无法写入某个产物（复现报告、保存的配置） |
 | `6` | assertion | 运行成功，但 `--min-packets` / `--fail-on-no-traffic` 未通过 |
-| `7` | permission | 需要管理员权限，但没有 |
+| `7` | permission | 需要管理员权限（Windows），或 root 或 CAP_BPF、CAP_NET_ADMIN、CAP_NET_RAW（Linux），但没有 |
 | `130` | interrupted | Ctrl+C（SIGINT） |
 | `143` | terminated | SIGTERM（作业取消、`docker stop`）、Ctrl+Break，或关闭控制台窗口 |
 
@@ -1282,6 +1283,7 @@ python -m pytest tests
 | `mutations` | 破坏每一个受保护的行为，并证明它的测试会变红。拉取请求运行它改动过的条目，每周的运行则运行全部 |
 | `audit` | 针对固定依赖集运行 **pip-audit**。每周运行一次，询问在没有变动的版本之下世界是否变了，并且在拉取请求修改了 requirements 文件时运行，询问这个依赖集是否变了。每周的运行会创建一个 issue，而固定了有漏洞版本的拉取请求则直接失败 |
 | `tests` | 测试套件、图形界面冒烟测试、真实 Tk 渲染检查以及 CLI 断言，在 Linux 和 Windows 上运行 |
+| `linux-capture` | 在真实内核上运行的实验性 Linux 抓包：以 root 运行命令行，置于专用的网络命名空间中，延迟和丢包必须只作用于目标。合并时并非必需 |
 | `build` | Windows 可执行文件，经过冒烟测试，并带有驱动检查和许可证登记扫描 |
 | `cron-issue` | 每周的运行变红时创建一个 issue，按失败的作业去重。定时任务很容易被忽略，别的东西都不会宣布它的结果。它也响应手动触发的运行，这是不必等到某个变红的星期一就能演练它的唯一办法。从不在拉取请求上运行，也从不自行关闭 issue |
 <!-- ci-jobs:end -->
