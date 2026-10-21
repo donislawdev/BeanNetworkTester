@@ -111,7 +111,7 @@ def cleanup_blocker():
 CLEAN_TIP = "tips.tools_diagnostics_clean"
 
 
-def cleanup_tip():
+def cleanup_tip() -> str:
     """The cleanup button's tooltip, an i18n key: what it does, on Windows - and off
     Windows, where it can never do it, why not, in the words of the note under it.
 
@@ -128,7 +128,7 @@ def cleanup_tip():
 WINDOWS_HELP = ("tools.diagnostics.help_windows",)
 
 
-def platform_help():
+def platform_help() -> tuple[str, ...]:
     """The "?" sheet's paragraphs on this system's own rows, as i18n keys, in order.
 
     The rest of the sheet is the same everywhere or follows the report boxes

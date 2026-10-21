@@ -10,6 +10,7 @@ File pickers stay native on purpose (``tkinter.filedialog``): a file browser
 should look like the system's, not like us.
 """
 import tkinter as tk
+from collections.abc import Iterable
 from tkinter import ttk
 
 from ..i18n import T
@@ -214,7 +215,7 @@ def show_help(parent, title, text):
     return _run(win, True)
 
 
-def sheet_text(body_key):
+def sheet_text(body_key: str | Iterable[str]) -> str:
     """A help sheet's text: one key's, or several keys' joined by a blank line."""
     if isinstance(body_key, str):
         return T(body_key)

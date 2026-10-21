@@ -64,7 +64,7 @@ BOX_NOT_HERE = "tips.tools_diagnostics_not_here"
 HELP_FIRST, HELP_COPY = "tools.diagnostics.help_body", "tools.diagnostics.help_copy"
 
 
-def help_keys():
+def help_keys() -> tuple[str, ...]:
     """The "?" sheet's paragraphs on this system, as i18n keys."""
     return ((HELP_FIRST,) + tuple(diagnostics.platform_help()) + (HELP_COPY,)
             + tuple(box.help for box in OPTIONAL_BOXES if capabilities.available(box.needs)))

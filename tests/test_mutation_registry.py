@@ -8767,6 +8767,13 @@ MUTATIONS = [
         "test": "test_the_linux_help_names_every_row_that_can_stop_a_session",
     },
     {
+        "label": "diagnostics: the Linux sheet says root is the only way to capture rights",
+        "file": "lang/en.json",
+        "old": "    Capture rights: capturing traffic needs root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW. Start the program with sudo.\\n",
+        "new": "    Capture rights: capturing traffic needs root. Start the program with sudo.\\n",
+        "test": "test_the_linux_help_names_every_row_that_can_stop_a_session",
+    },
+    {
         "label": "diagnostics: a report box is offered for a section this system cannot read",
         "file": "beantester/gui/toolbox/diagnostics.py",
         "old": "            offered = capabilities.available(spec.needs)\n",

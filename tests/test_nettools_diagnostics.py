@@ -8,6 +8,7 @@ and that the cleanup is always asked with the window's own marker let go first.
 """
 import json
 import os
+import re
 import sys
 
 from beantester import capture_backend, driver
@@ -319,8 +320,17 @@ def test_the_linux_help_names_every_row_that_can_stop_a_session(monkeypatch):
     failing = [name for name, state, _detail in rows if state == "fail"]
     check("every row the Linux backend adds can stop a session",
           failing == [name for name, *_rest in rows] and len(failing) == 4, f"({rows})")
+    # ...and both ways the rights row lets a capture start: root, or the capabilities
+    # it names. Taken from the row's own answer, so a fourth one needs its words here
+    # too. The sheet once said "needs root" alone (CodeRabbit on #282).
+    every_bit = "CapEff:\t" + format((1 << 64) - 1, "016x") + "\n"
+    caps = re.findall(r"CAP_[A-Z_]+", capture_backend._rights(1000, ROOT, every_bit) or "")
+    check("the rights row names the capabilities it accepts", len(caps) == 3, f"({caps})")
     for code in LANGS:
         texts = _texts(code)
-        unnamed = [name for name in failing
-                   if texts[diagnostics.check_key(name)] not in texts["tools.diagnostics.help_linux"]]
+        sheet = texts["tools.diagnostics.help_linux"]
+        unnamed = [name for name in failing if texts[diagnostics.check_key(name)] not in sheet]
         check(f"{code}: the Linux sheet names every such row", not unnamed, f"({unnamed})")
+        unsaid = [way for way in ["root", *caps] if way not in sheet]
+        check(f"{code}: the Linux sheet names every way to the capture rights", not unsaid,
+              f"({unsaid})")
