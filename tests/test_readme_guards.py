@@ -151,6 +151,10 @@ def test_both_readmes_document_every_csv_column():
     # inspection - `capture_narrowed` decides what `packets_seen` next to it even
     # counted.
     names |= set(csv_export.CSV_SESSION_COLUMNS.values())
+    # The driver's overload counters reach the stats header under their own names,
+    # and only on a backend that counts them (Linux), so no registry above names them.
+    from beantester import capture_backend
+    names |= set(capture_backend.OVERLOAD_STATS)
     for readme in READMES:
         text = _read(readme)
         missing = sorted(n for n in names if n not in text)

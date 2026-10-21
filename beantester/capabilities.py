@@ -5,7 +5,7 @@ row-menu entry whose work is a call only one system makes. Before it, each tool
 answered for itself and each answered differently: Adapters, Proxy and TCP health
 asked their module's ``supported()`` and carried their own sentence for the answer;
 Ping had a ``supported()`` that nothing read, and Reset had none. Measured on Linux
-(2026-10-20, Ubuntu 26.04 and WSL, ``internal_tools/sondy/2026-10-20-linux-gui``):
+(2026-10-20, Ubuntu 26.04 and WSL, ``internal_tools`` probes ``2026-10-20-linux-gui``):
 every ping came back "failed" with code -1, a reset ended in an ``AttributeError``
 recorded as a fault, and the Adapters tab was two blank tables - the sentence it had
 for this case was never drawn. Each of those is the same defect: a second reader of

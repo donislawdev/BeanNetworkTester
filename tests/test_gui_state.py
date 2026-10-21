@@ -547,7 +547,12 @@ def test_a_row_menu_greys_out_what_this_system_lacks():
     """Reset, TCP health and Ping on a TCP/IPv4 row, which each would offer - on a
     system without their API (``capabilities``). Measured before this on Linux: the
     reset entry was live and ended in an ``AttributeError`` recorded as a fault. The
-    socket table's menu asks the same two gates for its own entries."""
+    socket table's menu asks the same two gates for its own entries.
+
+    And a click on a greyed-out entry does nothing: it is only coloured inert
+    (``theme.MENU_ENTRY_INERT``), so its command still runs. Reset and TCP health
+    once acted anyway - the reset reached the missing ``SetTcpEntry`` - while
+    Ping refused."""
     run_gui("""
         from beantester import icmp, tcpestats, tcpreset
         from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
@@ -555,6 +560,9 @@ def test_a_row_menu_greys_out_what_this_system_lacks():
         page = app.pages["connections"]
         tree = page.table.tree
         keys = list(page.table.columns)
+        resets, watched = [], []
+        tcpreset.reset = lambda target: resets.append(target) or tcpreset.Outcome(tcpreset.GONE)
+        th.watch_from = lambda app, request: watched.append(request)
 
         class Ev:
             x_root = y_root = 10
@@ -562,6 +570,7 @@ def test_a_row_menu_greys_out_what_this_system_lacks():
 
         values = ["-"] * len(keys)
         values[keys.index("proto")], values[keys.index("remote_ip")] = "TCP", "198.51.100.7"
+        values[keys.index("local_port")], values[keys.index("remote_port")] = "51000", "443"
         page.table.sync([("r", values)])
         tree.row_at = page.table._slots[0]
         entries = (page.RESET_INDEX, page.HEALTH_INDEX, page.PING_INDEX)
@@ -573,6 +582,13 @@ def test_a_row_menu_greys_out_what_this_system_lacks():
             assert got == [state] * 3, (has_it, got)
             assert th.offered("TCP", "198.51.100.7", "ESTABLISHED") is has_it
             assert pp.offered("198.51.100.7") is has_it
+            del resets[:], watched[:]
+            worker = page._reset_connection()
+            if worker is not None:
+                worker.join(20)
+            page._show_health()
+            assert (worker is not None, len(resets)) == (has_it, int(has_it)), (has_it, resets)
+            assert len(watched) == int(has_it), (has_it, watched)
     """)
 
 

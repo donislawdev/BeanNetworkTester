@@ -45,7 +45,8 @@ GATED_ITSELF = {
 def _loads_a_windows_dll(path):
     """True when the file calls ``WinDLL(...)`` or touches ``ctypes.windll`` - in CODE,
     not in a comment or a docstring that mentions them."""
-    tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+    with open(path, encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=path)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             func = node.func
@@ -72,7 +73,8 @@ def _capability_files():
 
 def _direct_imports(rel):
     """The ``beantester`` modules a file under ``beantester/nettools`` imports by name."""
-    tree = ast.parse(open(os.path.join(ROOT, rel), encoding="utf-8").read())
+    with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
+        tree = ast.parse(f.read())
     here = rel[:-3].split("/")[:-1]                        # its package, as parts
     found = set()
     for node in ast.walk(tree):
@@ -122,7 +124,8 @@ def test_every_reason_is_said_in_every_language():
     languages = [n for n in os.listdir(os.path.join(ROOT, "lang")) if n.endswith(".json")]
     check("the language files were found", len(languages) >= 3, f"({languages})")
     for name in languages:
-        texts = json.load(open(os.path.join(ROOT, "lang", name), encoding="utf-8"))
+        with open(os.path.join(ROOT, "lang", name), encoding="utf-8") as f:
+            texts = json.load(f)
         for cap in capabilities.CAPABILITIES.values():
             check(f"{name}: {cap.reason}", bool(texts.get(cap.reason)))
 

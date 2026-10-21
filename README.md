@@ -1241,6 +1241,8 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `delivered_in_scope_bytes_down` / `delivered_in_scope_bytes_up` | delivered bytes, targeted traffic only |
 | `queue_len` / `queue_peak` | packets waiting in the delay queue, now and at peak |
 | `driver_wait_peak_ms` | the longest the driver made a packet wait before the tool saw it, counted once the tool is reading (packets caught while START was still getting ready are left out) |
+| `kernel_bypassed` | Linux only, after `driver_wait_peak_ms`: packets that went around the tool without being impaired, because the kernel's buffer in front of it was full. They are not in `packets_seen` |
+| `driver_dropped` | Linux only, the last column: packets the driver dropped before the tool saw them, because its queue was full. They are in neither `packets_seen` nor any `dropped_` column |
 
 The last three drop counters - `dropped_overflow`, `dropped_at_stop`, `dropped_send_failed` - are
 the **tool's own** losses rather than impairment you asked for, which is why they are counted apart.

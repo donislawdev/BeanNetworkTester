@@ -159,6 +159,11 @@ class StatsPage:
         self._unit_shown = None
         self.sess_labels = {}
         self.cells = cells()            # the counters this platform has (CELLS + the driver's)
+        # The cells the tick rewrites as counts: every one but the two rates, which
+        # it writes as rates. Taken from `self.cells`, so a cell on the grid is a
+        # cell that moves - a hand-kept list left the driver's two at "0" all session.
+        self._counter_keys = tuple(key for key, *_rest in self.cells
+                                   if key not in RATE_FIELD_KEYS)
         self._cells = []
         self._grid_cols = 0
         self._chart_job = None
@@ -558,12 +563,7 @@ class StatsPage:
         # can be impaired), and drop_overflow / drop_shutdown / drop_send stay on
         # the FULL traffic on purpose - they are what the TOOL lost, including
         # traffic the user never targeted, and narrowing them would hide it.
-        for key in ("seen", "queue", "drop_loss", "loss_bursts", "corrupted", "duplicated",
-                    "reordered",
-                    "drop_overflow", "drop_shutdown", "drop_send",
-                    "drop_rate", "drop_syn", "drop_mtu",
-                    "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",
-                    "drop_block", "drop_flap", "rst_sent"):
+        for key in self._counter_keys:
             configure_changed(self.stat_labels[key],
                               text=str(self.app.scoped_stat(snap, key)))
 

@@ -111,6 +111,14 @@ def ensure_data_dir():
 # (``tests/test_sudo_files.py`` holds every such place to that).
 
 
+def running_as_root():
+    """True when this process runs as root, however it got there - ``sudo``, ``su``,
+    ``doas`` or a root login. Never on Windows, which has no such user."""
+    if sys.platform == "win32":
+        return False
+    return os.geteuid() == 0
+
+
 def invoking_user():
     """``(uid, gid)`` of the person who typed ``sudo`` for this root process, else ``None``.
 
@@ -118,9 +126,7 @@ def invoking_user():
     (26.04) both set ``SUDO_UID`` and ``SUDO_GID`` (measured). ``None`` when this
     process is not root, when nothing says who started it, and on Windows.
     """
-    if sys.platform == "win32":
-        return None
-    if os.geteuid() != 0:
+    if not running_as_root():
         return None
     try:
         return int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
@@ -134,6 +140,10 @@ def hand_back(path):
     Only inside a directory that belongs to that person: a file in root's own place
     stays root's. True when it changed hands. Never raises - a change of owner that
     fails leaves the file as it was, which is what happened before this existed.
+
+    The entry itself changes owner, never what a link there points at: that person
+    owns the directory, so they can swap the file for a link between the write and
+    this call, and a chown that followed it would hand them any file root can reach.
     """
     if sys.platform == "win32":
         return False
@@ -144,7 +154,7 @@ def hand_back(path):
     try:
         if os.stat(os.path.dirname(os.path.abspath(path))).st_uid != uid:
             return False
-        os.chown(path, uid, gid)
+        os.chown(path, uid, gid, follow_symlinks=False)
     except OSError:
         return False
     return True

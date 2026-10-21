@@ -16,12 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   `--cleanup-driver` has nothing to do: the kernel cleans up.
 
 - **Linux, experimental: the window.** Start it with sudo, or a red line says it cannot
-  capture, and a refused START says what to do. Statistics counts the packets that went
-  around the tool and the ones the driver dropped, and a red line warns while either grows.
-  Its files stay yours, and GitHub and Donate print the address instead of starting a
-  browser as root. On the Tools tab, Ping, TCP health and Adapters say they work on Windows
-  only for now, and the row menus grey out Reset this connection, Show TCP health and Ping
-  this address.
+  capture, and a refused START says what to do. The Statistics page and its CSV count
+  packets that went around the tool and those the driver dropped, with a red line while
+  either grows. Its files stay yours, and GitHub and Donate print the address instead of
+  starting a browser as root. On the Tools tab, Ping, TCP health and Adapters say they are
+  Windows-only for now, and the row menus grey out Reset this connection, Show TCP health
+  and Ping this address.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

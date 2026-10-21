@@ -35,9 +35,10 @@ class _Owned:
 
 def _become_sudo(monkeypatch):
     """A Linux root process started by uid/gid 1000 through sudo. Returns what was
-    chowned, and ``owners`` - path -> uid, the owner ``os.stat`` reports; a chown
-    moves it, the way the real one would."""
-    chowned, owners = [], {}
+    chowned, ``followed`` - whether each chown would follow a link - and ``owners`` -
+    path -> uid, the owner ``os.stat`` reports; a chown moves it, the way the real
+    one would."""
+    chowned, followed, owners = [], [], {}
     real_stat = os.stat
 
     def fake_stat(path, *a, **k):
@@ -45,8 +46,9 @@ def _become_sudo(monkeypatch):
         key = os.path.abspath(path)
         return _Owned(result, owners[key]) if key in owners else result
 
-    def fake_chown(path, uid, gid):
+    def fake_chown(path, uid, gid, *, follow_symlinks=True):
         chowned.append((os.path.abspath(path), uid, gid))
+        followed.append(follow_symlinks)
         owners[os.path.abspath(path)] = uid
 
     monkeypatch.setattr(sys, "platform", "linux")
@@ -55,7 +57,7 @@ def _become_sudo(monkeypatch):
     monkeypatch.setattr(os, "stat", fake_stat)
     monkeypatch.setenv("SUDO_UID", "1000")
     monkeypatch.setenv("SUDO_GID", "1000")
-    return types.SimpleNamespace(chowned=chowned, owners=owners)
+    return types.SimpleNamespace(chowned=chowned, followed=followed, owners=owners)
 
 
 @pytest.fixture
@@ -65,15 +67,19 @@ def sudo(monkeypatch):
 
 def test_who_ran_it_is_read_from_sudo_and_only_by_root(monkeypatch, sudo):
     check("root through sudo", paths.invoking_user() == (1000, 1000))
+    check("is root", paths.running_as_root() is True)
     monkeypatch.setattr(os, "geteuid", lambda: 1000, raising=False)
     check("not root: nobody to hand anything to", paths.invoking_user() is None)
+    check("is not root", paths.running_as_root() is False)
     monkeypatch.setattr(os, "geteuid", lambda: 0, raising=False)
     monkeypatch.delenv("SUDO_GID")
     check("root, but sudo did not say who", paths.invoking_user() is None)
+    check("root all the same", paths.running_as_root() is True)
     monkeypatch.setenv("SUDO_GID", "x")
     check("or said it in a way that is not a number", paths.invoking_user() is None)
     monkeypatch.setattr(sys, "platform", "win32")
     check("Windows: never", paths.invoking_user() is None)
+    check("Windows: never root", paths.running_as_root() is False)
 
 
 def test_a_file_is_handed_back_only_inside_the_persons_own_directory(tmp_path, sudo):
@@ -85,12 +91,16 @@ def test_a_file_is_handed_back_only_inside_the_persons_own_directory(tmp_path, s
     check("in root's own place it stays root's", paths.hand_back(str(roots / "x.json")) is False)
     check("one change of owner, to them", sudo.chowned == [(str(mine / "ui.json"), 1000, 1000)],
           f"({sudo.chowned})")
+    # They own the folder, so they can put a link where the file was before the chown
+    # runs: a chown that followed it would give them whatever the link points at.
+    check("the entry itself, never what a link there points at", sudo.followed == [False],
+          f"({sudo.followed})")
 
 
 def test_a_failed_change_of_owner_is_never_a_failure_of_the_write(monkeypatch, tmp_path, sudo):
     sudo.owners[str(tmp_path)] = 1000
 
-    def refuse(*_a):
+    def refuse(*_a, **_k):
         raise PermissionError(1, "Operation not permitted")
     monkeypatch.setattr(os, "chown", refuse, raising=False)
     check("answered, not raised", paths.hand_back(str(tmp_path / "f")) is False)
@@ -148,7 +158,13 @@ def test_the_page_buttons_start_no_browser_as_root(monkeypatch):
           lines == [f"{T('log.page_open_yourself')}: {links.GITHUB.url}"], f"({lines})")
     monkeypatch.delenv("SUDO_UID")
     lines.clear()
-    check("without sudo: the browser, as before", links.open_page(links.GITHUB, lines.append)
+    check("root without sudo (su, doas, a root login): not opened either",
+          links.open_page(links.GITHUB, lines.append) is False and opened == [], f"({opened})")
+    check("and the log says why", lines == [f"{T('log.page_open_yourself')}: {links.GITHUB.url}"],
+          f"({lines})")
+    monkeypatch.setattr(os, "geteuid", lambda: 1000, raising=False)
+    lines.clear()
+    check("not root: the browser, as before", links.open_page(links.GITHUB, lines.append)
           is True and opened == [links.GITHUB.url], f"({opened})")
 
 
@@ -185,28 +201,54 @@ def _creates(call):
     return None
 
 
-def _calls_by_name(node):
-    return {(n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", ""))
-            for n in ast.walk(node) if isinstance(n, ast.Call)}
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+def _name(call):
+    func = call.func
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+
+
+def _read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 def _unhanded(source, rel):
-    """``(function, line, what)`` for each creating call whose function never hands back."""
+    """``(function, line, what)`` for each creating call whose function never hands back.
+
+    A function answers for its OWN calls: those of a function nested in it are left
+    out on both sides - what it creates, and the hand_back that would excuse it.
+    The nested one is walked as a function of its own.
+    """
     tree = ast.parse(source)
     found = []
     for func in ast.walk(tree):
-        if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if not isinstance(func, _FUNCTIONS):
             continue
         inner = {id(n) for f in ast.walk(func) if f is not func
-                 and isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(f)}
+                 and isinstance(f, _FUNCTIONS) for n in ast.walk(f)}
         calls = [n for n in ast.walk(func) if isinstance(n, ast.Call) and id(n) not in inner]
         what = [(c.lineno, _creates(c)) for c in calls if _creates(c)]
         if not what or (rel, func.name) in CREATES_WITHOUT_HANDING_BACK:
             continue
-        if HANDS_BACK & _calls_by_name(func):
+        if HANDS_BACK & {_name(c) for c in calls}:
             continue
         found.extend((func.name, line, kind) for line, kind in what)
     return found
+
+
+def _stale(exceptions, root=ROOT):
+    """The exceptions that no longer name a function defined in their file."""
+    stale = []
+    for rel, function in exceptions:
+        path = os.path.join(root, rel)
+        defined = os.path.isfile(path) and any(
+            isinstance(n, _FUNCTIONS) and n.name == function
+            for n in ast.walk(ast.parse(_read(path))))
+        if not defined:
+            stale.append((rel, function))
+    return stale
 
 
 def test_every_place_that_makes_a_file_hands_it_back():
@@ -216,7 +258,7 @@ def test_every_place_that_makes_a_file_hands_it_back():
             if name.endswith(".py"):
                 path = os.path.join(folder, name)
                 rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
-                source = open(path, encoding="utf-8").read()
+                source = _read(path)
                 seen += sum(1 for n in ast.walk(ast.parse(source))
                             if isinstance(n, ast.Call) and _creates(n))
                 bad.extend(f"{rel}:{line} {func} ({kind})" for func, line, kind in _unhanded(source, rel))
@@ -224,8 +266,9 @@ def test_every_place_that_makes_a_file_hands_it_back():
     check("every one hands back what it makes, or says why it need not",
           not bad, f"({bad} - call paths.hand_back / make_dirs, write through temp_beside, or "
                    f"list it in CREATES_WITHOUT_HANDING_BACK with the reason)")
-    stale = [k for k in CREATES_WITHOUT_HANDING_BACK
-             if not os.path.isfile(os.path.join(ROOT, k[0]))]
+    # A renamed or removed function would leave its exception behind, ready to excuse
+    # the next function that takes the old name - so the name must still be defined.
+    stale = _stale(CREATES_WITHOUT_HANDING_BACK)
     check("no stale exception", not stale, f"({stale})")
 
 
@@ -236,9 +279,18 @@ def test_the_scan_for_files_made_can_fail():
         "open a, mode=": "def f(p):\n    open(p, mode='a').close()\n",
         "makedirs": "import os\ndef f(p):\n    os.makedirs(p, exist_ok=True)\n",
         "mkstemp": "import tempfile\ndef f(d):\n    return tempfile.mkstemp(dir=d)\n",
+        "a nested hand_back does not cover the outer open":
+            "def f(p):\n    open(p, 'w').close()\n    def g(q):\n        hand_back(q)\n",
     }
     for name, code in shapes.items():
         check(f"{name} is seen", _unhanded(code, "beantester/x.py") != [], f"({name})")
+    check("an exception whose function is gone is stale",
+          _stale({("beantester/paths.py", "no_such_function"): ""})
+          == [("beantester/paths.py", "no_such_function")])
+    check("so is one whose file is gone",
+          _stale({("beantester/no_such_file.py", "f"): ""}) == [("beantester/no_such_file.py", "f")])
+    check("one that names a function there is not",
+          _stale({("beantester/paths.py", "make_dirs"): ""}) == [])
     quiet = {
         "read": "def f(p):\n    return open(p).read()\n",
         "read rb": "def f(p):\n    return open(p, 'rb').read()\n",

@@ -3270,8 +3270,8 @@ MUTATIONS = [
     {
         "label": "capabilities: the Connections page offers a reset on a system without one",
         "file": "beantester/gui/pages/conns.py",
-        "old": "                self.menu, self.RESET_INDEX, capabilities.available(\"tcp_reset\")\n",
-        "new": "                self.menu, self.RESET_INDEX, True\n",
+        "old": "    return capabilities.available(\"tcp_reset\") and tcpreset.resettable(\n",
+        "new": "    return tcpreset.resettable(\n",
         "test": "test_a_row_menu_greys_out_what_this_system_lacks",
     },
     {
@@ -4794,9 +4794,25 @@ MUTATIONS = [
     {
         "label": "sudo files: any process hands its files to SUDO_UID",
         "file": "beantester/paths.py",
-        "old": "    if os.geteuid() != 0:\n        return None\n",
+        "old": "    if not running_as_root():\n        return None\n",
         "new": "",
         "test": "test_who_ran_it_is_read_from_sudo_and_only_by_root",
+    },
+    {
+        "label": "sudo files: Windows counts as root",
+        "file": "beantester/paths.py",
+        "old": "    if sys.platform == \"win32\":\n        return False\n    return os.geteuid() == 0\n",
+        "new": "    return os.geteuid() == 0\n",
+        "test": "test_who_ran_it_is_read_from_sudo_and_only_by_root",
+    },
+    {
+        # The person owns the directory, so they can swap the file for a link before
+        # the chown: following it hands them whatever root can reach (review of #281).
+        "label": "sudo files: hand_back follows a link",
+        "file": "beantester/paths.py",
+        "old": "        os.chown(path, uid, gid, follow_symlinks=False)\n",
+        "new": "        os.chown(path, uid, gid)\n",
+        "test": "test_a_file_is_handed_back_only_inside_the_persons_own_directory",
     },
     {
         "label": "sudo files: new directories are handed back bottom up",
@@ -4817,9 +4833,40 @@ MUTATIONS = [
         # nothing opened, and the log said "opened".
         "label": "sudo files: the page buttons start a browser as root",
         "file": "beantester/gui/links.py",
-        "old": "    if invoking_user() is not None:\n",
+        "old": "    if running_as_root():\n",
         "new": "    if False:\n",
         "test": "test_the_page_buttons_start_no_browser_as_root",
+    },
+    {
+        # Root without SUDO_UID - su, doas, a root login - is root all the same.
+        "label": "sudo files: the page buttons start a browser for root without sudo",
+        "file": "beantester/gui/links.py",
+        "old": "    if running_as_root():\n",
+        "new": "    if __import__(\"os\").environ.get(\"SUDO_UID\"):\n",
+        "test": "test_the_page_buttons_start_no_browser_as_root",
+    },
+    # -- a greyed-out row-menu entry does nothing (review of #281) ------------------- #
+    {
+        # MEASURED before on Linux: the reset reached None.SetTcpEntry, a fault.
+        "label": "conns: a greyed-out Reset still starts a reset",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not row or not can_reset(row):\n",
+        "new": "        if not row:\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "conns: a greyed-out Show TCP health still opens the tool",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if row and tcphealth.offered(row.get(\"proto\"), row.get(\"remote_ip\")):\n",
+        "new": "        if row:\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "conns: the Reset entry is never greyed out",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            set_menu_entry_available(self.menu, self.RESET_INDEX, can_reset(selected))\n",
+        "new": "            set_menu_entry_available(self.menu, self.RESET_INDEX, True)\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
     },
     {
         # The dialog's absolute path carries the Windows account name into every
@@ -7775,6 +7822,15 @@ MUTATIONS = [
         "test": "test_the_live_counters_are_not_rewritten_when_nothing_moved",
     },
     {
+        # The refresh kept a list of its own and left the driver's two cells at "0"
+        # beside a banner saying packets went around the tool (review of #281).
+        "label": "stats: the driver's overload cells are never refreshed",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        self._counter_keys = tuple(key for key, *_rest in self.cells\n",
+        "new": "        self._counter_keys = tuple(key for key, *_rest in CELLS\n",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
         "label": "stats (R-4, W-C2): the chart is redrawn from the same data",
         "file": "beantester/gui/pages/stats.py",
         "old": ("            if source == self._chart_drawn:\n"
@@ -8554,8 +8610,8 @@ MUTATIONS = [
     {
         "label": "conns: the row menu offers a reset for a row Windows cannot reset",
         "file": "beantester/gui/pages/conns.py",
-        "old": "                and tcpreset.resettable(selected.get(\"proto\"), selected.get(\"remote_ip\")))\n",
-        "new": "                and True)\n",
+        "old": "        row.get(\"proto\"), row.get(\"remote_ip\"))\n",
+        "new": "        row.get(\"proto\"), row.get(\"remote_ip\")) or True\n",
         "test": "test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4",
     },
     {
