@@ -12,7 +12,9 @@ when asked, and the status line says when the rows on screen were taken.
 """
 import tkinter as tk
 from tkinter import ttk
+from typing import NamedTuple
 
+from ... import capabilities
 from ...i18n import T
 from ...nettools import diagnostics
 from .. import dialogs
@@ -35,12 +37,37 @@ STATE_TEXT = {
 
 CHECK, CLEAN = "check", "clean"
 
-# The report's optional sections, as the person ticks them: (section id in
-# nettools/diagnostics.REPORT_SECTIONS, box text, tooltip).
+class Box(NamedTuple):
+    """One of the report's optional sections, as the person ticks it."""
+    section: str        # its id in nettools/diagnostics.REPORT_SECTIONS
+    text: str           # the box's words
+    tip: str
+    help: str           # its paragraph on the "?" sheet
+    needs: str          # the capability its section reads (capabilities.py)
+
+
 OPTIONAL_BOXES = (
-    ("adapters", "tools.diagnostics.with_adapters", "tips.tools_diagnostics_adapters"),
-    ("proxy", "tools.diagnostics.with_proxy", "tips.tools_diagnostics_proxy"),
+    Box("adapters", "tools.diagnostics.with_adapters", "tips.tools_diagnostics_adapters",
+        "tools.diagnostics.help_adapters", "adapters"),
+    Box("proxy", "tools.diagnostics.with_proxy", "tips.tools_diagnostics_proxy",
+        "tools.diagnostics.help_proxy", "proxy"),
 )
+
+# What a box says when this system cannot read its section. Greyed out and still
+# there, as a row menu greys out what the system lacks (capabilities.py): the
+# owner's decision for Linux is that a missing tool stays visible and says so.
+BOX_NOT_HERE = "tips.tools_diagnostics_not_here"
+
+# The "?" sheet, in this order: what every system shares, this system's own rows
+# (nettools/diagnostics.platform_help), the copied report, then one paragraph per
+# box this system offers - so a box that comes or goes takes its paragraph with it.
+HELP_FIRST, HELP_COPY = "tools.diagnostics.help_body", "tools.diagnostics.help_copy"
+
+
+def help_keys():
+    """The "?" sheet's paragraphs on this system, as i18n keys."""
+    return ((HELP_FIRST,) + tuple(diagnostics.platform_help()) + (HELP_COPY,)
+            + tuple(box.help for box in OPTIONAL_BOXES if capabilities.available(box.needs)))
 
 
 def check_name(name):
@@ -72,12 +99,11 @@ class DiagnosticsPanel:
         self.check_btn = self._button(bar, "tools.diagnostics.check_again",
                                       "tips.tools_diagnostics_check", self.check)
         self.clean_btn = self._button(bar, "tools.diagnostics.clean",
-                                      "tips.tools_diagnostics_clean", self.clean)
+                                      diagnostics.cleanup_tip(), self.clean)
         self.copy_btn = self._button(bar, "tools.diagnostics.copy_report",
                                      "tips.tools_diagnostics_copy", self.copy_report)
         dialogs.help_button(bar, self.app.root, "tools.diagnostics.help_title",
-                            "tools.diagnostics.help_body",
-                            "tips.tools_diagnostics_help").pack(side="right")
+                            help_keys(), "tips.tools_diagnostics_help").pack(side="right")
         # The report's optional sections, one box each: off until ticked, because the
         # report goes into a PUBLIC bug report and these carry this machine's
         # addresses, MAC and proxy (nettools/diagnostics.py, REPORT_SECTIONS). On a
@@ -86,13 +112,23 @@ class DiagnosticsPanel:
         # 2026-10-14).
         boxes = ttk.Frame(self.frame)
         boxes.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))
-        self.include = {}
-        for section_id, text_key, tip_key in OPTIONAL_BOXES:
-            ticked = tk.BooleanVar(value=self.memory.get(section_id) == "1")
-            box = ttk.Checkbutton(boxes, text=T(text_key), variable=ticked, command=self._ticked)
+        # Only the boxes this system can fill are in `include`, so a greyed-out one
+        # can neither be ticked nor put a "not read on this system" into the report.
+        # Its variable is kept all the same (`boxes`): a ttk box whose variable is
+        # collected draws the half-ticked "alternate" mark (measured, real Tk 8.6).
+        self.include, self.boxes = {}, {}
+        for spec in OPTIONAL_BOXES:
+            offered = capabilities.available(spec.needs)
+            ticked = tk.BooleanVar(value=offered and self.memory.get(spec.section) == "1")
+            box = ttk.Checkbutton(boxes, text=T(spec.text), variable=ticked, command=self._ticked)
             box.pack(side="left", padx=(0, space("inline")))
-            add_tooltip(box, tip_key)
-            self.include[section_id] = ticked
+            if offered:
+                add_tooltip(box, spec.tip)
+                self.include[spec.section] = ticked
+            else:
+                box.state(["disabled"])
+                add_tooltip(box, BOX_NOT_HERE)
+            self.boxes[spec.section] = (box, ticked)
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))

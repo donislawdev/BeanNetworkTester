@@ -496,7 +496,9 @@ def test_every_question_mark_opens_its_own_sheet():
             opened = []
             dialogs.show_help = lambda parent, t, b: opened.append((t, b))
             button.kw["command"]()
-            assert opened == [(T(title), T(body))], (title, opened)
+            # one key, or a sheet of several paragraphs (Diagnostics: they follow the system)
+            text = T(body) if isinstance(body, str) else "\\n\\n".join(T(k) for k in body)
+            assert opened == [(T(title), text)], (title, opened)
             assert button._bnt_tooltip.text == tooltip_text(tip), (tip, button._bnt_tooltip.text)
             placed.append(button)
 
@@ -512,10 +514,14 @@ def test_every_question_mark_opens_its_own_sheet():
         expect(search, "dialogs.conn_search_help_title", "dialogs.conn_search_help",
                "tips.conn_search_help")
         tools = app.pages["tools"]
+        from beantester.gui.toolbox import diagnostics as diagnostics_panel
         for tool in TOOLS:               # every panel carries one "?" (the skeleton)
             [button] = helps_in(tools.panels[tool.id].frame)
-            expect(button, f"tools.{tool.id}.help_title", f"tools.{tool.id}.help_body",
-                   f"tips.tools_{tool.id}_help")
+            body = f"tools.{tool.id}.help_body"
+            if tool.id == "diagnostics":     # its sheet still opens with that key
+                assert diagnostics_panel.help_keys()[0] == body
+                body = diagnostics_panel.help_keys()
+            expect(button, f"tools.{tool.id}.help_title", body, f"tips.tools_{tool.id}_help")
         unplaced = [b for b in helps_in(root) if b not in placed]
         assert not unplaced, f"{len(unplaced)} '?' button(s) this test cannot place"
     """)

@@ -483,6 +483,68 @@ def test_diagnostics_checks_when_first_looked_at_and_not_at_start_up():
     """))
 
 
+def test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read():
+    """On Linux the panel spoke of Windows: the greyed-out cleanup button's tip said
+    "Unloads a WinDivert driver" over the note saying there is nothing to clean up,
+    the "?" sheet explained administrator rights and WinDivert's states, and the two
+    report boxes promised adapters and a WinHTTP proxy that the report then gave as
+    "not read on this system". Built once per platform, the way the Tools page
+    builds it: the platform is only stood in for while the panel is made."""
+    run_gui(DIAG + textwrap.dedent("""
+        from beantester import capabilities, capture_backend, driver
+        from beantester.gui.toolbox.diagnostics import BOX_NOT_HERE, OPTIONAL_BOXES, DiagnosticsPanel
+        from beantester.gui.tooltip import tooltip_text
+
+        # the real answer off Windows (DIAG stands in a Windows administrator's "")
+        dg.cleanup_blocker = lambda: capture_backend.current().CLEANUP_BLOCKER
+        real_is_windows = driver.is_windows
+
+        def build(windows, backend, readable):
+            driver.is_windows = lambda: windows
+            capture_backend._CURRENT = backend
+            for spec in OPTIONAL_BOXES:
+                capabilities.CAPABILITIES[spec.needs].module.supported = lambda r=readable: r
+            try:
+                return DiagnosticsPanel(app, app.root)
+            finally:
+                driver.is_windows = real_is_windows
+
+        def sheet(panel):
+            opened = []
+            dialogs.show_help = lambda parent, title, body: opened.append(body)
+            [button] = [w for w in fake_tk.walk(panel.frame) if w.kw.get("style") == "Help.TButton"]
+            button.kw["command"]()
+            return opened[0]
+
+        linux = build(False, capture_backend._EBPFDIVERT, False)
+        assert linux.clean_btn._bnt_tooltip.text == tooltip_text("tools.diagnostics.clean_linux")
+        assert "disabled" in linux.clean_btn.state()
+        for section, (box, ticked) in linux.boxes.items():
+            assert "disabled" in box.state(), section
+            assert box._bnt_tooltip.text == tooltip_text(BOX_NOT_HERE), section
+            assert not ticked.get(), section
+        assert linux.include == {}, "a box it cannot fill never reaches the report"
+        text = sheet(linux)
+        assert T("tools.diagnostics.help_linux") in text, text
+        assert T("tools.diagnostics.clean_linux") in text, text
+        assert "Windows" not in text and "WinDivert" not in text, text
+        assert T("tools.diagnostics.help_adapters") not in text, "no paragraph for a greyed-out box"
+
+        # Windows: what it always was, the sheet in its old order
+        windows = build(True, capture_backend._WINDIVERT, True)
+        assert windows.clean_btn._bnt_tooltip.text == tooltip_text("tips.tools_diagnostics_clean")
+        for spec in OPTIONAL_BOXES:
+            box, ticked = windows.boxes[spec.section]
+            assert "disabled" not in box.state(), spec.section
+            assert box._bnt_tooltip.text == tooltip_text(spec.tip), spec.section
+            assert windows.include[spec.section] is ticked
+        assert sheet(windows) == "\\n\\n".join(T(key) for key in (
+            "tools.diagnostics.help_body", "tools.diagnostics.help_windows",
+            "tools.diagnostics.help_copy", "tools.diagnostics.help_adapters",
+            "tools.diagnostics.help_proxy"))
+    """))
+
+
 def test_a_first_check_that_fails_says_so_and_is_not_retried_by_itself():
     """A failure waits for "Check again". Asked again on every tick, a service
     manager that refuses would be asked for as long as the tab stays open."""
@@ -1731,8 +1793,15 @@ def test_a_proxy_that_cannot_be_read_says_so_and_the_adapters_stay():
 
 
 def test_the_environment_report_adds_the_adapters_only_when_ticked():
-    """Off until ticked, and kept across a rebuild like every tool's input."""
+    """Off until ticked, and kept across a rebuild like every tool's input. The boxes
+    are offered whatever the system (a Linux runner has no Adapters tool): the tick
+    is the question here, the greyed-out box is
+    ``test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read``'s."""
     run_gui(DIAG + textwrap.dedent("""
+        from beantester import capabilities
+        from beantester.gui.toolbox.diagnostics import OPTIONAL_BOXES
+        for spec in OPTIONAL_BOXES:
+            capabilities.CAPABILITIES[spec.needs].module.supported = lambda: True
         blank = chr(10) * 2
         panel = open_diag()
         settle(panel)
