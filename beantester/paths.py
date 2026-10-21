@@ -94,10 +94,90 @@ def ensure_data_dir():
     become a silent success) and the CSV export is a plain ``open``.
     """
     try:
-        os.makedirs(user_data_dir(), exist_ok=True)
+        make_dirs(user_data_dir())
     except OSError as e:
         return str(e)
     return None
+
+
+# -- a run under sudo ---------------------------------------------------------------- #
+# Capturing on Linux needs root, and the README starts the program with ``sudo``. Every
+# file it then writes is root's - and its own: MEASURED 2026-10-20 on Ubuntu 26.04, a
+# window run with sudo left ``bean_network_tester_ui.json`` as root, mode 0600, in the
+# person's own folder; their next start without sudo could not read it and set it
+# aside as corrupt, and a profile saved there would have gone the same way. Saving
+# over a file of theirs as root takes it from them too: ``os.replace`` puts root's temp
+# file in its place. So each place that makes a file or a directory hands it back
+# (``tests/test_sudo_files.py`` holds every such place to that).
+
+
+def running_as_root():
+    """True when this process runs as root, however it got there - ``sudo``, ``su``,
+    ``doas`` or a root login. Never on Windows, which has no such user."""
+    if sys.platform == "win32":
+        return False
+    return os.geteuid() == 0
+
+
+def invoking_user():
+    """``(uid, gid)`` of the person who typed ``sudo`` for this root process, else ``None``.
+
+    What sudo sets for the command it runs: sudo 1.9 (Ubuntu 24.04) and sudo-rs
+    (26.04) both set ``SUDO_UID`` and ``SUDO_GID`` (measured). ``None`` when this
+    process is not root, when nothing says who started it, and on Windows.
+    """
+    if not running_as_root():
+        return None
+    try:
+        return int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+    except (KeyError, ValueError):
+        return None
+
+
+def hand_back(path):
+    """Give a file or directory this run made back to whoever ran it with sudo.
+
+    Only inside a directory that belongs to that person: a file in root's own place
+    stays root's. True when it changed hands. Never raises - a change of owner that
+    fails leaves the file as it was, which is what happened before this existed.
+
+    The entry itself changes owner, never what a link there points at: that person
+    owns the directory, so they can swap the file for a link between the write and
+    this call, and a chown that followed it would hand them any file root can reach.
+    """
+    if sys.platform == "win32":
+        return False
+    who = invoking_user()
+    if who is None:
+        return False
+    uid, gid = who
+    try:
+        if os.stat(os.path.dirname(os.path.abspath(path))).st_uid != uid:
+            return False
+        os.chown(path, uid, gid, follow_symlinks=False)
+    except OSError:
+        return False
+    return True
+
+
+def make_dirs(path):
+    """``os.makedirs(path, exist_ok=True)``, and each level it created handed back.
+
+    Only the levels this call created: a directory that was already there keeps
+    its owner, whoever that is. Top down, so each level's parent is already the
+    person's when its turn comes. Raises what ``os.makedirs`` raises.
+    """
+    created = []
+    probe = os.path.abspath(path)
+    while not os.path.isdir(probe):
+        created.append(probe)
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    os.makedirs(path, exist_ok=True)
+    for level in reversed(created):
+        hand_back(level)
 
 
 def directory_is_writable(path):
@@ -158,12 +238,17 @@ def temp_beside(path):
     and everywhere else these files sit in the user's own data directory, so the
     change is a tightening in a private place. Copying the old file's mode across
     would buy nothing and add a failure path to a function that must not have one.
+
+    Under sudo the temp file is handed back to whoever ran it (``hand_back``) before
+    anything is written, so the file ``os.replace`` publishes is theirs: this is the
+    one place every atomic write goes through, so it is the one place that has to.
     """
     directory, name = os.path.split(path)
     # No makedirs: a missing directory is the CALLER's error to report, and
     # mkstemp raising OSError here is how it finds out (see jsonfile.write_json).
     fd, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
     os.close(fd)
+    hand_back(tmp)
     return tmp
 
 
@@ -194,7 +279,7 @@ def migrate_user_files(source=None, target=None):
 
     problems = []
     try:
-        os.makedirs(target, exist_ok=True)
+        make_dirs(target)
     except OSError as e:
         return [str(e)]
 

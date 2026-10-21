@@ -26,7 +26,7 @@ import tkinter as tk
 import weakref
 from tkinter import ttk
 
-from ... import crashlog
+from ... import capabilities, crashlog
 from ...i18n import T
 from ...nettools import Refused, ping
 from .. import dialogs
@@ -288,6 +288,8 @@ def window_run(app):
 
 def offered(remote_ip):
     """Whether a row menu offers "Ping this address" for a row's remote address."""
+    if not capabilities.available("ping"):
+        return False
     try:
         return bool(remote_ip) and bool(ping.parse(str(remote_ip)).address)
     except Refused:

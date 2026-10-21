@@ -943,10 +943,12 @@ MUTATIONS = [
         "label": "ratchet: the crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
         # Re-anchored 2026-10-14 (1 -> 2, engine.py joined the band when the
-        # page buttons left app.py - the owner's decision). Same proof: a count
-        # frozen looser than the measurement is caught by the equality half.
-        "old": "FILES_NEAR_CEILING = 2          # beantester/gui/app.py",
-        "new": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        # page buttons left app.py) and 2026-10-20 (2 -> 3, cli.py joined it when
+        # the window's rights questions left app.py) - the owner's decisions. Same
+        # proof: a count frozen looser than the measurement is caught by the
+        # equality half.
+        "old": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
+        "new": "FILES_NEAR_CEILING = 4          # beantester/gui/app.py",
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
     {
@@ -1901,7 +1903,7 @@ MUTATIONS = [
     {
         "label": "driver: a start failure goes back to blaming the user's rights",
         "file": "beantester/gui/dialogs.py",
-        "old": "    key = open_failure_hint(err, elevated)",
+        "old": "    key = current().open_failure_hint(err, elevated)",
         "new": "    key = \"dialogs.run_as_admin\"",
         "test": "test_the_start_failure_advice_fits_the_failure_not_every_failure",
     },
@@ -3211,6 +3213,67 @@ MUTATIONS = [
         "new": "        if False:\n            tool_id = TOOLS[0].id",
         "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
     },
+    # -- what this system offers (capabilities, Linux stage 2, 2026-10-20) --------- #
+    {
+        # MEASURED on Linux before the gate: every ping "failed" with code -1, and the
+        # Adapters tab was two blank tables.
+        "label": "toolbox: a tool this system lacks gets its panel built anyway",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            if reason is not None:\n",
+        "new": "            if False:\n",
+        "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
+    },
+    {
+        "label": "capabilities: every system is said to have every API",
+        "file": "beantester/capabilities.py",
+        "old": "    return bool(CAPABILITIES[name].module.supported())\n",
+        "new": "    return True\n",
+        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+    },
+    {
+        # A tool that needs nothing would be hidden on every system, without a word.
+        "label": "capabilities: a tool that needs nothing is said to need something",
+        "file": "beantester/capabilities.py",
+        "old": "    if not name:\n        return True\n",
+        "new": "    if not name:\n        return False\n",
+        "test": "test_a_tool_that_needs_nothing_is_always_available_and_a_typo_is_loud",
+    },
+    {
+        "label": "capabilities: Ping forgets what it needs",
+        "file": "beantester/gui/toolbox/__init__.py",
+        "old": "PingPanel, sends=True, needs=\"ping\"),\n",
+        "new": "PingPanel, sends=True),\n",
+        "test": "test_every_tool_needs_a_real_capability_and_the_one_its_logic_imports",
+    },
+    {
+        "label": "capabilities: a reset is said to exist off Windows",
+        "file": "beantester/tcpreset.py",
+        "old": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n"
+               "    return sys.platform.startswith(\"win\")\n",
+        "new": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n    return True\n",
+        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+    },
+    {
+        "label": "capabilities: the row menus offer Ping on a system without it",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    if not capabilities.available(\"ping\"):\n        return False\n",
+        "new": "    if False:\n        return False\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "capabilities: the row menus offer TCP health on a system without it",
+        "file": "beantester/gui/toolbox/tcphealth.py",
+        "old": "    return capabilities.available(\"tcp_health\") and tcphealth.watchable(",
+        "new": "    return tcphealth.watchable(",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "capabilities: the Connections page offers a reset on a system without one",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return capabilities.available(\"tcp_reset\") and tcpreset.resettable(\n",
+        "new": "    return tcpreset.resettable(\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
     {
         # App._tick refreshes the page in one try with the summary bar and the
         # secondary windows: an unguarded panel would stop them every 700 ms.
@@ -3298,8 +3361,8 @@ MUTATIONS = [
         # a tool that sends is not marked as sending, so the promise would not name it.
         "label": "toolbox promise: Ping is not marked as sending",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True),\n",
-        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel),\n",
+        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True, needs=\"ping\"),\n",
+        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, needs=\"ping\"),\n",
         "test": "test_the_promise_names_exactly_the_tools_that_send",
     },
     {
@@ -4710,6 +4773,101 @@ MUTATIONS = [
         "new": '_SHIPPED_SCENARIO_FOLDERS = (("scenarios",),)',
         "test": "test_the_command_path_and_its_reading_are_one_round_trip",
     },
+    # -- a run under sudo hands its files back (Linux stage 2a, 2026-10-20) ---------- #
+    {
+        # MEASURED before: ui.json root-owned 0600 in the person's folder, set aside
+        # as corrupt by their next start.
+        "label": "sudo files: an atomic write publishes root's temp file",
+        "file": "beantester/paths.py",
+        "old": "    os.close(fd)\n    hand_back(tmp)\n    return tmp\n",
+        "new": "    os.close(fd)\n    return tmp\n",
+        "test": "test_every_atomic_write_publishes_a_file_that_is_theirs",
+    },
+    {
+        "label": "sudo files: a file in root's own place is given away",
+        "file": "beantester/paths.py",
+        "old": "        if os.stat(os.path.dirname(os.path.abspath(path))).st_uid != uid:\n"
+               "            return False\n",
+        "new": "",
+        "test": "test_a_file_is_handed_back_only_inside_the_persons_own_directory",
+    },
+    {
+        "label": "sudo files: any process hands its files to SUDO_UID",
+        "file": "beantester/paths.py",
+        "old": "    if not running_as_root():\n        return None\n",
+        "new": "",
+        "test": "test_who_ran_it_is_read_from_sudo_and_only_by_root",
+    },
+    {
+        "label": "sudo files: Windows counts as root",
+        "file": "beantester/paths.py",
+        "old": "    if sys.platform == \"win32\":\n        return False\n    return os.geteuid() == 0\n",
+        "new": "    return os.geteuid() == 0\n",
+        "test": "test_who_ran_it_is_read_from_sudo_and_only_by_root",
+    },
+    {
+        # The person owns the directory, so they can swap the file for a link before
+        # the chown: following it hands them whatever root can reach (review of #281).
+        "label": "sudo files: hand_back follows a link",
+        "file": "beantester/paths.py",
+        "old": "        os.chown(path, uid, gid, follow_symlinks=False)\n",
+        "new": "        os.chown(path, uid, gid)\n",
+        "test": "test_a_file_is_handed_back_only_inside_the_persons_own_directory",
+    },
+    {
+        "label": "sudo files: new directories are handed back bottom up",
+        "file": "beantester/paths.py",
+        "old": "    for level in reversed(created):\n",
+        "new": "    for level in created:\n",
+        "test": "test_make_dirs_hands_back_only_the_levels_it_created_top_down",
+    },
+    {
+        "label": "sudo files: the stats CSV stays root's",
+        "file": "beantester/gui/csv_export.py",
+        "old": "        hand_back(CSV_FILE)             # a window run with sudo: the file stays theirs\n",
+        "new": "",
+        "test": "test_every_place_that_makes_a_file_hands_it_back",
+    },
+    {
+        # MEASURED before: webbrowser answered True through a background xdg-open,
+        # nothing opened, and the log said "opened".
+        "label": "sudo files: the page buttons start a browser as root",
+        "file": "beantester/gui/links.py",
+        "old": "    if running_as_root():\n",
+        "new": "    if False:\n",
+        "test": "test_the_page_buttons_start_no_browser_as_root",
+    },
+    {
+        # Root without SUDO_UID - su, doas, a root login - is root all the same.
+        "label": "sudo files: the page buttons start a browser for root without sudo",
+        "file": "beantester/gui/links.py",
+        "old": "    if running_as_root():\n",
+        "new": "    if __import__(\"os\").environ.get(\"SUDO_UID\"):\n",
+        "test": "test_the_page_buttons_start_no_browser_as_root",
+    },
+    # -- a greyed-out row-menu entry does nothing (review of #281) ------------------- #
+    {
+        # MEASURED before on Linux: the reset reached None.SetTcpEntry, a fault.
+        "label": "conns: a greyed-out Reset still starts a reset",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if not row or not can_reset(row):\n",
+        "new": "        if not row:\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "conns: a greyed-out Show TCP health still opens the tool",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        if row and tcphealth.offered(row.get(\"proto\"), row.get(\"remote_ip\")):\n",
+        "new": "        if row:\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
+    {
+        "label": "conns: the Reset entry is never greyed out",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "            set_menu_entry_available(self.menu, self.RESET_INDEX, can_reset(selected))\n",
+        "new": "            set_menu_entry_available(self.menu, self.RESET_INDEX, True)\n",
+        "test": "test_a_row_menu_greys_out_what_this_system_lacks",
+    },
     {
         # The dialog's absolute path carries the Windows account name into every
         # shared report (owner decision 2026-09-29).
@@ -5987,7 +6145,16 @@ MUTATIONS = [
         "file": "beantester/capture_backend.py",
         "old": "            new_enough = (major, minor) >= (5, 10)\n",
         "new": "            new_enough = True\n",
-        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_never_fail",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
+    },
+    {
+        # MEASURED before: the Diagnostics tab said "Nothing here stops a session from
+        # starting" under "a capture needs sudo" (owner, 2026-10-20: fail as Windows).
+        "label": "capture_backend: doctor calls a process without rights only a warning",
+        "file": "beantester/capture_backend.py",
+        "old": "    return (\"privileges\", \"fail\", \"not root, and without CAP_BPF,",
+        "new": "    return (\"privileges\", \"warn\", \"not root, and without CAP_BPF,",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
     },
     {
         "label": "capture_backend: Linux gets the WinDivert backend",
@@ -5995,6 +6162,110 @@ MUTATIONS = [
         "old": "    return _EBPFDIVERT if platform.startswith(\"linux\") else _WINDIVERT\n",
         "new": "    return _WINDIVERT\n",
         "test": "test_linux_gets_the_ebpfdivert_backend",
+    },
+    {
+        # MEASURED 2026-10-20: unregister() after a SIGKILL changed nothing (2.6 s
+        # either way), so Linux has no cleanup to offer - and must not say "Windows only".
+        "label": "cleanup: Linux says the cleanup works on Windows only",
+        "file": "beantester/capture_backend.py",
+        "old": "    CLEANUP_BLOCKER = \"tools.diagnostics.clean_linux\"\n",
+        "new": "    CLEANUP_BLOCKER = \"tools.diagnostics.clean_windows_only\"\n",
+        "test": "test_why_the_driver_cannot_be_cleaned_up_from_here",
+    },
+    # -- what an overloaded driver did, in the statistics (Linux stage 2a) ----------- #
+    {
+        # MEASURED on Linux: told to drop everything, a session said 100% while a
+        # third of the traffic went around the tool.
+        "label": "overload: the driver's counters never reach the statistics",
+        "file": "beantester/engine.py",
+        "old": "        if capture_backend.current().counts_overload:\n",
+        "new": "        if False:\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
+    {
+        # Windows' snapshot is its CSV header and its JSON counters: two new keys
+        # there would rotate every stats CSV and change a frozen schema.
+        "label": "overload: every platform's snapshot grows the driver's counters",
+        "file": "beantester/engine.py",
+        "old": "        if capture_backend.current().counts_overload:\n",
+        "new": "        if True:\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
+    {
+        "label": "overload: the Statistics grid leaves the driver's counters out",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "    return CELLS + (OVERLOAD_CELLS if capture_backend.current().counts_overload else ())\n",
+        "new": "    return CELLS\n",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
+        "label": "overload: the banner stays quiet while packets go around the tool",
+        "file": "beantester/gui/app.py",
+        "old": "                       (\"kernel_bypassed\", \"warn.ebpf_bypassed\"),\n",
+        "new": "",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
+        "label": "overload: the repro report leaves the driver's counters out",
+        "file": "beantester/repro.py",
+        "old": "        if key in stats:\n            metrics[key] = stats[key]\n",
+        "new": "        if False:\n            metrics[key] = stats[key]\n",
+        "test": "test_the_drivers_counters_reach_the_statistics_only_where_it_counts",
+    },
+    # -- the window asks the backend about rights (Linux stage 2a, 2026-10-20) ------- #
+    {
+        # MEASURED before: a Linux window logged "capture works only on Windows"
+        # over a session that was running.
+        "label": "gui rights: the startup note goes back to assuming Windows",
+        "file": "beantester/gui/app.py",
+        "old": "        note = capture_backend.current().startup_note(self._is_admin)\n",
+        "new": "        note = \"log.note_windows\"\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "gui rights: the red line keeps the Windows words everywhere",
+        "file": "beantester/gui/app.py",
+        "old": "                root, text=T(capture_backend.current().rights_banner()), style=\"Bad.TLabel\",\n",
+        "new": "                root, text=T(\"warn.not_admin\"), style=\"Bad.TLabel\",\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "gui rights: the window assumes it may capture",
+        "file": "beantester/gui/app.py",
+        "old": "            return capture_backend.current().has_capture_rights()\n",
+        "new": "            return True\n",
+        "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
+    },
+    {
+        "label": "capture_backend: Linux says any process may capture",
+        "file": "beantester/capture_backend.py",
+        "old": "        return _rights(_euid(), \"/\", None) is not None\n",
+        "new": "        return True\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: two of the three capabilities are enough",
+        "file": "beantester/capture_backend.py",
+        "old": "    if caps & needed == needed:\n",
+        "new": "    if caps & needed:\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: an unelevated Windows window is not told to elevate",
+        "file": "beantester/capture_backend.py",
+        "old": "        return None if has_rights else \"log.note_admin\"\n",
+        "new": "        return None\n",
+        "test": "test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did",
+    },
+    {
+        # The window decides what an unreadable token means; swallowed here, it would
+        # turn into "not elevated" - a banner on a window that may well be elevated.
+        "label": "capture_backend: an unreadable Windows token reads as not elevated",
+        "file": "beantester/capture_backend.py",
+        "old": "        import ctypes\n        return bool(ctypes.windll.shell32.IsUserAnAdmin())\n",
+        "new": "        import ctypes\n        try:\n            return bool(ctypes.windll.shell32.IsUserAnAdmin())\n"
+               "        except Exception:\n            return False\n",
+        "test": "test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did",
     },
     {
         "label": "cli: an EPERM open on Linux stays a RUNTIME failure",
@@ -7551,6 +7822,15 @@ MUTATIONS = [
         "test": "test_the_live_counters_are_not_rewritten_when_nothing_moved",
     },
     {
+        # The refresh kept a list of its own and left the driver's two cells at "0"
+        # beside a banner saying packets went around the tool (review of #281).
+        "label": "stats: the driver's overload cells are never refreshed",
+        "file": "beantester/gui/pages/stats.py",
+        "old": "        self._counter_keys = tuple(key for key, *_rest in self.cells\n",
+        "new": "        self._counter_keys = tuple(key for key, *_rest in CELLS\n",
+        "test": "test_a_linux_window_shows_what_the_driver_let_past_or_dropped",
+    },
+    {
         "label": "stats (R-4, W-C2): the chart is redrawn from the same data",
         "file": "beantester/gui/pages/stats.py",
         "old": ("            if source == self._chart_drawn:\n"
@@ -7604,8 +7884,8 @@ MUTATIONS = [
     {
         "label": "app (R-4, W-C6): the engine banner takes a stats snapshot of its own",
         "file": "beantester/gui/app.py",
-        "old": "        snap = self.last_snapshot or {}\n        # Overflow first",
-        "new": "        snap = self.engine.stats_snapshot()\n        # Overflow first",
+        "old": "        snap = self.last_snapshot or {}\n        text = next((T(key)",
+        "new": "        snap = self.engine.stats_snapshot()\n        text = next((T(key)",
         "test": "test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it",
     },
     {
@@ -8164,8 +8444,8 @@ MUTATIONS = [
         # A run waiting behind another is REPLACED (ToolJob): the request in it is lost.
         "label": "tcp health: a run is started while one is out",
         "file": "beantester/gui/toolbox/tcphealth.py",
-        "old": "        if not self.supported or self.job.busy() or not self.list.busy():\n",
-        "new": "        if not self.supported or not self.list.busy():\n",
+        "old": "        if self.job.busy() or not self.list.busy():\n",
+        "new": "        if not self.list.busy():\n",
         "test": "test_connections_asked_in_quick_succession_all_reach_the_list",
     },
     {
@@ -8330,8 +8610,8 @@ MUTATIONS = [
     {
         "label": "conns: the row menu offers a reset for a row Windows cannot reset",
         "file": "beantester/gui/pages/conns.py",
-        "old": "            set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(\n",
-        "new": "            set_menu_entry_available(self.menu, self.RESET_INDEX, True or tcpreset.resettable(\n",
+        "old": "        row.get(\"proto\"), row.get(\"remote_ip\"))\n",
+        "new": "        row.get(\"proto\"), row.get(\"remote_ip\")) or True\n",
         "test": "test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4",
     },
     {

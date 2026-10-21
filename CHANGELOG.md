@@ -8,12 +8,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Added
 
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
-  or newer built with BTF, it captures through pydivert's eBPFDivert. It needs root or
-  CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW, otherwise it stops with exit code 7. `--doctor`
-  shows what the machine lacks. When the tool cannot keep up, it says how many packets went
-  around it unimpaired and how many the driver dropped. `--target` reads the socket table,
-  so a new connection's first exchange can pass before it applies. The window and the Tools
-  tab are not on Linux yet.
+  or newer with BTF, it captures through pydivert's eBPFDivert. It needs root or CAP_BPF,
+  CAP_NET_ADMIN and CAP_NET_RAW, or it stops with exit code 7. `--doctor` shows what is
+  missing and ends with exit code 1. Under overload, the log, the JSON counters and the
+  repro report count the packets that went around the tool and those the driver dropped.
+  `--target` reads the socket table, so a new connection's first exchange can pass first.
+  `--cleanup-driver` has nothing to do: the kernel cleans up.
+
+- **Linux, experimental: the window.** Start it with sudo, or a red line says it cannot
+  capture, and a refused START says what to do. The Statistics page and its CSV count
+  packets that went around the tool and those the driver dropped, with a red line while
+  either grows. Its files stay yours, and GitHub and Donate print the address instead of
+  starting a browser as root. On the Tools tab, Ping, TCP health and Adapters say they are
+  Windows-only for now, and the row menus grey out Reset this connection, Show TCP health
+  and Ping this address.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

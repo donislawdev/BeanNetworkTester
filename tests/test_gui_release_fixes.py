@@ -684,6 +684,47 @@ def test_the_queue_overflow_banner_is_actually_in_the_layout():
     """)
 
 
+def test_a_linux_window_shows_what_the_driver_let_past_or_dropped():
+    """eBPFDivert counts what an overloaded session did (``capture_backend``): packets
+    let PAST the tool unimpaired, and packets the driver dropped. MEASURED on Linux: a
+    session told to drop everything said 100% while a third of the traffic arrived. On
+    the Linux backend the Statistics grid has both counters, each cell shows its count
+    as the tick refreshes the grid, and the banner says each; the Windows grid has
+    neither (``test_the_counters_tab_copies...`` counts it). The cells once sat at "0"
+    beside a banner saying packets went around the tool: the refresh kept its own list."""
+    run_gui("""
+        from beantester import capture_backend
+        from beantester.gui.pages import stats
+        capture_backend._CURRENT = capture_backend._EBPFDIVERT
+        app._build_ui()
+        page = app.pages["statistics"]
+        keys = [key for key, *_rest in page.cells]
+        assert keys[-2:] == list(capture_backend.OVERLOAD_STATS), keys
+        assert len(page.cells) == len(stats.CELLS) + 2
+        for key in capture_backend.OVERLOAD_STATS:
+            assert key in page.stat_labels, key
+
+        for counter, banner in (("kernel_bypassed", "warn.ebpf_bypassed"),
+                                ("driver_dropped", "warn.ebpf_driver_dropped")):
+            setattr(app.engine._driver_wait, "bypassed" if counter == "kernel_bypassed"
+                    else "dropped", 9)
+            app._sample()
+            app._drain_engine_warning()
+            assert app.engine_warning.kw.get("text") == bnt.T(banner), (counter, app.engine_warning.kw)
+            assert app.engine_warning in app.root.pack_slaves()
+            page.refresh_counters()
+            assert page.stat_labels[counter].cget("text") == "9", (
+                counter, page.stat_labels[counter].cget("text"))
+            assert bnt.T("stats." + counter) + ": 9" in page.live_text(), page.live_text()
+            app.engine._driver_wait.bypassed = app.engine._driver_wait.dropped = 0
+            app._sample()
+            app._drain_engine_warning()
+            assert app.engine_warning.kw.get("text") == "", counter
+            page.refresh_counters()
+            assert page.stat_labels[counter].cget("text") == "0", counter
+    """)
+
+
 def test_the_banner_also_fires_when_the_tool_cannot_re_inject():
     """A failed injection loses the user's packets exactly as an overflow does,
     so it has to be as loud. Overflow keeps precedence: it is the one the user

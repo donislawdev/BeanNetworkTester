@@ -16,7 +16,6 @@ Notable behaviour (all deliberate, see PROJECT_NOTES):
 """
 import os
 import queue
-import sys
 import threading
 import time
 from collections import deque
@@ -32,7 +31,7 @@ from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
 from ..fields import FIELD_DEFS, SECTIONS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
-from .. import crashlog, driver, winenv
+from .. import capture_backend, crashlog, driver, winenv
 from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
                     field_name, set_language)
@@ -424,7 +423,7 @@ class App:
         # wraplength refined on the first resize.
         if not self._is_admin:
             self.admin_warning = ttk.Label(
-                root, text=T("warn.not_admin"), style="Bad.TLabel",
+                root, text=T(capture_backend.current().rights_banner()), style="Bad.TLabel",
                 justify="left", anchor="w", wraplength=scaled(600))
             self.admin_warning.pack(side="top", fill="x", padx=pad,
                                     pady=(0, scaled(4)))
@@ -1223,16 +1222,8 @@ class App:
         lock AND ``_cv``, the injector's heap lock, so every tick queued twice
         behind the packet path for the same numbers (performance review W-C6).
         """
-        text = ""
         snap = self.last_snapshot or {}
-        # Overflow first: it is the one the user can act on by lowering the
-        # latency or the rate. A failed injection means the tool cannot reach
-        # the wire at all, which is worth saying whenever it is the only thing
-        # wrong - both mean "the packets you are missing are on us".
-        if snap.get("drop_overflow", 0) > 0:
-            text = T("warn.queue_overflow")
-        elif snap.get("drop_send", 0) > 0:
-            text = T("warn.send_failed")
+        text = next((T(key) for name, key in self.ENGINE_WARNINGS if snap.get(name, 0) > 0), "")
         if text == self._shown_engine_warning:
             return                      # unchanged: no widget work at all
         self._shown_engine_warning = text
@@ -1360,7 +1351,7 @@ class App:
         """Apply the result of an async start. Main thread only (from _tick)."""
         if err is not None:
             # Which dialog, and what advice, is the dialogs' call (shared with the
-            # CLI through driver.open_failure_hint). `_is_admin` is the same flag
+            # CLI through the backend's open_failure_hint). `_is_admin` is the same flag
             # that drives the banner above - the one thing this object knows that
             # the message needs.
             dialogs.show_start_failure(self.root, err, self._is_admin)
@@ -1651,25 +1642,22 @@ class App:
                 store.problem = None
 
     def _detect_admin(self):
-        """Do we hold the rights WinDivert needs? True when the question is moot.
+        """Do we hold the rights a capture needs here? The backend's answer.
 
-        Off Windows there is no driver to elevate for (that is logged separately),
-        so we do not nag; on Windows we ask the OS. Unknown -> don't cry wolf.
+        An elevated token on Windows, root or three capabilities on Linux
+        (``capture_backend``); True where the question is moot. Unknown -> don't
+        cry wolf.
         """
-        if not sys.platform.startswith("win"):
-            return True
         try:
-            import ctypes
-            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+            return capture_backend.current().has_capture_rights()
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
             return True
 
     def _check_environment(self):
-        if not sys.platform.startswith("win"):
-            self.log(T("log.note_windows"))
-        elif not self._is_admin:
-            self.log(T("log.note_admin"))
+        note = capture_backend.current().startup_note(self._is_admin)
+        if note:
+            self.log(T(note))
         # Installed, not IMPORTED: this runs before the window is shown, and the
         # import was ~97 ms of it (see driver.pydivert_available).
         self.log(T("log.ready") if driver.pydivert_available(load=False) else T("log.no_pydivert"))
@@ -1694,6 +1682,18 @@ class App:
     SCOPED_TWIN = {"seen": "scoped_seen",
                    "bytes_in": "bytes_in_scoped",
                    "bytes_out": "bytes_out_scoped"}
+
+    # The red line over a run whose numbers are wrong (``_drain_engine_warning``): the
+    # first counter above zero names it. Overflow first - the user can act on it by
+    # lowering the latency or the rate. Then what an overloaded Linux driver did
+    # (``capture_backend.OVERLOAD_STATS``, absent on Windows): packets let PAST the tool
+    # unimpaired - the session did less than it says - and packets it dropped. A failed
+    # injection last: the tool cannot reach the wire, worth saying whenever it is the
+    # only thing wrong. Each means "what you are missing, or not losing, is on us".
+    ENGINE_WARNINGS = (("drop_overflow", "warn.queue_overflow"),
+                       ("kernel_bypassed", "warn.ebpf_bypassed"),
+                       ("driver_dropped", "warn.ebpf_driver_dropped"),
+                       ("drop_send", "warn.send_failed"))
 
     def scoped_view(self):
         """Does the user want the VIEWS narrowed to the targeted traffic?

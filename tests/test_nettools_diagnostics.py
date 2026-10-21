@@ -232,6 +232,10 @@ def test_an_adapter_list_that_cannot_be_read_costs_its_own_section(monkeypatch):
 
 
 def test_why_the_driver_cannot_be_cleaned_up_from_here(monkeypatch):
+    from beantester import capture_backend
+    # WinDivert's answers - Windows, and a platform with no capture driver of its own
+    # (the backend is pinned: on the Linux runner it is eBPFDivert's, below).
+    monkeypatch.setattr(capture_backend, "_CURRENT", capture_backend._WINDIVERT)
     cases = {(False, False): "tools.diagnostics.clean_windows_only",
              (False, True): "tools.diagnostics.clean_windows_only",
              (True, False): "tools.diagnostics.clean_needs_admin",
@@ -241,6 +245,15 @@ def test_why_the_driver_cannot_be_cleaned_up_from_here(monkeypatch):
         monkeypatch.setattr(driver, "is_admin", lambda a=admin: a)
         got = diagnostics.cleanup_blocker()
         check(f"windows={windows} admin={admin}", got == expected, f"({got!r})")
+    # Linux: nothing to clean - the kernel does it (measured: unregister() after a
+    # SIGKILL changed nothing, 2.6 s either way).
+    monkeypatch.setattr(capture_backend, "_CURRENT", capture_backend._EBPFDIVERT)
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    check("Linux says why there is nothing to clean",
+          diagnostics.cleanup_blocker() == "tools.diagnostics.clean_linux")
+    check("and the command line says it in its own words",
+          driver.cleanup_driver() == [capture_backend.EBPFDivertBackend.CLEANUP_LINE]
+          and "kernel" in capture_backend.EBPFDivertBackend.CLEANUP_LINE)
 
 
 def test_the_window_cleans_up_with_its_own_marker_let_go_first(monkeypatch):

@@ -166,35 +166,49 @@ the socket table and the process names come straight from the OS, and targeting 
 for everything else, which is how the engine's tests run with no driver at all - and on
 Linux it is what `--target` reads.
 
-### Linux (experimental: the command line, from source)
+### Linux (experimental, from source)
 
-The command line also captures on Linux, through pydivert's eBPFDivert backend. It is experimental,
-and so is the pydivert Linux support it rests on.
+The command line and the window also capture on Linux, through pydivert's eBPFDivert backend. It
+is experimental, and so is the pydivert Linux support it rests on.
 
 - Linux 5.10 or newer built with BTF (`/sys/kernel/btf/vmlinux` exists), x86_64 or aarch64,
   glibc 2.28 or newer
 - root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW
-- run from a checkout, in a virtual environment:
+- run from a checkout, in a virtual environment (the window also needs Tk: `python3-tk` on
+  Ubuntu):
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --require-hashes -r requirements.txt
-sudo .venv/bin/python -m beantester --doctor
-sudo .venv/bin/python -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
+sudo .venv/bin/python -B -m beantester --doctor
+sudo .venv/bin/python -B -m beantester --dst-ip 203.0.113.10 --latency 100 --duration 30
+sudo .venv/bin/python -B bean_network_tester.py
 ```
 
-`--doctor` lists what the machine still lacks. Where Linux differs from Windows:
+The last line opens the window. `-B` keeps root from leaving Python's cache folders in your
+checkout, which you could then not delete without `sudo`. Plain `sudo` keeps the two settings
+the window needs to reach the desktop, `DISPLAY` and `XAUTHORITY`, on Ubuntu 24.04 and 26.04,
+also under Wayland. Ubuntu 26.04's `sudo` refuses `-E`, and nothing here needs it.
+
+`--doctor` lists what the machine still lacks, and while something stops a capture it ends with
+exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
 
 - Without root or those capabilities a session stops with exit code 7 and says to use `sudo`.
   If the kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit
   code 1 and says so.
 - `--target` reads the socket table, so the first exchange of a new connection can pass before the
   target applies.
-- When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log says how
-  many, and how many the driver dropped.
-- If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows again.
+- When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log, the
+  Statistics page, the JSON counters and the repro report say how many, and how many the driver
+  dropped.
+- If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows
+  again. There is nothing for `--cleanup-driver` to do: the kernel cleans up by itself.
 - IP fragments always pass through the tool, even those its filter does not match.
-- The window and the Tools tab are Windows only for now.
+- In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo`, and
+  GitHub and Donate print their address instead of starting a browser as root.
+- On the Tools tab, Sockets, Port check, Filter tester and Diagnostics work. Ping, TCP health and
+  Adapters say that they work on Windows only for now, and so do the row menu entries that open
+  them or reset a connection.
 
 ## The window
 
@@ -1227,6 +1241,8 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `delivered_in_scope_bytes_down` / `delivered_in_scope_bytes_up` | delivered bytes, targeted traffic only |
 | `queue_len` / `queue_peak` | packets waiting in the delay queue, now and at peak |
 | `driver_wait_peak_ms` | the longest the driver made a packet wait before the tool saw it, counted once the tool is reading (packets caught while START was still getting ready are left out) |
+| `kernel_bypassed` | Linux only, after `driver_wait_peak_ms`: packets that went around the tool without being impaired, because the kernel's buffer in front of it was full. They are not in `packets_seen` |
+| `driver_dropped` | Linux only, the last column: packets the driver dropped before the tool saw them, because its queue was full. They are in neither `packets_seen` nor any `dropped_` column |
 
 The last three drop counters - `dropped_overflow`, `dropped_at_stop`, `dropped_send_failed` - are
 the **tool's own** losses rather than impairment you asked for, which is why they are counted apart.
@@ -1559,6 +1575,7 @@ beantester/              the implementation package
   connlog.py             the session's connection log: one row per flow, and its cap
   driverwait.py          how long packets waited in the driver's queue before the tool got them
   capture_backend.py     which packet-capture driver this platform uses - the one place that knows
+  capabilities.py        which system APIs the Tools tab's tools find here - the one place that asks
   matchers.py            filter expressions (list/range/!/>/</wildcard/re:) - shared
                          by the process, IP and port fields; a single source of truth
   settings.py            settings model, config file, apply_settings

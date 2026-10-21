@@ -19,6 +19,7 @@ import json
 import sys
 import time
 from . import crashlog
+from .paths import hand_back
 
 LOG_PREFIX = "[bean]"
 
@@ -72,6 +73,7 @@ class CliLog:
         if log_file:
             try:
                 self._file = open(log_file, "a", encoding="utf-8")
+                hand_back(log_file)                    # a run under sudo: still theirs
             except OSError as e:                       # never kill a run over a log file
                 _write(self._err, f"{LOG_PREFIX} cannot open log file "
                                   f"{log_file!r}: {e}")

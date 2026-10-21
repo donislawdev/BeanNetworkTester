@@ -569,8 +569,32 @@ jobs:
       - name: CLI - config validation without touching the driver
         run: python bean_network_tester.py --dry-run --loss 10 --dst-port "80,443,!8080"
 
+      # The environment report, and the verdict it ends on. Windows: the runner is
+      # elevated, so nothing stops a capture - exit 0. Linux: as the runner's user a
+      # capture cannot start, so the privileges row FAILS and the exit is 1, as on
+      # unelevated Windows (owner's decision, 2026-10-20); the same machine under
+      # sudo is ready - exit 0.
       - name: CLI - environment report
-        run: python bean_network_tester.py --doctor
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" != "Linux" ]; then
+            python bean_network_tester.py --doctor
+            exit 0
+          fi
+          set +e
+          python bean_network_tester.py --doctor > doctor.txt
+          code=$?
+          set -e
+          cat doctor.txt
+          if [ "$code" -ne 1 ]; then
+            echo "expected exit 1 from --doctor without root, got $code"
+            exit 1
+          fi
+          if ! grep -Eq '^FAIL +privileges ' doctor.txt; then
+            echo "the privileges row did not fail without root"
+            exit 1
+          fi
+          sudo "$(command -v python)" bean_network_tester.py --doctor
 
       - name: CLI - licence and third-party notices
         run: python bean_network_tester.py --license

@@ -26,7 +26,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 
-from ... import tcpreset
+from ... import capabilities, tcpreset
 from ...i18n import T
 from ...nettools.tcphealth import Request
 from ...processes import port_process_map
@@ -130,6 +130,15 @@ RESET_LOG = {tcpreset.RESET: "log.conn_reset_done", tcpreset.GONE: "log.conn_res
              tcpreset.UNREADABLE: "log.conn_reset_unreadable",
              tcpreset.NOT_IPV4: "log.conn_reset_not_ipv4",
              tcpreset.FAILED: "log.conn_reset_failed"}
+
+
+def can_reset(row):
+    """Whether "Reset this connection" acts on ``row``: TCP over IPv4 only - Windows
+    has no IPv6 form of the call (tcpreset) - and nothing at all on a system without
+    it (capabilities). The menu greys the entry out by it, and the entry's command
+    refuses by it, so the two cannot answer differently."""
+    return capabilities.available("tcp_reset") and tcpreset.resettable(
+        row.get("proto"), row.get("remote_ip"))
 
 
 def reset_connection(app, row):
@@ -339,9 +348,7 @@ class ConnsPage:
         name = str(selected.get("proc") or "").strip()
         try:
             set_menu_entry_available(self.menu, self.TARGET_INDEX, bool(name and name != "?"))
-            # TCP over IPv4 only: Windows has no IPv6 form of the call (tcpreset).
-            set_menu_entry_available(self.menu, self.RESET_INDEX, tcpreset.resettable(
-                selected.get("proto"), selected.get("remote_ip")))
+            set_menu_entry_available(self.menu, self.RESET_INDEX, can_reset(selected))
             # TCP over both IPv4 and IPv6 (tcpestats has the IPv6 form).
             set_menu_entry_available(self.menu, self.HEALTH_INDEX, tcphealth.offered(
                 selected.get("proto"), selected.get("remote_ip")))
@@ -434,13 +441,17 @@ class ConnsPage:
             return
         block_ip_address(self.app, str(row.get("remote_ip") or ""))
 
+    # A greyed-out entry still runs its command (theme.MENU_ENTRY_INERT), so each
+    # of these asks the question the menu asked when it greyed the entry out.
     def _reset_connection(self):
         row = self._selected()
-        return reset_connection(self.app, row) if row else None
+        if not row or not can_reset(row):
+            return None
+        return reset_connection(self.app, row)
 
     def _show_health(self):
         row = self._selected()
-        if row:
+        if row and tcphealth.offered(row.get("proto"), row.get("remote_ip")):
             show_health(self.app, row)
 
     def _ping(self):

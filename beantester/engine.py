@@ -888,6 +888,15 @@ class BeanEngine:
         s["loss_bursts"] = self.core.loss_bursts
         # The same bargain for the driver-wait peak (see driverwait.DriverWait).
         s["driver_wait_peak_ms"] = self._driver_wait.peak_ms
+        # And for what an overloaded driver did, where the platform's driver counts
+        # it (Linux): written by the watchdog's tick, since the last stats reset.
+        # Absent on Windows, so its snapshot - CSV columns, JSON counters - is what
+        # it was. MEASURED on Linux: a session told to drop everything said 100%
+        # while a third of the traffic went around this tool.
+        if capture_backend.current().counts_overload:
+            bypassed, dropped = capture_backend.OVERLOAD_STATS
+            s[bypassed] = self._driver_wait.bypassed
+            s[dropped] = self._driver_wait.dropped
         return s
 
     def _bump(self, key, n=1):

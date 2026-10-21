@@ -28,7 +28,7 @@ from .. import scope
 from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
-from ... import crashlog
+from ... import capture_backend, crashlog
 
 # What the figures on this page COVER, in this page's words. Keyed by every
 # coverage state (gui/scope.py enforces that at import), because the state that
@@ -85,6 +85,21 @@ CELLS = (
     ("drop_flap", "stats.flap_cut", "", "tips.stat_flap"),
     ("rst_sent", "stats.rst_sent", "", "tips.stat_rst_sent"),
 )
+
+# What an overloaded driver did, on a platform whose driver counts it (Linux):
+# ``capture_backend.OVERLOAD_STATS``, in that order. Not in CELLS, so the grid on
+# Windows - where WinDivert counts nothing of the kind - is the grid it was.
+OVERLOAD_CELLS = (
+    ("kernel_bypassed", "stats.kernel_bypassed", "", "tips.stat_kernel_bypassed"),
+    ("driver_dropped", "stats.driver_dropped", "", "tips.stat_driver_dropped"),
+)
+
+
+def cells():
+    """The counter grid for this platform: CELLS, plus the driver's own counters
+    where the capture backend has them."""
+    return CELLS + (OVERLOAD_CELLS if capture_backend.current().counts_overload else ())
+
 
 SESSION_ROWS = (
     ("host", "session.host", ""),
@@ -143,6 +158,12 @@ class StatsPage:
         # when the preference changes and skip the work when it has not.
         self._unit_shown = None
         self.sess_labels = {}
+        self.cells = cells()            # the counters this platform has (CELLS + the driver's)
+        # The cells the tick rewrites as counts: every one but the two rates, which
+        # it writes as rates. Taken from `self.cells`, so a cell on the grid is a
+        # cell that moves - a hand-kept list left the driver's two at "0" all session.
+        self._counter_keys = tuple(key for key, *_rest in self.cells
+                                   if key not in RATE_FIELD_KEYS)
         self._cells = []
         self._grid_cols = 0
         self._chart_job = None
@@ -174,7 +195,7 @@ class StatsPage:
 
         self.grid = ttk.Frame(parent)
         self.grid.pack(fill="x", padx=scaled(8), pady=scaled(6))
-        for key, cap, unit, tip in CELLS:
+        for key, cap, unit, tip in self.cells:
             cell = tk.Frame(self.grid, bg=BG2)
             value = ttk.Label(cell, text="0", style="Stat.TLabel")
             value.pack(padx=scaled(10), pady=(scaled(8), 0), anchor="w")
@@ -328,13 +349,13 @@ class StatsPage:
             for key, cap, _tip in SESSION_ROWS if key in self.sess_labels)
 
     def live_text(self):
-        """The counter grid, same rule - `CELLS` is the source, units included."""
+        """The counter grid, same rule - `self.cells` is the source, units included."""
         rows = []
         # The copied text says the same unit the screen does: this is what ends up
         # pasted into a bug report, so a caption disagreeing with the number beside
         # it travels further than the window it came from.
         chosen = UNIT_LABEL.get(self.app.pref("rate_unit"), "")
-        for key, cap, unit, _tip in CELLS:
+        for key, cap, unit, _tip in self.cells:
             label = self.stat_labels.get(key)
             if label is None:
                 continue
@@ -385,7 +406,7 @@ class StatsPage:
     # -- responsive counter grid --------------------------------------------- #
     def _on_grid_configure(self, event):
         cols = max(2, int(event.width // scaled(CELL_MIN_W)) or 2)
-        cols = min(cols, len(CELLS))
+        cols = min(cols, len(self.cells))
         if cols != self._grid_cols:
             self._relayout_cells(cols)
 
@@ -394,7 +415,7 @@ class StatsPage:
         for index, cell in enumerate(self._cells):
             cell.grid(row=index // cols, column=index % cols,
                       padx=scaled(4), pady=scaled(4), sticky="nsew")
-        for c in range(len(CELLS)):
+        for c in range(len(self.cells)):
             try:
                 self.grid.columnconfigure(c, weight=1 if c < cols else 0,
                                           minsize=scaled(CELL_MIN_W) if c < cols else 0)
@@ -515,7 +536,7 @@ class StatsPage:
         self._unit_shown = unit
         label = UNIT_LABEL.get(unit, "")
         with crashlog.quiet("gui.pages.stats"):
-            for key, cap, _unit, _tip in CELLS:
+            for key, cap, _unit, _tip in self.cells:
                 if key not in RATE_FIELD_KEYS:
                     continue
                 caption = self.cap_labels.get(key)
@@ -542,12 +563,7 @@ class StatsPage:
         # can be impaired), and drop_overflow / drop_shutdown / drop_send stay on
         # the FULL traffic on purpose - they are what the TOOL lost, including
         # traffic the user never targeted, and narrowing them would hide it.
-        for key in ("seen", "queue", "drop_loss", "loss_bursts", "corrupted", "duplicated",
-                    "reordered",
-                    "drop_overflow", "drop_shutdown", "drop_send",
-                    "drop_rate", "drop_syn", "drop_mtu",
-                    "drop_nat", "drop_rst", "drop_lan", "drop_internet_only",
-                    "drop_block", "drop_flap", "rst_sent"):
+        for key in self._counter_keys:
             configure_changed(self.stat_labels[key],
                               text=str(self.app.scoped_stat(snap, key)))
 

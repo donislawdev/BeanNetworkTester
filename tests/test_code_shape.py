@@ -143,7 +143,7 @@ FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
 # that, by the OWNER's decision of the same day, over the alternative of keeping
 # three lines in `app.py` written longer than they need to be to hold the count.
 # `cli.py` is 757, seven lines under the band.
-FILE_CEILING = 1091             # beantester/gui/app.py
+FILE_CEILING = 1086             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -159,7 +159,10 @@ FILE_CEILING = 1091             # beantester/gui/app.py
 # counts are small and the next candidate is real - `engine.py` has about 130
 # lines of headroom before it joins the count.
 CROWD_BAND = 0.70
-FILES_NEAR_CEILING = 2          # beantester/gui/app.py, beantester/engine.py (since 2026-10-14)
+# 2 -> 3 on 2026-10-20, the owner's decision: `app.py` lost 5 lines when the window's
+# rights questions moved into `capture_backend` (Linux stage 2a), the ceiling followed
+# it to 1086 and the band to 760.2 - and `cli.py`, 761 since Linux stage 1, is in it.
+FILES_NEAR_CEILING = 3          # beantester/gui/app.py, engine.py, cli.py (since 2026-10-20)
 FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
 
 # 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph

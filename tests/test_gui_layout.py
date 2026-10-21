@@ -993,7 +993,7 @@ def test_the_session_panel_copies_exactly_what_it_shows():
 def test_the_counters_tab_copies_its_figures_with_their_units():
     run_gui("""
         import fake_tk
-        from beantester.gui.pages.stats import CELLS
+        from beantester.gui.pages.stats import cells
         from beantester.i18n import T
 
         app.select_page("statistics")
@@ -1003,7 +1003,8 @@ def test_the_counters_tab_copies_its_figures_with_their_units():
         fake_tk.CLIPBOARD.clear()
         page._copy_visible("live")
         lines = "".join(fake_tk.CLIPBOARD).splitlines()
-        assert len(lines) == len(CELLS), (len(lines), len(CELLS))
+        # the platform's grid (Linux has the driver's two counters as well)
+        assert len(lines) == len(cells()), (len(lines), len(cells()))
         # the unit belongs to the caption on this tab, and the copy keeps it
         down = [l for l in lines if l.startswith(T("stats.download"))]
         assert down and "(KB/s)" in down[0], down

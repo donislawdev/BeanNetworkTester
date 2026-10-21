@@ -14,6 +14,16 @@ client: a page opens in the user's own browser, only when they click, and
 opened" either way, so a click that opened nothing reported success. It now says
 the browser did not open and prints the address, which the user can copy from
 the log instead.
+
+As root (Linux, where a capture needs root) no browser is started at all.
+MEASURED 2026-10-20 on Ubuntu 26.04 under ``sudo``: ``webbrowser`` picked
+``xdg-open``, which runs in the background, so it answered True - and nothing
+opened (root has no session bus, and the display refused it). The log said
+"opened". A browser that DID start would run as root on the person's desktop,
+which is worse - and that holds for any way of becoming root (``su``, ``doas``, a
+root login), not only for the ``sudo`` that leaves its traces in the environment.
+So the window says why and prints the address, the way it does for a browser
+that failed.
 """
 from dataclasses import dataclass
 from tkinter import ttk
@@ -22,6 +32,7 @@ import webbrowser
 from .. import crashlog
 from ..appinfo import REPO_URL, SUPPORT_URL
 from ..i18n import T
+from ..paths import running_as_root
 from .theme import space
 from .tooltip import add_tooltip
 
@@ -50,6 +61,9 @@ PAGES = (DONATE, GITHUB)
 
 def open_page(page, log):
     """Open ``page`` in the user's browser and say in the log whether it opened."""
+    if running_as_root():
+        log(f"{T('log.page_open_yourself')}: {page.url}")
+        return False
     try:
         opened = webbrowser.open_new_tab(page.url)
     except Exception as e:              # the reason goes to the crash log, the address to the user

@@ -91,6 +91,9 @@ class _FakeBackend:
     """Records what the engine asks of a backend."""
 
     name = "fake"
+    counts_overload = False
+    CLEANUP_LINE = WinDivertBackend.CLEANUP_LINE
+    CLEANUP_BLOCKER = WinDivertBackend.CLEANUP_BLOCKER
 
     def __init__(self, source_factory=None):
         self.opened = []
@@ -134,6 +137,15 @@ class _FakeBackend:
 
     def platform_note(self):
         return None
+
+    def has_capture_rights(self):
+        return True
+
+    def startup_note(self, has_rights):
+        return None
+
+    def rights_banner(self):
+        return "warn.not_admin"
 
 
 # -- the choice ---------------------------------------------------------------- #
@@ -290,7 +302,9 @@ def test_every_backend_answers_the_whole_contract():
     check("the contract names what the call sites ask",
           {"open_network", "socket_source_factory", "filter_compiles", "stamp_now",
            "stamp_frequency", "text", "overload_counters", "is_permission_error",
-           "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS"} <= set(members),
+           "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS",
+           "has_capture_rights", "startup_note", "rights_banner", "counts_overload",
+           "CLEANUP_LINE", "CLEANUP_BLOCKER"} <= set(members),
           f"({members})")
     for backend in (WinDivertBackend, EBPFDivertBackend, _FakeBackend):
         missing = [n for n in members if not hasattr(backend, n)]
@@ -436,11 +450,64 @@ def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
           WinDivertBackend.open_failure_hint(err, elevated=True) == "key" and seen == [(err, True)])
 
 
+def test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_did(monkeypatch):
+    """MOVED from ``App._detect_admin``/``_check_environment``/the banner: shell32's
+    token on Windows (a failure raises - the window does not cry wolf), "nothing to
+    elevate" off it, and the same two notes and banner as before."""
+    import ctypes
+    monkeypatch.setattr(winenv, "is_windows", lambda: True)
+    shell32 = types.SimpleNamespace(IsUserAnAdmin=lambda: 1)
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(shell32=shell32), raising=False)
+    check("an elevated token", WinDivertBackend.has_capture_rights() is True)
+    shell32.IsUserAnAdmin = lambda: 0
+    check("and one that is not", WinDivertBackend.has_capture_rights() is False)
+
+    def unreadable():
+        raise OSError("no token")
+    shell32.IsUserAnAdmin = unreadable
+    with pytest.raises(OSError):
+        WinDivertBackend.has_capture_rights()
+    check("no note for an elevated window", WinDivertBackend.startup_note(True) is None)
+    check("'run as administrator' for one that is not",
+          WinDivertBackend.startup_note(False) == "log.note_admin")
+    check("the banner it always had", WinDivertBackend.rights_banner() == "warn.not_admin")
+    monkeypatch.setattr(winenv, "is_windows", lambda: False)
+    check("off Windows: nothing to elevate for", WinDivertBackend.has_capture_rights() is True)
+    check("and the note says where capture works",
+          WinDivertBackend.startup_note(True) == "log.note_windows")
+
+
+def test_the_linux_backend_reads_rights_the_way_the_doctor_row_does(monkeypatch):
+    """One answer (``_rights``) for the window's red line and ``--doctor``'s row."""
+    none, caps = "CapEff:\t0000000000000000\n", "CapEff:\t0000008000003000\n"   # bits 12, 13, 39
+    check("root", capture_backend._rights(0, "/", none) == "root")
+    check("the three capabilities", capture_backend._rights(1000, "/", caps).startswith("CAP_BPF"))
+    check("neither", capture_backend._rights(1000, "/", none) is None)
+    check("two of three is not enough",
+          capture_backend._rights(1000, "/", "CapEff:\t0000000000003000\n") is None)
+    real = capture_backend._rights
+    for status, euid, expected in ((none, 0, True), (none, 1000, False), (caps, 1000, True)):
+        monkeypatch.setattr(capture_backend, "_euid", lambda e=euid: e)
+        monkeypatch.setattr(capture_backend, "_rights", lambda e, r, s, st=status: real(e, r, st))
+        check(f"euid {euid}, {status.strip()}: has_capture_rights is {expected}",
+              EBPFDivertBackend.has_capture_rights() is expected)
+        row = capture_backend._privileges_row(euid, "/", status)
+        check("and the doctor row agrees", (row[1] == "ok") is expected, f"({row})")
+    check("the note for a window that can capture",
+          EBPFDivertBackend.startup_note(True) == "log.ebpf_note_experimental")
+    check("and for one that cannot", EBPFDivertBackend.startup_note(False) == "log.ebpf_note_root")
+    check("its own banner", EBPFDivertBackend.rights_banner() == "warn.ebpf_not_root")
+
+
 def _rows(**kw):
     return {row[0]: row for row in EBPFDivertBackend.doctor_rows(**kw)}
 
 
-def test_the_linux_doctor_rows_say_what_is_missing_and_never_fail(monkeypatch, tmp_path):
+def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture(monkeypatch,
+                                                                                 tmp_path):
+    """Each row without which a capture cannot start is a ``fail``, as on Windows
+    (owner, 2026-10-20). It was a ``warn``, and the Diagnostics tab said "Nothing here
+    stops a session from starting" under "a capture needs sudo"."""
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
     (tmp_path / "sys" / "kernel" / "btf").mkdir(parents=True)
     (tmp_path / "sys" / "kernel" / "btf" / "vmlinux").write_bytes(b"")
@@ -458,21 +525,27 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_never_fail(monkeypatch, t
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert(lib=False)[0])
     bare = _rows(release="5.4.0-42-generic", root=str(tmp_path / "nothing"), euid=1000,
                  status="CapEff:\t0000000000000000\n")
-    check("an old kernel, no BTF, no rights, no library: each one says so",
-          [bare[n][1] for n in ("kernel", "btf", "privileges", "pydivert")] == ["warn"] * 4,
+    check("an old kernel, no BTF, no rights, no library: each one fails",
+          [bare[n][1] for n in ("kernel", "btf", "privileges", "pydivert")] == ["fail"] * 4,
           f"({bare})")
     check("and says what to do", "5.10" in bare["kernel"][2] and "sudo" in bare["privileges"][2]
           and "reinstall" in bare["pydivert"][2], f"({bare})")
+    check("each in the words Windows uses for it",
+          all("cannot start" in bare[n][2] for n in ("kernel", "btf", "privileges")), f"({bare})")
     monkeypatch.setitem(sys.modules, "pydivert", None)
     gone = _rows(release="6.8.0", root=str(tmp_path), euid=0)
-    check("no pydivert: a warning with the install command", gone["pydivert"][1] == "warn"
+    check("no pydivert: a failure with the install command", gone["pydivert"][1] == "fail"
           and "pip install pydivert" in gone["pydivert"][2], f"({gone['pydivert']})")
-    check("never a 'fail': --doctor's verdict stays 'this box runs --simulate'",
-          all(row[1] != "fail" for rows in (ready, by_caps, bare, gone) for row in rows.values()))
+    check("a ready machine fails nothing, root or the three capabilities",
+          all(row[1] == "ok" for rows in (ready, by_caps) for row in rows.values()))
 
 
 def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
+    # A ready machine has BTF. Without the file this test's "healthy" verdict rested
+    # on a missing-BTF row being only a warning - which is what it no longer is.
+    (tmp_path / "sys" / "kernel" / "btf").mkdir(parents=True)
+    (tmp_path / "sys" / "kernel" / "btf" / "vmlinux").write_bytes(b"")
 
     class _Linux(EBPFDivertBackend):
         @staticmethod
@@ -483,12 +556,22 @@ def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path)
     ok, checks = driver.doctor()
     names = [c[0] for c in checks]
     platform_row = next(c for c in checks if c[0] == "platform")
-    check("the platform row says Linux capture is experimental and needs sudo",
-          "experimental" in platform_row[2] and "sudo" in platform_row[2], f"({platform_row})")
+    check("the platform row says Linux capture is experimental",
+          "experimental" in platform_row[2] and platform_row[1] == "warn", f"({platform_row})")
+    check("and does not tell root to use sudo", "sudo" not in platform_row[2], f"({platform_row})")
     check("the Linux rows follow", {"kernel", "btf", "privileges", "pydivert"} <= set(names),
           f"({names})")
     check("and nothing on the Windows path is asked", "windivert driver" not in names)
-    check("the verdict is still 'healthy' (warnings only)", ok)
+    check("a ready machine as root: the verdict is healthy (the platform warns only)", ok)
+
+    class _NotRoot(EBPFDivertBackend):
+        @staticmethod
+        def doctor_rows():
+            return EBPFDivertBackend.doctor_rows(release="6.8.0", root=str(tmp_path), euid=1000,
+                                                 status="CapEff:\t0000000000000000\n")
+    monkeypatch.setattr(capture_backend, "current", lambda: _NotRoot())
+    ok, checks = driver.doctor()
+    check("without root the verdict says a capture cannot start, as unelevated Windows", not ok)
 
 
 # -- the session's overload counters (driverwait.watch_overflow) ------------------ #
@@ -496,6 +579,7 @@ class _CountingBackend(_FakeBackend):
     """A backend whose driver counts what it let past and dropped, as eBPFDivert does."""
 
     TEXTS = EBPFDivertBackend.TEXTS
+    counts_overload = True
 
     def __init__(self, readings):
         super().__init__()
@@ -586,3 +670,28 @@ def test_the_engine_watches_the_drivers_counters_and_says_its_own_words(monkeypa
     check("the watchdog asked the counters and said so", overflow in lines, f"({lines})")
     total = T("log.ebpf_overflow_total", bypassed=4, dropped=0)
     check("and STOP said the total", total in lines, f"({lines[-4:]})")
+
+
+def test_the_drivers_counters_reach_the_statistics_only_where_it_counts(monkeypatch):
+    """The snapshot behind the Statistics page, the CSV and the JSON counters carries
+    the driver's two numbers on a backend that counts them, and nothing new on one
+    that does not (Windows: its snapshot is what it was). The repro report follows."""
+    from beantester.repro import build_repro_report
+    from beantester.settings import DEFAULT_SETTINGS
+    keys = capture_backend.OVERLOAD_STATS
+    counting = _CountingBackend([_counts(0, 0)])
+    monkeypatch.setattr(capture_backend, "current", lambda: counting)
+    eng = BeanEngine(log_fn=lambda *_: None)
+    eng._driver_wait.bypassed, eng._driver_wait.dropped = 7, 3
+    snap = eng.stats_snapshot()
+    check("the driver's counters, under their names", [snap.get(k) for k in keys] == [7, 3],
+          f"({ {k: snap.get(k) for k in keys} })")
+    metrics = build_repro_report(eng, dict(DEFAULT_SETTINGS))["metrics"]
+    check("and in the repro report", [metrics.get(k) for k in keys] == [7, 3], f"({metrics})")
+    monkeypatch.setattr(capture_backend, "current", lambda: _FakeBackend())
+    snap = eng.stats_snapshot()
+    check("a driver that counts nothing adds nothing", not set(keys) & set(snap), f"({sorted(snap)})")
+    metrics = build_repro_report(eng, dict(DEFAULT_SETTINGS))["metrics"]
+    check("nor to the report", not set(keys) & set(metrics))
+    check("Windows counts nothing of the kind", WinDivertBackend.counts_overload is False
+          and EBPFDivertBackend.counts_overload is True)
