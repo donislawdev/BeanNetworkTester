@@ -19,15 +19,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   capture, and a refused START says what to do. The Statistics page and its CSV count
   packets that went around the tool and those the driver dropped, with a red line while
   either grows. Its files stay yours, and GitHub and Donate print the address instead of
-  starting a browser as root. On the Tools tab, Ping, TCP health and Adapters say they are
-  Windows-only for now, and the row menus grey out Reset this connection, Show TCP health
-  and Ping this address.
+  starting a browser as root. On the Tools tab, TCP health and Adapters say they are
+  Windows-only for now, and the row menus grey out Reset this connection and Show TCP health.
 
 - **Linux, experimental: Diagnostics speaks of Linux.** Its help explains what stops a
   session there - capture rights, the kernel, BTF and pydivert - and what to do, and
   **Clean up the driver** says why there is nothing to clean up. **Add network adapters** and
   **Add proxy settings** are greyed out and say why, because the Adapters tool works on
   Windows only for now.
+
+- **Linux, experimental: Ping works.** It sends through the system's ping socket, which needs
+  no sudo where the system lets your group send pings (`net.ipv4.ping_group_range`), and under
+  sudo through a raw socket, so it works on Ubuntu 24.04 too. Replies, losses and what a router
+  answers show as on Windows, and the round trip is the kernel's own. Where it may not send,
+  the tab says how to allow it. An IPv6 zone can be an interface's name (`fe80::1%eth0`), and
+  **Ping this address** works in the row menus. Its tips and help name Windows only where
+  Windows differs.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

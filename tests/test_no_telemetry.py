@@ -116,6 +116,8 @@ ALLOWED_IMPORTS = {
         "the port check: bind on a loopback address and close, nothing sent",
     ("beantester/nettools/ping.py", "socket"):
         "Ping's name lookup (getaddrinfo, below) and the address family constants",
+    ("beantester/icmpsock.py", "socket"):
+        "Ping on Linux: the ICMP socket an echo request goes through (below)",
     ("beantester/gui/links.py", "webbrowser"):
         "the page buttons (support page, GitHub page), opened on a click",
     ("beantester/winenv.py", "subprocess"):
@@ -155,10 +157,18 @@ ALLOWED_CALLS = {
         "on_loopback runs it under an audit hook",
     ("beantester/nettools/ping.py", "socket", "getaddrinfo"):
         "the Tools tab's Ping: a NAME the person typed, looked up once when they press "
-        "Start, by Windows' own resolver (the hosts file, its cache, then its DNS "
-        "servers) - the lookup any program makes for a name. A text that is not plainly "
-        "an address or a host name is refused before it (nettools/ping.py::parse), so "
-        "nothing else reaches the resolver",
+        "Start, by the system's own resolver (on Windows the hosts file, its cache, then "
+        "its DNS servers) - the lookup any program makes for a name. A text that is not "
+        "plainly an address or a host name is refused before it (nettools/ping.py::parse), "
+        "so nothing else reaches the resolver",
+    ("beantester/icmpsock.py", "socket", "socket"):
+        "the Tools tab's Ping on Linux: the ICMP socket ONE echo request to the typed "
+        "address goes through - the system's ping socket, or a raw one under sudo - "
+        "opened for that request and closed before echo() returns. kind() opens one and "
+        "closes it at once to ask whether Ping is here, and sends nothing",
+    ("beantester/icmpsock.py", "socket", "if_nametoindex"):
+        "the number of a named interface, for an IPv6 zone typed as a name "
+        "(fe80::1%eth0): a lookup in this machine's own interface list, nothing sent",
     ("beantester/gui/links.py", "webbrowser", "open_new_tab"):
         "opens the support page or the project's GitHub page in the user's browser, "
         "only when they click its button (header or About window)",
@@ -783,7 +793,11 @@ TOOLS_TAB_SENDING = {
     ("beantester/nettools/ping.py", "socket"):
         ("ping", "import for the name lookup below"),
     ("beantester/nettools/ping.py", "socket", "getaddrinfo"):
-        ("ping", "a typed NAME, looked up once at Start by Windows' own resolver"),
+        ("ping", "a typed NAME, looked up once at Start by the system's own resolver"),
+    ("beantester/icmpsock.py", "socket"):
+        ("ping", "import for the ICMP socket below"),
+    ("beantester/icmpsock.py", "socket", "socket"):
+        ("ping", "on Linux, an echo request to the typed address, one at a time, Start to Stop"),
 }
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
@@ -813,6 +827,11 @@ TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
         "import for the loopback probe below",
     ("beantester/nettools/portcheck.py", "socket", "socket"):
         "bind on 127.0.0.1 or ::1 and close - checked three ways, see the comment above",
+    # Ping on Linux takes an IPv6 zone typed as a name (fe80::1%eth0): if_nametoindex
+    # asks this machine's own interface list for its number (an ioctl, SIOCGIFINDEX,
+    # read in glibc and the kernel) - nothing goes on the wire.
+    ("beantester/icmpsock.py", "socket", "if_nametoindex"):
+        "a named interface's number, from this machine's own list - see the comment above",
 }
 
 # The ctypes libraries a Tools-tab file may load while the promise stands: today's

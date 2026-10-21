@@ -51,6 +51,33 @@ def test_every_broken_loss_session_is_named():
           any("bystander" in f for f in smoke.judge_loss([None] * 6, [])))
 
 
+def ping(kind, rtts):
+    return {"kind": kind, "rtts": rtts}
+
+
+def test_every_broken_ping_through_a_session_is_named():
+    fast, held = [0] * 6, [100] * 6
+    good = (ping("raw", fast), ping("raw", held), ping("dgram", held), ping("dgram", fast))
+    check("both sockets carried the latency, fast around it", smoke.judge_ping(*good) == [])
+    cases = {
+        "the raw socket never tried (the ping socket refused)":
+            ((ping(None, []),) + good[1:], "ping before"),
+        "the ping socket never taken once allowed": (good[:2] + (ping("raw", held),) + good[3:],
+                                                     "ping dgram"),
+        "a ping the session did not reach": (good[:1] + (ping("raw", fast),) + good[2:],
+                                             "ping raw"),
+        "one direction delayed": (good[:2] + (ping("dgram", [50] * 6),) + good[3:], "ping dgram"),
+        "latency left behind": (good[:3] + (ping("dgram", held),), "ping after"),
+        "a machine too slow to tell": ((ping("raw", held),) + good[1:], "ping before"),
+        "no answers": (good[:1] + (ping("raw", [None] * 6),) + good[2:], "ping raw"),
+        "nothing measured": (good[:3] + ({},), "ping after"),
+    }
+    for name, (got, phase) in cases.items():
+        failures = smoke.judge_ping(*got)
+        check(f"{name}: failed, naming {phase}", any(f.startswith(phase) for f in failures),
+              f"({failures})")
+
+
 def test_a_machine_that_cannot_run_it_skips_and_ci_turns_that_into_a_failure(capsys):
     check("not Linux", smoke.skip_reason("win32", 0, True) == "not Linux")
     check("not root", "root" in smoke.skip_reason("linux", 1000, True))

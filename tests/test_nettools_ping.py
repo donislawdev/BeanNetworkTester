@@ -5,13 +5,17 @@ the address the person typed, and nothing anywhere else. So the first tests are 
 what NEVER reaches the name lookup: a text that is not plainly an address or a host
 name is refused before anything could put a DNS query for it on the wire.
 """
+import json
+import os
 import socket
+import sys
 
 import pytest
 
-from beantester import icmp
+from beantester import icmp, icmpsock
 from beantester.nettools import Refused, ping
-from fakes import check
+from beantester.nettools.adapters import Words
+from fakes import LANGS, ROOT, check
 
 REPLY = icmp.Echo(0, 201, 64, "192.0.2.10")
 LOST = icmp.Echo(icmp.IP_REQ_TIMED_OUT)
@@ -44,7 +48,8 @@ def test_a_host_name_is_kept_for_the_lookup(typed, name):
     ("", "tools.ping.refused.empty"), ("   ", "tools.ping.refused.empty"),
     ("999.1.1.1", "tools.ping.refused.bad_address"), ("127.1", "tools.ping.refused.bad_address"),
     ("0x7f.1", "tools.ping.refused.bad_address"), ("1.2.3.4.5", "tools.ping.refused.bad_address"),
-    ("fe80::1%eth0", "tools.ping.refused.bad_address"), ("2001:db8::zz", "tools.ping.refused.bad_address"),
+    ("fe80::1%nosuch0", "tools.ping.refused.bad_address"),
+    ("2001:db8::zz", "tools.ping.refused.bad_address"),
     ("0.0.0.0", "tools.ping.refused.not_one"), ("::", "tools.ping.refused.not_one"),
     ("224.0.0.1", "tools.ping.refused.not_one"), ("ff02::1", "tools.ping.refused.not_one"),
     ("255.255.255.255", "tools.ping.refused.not_one"),
@@ -57,6 +62,61 @@ def test_what_is_not_one_address_or_name_is_refused_before_any_lookup(typed, key
         ping.parse(typed)
     check("refused with its reason", refused.value.user_key == key,
           f"({typed!r}: {refused.value.user_key})")
+
+
+def test_a_named_zone_is_an_interface_on_linux_and_nowhere_on_windows(monkeypatch):
+    """Windows numbers its zones (fe80::1%12); on Linux the person types the
+    interface's name (fe80::1%eth0) - taken when this machine has it."""
+    monkeypatch.setattr(icmpsock, "zone_index", lambda name: {"eth0": 2}.get(name))
+    monkeypatch.setattr(sys, "platform", "linux")
+    target = ping.parse("fe80::1%eth0")
+    check("Linux: kept as typed", target == ping.Target("fe80::1%eth0", "", "fe80::1%eth0"),
+          f"({target})")
+    with pytest.raises(Refused):
+        ping.parse("fe80::1%wlan9")
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(Refused) as refused:
+        ping.parse("fe80::1%eth0")
+    check("Windows: no such zone", refused.value.user_key == "tools.ping.refused.bad_address")
+
+
+def test_what_linux_said_is_shown_and_reported_in_its_own_name():
+    echo = icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="10.77.0.1", said="EPERM")
+    check("the Result column", ping.result_words(echo) == Words("tools.ping.result.linux",
+                                                                 "EPERM"))
+    check("Windows' number keeps its own", ping.result_words(icmp.Echo(11042))
+          == Words("tools.ping.result.code", 11042))
+    run = ping.Run(ping.Target("192.0.2.10", "", "192.0.2.10"), started=0.0)
+    run.add(1.0, echo)
+    run.add(2.0, icmp.Echo(11042))
+    text = ping.report(run)
+    check("the report says who answered", "Linux answered EPERM" in text
+          and "Windows answered 11042" in text, text)
+
+
+@pytest.mark.parametrize("platform, keys", [
+    ("win32", ping.WINDOWS_HELP), ("linux", ping.LINUX_HELP), ("darwin", ())])
+def test_the_sheet_has_a_paragraph_about_the_system_it_runs_on(monkeypatch, platform, keys):
+    monkeypatch.setattr(sys, "platform", platform)
+    check(f"{platform}", ping.platform_help() == keys, f"({ping.platform_help()})")
+
+
+def test_no_ping_text_linux_shows_names_windows():
+    """Every Ping text on screen on Linux, in every language: only the paragraph about
+    Windows' wait and the words for a number Windows answered are Windows' own, and
+    Linux never shows them. The Linux paragraph says how to get the right to send."""
+    windows_only = {"tools.ping.help_windows", "tools.ping.result.code"}
+    for code in LANGS:
+        with open(os.path.join(ROOT, "lang", f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        shown = {k: v for k, v in texts.items() if (k.startswith(("tools.ping.", "tips.tools_ping_"))
+                                                    and k not in windows_only)}
+        check(f"{code}: Ping's texts were found", len(shown) > 40, f"({len(shown)})")
+        named = [k for k, v in shown.items() if "Windows" in v]
+        check(f"{code}: none names Windows", not named, f"({named})")
+        linux = texts["tools.ping.help_linux"]
+        check(f"{code}: the Linux paragraph says how", "sudo" in linux
+              and "net.ipv4.ping_group_range" in linux, f"({linux})")
 
 
 def test_a_name_is_looked_up_once_and_the_first_answer_in_windows_order_wins():
