@@ -514,13 +514,15 @@ def test_every_question_mark_opens_its_own_sheet():
         expect(search, "dialogs.conn_search_help_title", "dialogs.conn_search_help",
                "tips.conn_search_help")
         tools = app.pages["tools"]
-        from beantester.gui.toolbox import diagnostics as diagnostics_panel
+        from beantester.gui.toolbox import diagnostics as diagnostics_panel, ping as ping_panel
+        # The sheets composed of paragraphs, one of them about this system.
+        composed = {"diagnostics": diagnostics_panel.help_keys, "ping": ping_panel.help_keys}
         for tool in TOOLS:               # every panel carries one "?" (the skeleton)
             [button] = helps_in(tools.panels[tool.id].frame)
             body = f"tools.{tool.id}.help_body"
-            if tool.id == "diagnostics":     # its sheet still opens with that key
-                assert diagnostics_panel.help_keys()[0] == body
-                body = diagnostics_panel.help_keys()
+            if tool.id in composed:          # its sheet still opens with that key
+                assert composed[tool.id]()[0] == body
+                body = composed[tool.id]()
             expect(button, f"tools.{tool.id}.help_title", body, f"tips.tools_{tool.id}_help")
         unplaced = [b for b in helps_in(root) if b not in placed]
         assert not unplaced, f"{len(unplaced)} '?' button(s) this test cannot place"

@@ -91,12 +91,19 @@ def test_a_tool_this_system_lacks_says_so_and_builds_nothing():
     leaves out the line of what it sends. Measured before this on Linux: every ping
     "failed" with code -1 and the Adapters tab was two blank tables."""
     run_gui("""
-        from beantester import adapters as system_adapters, icmp
+        from beantester import adapters as system_adapters, capabilities, icmp
         from beantester.gui.pages import toolbox as page_mod
         from beantester.gui.toolbox import TOOL_BY_ID
         from beantester.gui.toolbox import ping as pp
         from beantester.i18n import T
         icmp.supported = lambda: False
+        # Ping's own words, as on a Linux that does not let this user send (stood in,
+        # so both runners see them); Adapters has none and says the shared ones.
+        icmp.why_not = lambda: icmp.NOT_HERE_LINUX
+        said = {"ping": T(icmp.NOT_HERE_LINUX), "adapters": T("tools.not_here")}
+        # ...and the sheet's paragraph about Linux, whatever runs the test
+        from beantester.nettools import ping as ping_logic
+        ping_logic.platform_help = lambda: ping_logic.LINUX_HELP
         system_adapters.supported = lambda: False
         built_anyway = []
         real_init = pp.PingPanel.__init__
@@ -109,9 +116,23 @@ def test_a_tool_this_system_lacks_says_so_and_builds_nothing():
             panel = page.panels[tool_id]
             assert isinstance(panel, page_mod._NotHere), (tool_id, type(panel))
             texts = [w.kw.get("text") for w in fake_tk.walk(page.tabs[tool_id])]
-            assert T("tools.not_here") in texts, (tool_id, texts)
+            assert said[tool_id] in texts, (tool_id, texts)
+            assert capabilities.why_not(tool_id) is not None
             helps = [w for w in fake_tk.walk(panel.frame) if w.kw.get("style") == "Help.TButton"]
             assert len(helps) == 1, (tool_id, "the tool's own ? stays")
+            # and opens the sheet the panel would: Ping's paragraph about this system
+            # (on Linux: how to let it send), Adapters' one body
+            from beantester.gui import dialogs
+            opened, real_show = [], dialogs.show_help
+            dialogs.show_help = lambda root, title, body: opened.append(body)
+            helps[0].invoke()
+            dialogs.show_help = real_show
+            # written out, not derived from help_keys(): a sheet that lost the
+            # paragraph would lose it on both sides of the comparison
+            want = ("\\n\\n".join(T(k) for k in ("tools.ping.help_body", "tools.ping.help_linux",
+                                                 "tools.ping.help_end"))
+                    if tool_id == "ping" else T("tools.adapters.help_body"))
+            assert opened == [want], (tool_id, opened)
         texts = [w.kw.get("text") for w in fake_tk.walk(page.tabs["ping"])]
         assert T("tools.ping.sends") not in texts, "a tool that cannot run sends nothing"
         assert built_anyway == [], "Ping's panel was built on a system without Ping"

@@ -1,11 +1,17 @@
-"""ICMP echo through Windows' own ICMP helper - the Tools tab's Ping.
+"""ICMP echo through Windows' own ICMP helper - the Tools tab's Ping - and Linux's sockets.
 
 The one place in the package that SENDS something of its own: an echo request to
 the address the person typed, from the moment they press Start until they press
-Stop (``nettools/ping.py`` decides when; this module sends one). It goes through
-``IcmpSendEcho2`` / ``Icmp6SendEcho2`` (Iphlpapi.dll, Microsoft Learn), the calls
-``ping.exe`` makes - no raw socket, no process. ``tests/test_no_telemetry.py`` names
-this file as the one place either may be called (``WIRE_ALLOWED``).
+Stop (``nettools/ping.py`` decides when; this module sends one). On Windows it goes
+through ``IcmpSendEcho2`` / ``Icmp6SendEcho2`` (Iphlpapi.dll, Microsoft Learn), the
+calls ``ping.exe`` makes - no raw socket, no process. ``tests/test_no_telemetry.py``
+names this file as the one place either may be called (``WIRE_ALLOWED``).
+
+On Linux the request goes through ``icmpsock.py`` (the system's ping socket, or a raw
+one under sudo), and its answer is said here in the same words as Windows' - its
+``IP_STATUS`` numbers below are the vocabulary both systems' answers share
+(``from_answer``). What Linux says that those numbers do not name comes in
+``Echo.said``.
 
 MEASURED 2026-10-19 on this project's machine (Windows 11, 64-bit Python; replies
 from loopback, a Linux peer in WSL and an address nobody holds), and the reason for
@@ -53,7 +59,7 @@ import struct
 import sys
 from typing import NamedTuple
 
-from . import crashlog
+from . import crashlog, icmpsock, paths
 
 # What a request carries: ping.exe's 32 bytes, so a capture shows the same thing; a
 # request of another size repeats them (``payload``), as ping.exe does.
@@ -92,6 +98,7 @@ class Echo(NamedTuple):
     ttl: int | None = None      # IPv4 replies only
     reply_from: str = ""        # who answered - a router may answer for the address
     changed: bool = False       # the reply's data are not what was sent
+    said: str = ""              # Linux: what it answered that the numbers do not name
 
 
 class _SockaddrIn6(ctypes.Structure):
@@ -168,7 +175,73 @@ def _declared(lib):
 
 
 def supported():
-    return sys.platform.startswith("win")
+    """Windows always; Linux when this process may open an ICMP socket now - the
+    ping socket for its group, or a raw one as root (``icmpsock.kind``)."""
+    if sys.platform.startswith("win"):
+        return True
+    return sys.platform.startswith("linux") and icmpsock.kind() is not None
+
+
+NOT_HERE_LINUX = "tools.ping.not_here_linux"
+NOT_HERE_ROOT = "tools.ping.not_here_root"
+
+
+def why_not():
+    """What a system without Ping says instead (``capabilities.why_not``): on Linux,
+    how to let it send; elsewhere nothing of its own. As root "start it with sudo"
+    is no advice: the system took the raw socket away (CAP_NET_RAW, as some
+    containers do), and only the ping socket's setting is left."""
+    if not sys.platform.startswith("linux"):
+        return None
+    return NOT_HERE_ROOT if paths.running_as_root() else NOT_HERE_LINUX
+
+
+# -- Linux's answers, in the words above (``icmpsock.Answer``) ----------------------- #
+# The ICMP errors the numbers above name, by (type, code): what Windows answers for
+# the same message (Learn, ICMP_ECHO_REPLY: IP_STATUS). IPv6's "packet too big" is a
+# type of its own, whatever its code.
+LINUX_ICMP = {
+    4: {(3, 0): IP_DEST_NET_UNREACHABLE, (3, 1): IP_DEST_HOST_UNREACHABLE,
+        (3, 4): IP_PACKET_TOO_BIG, (11, 0): IP_TTL_EXPIRED_TRANSIT},
+    6: {(1, 0): IP_DEST_NET_UNREACHABLE, (1, 3): IP_DEST_HOST_UNREACHABLE,
+        (3, 0): IP_TTL_EXPIRED_TRANSIT},
+}
+ICMPV6_PACKET_TOO_BIG = 2
+# What a refused send says (``sendto``: no route here, or bigger than IP carries).
+LINUX_ERRORS = {icmpsock.ENETUNREACH: IP_DEST_NET_UNREACHABLE,
+                icmpsock.EHOSTUNREACH: IP_DEST_HOST_UNREACHABLE,
+                icmpsock.EMSGSIZE: IP_PACKET_TOO_BIG}
+
+
+def from_answer(answer, sent, version):
+    """The Echo an ``icmpsock.Answer`` is, for a request of IP ``version`` that
+    carried ``sent``. A round trip in whole milliseconds, as Windows counts them."""
+    if answer.replied:
+        return Echo(IP_SUCCESS, (answer.rtt_ns or 0) // 1_000_000,
+                    answer.ttl if version == 4 else None, answer.source,
+                    answer.data != sent)
+    if answer.icmp is not None:
+        kind, code = answer.icmp
+        status = (IP_PACKET_TOO_BIG if version == 6 and kind == ICMPV6_PACKET_TOO_BIG
+                  else LINUX_ICMP[version].get((kind, code)))
+        said = "" if status else f"ICMP{'v6' if version == 6 else ''} {kind}/{code}"
+        return Echo(status or IP_GENERAL_FAILURE, reply_from=answer.source, said=said)
+    if answer.error:
+        status = LINUX_ERRORS.get(answer.error)
+        return Echo(status or IP_GENERAL_FAILURE, reply_from=answer.source,
+                    said="" if status else icmpsock.errno_name(answer.error))
+    return Echo(IP_REQ_TIMED_OUT)
+
+
+class Sockets:
+    """What an echo asks of Linux - ``icmpsock.echo`` - in the form ``_System`` is
+    asked on Windows. Injectable, so it all runs in tests anywhere."""
+
+    def __init__(self, send=None):
+        self.send = send or icmpsock.echo
+
+    def echo(self, address, timeout_ms, sent):
+        return from_answer(self.send(address, timeout_ms, sent), sent, address.version)
 
 
 _INVALID_HANDLE = ctypes.c_void_p(-1).value
@@ -238,10 +311,14 @@ def echo(address, timeout_ms, system=None, size=SIZE):
     """Send ONE echo request of ``size`` bytes of data to ``address`` (an ``ipaddress``
     object; an IPv6 one may carry a numeric scope) and wait up to ``timeout_ms``. On a
     worker; never raises - a failure of the call itself comes back as an Echo with its
-    error code, -1 when there is none."""
+    error code, -1 when there is none. Linux's ``system`` is a ``Sockets``."""
     try:
+        if system is None and sys.platform.startswith("linux"):
+            system = Sockets()
         system = system or _System()
         sent = payload(size)
+        if isinstance(system, Sockets):
+            return system.echo(address, timeout_ms, sent)
         if address.version == 4:
             count, error, raw, base = system.echo4(address, timeout_ms, sent)
             return parse_v4(raw, base, count, error, sent)

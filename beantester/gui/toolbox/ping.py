@@ -54,6 +54,15 @@ NUMERIC = frozenset({"seq", "rtt"})
 # (``SortableTree``'s rule; the render had "64 Reply" read as one value).
 CENTERED = frozenset({"sent", "ttl"})
 
+# The "?" sheet: the shared paragraphs around the one about this system
+# (``ping.platform_help``), joined by ``dialogs.sheet_text``.
+HELP_FIRST, HELP_LAST = "tools.ping.help_body", "tools.ping.help_end"
+
+
+def help_keys() -> tuple[str, ...]:
+    return (HELP_FIRST,) + tuple(ping.platform_help()) + (HELP_LAST,)
+
+
 START, ECHO = "start", "echo"
 # Which session line, by what the engine's connection log says of this ping's row.
 SESSION_WORDS = {None: "tools.ping.session.not_captured", True: "tools.ping.session.impaired",
@@ -309,6 +318,8 @@ def ping_from(app, address):
 class PingPanel:
     ID = ID
     LABEL = "tools.ping.tab"
+    # Asked by the shared "not available" panel too (``gui/pages/toolbox.py``).
+    help_keys = staticmethod(help_keys)
 
     def __init__(self, app, parent):
         self.app = app
@@ -330,7 +341,7 @@ class PingPanel:
                                       self._start_or_stop)
         self.copy_btn = self._button(bar, "tools.ping.copy", "tips.tools_ping_copy",
                                      self.copy_report)
-        dialogs.help_button(bar, app.root, "tools.ping.help_title", "tools.ping.help_body",
+        dialogs.help_button(bar, app.root, "tools.ping.help_title", help_keys(),
                             "tips.tools_ping_help").pack(side="right")
 
         options = ttk.Frame(self.frame)

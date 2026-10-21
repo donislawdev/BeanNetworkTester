@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from beantester import crashlog, icmp
+from beantester import crashlog, icmp, icmpsock
 from fakes import check
 
 PAYLOAD = icmp.PAYLOAD
@@ -199,7 +199,74 @@ def test_off_windows_there_is_no_binding():
         check("the binding loads here", icmp._iphlpapi() is not None)
     else:
         check("off Windows: None", icmp._iphlpapi() is None)
-        check("and unsupported", not icmp.supported())
+        check("and Ping only where this process may open an ICMP socket",
+              icmp.supported() is (icmpsock.kind() is not None))
+
+
+@pytest.mark.parametrize("platform, sockets, expected", [
+    ("win32", None, True), ("linux", icmpsock.DGRAM, True), ("linux", icmpsock.RAW, True),
+    ("linux", None, False), ("darwin", icmpsock.DGRAM, False)])
+def test_ping_is_here_on_windows_and_on_a_linux_that_lets_this_process_send(
+        monkeypatch, platform, sockets, expected):
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(icmpsock, "kind", lambda: sockets)
+    check(f"{platform}, {sockets}", icmp.supported() is expected)
+
+
+def answer(**kw):
+    return icmpsock.Answer(**kw)
+
+
+def test_linux_answers_are_said_in_the_words_windows_answers_are():
+    """The table the rest of the tool reads (``nettools/ping.py``): a Linux answer
+    gets the number Windows gives the same ICMP message, so the Result column, the
+    totals and the report need no second vocabulary."""
+    reply = answer(replied=True, rtt_ns=1_999_999, ttl=63, source="198.51.100.2", data=PAYLOAD)
+    check("a reply: whole ms, as Windows counts them",
+          icmp.from_answer(reply, PAYLOAD, 4) == icmp.Echo(0, 1, 63, "198.51.100.2", False))
+    check("changed data", icmp.from_answer(reply._replace(data=b"x" * 32), PAYLOAD, 4).changed)
+    check("an IPv6 row has no TTL, as on Windows",
+          icmp.from_answer(reply._replace(ttl=64), PAYLOAD, 6).ttl is None)
+    words = {(4, (3, 0)): icmp.IP_DEST_NET_UNREACHABLE, (4, (3, 1)): icmp.IP_DEST_HOST_UNREACHABLE,
+             (4, (3, 4)): icmp.IP_PACKET_TOO_BIG, (4, (11, 0)): icmp.IP_TTL_EXPIRED_TRANSIT,
+             (6, (1, 0)): icmp.IP_DEST_NET_UNREACHABLE, (6, (1, 3)): icmp.IP_DEST_HOST_UNREACHABLE,
+             (6, (2, 0)): icmp.IP_PACKET_TOO_BIG, (6, (2, 9)): icmp.IP_PACKET_TOO_BIG,
+             (6, (3, 0)): icmp.IP_TTL_EXPIRED_TRANSIT}
+    for (version, message), status in words.items():
+        echo = icmp.from_answer(answer(icmp=message, source="192.0.2.1"), PAYLOAD, version)
+        check(f"IPv{version} ICMP {message}", echo == icmp.Echo(status, reply_from="192.0.2.1"),
+              f"({echo})")
+    other = icmp.from_answer(answer(icmp=(3, 13), source="192.0.2.1"), PAYLOAD, 4)
+    check("one the numbers do not name: said, under a general failure",
+          other == icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="192.0.2.1", said="ICMP 3/13"),
+          f"({other})")
+    check("IPv6's says so", icmp.from_answer(answer(icmp=(1, 1)), PAYLOAD, 6).said == "ICMPv6 1/1")
+    for number, status in ((101, icmp.IP_DEST_NET_UNREACHABLE),
+                           (113, icmp.IP_DEST_HOST_UNREACHABLE), (90, icmp.IP_PACKET_TOO_BIG)):
+        check(f"errno {number}", icmp.from_answer(answer(error=number), PAYLOAD, 4)
+              == icmp.Echo(status))
+    check("an errno without words: its name", icmp.from_answer(answer(error=1), PAYLOAD, 4)
+          == icmp.Echo(icmp.IP_GENERAL_FAILURE, said="EPERM"))
+    check("nothing: timed out", icmp.from_answer(answer(), PAYLOAD, 4)
+          == icmp.Echo(icmp.IP_REQ_TIMED_OUT))
+
+
+def test_on_linux_an_echo_goes_through_the_sockets_and_a_given_system_is_kept(monkeypatch):
+    asked = []
+
+    def send(address, timeout_ms, sent):
+        asked.append((str(address), timeout_ms, len(sent)))
+        return answer(replied=True, rtt_ns=5_000_000, ttl=64, source=str(address), data=sent)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(icmpsock, "echo", send)
+    echo = icmp.echo(ipaddress.ip_address("192.0.2.10"), 1000, size=1372)
+    check("Linux: the sockets, with the size asked", asked == [("192.0.2.10", 1000, 1372)]
+          and echo == icmp.Echo(0, 5, 64, "192.0.2.10", False), f"({asked}, {echo})")
+    lib = FakeIphlpapi()
+    icmp.echo(ipaddress.ip_address("192.0.2.10"), 1000, icmp._System(
+        lib, last_error=lambda: icmp.IP_REQ_TIMED_OUT))
+    check("a Windows binding handed in is asked, whatever runs the test",
+          len(lib.sent) == 1 and len(asked) == 1, f"({lib.sent})")
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="Windows only: iphlpapi")

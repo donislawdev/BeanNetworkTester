@@ -27,10 +27,11 @@ one line here. ``tests/test_capabilities.py`` holds the other end: every module 
 loads a Windows DLL is either named here or listed there with the reason it gates
 itself.
 
-``reason`` is an i18n key. All five say the same thing today (Windows only for now);
-a tool ported to Linux later may still be missing on one kernel or another (Reset
-needs ``CONFIG_INET_DIAG_DESTROY``, which WSL's kernel does not have) and will say
-why in its own words.
+``reason`` is an i18n key: Windows only for now. A tool ported to Linux may still be
+missing on one system or another, and then its module says why in its own words
+(``why_not()``, asked when it is there): Ping, the first one, needs the ping socket
+for the user's group or sudo (``icmp.why_not``); Reset will need
+``CONFIG_INET_DIAG_DESTROY``, which WSL's kernel does not have.
 """
 from types import ModuleType
 from typing import NamedTuple, Optional
@@ -67,5 +68,10 @@ def available(name):
 
 
 def why_not(name) -> Optional[str]:
-    """``None`` when ``name`` is available, else the i18n key of what to say instead."""
-    return None if available(name) else CAPABILITIES[name].reason
+    """``None`` when ``name`` is available, else the i18n key of what to say instead:
+    the module's own words for this system when it has them, or the shared ones."""
+    if available(name):
+        return None
+    capability = CAPABILITIES[name]
+    own = getattr(capability.module, "why_not", None)
+    return (own() if own else None) or capability.reason

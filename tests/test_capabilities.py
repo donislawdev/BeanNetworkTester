@@ -23,7 +23,7 @@ import sys
 
 import pytest
 
-from beantester import capabilities, icmp
+from beantester import capabilities, icmp, icmpsock, paths
 from fakes import check
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -103,6 +103,8 @@ def test_a_tool_that_needs_nothing_is_always_available_and_a_typo_is_loud():
 
 
 def test_the_answer_follows_the_module_when_it_is_asked(monkeypatch):
+    # Without words of its own (Ping has them on Linux: the test after the next one).
+    monkeypatch.setattr(icmp, "why_not", lambda: None)
     monkeypatch.setattr(icmp, "supported", lambda: True)
     check("a module that says yes", capabilities.available("ping") is True)
     check("nothing to say", capabilities.why_not("ping") is None)
@@ -111,13 +113,45 @@ def test_the_answer_follows_the_module_when_it_is_asked(monkeypatch):
     check("and the reason to show", capabilities.why_not("ping") == capabilities.NOT_HERE)
 
 
-@pytest.mark.parametrize("platform, expected", [("win32", True), ("linux", False)])
-def test_windows_offers_every_capability_and_linux_none_yet(monkeypatch, platform, expected):
-    """The predicates read ``sys.platform`` when asked; both answers on either runner."""
+@pytest.mark.parametrize("platform, sockets, ping", [
+    ("win32", None, True), ("linux", icmpsock.DGRAM, True), ("linux", icmpsock.RAW, True),
+    ("linux", None, False)])
+def test_windows_offers_every_capability_and_linux_ping_when_it_may_send(monkeypatch, platform,
+                                                                         sockets, ping):
+    """The predicates read ``sys.platform`` when asked; every answer on either runner.
+    Linux has Ping when this process may open an ICMP socket - ``icmpsock.kind``, stood
+    in, because the real one asks this runner's kernel (on Windows it asks Winsock) -
+    and none of the rest yet."""
     monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(icmpsock, "kind", lambda: sockets)
     got = {name: capabilities.available(name) for name in capabilities.CAPABILITIES}
-    check(f"{platform}: every capability is {expected}",
-          all(v is expected for v in got.values()), f"({got})")
+    windows = platform == "win32"
+    want = {name: windows or (name == "ping" and ping) for name in capabilities.CAPABILITIES}
+    check(f"{platform}, {sockets}: {want}", got == want, f"({got})")
+
+
+def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):
+    """The module's own words before the shared ones: on Linux "Windows only for now"
+    is no longer true of Ping, and the person can do something about it - and as root
+    "start it with sudo" would be no advice: the system took CAP_NET_RAW away."""
+    monkeypatch.setattr(icmpsock, "kind", lambda: None)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)
+    check("Linux: Ping's own words", capabilities.why_not("ping") == icmp.NOT_HERE_LINUX,
+          f"({capabilities.why_not('ping')})")
+    check("the others keep the shared ones",
+          capabilities.why_not("adapters") == capabilities.NOT_HERE)
+    monkeypatch.setattr(paths, "running_as_root", lambda: True)
+    check("as root: the words for root", capabilities.why_not("ping") == icmp.NOT_HERE_ROOT,
+          f"({capabilities.why_not('ping')})")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    check("another system: the shared words", capabilities.why_not("ping") == capabilities.NOT_HERE)
+    with open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8") as f:
+        texts = json.load(f)
+    user, root = texts[icmp.NOT_HERE_LINUX], texts[icmp.NOT_HERE_ROOT]
+    check("the user is told what to do", "sudo" in user and "ping_group_range" in user, f"({user})")
+    check("root is not told to use sudo, and is told what is missing",
+          "sudo" not in root and "CAP_NET_RAW" in root and "ping_group_range" in root, f"({root})")
 
 
 def test_every_reason_is_said_in_every_language():

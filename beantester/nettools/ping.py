@@ -10,9 +10,10 @@ echo requests to the address the person typed, from Start to Stop. So a text tha
 is not plainly an address or a host name is refused HERE, before anything could
 send it anywhere: ``999.1.1.1`` and ``127.1`` are refused rather than handed to the
 name lookup, which would put a DNS query for them on the wire. A name is looked up
-once, at Start, by Windows (``getaddrinfo``: the hosts file, its cache, then its DNS
-servers), and the address it gave is shown, because a name with an IPv6 address
-first may not be pinged where the person thinks.
+once, at Start, by the system (``getaddrinfo``: on Windows the hosts file, its cache,
+then its DNS servers; on Linux the sources its name service lists), and the address
+it gave is shown, because a name with an IPv6 address first may not be pinged where
+the person thinks.
 
 What the numbers mean under a session (measured 2026-10-19, ``icmp.py``): a ping is
 a request out and a reply in, so with the two-way traffic filter it carries the
@@ -32,10 +33,11 @@ import ipaddress
 import math
 import re
 import socket
+import sys
 import time
 from typing import NamedTuple
 
-from .. import icmp
+from .. import icmp, icmpsock
 from . import Refused
 from .adapters import Words
 
@@ -63,6 +65,18 @@ PART_KINDS = {None: "none", "START": "start", "CHANGE": "change", "SCENARIO": "s
 # The marks whose text says the settings in English (the engine's own event text); a
 # STOP's text is the name of its reason, not words.
 _SAID = frozenset({"start", "change", "scenario"})
+
+# The "?" sheet's paragraph about what differs by system, between the shared ones
+# (``gui/toolbox/ping.py``): Windows rounds the wait, Linux needs the right to send.
+WINDOWS_HELP = ("tools.ping.help_windows",)
+LINUX_HELP = ("tools.ping.help_linux",)
+
+
+def platform_help() -> tuple[str, ...]:
+    if sys.platform.startswith("win"):
+        return WINDOWS_HELP
+    return LINUX_HELP if sys.platform.startswith("linux") else ()
+
 
 MAX_NAME = 253
 _LABEL = re.compile(r"(?!-)[A-Za-z0-9_-]{1,63}(?<!-)\Z")
@@ -100,9 +114,15 @@ def _one_address(address, typed):
             address.version == 4 and address == ipaddress.IPv4Address("255.255.255.255")):
         raise Refused("tools.ping.refused.not_one", typed=typed)
     scope = getattr(address, "scope_id", None)
-    if scope is not None and not scope.isdigit():
+    if scope is not None and not scope.isdigit() and not _interface(scope):
         # Windows numbers its zones (fe80::1%12); a name there would be pinged nowhere.
+        # Linux names them too (fe80::1%eth0) - taken when an interface has that name.
         raise Refused("tools.ping.refused.bad_address", typed=typed)
+
+
+def _interface(name):
+    """Whether ``name`` is one of this Linux machine's interfaces (never on Windows)."""
+    return sys.platform.startswith("linux") and icmpsock.zone_index(name) is not None
 
 
 def parse(text):
@@ -146,7 +166,7 @@ def _lookup(name):
 
 def resolve(target, lookup=None):
     """The Target with the address to ping: the name looked up, the first answer in
-    the order Windows gives. On a worker - a lookup can take seconds."""
+    the order the system gives. On a worker - a lookup can take seconds."""
     if target.address:
         return target
     try:
@@ -197,6 +217,10 @@ def result_words(echo):
     kind = kind_of(echo)
     if kind != FAILED:
         return Words(f"tools.ping.result.{kind}")
+    if echo.said:
+        # Before the numbers: Linux's said comes with a general status, whose word
+        # would hide what it said (``icmp.from_answer``).
+        return Words("tools.ping.result.linux", echo.said)
     slug = STATUS_WORDS.get(echo.status)
     return Words(f"tools.ping.result.{slug}") if slug else Words("tools.ping.result.code",
                                                                   echo.status)
@@ -400,7 +424,9 @@ def answered_by_other(echo, target):
 def _report_result(result, target):
     echo = result.echo
     kind = result.kind
-    if kind == FAILED:
+    if kind == FAILED and echo.said:
+        words = f"Linux answered {echo.said}"
+    elif kind == FAILED:
         words = REPORT_WORDS.get(STATUS_WORDS.get(echo.status, ""),
                                  f"Windows answered {echo.status}")
     else:

@@ -47,9 +47,10 @@ PLACEHOLDER_DNS = frozenset({"fec0:0:0:ffff::1", "fec0:0:0:ffff::2", "fec0:0:0:f
 
 class Words(NamedTuple):
     """Something said in the window's language: an i18n key, and the number a
-    ``code`` key shows (a state or type the table above does not name)."""
+    ``code`` key shows (a state or type the table above does not name) - or the
+    name Linux gave an answer of Ping's (``EPERM``)."""
     key: str
-    code: int | None = None
+    code: int | str | None = None
 
 
 def _word(table, prefix, number):

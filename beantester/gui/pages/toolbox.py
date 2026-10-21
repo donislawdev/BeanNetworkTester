@@ -49,15 +49,18 @@ class _NotHere:
 
     Not an error, so not ``_Unavailable``'s red: nothing failed, the tool has
     nothing to work with here. It keeps the tool's "?" where every tool has it, so
-    each tab has the same skeleton and the sheet still says what the tool is for.
+    each tab has the same skeleton and the sheet still says what the tool is for -
+    the panel's own sheet when it composes one (``help_keys``): Ping's paragraph
+    about this system is the one that says how to let it send.
     """
 
     def __init__(self, app, parent, tool, reason):
         self.frame = ttk.Frame(parent)
         bar = ttk.Frame(self.frame)
         bar.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
+        sheet = getattr(tool.factory, "help_keys", None)
         dialogs.help_button(bar, app.root, f"tools.{tool.id}.help_title",
-                            f"tools.{tool.id}.help_body",
+                            sheet() if sheet else f"tools.{tool.id}.help_body",
                             f"tips.tools_{tool.id}_help").pack(side="right")
         wrapping_label(self.frame, T(reason), pad=PAGE_WRAP_PAD).pack(
             fill="x", padx=space("page"), pady=(space("row"), 0))

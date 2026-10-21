@@ -206,7 +206,13 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
 - IP fragments always pass through the tool, even those its filter does not match.
 - In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo`, and
   GitHub and Donate print their address instead of starting a browser as root.
-- On the Tools tab, Sockets, Port check, Filter tester and Diagnostics work. Ping, TCP health and
+- On the Tools tab, Ping, Sockets, Port check, Filter tester and Diagnostics work. Ping works
+  without `sudo` where the system lets your group send pings (the setting
+  `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not). With `sudo` it sends
+  through a raw socket, which needs the capability CAP_NET_RAW: root has it unless the system
+  takes it away, as some containers do. A ping Linux refuses shows its own word for it:
+  `EPERM` usually means a firewall rule on this computer.
+  A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health and
   Adapters say that they work on Windows only for now, and so do the row menu entries that open
   them or reset a connection, and the Diagnostics boxes that add the adapters or the proxy to the
   report. The Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and
@@ -286,10 +292,9 @@ monitor is gone it returns to the centre of the current screen.
     connection. A reply whose data came back different (the session's corruption) says so.
     A bigger ping shows the speed limit and the packet size limit: on the wire a ping is its
     size plus 28 bytes (48 with IPv6), so with a 1400-byte limit 1372 bytes get through and
-    1373 are lost. Duplication does not show - Windows hands over the first reply and drops
-    the copies.
+    1373 are lost. Duplication does not show - only the first reply to each ping counts.
     Windows waits for a reply in steps of half a second, so the wait is offered in whole
-    seconds, and a reply that comes later counts as lost - with a long latency, choose a
+    seconds. A reply that comes after the wait counts as lost - with a long latency, choose a
     longer wait. A name is looked up once, at Start, the way any program does, and the
     address it gave is shown. Right-click a row of **Sockets** or of the Connections page
     and choose **"Ping this address"** to ping its far end. **"Copy results"** copies the
@@ -1603,6 +1608,8 @@ beantester/              the implementation package
                          finding it in the socket table, without calling Windows
   icmp.py                one ICMP echo request (iphlpapi/ctypes), for the Tools tab's Ping -
                          the only module that sends something of its own
+  icmpsock.py            the same request on Linux, through the system's ping socket or a
+                         raw one under sudo
   targeting.py           live target port set: process tree, asks for a rebuild on a miss
   target_resolver.py     rebuilds that port set on its own thread, off the packet path
   socketwatch.py         live local port -> PID from WinDivert SOCKET events (event-driven source)

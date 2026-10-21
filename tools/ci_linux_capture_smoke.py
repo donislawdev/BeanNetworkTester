@@ -20,7 +20,11 @@ went away" look the same from one side.
 * ``--latency 50 --narrow-filter``: the target's round trip grows by both
   directions' 50 ms, the bystander's does not, and the filter was narrowed;
 * ``--loss 100``: the target goes silent, the bystander keeps answering;
-* after: both are fast again - the session took nothing with it.
+* after: both are fast again - the session took nothing with it;
+* Ping, the Tools tab's own ``icmp.echo``, through ``--latency 50``: first through the
+  raw socket, because a new namespace refuses the ping socket even to root
+  (``ping_group_range = 1 0``), then through the ping socket once the namespace
+  allows it - each carries both directions' latency, and is fast before and after.
 
 What bounds the damage (convention 6)
 -------------------------------------
@@ -66,6 +70,19 @@ CLIENT = (
     "    time.sleep(0.05)\n"
     "print(json.dumps(out))\n")
 
+# Run INSIDE the namespace, from the checkout: the Tools tab's own Ping (icmp.echo),
+# one request per round, the socket kind it may use and each round trip in ms or None.
+PING_CLIENT = (
+    "import ipaddress, json, sys\n"
+    "from beantester import icmp, icmpsock\n"
+    "host, rounds, wait_ms = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])\n"
+    "out = []\n"
+    "for i in range(rounds):\n"
+    "    echo = icmp.echo(ipaddress.ip_address(host), wait_ms)\n"
+    "    out.append(echo.rtt_ms if echo.status == icmp.IP_SUCCESS else None)\n"
+    "print(json.dumps({'kind': icmpsock.kind(), 'rtts': out}))\n")
+PING_ROUNDS = 6
+
 
 # -- the judges: pure, so a test can prove they fail ------------------------------ #
 def _answered(rtts):
@@ -106,6 +123,31 @@ def judge_loss(target, bystander):
         failures.append(f"target: {len(_answered(target))} of {len(target)} answered under --loss 100")
     if not bystander or len(_answered(bystander)) < len(bystander):
         failures.append(f"bystander: {len(_answered(bystander))} of {len(bystander)} answered")
+    return failures
+
+
+def judge_ping(before, raw, dgram, after, latency_ms=LATENCY_MS):
+    """Failures (empty = pass) for the Ping phase. Each measurement is ``{"kind", "rtts"}``:
+    the raw socket while the namespace refuses the ping socket (a new one starts at
+    ``ping_group_range = 1 0``), the ping socket once it is opened."""
+    fast = latency_ms / 2
+    added = 2 * latency_ms
+    failures = []
+    for name, got, kind, slow in (("before", before, "raw", False), ("raw", raw, "raw", True),
+                                  ("dgram", dgram, "dgram", True), ("after", after, "dgram", False)):
+        rtts = got.get("rtts") or []
+        if got.get("kind") != kind:
+            failures.append(f"ping {name}: the {got.get('kind')} socket, expected the {kind} one")
+        if not rtts or len(_answered(rtts)) < 0.8 * len(rtts):
+            failures.append(f"ping {name}: only {len(_answered(rtts))} of {len(rtts)} answered")
+            continue
+        median = _median(rtts)
+        if slow and not 0.9 * added <= median <= added + 100:
+            failures.append(f"ping {name}: {median} ms, expected about {added} ms")
+        if not slow and median >= fast:
+            failures.append(f"ping {name}: {median} ms - "
+                            + ("the machine is too slow to tell" if name == "before"
+                               else "the session left something behind"))
     return failures
 
 
@@ -165,6 +207,23 @@ def measure(port, rounds=ROUNDS, timeout=1.0):
                                     str(timeout)),
                        capture_output=True, text=True, timeout=60)
     return json.loads(r.stdout.strip() or "[]")
+
+
+def ping(rounds=PING_ROUNDS, wait_ms=1000):
+    """Ping's own echo from inside the namespace: ``rounds * wait`` s at worst."""
+    r = subprocess.run(in_namespace(sys.executable, "-c", PING_CLIENT, HOST, str(rounds),
+                                    str(wait_ms)),
+                       cwd=ROOT, capture_output=True, text=True, timeout=60)
+    return json.loads(r.stdout.strip() or "{}")
+
+
+def open_ping_sockets():
+    """Let every group open the ping socket - in the namespace only. The setting is the
+    namespace's own (each one has its ``ping_group_range``) and goes with it:
+    ``teardown_namespace`` deletes the namespace in ``main``'s ``finally``, so there is
+    nothing to put back."""
+    subprocess.run(in_namespace("sysctl", "-q", "-w", "net.ipv4.ping_group_range=0 2147483647"),
+                   check=True, capture_output=True, text=True)
 
 
 def run_session(args, during):
@@ -242,6 +301,29 @@ def _loss_phase():
     return failures
 
 
+def _ping_phase():
+    # 6 rounds of ~100 ms for each socket, about 2 s of an 8 s session; the namespace
+    # opens the ping socket between them, so one session measures both.
+    before = ping()
+
+    def during():
+        raw = ping()
+        open_ping_sockets()
+        return raw, ping()
+    result, lines, code = run_session(
+        ["--dst-ip", HOST, "--latency", str(LATENCY_MS), "--duration", "8"], during)
+    failures = _session_failures("ping", result, lines, code)
+    if result is None:
+        return failures
+    raw, dgram = result
+    after = ping()
+    failures += judge_ping(before, raw, dgram, after)
+    print("ping:", json.dumps({name: [got.get("kind"), _median(got.get("rtts") or [])]
+                               for name, got in (("before", before), ("raw", raw),
+                                                 ("dgram", dgram), ("after", after))}))
+    return failures
+
+
 def main(argv=None, environment=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--require", action="store_true",
@@ -265,6 +347,7 @@ def main(argv=None, environment=None):
         start_far_end()
         failures += _latency_phase()
         failures += _loss_phase()
+        failures += _ping_phase()
     except Exception as exc:                      # a phase that could not run is a failure
         failures.append(f"{type(exc).__name__}: {exc}")
     finally:

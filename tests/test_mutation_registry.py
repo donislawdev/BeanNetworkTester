@@ -3228,7 +3228,7 @@ MUTATIONS = [
         "file": "beantester/capabilities.py",
         "old": "    return bool(CAPABILITIES[name].module.supported())\n",
         "new": "    return True\n",
-        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+        "test": "test_windows_offers_every_capability_and_linux_ping_when_it_may_send",
     },
     {
         # A tool that needs nothing would be hidden on every system, without a word.
@@ -3251,7 +3251,7 @@ MUTATIONS = [
         "old": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n"
                "    return sys.platform.startswith(\"win\")\n",
         "new": "    Ubuntu 26.04 and in WSL, as root and not).\n    \"\"\"\n    return True\n",
-        "test": "test_windows_offers_every_capability_and_linux_none_yet",
+        "test": "test_windows_offers_every_capability_and_linux_ping_when_it_may_send",
     },
     {
         "label": "capabilities: the row menus offer Ping on a system without it",
@@ -8807,6 +8807,203 @@ MUTATIONS = [
         "old": "    return \"\\n\\n\".join(T(key) for key in body_key)\n",
         "new": "    return \"\\n\".join(T(key) for key in body_key)\n",
         "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
+    },
+    # -- Ping on Linux (stage 2b): icmpsock, its words in icmp, and what shows them -- #
+    {
+        # MEASURED on the VM: an error after 5 ms was answered after the whole 2 s wait.
+        "label": "ping on Linux: the error queue is read while the socket still waits",
+        "file": "beantester/icmpsock.py",
+        "old": "    sock.settimeout(0)\n",
+        "new": "    sock.settimeout(None)\n",
+        "test": "test_an_icmp_error_is_read_from_the_error_queue_at_once",
+    },
+    {
+        "label": "ping on Linux: any echo reply is taken as this request's",
+        "file": "beantester/icmpsock.py",
+        "old": "        if got is None or got[:3] != (ECHO_REPLY[version], ident, SEQ):\n",
+        "new": "        if got is None:\n",
+        "test": "test_what_is_not_this_requests_reply_is_passed_over",
+    },
+    {
+        # Ubuntu 24.04 refuses the ping socket to root too: no Ping under sudo there.
+        "label": "ping on Linux: the raw socket is never tried",
+        "file": "beantester/icmpsock.py",
+        "old": "KINDS = (DGRAM, RAW)\n",
+        "new": "KINDS = (DGRAM,)\n",
+        "test": "test_the_ping_socket_first_and_the_raw_one_when_it_is_refused",
+    },
+    {
+        "label": "ping on Linux: a raw IPv4 reply is read from its IP header",
+        "file": "beantester/icmpsock.py",
+        "old": "        start = (raw[0] & 0x0F) * 4\n",
+        "new": "        start = 0\n",
+        "test": "test_a_raw_ipv4_reply_is_read_after_its_ip_header",
+    },
+    {
+        "label": "ping on Linux: the kernel's receive time is not believed",
+        "file": "beantester/icmpsock.py",
+        "old": "        rtt = stamp - sent_wall if stamped and stamp is not None else None\n",
+        "new": "        rtt = None\n",
+        "test": "test_a_ping_socket_reply_is_taken_with_its_ttl_and_the_kernels_time",
+    },
+    {
+        "label": "ping on Linux: an ICMP error is read as an errno",
+        "file": "beantester/icmpsock.py",
+        "old": "            if origin in (SO_EE_ORIGIN_ICMP, SO_EE_ORIGIN_ICMP6):\n",
+        "new": "            if False:\n",
+        "test": "test_measured_error_queue_entries_read_as_the_kernel_said",
+    },
+    {
+        "label": "ping on Linux: an IPv6 sender is read at the IPv4 offset",
+        "file": "beantester/icmpsock.py",
+        "old": "        return str(ipaddress.IPv6Address(bytes(raw[8:24])))\n",
+        "new": "        return str(ipaddress.IPv6Address(bytes(raw[4:20])))\n",
+        "test": "test_measured_error_queue_entries_read_as_the_kernel_said",
+    },
+    {
+        "label": "ping on Linux: a raw IPv4 request goes without its checksum",
+        "file": "beantester/icmpsock.py",
+        "old": "        head = _HEAD.pack(ECHO_REQUEST[version], 0, checksum(head + sent), ident, SEQ)\n",
+        "new": "        head = head\n",
+        "test": "test_the_checksum_of_the_request_the_kernel_took",
+    },
+    {
+        "label": "ping on Linux: the socket is left open",
+        "file": "beantester/icmpsock.py",
+        "old": "    finally:\n        sock.close()\n",
+        "new": "    finally:\n        pass\n",
+        "test": "test_the_socket_is_closed_whatever_happens",
+    },
+    {
+        "label": "ping on Linux: TTL expired is said as a general failure",
+        "file": "beantester/icmp.py",
+        "old": "        (3, 4): IP_PACKET_TOO_BIG, (11, 0): IP_TTL_EXPIRED_TRANSIT},\n",
+        "new": "        (3, 4): IP_PACKET_TOO_BIG},\n",
+        "test": "test_linux_answers_are_said_in_the_words_windows_answers_are",
+    },
+    {
+        "label": "ping on Linux: IPv6's packet too big is taken by its code",
+        "file": "beantester/icmp.py",
+        "old": "        status = (IP_PACKET_TOO_BIG if version == 6 and kind == ICMPV6_PACKET_TOO_BIG\n",
+        "new": "        status = (IP_PACKET_TOO_BIG if False\n",
+        "test": "test_linux_answers_are_said_in_the_words_windows_answers_are",
+    },
+    {
+        "label": "ping on Linux: the echo goes to the Windows binding",
+        "file": "beantester/icmp.py",
+        "old": "        if system is None and sys.platform.startswith(\"linux\"):\n"
+               "            system = Sockets()\n",
+        "new": "        if False:\n            system = Sockets()\n",
+        "test": "test_on_linux_an_echo_goes_through_the_sockets_and_a_given_system_is_kept",
+    },
+    {
+        "label": "ping on Linux: Ping is said to be on every Linux",
+        "file": "beantester/icmp.py",
+        "old": "    return sys.platform.startswith(\"linux\") and icmpsock.kind() is not None\n",
+        "new": "    return sys.platform.startswith(\"linux\")\n",
+        "test": "test_ping_is_here_on_windows_and_on_a_linux_that_lets_this_process_send",
+    },
+    {
+        "label": "capabilities: a module's own words for this system are not asked",
+        "file": "beantester/capabilities.py",
+        "old": "    return (own() if own else None) or capability.reason\n",
+        "new": "    return capability.reason\n",
+        "test": "test_a_linux_without_the_right_to_ping_says_how_to_get_it",
+    },
+    {
+        "label": "ping on Linux: what it said is hidden behind General failure",
+        "file": "beantester/nettools/ping.py",
+        "old": "    if echo.said:\n        # Before the numbers",
+        "new": "    if False:\n        # Before the numbers",
+        "test": "test_what_linux_said_is_shown_and_reported_in_its_own_name",
+    },
+    {
+        "label": "ping on Linux: the report says Windows answered",
+        "file": "beantester/nettools/ping.py",
+        "old": "    if kind == FAILED and echo.said:\n",
+        "new": "    if False:\n",
+        "test": "test_what_linux_said_is_shown_and_reported_in_its_own_name",
+    },
+    {
+        "label": "ping on Linux: a zone typed as an interface name is refused",
+        "file": "beantester/nettools/ping.py",
+        "old": "    if scope is not None and not scope.isdigit() and not _interface(scope):\n",
+        "new": "    if scope is not None and not scope.isdigit():\n",
+        "test": "test_a_named_zone_is_an_interface_on_linux_and_nowhere_on_windows",
+    },
+    {
+        "label": "ping on Linux: the sheet gives Windows' wait in steps of half a second",
+        "file": "beantester/nettools/ping.py",
+        "old": "    return LINUX_HELP if sys.platform.startswith(\"linux\") else ()\n",
+        "new": "    return WINDOWS_HELP\n",
+        "test": "test_the_sheet_has_a_paragraph_about_the_system_it_runs_on",
+    },
+    {
+        "label": "ping: the ? opens the one old body instead of the composed sheet",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "        dialogs.help_button(bar, app.root, \"tools.ping.help_title\", help_keys(),\n",
+        "new": "        dialogs.help_button(bar, app.root, \"tools.ping.help_title\", "
+               "\"tools.ping.help_body\",\n",
+        "test": "test_every_question_mark_opens_its_own_sheet",
+    },
+    {
+        "label": "ping on Linux: the sheet does not say which setting lets a group ping",
+        "file": "lang/en.json",
+        "old": "lets your group send pings (the setting net.ipv4.ping_group_range). Where it does not",
+        "new": "lets your group send pings. Where it does not",
+        "test": "test_no_ping_text_linux_shows_names_windows",
+    },
+    {
+        "label": "ping on Linux: the Result column's tip names Windows again",
+        "file": "lang/en.json",
+        "old": "or what the system or a router on the way said.",
+        "new": "or what Windows or a router on the way said.",
+        "test": "test_no_ping_text_linux_shows_names_windows",
+    },
+    {
+        # On a Linux that will not let Ping send, the "?" lost the paragraph saying how.
+        "label": "ping on Linux: the not-available tab's ? opens the bare first paragraph",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "                            sheet() if sheet else f\"tools.{tool.id}.help_body\",\n",
+        "new": "                            f\"tools.{tool.id}.help_body\",\n",
+        "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
+    },
+    {
+        # CodeRabbit on #283: a raw pinger may share the identifier, and a ping socket is
+        # handed replies by it alone.
+        "label": "ping on Linux: a reply from another host is taken as this request's",
+        "file": "beantester/icmpsock.py",
+        "old": "        if not _from_target(source, address):\n",
+        "new": "        if False:\n",
+        "test": "test_what_is_not_this_requests_reply_is_passed_over",
+    },
+    {
+        "label": "ping on Linux: as root the not-available words still say to use sudo",
+        "file": "beantester/icmp.py",
+        "old": "    return NOT_HERE_ROOT if paths.running_as_root() else NOT_HERE_LINUX\n",
+        "new": "    return NOT_HERE_LINUX\n",
+        "test": "test_a_linux_without_the_right_to_ping_says_how_to_get_it",
+    },
+    {
+        "label": "ping: the ? sheet loses its paragraph about this system",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    return (HELP_FIRST,) + tuple(ping.platform_help()) + (HELP_LAST,)\n",
+        "new": "    return (HELP_FIRST, HELP_LAST)\n",
+        "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
+    },
+    {
+        "label": "ping on Linux: the sheet promises sudo without CAP_NET_RAW",
+        "file": "lang/en.json",
+        "old": "as root it sends through a raw socket, which needs the capability CAP_NET_RAW - some containers take it away.",
+        "new": "as root it always sends.",
+        "test": "test_no_ping_text_linux_shows_names_windows",
+    },
+    {
+        "label": "linux capture smoke: Ping's socket kind is not judged",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "        if got.get(\"kind\") != kind:\n",
+        "new": "        if False:\n",
+        "test": "test_every_broken_ping_through_a_session_is_named",
     },
 ]
 
