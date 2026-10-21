@@ -23,7 +23,7 @@ import sys
 
 import pytest
 
-from beantester import capabilities, icmp, icmpsock
+from beantester import capabilities, icmp, icmpsock, paths
 from fakes import check
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -132,18 +132,26 @@ def test_windows_offers_every_capability_and_linux_ping_when_it_may_send(monkeyp
 
 def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):
     """The module's own words before the shared ones: on Linux "Windows only for now"
-    is no longer true of Ping, and the person can do something about it."""
+    is no longer true of Ping, and the person can do something about it - and as root
+    "start it with sudo" would be no advice: the system took CAP_NET_RAW away."""
     monkeypatch.setattr(icmpsock, "kind", lambda: None)
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)
     check("Linux: Ping's own words", capabilities.why_not("ping") == icmp.NOT_HERE_LINUX,
           f"({capabilities.why_not('ping')})")
     check("the others keep the shared ones",
           capabilities.why_not("adapters") == capabilities.NOT_HERE)
+    monkeypatch.setattr(paths, "running_as_root", lambda: True)
+    check("as root: the words for root", capabilities.why_not("ping") == icmp.NOT_HERE_ROOT,
+          f"({capabilities.why_not('ping')})")
     monkeypatch.setattr(sys, "platform", "darwin")
     check("another system: the shared words", capabilities.why_not("ping") == capabilities.NOT_HERE)
     with open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8") as f:
-        said = json.load(f)[icmp.NOT_HERE_LINUX]
-    check("and they say what to do", "sudo" in said and "ping_group_range" in said, f"({said})")
+        texts = json.load(f)
+    user, root = texts[icmp.NOT_HERE_LINUX], texts[icmp.NOT_HERE_ROOT]
+    check("the user is told what to do", "sudo" in user and "ping_group_range" in user, f"({user})")
+    check("root is not told to use sudo, and is told what is missing",
+          "sudo" not in root and "CAP_NET_RAW" in root and "ping_group_range" in root, f"({root})")
 
 
 def test_every_reason_is_said_in_every_language():

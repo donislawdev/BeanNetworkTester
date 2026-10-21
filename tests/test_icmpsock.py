@@ -4,8 +4,11 @@ The ancillary data and the requests below are copied from the run on a VM with
 Ubuntu 26.04 (2026-10-21, ``internal_tools`` probes ``2026-10-21-linux-ping``: a
 client, a router and a far end in three network namespaces), so a reader that takes
 another layout - the extended error's sender, the IPv6 address at another offset -
-reads the wrong bytes on every runner. The socket is a fake that answers as
-scripted; the live test at the bottom pings this machine's loopback on Linux.
+reads the wrong bytes on every runner. The layout is the kernel's; the addresses the
+probe's namespaces had (made up for them) are moved into the documentation ranges
+(RFC 5737, RFC 3849) - a router at 192.0.2.1, this machine 192.0.2.2, the far end
+198.51.100.2. The socket is a fake that answers as scripted; the live test at the
+bottom pings this machine's loopback on Linux.
 
 🔴 The fake refuses an error-queue read while the socket still has a timeout: the
 first version read it that way and an error that came after 5 ms was answered after
@@ -23,31 +26,31 @@ from beantester import icmpsock
 from fakes import check
 
 PAYLOAD = b"abcdefghijklmnopqrstuvwabcdefghi"
-V4 = ipaddress.ip_address("10.78.0.2")
-V6 = ipaddress.ip_address("fd00:78::2")
+V4 = ipaddress.ip_address("198.51.100.2")
+V6 = ipaddress.ip_address("2001:db8:78::2")
 SENT_WALL = 1_800_000_000_000_000_000      # the fake clock's wall time at the send
 
 # The error queue's ancillary data, as the kernel wrote it (VM, 2026-10-21):
 # sock_extended_err (errno, origin, type, code, pad, info, data) and the sender.
-TTL_EXPIRED = bytes.fromhex("71000000020b00000000000000000000020000000a4d00010000000000000000")
-NET_UNREACHABLE = bytes.fromhex("65000000020300000000000000000000020000000a4d00010000000000000000")
-HOST_UNREACHABLE = bytes.fromhex("71000000020301000000000000000000020000000a4d00020000000000000000")
-FRAG_NEEDED = bytes.fromhex("5a000000020304000005000000000000020000000a4d00010000000000000000")
+TTL_EXPIRED = bytes.fromhex("71000000020b0000000000000000000002000000c00002010000000000000000")
+NET_UNREACHABLE = bytes.fromhex("6500000002030000000000000000000002000000c00002010000000000000000")
+HOST_UNREACHABLE = bytes.fromhex("7100000002030100000000000000000002000000c00002020000000000000000")
+FRAG_NEEDED = bytes.fromhex("5a00000002030400000500000000000002000000c00002010000000000000000")
 V6_TIME_EXCEEDED = bytes.fromhex("710000000303000000000000000000000a00000000000000"
-                                 "fd000077000000000000000000000001" "00000000")
+                                 "20010db8007700000000000000000001" "00000000")
 V6_NO_ROUTE = bytes.fromhex("650000000301000000000000000000000a00000000000000"
-                            "fd000077000000000000000000000001" "00000000")
+                            "20010db8007700000000000000000001" "00000000")
 V6_ADDRESS_UNREACHABLE = bytes.fromhex("710000000301030000000000000000000a00000000000000"
-                                       "fd000077000000000000000000000002" "00000000")
+                                       "20010db8007700000000000000000002" "00000000")
 V6_TOO_BIG = bytes.fromhex("5a0000000302000000050000000000000a00000000000000"
-                           "fd000077000000000000000000000001" "00000000")
+                           "20010db8007700000000000000000001" "00000000")
 STAMP = bytes.fromhex("62a3d86a000000007799751f00000000")       # a timespec, 64-bit
 TTL_63 = struct.pack("=i", 63)
 # The request a raw socket sent, as the error queue handed it back: the kernel took it,
 # so its checksum (e26f) is the one the wire wanted.
 RAW_REQUEST_HEAD = bytes.fromhex("0800e26f5a5a1092")
 # An IPv4 header the VM's raw socket received (in a router's "TTL expired").
-IP_HEADER = bytes.fromhex("4500003c41ca4000010123590a4d00020a4e0002")
+IP_HEADER = bytes.fromhex("4500003c41ca400001014bbfc0000202c6336402")
 
 
 def head(kind, ident, seq=icmpsock.SEQ, code=0):
@@ -147,14 +150,14 @@ def run(sock, address=V4, kinds=(icmpsock.DGRAM,), wait_ms=2000, sent=PAYLOAD, *
 # -- what the kernel wrote ----------------------------------------------------------- #
 def test_measured_error_queue_entries_read_as_the_kernel_said():
     cases = {
-        TTL_EXPIRED: (4, (11, 0), "10.77.0.1"),
-        NET_UNREACHABLE: (4, (3, 0), "10.77.0.1"),
-        HOST_UNREACHABLE: (4, (3, 1), "10.77.0.2"),     # from this machine's own address
-        FRAG_NEEDED: (4, (3, 4), "10.77.0.1"),
-        V6_TIME_EXCEEDED: (6, (3, 0), "fd00:77::1"),
-        V6_NO_ROUTE: (6, (1, 0), "fd00:77::1"),
-        V6_ADDRESS_UNREACHABLE: (6, (1, 3), "fd00:77::2"),
-        V6_TOO_BIG: (6, (2, 0), "fd00:77::1"),
+        TTL_EXPIRED: (4, (11, 0), "192.0.2.1"),
+        NET_UNREACHABLE: (4, (3, 0), "192.0.2.1"),
+        HOST_UNREACHABLE: (4, (3, 1), "192.0.2.2"),     # from this machine's own address
+        FRAG_NEEDED: (4, (3, 4), "192.0.2.1"),
+        V6_TIME_EXCEEDED: (6, (3, 0), "2001:db8:77::1"),
+        V6_NO_ROUTE: (6, (1, 0), "2001:db8:77::1"),
+        V6_ADDRESS_UNREACHABLE: (6, (1, 3), "2001:db8:77::2"),
+        V6_TOO_BIG: (6, (2, 0), "2001:db8:77::1"),
     }
     for blob, (version, icmp, sender) in cases.items():
         level, kind = ((icmpsock.SOL_IP, icmpsock.IP_RECVERR) if version == 4
@@ -166,7 +169,7 @@ def test_measured_error_queue_entries_read_as_the_kernel_said():
     local[4] = 1                                        # origin LOCAL: the kernel's errno
     check("an error this machine raised is its errno",
           icmpsock.queued_error([(0, icmpsock.IP_RECVERR, bytes(local))])
-          == icmpsock.Answer(113, source="10.77.0.1"))
+          == icmpsock.Answer(113, source="192.0.2.1"))
     check("no extended error: nothing",
           icmpsock.queued_error([(icmpsock.SOL_IP, icmpsock.IP_TTL, TTL_63)]) is None)
 
@@ -210,13 +213,13 @@ def test_a_raw_ipv4_reply_is_read_after_its_ip_header():
 def test_a_ping_socket_reply_is_taken_with_its_ttl_and_the_kernels_time():
     sock = FakeSocket([("data", head(0, 21214) + PAYLOAD,
                         [stamp_at(1.5), (icmpsock.SOL_IP, icmpsock.IP_TTL, TTL_63)],
-                        ("10.78.0.2", 0))])
+                        ("198.51.100.2", 0))])
     answer = run(sock)
     check("the reply", answer == icmpsock.Answer(replied=True, rtt_ns=1_500_000, ttl=63,
-                                                 source="10.78.0.2", data=PAYLOAD), f"({answer})")
+                                                 source="198.51.100.2", data=PAYLOAD), f"({answer})")
     [(request, address)] = sock.sent
     check("an echo request, the identifier left to the kernel",
-          request == head(8, 0) + PAYLOAD and address == ("10.78.0.2", 0), f"({request!r})")
+          request == head(8, 0) + PAYLOAD and address == ("198.51.100.2", 0), f"({request!r})")
     check("the error queue, the TTL and the receive time asked for", {
         (icmpsock.SOL_IP, icmpsock.IP_RECVERR, 1), (icmpsock.SOL_IP, icmpsock.IP_RECVTTL, 1),
         (icmpsock.SOL_SOCKET, icmpsock.SO_TIMESTAMPNS, 1)} == set(sock.options), f"({sock.options})")
@@ -225,16 +228,23 @@ def test_a_ping_socket_reply_is_taken_with_its_ttl_and_the_kernels_time():
 
 def test_what_is_not_this_requests_reply_is_passed_over():
     """A raw socket sees every ICMP message: this request going out on loopback,
-    another program's replies - and a late one of an earlier request."""
+    another program's replies - one with this very identifier and number from another
+    host among them (a raw pinger may share it) - and a late one of an earlier request."""
     sock = FakeSocket([
         ("data", IP_HEADER + head(8, 0x5A5A) + PAYLOAD, [], ("127.0.0.1", 0)),
         ("data", IP_HEADER + head(0, 0x1234) + PAYLOAD, [], ("127.0.0.1", 0)),
         ("data", IP_HEADER + head(0, 0x5A5A, seq=2) + PAYLOAD, [], ("127.0.0.1", 0)),
         ("data", IP_HEADER[:5], [], ("127.0.0.1", 0)),
+        ("data", IP_HEADER + head(0, 0x5A5A) + PAYLOAD, [], ("203.0.113.9", 0)),
         ("data", IP_HEADER + head(0, 0x5A5A) + PAYLOAD, [stamp_at(0.2)], ("127.0.0.1", 0))])
     answer = run(sock, ipaddress.ip_address("127.0.0.1"), kinds=(icmpsock.RAW,), ident=0x5A5A)
-    check("the fifth datagram is the reply", answer.replied and answer.rtt_ns == 200_000
-          and not sock.script, f"({answer}, {len(sock.script)} left)")
+    check("the sixth datagram is the reply", answer.replied and answer.rtt_ns == 200_000
+          and answer.source == "127.0.0.1" and not sock.script,
+          f"({answer}, {len(sock.script)} left)")
+    dgram = FakeSocket([("data", head(0, 21214) + PAYLOAD, [], ("203.0.113.9", 0)),
+                        ("timeout",)])
+    check("a ping socket handed another host's reply by its identifier: no answer",
+          run(dgram) == icmpsock.Answer(), f"({dgram.script})")
     check("the raw request carries its identifier and checksum",
           icmpsock.checksum(sock.sent[0][0]) == 0 and sock.sent[0][0][4:6] == b"\x5a\x5a")
 
@@ -245,7 +255,7 @@ def test_an_icmp_error_is_read_from_the_error_queue_at_once():
                                                 TTL_EXPIRED)])])])
     answer = run(sock)
     check("TTL expired, from the router", answer == icmpsock.Answer(
-        source="10.77.0.1", icmp=(11, 0)), f"({answer})")
+        source="192.0.2.1", icmp=(11, 0)), f"({answer})")
     check("the queue was read without waiting", sock.timeouts[-1] == 0, f"({sock.timeouts})")
 
 
@@ -266,13 +276,13 @@ def test_a_refused_send_and_no_answer_in_time():
     check("no route here: sendto's errno", run(FakeSocket(send_error=101))
           == icmpsock.Answer(101))
     check("nothing within the wait", run(FakeSocket([("timeout",)])) == icmpsock.Answer())
-    late = FakeSocket([("data", head(0, 21214) + PAYLOAD, [], ("10.78.0.2", 0))])
+    late = FakeSocket([("data", head(0, 21214) + PAYLOAD, [], ("198.51.100.2", 0))])
     check("the wait already over: no answer, nothing read",
           run(late, clock=Clock(step_ns=3_000_000_000)) == icmpsock.Answer() and late.script)
 
 
 def test_the_ping_socket_first_and_the_raw_one_when_it_is_refused():
-    raw = FakeSocket([("data", IP_HEADER + head(0, 0x5A5A) + PAYLOAD, [], ("10.78.0.2", 0))])
+    raw = FakeSocket([("data", IP_HEADER + head(0, 0x5A5A) + PAYLOAD, [], ("198.51.100.2", 0))])
     opener = opener_of(raw, refuse={icmpsock.DGRAM})
     answer = icmpsock.echo(V4, 2000, PAYLOAD, opener=opener, ident=0x5A5A, clock=Clock(),
                            stamped=False)
@@ -292,11 +302,11 @@ def test_the_ping_socket_first_and_the_raw_one_when_it_is_refused():
 
 def test_the_kernels_time_is_believed_only_inside_the_wait():
     reply = head(0, 21214) + PAYLOAD
-    before = FakeSocket([("data", reply, [stamp_at(-5)], ("10.78.0.2", 0))])
+    before = FakeSocket([("data", reply, [stamp_at(-5)], ("198.51.100.2", 0))])
     answer = run(before, clock=Clock(step_ns=1_000_000))
     check("a receive time before the send: the time read here", answer.rtt_ns == 2_000_000,
           f"({answer.rtt_ns})")
-    unstamped = FakeSocket([("data", reply, [stamp_at(1)], ("10.78.0.2", 0))])
+    unstamped = FakeSocket([("data", reply, [stamp_at(1)], ("198.51.100.2", 0))])
     answer = run(unstamped, clock=Clock(step_ns=1_000_000), stamped=False)
     check("a machine that numbers its options otherwise: not asked, not read",
           answer.rtt_ns == 2_000_000 and not any(o[1] == icmpsock.SO_TIMESTAMPNS
@@ -319,7 +329,7 @@ def test_the_socket_is_closed_whatever_happens():
 def test_an_ipv6_reply_has_no_ttl_and_a_zone_goes_as_its_interface_number(monkeypatch):
     sock = FakeSocket([("data", head(129, 21214) + PAYLOAD,
                         [(icmpsock.SOL_IP, icmpsock.IP_TTL, TTL_63)],
-                        ("fd00:78::2", 0, 0, 0))], name=("::", 21214, 0, 0))
+                        ("2001:db8:78::2", 0, 0, 0))], name=("::", 21214, 0, 0))
     answer = run(sock, V6)
     check("IPv6: a reply, no TTL", answer.replied and answer.ttl is None, f"({answer})")
     check("only the error queue asked for", sock.options[:1]

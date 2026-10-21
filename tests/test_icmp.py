@@ -221,9 +221,9 @@ def test_linux_answers_are_said_in_the_words_windows_answers_are():
     """The table the rest of the tool reads (``nettools/ping.py``): a Linux answer
     gets the number Windows gives the same ICMP message, so the Result column, the
     totals and the report need no second vocabulary."""
-    reply = answer(replied=True, rtt_ns=1_999_999, ttl=63, source="10.78.0.2", data=PAYLOAD)
+    reply = answer(replied=True, rtt_ns=1_999_999, ttl=63, source="198.51.100.2", data=PAYLOAD)
     check("a reply: whole ms, as Windows counts them",
-          icmp.from_answer(reply, PAYLOAD, 4) == icmp.Echo(0, 1, 63, "10.78.0.2", False))
+          icmp.from_answer(reply, PAYLOAD, 4) == icmp.Echo(0, 1, 63, "198.51.100.2", False))
     check("changed data", icmp.from_answer(reply._replace(data=b"x" * 32), PAYLOAD, 4).changed)
     check("an IPv6 row has no TTL, as on Windows",
           icmp.from_answer(reply._replace(ttl=64), PAYLOAD, 6).ttl is None)
@@ -233,12 +233,12 @@ def test_linux_answers_are_said_in_the_words_windows_answers_are():
              (6, (2, 0)): icmp.IP_PACKET_TOO_BIG, (6, (2, 9)): icmp.IP_PACKET_TOO_BIG,
              (6, (3, 0)): icmp.IP_TTL_EXPIRED_TRANSIT}
     for (version, message), status in words.items():
-        echo = icmp.from_answer(answer(icmp=message, source="10.77.0.1"), PAYLOAD, version)
-        check(f"IPv{version} ICMP {message}", echo == icmp.Echo(status, reply_from="10.77.0.1"),
+        echo = icmp.from_answer(answer(icmp=message, source="192.0.2.1"), PAYLOAD, version)
+        check(f"IPv{version} ICMP {message}", echo == icmp.Echo(status, reply_from="192.0.2.1"),
               f"({echo})")
-    other = icmp.from_answer(answer(icmp=(3, 13), source="10.77.0.1"), PAYLOAD, 4)
+    other = icmp.from_answer(answer(icmp=(3, 13), source="192.0.2.1"), PAYLOAD, 4)
     check("one the numbers do not name: said, under a general failure",
-          other == icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="10.77.0.1", said="ICMP 3/13"),
+          other == icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="192.0.2.1", said="ICMP 3/13"),
           f"({other})")
     check("IPv6's says so", icmp.from_answer(answer(icmp=(1, 1)), PAYLOAD, 6).said == "ICMPv6 1/1")
     for number, status in ((101, icmp.IP_DEST_NET_UNREACHABLE),

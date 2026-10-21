@@ -243,6 +243,19 @@ def _host(source):
     return str(source[0]).split("%")[0] if source else ""
 
 
+def _from_target(source, address):
+    """Whether a reply came from the address pinged (the zone aside). An echo reply
+    always does - a router answers through an ICMP error, which the error queue
+    carries - so one with this request's identifier from another host is another
+    program's: a raw socket sees every reply this host gets, and a ping socket is
+    handed replies by their identifier alone, which a raw pinger may share."""
+    try:
+        return ipaddress.ip_address(_host(source)) == \
+            ipaddress.ip_address(str(address).split("%")[0])
+    except ValueError:
+        return False
+
+
 # -- one request ------------------------------------------------------------------- #
 def _target(address):
     if address.version == 4:
@@ -325,6 +338,8 @@ def _exchange(sock, kind, address, timeout_ms, sent, ident, clock, stamped):
         got = parse_reply(raw, version, kind)
         if got is None or got[:3] != (ECHO_REPLY[version], ident, SEQ):
             continue                # another program's ICMP, or this request going out
+        if not _from_target(source, address):
+            continue                # the same identifier and number, from another host
         ttl, stamp = received(ancillary)
         rtt = stamp - sent_wall if stamped and stamp is not None else None
         if rtt is None or not 0 <= rtt <= wait_ns:

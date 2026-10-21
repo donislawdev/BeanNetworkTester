@@ -208,7 +208,10 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   GitHub and Donate print their address instead of starting a browser as root.
 - On the Tools tab, Ping, Sockets, Port check, Filter tester and Diagnostics work. Ping works
   without `sudo` where the system lets your group send pings (the setting
-  `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not), and with `sudo` always.
+  `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not). With `sudo` it sends
+  through a raw socket, which needs the capability CAP_NET_RAW: root has it unless the system
+  takes it away, as some containers do. A ping Linux refuses shows its own word for it:
+  `EPERM` usually means a firewall rule on this computer.
   A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health and
   Adapters say that they work on Windows only for now, and so do the row menu entries that open
   them or reset a connection, and the Diagnostics boxes that add the adapters or the proxy to the

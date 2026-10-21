@@ -101,6 +101,9 @@ def test_a_tool_this_system_lacks_says_so_and_builds_nothing():
         # so both runners see them); Adapters has none and says the shared ones.
         icmp.why_not = lambda: icmp.NOT_HERE_LINUX
         said = {"ping": T(icmp.NOT_HERE_LINUX), "adapters": T("tools.not_here")}
+        # ...and the sheet's paragraph about Linux, whatever runs the test
+        from beantester.nettools import ping as ping_logic
+        ping_logic.platform_help = lambda: ping_logic.LINUX_HELP
         system_adapters.supported = lambda: False
         built_anyway = []
         real_init = pp.PingPanel.__init__
@@ -124,8 +127,11 @@ def test_a_tool_this_system_lacks_says_so_and_builds_nothing():
             dialogs.show_help = lambda root, title, body: opened.append(body)
             helps[0].invoke()
             dialogs.show_help = real_show
-            want = (dialogs.sheet_text(pp.help_keys()) if tool_id == "ping"
-                    else T("tools.adapters.help_body"))
+            # written out, not derived from help_keys(): a sheet that lost the
+            # paragraph would lose it on both sides of the comparison
+            want = ("\\n\\n".join(T(k) for k in ("tools.ping.help_body", "tools.ping.help_linux",
+                                                 "tools.ping.help_end"))
+                    if tool_id == "ping" else T("tools.adapters.help_body"))
             assert opened == [want], (tool_id, opened)
         texts = [w.kw.get("text") for w in fake_tk.walk(page.tabs["ping"])]
         assert T("tools.ping.sends") not in texts, "a tool that cannot run sends nothing"

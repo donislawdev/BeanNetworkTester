@@ -218,7 +218,10 @@ def ping(rounds=PING_ROUNDS, wait_ms=1000):
 
 
 def open_ping_sockets():
-    """Let every group open the ping socket - in the namespace only."""
+    """Let every group open the ping socket - in the namespace only. The setting is the
+    namespace's own (each one has its ``ping_group_range``) and goes with it:
+    ``teardown_namespace`` deletes the namespace in ``main``'s ``finally``, so there is
+    nothing to put back."""
     subprocess.run(in_namespace("sysctl", "-q", "-w", "net.ipv4.ping_group_range=0 2147483647"),
                    check=True, capture_output=True, text=True)
 

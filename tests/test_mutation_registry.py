@@ -8969,6 +8969,36 @@ MUTATIONS = [
         "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
     },
     {
+        # CodeRabbit on #283: a raw pinger may share the identifier, and a ping socket is
+        # handed replies by it alone.
+        "label": "ping on Linux: a reply from another host is taken as this request's",
+        "file": "beantester/icmpsock.py",
+        "old": "        if not _from_target(source, address):\n",
+        "new": "        if False:\n",
+        "test": "test_what_is_not_this_requests_reply_is_passed_over",
+    },
+    {
+        "label": "ping on Linux: as root the not-available words still say to use sudo",
+        "file": "beantester/icmp.py",
+        "old": "    return NOT_HERE_ROOT if paths.running_as_root() else NOT_HERE_LINUX\n",
+        "new": "    return NOT_HERE_LINUX\n",
+        "test": "test_a_linux_without_the_right_to_ping_says_how_to_get_it",
+    },
+    {
+        "label": "ping: the ? sheet loses its paragraph about this system",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    return (HELP_FIRST,) + tuple(ping.platform_help()) + (HELP_LAST,)\n",
+        "new": "    return (HELP_FIRST, HELP_LAST)\n",
+        "test": "test_a_tool_this_system_lacks_says_so_and_builds_nothing",
+    },
+    {
+        "label": "ping on Linux: the sheet promises sudo without CAP_NET_RAW",
+        "file": "lang/en.json",
+        "old": "as root it sends through a raw socket, which needs the capability CAP_NET_RAW - some containers take it away.",
+        "new": "as root it always sends.",
+        "test": "test_no_ping_text_linux_shows_names_windows",
+    },
+    {
         "label": "linux capture smoke: Ping's socket kind is not judged",
         "file": "tools/ci_linux_capture_smoke.py",
         "old": "        if got.get(\"kind\") != kind:\n",

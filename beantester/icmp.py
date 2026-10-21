@@ -59,7 +59,7 @@ import struct
 import sys
 from typing import NamedTuple
 
-from . import crashlog, icmpsock
+from . import crashlog, icmpsock, paths
 
 # What a request carries: ping.exe's 32 bytes, so a capture shows the same thing; a
 # request of another size repeats them (``payload``), as ping.exe does.
@@ -183,12 +183,17 @@ def supported():
 
 
 NOT_HERE_LINUX = "tools.ping.not_here_linux"
+NOT_HERE_ROOT = "tools.ping.not_here_root"
 
 
 def why_not():
     """What a system without Ping says instead (``capabilities.why_not``): on Linux,
-    how to let it send; elsewhere nothing of its own."""
-    return NOT_HERE_LINUX if sys.platform.startswith("linux") else None
+    how to let it send; elsewhere nothing of its own. As root "start it with sudo"
+    is no advice: the system took the raw socket away (CAP_NET_RAW, as some
+    containers do), and only the ping socket's setting is left."""
+    if not sys.platform.startswith("linux"):
+        return None
+    return NOT_HERE_ROOT if paths.running_as_root() else NOT_HERE_LINUX
 
 
 # -- Linux's answers, in the words above (``icmpsock.Answer``) ----------------------- #

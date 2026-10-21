@@ -81,7 +81,7 @@ def test_a_named_zone_is_an_interface_on_linux_and_nowhere_on_windows(monkeypatc
 
 
 def test_what_linux_said_is_shown_and_reported_in_its_own_name():
-    echo = icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="10.77.0.1", said="EPERM")
+    echo = icmp.Echo(icmp.IP_GENERAL_FAILURE, reply_from="192.0.2.1", said="EPERM")
     check("the Result column", ping.result_words(echo) == Words("tools.ping.result.linux",
                                                                  "EPERM"))
     check("Windows' number keeps its own", ping.result_words(icmp.Echo(11042))
@@ -117,6 +117,9 @@ def test_no_ping_text_linux_shows_names_windows():
         linux = texts["tools.ping.help_linux"]
         check(f"{code}: the Linux paragraph says how", "sudo" in linux
               and "net.ipv4.ping_group_range" in linux, f"({linux})")
+        # sudo is not enough without CAP_NET_RAW, and a refused ping shows Linux's word
+        check(f"{code}: and what sudo needs, and what EPERM and ICMP 3/13 mean",
+              "CAP_NET_RAW" in linux and "EPERM" in linux and "ICMP 3/13" in linux, f"({linux})")
 
 
 def test_a_name_is_looked_up_once_and_the_first_answer_in_windows_order_wins():
