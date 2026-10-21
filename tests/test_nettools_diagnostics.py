@@ -8,11 +8,13 @@ and that the cleanup is always asked with the window's own marker let go first.
 """
 import json
 import os
+import re
+import sys
 
 from beantester import capture_backend, driver
 from beantester.appinfo import version_line
 from beantester.nettools import diagnostics
-from fakes import ROOT, check
+from fakes import LANGS, ROOT, check
 
 
 def _names_doctor_can_give(monkeypatch):
@@ -269,3 +271,66 @@ def test_the_window_cleans_up_with_its_own_marker_let_go_first(monkeypatch):
     monkeypatch.setattr(driver, "_OPENS", [5])
     check("the count read at the yes is the driver's own",
           diagnostics.opens_so_far() == 5, f"({diagnostics.opens_so_far()})")
+
+
+def _texts(code):
+    with open(os.path.join(ROOT, "lang", f"{code}.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_the_cleanup_tip_and_the_help_speak_of_the_system_they_run_on(monkeypatch):
+    """On Linux the greyed-out cleanup button said "Unloads a WinDivert driver" over
+    the note saying there is nothing to clean up, and the "?" sheet explained
+    administrator rights and a WinDivert service "stop pending" beside rows that
+    said kernel, BTF and capture rights."""
+    # Windows: what it always said.
+    monkeypatch.setattr(capture_backend, "_CURRENT", capture_backend._WINDIVERT)
+    monkeypatch.setattr(driver, "is_windows", lambda: True)
+    check("Windows: the tip says what the button does",
+          diagnostics.cleanup_tip() == "tips.tools_diagnostics_clean")
+    check("Windows: the sheet explains its own rows",
+          diagnostics.platform_help() == ("tools.diagnostics.help_windows",))
+    # A platform with no capture driver: why there is no cleanup, and no rows to explain.
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    check("no capture driver: the tip says why",
+          diagnostics.cleanup_tip() == "tools.diagnostics.clean_windows_only")
+    check("no capture driver: nothing of its own on the sheet", diagnostics.platform_help() == ())
+    # Linux: its own words, in every language, and none of them Windows'.
+    monkeypatch.setattr(capture_backend, "_CURRENT", capture_backend._EBPFDIVERT)
+    tip, sheet = diagnostics.cleanup_tip(), diagnostics.platform_help()
+    check("Linux: the tip is the note's reason", tip == "tools.diagnostics.clean_linux", f"({tip})")
+    check("Linux: the sheet has paragraphs of its own", "tools.diagnostics.help_linux" in sheet,
+          f"({sheet})")
+    for code in LANGS:
+        texts = _texts(code)
+        windows = [key for key in (tip, *sheet) if "Windows" in texts[key] or "WinDivert" in texts[key]]
+        check(f"{code}: nothing said on Linux speaks of Windows", not windows, f"({windows})")
+
+
+def test_the_linux_help_names_every_row_that_can_stop_a_session(monkeypatch):
+    """The Linux sheet says "the rows that stop a session" - all of them, unlike
+    Windows', which names the ones that do it most often. So every row the Linux
+    backend adds is driven to ``fail`` here and has to be named on the sheet, by its
+    name on screen, in every language: a fifth row without its sentence is red."""
+    import tempfile
+    monkeypatch.setitem(sys.modules, "pydivert", None)      # the import fails: its fail row
+    with tempfile.TemporaryDirectory() as empty_root:       # no /sys/kernel/btf/vmlinux
+        rows = capture_backend.EBPFDivertBackend.doctor_rows(
+            release="4.19.0", root=empty_root, euid=1000, status="CapEff:\t0000000000000000\n")
+    failing = [name for name, state, _detail in rows if state == "fail"]
+    check("every row the Linux backend adds can stop a session",
+          failing == [name for name, *_rest in rows] and len(failing) == 4, f"({rows})")
+    # ...and both ways the rights row lets a capture start: root, or the capabilities
+    # it names. Taken from the row's own answer, so a fourth one needs its words here
+    # too. The sheet once said "needs root" alone (CodeRabbit on #282).
+    every_bit = "CapEff:\t" + format((1 << 64) - 1, "016x") + "\n"
+    caps = re.findall(r"CAP_[A-Z_]+", capture_backend._rights(1000, ROOT, every_bit) or "")
+    check("the rights row names the capabilities it accepts", len(caps) == 3, f"({caps})")
+    for code in LANGS:
+        texts = _texts(code)
+        sheet = texts["tools.diagnostics.help_linux"]
+        unnamed = [name for name in failing if texts[diagnostics.check_key(name)] not in sheet]
+        check(f"{code}: the Linux sheet names every such row", not unnamed, f"({unnamed})")
+        unsaid = [way for way in ["root", *caps] if way not in sheet]
+        check(f"{code}: the Linux sheet names every way to the capture rights", not unsaid,
+              f"({unsaid})")

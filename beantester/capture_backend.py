@@ -25,7 +25,7 @@ import errno
 import os
 import sys
 import time
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 from . import winenv
 
@@ -44,6 +44,9 @@ class CaptureBackend(Protocol):
     counts_overload: bool
     CLEANUP_LINE: str       # --cleanup-driver off Windows: why there is nothing to do
     CLEANUP_BLOCKER: str    # the same, as the Diagnostics button's i18n key
+    # The Diagnostics "?" sheet's paragraphs on this driver's own rows, off Windows:
+    # i18n keys, in order (Windows' own are nettools/diagnostics.WINDOWS_HELP).
+    DIAGNOSTICS_HELP: Tuple[str, ...]
 
     def open_network(self, filt: str) -> Any: ...
     def socket_source_factory(self) -> Any: ...
@@ -83,6 +86,8 @@ class WinDivertBackend:
     # Off Windows (a platform with no capture driver) there is no WinDivert service.
     CLEANUP_LINE = "Not Windows - there is no WinDivert driver to clean up."
     CLEANUP_BLOCKER = "tools.diagnostics.clean_windows_only"
+    # ...and no rows of its own to explain: its --doctor rows say capture needs Windows.
+    DIAGNOSTICS_HELP: Tuple[str, ...] = ()
 
     @staticmethod
     def open_network(filt):
@@ -243,6 +248,9 @@ class EBPFDivertBackend:
     CLEANUP_LINE = ("Linux - nothing to clean up: the kernel removes a stopped or killed "
                     "session's eBPF programs by itself, within about 3 seconds.")
     CLEANUP_BLOCKER = "tools.diagnostics.clean_linux"
+    # What doctor_rows' four rows need, then why "Clean up the driver" stays greyed
+    # out - the same sentence as the note under the button, not a second copy of it.
+    DIAGNOSTICS_HELP: Tuple[str, ...] = ("tools.diagnostics.help_linux", CLEANUP_BLOCKER)
 
     @staticmethod
     def open_network(filt):

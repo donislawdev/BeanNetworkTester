@@ -10,6 +10,7 @@ File pickers stay native on purpose (``tkinter.filedialog``): a file browser
 should look like the system's, not like us.
 """
 import tkinter as tk
+from collections.abc import Iterable
 from tkinter import ttk
 
 from ..i18n import T
@@ -214,6 +215,13 @@ def show_help(parent, title, text):
     return _run(win, True)
 
 
+def sheet_text(body_key: str | Iterable[str]) -> str:
+    """A help sheet's text: one key's, or several keys' joined by a blank line."""
+    if isinstance(body_key, str):
+        return T(body_key)
+    return "\n\n".join(T(key) for key in body_key)
+
+
 def help_button(parent, root, title_key, body_key, tip_key):
     """The "?" that opens a help sheet - the one way this window offers one.
 
@@ -222,10 +230,13 @@ def help_button(parent, root, title_key, body_key, tip_key):
     the Control form, the connection search, the Tools tab), and a copy is how
     one of them ends up a different width or opening another field's sheet.
     Placing it stays with the caller: every row packs its "?" its own way.
+
+    ``body_key`` is one key, or several - the sheet's paragraphs, in order - for a
+    sheet whose parts depend on the system (Diagnostics: Windows' rows or Linux's).
     """
     button = ttk.Button(parent, text=T("fields.match_help"), style="Help.TButton",
                         width=CHARS["help_button"],
-                        command=lambda: show_help(root, T(title_key), T(body_key)))
+                        command=lambda: show_help(root, T(title_key), sheet_text(body_key)))
     add_tooltip(button, tip_key)
     return button
 

@@ -108,6 +108,37 @@ def cleanup_blocker():
     return ""
 
 
+CLEAN_TIP = "tips.tools_diagnostics_clean"
+
+
+def cleanup_tip() -> str:
+    """The cleanup button's tooltip, an i18n key: what it does, on Windows - and off
+    Windows, where it can never do it, why not, in the words of the note under it.
+
+    It said "Unloads a WinDivert driver" on Linux, over a greyed-out button and right
+    above the note saying there is nothing to clean up there.
+    """
+    return CLEAN_TIP if driver.is_windows() else cleanup_blocker()
+
+
+# -- the "?" sheet ----------------------------------------------------------------- #
+# Its paragraphs on the rows only Windows gives (administrator, the WinDivert driver)
+# and on cleaning that driver up. Off Windows the capture backend names its own
+# (``CaptureBackend.DIAGNOSTICS_HELP``), as it does for the cleanup above.
+WINDOWS_HELP = ("tools.diagnostics.help_windows",)
+
+
+def platform_help() -> tuple[str, ...]:
+    """The "?" sheet's paragraphs on this system's own rows, as i18n keys, in order.
+
+    The rest of the sheet is the same everywhere or follows the report boxes
+    (``gui/toolbox/diagnostics.py``). On Linux it used to be Windows' rows - the
+    administrator, a WinDivert service "stop pending" - beside rows that said
+    kernel, BTF and capture rights.
+    """
+    return WINDOWS_HELP if driver.is_windows() else capture_backend.current().DIAGNOSTICS_HELP
+
+
 def opens_so_far():
     """What a cleanup asked for NOW must still find when it runs: read at the yes.
 

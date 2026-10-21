@@ -3640,8 +3640,8 @@ MUTATIONS = [
         # wrong words, on every "?" at once.
         "label": "help button: the sheet opens with title and body swapped",
         "file": "beantester/gui/dialogs.py",
-        "old": "command=lambda: show_help(root, T(title_key), T(body_key)))",
-        "new": "command=lambda: show_help(root, T(body_key), T(title_key)))",
+        "old": "command=lambda: show_help(root, T(title_key), sheet_text(body_key)))",
+        "new": "command=lambda: show_help(root, sheet_text(body_key), T(title_key)))",
         "test": "test_every_question_mark_opens_its_own_sheet",
     },
     {
@@ -8736,6 +8736,77 @@ MUTATIONS = [
         "old": "REPO_URL = \"https://github.com/donislawdev/BeanNetworkTester\"\n",
         "new": "REPO_URL = \"https://github.com/donislawdev/BeanNetworkTester-old\"\n",
         "test": "test_the_github_button_opens_the_repository_the_site_and_packages_name",
+    },
+    # -- Diagnostics on Linux: its own words, its own boxes (2026-10-21) ---------- #
+    {
+        "label": "diagnostics: off Windows the cleanup tip describes WinDivert's button",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "    return CLEAN_TIP if driver.is_windows() else cleanup_blocker()\n",
+        "new": "    return CLEAN_TIP\n",
+        "test": "test_the_cleanup_tip_and_the_help_speak_of_the_system_they_run_on",
+    },
+    {
+        "label": "diagnostics: the Linux sheet explains Windows' rows",
+        "file": "beantester/nettools/diagnostics.py",
+        "old": "    return WINDOWS_HELP if driver.is_windows() else capture_backend.current().DIAGNOSTICS_HELP\n",
+        "new": "    return WINDOWS_HELP\n",
+        "test": "test_the_cleanup_tip_and_the_help_speak_of_the_system_they_run_on",
+    },
+    {
+        "label": "capture_backend: Linux's Diagnostics sheet says nothing of its rows",
+        "file": "beantester/capture_backend.py",
+        "old": "    DIAGNOSTICS_HELP: Tuple[str, ...] = (\"tools.diagnostics.help_linux\", CLEANUP_BLOCKER)\n",
+        "new": "    DIAGNOSTICS_HELP: Tuple[str, ...] = (CLEANUP_BLOCKER,)\n",
+        "test": "test_the_cleanup_tip_and_the_help_speak_of_the_system_they_run_on",
+    },
+    {
+        "label": "diagnostics: the Linux sheet leaves out the kernel row",
+        "file": "lang/en.json",
+        "old": "    Linux kernel: capturing needs Linux 5.10 or newer.\\n",
+        "new": "    The kernel: capturing needs Linux 5.10 or newer.\\n",
+        "test": "test_the_linux_help_names_every_row_that_can_stop_a_session",
+    },
+    {
+        "label": "diagnostics: the Linux sheet says root is the only way to capture rights",
+        "file": "lang/en.json",
+        "old": "    Capture rights: capturing traffic needs root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW. Start the program with sudo.\\n",
+        "new": "    Capture rights: capturing traffic needs root. Start the program with sudo.\\n",
+        "test": "test_the_linux_help_names_every_row_that_can_stop_a_session",
+    },
+    {
+        "label": "diagnostics: a report box is offered for a section this system cannot read",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "            offered = capabilities.available(spec.needs)\n",
+        "new": "            offered = True\n",
+        "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
+    },
+    {
+        "label": "diagnostics: a greyed-out box still reaches the report",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "            self.boxes[spec.section] = (box, ticked)\n",
+        "new": "            self.boxes[spec.section] = (box, ticked)\n            self.include[spec.section] = ticked\n",
+        "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
+    },
+    {
+        "label": "diagnostics: the sheet explains a box this system does not offer",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "            + tuple(box.help for box in OPTIONAL_BOXES if capabilities.available(box.needs)))\n",
+        "new": "            + tuple(box.help for box in OPTIONAL_BOXES))\n",
+        "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
+    },
+    {
+        "label": "diagnostics: the cleanup button keeps its Windows tip everywhere",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "                                      diagnostics.cleanup_tip(), self.clean)\n",
+        "new": "                                      \"tips.tools_diagnostics_clean\", self.clean)\n",
+        "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
+    },
+    {
+        "label": "help button: a sheet of several paragraphs runs them together",
+        "file": "beantester/gui/dialogs.py",
+        "old": "    return \"\\n\\n\".join(T(key) for key in body_key)\n",
+        "new": "    return \"\\n\".join(T(key) for key in body_key)\n",
+        "test": "test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read",
     },
 ]
 

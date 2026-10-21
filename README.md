@@ -208,7 +208,9 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   GitHub and Donate print their address instead of starting a browser as root.
 - On the Tools tab, Sockets, Port check, Filter tester and Diagnostics work. Ping, TCP health and
   Adapters say that they work on Windows only for now, and so do the row menu entries that open
-  them or reset a connection.
+  them or reset a connection, and the Diagnostics boxes that add the adapters or the proxy to the
+  report. The Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and
+  pydivert.
 
 ## The window
 

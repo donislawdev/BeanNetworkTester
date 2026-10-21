@@ -23,6 +23,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Windows-only for now, and the row menus grey out Reset this connection, Show TCP health
   and Ping this address.
 
+- **Linux, experimental: Diagnostics speaks of Linux.** Its help explains what stops a
+  session there - capture rights, the kernel, BTF and pydivert - and what to do, and
+  **Clean up the driver** says why there is nothing to clean up. **Add network adapters** and
+  **Add proxy settings** are greyed out and say why, because the Adapters tool works on
+  Windows only for now.
+
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last
   60 are charted, and the totals say what was lost. The ping goes on while another tab is in
