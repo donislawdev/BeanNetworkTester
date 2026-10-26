@@ -441,6 +441,73 @@ def test_the_render_check_walks_every_page_and_every_sub_tab():
     check("check_language names no page of its own", not named, f"({named})")
 
 
+def test_the_render_check_measures_every_row_of_tabs():
+    """A notebook tab is not a widget, so the button walk never met one.
+
+    The seven Tools sub-tabs in Polish on Linux asked 762 px of 728 and ttk cut every
+    label (2026-10-26), and the check said OK. It now measures each row of tabs on
+    every surface it walks, and before that proves on a row made to fail that it can
+    tell one that does not fit from one that does - both only on real Tk, so here the
+    wiring is pinned on the source: the scan collects the rows, and the verdict
+    counts them and the proof.
+    """
+    func = next(n for n in ast.walk(_parsed("tools", "ci_gui_render.py"))
+                if isinstance(n, ast.FunctionDef) and n.name == "check_language")
+    scan = next(n for n in ast.walk(func)
+                if isinstance(n, ast.FunctionDef) and n.name == "scan")
+    in_scan = {n.func.id for n in ast.walk(scan)
+               if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("every surface's scan measures the rows of tabs", "_squeezed_tabs" in in_scan,
+          f"({sorted(in_scan)})")
+    called = {n.func.id for n in ast.walk(func)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("the check first proves it can fail", "_tab_check_can_fail" in called,
+          f"({sorted(called)})")
+    verdict = next(n for n in ast.walk(func)
+                   if isinstance(n, ast.Assign)
+                   and any(isinstance(t, ast.Name) and t.id == "ok" for t in n.targets))
+    counted = {n.id for n in ast.walk(verdict.value) if isinstance(n, ast.Name)}
+    check("a squeezed row and a broken proof both fail the run",
+          {"squeezed", "selftest"} <= counted, f"({sorted(counted)})")
+
+
+def test_the_notebooks_inside_a_page_have_the_narrower_tabs():
+    """The page tabs keep their padding; a notebook inside a page has its own, narrower.
+
+    With the page tabs' 18 px a side the seven Tools sub-tabs did not fit the window
+    in Polish on Linux (2026-10-26). Every page notebook asks for ``Sub.TNotebook``,
+    the main one stays on the default style, and the theme gives the sub-tabs a
+    narrower padding in every state - a selected or hovered tab falling back to the
+    page tabs' padding would grow the row again exactly where the eye is.
+    """
+    run_gui("""
+        from beantester.gui import theme
+        assert str(app.nb.kw.get("style") or "TNotebook") == "TNotebook", app.nb.kw
+        inner = {page_id: page.nb for page_id, page in app.pages.items()
+                 if getattr(page, "nb", None) is not None}
+        assert set(inner) >= {"statistics", "tools"}, sorted(inner)
+        for page_id, nb in inner.items():
+            assert nb.kw.get("style") == "Sub.TNotebook", (page_id, nb.kw)
+
+        class Recorder:
+            def __init__(self):
+                self.configured, self.mapped = {}, {}
+            def configure(self, name, **kw):
+                self.configured.setdefault(name, {}).update(kw)
+            def map(self, name, **kw):
+                self.mapped.setdefault(name, {}).update(kw)
+            def layout(self, *a, **kw):
+                pass
+        style = Recorder()
+        theme._style_notebook_and_tables(style)
+        page = style.configured["TNotebook.Tab"]["padding"]
+        sub = style.configured["Sub.TNotebook.Tab"]["padding"]
+        assert sub[0] < page[0], (sub, page)
+        states = dict((spec[0], spec[1]) for spec in style.mapped["Sub.TNotebook.Tab"]["padding"])
+        assert states == {"selected": sub, "active": sub}, states
+    """)
+
+
 def _parsed(*parts):
     path = parts[0] if os.path.isabs(parts[0]) else os.path.join(ROOT, *parts)
     with open(path, encoding="utf-8") as handle:

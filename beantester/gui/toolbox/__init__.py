@@ -14,9 +14,12 @@ remembered tab is found by id, never by position.
 Deliberately few fields. More were sketched - which group a tool belongs to,
 whether it needs administrator rights - and each comes with the first code that
 READS it (a flag nothing reads is decoration nobody checks): a group when the
-tabs stop fitting and the page starts rendering a tab per group instead. With
-Ping the strip holds seven, and in Polish it ends 15 px short of the window
-(rendered 2026-10-19 at 760 px): an eighth tool needs the groups first.
+tabs stop fitting and the page starts rendering a tab per group instead. The strip
+holds seven, on the narrower sub-tabs (``Sub.TNotebook`` in ``gui/theme.py``): in
+Polish on Linux it asks 678 px of 728 with Noto Sans and about 704 with DejaVu Sans
+(2026-10-26, a 760 px window, which is also the narrowest it gets). An eighth tool
+does not fit there, and ``tools/ci_gui_render.py`` fails on a row of tabs that does
+not fit - so the groups come first.
 
 ``sends`` came with Ping, the first tool that sends anything (2026-10-19), and has
 two readers. The page puts the tool's own sentence of what it sends

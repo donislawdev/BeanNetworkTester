@@ -538,6 +538,16 @@ def _style_notebook_and_tables(s):
           darkcolor=[("selected", ACC), ("disabled", DIS_BG), ("active", BTN_HOVER)],
           foreground=[("selected", "#0c1220"), ("disabled", DIS_FG), ("active", FG)],
           font=[("selected", (FONT, 9, "bold"))])
+    # A notebook INSIDE a page (Statistics, Tools) is the level below the page tabs,
+    # so its tabs are narrower: it reads as a level below, and the Tools row - seven
+    # tools - fits the window. With the page tabs' padding it did not: in Polish on
+    # Linux the row asked 762 px of 728, and ttk squeezed every tab and cut its label
+    # (2026-10-26; tools/ci_gui_render.py now fails on a row that does not fit).
+    # Colours and the bold selected tab come from TNotebook.Tab; the padding is its
+    # own in every state, so the map above never hands a tab the wider one.
+    sub_pad = (scaled(12), scaled(8))
+    s.configure("Sub.TNotebook.Tab", padding=sub_pad)
+    s.map("Sub.TNotebook.Tab", padding=[("selected", sub_pad), ("active", sub_pad)])
     s.configure("TPanedwindow", background=BG)
     s.configure("Sash", sashthickness=scaled(6), gripcount=0)
     # tables must grow with the font, otherwise text is clipped at 125%+

@@ -9,6 +9,9 @@ opens every registered window, and fails if any BUTTON is clipped (rendered
 narrower than it asks for). That is the "Wesprzyj
 projekt" -> "Wesp" class of regression: it only appears with real fonts and the
 longer Polish strings, so example-based tests stay green while the UI is broken.
+It fails as well if a notebook's row of TABS asks for more width than the notebook
+has: ttk then squeezes every tab and cuts its label, and a tab is not a widget, so
+the button walk never sees one (``tab_row_width``).
 
 Truncated wrapping labels (long About-box prose) are reported for the human but do
 NOT fail the run - they legitimately wrap when given less width.
@@ -59,6 +62,7 @@ from collections.abc import Callable, Iterator       # noqa: E402
 
 from font_coverage import system_can_draw            # noqa: E402
 import tkinter as tk                                 # noqa: E402
+import tkinter.font as tkfont                        # noqa: E402
 from tkinter import ttk                              # noqa: E402
 
 import beantester.gui.profiles as _profiles          # noqa: E402
@@ -167,7 +171,78 @@ def _scan(root, styles=None):
     return buttons, labels, cut
 
 
-PAINT_OPTIONS = ("background", "foreground", "bordercolor", "lightcolor", "darkcolor")
+# -- the tab rows -------------------------------------------------------------- #
+# A notebook TAB is not a widget: it is an element the notebook draws, so the walk
+# in `_scan` never meets one. When a row of tabs asks for more width than its
+# notebook has, ttk squeezes EVERY tab in proportion and cuts each label - measured
+# 2026-10-26: the seven Tools sub-tabs in Polish on Linux asked 762 px of 728 ("Zdrowie
+# TCI", "Czy port woln"), and at the old 620 px window minimum every language but
+# Chinese was cut, Windows included. This check saw none of it.
+#
+# What a row asks for is Tk's own arithmetic, read off a TWIN: a bare notebook in the
+# same style, with the same labels and the same tab selected (it is the bold one) and
+# pages one pixel wide, so its requested width is the tab row and nothing else. The
+# text widths plus the style's padding come out 4 px a tab short, on Tk 8.6 and 9.0
+# alike: clam's tab element draws a border no style option reaches.
+def tab_row_width(notebook):
+    """The width ``notebook``'s row of tabs asks for, as Tk computes it."""
+    twin = ttk.Notebook(notebook.winfo_toplevel(),
+                        style=str(notebook.cget("style")) or "TNotebook")
+    try:
+        for index in range(notebook.index("end")):
+            twin.add(ttk.Frame(twin, width=1, height=1),
+                     text=notebook.tab(index, "text"))
+        if notebook.select():
+            twin.select(notebook.index(notebook.select()))
+        twin.update_idletasks()
+        return twin.winfo_reqwidth()
+    finally:
+        twin.destroy()
+
+
+def _squeezed_tabs(root):
+    """Every notebook on screen whose row of tabs does not fit: (labels, req, got)."""
+    found = []
+    for widget in _walk(root):
+        try:
+            if widget.winfo_class() != "TNotebook" or not widget.winfo_ismapped():
+                continue
+            req, got = tab_row_width(widget), widget.winfo_width()
+            labels = tuple(str(widget.tab(i, "text")) for i in range(widget.index("end")))
+        except tk.TclError:
+            continue
+        if got > 1 and req > got + TOL:
+            found.append((labels, req, got))
+    return found
+
+
+def _tab_check_can_fail(root):
+    """What is wrong with the tab check itself, measured on a row made to fail.
+
+    A guard that cannot go red proves nothing: the same row of tabs in a window too
+    narrow for it must be reported, and in a window wide enough it must not.
+    """
+    window = tk.Toplevel(root)
+    try:
+        notebook = ttk.Notebook(window)
+        for number in range(4):
+            notebook.add(ttk.Frame(notebook), text=f"A tab label {number} that is long")
+        notebook.pack(fill="both", expand=True)
+        need = tab_row_width(notebook)
+        problems = []
+        for width, should_see in ((need // 2, True), (need + 40, False)):
+            window.geometry(f"{width}x{scaling.scaled(80)}")
+            window.update_idletasks()
+            window.update()
+            if bool(_squeezed_tabs(window)) != should_see:
+                problems.append(f"the tab check {'missed' if should_see else 'invented'} "
+                                f"a squeezed row at {width} px (it asks {need})")
+        return problems
+    finally:
+        window.destroy()
+
+
+PAINT_OPTIONS =("background", "foreground", "bordercolor", "lightcolor", "darkcolor")
 
 
 def _declared_styles():
@@ -342,8 +417,13 @@ def check_language(code):
     print(f"  [{code}] window {root.winfo_width()}x{root.winfo_height()}, "
           f"DPI {round(root.winfo_fpixels('1i'))} (tk scaling "
           f"{float(root.tk.call('tk', 'scaling')):.2f})")
+    # The face the tab rows were measured in: a runner has no Segoe UI, and which
+    # font stands in for it decides how wide every label below is.
+    face = tkfont.Font(root=root, font=ttk.Style(root).lookup("TNotebook.Tab", "font"))
+    print(f"  [{code}] tab font {face.actual('family')} {face.actual('size')}")
+    selftest = _tab_check_can_fail(root)
 
-    buttons, labels, cut = [], [], []
+    buttons, labels, cut, squeezed = [], [], [], []
     styles = _declared_styles()
 
     def scan():
@@ -351,6 +431,7 @@ def check_language(code):
         buttons.extend(b)
         labels.extend(l)
         cut.extend(c)
+        squeezed.extend(_squeezed_tabs(root))
 
     walked = walk_surfaces(app, root, scan)
     # Named in the log on purpose: a guard whose coverage nobody can see is a
@@ -376,6 +457,12 @@ def check_language(code):
     buttons = sorted(set(buttons))
     labels = sorted(set(labels))
     cut = sorted(set(cut))
+    # one row, once: the walk measures it with each of its tabs selected (the bold
+    # one), and the widest of those is what the row needs
+    widest = {}
+    for row, req, got in squeezed:
+        widest[row] = max(widest.get(row, (0, got)), (req, got))
+    squeezed = sorted((row, req, got) for row, (req, got) in widest.items())
     for text, req, got in labels:
         print(f"  [{code}] note: label narrower than requested "
               f"(req={req} got={got}): {text!r}")
@@ -390,13 +477,23 @@ def check_language(code):
     for text, req, got in buttons:
         print(f"  [{code}] {'unmeasured' if drawable is False else 'CLIPPED'} "
               f"BUTTON (req={req} got={got}): {text!r}")
+    for row, req, got in squeezed:
+        print(f"  [{code}] {'unmeasured' if drawable is False else 'SQUEEZED'} TAB ROW - "
+              f"every label in it is cut (req={req} got={got}): {', '.join(map(repr, row))}")
+    for problem in selftest:
+        print(f"  [{code}] TAB CHECK BROKEN: {problem}")
     measured = drawable is not False
-    ok = not twins and (not measured or (not buttons and not cut))
+    ok = not twins and not selftest and (not measured or (not buttons and not cut
+                                                          and not squeezed))
     problems = []
     if buttons and measured:
         problems.append(f"{len(buttons)} clipped button(s)")
     if cut and measured:
         problems.append(f"{len(cut)} truncated label(s)")
+    if squeezed and measured:
+        problems.append(f"{len(squeezed)} squeezed tab row(s)")
+    if selftest:
+        problems.append("the tab check cannot tell a squeezed row from one that fits")
     if twins:
         problems.append(f"{len(twins)} style(s) where focus looks like hover")
     state = "OK" if measured else "built, layout NOT measured (no font)"

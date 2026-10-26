@@ -9005,6 +9005,64 @@ MUTATIONS = [
         "new": "        if False:\n",
         "test": "test_every_broken_ping_through_a_session_is_named",
     },
+    # -- rows of tabs that fit: narrower sub-tabs, the narrowest window, the check -- #
+    {
+        # 620 px cut the Tools sub-tabs in every language but Chinese, Windows too.
+        "label": "window: the minimum is narrower than the size it opens at",
+        "file": "beantester/gui/scaling.py",
+        "old": "    w = int(round(FIRST_RUN[0] * factor))\n",
+        "new": "    w = int(round(620 * factor))\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        "label": "sub-tabs: as wide as the page tabs",
+        "file": "beantester/gui/theme.py",
+        "old": "    sub_pad = (scaled(12), scaled(8))\n",
+        "new": "    sub_pad = (scaled(18), scaled(8))\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the selected one falls back to the page tabs' padding",
+        "file": "beantester/gui/theme.py",
+        "old": '    s.map("Sub.TNotebook.Tab", padding=[("selected", sub_pad), ("active", sub_pad)])\n',
+        "new": '    s.map("Sub.TNotebook.Tab", padding=[("active", sub_pad)])\n',
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the Tools page keeps the page tabs' style",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": '        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")\n',
+        "new": "        self.nb = ttk.Notebook(self.frame)\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the Statistics page keeps the page tabs' style",
+        "file": "beantester/gui/pages/stats.py",
+        "old": '        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")\n',
+        "new": "        self.nb = ttk.Notebook(self.frame)\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "render check: a surface's rows of tabs are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        squeezed.extend(_squeezed_tabs(root))\n",
+        "new": "        squeezed.extend([])\n",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        "label": "render check: a squeezed row of tabs passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not squeezed))",
+        "new": "                                                          and True))",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        "label": "render check: the tab check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest = _tab_check_can_fail(root)\n",
+        "new": "    selftest = []\n",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

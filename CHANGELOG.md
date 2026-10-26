@@ -109,6 +109,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The names of the tools on the Tools tab are whole.** On Linux in Polish, and in every
+  language but Chinese once the window was made narrow, each name lost its last letters, such
+  as "Zdrowie TCI" for "Zdrowie TCP". The tabs inside a page are now narrower than the page
+  tabs above them, so the seven tools fit in one row. The main window can no longer be made
+  narrower than it opens: 760 pixels at 100% display scaling.
+
 - **The log no longer says a page opened when no browser started.** After a click on **Donate**
   the log said the support page was opened even when the browser did not start. It now says the
   browser could not be opened and shows the address, so you can copy it from the log.

@@ -18,6 +18,16 @@ MIN_SUPPORTED = (1366, 768)
 CHROME_H = 90          # taskbar + title bar reserve
 CHROME_W = 40
 
+# The size the main window opens at on its first run, at 96 DPI - and its width is
+# also the NARROWEST the window may get (``min_window_size``). The GUI render check
+# measures the window at the size it opens, so a narrower one was a layout nobody had
+# measured, and it showed: at the old 620 px minimum the Tools sub-tabs were cut in
+# every language but Chinese, Windows included (2026-10-26). Width is what cuts - a
+# row of tabs or buttons cannot wrap - while a shorter window scrolls, so the
+# minimum HEIGHT stays below the first-run one.
+FIRST_RUN = (760, 920)
+MIN_H = 560
+
 _scale = 1.0
 _font_probe = None     # a tkfont.Font used to measure text, when Tk is available
 
@@ -85,7 +95,7 @@ def column_width(header, min_chars=0, padding=22):
     return max(text_width(header, padding), scaled(min_chars * 7 + padding))
 
 
-def initial_geometry(screen_w, screen_h, want=(760, 920), scale=None):
+def initial_geometry(screen_w, screen_h, want=FIRST_RUN, scale=None):
     """Startup window geometry, clamped to the screen and centred.
 
     Returns ``(width, height, x, y)``. The old code hard-coded ``680x900``,
@@ -103,10 +113,10 @@ def initial_geometry(screen_w, screen_h, want=(760, 920), scale=None):
 
 
 def min_window_size(scale=None):
-    """Smallest usable window: must still fit on the smallest supported screen."""
+    """Smallest usable window: as wide as it opens, and it fits the smallest screen."""
     factor = _scale if scale is None else float(scale)
-    w = int(round(620 * factor))
-    h = int(round(560 * factor))
+    w = int(round(FIRST_RUN[0] * factor))
+    h = int(round(MIN_H * factor))
     return (min(w, MIN_SUPPORTED[0] - CHROME_W),
             min(h, MIN_SUPPORTED[1] - CHROME_H))
 

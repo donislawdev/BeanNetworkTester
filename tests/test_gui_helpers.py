@@ -154,6 +154,23 @@ def test_min_window_size_never_exceeds_the_smallest_screen():
               w <= 1366 - scaling.CHROME_W and h <= 768 - scaling.CHROME_H, f"({w}x{h})")
 
 
+def test_the_window_is_never_narrower_than_it_opens():
+    """The render check measures the window at the size it opens - and nothing else.
+
+    A narrower minimum was a layout nobody measured: at the old 620 px the Tools
+    sub-tabs were cut in every language but Chinese, on Windows too (2026-10-26).
+    On the smallest supported screen, at every scale, the narrowest window is the
+    first-run one; the height may still go lower, a shorter window scrolls.
+    """
+    for scale in (1.0, 1.25, 1.5, 1.75, 2.0):
+        opens, high, _x, _y = scaling.initial_geometry(1366, 768, scale=scale)
+        narrowest, lowest = scaling.min_window_size(scale)
+        check(f"at {scale}x the window opens as narrow as it may get",
+              narrowest == opens, f"(min {narrowest}, opens {opens})")
+        check(f"at {scale}x it may still be lower than it opens",
+              lowest <= high, f"(min {lowest}, opens {high})")
+
+
 # -- tooltip / chart --------------------------------------------------------- #
 def test_tooltip_flips_above_at_the_bottom_of_the_screen():
     screen = (0, 0, 1920, 1080)
