@@ -35,7 +35,7 @@
 
 <section>
   <h2>它能在 Linux 或 macOS 上用吗？</h2>
-  <p>不能，将来也不会。它建立在 Windows 内核驱动之上。在 Linux 上，<code>tc</code> 配合 <code>netem</code> 可以完成这项工作，而且系统已经自带。</p>
+  <p>在 Linux 上可以，属于实验性支持：窗口和命令行可以从源代码以 root 权限运行，需要 5.10 或更新的内核。下载版只支持 Windows，{{app.app.tabs.tools}} 选项卡中的部分工具也是如此。如果在 Linux 上只需要为整台机器加延迟和丢包，系统已经自带 <code>tc</code> 配合 <code>netem</code>。在 macOS 上不能运行。</p>
 </section>
 
 <section>
