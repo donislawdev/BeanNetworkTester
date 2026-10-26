@@ -164,7 +164,7 @@ Liste. Eine beschädigte Sprachdatei wird übersprungen (sie bringt die App nich
 - `pydivert` (Erfassung des Datenverkehrs), `psutil` (ein Fallback, siehe unten)
 
 Die Installation aus dem Quellcode funktioniert mit Python 3.10 und neuer. CI testet und baut
-**nur mit 3.14** - das ist die Version, mit der die veröffentlichte `.exe` eingefroren wird, ältere
+**nur mit 3.15** - das ist die Version, mit der die veröffentlichte `.exe` eingefroren wird, ältere
 werden also unterstützt, aber nicht bei jedem Commit erneut nachgewiesen.
 
 Unter Windows messen Python 3.10 bis 3.12 die Zeit in Schritten von 15,6 ms. Jedes Paket wird mit

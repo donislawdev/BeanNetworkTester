@@ -166,8 +166,8 @@ version is linked above. Contact: https://donislawdev.com/
 * Used under: **the Unlicense** (a public-domain dedication)
 * Licence text: `licenses/libtommath-LICENSE.txt`
 * Source code: https://github.com/libtom/libtommath
-* Ships as `libtommath.dll`, as part of the CPython Windows runtime. Python 3.14
-  ships Tcl/Tk 9.0, and Tcl 9 links libtommath for its arbitrary-precision
+* Ships as `libtommath.dll`, as part of the CPython Windows runtime. Python ships
+  Tcl/Tk 9 since 3.14, and Tcl 9 links libtommath for its arbitrary-precision
   integer arithmetic. Nothing in this project calls it directly - it arrives
   because the graphical interface needs Tk.
 

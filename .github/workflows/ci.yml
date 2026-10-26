@@ -13,7 +13,7 @@ on:
   # them between pushes:
   #   * `requirements-dev.txt` is deliberately unpinned - pytest, hypothesis and
   #     pytest-cov track latest, and a new pytest can redden a green suite;
-  #   * the runner image and the 3.14.x patch `setup-python` resolves both move
+  #   * the runner image and the 3.15.x patch `setup-python` resolves both move
   #     under us - and that is not theoretical: a 3.14 patch brought Tcl/Tk 9.0,
   #     whose DLL-embedded library archive broke the frozen exe on an older
   #     PyInstaller and added `libtommath` to the bundle (2026-08-17).
@@ -67,10 +67,10 @@ jobs:
         with:
           # the whole range being merged, not just its tip
           fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       - name: check the commit messages
         # Through the environment, for the same reason as the step below: a
         # `${{ }}` is pasted into the script BEFORE any shell sees it, so a
@@ -101,10 +101,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       - name: Install the linter
         run: pip install --require-hashes -r requirements-lint.txt
       # The gate. `--select` on the command line replaces the families named in
@@ -136,10 +136,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       - name: Install the type checker
         run: pip install --require-hashes -r requirements-lint.txt
       # No project dependencies installed on purpose: `pydivert` is Windows-only
@@ -161,8 +161,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
+          # 🔴 The one job still on 3.14, and on purpose (2026-10-26): semgrep's
+          # wheels name each Python they are for, and 1.182.1 - the newest - stops
+          # at py314. On 3.15 pip would fall back to the source distribution and
+          # try to build the engine. This job scans the source and ships nothing,
+          # so its interpreter is not the program's. Move it to 3.15 with the first
+          # semgrep whose wheel names py315.
           python-version: "3.14"
           check-latest: true  # newest 3.14.x, not the runner image's cached one
       - name: Install the scanner
@@ -226,10 +232,10 @@ jobs:
           # The pull-request path diffs against the base branch, and a shallow
           # clone has no base branch to diff against.
           fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       # 🔴 The cheap question, and the one place this job can go quietly wrong.
       # If the base cannot be fetched, `git diff` fails and so does this step -
       # deliberately. The alternative shape ("could not tell, so assume nothing
@@ -341,10 +347,10 @@ jobs:
         with:
           # `--changed` diffs against the base branch, which has to be here.
           fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       - name: Install dependencies
         run: |
           pip install --require-hashes -r requirements.txt
@@ -395,7 +401,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.14"]
+        python-version: ["3.15"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -422,10 +428,10 @@ jobs:
             exit 1
           fi
           echo "All required release files are present."
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
           cache: pip
       - name: Install dependencies
         # 🔴 No `pip install --upgrade pip`, here or anywhere else in this repository.
@@ -644,9 +650,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Runtime dependencies (hash-pinned)
         run: pip install --require-hashes -r requirements.txt
       - name: The kernel the capture runs on
@@ -664,10 +670,10 @@ jobs:
       # Must match the interpreter release.yml builds with: PyInstaller freezes
       # THIS Python into the bundle, so a CI build on a different one is not
       # smoke-testing the artefact users get.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
           cache: pip
       - name: Install dependencies
         run: |
@@ -775,10 +781,10 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
-          python-version: "3.14"
-          check-latest: true  # newest 3.14.x, not the runner image's cached one
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
       - name: Say which jobs went red, once
         shell: bash
         # Every context value travels through the environment, never into the

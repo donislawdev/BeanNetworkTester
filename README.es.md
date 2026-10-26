@@ -162,7 +162,7 @@ aplicación se cierre con un error).
 - `pydivert` (captura de tráfico), `psutil` (una alternativa, véase más abajo)
 
 La instalación desde el código fuente funciona con Python 3.10 y posteriores. CI prueba y compila
-**solo con 3.14**, la versión con la que se congela el `.exe` publicado, de modo que las anteriores
+**solo con 3.15**, la versión con la que se congela el `.exe` publicado, de modo que las anteriores
 son compatibles, pero no se vuelven a comprobar en cada commit.
 
 En Windows, Python 3.10 a 3.12 miden el tiempo en pasos de 15,6 ms. Cada paquete se cronometra con

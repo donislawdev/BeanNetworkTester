@@ -109,6 +109,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   longer show up as TCP or UDP with ports read from their data: they are counted as IP
   traffic, so they no longer add a made-up connection to the table.
 
+- **The program is built and tested with Python 3.15.** The released program runs on
+  Python 3.15.2 instead of 3.14. Installing from source still works on Python 3.10 and
+  newer.
+
 ### Fixed
 
 - **The names of the tools on the Tools tab are whole.** On Linux in Polish, and in every

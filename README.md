@@ -152,7 +152,7 @@ crash the app).
 - Administrator rights
 - `pydivert` (traffic capture), `psutil` (a fallback, see below)
 
-Installing from source works on Python 3.10 and newer. CI tests and builds on **3.14 only** -
+Installing from source works on Python 3.10 and newer. CI tests and builds on **3.15 only** -
 that is the version the released `.exe` is frozen with, so older ones are supported but not
 re-proven on every commit.
 

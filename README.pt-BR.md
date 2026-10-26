@@ -157,7 +157,7 @@ de idioma corrompido é ignorado (não derruba o app).
 - `pydivert` (captura de tráfego), `psutil` (um recurso alternativo, veja abaixo)
 
 A instalação a partir do código-fonte funciona no Python 3.10 e mais novos. A CI testa e compila
-**somente na 3.14** - essa é a versão com a qual o `.exe` publicado é empacotado, então as mais
+**somente na 3.15** - essa é a versão com a qual o `.exe` publicado é empacotado, então as mais
 antigas são suportadas, mas não são comprovadas de novo a cada commit.
 
 No Windows, o Python 3.10 a 3.12 mede o tempo em passos de 15,6 ms. Cada pacote é cronometrado por
