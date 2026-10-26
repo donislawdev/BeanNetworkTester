@@ -9015,6 +9015,29 @@ MUTATIONS = [
         "test": "test_the_window_is_never_narrower_than_it_opens",
     },
     {
+        # 1920 px at 200% opens 1520 wide; the smallest screen's cap allowed 1326.
+        "label": "window: the minimum width ignores the screen it is on",
+        "file": "beantester/gui/scaling.py",
+        "old": "    room_w = MIN_SUPPORTED[0] if screen_w is None else int(screen_w)\n",
+        "new": "    room_w = MIN_SUPPORTED[0]\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        # 1280x720 at 125% opens 630 high; the smallest screen's cap is 678.
+        "label": "window: the minimum height ignores a screen smaller than supported",
+        "file": "beantester/gui/scaling.py",
+        "old": "        room_h = min(room_h, int(screen_h))\n",
+        "new": "        room_h = min(room_h, MIN_SUPPORTED[1])\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        "label": "window: the main window does not say which screen its minimum is for",
+        "file": "beantester/gui/app.py",
+        "old": "            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))\n",
+        "new": "            root.minsize(*min_window_size())\n",
+        "test": "test_the_main_window_tells_its_minimum_which_screen_it_is_on",
+    },
+    {
         "label": "sub-tabs: as wide as the page tabs",
         "file": "beantester/gui/theme.py",
         "old": "    sub_pad = (scaled(12), scaled(8))\n",

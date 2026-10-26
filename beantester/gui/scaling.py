@@ -112,13 +112,27 @@ def initial_geometry(screen_w, screen_h, want=FIRST_RUN, scale=None):
     return w, h, x, y
 
 
-def min_window_size(scale=None):
-    """Smallest usable window: as wide as it opens, and it fits the smallest screen."""
+def min_window_size(scale=None, screen_w=None, screen_h=None):
+    """Smallest usable window: as wide as it opens, and never larger than it opens.
+
+    The width is capped by the screen exactly the way ``initial_geometry`` caps it,
+    so on every screen the two are one number. Capped by the smallest supported
+    screen instead, a 1920 or 3840 px wide screen at 175% or more opened the window
+    wider than 1326 px and still let it be squeezed to 1326 - a width the render
+    check never measured. The height keeps the smallest screen's cap on bigger
+    screens (a shorter window scrolls, so there is nothing to gain from forbidding
+    it) and goes lower on a screen smaller than that, where the window opens lower.
+    Without a screen both caps are the smallest supported one.
+    """
     factor = _scale if scale is None else float(scale)
     w = int(round(FIRST_RUN[0] * factor))
     h = int(round(MIN_H * factor))
-    return (min(w, MIN_SUPPORTED[0] - CHROME_W),
-            min(h, MIN_SUPPORTED[1] - CHROME_H))
+    room_w = MIN_SUPPORTED[0] if screen_w is None else int(screen_w)
+    room_h = MIN_SUPPORTED[1]
+    if screen_h is not None:
+        room_h = min(room_h, int(screen_h))
+    return (min(w, max(320, room_w - CHROME_W)),
+            min(h, max(320, room_h - CHROME_H)))
 
 
 def max_window_size(screen_w, screen_h, want=(1280, 1000), scale=None):

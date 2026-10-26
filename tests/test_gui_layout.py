@@ -50,6 +50,22 @@ def test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on():
     """)
 
 
+def test_the_main_window_tells_its_minimum_which_screen_it_is_on():
+    """Wiring, not arithmetic: `app._restore_geometry` has to hand the screen over.
+
+    `scaling.min_window_size` caps the minimum by the screen only when it is told
+    which one. A caller passing nothing keeps the smallest supported screen's cap,
+    and at 200% on a 4K screen that is 1326 px against a window that opens 1520
+    wide - a width the render check never measured.
+    """
+    run_gui("""
+        spec = root.kw["geometry"]
+        w = int(spec.split("x")[0])
+        min_w, _min_h = root.kw["minsize"]
+        assert min_w == w, (root.kw["minsize"], spec)
+    """, screen=(3840, 2160), dpi=192.0)
+
+
 def test_window_scales_up_on_a_4k_screen():
     run_gui("""
         spec = root.kw["geometry"]

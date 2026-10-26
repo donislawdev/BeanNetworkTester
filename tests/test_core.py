@@ -1525,8 +1525,7 @@ def test_a_later_fragment_of_a_tcp_segment_carries_no_ports():
     Up to pydivert 4.0.0 a later fragment was read as if a TCP header followed the
     IP header, so what the engine took for its ports was payload - a made-up
     connection in the table, and a port filter or a target judged on noise.
-    MEASURED 2026-10-26 (internal_tools/sondy/2026-10-26-linux-tabs/fragment_probe.py):
-    for payload bytes BE EF 1F 90, 4.0.0 gave TCP with ports 48879 and 8080, 4.0.1
+    MEASURED 2026-10-26 on both wheels with the packet built here: for payload bytes BE EF 1F 90, 4.0.0 gave TCP with ports 48879 and 8080, 4.0.1
     gives IP with none - the reading WinDivert's own filter language has. It needs
     the real pydivert, so it is skipped where pydivert is not installed.
     """

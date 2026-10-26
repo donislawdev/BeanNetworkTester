@@ -119,7 +119,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   language but Chinese once the window was made narrow, each name lost its last letters, such
   as "Zdrowie TCI" for "Zdrowie TCP". The tabs inside a page are now narrower than the page
   tabs above them, so the seven tools fit in one row. The main window can no longer be made
-  narrower than it opens: 760 pixels at 100% display scaling.
+  narrower than it opens, on any screen and at any display scaling (760 pixels at 100%).
 
 - **The log no longer says a page opened when no browser started.** After a click on **Donate**
   the log said the support page was opened even when the browser did not start. It now says the

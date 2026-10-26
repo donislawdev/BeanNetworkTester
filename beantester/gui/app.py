@@ -274,7 +274,7 @@ class App:
             geometry = f"{w}x{h}+{x}+{y}"
         try:
             root.geometry(geometry)
-            root.minsize(*min_window_size())
+            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))
             # a capped size AND no maximise button: the layout has an upper bound
             # at which it still looks like a layout, so do not offer more
             root.maxsize(*maximum)
