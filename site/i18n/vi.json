@@ -22,7 +22,7 @@
   "footer.issues": "Tìm thấy lỗi? Hãy báo trên GitHub.",
   "footer.license": "Phần mềm tự do và mã nguồn mở theo Giấy phép Công cộng GNU phiên bản 3.0.",
   "footer.no_telemetry": "Chương trình không tự gửi bất cứ thứ gì. Trang này cũng không tải gì từ bên khác.",
-  "llms.note": "Dành cho tester, lập trình viên và QA cần chủ ý tái hiện một kết nối kém. Sự suy giảm có thể nhắm vào một tiến trình, PID, địa chỉ hoặc cổng, nên phần còn lại của máy vẫn hoạt động. Các lần chạy lặp lại được nhờ seed, và dòng lệnh báo kết quả qua mã thoát và NDJSON, nên pipeline dùng được. Không có cho Linux hay macOS.",
+  "llms.note": "Dành cho tester, lập trình viên và QA cần chủ ý tái hiện một kết nối kém. Sự suy giảm có thể nhắm vào một tiến trình, PID, địa chỉ hoặc cổng, nên phần còn lại của máy vẫn hoạt động. Các lần chạy lặp lại được nhờ seed, và dòng lệnh báo kết quả qua mã thoát và NDJSON, nên pipeline dùng được. Trên Linux, nó chạy từ mã nguồn ở dạng thử nghiệm. Không có cho macOS.",
   "llms.pages": "Các trang",
   "llms.source": "Mã nguồn và tải về",
   "llms.summary": "Bean Network Tester là công cụ miễn phí, mã nguồn mở (GNU GPL v3) cho Windows, chủ ý làm suy giảm mạng của một ứng dụng: thêm độ trễ và jitter, mất, hỏng và nhân đôi gói tin, giới hạn tốc độ tải xuống và tải lên, đặt lại kết nối, ngắt đường truyền, chặn cổng và địa chỉ, cùng chế độ chỉ mạng nội bộ. Cửa sổ và dòng lệnh nằm trong cùng một tệp thực thi. Cần Windows 10 hoặc 11 (64 bit) và quyền quản trị vì trình điều khiển WinDivert bắt lưu lượng. Không tự gửi bất cứ thứ gì - chỉ gửi các ping do người dùng bắt đầu, tới địa chỉ người dùng nhập.",

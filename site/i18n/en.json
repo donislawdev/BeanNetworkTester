@@ -22,7 +22,7 @@
   "footer.issues": "Found a bug? Report it on GitHub.",
   "footer.license": "Free and open source under the GNU General Public License v3.0.",
   "footer.no_telemetry": "The program sends nothing on its own. This page loads nothing from anyone else.",
-  "llms.note": "Aimed at testers, developers and QA who need to reproduce a bad connection on purpose. Impairment can be pointed at one process, PID, address or port, so the rest of the machine keeps working. Runs are repeatable with a seed, and the command line reports through exit codes and NDJSON, so a pipeline can use it. Not available for Linux or macOS.",
+  "llms.note": "Aimed at testers, developers and QA who need to reproduce a bad connection on purpose. Impairment can be pointed at one process, PID, address or port, so the rest of the machine keeps working. Runs are repeatable with a seed, and the command line reports through exit codes and NDJSON, so a pipeline can use it. On Linux it runs from source, as an experiment. Not available for macOS.",
   "llms.pages": "Pages",
   "llms.source": "Source and download",
   "llms.summary": "Bean Network Tester is a free, open source (GNU GPL v3) Windows tool that deliberately degrades the network for one application: added latency and jitter, packet loss, corruption and duplication, download and upload speed limits, connection resets, link outages, port and address blocking, and LAN-only mode. It has a window and a command line in the same executable. Requires Windows 10 or 11, 64-bit, and administrator rights, because traffic is captured by the WinDivert driver. It sends nothing on its own - only the pings a user starts, to the address the user types.",

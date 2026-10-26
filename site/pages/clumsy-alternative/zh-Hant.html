@@ -45,7 +45,7 @@
   <h2>什麼時候該用別的工具</h2>
   <p>坦誠相告，比讓人白下載一次更划算。</p>
   <ul>
-    <li><strong>你用的是 Linux 或 macOS。</strong>本工具只支援 Windows，而且將來也是如此，因為它建立在 Windows 驅動程式之上。在 Linux 上，<code>tc</code> 配合 <code>netem</code> 是標準答案，而且不需要額外軟體。</li>
+    <li><strong>你用的是 macOS，或者想在 Linux 上用現成的安裝套件。</strong>本工具無法在 macOS 上執行。在 Linux 上可以從原始碼執行，屬於實驗性支援；在那裡，<code>tc</code> 配合 <code>netem</code> 是標準答案，而且不需要額外軟體。</li>
     <li><strong>你想要的是長期的頻寬管理</strong>：對整台機器、按應用，並且是作為產品功能而不是測試。這正是 NetLimiter 這類商業流量整形工具的用途。本工具是測試儀器：打算開啟一段時間，然後關閉。</li>
     <li><strong>你拿不到管理員權限。</strong>擷取封包需要這些權限，沒有辦法繞過，聲稱可以繞過的工具並沒有真正擷取你的流量。</li>
     <li><strong>你需要檢查並改寫應用資料</strong>，而不是讓鏈路變差。那是代理伺服器的工作。</li>

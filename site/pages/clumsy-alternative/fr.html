@@ -45,7 +45,7 @@
   <h2>Quand utiliser autre chose</h2>
   <p>Être honnête coûte moins cher qu’un téléchargement décevant.</p>
   <ul>
-    <li><strong>Vous êtes sous Linux ou macOS.</strong> Il ne fonctionne que sous Windows, et il en sera toujours ainsi, car il repose sur un pilote Windows. Sous Linux, <code>tc</code> avec <code>netem</code> est la réponse standard et ne demande aucun logiciel supplémentaire.</li>
+    <li><strong>Vous êtes sous macOS, ou vous voulez un paquet prêt à l’emploi sous Linux.</strong> Il ne fonctionne pas sous macOS. Sous Linux, il fonctionne depuis les sources, à titre expérimental ; là, <code>tc</code> avec <code>netem</code> est la réponse standard et ne demande aucun logiciel supplémentaire.</li>
     <li><strong>Vous voulez une gestion permanente de la bande passante</strong> pour toute la machine, application par application, comme fonction d’un produit plutôt que comme un test. C’est à cela que servent les outils commerciaux de mise en forme du trafic comme NetLimiter. Celui-ci est un instrument de test : il est fait pour être allumé un moment puis éteint.</li>
     <li><strong>Vous ne pouvez pas obtenir de droits d’administrateur.</strong> La capture de paquets en a besoin. Il n’y a aucun moyen de contourner cela, et un outil qui prétend le contraire ne capture pas votre trafic.</li>
     <li><strong>Vous devez inspecter et réécrire les données d’une application</strong> plutôt que dégrader la liaison. C’est le travail d’un proxy.</li>
