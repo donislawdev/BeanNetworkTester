@@ -9005,6 +9005,87 @@ MUTATIONS = [
         "new": "        if False:\n",
         "test": "test_every_broken_ping_through_a_session_is_named",
     },
+    # -- rows of tabs that fit: narrower sub-tabs, the narrowest window, the check -- #
+    {
+        # 620 px cut the Tools sub-tabs in every language but Chinese, Windows too.
+        "label": "window: the minimum is narrower than the size it opens at",
+        "file": "beantester/gui/scaling.py",
+        "old": "    w = int(round(FIRST_RUN[0] * factor))\n",
+        "new": "    w = int(round(620 * factor))\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        # 1920 px at 200% opens 1520 wide; the smallest screen's cap allowed 1326.
+        "label": "window: the minimum width ignores the screen it is on",
+        "file": "beantester/gui/scaling.py",
+        "old": "    room_w = MIN_SUPPORTED[0] if screen_w is None else int(screen_w)\n",
+        "new": "    room_w = MIN_SUPPORTED[0]\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        # 1280x720 at 125% opens 630 high; the smallest screen's cap is 678.
+        "label": "window: the minimum height ignores a screen smaller than supported",
+        "file": "beantester/gui/scaling.py",
+        "old": "        room_h = min(room_h, int(screen_h))\n",
+        "new": "        room_h = min(room_h, MIN_SUPPORTED[1])\n",
+        "test": "test_the_window_is_never_narrower_than_it_opens",
+    },
+    {
+        "label": "window: the main window does not say which screen its minimum is for",
+        "file": "beantester/gui/app.py",
+        "old": "            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))\n",
+        "new": "            root.minsize(*min_window_size())\n",
+        "test": "test_the_main_window_tells_its_minimum_which_screen_it_is_on",
+    },
+    {
+        "label": "sub-tabs: as wide as the page tabs",
+        "file": "beantester/gui/theme.py",
+        "old": "    sub_pad = (scaled(12), scaled(8))\n",
+        "new": "    sub_pad = (scaled(18), scaled(8))\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the selected one falls back to the page tabs' padding",
+        "file": "beantester/gui/theme.py",
+        "old": '    s.map("Sub.TNotebook.Tab", padding=[("selected", sub_pad), ("active", sub_pad)])\n',
+        "new": '    s.map("Sub.TNotebook.Tab", padding=[("active", sub_pad)])\n',
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the Tools page keeps the page tabs' style",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": '        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")\n',
+        "new": "        self.nb = ttk.Notebook(self.frame)\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "sub-tabs: the Statistics page keeps the page tabs' style",
+        "file": "beantester/gui/pages/stats.py",
+        "old": '        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")\n',
+        "new": "        self.nb = ttk.Notebook(self.frame)\n",
+        "test": "test_the_notebooks_inside_a_page_have_the_narrower_tabs",
+    },
+    {
+        "label": "render check: a surface's rows of tabs are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        squeezed.extend(_squeezed_tabs(root))\n",
+        "new": "        squeezed.extend([])\n",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        "label": "render check: a squeezed row of tabs passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not squeezed))",
+        "new": "                                                          and True))",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        "label": "render check: the tab check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest = _tab_check_can_fail(root)\n",
+        "new": "    selftest = []\n",
+        "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

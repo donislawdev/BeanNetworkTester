@@ -143,7 +143,7 @@ class StatsPage:
     def __init__(self, app, parent):
         self.app = app
         self.frame = ttk.Frame(parent)
-        self.nb = ttk.Notebook(self.frame)
+        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")
         self.nb.pack(fill="both", expand=True, pady=(scaled(4), 0))
         self.tabs = {}
         for sub_id, label in self.SUBPAGES:

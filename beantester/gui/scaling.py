@@ -18,6 +18,16 @@ MIN_SUPPORTED = (1366, 768)
 CHROME_H = 90          # taskbar + title bar reserve
 CHROME_W = 40
 
+# The size the main window opens at on its first run, at 96 DPI - and its width is
+# also the NARROWEST the window may get (``min_window_size``). The GUI render check
+# measures the window at the size it opens, so a narrower one was a layout nobody had
+# measured, and it showed: at the old 620 px minimum the Tools sub-tabs were cut in
+# every language but Chinese, Windows included (2026-10-26). Width is what cuts - a
+# row of tabs or buttons cannot wrap - while a shorter window scrolls, so the
+# minimum HEIGHT stays below the first-run one.
+FIRST_RUN = (760, 920)
+MIN_H = 560
+
 _scale = 1.0
 _font_probe = None     # a tkfont.Font used to measure text, when Tk is available
 
@@ -85,7 +95,7 @@ def column_width(header, min_chars=0, padding=22):
     return max(text_width(header, padding), scaled(min_chars * 7 + padding))
 
 
-def initial_geometry(screen_w, screen_h, want=(760, 920), scale=None):
+def initial_geometry(screen_w, screen_h, want=FIRST_RUN, scale=None):
     """Startup window geometry, clamped to the screen and centred.
 
     Returns ``(width, height, x, y)``. The old code hard-coded ``680x900``,
@@ -102,13 +112,27 @@ def initial_geometry(screen_w, screen_h, want=(760, 920), scale=None):
     return w, h, x, y
 
 
-def min_window_size(scale=None):
-    """Smallest usable window: must still fit on the smallest supported screen."""
+def min_window_size(scale=None, screen_w=None, screen_h=None):
+    """Smallest usable window: as wide as it opens, and never larger than it opens.
+
+    The width is capped by the screen exactly the way ``initial_geometry`` caps it,
+    so on every screen the two are one number. Capped by the smallest supported
+    screen instead, a 1920 or 3840 px wide screen at 175% or more opened the window
+    wider than 1326 px and still let it be squeezed to 1326 - a width the render
+    check never measured. The height keeps the smallest screen's cap on bigger
+    screens (a shorter window scrolls, so there is nothing to gain from forbidding
+    it) and goes lower on a screen smaller than that, where the window opens lower.
+    Without a screen both caps are the smallest supported one.
+    """
     factor = _scale if scale is None else float(scale)
-    w = int(round(620 * factor))
-    h = int(round(560 * factor))
-    return (min(w, MIN_SUPPORTED[0] - CHROME_W),
-            min(h, MIN_SUPPORTED[1] - CHROME_H))
+    w = int(round(FIRST_RUN[0] * factor))
+    h = int(round(MIN_H * factor))
+    room_w = MIN_SUPPORTED[0] if screen_w is None else int(screen_w)
+    room_h = MIN_SUPPORTED[1]
+    if screen_h is not None:
+        room_h = min(room_h, int(screen_h))
+    return (min(w, max(320, room_w - CHROME_W)),
+            min(h, max(320, room_h - CHROME_H)))
 
 
 def max_window_size(screen_w, screen_h, want=(1280, 1000), scale=None):

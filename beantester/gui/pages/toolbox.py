@@ -76,7 +76,7 @@ class ToolboxPage:
     def __init__(self, app, parent):
         self.app = app
         self.frame = ttk.Frame(parent)
-        self.nb = ttk.Notebook(self.frame)
+        self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")
         self.nb.pack(fill="both", expand=True, pady=(space("tight"), 0))
         self.tabs = {}
         self.panels = {}            # tool id -> panel, only for tools already shown

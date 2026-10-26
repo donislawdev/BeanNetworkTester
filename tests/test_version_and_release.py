@@ -820,7 +820,7 @@ def test_the_analysis_tools_carry_their_artefact_hashes_too():
     `requirements-lint.txt` used to pin three tools by version alone. Since
     2026-08-19 it is hash-checked, which is all-or-nothing in pip: the moment one
     requirement carries a hash, EVERY package the install resolves needs one. So
-    the file holds the whole closure (13 packages, resolved for Python 3.14 and
+    the file holds the whole closure (13 packages, resolved for Python 3.15 and
     measured identical on manylinux2014_x86_64 and win_amd64), not just the three
     names a person chose.
 

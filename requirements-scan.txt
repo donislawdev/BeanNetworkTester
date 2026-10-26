@@ -47,7 +47,7 @@
 # themselves, and that PyJWT line carries thirteen advisories Scorecard raised as
 # alert 20 (PYSEC-2026-4140..4152). 1.179.0 is the first that allows PyJWT 2.15.
 # A security fix is the cooldown's stated exception (see .github/dependabot.yml).
-semgrep==1.180.0; sys_platform != "win32"
+semgrep==1.182.1; sys_platform != "win32"
 
 # The weekly audit of what we PIN. Not the same question as dependency-review,
 # which looks at what a pull request ADDS: this one asks whether an advisory has

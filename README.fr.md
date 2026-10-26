@@ -165,7 +165,7 @@ redémarrage. Un fichier de langue corrompu est ignoré (il ne fait pas planter 
 - `pydivert` (capture du trafic), `psutil` (solution de repli, voir plus bas)
 
 L'installation depuis les sources fonctionne avec Python 3.10 et les versions plus récentes. La CI
-teste et construit **uniquement avec la version 3.14** - c'est la version avec laquelle le `.exe`
+teste et construit **uniquement avec la version 3.15** - c'est la version avec laquelle le `.exe`
 publié est figé, les versions plus anciennes sont donc prises en charge mais pas revalidées à
 chaque commit.
 

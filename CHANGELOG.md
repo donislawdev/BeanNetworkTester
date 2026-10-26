@@ -103,11 +103,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   now also say that the Ping tool sends echo requests to the address you type, from Start to
   Stop, and that a name you type is looked up first, as for any program.
 
-- **PyDivert, the library that captures the traffic, is updated to 4.0.0.** The WinDivert
+- **PyDivert, the library that captures the traffic, is updated to 4.0.1.** The WinDivert
   driver that comes with it is the same version 2.2 as before, file for file. `--license`
-  names the new version.
+  names the new version. When a packet is split into IP fragments, the later pieces no
+  longer show up as TCP or UDP with ports read from their data: they are counted as IP
+  traffic, so they no longer add a made-up connection to the table.
+
+- **The program is built and tested with Python 3.15.** The released program runs on
+  Python 3.15.2 instead of 3.14. Installing from source still works on Python 3.10 and
+  newer.
 
 ### Fixed
+
+- **The names of the tools on the Tools tab are whole.** On Linux in Polish, and in every
+  language but Chinese once the window was made narrow, each name lost its last letters, such
+  as "Zdrowie TCI" for "Zdrowie TCP". The tabs inside a page are now narrower than the page
+  tabs above them, so the seven tools fit in one row. The main window can no longer be made
+  narrower than it opens, on any screen and at any display scaling (760 pixels at 100%).
 
 - **The log no longer says a page opened when no browser started.** After a click on **Donate**
   the log said the support page was opened even when the browser did not start. It now says the
