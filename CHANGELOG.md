@@ -103,9 +103,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   now also say that the Ping tool sends echo requests to the address you type, from Start to
   Stop, and that a name you type is looked up first, as for any program.
 
-- **PyDivert, the library that captures the traffic, is updated to 4.0.0.** The WinDivert
+- **PyDivert, the library that captures the traffic, is updated to 4.0.1.** The WinDivert
   driver that comes with it is the same version 2.2 as before, file for file. `--license`
-  names the new version.
+  names the new version. When a packet is split into IP fragments, the later pieces no
+  longer show up as TCP or UDP with ports read from their data: they are counted as IP
+  traffic, so they no longer add a made-up connection to the table.
 
 ### Fixed
 

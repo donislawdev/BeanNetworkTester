@@ -9,8 +9,8 @@
 [[IgnoredVulns]]
 # MCP Python SDK: a Streamable HTTP server in stateful mode never reclaims its
 # sessions (fixed in mcp 1.30.0). `mcp` is not ours: semgrep pins `mcp==1.29.0`
-# exactly, in 1.180.0 (requirements-scan.txt) and in 1.181.0, the newest release
-# when this was written, so no pin of ours can move it. The CI job runs
+# exactly, in 1.180.0 and 1.181.0 and still in 1.182.1 (requirements-scan.txt,
+# checked 2026-10-26), so no pin of ours can move it. The CI job runs
 # `semgrep scan` on a throwaway runner and never starts semgrep's MCP server, and
 # nothing of semgrep reaches the program. Remove this entry when a semgrep
 # release allows mcp 1.30.0 or later, and raise the pin in the same change.

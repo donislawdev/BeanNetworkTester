@@ -4,7 +4,10 @@ Ported 1:1 from the original monolithic suite; every ``check(...)`` from the
 270-assertion baseline is preserved as a pytest assertion.
 """
 import random
+import struct
 import time
+
+import pytest
 
 from beantester import BeanCore, Decision
 from beantester.core import MAX_FLOWS
@@ -1514,3 +1517,31 @@ def test_a_reset_still_running_does_not_carry_into_the_next_session():
     core.reset_buckets(now + 1.0)
     check("the next session starts with no reset running",
           core._reset_now_deadline == 0.0, f"({core._reset_now_deadline})")
+
+
+def test_a_later_fragment_of_a_tcp_segment_carries_no_ports():
+    """A non-first IP fragment has no transport header: its first bytes are payload.
+
+    Up to pydivert 4.0.0 a later fragment was read as if a TCP header followed the
+    IP header, so what the engine took for its ports was payload - a made-up
+    connection in the table, and a port filter or a target judged on noise.
+    MEASURED 2026-10-26 (internal_tools/sondy/2026-10-26-linux-tabs/fragment_probe.py):
+    for payload bytes BE EF 1F 90, 4.0.0 gave TCP with ports 48879 and 8080, 4.0.1
+    gives IP with none - the reading WinDivert's own filter language has. It needs
+    the real pydivert, so it is skipped where pydivert is not installed.
+    """
+    pydivert = pytest.importorskip("pydivert")
+    payload = struct.pack("!HH", 0xBEEF, 0x1F90) + bytes(28)
+
+    def fragment(offset_units):
+        ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(payload), 0x1234, offset_units,
+                         64, 6, 0, bytes([192, 0, 2, 1]), bytes([198, 51, 100, 7]))
+        return pydivert.Packet(ip + payload, (1, 0), pydivert.Direction.OUTBOUND)
+
+    # (is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp)
+    first = BeanCore.packet_meta(fragment(0))
+    later = BeanCore.packet_meta(fragment(185))
+    check("the first fragment is TCP with its ports",
+          (first[1], first[2], first[4]) == (48879, 8080, "TCP"), f"({first})")
+    check("a later fragment is IP with no ports",
+          (later[1], later[2], later[4], later[6]) == (None, None, "IP", False), f"({later})")

@@ -16,11 +16,11 @@
 # carries libebpfdivert instead, with libbpf, libelf, zstd and zlib linked in. The
 # hashes already cover it - tools/pin_hashes.py writes every artefact of the
 # version. Nothing is shipped for Linux yet, so its notices wait for a Linux build.
-pydivert==4.0.0; sys_platform == "win32" or sys_platform == "linux" \
-    --hash=sha256:06272d935efe7489cba5558bf6f7de5b68a2fdbd9fa0521ee04120b22fdeb73a \
-    --hash=sha256:3736e19922b12a8d3839c6fecbc6faa0ce7ac0b62507368432542cb559bce907 \
-    --hash=sha256:a507ad3fa5efef95147595d9486d84fc9118b149d5ec6ed140c30283f9151602 \
-    --hash=sha256:a642f745c7168b9449fbcfb8fbeedf948e6739c608b92faff0caf80c098540ff
+pydivert==4.0.1; sys_platform == "win32" or sys_platform == "linux" \
+    --hash=sha256:1985fc89d2ec495ecd180ae679375b90636ffb8f6983502e8da3a701b13d457a \
+    --hash=sha256:73eb86a3d311660fe35f22c3f91eb5479ddc8416fe4c4d57f2c5ad15daeeb46f \
+    --hash=sha256:7de2eab52bef9005bcdb9d1ea3641b9a42bc8be8093af748d33c635d997dced2 \
+    --hash=sha256:848e8da98a39b4da056758f51b53af33cdf027d8c55eff19d910922b61347db1
 psutil==7.2.2 \
     --hash=sha256:0746f5f8d406af344fd547f1c8daa5f5c33dbc293bb8d6a16d80b4bb88f59372 \
     --hash=sha256:076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9 \
