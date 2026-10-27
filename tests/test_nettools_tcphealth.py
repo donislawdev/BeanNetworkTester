@@ -121,7 +121,8 @@ def test_a_cycle_reads_the_socket_table_once_and_only_for_connections_rows():
         [Request("x", 1, target=Target(51000, "198.51.100.7", 443)),
          Request("y", 2, target=Target(51001, "198.51.100.7", 443)),
          Request("z", 3, connection=C._replace(local_port=60000))],
-        [C], watch=lambda c: watched.append(c) or ok(), read=lambda c: ok(resent=1), rows=rows)
+        [(C, None)], watch=lambda c: watched.append(c) or ok(),
+        read=lambda c, handle=None: ok(resent=1), rows=rows)
     check("one socket table read for two Connections rows", calls == [1], f"({calls})")
     kinds = [(r.process, kind) for r, _c, kind, _reading in result.added]
     check("found, gone, and a known connection that needed no lookup",
@@ -131,7 +132,7 @@ def test_a_cycle_reads_the_socket_table_once_and_only_for_connections_rows():
           result.added[0][1] == C and watched == [C, C._replace(local_port=60000)])
     check("and what was on the list is read", list(result.readings) == [tcphealth.key_of(C)])
     none = tcphealth.cycle([Request("z", 3, connection=C)], [], watch=lambda c: ok(),
-                           read=lambda c: ok(), rows=lambda: calls.append(2))
+                           read=lambda c, handle=None: ok(), rows=lambda: calls.append(2))
     check("no Connections row: no table read", calls == [1] and len(none.added) == 1)
 
 
@@ -144,8 +145,8 @@ def test_a_socket_table_that_does_not_answer_is_said_and_not_taken_for_closed(mo
     target = Request("x", 1, target=Target(51000, "198.51.100.7", 443))
     for rows in (unavailable, lambda: ([], ["tcp/v6"]), lambda: (_ for _ in ()).throw(
             RuntimeError("a fault in the table read on purpose"))):
-        result = tcphealth.cycle([target], [C], watch=lambda c: ok(), read=lambda c: ok(),
-                                 rows=rows)
+        result = tcphealth.cycle([target], [(C, None)], watch=lambda c: ok(),
+                                 read=lambda c, handle=None: ok(), rows=rows)
         check(f"{rows}: unreadable", result.added[0][2] == tcphealth.UNREADABLE,
               f"({result.added})")
         check("and what was watched is still read", list(result.readings) ==
@@ -172,7 +173,10 @@ def test_the_details_and_the_report_say_the_numbers_since_watching():
           rows["remote"].value == "[2001:db8::7]:443" and rows["remote"].address == "2001:db8::7")
     check("resent in BYTES since watching, and the growth since the last read in brackets",
           rows["resent_bytes"].value == "2920 B (+2920)", f"({rows['resent_bytes']})")
-    check("no row for the segment count Windows never fills", "resent" not in rows)
+    check("no row for the segment count Windows never fills",
+          "resent" not in rows and "resent_segments" not in rows, f"({list(rows)})")
+    check("nor Linux's lowest-alone row: Windows has the range",
+          "lowest" not in rows and "range" in rows)
     check("a counter that did not grow: no brackets", rows["timeouts"].value == "0"
           and rows["dupacks"].value == "3 (+3)", f"({rows['timeouts']}, {rows['dupacks']})")
     check("bytes sent and received since watching", rows["data"].value == "2000 / 4000 B")
@@ -263,3 +267,128 @@ def test_a_round_trip_under_a_millisecond_is_said_so_not_as_none():
           and tcphealth.rtt_number(214) == "214")
     check("not measured stays not measured", tcphealth.ms(None) == tcphealth.Words(
         "tools.tcphealth.value.no_rtt"))
+
+
+# -- Linux: what its kernel keeps (tcpestats._linux_sample) ----------------------------- #
+def linux(**kernel):
+    """A Linux reading from ``tcp_info``'s fields, in the kernel's units (microseconds).
+    A field given as None is one an older kernel's shorter struct does not have."""
+    info = {"rto": 201000, "snd_mss": 1448, "rtt": 210500, "rttvar": 3200, "total_retrans": 0,
+            "bytes_received": 5000, "min_rtt": 180250, "bytes_sent": 1000, "bytes_retrans": 0,
+            "total_rto": 0, **kernel}
+    return tcpestats.Reading(tcpestats.OK, tcpestats._linux_sample(
+        {name: value for name, value in info.items() if value is not None}), handle="id")
+
+
+def test_a_linux_reading_says_only_what_its_kernel_keeps():
+    """No newest single round trip, no highest one, no fast resends or duplicate ACKs, no
+    count of measurements - so none of those is said, not even as "not measured yet". It
+    does count the segments sent again, which Windows never fills."""
+    watch = Watch(C, "app", 7, 0.0)
+    watch.take(linux(total_retrans=3, bytes_retrans=4344), 1.0)
+    for second in range(2, 9):
+        watch.take(linux(total_retrans=5, bytes_retrans=7240, bytes_sent=1000 + 500 * second),
+                   float(second))
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    check("what Linux keeps, in its order",
+          list(rows) == ["process", "local", "remote", "state", "srtt", "lowest", "rttvar", "rto",
+                         "resent_bytes", "resent_segments", "timeouts", "mss", "data", "since"],
+          f"({list(rows)})")
+    check("whole milliseconds, rounded down", rows["srtt"].value == "210 ms"
+          and rows["lowest"].value == "180 ms" and rows["rttvar"].value == "3 ms"
+          and rows["rto"].value == "201 ms", f"({rows['srtt']}, {rows['lowest']})")
+    check("the segments sent again since watching, as a counter",
+          rows["resent_segments"].value == "2" and rows["resent_bytes"].value == "2896 B",
+          f"({rows['resent_segments']}, {rows['resent_bytes']})")
+    check("never said to be unmeasured: Linux keeps no count of its measurements",
+          watch.unmeasured_for() == 0 and tcphealth.tag_of(watch) == ""
+          and rows["srtt"].note == ())
+    text = tcphealth.report(_one(watch))
+    check("the report says the same and no more",
+          "smoothed 210 ms, lowest 180 ms, variation 3 ms, resend timer 201 ms, segment size "
+          "1448 B" in text and "resent 2896 B (2 segments), timeouts 0, sent 4000 B, received 0 B"
+          in text and not any(word in text for word in ("last", "highest", "measured",
+                                                        "fast resends", "duplicate ACKs")),
+          "\n" + text)
+    smoothed, sample, _span = tcphealth.chart(watch, 9.0)
+    check("the chart: the smoothed line alone", len(smoothed) == 8 and sample == [],
+          f"({smoothed}, {sample})")
+
+
+def test_linux_counters_wrap_at_their_own_widths():
+    """The kernel's timeout count is 16 bits, its resent bytes 64: a difference taken at
+    Windows' 32 would be a huge jump in one and a wrap that never was in the other."""
+    watch = Watch(C, "app", 7, 0.0)
+    watch.take(linux(total_rto=65534, bytes_retrans=1), 1.0)
+    watch.take(linux(total_rto=2, bytes_retrans=2 ** 32 + 5), 2.0)
+    check("timeouts across the 16-bit wrap", watch.since_watching("timeouts") == 4
+          and watch.since_previous("timeouts") == 4, f"({watch.since_watching('timeouts')})")
+    check("resent bytes past 4 GiB", watch.since_watching("resent_bytes") == 2 ** 32 + 4,
+          f"({watch.since_watching('resent_bytes')})")
+
+
+def test_an_older_kernel_without_a_field_has_no_row_for_it():
+    """Fields are added at the end of ``tcp_info``: Linux before 6.7 has no timeout count
+    (Ubuntu 22.04). The row goes, never a 0 that was not counted."""
+    watch = Watch(C, "app", 7, 0.0)
+    watch.take(linux(total_rto=None), 1.0)
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    check("no timeouts row", "timeouts" not in rows and "resent_segments" in rows, f"({list(rows)})")
+    check("nor in the report", "timeouts" not in tcphealth.report(_one(watch)))
+
+
+def test_a_round_trip_linux_has_not_measured_yet_is_said_so():
+    """A round trip of 0 us is none yet (a connection still opening, measured 2026-10-27);
+    its variation is then the kernel's starting value, not a measurement."""
+    watch = Watch(C, "app", 7, 0.0)
+    watch.take(linux(rtt=0, rttvar=250000, min_rtt=0xFFFFFFFF), 1.0)
+    rows = {d.key: d for d in tcphealth.details(watch)}
+    none = tcphealth.Words("tools.tcphealth.value.no_rtt")
+    check("not measured yet", rows["srtt"].value == none and rows["rttvar"].value == none
+          and rows["lowest"].value == none, f"({rows['srtt']}, {rows['rttvar']})")
+    under = Watch(C, "app", 7, 0.0)
+    under.take(linux(rtt=999, min_rtt=14), 1.0)
+    check("measured, 0.999 ms: rounded down, < 1 ms - under one, as it was",
+          tcphealth.cells(under)[4] == "< 1 ms", f"({tcphealth.cells(under)})")
+
+
+def test_a_connections_row_is_looked_up_in_the_systems_own_table(monkeypatch):
+    """The system's table (``tcpestats.socket_rows``): on Linux the kernel's list, which
+    writes a dual-stack socket's address as the row does, where psutil does not."""
+    asked = []
+
+    def system_rows():
+        asked.append(1)
+        return ([SocketRow("TCP", 4, "192.0.2.10", 51000, "198.51.100.7", 443, "ESTABLISHED",
+                           7)], [])
+    monkeypatch.setattr(tcpestats, "socket_rows", system_rows)
+    result = tcphealth.cycle([Request("x", 1, target=Target(51000, "198.51.100.7", 443))], [],
+                             watch=lambda c: ok())
+    check("the system's table, read once", asked == [1]
+          and result.added[0][2] == tcphealth.WATCHING, f"({asked}, {result.added})")
+
+
+def test_the_handle_a_watch_gave_is_what_its_connection_is_read_by():
+    """Linux reads a connection by the kernel's id of its socket, cookie in it - the one
+    the watch found. A reading without one (Windows) keeps none."""
+    watchlist = Watchlist()
+    watchlist.apply(tcphealth.Result(((Request("a", 1, connection=C), C, tcphealth.WATCHING,
+                                       linux()),), {}), 1.0)
+    check("kept", watchlist.to_read() == [(C, "id")], f"({watchlist.to_read()})")
+    watchlist.apply(tcphealth.Result((), {tcphealth.key_of(C): ok()}), 2.0)
+    check("a reading without one does not lose it", watchlist.to_read() == [(C, "id")])
+    asked = []
+    result = tcphealth.cycle([], watchlist.to_read(), watch=lambda c: ok(),
+                             read=lambda c, handle=None: asked.append((c, handle)) or ok())
+    check("and the cycle reads by it", asked == [(C, "id")]
+          and list(result.readings) == [tcphealth.key_of(C)], f"({asked})")
+
+
+def test_no_note_about_rights_where_watching_needs_none(monkeypatch):
+    monkeypatch.setattr(tcphealth.driver, "is_admin", lambda: False)
+    monkeypatch.setattr(tcpestats, "needs_rights", lambda: True)
+    check("Windows without rights: said", tcphealth.blocker() == "tools.tcphealth.needs_admin")
+    monkeypatch.setattr(tcpestats, "needs_rights", lambda: False)
+    check("Linux: nothing to say", tcphealth.blocker() == "")
+    monkeypatch.setattr(tcpestats.sys, "platform", "linux")
+    check("Linux needs none", tcpestats.needs_rights() is False)

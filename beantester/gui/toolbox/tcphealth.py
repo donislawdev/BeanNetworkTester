@@ -1,13 +1,14 @@
-"""Tools tab: TCP health - what Windows' TCP stack measures for a watched connection.
+"""Tools tab: TCP health - what the system's TCP stack measures for a watched connection.
 The numbers are ``tcpestats``'s; the list, the differences and the words are
 ``nettools/tcphealth.py``'s.
 
 "Does the stack see my 200 ms as 200 ms of round trip, my 5% loss as resent
 segments?" A connection is put on the list from a row menu - the socket table
 beside this tool, or the Connections page of a session (the owner's choice,
-2026-10-19: no second socket table here). Turning counting on for it needs
-administrator rights; without them the tool says so in a line of its own, like
-"Clean up the driver" does.
+2026-10-19: no second socket table here). On Windows turning counting on for it
+needs administrator rights; without them the tool says so in a line of its own,
+like "Clean up the driver" does. Linux needs none, and has its own "?" sheet, tips
+and chart legend (its stack keeps no newest single round trip).
 
 Layout (the owner's choice of the rendered two, 2026-10-19): the list above, the
 chosen connection's details below with its round trips charted BESIDE them - stacked
@@ -20,6 +21,7 @@ list and turns counting on for what was just asked, and the next run starts only
 after the last one answered: a run waiting behind another is REPLACED by a newer one
 (``ToolJob``), so asking twice could have lost the first request.
 """
+import sys
 import time
 import tkinter as tk
 import weakref
@@ -44,6 +46,17 @@ COLUMNS = {"process": "tools.tcphealth.col.process", "local": "tools.tcphealth.c
            "remote": "tools.tcphealth.col.remote", "state": "tools.tcphealth.col.state",
            "rtt": "tools.tcphealth.col.rtt", "resent": "tools.tcphealth.col.resent"}
 TIPS = {column: f"tips.tools_tcphealth_col_{column}" for column in COLUMNS}
+# What Linux says in its own words: the whole "?" sheet (it is about what Windows
+# measures and when), the two column tips and the Stop tip that name Windows.
+HELP, HELP_LINUX = "tools.tcphealth.help_body", "tools.tcphealth.help_linux"
+TIPS_LINUX = {**TIPS, "state": "tips.tools_tcphealth_col_state_linux",
+              "resent": "tips.tools_tcphealth_col_resent_linux"}
+STOP_TIP, STOP_TIP_LINUX = "tips.tools_tcphealth_stop", "tips.tools_tcphealth_stop_linux"
+# The chart's legend: (swatch style, key) of each line, the newest single round trip
+# only where the stack keeps one.
+LEGEND = (("Swatch.Down.TLabel", "tools.tcphealth.legend_smoothed"),
+          ("Swatch.Up.TLabel", "tools.tcphealth.legend_sample"))
+LEGEND_LINUX = LEGEND[:1]
 MIN_CHARS = {"process": CHARS["process"], "local": CHARS["address"],
              "remote": CHARS["address"], "state": CHARS["tcp_state"], "rtt": CHARS["rtt"],
              "resent": CHARS["resent"]}
@@ -68,6 +81,29 @@ _LISTS: "weakref.WeakKeyDictionary[object, tcphealth.Watchlist]" = weakref.WeakK
 
 def watchlist(app):
     return _LISTS.setdefault(app, tcphealth.Watchlist())
+
+
+def _is_linux(platform=None):
+    return (platform or sys.platform).startswith("linux")
+
+
+def help_key(platform=None):
+    """The "?" sheet of this system."""
+    return HELP_LINUX if _is_linux(platform) else HELP
+
+
+def tips(platform=None):
+    """The list's column tips on this system."""
+    return TIPS_LINUX if _is_linux(platform) else TIPS
+
+
+def stop_tip(platform=None):
+    return STOP_TIP_LINUX if _is_linux(platform) else STOP_TIP
+
+
+def legend_lines(platform=None):
+    """The chart legend's lines on this system."""
+    return LEGEND_LINUX if _is_linux(platform) else LEGEND
 
 
 def render(watch):
@@ -104,8 +140,7 @@ class TcpHealthPanel:
 
         bar = ttk.Frame(self.frame)
         bar.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
-        self.stop_btn = self._button(bar, "tools.tcphealth.stop", "tips.tools_tcphealth_stop",
-                                     self.stop)
+        self.stop_btn = self._button(bar, "tools.tcphealth.stop", stop_tip(), self.stop)
         self.copy_btn = self._button(bar, "tools.tcphealth.copy_report",
                                      "tips.tools_tcphealth_copy", self.copy_report)
         self.background = tk.BooleanVar(value=self.memory.get("background") == "1")
@@ -113,8 +148,7 @@ class TcpHealthPanel:
                               variable=self.background, command=self._background_ticked)
         box.pack(side="left", padx=(0, space("inline")))
         add_tooltip(box, "tips.tools_tcphealth_background")
-        dialogs.help_button(bar, app.root, "tools.tcphealth.help_title",
-                            "tools.tcphealth.help_body",
+        dialogs.help_button(bar, app.root, "tools.tcphealth.help_title", help_key(),
                             "tips.tools_tcphealth_help").pack(side="right")
 
         # Asked once: a running process does not gain or lose administrator rights.
@@ -132,7 +166,7 @@ class TcpHealthPanel:
         top.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))
         self.table = SortableTree(
             top, COLUMNS, sort={"col": "", "reverse": False}, on_sort=lambda _s: self._show(),
-            height=ROWS["watched"], min_chars=MIN_CHARS, tips=TIPS, tags=HEALTH_COLORS,
+            height=ROWS["watched"], min_chars=MIN_CHARS, tips=tips(), tags=HEALTH_COLORS,
             selectmode="browse", empty_text="tools.tcphealth.empty")
         self.table.bind_select(self._on_select)
 
@@ -146,8 +180,7 @@ class TcpHealthPanel:
         # not its legend (rendered 2026-10-19 without the note's room: the legend went).
         legend = ttk.Frame(box)
         legend.pack(side="bottom", fill="x", padx=space("tight"), pady=(0, space("tight")))
-        for style, key in (("Swatch.Down.TLabel", "tools.tcphealth.legend_smoothed"),
-                           ("Swatch.Up.TLabel", "tools.tcphealth.legend_sample")):
+        for style, key in legend_lines():
             ttk.Label(legend, text="  ", style=style).pack(side="left")
             ttk.Label(legend, text=T(key)).pack(side="left", padx=(space("tight"), space("row")))
         self.canvas = chart_canvas(box, size("side_chart"), size("chart"))

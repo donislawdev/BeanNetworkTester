@@ -104,6 +104,46 @@ def test_every_broken_reset_is_named():
               f"({failures})")
 
 
+SS_LINE = ("ESTAB 0 0 10.233.0.2:41000 10.233.0.1:47104 cubic wscale:7,7 rto:201 "
+           "rtt:0.067/0.038 ato:40 mss:1448 pmtu:1500 rcvmss:536 advmss:1448 cwnd:10 "
+           "bytes_sent:500 bytes_acked:501 bytes_received:500 segs_out:7 segs_in:6")
+
+
+def test_every_broken_tcp_health_reading_is_named():
+    """The tool's own numbers against ``ss -tin`` of the same moment, the smoothed round
+    trip climbing through the session, and ended once closed."""
+    watched = {"state": "ok", "srtt": 0, "rto": 201, "mss": 1448, "sent": 500,
+               "received": 500, "resent": 0, "ss": SS_LINE}
+    during = {"state": "ok", "srtt": 93, "closed": "ended"}
+    check("a TCP health reading that did its job passes",
+          smoke.judge_health(watched, during) == [], f"({smoke.judge_health(watched, during)})")
+    check("a smoothed value one slow sample pulled up passes too (232 ms on the VM)",
+          smoke.judge_health(watched, dict(during, srtt=232)) == [])
+    cases = {
+        "not watched": ((dict(watched, state="failed"), during), "watching ended"),
+        "the timer read in microseconds": ((dict(watched, rto=201000), during), "rto"),
+        "the segment size of another field": ((dict(watched, mss=536), during), "mss"),
+        "the bytes of the other direction": ((dict(watched, sent=501), during), "sent"),
+        "resent bytes where ss saw none": ((dict(watched, resent=1448), during), "resent"),
+        "a round trip rounded up": ((dict(watched, srtt=1), during), "srtt"),
+        "no ss line": ((dict(watched, ss=""), during), "ss said no numbers"),
+        "a slow machine": ((dict(watched, ss=SS_LINE.replace("rtt:0.067", "rtt:30.5"),
+                                 srtt=30), during), "30 ms before"),
+        "the latency not seen": ((watched, dict(during, srtt=1)), "smoothed 1 ms"),
+        "a round trip in another unit": ((watched, dict(during, srtt=93000)), "smoothed 93000"),
+        "a session that never ran": ((watched, {}), "smoothed None"),
+        "still open once closed": ((watched, dict(during, closed="ok")), "closed"),
+    }
+    for name, (got, words) in cases.items():
+        failures = smoke.judge_health(*got)
+        check(f"{name}: failed, saying {words!r}", any(words in f for f in failures),
+              f"({failures})")
+    check("ss leaves out bytes_retrans while it is 0, and says it once it is not",
+          smoke.judge_health(dict(watched, resent=2896), during) != []
+          and smoke.judge_health(dict(watched, resent=2896, ss=SS_LINE + " bytes_retrans:2896"),
+                                 during) == [])
+
+
 def _adapters_seen():
     """What the Adapters phase reads in a namespace that came out right."""
     def link(index, name, state, flags, kind="ether", mac="02:00:00:00:00:0a", mtu=1500):

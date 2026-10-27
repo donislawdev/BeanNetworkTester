@@ -19,8 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   capture, and a refused START says what to do. The Statistics page and its CSV count
   packets that went around the tool and those the driver dropped, with a red line while
   either grows. Its files stay yours, and GitHub and Donate print the address instead of
-  starting a browser as root. On the Tools tab, TCP health says it is Windows-only for now,
-  and the row menus grey out Show TCP health.
+  starting a browser as root.
 
 - **Linux, experimental: Diagnostics speaks of Linux.** Its help explains what stops a
   session there - capture rights, the kernel, BTF and pydivert - and what to do, and
@@ -47,6 +46,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   shows the desktop's proxy settings (GNOME) and the proxy variables in `/etc/environment`
   and the `environment.d` folders, also under sudo as yours. **Add network adapters** and
   **Add proxy settings** in Diagnostics work too.
+
+- **Linux, experimental: TCP health works, without sudo.** It shows what the kernel keeps for a
+  connection, as `ss -ti` does, also for other users' programs, and **Show TCP health** works
+  in the row menus. Linux keeps no newest or highest round trip and counts no fast resends or
+  duplicate ACKs, so those rows are not there. It does count the segments sent again, in a
+  row of its own. The lowest round trip is the lowest of the last 5 minutes, and timeouts are
+  counted from Linux 6.7 on.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

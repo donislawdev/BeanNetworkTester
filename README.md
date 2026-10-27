@@ -206,14 +206,13 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
 - IP fragments always pass through the tool, even those its filter does not match.
 - In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo`, and
   GitHub and Donate print their address instead of starting a browser as root.
-- On the Tools tab, Ping, Sockets, Port check, Filter tester and Diagnostics work. Ping works
-  without `sudo` where the system lets your group send pings (the setting
+- On the Tools tab, Ping, Sockets, Port check, Filter tester, TCP health and Diagnostics work.
+  Ping works without `sudo` where the system lets your group send pings (the setting
   `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not). With `sudo` it sends
   through a raw socket, which needs the capability CAP_NET_RAW: root has it unless the system
   takes it away, as some containers do. A ping Linux refuses shows its own word for it:
   `EPERM` usually means a firewall rule on this computer.
-  A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health says that
-  it works on Windows only for now, and so do the row menu entries that open it. The
+  A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). The
   Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and pydivert.
 - **"Reset this connection"** on the Connections page works on Linux for TCP over IPv4 and IPv6,
   as root or with the capability CAP_NET_ADMIN. The program using the connection gets
@@ -236,6 +235,15 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   not read. The desktop's settings are read with `gsettings`, as you, also under `sudo`: this
   is the one program the tool starts, and it sends nothing. There is no proxy for services as
   on Windows (WinHTTP).
+- **TCP health** on the Tools tab works on Linux, without `sudo`, also for connections of other
+  users' programs: the kernel keeps these numbers for every TCP connection from the moment it
+  opens, as `ss -ti` shows them. Linux keeps no newest single round trip and no highest one,
+  and does not count fast resends or duplicate ACKs, so those rows are not shown. It does
+  count the segments sent again, which is a row of its own there. The lowest round trip is
+  the lowest of the last 5 minutes. Timeouts are counted from Linux 6.7 on and count every
+  time the resend timer ran out. Linux kept measuring when the round trip of an open
+  connection jumped by 200 ms, so there is no "not measured" note on Linux. The bytes received
+  do not count data received twice. A connection whose program has closed it reads as Ended.
 
 ## The window
 
@@ -328,7 +336,8 @@ monitor is gone it returns to the centre of the current screen.
     right-click a row to target its program, leave it alone, limit to or block its
     remote address, watch a TCP connection in **TCP health** or ping its far end in
     **Ping**. Program names are shown without administrator rights.
-  - **TCP health** - what Windows measures for a TCP connection: the round-trip time
+  - **TCP health** - what Windows measures for a TCP connection (on Linux, what the kernel
+    keeps: see the Linux section): the round-trip time
     (smoothed, newest, lowest and highest, charted for the last minute), the bytes sent
     again, timeouts, duplicate ACKs, the segment size and the bytes sent and received (data
     sent again included). Windows measures a round trip only from data it sent once: when
@@ -1622,14 +1631,16 @@ beantester/              the implementation package
   proxy.py               the proxy this account and this machine use (winhttp/ctypes and the
                          registry; on Linux gsettings and the environment files), read only,
                          for the Tools tab
-  tcpestats.py           what Windows' TCP stack measures for one connection (EStats,
-                         iphlpapi/ctypes), for the Tools tab's TCP health
+  tcpestats.py           what the TCP stack measures for one connection (EStats,
+                         iphlpapi/ctypes; on Linux the kernel's tcp_info), for the Tools
+                         tab's TCP health
   tcpreset.py            reset one TCP connection (iphlpapi/ctypes; on Linux the kernel's
                          SOCK_DESTROY), for the Connections page's row menu
   tcprow.py              one TCP connection the way Windows names it: the row layouts and
                          finding it in the socket table, without calling Windows
   sockdiag.py            the kernel's own list of TCP sockets on Linux (sock_diag over
-                         netlink), read only: where a reset finds the socket it destroys
+                         netlink), read only: where a reset finds the socket it destroys,
+                         and one socket's tcp_info for TCP health
   rtnetlink.py           the kernel's tables of adapters, addresses and routes on Linux, and a
                          route lookup (what ip route get asks), read only, for the adapters
   netlink.py             the message socket to the Linux kernel under sockdiag and rtnetlink:

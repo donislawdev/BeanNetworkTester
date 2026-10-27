@@ -32,6 +32,12 @@ went away" look the same from one side.
   other. And a connection that closed after the socket list was read: its destroy ends
   as "gone", and the listener on its port lives on (by its numbers alone, without the
   cookie, the kernel took the listener - measured 2026-10-26).
+* The Tools tab's TCP health, its own ``tcpestats.watch`` and ``read``, on a TCP
+  connection from the namespace: its numbers equal what ``ss -tin`` says of that socket
+  at the same moment (resend timer, segment size, round trip, bytes sent, received and
+  sent again); during ``--latency 50`` on its port the smoothed round trip it reports
+  climbs toward both directions' 50 ms - the tool's promise, "does the stack see my
+  latency"; closed, the connection reads as ended.
 * The Tools tab's Adapters, its own ``adapters.read``, against ``ip -j`` of the same
   tables: in the namespace, given an address with a lease, a deprecated one and a
   duplicate (the same IPv6 address on both ends of a veth pair, so DAD finds it), each
@@ -144,6 +150,53 @@ STALE_CLIENT = (
     "except OSError as exc:\n"
     "    listener = type(exc).__name__\n"
     "print(json.dumps({'found': len(served), 'stale': stale, 'listener': listener}))\n")
+
+HEALTH_PORT = 47104
+HEALTH_ROUNDS = 20          # echoes of ~2 x 50 ms + 0.1 s each under the session: about 4 s
+# What the far end says first: an echo alone sends as many bytes as it receives, and the
+# two counters swapped would pass.
+HEALTH_GREETING = b"bnt says hello\n"
+
+# Run INSIDE the namespace, from the checkout: one TCP connection to the far end's echo,
+# watched by the Tools tab's own TCP health and read by `ss -tin` at the same moment;
+# then, at a line on stdin, an echo every 0.1 s (a session adds its latency meanwhile)
+# and a read; then closed, and read once more.
+HEALTH_CLIENT = (
+    "import json, socket, subprocess, sys, time\n"
+    "from beantester import tcpestats\n"
+    "from beantester.tcprow import Connection\n"
+    "host, port, rounds, greeting = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])\n"
+    "s = socket.create_connection((host, port), timeout=5)\n"
+    "s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\n"
+    "heard = b''\n"
+    "while len(heard) < greeting:\n"
+    "    heard += s.recv(greeting - len(heard))\n"
+    "def echo(n):\n"
+    "    for _ in range(n):\n"
+    "        s.sendall(b'h' * 100)\n"
+    "        got = 0\n"
+    "        while got < 100:\n"
+    "            got += len(s.recv(4096))\n"
+    "        time.sleep(0.1)\n"
+    "def said(r):\n"
+    "    x = r.sample\n"
+    "    return {'state': r.state, 'srtt': x and x.smoothed_rtt, 'rto': x and x.rto,\n"
+    "            'mss': x and x.mss, 'sent': x and x.bytes_out, 'received': x and x.bytes_in,\n"
+    "            'resent': x and x.resent_bytes}\n"
+    "echo(5)\n"
+    "time.sleep(0.3)\n"
+    "c = Connection(s.getsockname()[0], s.getsockname()[1], host, port)\n"
+    "r = tcpestats.watch(c)\n"
+    "ss = subprocess.run(['ss', '-tinH', 'state', 'all', '( sport = :%d )' % c.local_port],\n"
+    "                    capture_output=True, text=True, timeout=10).stdout\n"
+    "print(json.dumps({**said(r), 'ss': ss}), flush=True)\n"
+    "sys.stdin.readline()\n"
+    "echo(rounds)\n"
+    "during = said(tcpestats.read(c, handle=r.handle))\n"
+    "s.close()\n"
+    "time.sleep(0.3)\n"
+    "during['closed'] = tcpestats.read(c, handle=r.handle).state\n"
+    "print(json.dumps(during), flush=True)\n")
 
 
 # Run INSIDE the namespace (and once outside it), from the checkout: the Adapters tool's
@@ -343,6 +396,54 @@ def judge_adapters(seen, where, states=False, private=False):
         if states and not any(x[0] == ip and x[field] == value for x in mine.values()):
             failures.append(f"adapters {where}: {ip} not seen as {what} "
                             f"({[x for x in mine.values() if x[0] == ip]})")
+    return failures
+
+
+SS_FIELDS = ("rto", "rtt", "mss", "bytes_sent", "bytes_received", "bytes_retrans")
+
+
+def _ss_numbers(text):
+    """The fields of an ``ss -tin`` line TCP health is judged by, as ``ss`` wrote them."""
+    out = {}
+    for token in text.split():
+        key, sep, value = token.partition(":")
+        if sep and key in SS_FIELDS:
+            out[key] = value
+    return out
+
+
+def judge_health(watched, during, latency_ms=LATENCY_MS):
+    """Failures (empty = pass) for the TCP health phase. ``watched`` is the reading when
+    the connection was put on the list, with ``ss -tin``'s line of the same moment;
+    ``during`` the reading after the echoes through ``--latency``, and ``closed`` the
+    state once the connection was closed. Whole milliseconds rounded down, as the tool
+    says them; ``ss`` leaves out bytes_retrans while it is 0. The far end's greeting
+    makes the bytes received differ from the bytes sent."""
+    if watched.get("state") != "ok":
+        return [f"tcp health: watching ended {watched.get('state')!r}, not 'ok'"]
+    ss = _ss_numbers(watched.get("ss") or "")
+    failures = []
+    try:
+        want = {"rto": int(float(ss["rto"])), "srtt": int(float(ss["rtt"].split("/")[0])),
+                "mss": int(ss["mss"]), "sent": int(ss["bytes_sent"]),
+                "received": int(ss["bytes_received"]), "resent": int(ss.get("bytes_retrans", 0))}
+    except (KeyError, ValueError):
+        return [f"tcp health: ss said no numbers for the connection: {watched.get('ss')!r}"]
+    for name, value in want.items():
+        if watched.get(name) != value:
+            failures.append(f"tcp health: {name} {watched.get(name)}, ss said {value}")
+    added = 2 * latency_ms                       # each direction carries the latency
+    if want["srtt"] >= latency_ms / 2:
+        failures.append(f"tcp health: {want['srtt']} ms before the session - the machine is "
+                        "too slow to tell")
+    # A smoothed value, not one round trip: one slow sample pulls it up for seconds (232 ms
+    # through this session on the VM, 2026-10-27), so the top only catches a wrong unit.
+    srtt = during.get("srtt")
+    if during.get("state") != "ok" or srtt is None or not 0.6 * added <= srtt <= 5 * added:
+        failures.append(f"tcp health: smoothed {srtt} ms ({during.get('state')}) through the "
+                        f"session, expected toward {added} ms")
+    if during.get("closed") != "ended":
+        failures.append(f"tcp health: closed, it read {during.get('closed')!r}, not 'ended'")
     return failures
 
 
@@ -603,6 +704,56 @@ def _reset_phase():
         far.close()
 
 
+def start_tcp_echo(port):
+    """A TCP echo in the root namespace, in THIS process: the far end TCP health watches."""
+    far = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    far.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    far.bind((HOST, port))
+    far.listen(4)
+
+    def serve():
+        try:
+            conn = far.accept()[0]
+        except OSError:             # closed before anyone connected
+            return
+        with conn:
+            conn.sendall(HEALTH_GREETING)
+            while data := conn.recv(4096):
+                conn.sendall(data)
+    threading.Thread(target=serve, daemon=True).start()
+    return far
+
+
+def _health_phase():
+    far = start_tcp_echo(HEALTH_PORT)
+    client = subprocess.Popen(
+        in_namespace(sys.executable, "-c", HEALTH_CLIENT, HOST, str(HEALTH_PORT),
+                     str(HEALTH_ROUNDS), str(len(HEALTH_GREETING))),
+        cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True)
+    try:
+        watched = json.loads(client.stdout.readline() or "{}")
+
+        def during():
+            client.stdin.write("go\n")
+            client.stdin.flush()
+            return json.loads(client.stdout.readline() or "{}")
+        result, lines, code = run_session(
+            ["--dst-ip", HOST, "--dst-port", str(HEALTH_PORT), "--latency", str(LATENCY_MS),
+             "--duration", "10"], during)
+        failures = _session_failures("tcp health", result, lines, code)
+        failures += judge_health(watched, result or {})
+        print("tcp health:", json.dumps({"watched": {k: watched.get(k) for k in
+                                                     ("state", "srtt", "rto", "mss")},
+                                         "during": result}))
+        return failures
+    finally:
+        if client.poll() is None:
+            client.kill()
+        client.wait(10)
+        far.close()
+
+
 def _read_adapters(argv):
     r = subprocess.run([*argv, sys.executable, "-c", ADAPTERS_CLIENT], cwd=ROOT,
                        capture_output=True, text=True, timeout=60)
@@ -667,6 +818,7 @@ def main(argv=None, environment=None):
         failures += _loss_phase()
         failures += _ping_phase()
         failures += _reset_phase()
+        failures += _health_phase()
         failures += _adapters_phase()       # last: it gives the namespace a default route
     except Exception as exc:                      # a phase that could not run is a failure
         failures.append(f"{type(exc).__name__}: {exc}")

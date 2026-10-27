@@ -130,6 +130,9 @@ LINUX_RESET_METHODS = ("rows", "destroy")
 # The Tools tab's TCP health (``tcpestats._System``): counting turned on and read, by
 # that tool's worker once a second - never by a packet thread.
 ESTATS_METHODS = ("enable", "read_stats")
+# The same on Linux (``tcpestats._Linux``): the kernel's socket list when a connection is
+# put on the list, and one socket's tcp_info - over netlink, by the same worker.
+LINUX_ESTATS_METHODS = ("rows", "lookup")
 # The Tools tab's Ping (``icmp._System``): one echo request per call, by that tool's
 # worker at the pace the person chose - never by a packet thread.
 ICMP_METHODS = ("echo4", "echo6")
@@ -164,6 +167,8 @@ def os_calls_recorded():
                    getattr(tcpreset._Linux, name) for name in LINUX_RESET_METHODS})
     native.update({(tcpestats._System, name, "tcpestats." + name):
                    getattr(tcpestats._System, name) for name in ESTATS_METHODS})
+    native.update({(tcpestats._Linux, name, "tcpestats_linux." + name):
+                   getattr(tcpestats._Linux, name) for name in LINUX_ESTATS_METHODS})
     native.update({(icmp._System, name, "icmp." + name):
                    getattr(icmp._System, name) for name in ICMP_METHODS})
 

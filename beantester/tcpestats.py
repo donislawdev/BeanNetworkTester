@@ -1,4 +1,5 @@
-"""What Windows' TCP stack measures for one connection - the Tools tab's TCP health.
+"""What the system's TCP stack measures for one connection - the Tools tab's TCP health.
+Windows first; Linux at the end of this text.
 
 "Does the stack see my 200 ms latency as 200 ms of round trip, and my 5% loss as
 data sent again?" A second opinion on the impairments, from the side of the program
@@ -57,12 +58,41 @@ and a packet capture on the peer as the controls:
   session's end), so resends are said in bytes and the segment count is not read.
 * ``DataBytesOut`` / ``DataBytesIn`` count data sent again and received twice too
   (19 800 B for 15 000 B the application sent).
+
+On Linux the kernel keeps ``struct tcp_info`` for every TCP socket, from the moment it
+opened, and gives it through sock_diag (``sockdiag.lookup``) - nothing is turned on, and
+no rights are needed, also for another user's connection. MEASURED 2026-10-27
+(``internal_tools`` probes ``2026-10-27-linux-tcphealth``: Ubuntu 26.04.1 with kernel 7.0,
+WSL with 6.18), and the reason for each rule:
+
+* A connection is found once in the kernel's list (``sockdiag.tcp_sockets``) and read
+  after that by the id the list gave, its cookie in it (``Handle``): asked by its numbers
+  alone, a connection that has gone is answered by the listener on its port. No such
+  socket (ENOENT), TIME_WAIT, and a socket its program has closed (answered without
+  ``tcp_info``) are all "ended".
+* Round trips are kept in microseconds; they are said in whole milliseconds here, as
+  Windows and Ping say them. A round trip of 0 is none measured yet.
+* It measured on through a round trip that jumped from 0.4 to 200 ms on an open
+  connection (an echo every 100 ms, ``netem`` on a veth of a namespace of the probe's
+  own), with TCP timestamps on and off: the smoothed value was at 198 ms after 6 s - no
+  stall like Windows' above. It keeps no count of its measurements, so "not measured
+  for N s" is never said for it.
+* It keeps no newest single measurement, no highest round trip, no count of fast resends
+  or duplicate ACKs (``LINUX_ABSENT``); its lowest round trip is the lowest of a window
+  (``net.ipv4.tcp_min_rtt_wlen``, 300 s by default). Timeouts are counted from kernel 6.7
+  on and count every expiry of the resend timer, the first one or not.
+* It counts the segments sent again (``total_retrans``), which Windows never fills: 120
+  segments of 1448 B for 173 760 resent bytes through 5% loss, and the resent bytes
+  equal the bytes sent minus the bytes acknowledged to the byte. The bytes received do
+  not count data received twice.
 """
 import ctypes
+import ipaddress
 import sys
-from typing import NamedTuple
+import types
+from typing import Mapping, NamedTuple
 
-from . import crashlog, tcprow, winenv
+from . import crashlog, portmap, sockdiag, tcprow, winenv
 
 # TCP_ESTATS_TYPE (Learn, tcpestats.h).
 DATA, PATH = 1, 3
@@ -110,29 +140,47 @@ class _DataRod(ctypes.Structure):
                 ("RcvNxt", ctypes.c_uint32), ("ThruBytesReceived", ctypes.c_uint64)]
 
 
+# What a system's stack does not keep, by ``Sample`` field. Such a field is never shown:
+# a round trip of None is otherwise "not measured yet", a counter of 0 "nothing happened".
+WINDOWS_ABSENT = frozenset({"resent_segments"})          # PktsRetrans: never filled (above)
+LINUX_ABSENT = frozenset({"sample_rtt", "max_rtt", "fast_resends", "duplicate_acks",
+                          "rtt_samples"})
+# Each counter's width in bits: a difference of two readings is taken modulo it.
+WINDOWS_WIDTHS = types.MappingProxyType({
+    "resent_bytes": 32, "timeouts": 32, "fast_resends": 32, "duplicate_acks": 32,
+    "resent_segments": 32, "bytes_out": 64, "bytes_in": 64})
+LINUX_WIDTHS = types.MappingProxyType({
+    "resent_bytes": 64, "timeouts": 16, "fast_resends": 32, "duplicate_acks": 32,
+    "resent_segments": 32, "bytes_out": 64, "bytes_in": 64})
+
+
 class Sample(NamedTuple):
-    """One reading's numbers. Round trips in ms, None while Windows has none."""
+    """One reading's numbers. Round trips in ms, None while the system has none."""
     smoothed_rtt: int | None
     sample_rtt: int | None
     min_rtt: int | None
     max_rtt: int | None
     rtt_var: int | None
     rto: int                    # the resend timer, ms
-    resent_bytes: int           # counters: since counting was turned on, 32-bit
+    resent_bytes: int           # counters: since counting was turned on (``widths``)
     timeouts: int
     fast_resends: int
     duplicate_acks: int
     mss: int
-    bytes_out: int              # 64-bit counters
+    bytes_out: int
     bytes_in: int
     rtt_samples: int = 0        # CountRtt: how many round trips Windows has measured
+    resent_segments: int = 0    # Linux's total_retrans
+    absent: frozenset = WINDOWS_ABSENT
+    widths: Mapping = WINDOWS_WIDTHS
 
 
 class Reading(NamedTuple):
     state: str
     sample: Sample | None = None
-    code: int = 0               # what Windows answered, when it said no
+    code: int = 0               # what the system answered, when it said no
     detail: str = ""            # FAILED: the exception, program text
+    handle: object = None       # how the system finds this connection again (Linux)
 
 
 def _sample(path, data):
@@ -175,7 +223,26 @@ def _declared(lib):
 
 
 def supported():
+    """Windows has the EStats calls; Linux has ``tcp_info`` when its kernel lists TCP
+    sockets through sock_diag (``_Linux.can_list``). Asked through ``capabilities``."""
+    if sys.platform.startswith("win"):
+        return True
+    return sys.platform.startswith("linux") and _Linux().can_list()
+
+
+def needs_rights():
+    """Whether watching needs administrator rights here: on Windows turning counting on
+    does (above); Linux counts for every socket and lets any user read it."""
     return sys.platform.startswith("win")
+
+
+def socket_rows():
+    """The socket table a Connections row is looked up in, as ``portmap.socket_rows``
+    answers. On Linux the kernel's own list: it writes a socket opened as IPv6 for an
+    IPv4 address with the IPv4 one, as the row does, where psutil writes ``::ffff:``."""
+    if sys.platform.startswith("linux"):
+        return _Linux().rows()
+    return portmap.socket_rows()
 
 
 class _System:
@@ -184,6 +251,12 @@ class _System:
     def __init__(self, iphlpapi=None, is_admin=None):
         self.iphlpapi = iphlpapi if iphlpapi is not None else _iphlpapi()
         self.is_admin = is_admin or winenv.is_admin
+
+    def watch(self, connection):
+        return _watch(tcprow.row_for(connection), self)
+
+    def read(self, connection, _handle=None):
+        return _read(tcprow.row_for(connection), self)
 
     def enable(self, row, kind):
         """Turn counting ON (never off - Learn). Version 0 and offset 0, as Learn says."""
@@ -229,19 +302,136 @@ def _watch(row, system):
     return _read(row, system)
 
 
-def _guard(work, connection, system):
+# -- Linux --------------------------------------------------------------------------- #
+US_PER_MS = 1000
+ENOENT = 2
+# Answers that hold no connection to read: TIME_WAIT and CLOSED keep no tcp_info, and a
+# LISTEN answer is the listener on the port, never the connection (the cookie prevents
+# it; this is the second lock).
+_NOT_OPEN = frozenset({"TIME_WAIT", "CLOSED", "LISTEN"})
+# Sample field -> the tcp_info field it is read from: one an older kernel's shorter struct
+# lacks goes to ``absent`` for that reading.
+_FROM_KERNEL = {"smoothed_rtt": "rtt", "min_rtt": "min_rtt", "rtt_var": "rttvar", "rto": "rto",
+                "resent_bytes": "bytes_retrans", "timeouts": "total_rto", "mss": "snd_mss",
+                "bytes_out": "bytes_sent", "bytes_in": "bytes_received",
+                "resent_segments": "total_retrans"}
+
+
+class Handle(NamedTuple):
+    """A socket's id in the kernel's words: the list it is in and ``inet_diag_sockid``
+    with the cookie."""
+    kernel_family: int
+    sockid: bytes
+
+
+def _bare(ip):
+    """An address as one value: without its zone, an IPv4 address mapped into IPv6 as
+    the IPv4 one (psutil writes a dual-stack socket that way, the kernel's list not)."""
+    address = ipaddress.ip_address(str(ip).split("%")[0])
+    return getattr(address, "ipv4_mapped", None) or address
+
+
+def _same(socket, connection):
     try:
-        return work(tcprow.row_for(connection), system or _System())
+        return (socket.local_port == connection.local_port
+                and socket.remote_port == connection.remote_port
+                and _bare(socket.local_ip) == _bare(connection.local_ip)
+                and _bare(socket.remote_ip) == _bare(connection.remote_ip))
+    except ValueError:
+        return False
+
+
+def _ms(value):
+    return value // US_PER_MS
+
+
+def _linux_sample(info):
+    """A ``Sample`` from ``sockdiag.tcp_info``'s fields. Whole milliseconds, rounded down,
+    so "< 1" means under one; a round trip of 0 is none measured yet, and then neither
+    is its variation (the kernel starts it at 250 ms before any measurement)."""
+    measured = bool(info.get("rtt"))
+
+    def rtt(name):
+        value = info.get(name)
+        return _ms(value) if measured and value is not None and value != UNSET else None
+    absent = LINUX_ABSENT | {field for field, name in _FROM_KERNEL.items() if name not in info}
+    return Sample(rtt("rtt"), None, rtt("min_rtt"), None, rtt("rttvar"),
+                  _ms(info.get("rto", 0)), info.get("bytes_retrans", 0),
+                  info.get("total_rto", 0), 0, 0, info.get("snd_mss", 0),
+                  info.get("bytes_sent", 0), info.get("bytes_received", 0),
+                  resent_segments=info.get("total_retrans", 0), absent=frozenset(absent),
+                  widths=LINUX_WIDTHS)
+
+
+class _Linux:
+    """What a reading asks of Linux: the kernel's list (``sockdiag``) to find a
+    connection once, then that one socket's ``tcp_info`` by its id. ``talk`` sends one
+    request as ``sockdiag.exchange`` does - a test brings its own."""
+
+    def __init__(self, talk=None):
+        self.talk = talk or sockdiag.exchange
+
+    def rows(self):
+        try:
+            return sockdiag.tcp_sockets(self.talk), []
+        except OSError as exc:
+            raise portmap.SocketTableUnavailable("missing", str(exc)) from exc
+
+    def lookup(self, handle):
+        return sockdiag.lookup(handle.kernel_family, handle.sockid, self.talk)
+
+    def can_list(self):
+        try:
+            return sockdiag.lists(self.talk)
+        except OSError:
+            return False        # no sock_diag at all, or netlink refused to this process
+
+    def watch(self, connection):
+        """Find ``connection`` in the kernel's list by its four numbers, then read it.
+        Two sockets with them (a link-local address on two links) are not guessed at. A
+        list the kernel would not give is said in its words - not a fault of the program."""
+        try:
+            rows, _failed = self.rows()
+        except portmap.SocketTableUnavailable as exc:
+            return Reading(FAILED, detail=str(exc))
+        found = [s for s in rows if _same(s, connection)]
+        if not found:
+            return Reading(ENDED, code=ENOENT)
+        if len(found) > 1:
+            return Reading(FAILED, detail=f"{len(found)} sockets have these addresses and ports")
+        return self.read(connection, Handle(found[0].kernel_family, found[0].sockid))
+
+    def read(self, _connection, handle):
+        code, found = self.lookup(handle)
+        if code == ENOENT or (code == 0 and (found.info is None or found.state in _NOT_OPEN)):
+            return Reading(ENDED, code=code, handle=handle)
+        if code:
+            return Reading(FAILED, code=code, detail=f"sock_diag answered errno {code}",
+                           handle=handle)
+        return Reading(OK, _linux_sample(sockdiag.tcp_info(found.info)), handle=handle)
+
+
+def _system_class():
+    """The system a reading asks here. Off Windows and Linux it is never reached:
+    ``supported`` says no first."""
+    return _Linux if sys.platform.startswith("linux") else _System
+
+
+def _guard(work):
+    try:
+        return work()
     except Exception as exc:
         crashlog.note(exc, "tcpestats")
         return Reading(FAILED, detail=f"{type(exc).__name__}: {exc}")
 
 
 def watch(connection, system=None):
-    """Turn counting on for ``connection`` and read it. On a worker; never raises."""
-    return _guard(_watch, connection, system)
+    """Turn counting on for ``connection`` (Windows; Linux always counts) and read it.
+    On a worker; never raises."""
+    return _guard(lambda: (system or _system_class()()).watch(connection))
 
 
-def read(connection, system=None):
-    """Read ``connection``; counting must have been turned on. Never raises."""
-    return _guard(_read, connection, system)
+def read(connection, system=None, handle=None):
+    """Read ``connection``: counting turned on (Windows), or the socket ``handle`` names -
+    the one its watch reading carried (Linux). Never raises."""
+    return _guard(lambda: (system or _system_class()()).read(connection, handle))

@@ -32,7 +32,9 @@ missing on one system or another, and then its module says why in its own words
 (``why_not()``, asked when it is there): Ping, the first one, needs the ping socket
 for the user's group or sudo (``icmp.why_not``). Reset on Linux needs a kernel built
 with ``CONFIG_INET_DIAG_DESTROY`` (WSL's is not); it has no words of its own, because
-its only reader is a row menu, which greys the entry out - the README says why.
+its only reader is a row menu, which greys the entry out - the README says why. TCP
+health on Linux needs a kernel that lists TCP sockets through sock_diag (every one
+measured does); without it the shared words are said.
 """
 from types import ModuleType
 from typing import NamedTuple, Optional
