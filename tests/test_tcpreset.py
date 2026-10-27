@@ -7,6 +7,11 @@ bytes it was handed, and a socket table of ``portmap.SocketRow`` - so it all run
 the Linux runner too. The live test at the bottom resets a loopback connection it
 opened itself, on Windows with administrator rights: the measurement of 2026-10-14,
 kept as a test.
+
+Linux (``_Linux``): the fake is the kernel's side of netlink - the two lists as
+``inet_diag_msg``, and the answer to SOCK_DESTROY. ``test_sockdiag.py`` holds a real
+kernel's answers, which prove the layout these are built in; the real kernel resets
+in ``tools/ci_linux_capture_smoke.py``, as root on the Linux runner.
 """
 import ctypes
 import ipaddress
@@ -16,7 +21,7 @@ import sys
 
 import pytest
 
-from beantester import crashlog, portmap, tcpreset, winenv
+from beantester import crashlog, portmap, sockdiag, tcpreset, winenv
 from beantester.portmap import SocketRow
 from beantester.tcpreset import Outcome, Target
 from fakes import check
@@ -62,12 +67,26 @@ def test_the_row_is_the_one_learn_describes():
 
 
 def test_only_tcp_over_ipv4_is_offered():
+    """Windows' rule, asked of Windows' system whichever runner this is on."""
     cases = {("TCP", "198.51.100.7"): True, ("TCP", "127.0.0.1"): True,
              ("UDP", "198.51.100.7"): False, ("ICMP", "198.51.100.7"): False,
              ("TCP", "2001:db8::1"): False, ("TCP", "::ffff:198.51.100.7"): False,
              ("TCP", ""): False, ("TCP", None): False, ("IP", "198.51.100.7"): False}
     for (proto, ip), wanted in cases.items():
-        check(f"{proto} {ip!r}", tcpreset.resettable(proto, ip) is wanted)
+        check(f"{proto} {ip!r}", tcpreset.resettable(proto, ip, tcpreset._System) is wanted)
+
+
+def test_linux_offers_tcp_over_both_families_and_this_machine_asks_its_own(monkeypatch):
+    cases = {("TCP", "198.51.100.7"): True, ("TCP", "2001:db8::1"): True,
+             ("TCP", "fe80::1%2"): True, ("UDP", "2001:db8::1"): False,
+             ("TCP", ""): False, ("TCP", None): False}
+    for (proto, ip), wanted in cases.items():
+        check(f"Linux: {proto} {ip!r}", tcpreset.resettable(proto, ip, tcpreset._Linux) is wanted)
+    for platform, system in (("linux", tcpreset._Linux), ("win32", tcpreset._System)):
+        monkeypatch.setattr(sys, "platform", platform)
+        check(f"{platform}: its own system", tcpreset._system_class() is system)
+        check(f"{platform}: and its rule for IPv6", tcpreset.resettable("TCP", "2001:db8::1")
+              is (system is tcpreset._Linux))
 
 
 def test_the_one_matching_connection_is_reset_with_its_local_address():
@@ -137,6 +156,7 @@ def test_what_cannot_be_asked_ends_in_an_outcome_never_a_raise(monkeypatch):
     def no_library():
         raise OSError("iphlpapi would not load")
     monkeypatch.setattr(tcpreset, "_iphlpapi", no_library)
+    monkeypatch.setattr(tcpreset, "_system_class", lambda: tcpreset._System)    # any runner
     got = tcpreset.reset(TARGET)
     check("a binding that will not load is a FAILED too", got.kind == tcpreset.FAILED
           and "iphlpapi would not load" in got.detail, f"({got})")
@@ -171,6 +191,149 @@ def test_the_binding_declares_the_call_and_reads_the_real_table_by_default(monke
                                                   is_admin=lambda: True))
     check("portmap's answer, failed tables included", got == Outcome(tcpreset.UNREADABLE),
           f"({got})")
+
+
+# -- Linux ---------------------------------------------------------------------------- #
+COOKIE = (41, 7)
+
+
+def kernel_socket(state=1, local=LOCAL, local_port=51000, remote="198.51.100.7",
+                  remote_port=443, family=sockdiag.LINUX_AF_INET, cookie=COOKIE):
+    """One ``inet_diag_msg``: family, state, timer, retransmits, the id, then the five
+    numbers nothing here reads."""
+    af = socket.AF_INET if family == sockdiag.LINUX_AF_INET else socket.AF_INET6
+    sid = (struct.pack("!HH", local_port, remote_port)
+           + socket.inet_pton(af, local).ljust(16, b"\0")
+           + socket.inet_pton(af, remote).ljust(16, b"\0") + struct.pack("=III", 0, *cookie))
+    return bytes([family, state, 0, 0]) + sid + bytes(20)
+
+
+class Kernel:
+    """``talk`` for ``tcpreset._Linux``: the IPv4 and the IPv6 list, then ``answer`` (an
+    errno) to every SOCK_DESTROY. ``refuse``: a family whose list is refused."""
+
+    def __init__(self, v4=(), v6=(), answer=0, refuse=None):
+        self.lists = {sockdiag.LINUX_AF_INET: v4, sockdiag.LINUX_AF_INET6: v6}
+        self.answer = answer
+        self.refuse = refuse
+        self.sent = []
+
+    def __call__(self, message):
+        self.sent.append(message)
+        kind, family = struct.unpack_from("=H", message, 4)[0], message[16]
+        if kind == tcpreset.SOCK_DESTROY:
+            return [(sockdiag.NLMSG_ERROR, struct.pack("=i", -self.answer) + message[:16])]
+        if family == self.refuse:
+            return [(sockdiag.NLMSG_ERROR, struct.pack("=i", -13) + message[:16])]
+        return ([(sockdiag.SOCK_DIAG_BY_FAMILY, payload) for payload in self.lists[family]]
+                + [(sockdiag.NLMSG_DONE, bytes(4))])
+
+    def destroys(self):
+        return [m for m in self.sent if struct.unpack_from("=H", m, 4)[0] == tcpreset.SOCK_DESTROY]
+
+
+def test_linux_resets_the_one_socket_by_its_id_with_the_cookie_in_it():
+    """🔴 Measured 2026-10-26: by its numbers alone the kernel takes the LISTENER on the
+    port when the connection has gone - it took a server down. The cookie names the
+    one socket the list showed."""
+    near = (kernel_socket(local_port=51001, cookie=(1, 0)),
+            kernel_socket(remote="198.51.100.8", cookie=(2, 0)),
+            kernel_socket(remote_port=444, cookie=(3, 0)))
+    kernel = Kernel(v4=near + (kernel_socket(),))
+    got = tcpreset.reset(TARGET, tcpreset._Linux(kernel))
+    check("reset", got == Outcome(tcpreset.RESET), f"({got})")
+    sent = kernel.destroys()
+    check("one destroy", len(sent) == 1, f"({len(sent)})")
+    request = sent[0]
+    check("asked to answer (an acknowledgement, or why not)",
+          struct.unpack_from("=H", request, 6)[0] == sockdiag.NLM_F_REQUEST | sockdiag.NLM_F_ACK)
+    check("in the list the socket is in", request[16] == sockdiag.LINUX_AF_INET)
+    check("its ports and addresses",
+          request[24:28] == struct.pack("!HH", 51000, 443)
+          and request[28:32] == ipaddress.IPv4Address(LOCAL).packed
+          and request[44:48] == ipaddress.IPv4Address("198.51.100.7").packed)
+    check("and its cookie", request[-8:] == struct.pack("=II", *COOKIE), f"({request[-8:].hex()})")
+
+
+def test_linux_finds_a_socket_opened_as_ipv6_for_an_ipv4_address():
+    """Java's default: the socket is in the IPv6 list as ``::ffff:198.51.100.7``, its
+    row says 198.51.100.7 - and the destroy goes to the list it is in."""
+    mapped = kernel_socket(local="::ffff:" + LOCAL, remote="::ffff:198.51.100.7",
+                           family=sockdiag.LINUX_AF_INET6)
+    kernel = Kernel(v6=(mapped,))
+    got = tcpreset.reset(TARGET, tcpreset._Linux(kernel))
+    check("reset", got == Outcome(tcpreset.RESET), f"({got})")
+    check("through the IPv6 list", [m[16] for m in kernel.destroys()] == [sockdiag.LINUX_AF_INET6])
+
+
+def test_linux_resets_an_ipv6_connection():
+    target = Target(51000, "2001:db8::7", 443)
+    kernel = Kernel(v6=(kernel_socket(local="2001:db8::2", remote="2001:db8::7",
+                                      family=sockdiag.LINUX_AF_INET6),))
+    check("reset", tcpreset.reset(target, tcpreset._Linux(kernel)) == Outcome(tcpreset.RESET))
+
+
+def test_linux_resets_only_where_the_other_end_gets_a_reset():
+    """Linux destroys a socket in any state; the far end gets a reset only in these
+    (``tcp_need_reset``) - a connection still opening was dropped and nobody told."""
+    states = {1: "ESTABLISHED", 2: "SYN_SENT", 3: "SYN_RECEIVED", 4: "FIN_WAIT_1",
+              5: "FIN_WAIT_2", 6: "TIME_WAIT", 8: "CLOSE_WAIT", 9: "LAST_ACK",
+              11: "CLOSING", 12: "NEW_SYN_RECV"}
+    resets = {"ESTABLISHED", "SYN_RECEIVED", "FIN_WAIT_1", "FIN_WAIT_2", "CLOSE_WAIT"}
+    for number, name in states.items():
+        kernel = Kernel(v4=(kernel_socket(state=number),))
+        got = tcpreset.reset(TARGET, tcpreset._Linux(kernel))
+        if name in resets:
+            check(f"{name}: reset", got == Outcome(tcpreset.RESET) and kernel.destroys(), f"({got})")
+        else:
+            check(f"{name}: refused, nothing sent", got == Outcome(tcpreset.REFUSED, name)
+                  and not kernel.destroys(), f"({got})")
+
+
+def test_linux_names_each_answer_of_the_kernel():
+    cases = {0: Outcome(tcpreset.RESET),
+             2: Outcome(tcpreset.GONE),                         # closed since the list
+             1: Outcome(tcpreset.NEEDS_ADMIN, "ESTABLISHED", 1),
+             95: Outcome(tcpreset.FAILED, "ESTABLISHED", 95,
+                         detail="SOCK_DESTROY answered errno 95")}
+    for answer, wanted in cases.items():
+        got = tcpreset.reset(TARGET, tcpreset._Linux(Kernel(v4=(kernel_socket(),), answer=answer)))
+        check(f"errno {answer}", got == wanted, f"({got})")
+
+
+def test_linux_guesses_nothing_and_reads_no_missing_list_as_closed():
+    two = (kernel_socket(), kernel_socket(local="192.0.2.11", cookie=(9, 0)))
+    kernel = Kernel(v4=two)
+    check("two local addresses: ambiguous",
+          tcpreset.reset(TARGET, tcpreset._Linux(kernel)) == Outcome(tcpreset.AMBIGUOUS))
+    check("none in the lists: gone", tcpreset.reset(TARGET, tcpreset._Linux(Kernel()))
+          == Outcome(tcpreset.GONE))
+    for family in (sockdiag.LINUX_AF_INET, sockdiag.LINUX_AF_INET6):
+        refused = Kernel(v4=(kernel_socket(),), refuse=family)
+        check(f"list {family} refused: unreadable, not gone",
+              tcpreset.reset(TARGET, tcpreset._Linux(refused)) == Outcome(tcpreset.UNREADABLE))
+        check("and nothing destroyed", not refused.destroys() and not kernel.destroys())
+
+
+def test_linux_has_a_reset_when_its_kernel_destroys_sockets(monkeypatch):
+    """Asked with a destroy that names no socket: ENOENT where the kernel can (26.04),
+    EOPNOTSUPP where it was built without (WSL) - measured, as root and not."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    for answer, wanted in ((2, True), (95, False), (1, False)):
+        kernel = Kernel(answer=answer)
+        monkeypatch.setattr(sockdiag, "exchange", kernel)
+        check(f"errno {answer}", tcpreset.supported() is wanted)
+        check("the request names nobody: no ports, no addresses, cookie 0",
+              kernel.sent == [sockdiag.request(tcpreset.SOCK_DESTROY,
+                                               sockdiag.NLM_F_REQUEST | sockdiag.NLM_F_ACK,
+                                               sockdiag.LINUX_AF_INET, bytes(48))])
+
+    def no_netlink(_message):
+        raise PermissionError(1, "netlink refused to this process")
+    monkeypatch.setattr(sockdiag, "exchange", no_netlink)
+    check("no netlink at all: no reset", tcpreset.supported() is False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    check("another system: none", tcpreset.supported() is False)
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="SetTcpEntry is Windows'")

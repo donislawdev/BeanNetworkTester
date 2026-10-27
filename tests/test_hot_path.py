@@ -121,6 +121,9 @@ ADAPTER_METHODS = ("adapters", "best_interface")
 # "Reset this connection" on the Connections page (``tcpreset._System``): one call, on
 # a click, by a worker - never by a packet thread.
 RESET_METHODS = ("delete",)
+# The same on Linux (``tcpreset._Linux``): the kernel's socket list and one SOCK_DESTROY,
+# both over netlink - on a click, by a worker.
+LINUX_RESET_METHODS = ("rows", "destroy")
 # The Tools tab's TCP health (``tcpestats._System``): counting turned on and read, by
 # that tool's worker once a second - never by a packet thread.
 ESTATS_METHODS = ("enable", "read_stats")
@@ -152,6 +155,8 @@ def os_calls_recorded():
                    getattr(adapters._Native, name) for name in ADAPTER_METHODS})
     native.update({(tcpreset._System, name, "tcpreset." + name):
                    getattr(tcpreset._System, name) for name in RESET_METHODS})
+    native.update({(tcpreset._Linux, name, "tcpreset_linux." + name):
+                   getattr(tcpreset._Linux, name) for name in LINUX_RESET_METHODS})
     native.update({(tcpestats._System, name, "tcpestats." + name):
                    getattr(tcpestats._System, name) for name in ESTATS_METHODS})
     native.update({(icmp._System, name, "icmp." + name):
@@ -318,6 +323,18 @@ def test_the_recorder_sees_what_it_claims_to_see():
         names = [name for name, _ in calls]
     check("the connection reset is recorded too", names == ["tcpreset.delete"], f"({names})")
     check("and unwrapped after", tcpreset._System.delete.__name__ == "delete")
+
+    # And Linux's: the list and a destroy, through a kernel that answers "done".
+    def kernel(message):
+        return [(2, bytes(4) + message[:16])]       # NLMSG_ERROR 0: listed nothing, done
+    with os_calls_recorded() as calls:
+        system = tcpreset._Linux(talk=kernel)
+        system.rows()
+        system.destroy(2, bytes(48))
+        names = [name for name, _ in calls]
+    check("Linux's reset is recorded too",
+          names == ["tcpreset_linux.rows", "tcpreset_linux.destroy"], f"({names})")
+    check("and unwrapped after", tcpreset._Linux.destroy.__name__ == "destroy")
 
     # And TCP health's: counting turned on and read, through a fake binding.
     class Estats:

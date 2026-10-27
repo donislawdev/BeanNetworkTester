@@ -23,7 +23,7 @@ import sys
 
 import pytest
 
-from beantester import capabilities, icmp, icmpsock, paths
+from beantester import capabilities, icmp, icmpsock, paths, tcpreset
 from fakes import check
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -113,21 +113,25 @@ def test_the_answer_follows_the_module_when_it_is_asked(monkeypatch):
     check("and the reason to show", capabilities.why_not("ping") == capabilities.NOT_HERE)
 
 
-@pytest.mark.parametrize("platform, sockets, ping", [
-    ("win32", None, True), ("linux", icmpsock.DGRAM, True), ("linux", icmpsock.RAW, True),
-    ("linux", None, False)])
-def test_windows_offers_every_capability_and_linux_ping_when_it_may_send(monkeypatch, platform,
-                                                                         sockets, ping):
+@pytest.mark.parametrize("platform, sockets, ping, destroys", [
+    ("win32", None, True, False), ("linux", icmpsock.DGRAM, True, False),
+    ("linux", icmpsock.RAW, True, True), ("linux", None, False, True),
+    ("linux", None, False, False)])
+def test_windows_offers_every_capability_and_linux_ping_when_it_may_send(
+        monkeypatch, platform, sockets, ping, destroys):
     """The predicates read ``sys.platform`` when asked; every answer on either runner.
     Linux has Ping when this process may open an ICMP socket - ``icmpsock.kind``, stood
     in, because the real one asks this runner's kernel (on Windows it asks Winsock) -
-    and none of the rest yet."""
+    and Reset when its kernel destroys sockets (``tcpreset._Linux.can_destroy``, stood
+    in for the same reason), and none of the rest yet."""
     monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr(icmpsock, "kind", lambda: sockets)
+    monkeypatch.setattr(tcpreset._Linux, "can_destroy", lambda _self: destroys)
     got = {name: capabilities.available(name) for name in capabilities.CAPABILITIES}
     windows = platform == "win32"
-    want = {name: windows or (name == "ping" and ping) for name in capabilities.CAPABILITIES}
-    check(f"{platform}, {sockets}: {want}", got == want, f"({got})")
+    want = {name: windows or (name == "ping" and ping) or (name == "tcp_reset" and destroys)
+            for name in capabilities.CAPABILITIES}
+    check(f"{platform}, {sockets}, {destroys}: {want}", got == want, f"({got})")
 
 
 def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):

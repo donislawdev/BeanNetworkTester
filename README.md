@@ -214,8 +214,13 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   `EPERM` usually means a firewall rule on this computer.
   A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health and
   Adapters say that they work on Windows only for now, and so do the row menu entries that open
-  them or reset a connection, and the Diagnostics boxes that add the adapters or the proxy to the
-  report. The Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and
+  them, and the Diagnostics boxes that add the adapters or the proxy to the report.
+- **"Reset this connection"** on the Connections page works on Linux for TCP over IPv4 and IPv6,
+  as root or with the capability CAP_NET_ADMIN. The program using the connection gets
+  `ECONNABORTED`, and the other end gets a reset. It needs a kernel built with
+  `CONFIG_INET_DIAG_DESTROY`: Ubuntu's is, WSL's is not, and there the entry is greyed out. A
+  connection the list of this system's connections does not show has closed, or belongs to a
+  container or another network namespace: it cannot be reset from here. The Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and
   pydivert.
 
 ## The window
@@ -256,9 +261,10 @@ monitor is gone it returns to the centre of the current screen.
   fills the filter fields with one click. **"Reset this connection"** breaks that one
   connection at once, with or without a session running: the program using it gets an error,
   and the other end gets a TCP reset. During a session that reset goes through the impairments
-  like any other packet, so heavy loss can drop it on the way. It works for TCP over IPv4 only -
-  Windows has no way to reset an IPv6 connection - so the entry is greyed out on other rows, and
-  it needs administrator rights. **"Show TCP health"** opens **TCP health** on the Tools tab
+  like any other packet, so heavy loss can drop it on the way. On Windows it works for TCP over
+  IPv4 only - Windows has no way to reset an IPv6 connection - so the entry is greyed out on other
+  rows, and it needs administrator rights. On Linux it works for IPv6 too (see the Linux
+  section). **"Show TCP health"** opens **TCP health** on the Tools tab
   for that connection (TCP over IPv4 and IPv6), and **"Ping this address"** starts **Ping**
   on the Tools tab for the row's remote address.
   The table is **virtualised**: it draws only the rows actually on screen, so scrolling is instant
@@ -1602,10 +1608,12 @@ beantester/              the implementation package
                          registry), read only, for the Tools tab
   tcpestats.py           what Windows' TCP stack measures for one connection (EStats,
                          iphlpapi/ctypes), for the Tools tab's TCP health
-  tcpreset.py            reset one TCP connection (iphlpapi/ctypes), for the Connections
-                         page's row menu
+  tcpreset.py            reset one TCP connection (iphlpapi/ctypes; on Linux the kernel's
+                         SOCK_DESTROY), for the Connections page's row menu
   tcprow.py              one TCP connection the way Windows names it: the row layouts and
                          finding it in the socket table, without calling Windows
+  sockdiag.py            the kernel's own list of TCP sockets on Linux (sock_diag over
+                         netlink), read only: where a reset finds the socket it destroys
   icmp.py                one ICMP echo request (iphlpapi/ctypes), for the Tools tab's Ping -
                          the only module that sends something of its own
   icmpsock.py            the same request on Linux, through the system's ping socket or a
