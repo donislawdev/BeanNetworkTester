@@ -114,7 +114,7 @@ Examples:
   %(prog)s --simulate --loss 20 --duration 10
       try it out. No driver, no real traffic, nothing to break.
 
-  %(prog)s --target chrome.exe --latency 200 --duration 30
+  %(prog)s --target chrome --latency 200 --duration 30
       impair one application for half a minute, and nothing else.
 
   %(prog)s --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 60
@@ -142,7 +142,7 @@ def _add_scope_arguments(p):
     p.add_argument("--target",
                    help="target processes: name/PID, comma-separated list, range, "
                         "wildcard, re: pattern, ! to exclude "
-                        "(e.g. 'chrome.exe,!chromedriver' or 're:^fire')")
+                        "(e.g. 'chrome,!chromedriver' or 're:^fire')")
     p.add_argument("--dst-ip",
                    help="affect only traffic to/from these remote IPs, IPv4 and IPv6: "
                         "address, list, range a-b, CIDR, wildcard, comparison, re: "
@@ -1364,7 +1364,7 @@ def _window_did_not_open(exc):
     in place of stderr, so a double-clicked exe just vanished with exit code 1.
     """
     if isinstance(exc, ImportError) and exc.name in _TK_MODULES:
-        text = f"No tkinter. Use CLI mode, e.g.:  {command_name()} --simulate --loss 5"
+        text = f"No tkinter. Use CLI mode, e.g.:  {command_name(simulate=True)} --simulate --loss 5"
     else:
         text = f"The window could not open: {type(exc).__name__}: {exc}"
         if crashlog.record(exc, source="gui-start") is not None:

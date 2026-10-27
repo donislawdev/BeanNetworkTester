@@ -14,10 +14,11 @@ draws or translates.
 """
 import ipaddress
 import itertools
+import sys
 import time
 from typing import NamedTuple
 
-from .. import portmap
+from .. import paths, portmap
 from ..matchers import KIND_INT, KIND_IP, KIND_PROCESS
 from ..views import compile_query
 
@@ -123,6 +124,23 @@ def _sockets(rows, names):
         yield Socket(f"{base}|{repeat}", row.proto, row.family, row.local_ip,
                      row.local_port, row.remote_ip, row.remote_port, row.state,
                      row.pid, name)
+
+
+NO_OWNER, NO_OWNER_LINUX, NO_OWNER_ROOT = ("tools.sockets.note_no_pid",
+                                          "tools.sockets.note_no_pid_linux",
+                                          "tools.sockets.note_no_pid_root")
+
+
+def no_owner_note(platform=None):
+    """What the note on sockets without a program says here. Windows names their
+    owner to an administrator. Linux names the program only to root - measured
+    2026-10-27 on Ubuntu 26.04: 14 of 14 sockets without one as a user, none under
+    sudo - and the ones still without one under sudo are held from outside this
+    system (WSL: its DNS on the tunnel address and a second chrony socket, for which
+    ``ss`` as root names no process either)."""
+    if not (sys.platform if platform is None else platform).startswith("linux"):
+        return NO_OWNER
+    return NO_OWNER_ROOT if paths.running_as_root() else NO_OWNER_LINUX
 
 
 def without_owner(snapshot):

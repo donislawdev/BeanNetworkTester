@@ -153,9 +153,10 @@ def _quote(arg):
 def settings_to_cli_string(settings, seed=None, simulate=False, scenario=None, loop=False):
     # Copy-paste ready: every argument a shell would read its own way is quoted
     # (see _quote). The program name follows the build: a frozen user has no
-    # "python bean_network_tester.py" to paste (appinfo.command_name).
+    # "python bean_network_tester.py" to paste, and Linux runs it under sudo from the
+    # virtual environment unless it simulates (appinfo.command_name).
     args = settings_to_cli(settings, seed, simulate, scenario, loop)
-    return f"{command_name()} " + " ".join(_quote(a) for a in args)
+    return f"{command_name(simulate)} " + " ".join(_quote(a) for a in args)
 
 
 def session_command(engine, settings):

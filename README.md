@@ -497,7 +497,8 @@ program says so in the log when you apply it, and each of the two counters repor
 **Target process** - narrow the effect to chosen apps: process name (e.g. `chrome.exe`), PID, a
 comma-separated list, PID range, wildcard or regular expression - see
 [Filter syntax](#filter-syntax-process--ip--port). The rest of the machine's traffic stays
-untouched. Empty field = all traffic.
+untouched. Empty field = all traffic. On Linux a process name has no `.exe` (`chrome`,
+`firefox`), and a bare name such as `chrome` finds the program on both systems.
 
 **Speed limit** - maximum throughput separately for download (inbound) and upload (outbound), in
 KB/s. 0 = no limit. Ping is small packets, so a speed limit barely changes it - to test the limit
@@ -934,7 +935,10 @@ Designed so that after a bug you can recreate exactly the same conditions:
   says which queue produced its numbers. The same three values go into the log at START.
 - **Copy CLI command** - straight to the clipboard: `BeanNetworkTester.exe --seed ... --loss ...
   --duration ...` (the command adapts to the build: from the repository you get
-  `python bean_network_tester.py ...`).
+  `python bean_network_tester.py ...`, and on Linux the way this README starts it,
+  `sudo .venv/bin/python -B bean_network_tester.py ...`, with no `sudo` and no `-B` for
+  `--simulate`. A virtual environment outside the checkout is named from `~`, and any other
+  interpreter as `python3`, so the command carries no path from your machine).
 - **What the report and the command describe** - the last session, not the form: the settings
   START gave it, updated by every "Apply changes", with its seed and its scenario
   (`--scenario`, plus `--loop` if it looped). A change you typed but did not apply is left out,

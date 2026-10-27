@@ -140,6 +140,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   word it can show, and an empty list's note wraps inside it. A window size saved by an older
   version grows to the new width and stays on its screen.
 
+- **Linux, experimental: the texts say what Linux does.** The Sockets note says that Linux
+  shows the program of another account's socket only to root, and under sudo that the rest
+  are held from outside the system, as in WSL. The process field, its "?" help and `--help`
+  show `chrome`, which finds the program on Windows and on Linux. **Copy CLI command** gives
+  the command the way the README starts it: `sudo .venv/bin/python -B bean_network_tester.py`,
+  without sudo for `--simulate`. TCP health on a kernel without the socket list says so.
+
+- **Texts that were not true on every system.** The process field's tip no longer says it
+  requires psutil, which comes with the program and which Windows does not use for it. On a
+  system other than Windows and Linux, `--doctor` and the Tools tab say that capture and the
+  tools work on Windows and Linux.
+
 - **The names of the tools on the Tools tab are whole.** On Linux in Polish, and in every
   language but Chinese once the window was made narrow, each name lost its last letters, such
   as "Zdrowie TCI" for "Zdrowie TCP". The tabs inside a page are now narrower than the page

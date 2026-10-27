@@ -128,13 +128,57 @@ def test_settings_to_cli_prefix_and_name():
     ``paths.is_frozen()``), not from a hard-coded string.
     """
     from beantester import build_arg_parser, settings_to_cli_string
-    from beantester.appinfo import EXE_NAME, LAUNCHER
+    from beantester.appinfo import EXE_NAME, LAUNCHER, command_name
     cmd = settings_to_cli_string({"loss": 5}, seed=123)
-    check("cli string: run-from-sources prefix",
-          cmd.startswith(f"python {LAUNCHER}"), f"({cmd[:40]})")
+    check("cli string: run-from-sources prefix, as this system runs it",
+          cmd.startswith(command_name() + " ") and LAUNCHER in cmd.split(), f"({cmd[:60]})")
     check("cli: prog names this build",
           build_arg_parser().prog in (LAUNCHER, EXE_NAME),
           f"({build_arg_parser().prog})")
+
+
+def test_the_command_on_linux_is_the_one_its_readme_runs():
+    """Ubuntu 26.04 has no ``python`` (only ``python3``), a capture needs root and
+    pydivert lives in the virtual environment: the window copied a command that
+    ended in "command not found" (2026-10-27). It is the README's now, and names no
+    path from the machine - a report carrying it is shared."""
+    from beantester.appinfo import LAUNCHER, linux_command
+    checkout, home = "/u/ana/bnt", "/u/ana"
+    say = lambda exe, simulate=False, home=home: linux_command(simulate, exe, checkout, home)  # noqa: E731
+    check("the venv in the checkout, a capture: sudo and -B, as the README",
+          say("/u/ana/bnt/.venv/bin/python") == f"sudo .venv/bin/python -B {LAUNCHER}",
+          f"({say('/u/ana/bnt/.venv/bin/python')})")
+    check("a simulation needs no root",
+          say("/u/ana/bnt/.venv/bin/python", True) == f".venv/bin/python {LAUNCHER}")
+    check("a venv in the person's home: from ~, no account name",
+          say("/u/ana/.venvs/bnt/bin/python") == f"sudo ~/.venvs/bnt/bin/python -B {LAUNCHER}")
+    check("anywhere else: python3, never a path",
+          say("/opt/py/bin/python3.15") == f"sudo python3 -B {LAUNCHER}")
+    check("a folder that only starts like the checkout is not inside it",
+          say("/u/ana/bnt-old/bin/python", home="/srv") == f"sudo python3 -B {LAUNCHER}")
+    check("a space is quoted, ~ is left for the shell",
+          say("/u/ana/my envs/bin/python", True) == f"~/'my envs/bin/python' {LAUNCHER}")
+    check("no home known: python3", say("/x/bin/python", True, "") == f"python3 {LAUNCHER}")
+
+
+def test_the_command_follows_the_system_it_runs_on(monkeypatch):
+    """Windows from source keeps ``python bean_network_tester.py``; Linux asks
+    ``linux_command``, with root only for a capture."""
+    import sys
+
+    from beantester import appinfo, paths
+    from beantester.repro import settings_to_cli_string
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    check("Windows", appinfo.command_name() == f"python {appinfo.LAUNCHER}")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)  # asks geteuid, not on Windows
+    capture = settings_to_cli_string({"loss": 5}, seed=1)
+    check("Linux, a capture: under sudo", capture.startswith("sudo ") and " -B " in capture
+          and f" {appinfo.LAUNCHER} --" in capture, f"({capture})")
+    simulated = settings_to_cli_string({"loss": 5}, seed=1, simulate=True)
+    check("Linux, a simulation: no sudo", not simulated.startswith("sudo")
+          and "--simulate" in simulated, f"({simulated})")
 
 
 def test_build_repro_report():
@@ -147,7 +191,7 @@ def test_build_repro_report():
     settings = dict(DEFAULT_SETTINGS, loss=20, seed=777)
     rep = build_repro_report(sh, settings)
     sh.stop()
-    ok = (rep["seed"] == 777 and rep["cli_command"].startswith("python bean_network_tester.py")
+    ok = (rep["seed"] == 777 and "bean_network_tester.py" in rep["cli_command"].split()
           and "--seed 777" in rep["cli_command"] and "--loss 20" in rep["cli_command"]
           and "effective_loss_pct" in rep["metrics"]
           and any(e["type"] == "BUG" for e in rep["events"])
@@ -244,7 +288,7 @@ def test_save_repro_report_roundtrip():
           f"({sorted(rep)})")
     check("repro file: tool = BeanNetworkTester", rep["tool"] == "BeanNetworkTester")
     check("repro file: cli_command uses the new name",
-          rep["cli_command"].startswith("python bean_network_tester.py"))
+          "bean_network_tester.py" in rep["cli_command"].split(), f"({rep['cli_command']})")
     check("repro file: metrics in English",
           {"packets", "downloaded_mb", "uploaded_mb", "total_mb"} <= set(rep["metrics"]))
 

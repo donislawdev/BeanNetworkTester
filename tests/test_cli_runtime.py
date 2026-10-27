@@ -697,7 +697,10 @@ def test_the_repro_command_repeats_the_scenario_and_the_simulation(tmp_path):
     check("repro: the report's command is the summary's", written == command,
           f"({written!r} vs {command!r})")
     parts = [p.strip('"') for p in shlex.split(command, posix=False)]
-    argv = parts[2:] if parts[0] == "python" else parts[1:]
+    # Everything up to the script is how this system runs it (appinfo.command_name):
+    # "python" on Windows, sudo and the virtual environment on Linux, or the exe.
+    argv = parts[parts.index("bean_network_tester.py") + 1:] \
+        if "bean_network_tester.py" in parts else parts[1:]
     args = build_arg_parser().parse_args(argv)
     check("repro: the command names the scenario as it was typed, and loops it",
           args.scenario == scen and args.loop, f"({command})")
@@ -1722,9 +1725,10 @@ def test_duration_survives_the_repro_command():
     check("repro: --duration is reproduced", "--duration" in argv, f"({argv})")
     parsed = config_from_args(build_arg_parser().parse_args(argv))["settings"]
     check("repro: the duration round-trips", parsed["duration"] == 25)
+    from beantester import appinfo
     check("repro: the command names this build",
-          settings_to_cli_string(s).startswith("python bean_network_tester.py")
-          or settings_to_cli_string(s).startswith("BeanNetworkTester.exe"))
+          settings_to_cli_string(s).startswith(appinfo.command_name() + " "),
+          f"({settings_to_cli_string(s)})")
 
 
 def test_repro_command_follows_a_frozen_build(monkeypatch):

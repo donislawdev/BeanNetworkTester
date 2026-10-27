@@ -86,6 +86,25 @@ def test_a_missing_psutil_says_how_to_get_it_in_every_language():
               f"({text})")
 
 
+def test_the_note_on_sockets_without_a_program_says_who_may_see_it_here(monkeypatch):
+    """Windows names the owner to an administrator; Linux names the program only to
+    root (Ubuntu 26.04: 14 of 14 without one as a user, none under sudo), and the ones
+    still without one under sudo are held from outside the system (WSL, 4 of 14)."""
+    from beantester import paths
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)
+    check("Windows: the administrator", sk.no_owner_note("win32") == sk.NO_OWNER)
+    check("Linux, a user: root names them", sk.no_owner_note("linux") == sk.NO_OWNER_LINUX)
+    monkeypatch.setattr(paths, "running_as_root", lambda: True)
+    check("Linux, root: held from outside", sk.no_owner_note("linux") == sk.NO_OWNER_ROOT)
+    for code in LANGS:
+        with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        for key in (sk.NO_OWNER, sk.NO_OWNER_LINUX, sk.NO_OWNER_ROOT):
+            check(f"lang/{code}.json: {key} says how many", "{count}" in texts.get(key, ""))
+        check(f"lang/{code}.json: a user is told to use sudo", "sudo" in texts[sk.NO_OWNER_LINUX])
+        check(f"lang/{code}.json: root is not", "sudo" not in texts[sk.NO_OWNER_ROOT])
+
+
 def test_two_identical_sockets_are_two_rows_with_two_keys(machine):
     """One process can hold two UDP sockets on the same address and port. The table
     finds rows by key through a dict, so the same key would send a click on one to

@@ -284,10 +284,10 @@ def temp_beside(path):
 
     One more consequence, decided rather than overlooked: on POSIX ``mkstemp``
     creates the file 0600, and ``os.replace`` carries that mode onto the target, so
-    a config file that used to be 0644 becomes owner-only. On Windows - where a
-    real capture session can only run - the mode is not what decides access at all,
-    and everywhere else these files sit in the user's own data directory, so the
-    change is a tightening in a private place. Copying the old file's mode across
+    a config file that used to be 0644 becomes owner-only. On Windows the mode is not
+    what decides access at all, and everywhere else these files sit in the user's
+    own data directory - under sudo on Linux too, handed back to that user (below) -
+    so the change is a tightening in a private place. Copying the old file's mode across
     would buy nothing and add a failure path to a function that must not have one.
 
     Under sudo the temp file is handed back to whoever ran it (``hand_back``) before

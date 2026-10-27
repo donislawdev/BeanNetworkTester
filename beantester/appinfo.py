@@ -8,6 +8,7 @@ one-line edit of a text file plus a build, and there is no second copy left to
 drift. ``tests/test_repo_conventions.py`` fails the build if a copy appears.
 """
 import re
+import sys
 
 APP_NAME = "Bean Network Tester"     # human-readable window / product name
 AUTHOR = "DonislawDev"               # shown in the GUI, the exe metadata and --version
@@ -50,14 +51,65 @@ def _read_version():
 __version__ = _read_version()
 
 
-def command_name():
-    """How the user invokes this build: the exe when frozen, the script otherwise.
+def command_name(simulate=False):
+    """How the user invokes this build: the exe when frozen, the script otherwise -
+    on Linux the way its README starts it (``linux_command``).
 
     Reproduction commands and ``--help`` must be copy-paste ready, and a frozen
-    build has no ``python bean_network_tester.py`` to offer.
+    build has no ``python bean_network_tester.py`` to offer. ``simulate``: the
+    command runs ``--simulate``, which on Linux needs no root.
     """
     from .paths import is_frozen
-    return EXE_NAME if is_frozen() else f"python {LAUNCHER}"
+    if is_frozen():
+        return EXE_NAME
+    if sys.platform.startswith("linux"):
+        return linux_command(simulate)
+    return f"python {LAUNCHER}"
+
+
+def linux_command(simulate=False, executable=None, checkout=None, home=None):
+    """The script as Linux runs it from this checkout, the README's way:
+    ``sudo .venv/bin/python -B bean_network_tester.py``.
+
+    MEASURED 2026-10-27 on Ubuntu 26.04: there is no ``python`` there, only
+    ``python3``, for a user or under sudo, so the command the window copied ended
+    in "command not found"; a capture needs root, so without ``sudo`` it ended with
+    exit code 7; and pydivert lives in the virtual environment, which the system's
+    ``python3`` is not. So ``sudo`` and ``-B`` (root leaves no cache folders in the
+    checkout) unless the command is a simulation, and the interpreter running now,
+    named with no path from this machine - a report carrying the command is shared:
+    relative to the checkout when it is inside it, from ``~`` when it is in the
+    person's home, else ``python3``.
+    """
+    from . import paths
+    executable = sys.executable if executable is None else executable
+    checkout = paths.PROJECT_ROOT if checkout is None else checkout
+    home = _persons_home() if home is None else home
+    interpreter = (_inside(executable, checkout, "")
+                   or (home and _inside(executable, home, "~/")) or "python3")
+    return " ".join(([] if simulate else ["sudo"]) + [interpreter]
+                    + ([] if simulate else ["-B"]) + [LAUNCHER])
+
+
+def _inside(path, base, prefix):
+    """``path`` as ``prefix`` + its place under ``base``, or None when it is not under it."""
+    import posixpath
+    import shlex
+    if not path or not base:
+        return None
+    place = posixpath.relpath(posixpath.abspath(path), posixpath.abspath(base))
+    if place == posixpath.pardir or place.startswith(posixpath.pardir + "/"):
+        return None
+    return prefix + shlex.quote(place)
+
+
+def _persons_home():
+    """The home of the person running the program: under sudo theirs, not root's."""
+    import os
+
+    from . import paths
+    person = paths.invoking_user()
+    return paths.home_of(person[0]) if person else os.path.expanduser("~")
 
 
 def version_line():

@@ -541,6 +541,17 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture
           all(row[1] == "ok" for rows in (ready, by_caps) for row in rows.values()))
 
 
+def test_doctor_on_a_system_without_a_capture_driver_names_both_that_have_one(monkeypatch):
+    """Off Windows and Linux (``select`` gives the WinDivert path, which has no words
+    for this row) the platform row said capture needs Windows - Linux captures too."""
+    monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.WinDivertBackend())
+    monkeypatch.setattr(driver, "is_windows", lambda: False)
+    _ok, checks = driver.doctor()
+    row = next(c for c in checks if c[0] == "platform")
+    check("the platform row names Windows and Linux", "Windows or Linux" in row[2] and
+          "--simulate" in row[2] and row[1] == "warn", f"({row})")
+
+
 def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
     # A ready machine has BTF. Without the file this test's "healthy" verdict rested

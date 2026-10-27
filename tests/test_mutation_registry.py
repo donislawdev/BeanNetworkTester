@@ -9830,6 +9830,63 @@ MUTATIONS = [
         "new": "    saved = str(saved)\n",
         "test": "test_a_window_saved_narrower_than_today_grows_and_stays_on_its_monitor",
     },
+    {
+        "label": "sockets: Linux says Windows' words on who may see a socket's program",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    if not (sys.platform if platform is None else platform).startswith(\"linux\"):\n",
+        "new": "    if True:\n",
+        "test": "test_the_note_on_sockets_without_a_program_says_who_may_see_it_here",
+    },
+    {
+        "label": "sockets: Linux under sudo is told to use sudo",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return NO_OWNER_ROOT if paths.running_as_root() else NO_OWNER_LINUX\n",
+        "new": "    return NO_OWNER_LINUX\n",
+        "test": "test_the_note_on_sockets_without_a_program_says_who_may_see_it_here",
+    },
+    {
+        "label": "sockets panel: the note says Windows' words on every system",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "            lines.append(T(sockets.no_owner_note(), count=unnamed))\n",
+        "new": "            lines.append(T(sockets.NO_OWNER, count=unnamed))\n",
+        "test": "test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing",
+    },
+    {
+        "label": "tcpestats: a Linux kernel without the socket list says the shared words",
+        "file": "beantester/tcpestats.py",
+        "old": "    return NOT_HERE_LINUX if sys.platform.startswith(\"linux\") else None\n",
+        "new": "    return None\n",
+        "test": "test_a_linux_kernel_without_the_socket_list_says_so_for_tcp_health",
+    },
+    {
+        # 2026-10-27: Ubuntu 26.04 has no `python`; the copied command was not found.
+        "label": "repro command: Linux is given Windows' python bean_network_tester.py",
+        "file": "beantester/appinfo.py",
+        "old": "        return linux_command(simulate)\n",
+        "new": "        return f\"python {LAUNCHER}\"\n",
+        "test": "test_the_command_follows_the_system_it_runs_on",
+    },
+    {
+        "label": "repro command: a simulation on Linux is put under sudo",
+        "file": "beantester/appinfo.py",
+        "old": "    return \" \".join(([] if simulate else [\"sudo\"]) + [interpreter]\n",
+        "new": "    return \" \".join([\"sudo\"] + [interpreter]\n",
+        "test": "test_the_command_on_linux_is_the_one_its_readme_runs",
+    },
+    {
+        "label": "repro command: an interpreter outside the checkout is named from it",
+        "file": "beantester/appinfo.py",
+        "old": "    if place == posixpath.pardir or place.startswith(posixpath.pardir + \"/\"):\n",
+        "new": "    if False:\n",
+        "test": "test_the_command_on_linux_is_the_one_its_readme_runs",
+    },
+    {
+        "label": "repro command: the simulate flag does not reach the program name",
+        "file": "beantester/repro.py",
+        "old": "    return f\"{command_name(simulate)} \" + \" \".join(_quote(a) for a in args)\n",
+        "new": "    return f\"{command_name()} \" + \" \".join(_quote(a) for a in args)\n",
+        "test": "test_the_command_follows_the_system_it_runs_on",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

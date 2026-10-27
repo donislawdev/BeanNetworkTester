@@ -230,6 +230,16 @@ def supported():
     return sys.platform.startswith("linux") and _Linux().can_list()
 
 
+NOT_HERE_LINUX = "tools.tcphealth.not_here_linux"
+
+
+def why_not():
+    """What a system without TCP health says instead (``capabilities.why_not``): on
+    Linux, that its kernel lists no TCP sockets - the shared words name Linux as a
+    system the tool works on. Elsewhere nothing of its own."""
+    return NOT_HERE_LINUX if sys.platform.startswith("linux") else None
+
+
 def needs_rights():
     """Whether watching needs administrator rights here: on Windows turning counting on
     does (above); Linux counts for every socket and lets any user read it."""

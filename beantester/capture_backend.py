@@ -86,7 +86,7 @@ class WinDivertBackend:
     # Off Windows (a platform with no capture driver) there is no WinDivert service.
     CLEANUP_LINE = "Not Windows - there is no WinDivert driver to clean up."
     CLEANUP_BLOCKER = "tools.diagnostics.clean_windows_only"
-    # ...and no rows of its own to explain: its --doctor rows say capture needs Windows.
+    # ...and no rows of its own to explain: its --doctor rows say capture needs Windows or Linux.
     DIAGNOSTICS_HELP: Tuple[str, ...] = ()
 
     @staticmethod
