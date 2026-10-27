@@ -19,14 +19,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   capture, and a refused START says what to do. The Statistics page and its CSV count
   packets that went around the tool and those the driver dropped, with a red line while
   either grows. Its files stay yours, and GitHub and Donate print the address instead of
-  starting a browser as root. On the Tools tab, TCP health and Adapters say they are
-  Windows-only for now, and the row menus grey out Show TCP health.
+  starting a browser as root. On the Tools tab, TCP health says it is Windows-only for now,
+  and the row menus grey out Show TCP health.
 
 - **Linux, experimental: Diagnostics speaks of Linux.** Its help explains what stops a
   session there - capture rights, the kernel, BTF and pydivert - and what to do, and
-  **Clean up the driver** says why there is nothing to clean up. **Add network adapters** and
-  **Add proxy settings** are greyed out and say why, because the Adapters tool works on
-  Windows only for now.
+  **Clean up the driver** says why there is nothing to clean up.
 
 - **Linux, experimental: Ping works.** It sends through the system's ping socket, which needs
   no sudo where the system lets your group send pings (`net.ipv4.ping_group_range`), and under
@@ -42,6 +40,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   drop on the way, as on Windows. A connection still opening or closing is not reset. Where the
   kernel cannot reset connections (WSL's), the entry is greyed out. A connection missing from
   the system's list has closed or belongs to another network namespace, such as a container's.
+
+- **Linux, experimental: Adapters and its Proxy row work, without sudo.** The adapters, their
+  addresses, gateways and the route to the internet are what `ip addr` and `ip route` show,
+  and each DNS server is listed at the adapter its questions leave through. The Proxy row
+  shows the desktop's proxy settings (GNOME) and the proxy variables in `/etc/environment`
+  and the `environment.d` folders, also under sudo as yours. **Add network adapters** and
+  **Add proxy settings** in Diagnostics work too.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

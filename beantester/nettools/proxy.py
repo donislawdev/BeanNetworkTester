@@ -79,16 +79,38 @@ def address_of(entry):
         return ""
 
 
+def _sends(variable):
+    """A variable that sends a program to a proxy - on Linux in either case of letters."""
+    return variable.name.upper() in PROXY_VARIABLES
+
+
 def in_use(reading):
     """Some program on this machine would be sent to a proxy."""
     user, machine = reading.user, reading.machine
     return bool((user and (user.detect or user.script or user.server))
                 or (machine and machine.server)
-                or any(v.name in PROXY_VARIABLES for v in reading.env))
+                or any(_sends(v) for v in reading.env))
 
 
 def unreadable(reading):
-    return reading.user is None or reading.machine is None or bool(reading.env_error)
+    """A part could not be read. A part this system does not have (``None`` with no
+    error) is not a failure."""
+    return bool((reading.user is None and reading.user_error)
+                or (reading.machine is None and reading.machine_error)
+                or reading.env_error)
+
+
+# What differs by the system the reading is from: where the account's part comes from,
+# and who looks for a script when detection is on.
+ACCOUNT_ITEM = {"windows": "tools.adapters.proxy.item.account",
+                "linux": "tools.adapters.proxy.item.desktop"}
+DETECT_NOTE = {"windows": "tools.adapters.proxy.note.detect",
+               "linux": "tools.adapters.proxy.note.detect_linux"}
+ACCOUNT_REPORT = {"windows": "proxy, this account", "linux": "proxy, desktop (GNOME)"}
+# On Linux a variable's name is case-sensitive, and curl takes the http:// proxy from
+# the lowercase one only (its manual: the uppercase one is not read, for CGI's sake).
+# On Windows names have no case, and the same curl finds either.
+CURL_SKIPS = "HTTP_PROXY"
 
 
 # -- the row on the adapter list ---------------------------------------------------- #
@@ -134,12 +156,14 @@ def _failed(key, item, error):
 
 
 def _user_rows(reading):
-    user = reading.user
+    user, item = reading.user, ACCOUNT_ITEM[reading.system]
+    if user is None and reading.user_error:
+        return _failed("user", item, reading.user_error)
     if user is None:
-        return _failed("user", "tools.adapters.proxy.item.account", reading.user_error)
+        return [Detail("user", Words(item), Words("tools.adapters.proxy.value.not_here"))]
     yes, no = Words("tools.adapters.value.yes"), Words("tools.adapters.value.no")
     out = [Detail("detect", Words("tools.adapters.proxy.item.detect"), yes if user.detect else no,
-                  (Words("tools.adapters.proxy.note.detect"),) if user.detect else ()),
+                  (Words(DETECT_NOTE[reading.system]),) if user.detect else ()),
            Detail("script", Words("tools.adapters.proxy.item.script"),
                   masked(user.script) or Words("tools.adapters.value.none"))]
     servers = _servers("server", "tools.adapters.proxy.item.server", user.server, ())
@@ -150,6 +174,8 @@ def _user_rows(reading):
 
 def _machine_rows(reading):
     machine = reading.machine
+    if machine is None and not reading.machine_error:
+        return []                           # Linux: no such place
     if machine is None:
         return _failed("winhttp", "tools.adapters.proxy.item.winhttp", reading.machine_error)
     note = (Words("tools.adapters.proxy.note.services"),)
@@ -171,11 +197,13 @@ def _variable_rows(reading):
                       else "tools.adapters.proxy.note.all_accounts")]
         if variable.replaces:
             note.append(Words("tools.adapters.proxy.note.replaces"))
-        note.append(Words("tools.adapters.proxy.note.readers" if variable.name in PROXY_VARIABLES
+        note.append(Words("tools.adapters.proxy.note.readers" if _sends(variable)
                           else "tools.adapters.proxy.note.no_proxy"))
+        if reading.system == "linux" and variable.name == CURL_SKIPS:
+            note.append(Words("tools.adapters.proxy.note.curl_lowercase"))
         if shown != variable.value:
             note.append(Words("tools.adapters.proxy.note.masked"))
-        address = (address_of(variable.value) if variable.name in PROXY_VARIABLES else "")
+        address = address_of(variable.value) if _sends(variable) else ""
         out.append(Detail(f"env|{variable.name}", variable.name, shown, tuple(note),
                           address=address))
     return out or [Detail("env", Words("tools.adapters.proxy.item.variables"),
@@ -196,15 +224,18 @@ def _or_none(text):
 def report_lines(reading):
     """The proxy in the copied report: passwords hidden, setup script queries dropped."""
     user, machine = reading.user, reading.machine
-    if user is None:
-        lines = [f"proxy, this account: could not be read ({reading.user_error})"]
+    account = ACCOUNT_REPORT[reading.system]
+    if user is None and reading.user_error:
+        lines = [f"{account}: could not be read ({reading.user_error})"]
+    elif user is None:
+        lines = [f"{account}: not on this system"]
     else:
-        lines = [f"proxy, this account: detect automatically {'yes' if user.detect else 'no'}, "
+        lines = [f"{account}: detect automatically {'yes' if user.detect else 'no'}, "
                  f"setup script {_or_none(user.script)}, server {_or_none(user.server)}, "
                  f"bypass {_or_none(user.bypass)}"]
-    if machine is None:
+    if machine is None and reading.machine_error:
         lines.append(f"proxy for services (WinHTTP): could not be read ({reading.machine_error})")
-    else:
+    elif machine is not None:
         lines.append(f"proxy for services (WinHTTP): {_or_none(machine.server)}"
                      + (f", bypass {for_report(machine.bypass)}" if machine.bypass else ""))
     if reading.env_error:

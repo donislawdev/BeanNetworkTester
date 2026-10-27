@@ -29,8 +29,10 @@ STATUS = {1: "up", 2: "down", 3: "testing", 4: "unknown", 5: "dormant",
 # two of the seven adapters on the development machine were one (measured).
 KINDS = {1: "other", 6: "ethernet", 9: "token_ring", 23: "ppp", 24: "loopback",
          37: "atm", 53: "virtual", 71: "wifi", 131: "tunnel", 144: "firewire"}
-# NL_PREFIX_ORIGIN: where an address's network part came from.
-ORIGINS = {0: "other", 1: "manual", 2: "well_known", 3: "dhcp", 4: "router"}
+# NL_PREFIX_ORIGIN: where an address's network part came from - and one of the
+# program's own, for a Linux address with a lifetime and no word on who gave it.
+ORIGINS = {0: "other", 1: "manual", 2: "well_known", 3: "dhcp", 4: "router",
+           system.LEASE: "lease"}
 # NL_DAD_STATE. "preferred" is the normal state and gets no note; "duplicate" is the
 # one worth a tester's eye - Learn: "a duplicate IP address has been detected".
 # "tentative" is normal on an adapter that is down (all of them there, measured).
@@ -110,7 +112,8 @@ class Unreadable(Exception):
 
 
 # ``adapters.AdaptersUnavailable.reason`` -> what the person is told.
-UNREADABLE_KEYS = {"not_ready": "tools.adapters.error_not_ready"}
+UNREADABLE_KEYS = {"not_ready": "tools.adapters.error_not_ready",
+                   "changing": "tools.adapters.error_changing"}
 
 
 def supported():
@@ -258,6 +261,11 @@ def details(adapter):
         if _bare(server) in PLACEHOLDER_DNS:
             out.append(Detail(f"dns|{n}", Words("tools.adapters.item.dns"), server,
                               (Words("tools.adapters.dns_placeholder"),)))
+        elif server in row.stub_dns:
+            # Not offered to the Control page either: impairing it would slow only
+            # the step to this computer's own resolver, not its questions out.
+            out.append(Detail(f"dns|{n}", Words("tools.adapters.item.dns"), server,
+                              (Words("tools.adapters.dns_stub"),)))
         else:
             out.append(Detail(f"dns|{n}", Words("tools.adapters.item.dns"), server,
                               address=_bare(server)))
@@ -292,9 +300,7 @@ def adapter_lines(adapter):
             note += ", " + _slug(DAD, address.dad)
         lines.append(f"  IPv{address.version}: {address_text(address)} ({note})")
     lines += [f"  gateway: {gateway}" for gateway in row.gateways]
-    lines += [f"  DNS: {server}" + (" (Windows placeholder)"
-                                     if _bare(server) in PLACEHOLDER_DNS else "")
-              for server in row.dns_servers]
+    lines += [f"  DNS: {server}" + _dns_note(row, server) for server in row.dns_servers]
     dhcp = "on" + (f", server {row.dhcp_server}" if row.dhcp_server else "") if row.dhcp else "off"
     lines.append(f"  DHCP: {dhcp}")
     if row.dns_suffix:
@@ -305,6 +311,14 @@ def adapter_lines(adapter):
     metric = " / ".join("-" if m is None else str(m) for m in (row.ipv4_metric, row.ipv6_metric))
     lines.append(f"  metric: {metric}, index: {row.if_index} / {row.ipv6_index or '-'}")
     return lines
+
+
+def _dns_note(row, server):
+    if _bare(server) in PLACEHOLDER_DNS:
+        return " (Windows placeholder)"
+    if server in row.stub_dns:
+        return " (systemd-resolved, on this computer)"
+    return ""
 
 
 def _read_at(read_at):

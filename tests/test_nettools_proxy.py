@@ -176,7 +176,7 @@ def test_the_report_hides_passwords_and_says_none_or_why():
           bare[-1] == "proxy variables: ALL_PROXY=***@192.0.2.40:1080 (user)", f"({bare})")
 
 
-def test_the_tool_reads_through_the_binding_and_on_windows_only():
+def test_the_tool_reads_through_the_binding_on_windows_and_linux():
     class Native:                   # what proxy._Native answers, without a system
         def user(self):
             return UserProxy(True, "", "", "")
@@ -191,8 +191,8 @@ def test_the_tool_reads_through_the_binding_and_on_windows_only():
         UserProxy(True, "", "", ""), "", MachineProxy("", ""), "",
         (Variable("NO_PROXY", "localhost", "user"),), ""), f"({got})")
     import sys
-    check("read on Windows only, like the adapters",
-          proxy.supported() == sys.platform.startswith("win"))
+    check("read on Windows and Linux, like the adapters",
+          proxy.supported() == sys.platform.startswith(("win", "linux")))
 
 
 def test_every_word_the_row_can_say_is_in_every_language():

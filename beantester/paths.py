@@ -11,6 +11,7 @@ reason is package managers - see ``user_data_dir``.
 """
 import os
 import shutil
+import stat
 import sys
 import tempfile
 
@@ -158,6 +159,56 @@ def hand_back(path):
     except OSError:
         return False
     return True
+
+
+SMALL_FILE = 1 << 16
+
+
+def read_small_file(path, owner=None, limit=SMALL_FILE):
+    """The text of a small regular file, or ``None`` when there is none to read.
+
+    For files of the system (``/etc/resolv.conf``) and of a person (their
+    ``~/.config/environment.d``) that a tool shows. It never waits: a FIFO or a
+    device put in a file's place would block a read forever, so it is opened
+    without blocking and refused unless it is a regular file. A dangling link reads
+    as no file. At most ``limit`` bytes, as UTF-8 with what does not decode replaced.
+
+    ``owner``: only a file that user owns is read. Under ``sudo`` root reads the
+    person's files, and a link they made there to a file only root may read would
+    otherwise put that file on their screen. Checked on the file opened, after any
+    link was followed, so a person's own link to their own file still reads.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    try:
+        status = os.fstat(fd)
+        if not stat.S_ISREG(status.st_mode) or (owner is not None and status.st_uid != owner):
+            return None
+        chunks, left = [], limit
+        while left > 0:
+            chunk = os.read(fd, left)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            left -= len(chunk)
+        return b"".join(chunks).decode("utf-8", errors="replace")
+    finally:
+        os.close(fd)
+
+
+def home_of(uid):
+    """The home directory of the account ``uid`` (the password database); None on
+    Windows and for an account the system does not know."""
+    if sys.platform == "win32":
+        return None
+    import pwd
+    try:
+        return pwd.getpwuid(uid).pw_dir
+    except KeyError:
+        return None
 
 
 def make_dirs(path):

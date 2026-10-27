@@ -118,12 +118,14 @@ ALLOWED_IMPORTS = {
         "Ping's name lookup (getaddrinfo, below) and the address family constants",
     ("beantester/icmpsock.py", "socket"):
         "Ping on Linux: the ICMP socket an echo request goes through (below)",
-    ("beantester/sockdiag.py", "socket"):
-        "Linux: the netlink socket to the kernel's own list of TCP sockets (below)",
+    ("beantester/netlink.py", "socket"):
+        "Linux: the netlink socket to this machine's kernel - sock_diag and rtnetlink (below)",
     ("beantester/gui/links.py", "webbrowser"):
         "the page buttons (support page, GitHub page), opened on a click",
     ("beantester/winenv.py", "subprocess"):
         "list2cmdline, a pure string helper - nothing here spawns anything",
+    ("beantester/proxy.py", "subprocess"):
+        "Linux: gsettings, which reads the desktop's proxy settings (below)",
 }
 
 # The exceptions, each with the reason it exists. A call on one of these modules
@@ -171,11 +173,13 @@ ALLOWED_CALLS = {
     ("beantester/icmpsock.py", "socket", "if_nametoindex"):
         "the number of a named interface, for an IPv6 zone typed as a name "
         "(fe80::1%eth0): a lookup in this machine's own interface list, nothing sent",
-    ("beantester/sockdiag.py", "socket", "socket"):
-        "a netlink socket (AF_NETLINK, sock_diag): it talks to this machine's kernel and "
-        "to nothing else - the list of TCP sockets, and for tcpreset the one SOCK_DESTROY "
-        "a reset is. Opened per request and closed before it returns. What a destroy "
-        "makes the kernel send is SOCK_DESTROY's entry in WIRE_FUNCTIONS",
+    ("beantester/netlink.py", "socket", "socket"):
+        "a netlink socket (AF_NETLINK): it talks to this machine's kernel and to nothing "
+        "else. sock_diag: the list of TCP sockets, and for tcpreset the one SOCK_DESTROY "
+        "a reset is - what a destroy makes the kernel send is SOCK_DESTROY's entry in "
+        "WIRE_FUNCTIONS. rtnetlink: the lists of adapters, addresses and routes, and a "
+        "route lookup (what `ip route get` asks), all answered from the kernel's tables. "
+        "Opened per request and closed before it returns",
     ("beantester/gui/links.py", "webbrowser", "open_new_tab"):
         "opens the support page or the project's GitHub page in the user's browser, "
         "only when they click its button (header or About window)",
@@ -615,11 +619,50 @@ def test_the_wire_allowlist_names_a_place_not_a_function():
         check(name, bool(unallowed_wire(wire)) == caught, f"({wire})")
 
 
-def test_the_shipped_package_never_spawns_a_process():
-    """No child process, so no shelling out to curl, bitsadmin or PowerShell."""
-    bad = ["%s:%d %s" % (rel, line, detail)
-           for rel, detail, line in _scan().get("spawn", [])]
-    check("the shipped package spawns no process", not bad, f"({bad})")
+# The one child process the package may start, by its place - the arrangement of
+# WIRE_ALLOWED: the call anywhere else is still caught, and an entry naming code that
+# is gone fails. 2026-10-27, the owner's decision for the Adapters tool's proxy row on
+# Linux: the desktop's proxy settings are read the way GNOME reads them, by gsettings,
+# as the person whose desktop it is (as root it reads root's - measured).
+SPAWN_ALLOWED = {
+    ("beantester/proxy.py", "subprocess.run"):
+        "Linux: gsettings list-recursively org.gnome.system.proxy, started through "
+        "setpriv as the person who typed sudo; a fixed argv found on PATH, an "
+        "environment of HOME, PATH and LC_ALL only, no terminal, a 2 s limit. Traced "
+        "2026-10-27 (strace -f -e connect,socket,execve, Ubuntu 26.04): its only "
+        "sockets were AF_UNIX ones to the system's account database, no D-Bus, no "
+        "AF_INET or AF_INET6",
+}
+
+
+def unallowed_spawns(found):
+    return [(rel, detail, line) for rel, detail, line in found
+            if (rel, detail) not in SPAWN_ALLOWED]
+
+
+def test_the_shipped_package_spawns_only_the_one_named_process():
+    """No child process but the one named above, so no shelling out to curl,
+    bitsadmin or PowerShell."""
+    found = _scan().get("spawn", [])
+    bad = ["%s:%d %s" % (rel, line, detail) for rel, detail, line in unallowed_spawns(found)]
+    check("the shipped package spawns no process but the named one", not bad, f"({bad})")
+    seen = {(rel, detail) for rel, detail, _line in found}
+    stale = sorted(str(key) for key in SPAWN_ALLOWED if key not in seen)
+    check("every allowed process is still started where it is allowed", not stale, f"({stale})")
+
+
+def test_the_spawn_allowlist_names_a_place_not_a_call():
+    """The canary for SPAWN_ALLOWED: the allowed call in any other module is caught,
+    and so is another way of starting a program in the allowed one."""
+    run = "import subprocess\nsubprocess.run(['gsettings'])\n"
+    popen = "import subprocess\nsubprocess.Popen(['curl', 'x'])\n"
+    cases = {"the allowed call in its own module": (run, "beantester/proxy.py", False),
+             "the same call anywhere else": (run, "beantester/adapters.py", True),
+             "another spawn in the allowed module": (popen, "beantester/proxy.py", True)}
+    for name, (source, rel, caught) in cases.items():
+        found = [(rel, detail, line) for kind, detail, line in findings(source, rel)
+                 if kind == "spawn"]
+        check(name, bool(unallowed_spawns(found)) == caught, f"({found})")
 
 
 def test_a_url_literal_lives_only_where_the_licence_needs_one():
@@ -866,6 +909,17 @@ TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
     # read in glibc and the kernel) - nothing goes on the wire.
     ("beantester/icmpsock.py", "socket", "if_nametoindex"):
         "a named interface's number, from this machine's own list - see the comment above",
+    # The Adapters tool's proxy row on Linux asks gsettings for the desktop's proxy
+    # settings. How it was checked that this sends nothing: strace -f -e
+    # connect,socket,execve on the very command (setpriv to the person, then gsettings
+    # list-recursively org.gnome.system.proxy), 2026-10-27 on Ubuntu 26.04 - its only
+    # sockets were AF_UNIX ones to /run/systemd/userdb (the account database
+    # --init-groups reads), no D-Bus, no AF_INET or AF_INET6. Reading a GSettings key
+    # is a file read in dconf; only a write goes to a service.
+    ("beantester/proxy.py", "subprocess"):
+        "import for the gsettings run below",
+    ("beantester/proxy.py", "spawn", "subprocess.run"):
+        "gsettings reads the desktop's proxy settings, nothing sent - see the comment above",
 }
 
 # The ctypes libraries a Tools-tab file may load while the promise stands: today's

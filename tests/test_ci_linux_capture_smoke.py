@@ -104,6 +104,94 @@ def test_every_broken_reset_is_named():
               f"({failures})")
 
 
+def _adapters_seen():
+    """What the Adapters phase reads in a namespace that came out right."""
+    def link(index, name, state, flags, kind="ether", mac="02:00:00:00:00:0a", mtu=1500):
+        return {"ifindex": index, "ifname": name, "operstate": state, "flags": flags,
+                "link_type": kind, "address": mac, "mtu": mtu}
+    addr = [{"ifname": "lo", "addr_info": [{"local": "127.0.0.1", "prefixlen": 8}]},
+            {"ifname": "bntci-d", "addr_info": [
+                {"local": smoke.LEASED, "prefixlen": 24, "dynamic": True},
+                {"local": smoke.DEPRECATED, "prefixlen": 24, "dynamic": True,
+                 "deprecated": True}]},
+            {"ifname": "bntci-b", "addr_info": [
+                {"local": smoke.DUPLICATE6, "prefixlen": 64, "tentative": True,
+                 "dadfailed": True}]},
+            # the end that answers for it: in use there (measured on the VM)
+            {"ifname": "bntci-a", "addr_info": [{"local": smoke.DUPLICATE6, "prefixlen": 64}]}]
+    return {
+        "product": [
+            {"name": "lo", "index": 1, "status": 1, "mtu": 65536, "mac": "",
+             "addresses": [["127.0.0.1", 8, smoke.ORIGIN_WELL_KNOWN, smoke.DAD_PREFERRED]]},
+            {"name": "bntci-d", "index": 2, "status": 1, "mtu": 1500, "mac": "02:00:00:00:00:0a",
+             "addresses": [[smoke.LEASED, 24, smoke.ORIGIN_DHCP, smoke.DAD_PREFERRED],
+                           [smoke.DEPRECATED, 24, smoke.ORIGIN_DHCP, smoke.DAD_DEPRECATED]]},
+            {"name": "bntci-b", "index": 3, "status": 1, "mtu": 1500, "mac": "02:00:00:00:00:0a",
+             "addresses": [[smoke.DUPLICATE6, 64, 1, smoke.DAD_DUPLICATE]]},
+            {"name": "bntci-a", "index": 4, "status": 1, "mtu": 1500, "mac": "02:00:00:00:00:0a",
+             "addresses": [[smoke.DUPLICATE6, 64, 1, smoke.DAD_PREFERRED]]}],
+        "internet": 2,
+        "link": [link(1, "lo", "UNKNOWN", ["LOOPBACK", "UP", "LOWER_UP"], "loopback",
+                      "00:00:00:00:00:00", 65536),
+                 link(2, "bntci-d", "UNKNOWN", ["BROADCAST", "NOARP", "UP", "LOWER_UP"]),
+                 link(3, "bntci-b", "UP", ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"]),
+                 link(4, "bntci-a", "UP", ["BROADCAST", "MULTICAST", "UP", "LOWER_UP"])],
+        "addr": addr,
+        "route": [{"dst": "8.8.8.8", "dev": "bntci-d"}],
+    }
+
+
+def test_every_broken_adapters_reading_is_named():
+    from beantester import adapters
+    check("the phase's numbers are the module's", (
+        smoke.ORIGIN_WELL_KNOWN, smoke.ORIGIN_DHCP, smoke.ORIGIN_ROUTER, smoke.ORIGIN_LEASE,
+        smoke.DAD_TENTATIVE, smoke.DAD_DUPLICATE, smoke.DAD_DEPRECATED, smoke.DAD_PREFERRED,
+        smoke.STATUS_UP) == (adapters.ORIGIN_WELL_KNOWN, adapters.ORIGIN_DHCP,
+                             adapters.ORIGIN_ROUTER, adapters.LEASE, adapters.DAD_TENTATIVE,
+                             adapters.DAD_DUPLICATE, adapters.DAD_DEPRECATED,
+                             adapters.DAD_PREFERRED, adapters.STATUS_UP))
+    seen = _adapters_seen()
+    check("a reading that matches ip passes",
+          smoke.judge_adapters(seen, "here", states=True) == [], f"({smoke.judge_adapters(seen, 'here', states=True)})")
+
+    def broken(change):
+        copy = _adapters_seen()
+        change(copy)
+        return smoke.judge_adapters(copy, "here", states=True)
+    product = lambda s, name: next(a for a in s["product"] if a["name"] == name)  # noqa: E731
+    cases = {
+        "an adapter missing": lambda s: s["product"].pop(),
+        "a wrong MTU": lambda s: product(s, "lo").update(mtu=1500),
+        "a MAC written another way": lambda s: product(s, "bntci-b").update(
+            mac="02-00-00-00-00-0A"),
+        "UNKNOWN with its link read as down": lambda s: product(s, "bntci-d").update(status=4),
+        "an address missing": lambda s: product(s, "lo").update(addresses=[]),
+        "a duplicate read as in use": lambda s: product(s, "bntci-b")["addresses"][0].__setitem__(
+            3, smoke.DAD_PREFERRED),
+        "a lease read as set by hand": lambda s: product(s, "bntci-d")["addresses"][0].__setitem__(
+            2, 1),
+        "the wrong way out": lambda s: s.update(internet=3),
+        "nothing listed": lambda s: s.update(product=[]),
+    }
+    for name, change in cases.items():
+        failures = broken(change)
+        check(f"{name}: failed, naming the adapters", any(f.startswith("adapters here")
+                                                         for f in failures), f"({failures})")
+    other = _adapters_seen()
+    product(other, "lo")["addresses"][0][3] = smoke.DAD_DEPRECATED
+    check("a DAD state ip does not show, on a machine with no states required",
+          any("DAD state" in f for f in smoke.judge_adapters(other, "here")),
+          f"({smoke.judge_adapters(other, 'here')})")
+    calm = _adapters_seen()
+    product(calm, "bntci-b")["addresses"][0][3] = smoke.DAD_PREFERRED
+    calm["addr"][2]["addr_info"][0] = {"local": smoke.DUPLICATE6, "prefixlen": 64}
+    check("without the states the namespace was given, the phase cannot pass",
+          any("not seen as a duplicate" in f
+              for f in smoke.judge_adapters(calm, "here", states=True)))
+    check("on this machine as it is, no state is required",
+          smoke.judge_adapters(calm, "here") == [])
+
+
 def test_a_machine_that_cannot_run_it_skips_and_ci_turns_that_into_a_failure(capsys):
     check("not Linux", smoke.skip_reason("win32", 0, True) == "not Linux")
     check("not root", "root" in smoke.skip_reason("linux", 1000, True))

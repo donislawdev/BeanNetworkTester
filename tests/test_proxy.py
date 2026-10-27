@@ -228,7 +228,7 @@ def test_off_windows_nothing_is_loaded():
         pytest.skip("the Windows branch is the live test below")
     check("no library and no registry",
           (proxy._winhttp(), proxy._kernel32(), proxy._registry_reader()) == (None, None, None))
-    check("and nothing is supported", not proxy.supported())
+    check("supported on Linux only, of the rest", proxy.supported() == sys.platform.startswith("linux"))
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="the proxy settings are Windows'")
