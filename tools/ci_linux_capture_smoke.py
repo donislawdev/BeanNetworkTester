@@ -168,15 +168,18 @@ HEALTH_CLIENT = (
     "host, port, rounds, greeting = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])\n"
     "s = socket.create_connection((host, port), timeout=5)\n"
     "s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\n"
-    "heard = b''\n"
-    "while len(heard) < greeting:\n"
-    "    heard += s.recv(greeting - len(heard))\n"
+    "def heard(n, when):\n"
+    "    got = 0\n"
+    "    while got < n:\n"
+    "        part = s.recv(n - got)\n"
+    "        if not part:\n"
+    "            raise ConnectionError('the far end closed ' + when)\n"
+    "        got += len(part)\n"
+    "heard(greeting, 'before its greeting')\n"
     "def echo(n):\n"
     "    for _ in range(n):\n"
     "        s.sendall(b'h' * 100)\n"
-    "        got = 0\n"
-    "        while got < 100:\n"
-    "            got += len(s.recv(4096))\n"
+    "        heard(100, 'during an echo')\n"
     "        time.sleep(0.1)\n"
     "def said(r):\n"
     "    x = r.sample\n"
@@ -726,12 +729,13 @@ def start_tcp_echo(port):
 
 def _health_phase():
     far = start_tcp_echo(HEALTH_PORT)
-    client = subprocess.Popen(
-        in_namespace(sys.executable, "-c", HEALTH_CLIENT, HOST, str(HEALTH_PORT),
-                     str(HEALTH_ROUNDS), str(len(HEALTH_GREETING))),
-        cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        text=True)
+    client = None
     try:
+        client = subprocess.Popen(
+            in_namespace(sys.executable, "-c", HEALTH_CLIENT, HOST, str(HEALTH_PORT),
+                         str(HEALTH_ROUNDS), str(len(HEALTH_GREETING))),
+            cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True)
         watched = json.loads(client.stdout.readline() or "{}")
 
         def during():
@@ -748,9 +752,10 @@ def _health_phase():
                                          "during": result}))
         return failures
     finally:
-        if client.poll() is None:
-            client.kill()
-        client.wait(10)
+        if client is not None:
+            if client.poll() is None:
+                client.kill()
+            client.wait(10)
         far.close()
 
 

@@ -8494,6 +8494,22 @@ MUTATIONS = [
         "test": "test_a_socket_opened_as_ipv6_is_found_by_either_spelling",
     },
     {
+        # A failed watch carries no handle and is read again: None.kernel_family was an
+        # AttributeError recorded as a fault, and the connection never came back.
+        "label": "tcpestats: on Linux a watch that found no socket is read by no id",
+        "file": "beantester/tcpestats.py",
+        "old": "        if handle is None:\n",
+        "new": "        if False:\n",
+        "test": "test_a_watch_that_found_no_socket_looks_for_it_again",
+    },
+    {
+        "label": "linux smoke: the TCP health client counts a closed far end as data",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "    \"            raise ConnectionError('the far end closed ' + when)\\n\"\n",
+        "new": "    \"            break\\n\"\n",
+        "test": "test_the_tcp_health_client_stops_when_the_far_end_closes",
+    },
+    {
         "label": "tcpestats: a list the Linux kernel refused is a fault of the program",
         "file": "beantester/tcpestats.py",
         "old": "            return Reading(FAILED, detail=str(exc))\n",

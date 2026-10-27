@@ -117,6 +117,27 @@ def test_what_the_kernel_refuses_is_said_in_its_words_and_never_raised(monkeypat
           f"({got}, {noted})")
 
 
+def test_a_watch_that_found_no_socket_looks_for_it_again(monkeypatch):
+    """A failed watch carries no handle and stays on the list (a failure is read again):
+    the next reading looks the connection up anew - found, it is read; still not
+    listable, the same failure in the kernel's words. Never a fault of the program."""
+    noted = []
+    monkeypatch.setattr(crashlog, "note", lambda exc, area: noted.append(area))
+    refused = NOBODY_ANSWER[:16] + bytes.fromhex("f3ffffff") + NOBODY_ANSWER[20:]  # -13
+    first = tcpestats.watch(CLIENT, linux((refused,))[0])
+    check("the watch failed, with no handle", first.state == tcpestats.FAILED
+          and first.handle is None, f"({first})")
+    again = tcpestats.read(CLIENT, linux((refused,))[0], first.handle)
+    check("still not listable: the same failure", again.state == tcpestats.FAILED
+          and "refused" in again.detail, f"({again})")
+    system, talk = linux(*LIST, (OPEN_ANSWER, LOOKUP_ACK))
+    found = tcpestats.read(CLIENT, system, first.handle)
+    check("listable now: found and read, with its handle", found.state == tcpestats.OK
+          and found.handle is not None
+          and talk.sent == [LIST4_REQUEST, LIST6_REQUEST, CLIENT_REQUEST], f"({found})")
+    check("no fault noted", noted == [], f"({noted})")
+
+
 def test_linux_is_asked_whether_it_lists_and_never_needs_rights(monkeypatch):
     def no_socket(_message):
         raise OSError(97, "Address family not supported by protocol")

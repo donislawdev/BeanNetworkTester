@@ -6,7 +6,10 @@ red. Its judges are pure for exactly this: each one here is fed the measurement
 of a broken session and must say so, and the clean one must pass.
 """
 import os
+import socket
+import subprocess
 import sys
+import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
@@ -104,16 +107,16 @@ def test_every_broken_reset_is_named():
               f"({failures})")
 
 
-SS_LINE = ("ESTAB 0 0 10.233.0.2:41000 10.233.0.1:47104 cubic wscale:7,7 rto:201 "
+SS_LINE = ("ESTAB 0 0 192.0.2.2:41000 192.0.2.1:47104 cubic wscale:7,7 rto:201 "
            "rtt:0.067/0.038 ato:40 mss:1448 pmtu:1500 rcvmss:536 advmss:1448 cwnd:10 "
-           "bytes_sent:500 bytes_acked:501 bytes_received:500 segs_out:7 segs_in:6")
+           "bytes_sent:500 bytes_acked:501 bytes_received:515 segs_out:7 segs_in:6")
 
 
 def test_every_broken_tcp_health_reading_is_named():
     """The tool's own numbers against ``ss -tin`` of the same moment, the smoothed round
     trip climbing through the session, and ended once closed."""
     watched = {"state": "ok", "srtt": 0, "rto": 201, "mss": 1448, "sent": 500,
-               "received": 500, "resent": 0, "ss": SS_LINE}
+               "received": 515, "resent": 0, "ss": SS_LINE}
     during = {"state": "ok", "srtt": 93, "closed": "ended"}
     check("a TCP health reading that did its job passes",
           smoke.judge_health(watched, during) == [], f"({smoke.judge_health(watched, during)})")
@@ -123,7 +126,9 @@ def test_every_broken_tcp_health_reading_is_named():
         "not watched": ((dict(watched, state="failed"), during), "watching ended"),
         "the timer read in microseconds": ((dict(watched, rto=201000), during), "rto"),
         "the segment size of another field": ((dict(watched, mss=536), during), "mss"),
-        "the bytes of the other direction": ((dict(watched, sent=501), during), "sent"),
+        "one byte count wrong": ((dict(watched, sent=501), during), "sent"),
+        "sent and received swapped": ((dict(watched, sent=515, received=500), during),
+                                      "received 500, ss said 515"),
         "resent bytes where ss saw none": ((dict(watched, resent=1448), during), "resent"),
         "a round trip rounded up": ((dict(watched, srtt=1), during), "srtt"),
         "no ss line": ((dict(watched, ss=""), during), "ss said no numbers"),
@@ -142,6 +147,29 @@ def test_every_broken_tcp_health_reading_is_named():
           smoke.judge_health(dict(watched, resent=2896), during) != []
           and smoke.judge_health(dict(watched, resent=2896, ss=SS_LINE + " bytes_retrans:2896"),
                                  during) == [])
+
+
+def test_the_tcp_health_client_stops_when_the_far_end_closes():
+    """``recv`` answers ``b''`` once the far end has closed: counted as data, the read never
+    ends, and the phase would wait for the client's line until CI's own limit. The client
+    itself, run against a far end that closes at once."""
+    far = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    far.bind(("127.0.0.1", 0))
+    far.listen(1)
+
+    def close_at_once():
+        conn = far.accept()[0]
+        conn.close()
+    threading.Thread(target=close_at_once, daemon=True).start()
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", smoke.HEALTH_CLIENT, "127.0.0.1", str(far.getsockname()[1]),
+             "1", str(len(smoke.HEALTH_GREETING))],
+            cwd=smoke.ROOT, capture_output=True, text=True, timeout=30)
+    finally:
+        far.close()
+    check("it ends, saying why", done.returncode != 0
+          and "the far end closed before its greeting" in done.stderr, f"({done.stderr[-300:]})")
 
 
 def _adapters_seen():

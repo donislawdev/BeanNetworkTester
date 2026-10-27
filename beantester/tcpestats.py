@@ -401,7 +401,12 @@ class _Linux:
             return Reading(FAILED, detail=f"{len(found)} sockets have these addresses and ports")
         return self.read(connection, Handle(found[0].kernel_family, found[0].sockid))
 
-    def read(self, _connection, handle):
+    def read(self, connection, handle):
+        """Read the socket ``handle`` names. A watch that found none to read (a list the
+        kernel would not give, two sockets with its numbers) carried no handle: it is
+        looked for again, as Windows asks again after a failure."""
+        if handle is None:
+            return self.watch(connection)
         code, found = self.lookup(handle)
         if code == ENOENT or (code == 0 and (found.info is None or found.state in _NOT_OPEN)):
             return Reading(ENDED, code=code, handle=handle)
