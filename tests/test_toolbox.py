@@ -1013,9 +1013,11 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
 # -- TCP health ---------------------------------------------------------------------- #
 # The socket table above, and Windows' EStats stood in for at ``tcpestats.watch`` and
 # ``tcpestats.read`` - what those answer is test_tcpestats.py's. ``ANSWER[0]`` is what
-# every reading says; ``admin`` what the process's token says.
+# every reading says; ``admin`` what the process's token says. Windows' rules on either
+# runner: rights needed, and a Connections row looked up in ``portmap``'s table (a test
+# stands that one in) - on the Linux runner the system's would be the kernel's own.
 TCPH = SOCK + """
-from beantester import driver, tcpestats
+from beantester import driver, portmap, tcpestats
 from beantester.nettools import tcphealth as th
 from beantester.tcprow import Connection
 from beantester.gui.toolbox.tcphealth import render as health_cells
@@ -1030,11 +1032,13 @@ def est_watch(connection, system=None):
     watched.append(connection)
     return ANSWER[0]
 
-def est_read(connection, system=None):
+def est_read(connection, system=None, handle=None):
     readings.append(connection)
     return ANSWER[0]
 
 tcpestats.supported = lambda: True
+tcpestats.needs_rights = lambda: True
+tcpestats.socket_rows = lambda: portmap.socket_rows()
 tcpestats.watch = est_watch
 tcpestats.read = est_read
 driver.is_admin = lambda: admin[0]

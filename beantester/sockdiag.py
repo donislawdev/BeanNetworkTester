@@ -25,6 +25,22 @@ answers):
   while the id keeps the kernel's form - the kernel finds the socket by it.
 * Both lists, asked for every state but LISTEN, took 0.2 ms in WSL and about 3 ms on the
   VM, where ``psutil.net_connections`` took 6.6 and 19 ms.
+
+TCP health reads one socket at a time (``lookup``): the socket's id from the list, its
+``tcp_info`` asked for. MEASURED 2026-10-27 (``internal_tools`` probes
+``2026-10-27-linux-tcphealth``, the same VM and WSL with 6.18):
+
+* ``tcp_info`` is 280 bytes on both, the same bytes ``getsockopt(TCP_INFO)`` gives the
+  socket's own program, and every field read here equals what ``ss -tin`` printed. An
+  older kernel sends a shorter one - fields are only ever added at its end - so a field
+  is read only when it is inside the length (``tcp_info``).
+* An ordinary user gets it for root's sockets too.
+* 🔴 Asked for by its addresses and ports alone, a connection that has gone is answered
+  by the LISTENER on its local port, with the listener's numbers. With the cookie the
+  answer is ENOENT, also for a new connection that took the same ports.
+* A socket in TIME_WAIT, or one its program has closed (an orphan in FIN_WAIT2), is
+  answered without ``tcp_info``: the kernel keeps none for it.
+* One lookup took about 0.1 ms, a new netlink socket included.
 """
 import errno
 import ipaddress
@@ -45,7 +61,12 @@ TCP_LISTEN = 10
 EVERY_STATE = 0xFFFFFFFF
 # A listener has no far end, so no Connections row can mean one.
 CONNECTED = EVERY_STATE & ~(1 << TCP_LISTEN)
+NO_STATES = 0                           # a list of nothing: "is sock_diag for TCP here?"
 NO_COOKIE = (0xFFFFFFFF, 0xFFFFFFFF)    # INET_DIAG_NOCOOKIE: "any socket with this id"
+# The attribute of an answer that holds the socket's ``struct tcp_info``, and the bit that
+# asks for it (``idiag_ext``: bit N-1 for attribute N).
+INET_DIAG_INFO = 2
+INFO = 1 << (INET_DIAG_INFO - 1)
 
 # The kernel's TCP states (``include/net/tcp_states.h``) in ``portmap.TCP_STATES``' words,
 # so a state reads the same on both systems. 12 is the kernel's own: a connection request
@@ -61,6 +82,14 @@ _TAIL = struct.Struct("=III")           # ... its interface and the two halves o
 SOCKID = 48
 MESSAGE = 72                            # inet_diag_msg; attributes may follow it
 _ID_AT = 4                              # family, state, timer, retransmits, then the id
+
+# ``struct tcp_info`` (``include/uapi/linux/tcp.h``): the fields TCP health reads, at the
+# offsets that header gives them, in the machine's own byte order. Times in microseconds.
+TCP_INFO_FIELDS = {
+    "rto": (8, "I"), "snd_mss": (16, "I"), "rtt": (68, "I"), "rttvar": (72, "I"),
+    "total_retrans": (100, "I"), "bytes_received": (128, "Q"), "min_rtt": (148, "I"),
+    "bytes_sent": (200, "Q"), "bytes_retrans": (208, "Q"), "total_rto": (240, "H")}
+_TCP_INFO = {name: (at, struct.Struct("=" + kind)) for name, (at, kind) in TCP_INFO_FIELDS.items()}
 
 
 class Socket(NamedTuple):
@@ -82,9 +111,10 @@ def sockid(sport=0, dport=0, src=b"", dst=b"", interface=0, cookie=NO_COOKIE):
             + _TAIL.pack(interface, *cookie))
 
 
-def request(kind, flags, family, sid, states=EVERY_STATE):
-    """One ``inet_diag_req_v2`` for TCP, in its netlink header."""
-    body = _REQUEST.pack(family, IPPROTO_TCP, 0, 0, states) + sid
+def request(kind, flags, family, sid, states=EVERY_STATE, extensions=0):
+    """One ``inet_diag_req_v2`` for TCP, in its netlink header. ``extensions``: the
+    attributes asked for besides the message (``INFO``)."""
+    body = _REQUEST.pack(family, IPPROTO_TCP, extensions, 0, states) + sid
     return netlink.message(kind, flags, body)
 
 
@@ -130,3 +160,42 @@ def tcp_sockets(talk=exchange):
             raise OSError(code, "sock_diag: the kernel refused the list")
         found += [_socket(payload) for kind, payload in replies if kind == SOCK_DIAG_BY_FAMILY]
     return found
+
+
+def lists(talk=exchange):
+    """Whether this kernel lists TCP sockets with their ``tcp_info``: a list of no state at
+    all, which needs no rights and walks nothing. A kernel without sock_diag's TCP part
+    refuses it; one without sock_diag at all fails to open the socket (OSError)."""
+    return error_of(talk(request(SOCK_DIAG_BY_FAMILY, NLM_F_REQUEST | NLM_F_DUMP, LINUX_AF_INET,
+                                 sockid(), NO_STATES, INFO))) == 0
+
+
+class Found(NamedTuple):
+    """The kernel's answer for one socket: its state, and its ``tcp_info`` - None for a
+    socket that keeps none (TIME_WAIT, or one whose program has closed it)."""
+    state: str
+    info: bytes | None
+
+
+def lookup(kernel_family, sid, talk=exchange):
+    """The one socket ``sid`` names, with its ``tcp_info``: ``(0, Found)``, or the errno the
+    kernel answered and None - ENOENT when there is no such socket. ``sid`` carries the
+    cookie the list gave: without it a connection that has gone is answered by the
+    listener on its port."""
+    replies = talk(request(SOCK_DIAG_BY_FAMILY, NLM_F_REQUEST | NLM_F_ACK, kernel_family, sid,
+                           EVERY_STATE, INFO))
+    error = error_of(replies)
+    if error:
+        return error, None
+    answers = [payload for kind, payload in replies if kind == SOCK_DIAG_BY_FAMILY]
+    if len(answers) != 1:
+        raise OSError(errno.EBADMSG, f"sock_diag: {len(answers)} sockets for one id")
+    info = [a.value for a in netlink.attributes(answers[0], MESSAGE) if a.kind == INET_DIAG_INFO]
+    return 0, Found(_socket(answers[0]).state, info[0] if info else None)
+
+
+def tcp_info(raw):
+    """The fields of ``TCP_INFO_FIELDS`` that ``raw`` holds, by name: a field past the end
+    of an older kernel's shorter struct is left out, never read as 0."""
+    return {name: shape.unpack_from(raw, at)[0] for name, (at, shape) in _TCP_INFO.items()
+            if at + shape.size <= len(raw)}

@@ -1,12 +1,15 @@
-"""TCP health: the connections a person watches, and what Windows measured for them.
+"""TCP health: the connections a person watches, and what the system measured for them.
 
 A connection comes from a row menu - the socket table on this tab, or the
 Connections page of a session (the owner's choice, 2026-10-19) - and stays on the
 list until it is taken off, after it has ended too, with its last numbers. The
 numbers are ``tcpestats``'s; this module keeps them over time and says them: the
 counters as a difference from the first reading (Learn: counting is never turned
-off, so a counter can hold what happened before anyone here watched), the round
-trips as they are, and a minute of them for the chart.
+off, so a counter can hold what happened before anyone here watched; Linux counts
+from the moment a connection opened), the round trips as they are, and a minute of
+them for the chart. What a system's stack does not keep (``Sample.absent``) is not
+said at all - Linux has no newest single round trip, Windows no count of the
+segments sent again.
 
 Kept on the UI thread (``Watchlist``); a worker only ever gets a snapshot to work on
 (``cycle``) and its answer is applied when it lands - so no lock, and a reading
@@ -28,7 +31,6 @@ MAX_WATCHED = 20                # each costs two calls a second, ~50 us (measure
 # value only looked current. Three readings: one without a measurement is ordinary (a
 # quiet second).
 STALE_S = 3
-_U32, _U64 = 2 ** 32, 2 ** 64
 
 # How asking to watch a connection can end besides being watched.
 GONE = "gone"                   # a Connections row whose connection has closed
@@ -57,11 +59,11 @@ class Request(NamedTuple):
 
 def blocker():
     """Why no connection can be watched from this process: an i18n key, "" if one can
-    (``diagnostics.cleanup_blocker``'s shape). Counting is turned on only with
-    administrator rights (Learn, measured). ``driver.is_admin``, as the diagnostics
-    ask it: this module is read by the Tools tab's quiet-tab guard, and ``winenv``
-    carries the subprocess of the elevation prompt."""
-    if tcpestats.supported() and not driver.is_admin():
+    (``diagnostics.cleanup_blocker``'s shape). On Windows counting is turned on only
+    with administrator rights (Learn, measured); Linux needs none. ``driver.is_admin``,
+    as the diagnostics ask it: this module is read by the Tools tab's quiet-tab guard,
+    and ``winenv`` carries the subprocess of the elevation prompt."""
+    if tcpestats.needs_rights() and not driver.is_admin():
         return "tools.tcphealth.needs_admin"
     return ""
 
@@ -103,6 +105,7 @@ class Watch:
         self.code = 0
         self.detail = ""
         self.first = self.previous = self.last = None
+        self.handle = None          # how the system finds it again (``Reading.handle``)
         self.history = collections.deque(maxlen=HISTORY)    # (at, smoothed, sample)
         # When Windows last measured a round trip, and the bytes sent by then.
         self.measured_at = None
@@ -123,6 +126,8 @@ class Watch:
             reading = tcpestats.Reading(STOPPED)
         if reading.state == tcpestats.NOT_COUNTING and self.last is not None:
             reading = tcpestats.Reading(STOPPED)
+        if reading.handle is not None:
+            self.handle = reading.handle
         self.state, self.code, self.detail = reading.state, reading.code, reading.detail
         if reading.state != tcpestats.OK:
             return
@@ -138,18 +143,25 @@ class Watch:
                                  sample.smoothed_rtt if sample.sample_rtt is None
                                  else sample.sample_rtt))
 
-    def since_watching(self, field, bits=_U32):
-        """A counter's change since the first reading - modulo its width: Windows'
-        32-bit counters wrap."""
+    def has(self, field):
+        """Whether the system's stack keeps ``field`` (``Sample.absent``)."""
+        return self.last is not None and field not in self.last.absent
+
+    def since_watching(self, field):
+        """A counter's change since the first reading - modulo its width
+        (``Sample.widths``): Windows' 32-bit counters wrap, Linux's timeouts at 16."""
         if self.last is None:
             return None
-        return (getattr(self.last, field) - getattr(self.first, field)) % bits
+        return (getattr(self.last, field) - getattr(self.first, field)) % _span(self.last, field)
 
     def unmeasured_for(self):
         """Whole seconds since Windows last measured a round trip, when data went out
         after it and that is ``STALE_S`` or more; else 0. A connection that only
         receives is not stale: Windows measures on THIS computer's data. Nor is one
-        no longer read (ended, stopped): its last numbers are final, not old."""
+        no longer read (ended, stopped): its last numbers are final, not old. A stack
+        that keeps no count of its measurements (Linux) is never said to be stale."""
+        if not self.has("rtt_samples"):
+            return 0
         if self.state != tcpestats.OK or self.last is None or self.measured_at is None:
             return 0
         waited = round(self.read_at - self.measured_at)
@@ -159,7 +171,12 @@ class Watch:
     def since_previous(self, field):
         if self.last is None or self.previous is None:
             return 0
-        return (getattr(self.last, field) - getattr(self.previous, field)) % _U32
+        return (getattr(self.last, field) - getattr(self.previous, field)) % _span(self.last, field)
+
+
+def _span(sample, field):
+    """How many values a counter of ``sample`` takes before it wraps."""
+    return 2 ** sample.widths.get(field, 32)
 
 
 def _went_back(old, new):
@@ -189,7 +206,8 @@ class Watchlist:
         self.watches.pop(key, None)
 
     def to_read(self):
-        return [w.connection for w in self.watches.values() if w.reading]
+        """``(connection, handle)`` of each connection still read."""
+        return [(w.connection, w.handle) for w in self.watches.values() if w.reading]
 
     def busy(self):
         """Something to ask Windows: a request to send or a connection to read."""
@@ -221,11 +239,13 @@ class Result(NamedTuple):
     readings: dict              # key -> tcpestats.Reading
 
 
-def cycle(requests, connections, watch=None, read=None, rows=None):
-    """On the WORKER: find and turn on what was asked, read what is watched.
+def cycle(requests, watched, watch=None, read=None, rows=None):
+    """On the WORKER: find and turn on what was asked, read what is watched -
+    ``watched`` being ``Watchlist.to_read``'s pairs.
 
     One socket table read for all the Connections rows in this cycle, and none
-    when there are none. The functions are injectable (tests)."""
+    when there are none - the system's table (``tcpestats.socket_rows``). The
+    functions are injectable (tests)."""
     watch, read = watch or tcpestats.watch, read or tcpestats.read
     table = None
     added = []
@@ -233,11 +253,11 @@ def cycle(requests, connections, watch=None, read=None, rows=None):
         connection, kind = request.connection, WATCHING
         if connection is None:
             if table is None:
-                table = _table(rows or portmap.socket_rows)
+                table = _table(rows or tcpestats.socket_rows)
             connection, kind = _find(table, request.target)
         added.append((request, connection, kind,
                       watch(connection) if kind == WATCHING else None))
-    return Result(tuple(added), {key_of(c): read(c) for c in connections})
+    return Result(tuple(added), {key_of(c): read(c, handle=handle) for c, handle in watched})
 
 
 def _table(socket_rows):
@@ -350,42 +370,61 @@ def details(watch):
     last = watch.last
     if last is None:
         return out
-    sent, received = (watch.since_watching("bytes_out", _U64),
-                      watch.since_watching("bytes_in", _U64))
+    sent, received = watch.since_watching("bytes_out"), watch.since_watching("bytes_in")
     unmeasured = watch.unmeasured_for()
     # The Note column says one thing: that the round trip is not measured. What a row
     # means is the help's - every other note was cut at the smallest window.
-    out += [Detail("srtt", Words("tools.tcphealth.item.srtt"), ms(last.smoothed_rtt),
-                   (Words("tools.tcphealth.note.not_measured", unmeasured),) if unmeasured
-                   else (), tag="stale" if unmeasured else ""),
-            Detail("sample", Words("tools.tcphealth.item.sample"), ms(last.sample_rtt)),
-            Detail("range", Words("tools.tcphealth.item.range"),
-                   Words("tools.tcphealth.value.no_rtt")
-                   if last.min_rtt is None or last.max_rtt is None
-                   else f"{rtt_number(last.min_rtt)} / {rtt_number(last.max_rtt)} ms"),
-            Detail("rttvar", Words("tools.tcphealth.item.rttvar"), ms(last.rtt_var)),
-            Detail("rto", Words("tools.tcphealth.item.rto"), f"{last.rto} ms"),
-            Detail("resent_bytes", Words("tools.tcphealth.item.resent_bytes"),
-                   _counter(watch, "resent_bytes", " B")),
-            Detail("timeouts", Words("tools.tcphealth.item.timeouts"),
-                   _counter(watch, "timeouts")),
-            Detail("fast_resends", Words("tools.tcphealth.item.fast_resends"),
-                   _counter(watch, "fast_resends")),
-            Detail("dupacks", Words("tools.tcphealth.item.dupacks"),
-                   _counter(watch, "duplicate_acks")),
-            Detail("mss", Words("tools.tcphealth.item.mss"), f"{last.mss} B"),
-            Detail("data", Words("tools.tcphealth.item.data"), f"{sent} / {received} B"),
-            Detail("since", Words("tools.tcphealth.item.since"),
-                   time.strftime("%H:%M:%S", time.localtime(watch.since)))]
+    rows = [(("smoothed_rtt",), Detail(
+                "srtt", Words("tools.tcphealth.item.srtt"), ms(last.smoothed_rtt),
+                (Words("tools.tcphealth.note.not_measured", unmeasured),) if unmeasured
+                else (), tag="stale" if unmeasured else "")),
+            (("sample_rtt",), Detail("sample", Words("tools.tcphealth.item.sample"),
+                                     ms(last.sample_rtt))),
+            (("min_rtt", "max_rtt"), Detail(
+                "range", Words("tools.tcphealth.item.range"),
+                Words("tools.tcphealth.value.no_rtt")
+                if last.min_rtt is None or last.max_rtt is None
+                else f"{rtt_number(last.min_rtt)} / {rtt_number(last.max_rtt)} ms")),
+            # A stack without the highest round trip (Linux) says the lowest alone.
+            (("min_rtt", "!max_rtt"), Detail("lowest", Words("tools.tcphealth.item.lowest"),
+                                             ms(last.min_rtt))),
+            (("rtt_var",), Detail("rttvar", Words("tools.tcphealth.item.rttvar"),
+                                  ms(last.rtt_var))),
+            (("rto",), Detail("rto", Words("tools.tcphealth.item.rto"), f"{last.rto} ms")),
+            (("resent_bytes",), Detail("resent_bytes", Words("tools.tcphealth.item.resent_bytes"),
+                                       _counter(watch, "resent_bytes", " B"))),
+            (("resent_segments",), Detail(
+                "resent_segments", Words("tools.tcphealth.item.resent_segments"),
+                _counter(watch, "resent_segments"))),
+            (("timeouts",), Detail("timeouts", Words("tools.tcphealth.item.timeouts"),
+                                   _counter(watch, "timeouts"))),
+            (("fast_resends",), Detail("fast_resends", Words("tools.tcphealth.item.fast_resends"),
+                                       _counter(watch, "fast_resends"))),
+            (("duplicate_acks",), Detail("dupacks", Words("tools.tcphealth.item.dupacks"),
+                                         _counter(watch, "duplicate_acks"))),
+            (("mss",), Detail("mss", Words("tools.tcphealth.item.mss"), f"{last.mss} B")),
+            (("bytes_out", "bytes_in"), Detail("data", Words("tools.tcphealth.item.data"),
+                                               f"{sent} / {received} B"))]
+    out += [detail for fields, detail in rows if _kept(watch, fields)]
+    out.append(Detail("since", Words("tools.tcphealth.item.since"),
+                      time.strftime("%H:%M:%S", time.localtime(watch.since))))
     return out
 
 
+def _kept(watch, fields):
+    """Whether a row is said: every field it shows is kept, and none of those it stands in
+    for (``!name``) is."""
+    return all(watch.has(f) if not f.startswith("!") else not watch.has(f[1:]) for f in fields)
+
+
 def chart(watch, now=None):
-    """(smoothed, sample, seconds the points span) for the RTT chart."""
+    """(smoothed, sample, seconds the points span) for the RTT chart. A stack that keeps
+    no newest single round trip (Linux) has the smoothed line alone."""
     points = list(watch.history) if watch is not None else []
     now = time.time() if now is None else now
     span = round(now - points[0][0]) if points else 0
-    return [p[1] for p in points], [p[2] for p in points], span
+    sample = [p[2] for p in points] if watch is None or watch.has("sample_rtt") else []
+    return [p[1] for p in points], sample, span
 
 
 # -- the report (English, like the other tools') ------------------------------------- #
@@ -405,22 +444,33 @@ def report_lines(watchlist):
         if last is None:
             continue
         unmeasured = watch.unmeasured_for()
-        lines.append(f"  round trip: smoothed {_rtt(last.smoothed_rtt)}, last "
-                     f"{_rtt(last.sample_rtt)}, lowest {_rtt(last.min_rtt)}, highest "
-                     f"{_rtt(last.max_rtt)}, variation {_rtt(last.rtt_var)}, resend timer "
-                     f"{last.rto} ms, segment size {last.mss} B, measured {last.rtt_samples} "
-                     "times" + (f", none for {unmeasured} s while data went out"
-                                if unmeasured else ""))
-        lines.append(
-            "  since watching ("
-            + time.strftime("%H:%M:%S", time.localtime(watch.since)) + "): resent "
-            f"{watch.since_watching('resent_bytes')} B, timeouts "
-            f"{watch.since_watching('timeouts')}, fast resends "
-            f"{watch.since_watching('fast_resends')}, duplicate ACKs "
-            f"{watch.since_watching('duplicate_acks')}, sent "
-            f"{watch.since_watching('bytes_out', _U64)} B, received "
-            f"{watch.since_watching('bytes_in', _U64)} B")
+        trip = [("smoothed_rtt", f"smoothed {_rtt(last.smoothed_rtt)}"),
+                ("sample_rtt", f"last {_rtt(last.sample_rtt)}"),
+                ("min_rtt", f"lowest {_rtt(last.min_rtt)}"),
+                ("max_rtt", f"highest {_rtt(last.max_rtt)}"),
+                ("rtt_var", f"variation {_rtt(last.rtt_var)}"),
+                ("rto", f"resend timer {last.rto} ms"),
+                ("mss", f"segment size {last.mss} B"),
+                ("rtt_samples", f"measured {last.rtt_samples} times")]
+        lines.append("  round trip: " + ", ".join(_said(watch, trip))
+                     + (f", none for {unmeasured} s while data went out" if unmeasured else ""))
+        segments = watch.since_watching("resent_segments")
+        counts = [("resent_bytes", f"resent {watch.since_watching('resent_bytes')} B"
+                   + (f" ({segments} segments)" if watch.has("resent_segments") else "")),
+                  ("timeouts", f"timeouts {watch.since_watching('timeouts')}"),
+                  ("fast_resends", f"fast resends {watch.since_watching('fast_resends')}"),
+                  ("duplicate_acks", f"duplicate ACKs {watch.since_watching('duplicate_acks')}"),
+                  ("bytes_out", f"sent {watch.since_watching('bytes_out')} B"),
+                  ("bytes_in", f"received {watch.since_watching('bytes_in')} B")]
+        lines.append("  since watching ("
+                     + time.strftime("%H:%M:%S", time.localtime(watch.since)) + "): "
+                     + ", ".join(_said(watch, counts)))
     return lines
+
+
+def _said(watch, parts):
+    """The report's parts for the fields the stack keeps."""
+    return [text for field, text in parts if watch.has(field)]
 
 
 def report(watchlist):
