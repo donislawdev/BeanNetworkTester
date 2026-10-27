@@ -20,7 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   packets that went around the tool and those the driver dropped, with a red line while
   either grows. Its files stay yours, and GitHub and Donate print the address instead of
   starting a browser as root. On the Tools tab, TCP health and Adapters say they are
-  Windows-only for now, and the row menus grey out Reset this connection and Show TCP health.
+  Windows-only for now, and the row menus grey out Show TCP health.
 
 - **Linux, experimental: Diagnostics speaks of Linux.** Its help explains what stops a
   session there - capture rights, the kernel, BTF and pydivert - and what to do, and
@@ -35,6 +35,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the tab says how to allow it. An IPv6 zone can be an interface's name (`fe80::1%eth0`), and
   **Ping this address** works in the row menus. Its tips and help name Windows only where
   Windows differs.
+
+- **Linux, experimental: Reset this connection works.** On the Connections page it resets TCP
+  connections over IPv4 and IPv6, as root or with CAP_NET_ADMIN. The program using the
+  connection gets `ECONNABORTED` and the other end a reset, which heavy loss in a session can
+  drop on the way, as on Windows. A connection still opening or closing is not reset. Where the
+  kernel cannot reset connections (WSL's), the entry is greyed out. A connection missing from
+  the system's list has closed or belongs to another network namespace, such as a container's.
 
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last

@@ -25,6 +25,13 @@ went away" look the same from one side.
   raw socket, because a new namespace refuses the ping socket even to root
   (``ping_group_range = 1 0``), then through the ping socket once the namespace
   allows it - each carries both directions' latency, and is fast before and after.
+* "Reset this connection", the Connections page's own ``tcpreset.reset``, on a TCP
+  connection from the namespace: with no session the program holding it hears
+  ECONNABORTED and the far end a reset; during ``--loss 100`` toward the far end the
+  program still hears it and the far end hears nothing - the reset is a packet like any
+  other. And a connection that closed after the socket list was read: its destroy ends
+  as "gone", and the listener on its port lives on (by its numbers alone, without the
+  cookie, the kernel took the listener - measured 2026-10-26).
 
 What bounds the damage (convention 6)
 -------------------------------------
@@ -32,6 +39,7 @@ Every packet the tool can see is inside a network namespace this script builds
 (``bntci``, joined to the root namespace by a veth pair) and deletes again, also
 when a phase fails. The sessions run INSIDE it, with ``--dst-ip``, ``--dst-port``
 and ``--duration``, so the machine's own interfaces are never handed to the tool.
+The resets act only on connections this script opened, from inside the namespace.
 
 Not Linux, not root, or no eBPFDivert -> SKIP and exit 0, unless ``--require`` is
 given, which CI passes: there a check that cannot run must fail, not pass quietly.
@@ -82,6 +90,53 @@ PING_CLIENT = (
     "    out.append(echo.rtt_ms if echo.status == icmp.IP_SUCCESS else None)\n"
     "print(json.dumps({'kind': icmpsock.kind(), 'rtts': out}))\n")
 PING_ROUNDS = 6
+
+RESET_PORT = 47103
+ECONNABORTED = 103          # what Linux tells the program whose socket a reset destroyed
+
+# Run INSIDE the namespace, from the checkout: one TCP connection to the far end, held
+# open until a line arrives on stdin, then the Connections page's own reset of it and
+# what the program holding it hears next.
+RESET_CLIENT = (
+    "import json, socket, sys\n"
+    "from beantester import tcpreset\n"
+    "host, port = sys.argv[1], int(sys.argv[2])\n"
+    "s = socket.create_connection((host, port), timeout=5)\n"
+    "print('ready', flush=True)\n"
+    "sys.stdin.readline()\n"
+    "got = tcpreset.reset(tcpreset.Target(s.getsockname()[1], host, port))\n"
+    "try:\n"
+    "    s.recv(1)\n"
+    "    heard = None\n"
+    "except OSError as exc:\n"
+    "    heard = exc.errno\n"
+    "print(json.dumps({'outcome': got.kind, 'client': heard}), flush=True)\n")
+
+# Run INSIDE the namespace: a connection to a listener there, ended by a reset from its
+# client, then destroyed by the socket the list showed before - what a click meets when
+# the connection closes between reading the list and the destroy.
+STALE_CLIENT = (
+    "import json, socket, struct, time\n"
+    "from beantester import tcpreset\n"
+    "srv = socket.socket()\n"
+    "srv.bind(('127.0.0.1', 0))\n"
+    "srv.listen(4)\n"
+    "port = srv.getsockname()[1]\n"
+    "c = socket.create_connection(('127.0.0.1', port), timeout=5)\n"
+    "a, _ = srv.accept()\n"
+    "system = tcpreset._Linux()\n"
+    "rows, _ = system.rows()\n"
+    "served = [r for r in rows if r.local_port == port and r.remote_port == c.getsockname()[1]]\n"
+    "c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))\n"
+    "c.close()\n"
+    "time.sleep(0.2)\n"
+    "stale = system.end(served[0], None).kind if len(served) == 1 else None\n"
+    "try:\n"
+    "    socket.create_connection(('127.0.0.1', port), timeout=2).close()\n"
+    "    listener = 'alive'\n"
+    "except OSError as exc:\n"
+    "    listener = type(exc).__name__\n"
+    "print(json.dumps({'found': len(served), 'stale': stale, 'listener': listener}))\n")
 
 
 # -- the judges: pure, so a test can prove they fail ------------------------------ #
@@ -148,6 +203,28 @@ def judge_ping(before, raw, dgram, after, latency_ms=LATENCY_MS):
             failures.append(f"ping {name}: {median} ms - "
                             + ("the machine is too slow to tell" if name == "before"
                                else "the session left something behind"))
+    return failures
+
+
+def judge_reset(plain, impaired, stale):
+    """Failures (empty = pass) for the Reset phase. ``plain`` is a reset with no session,
+    ``impaired`` one during ``--loss 100`` toward the far end, each ``{"outcome",
+    "client", "far"}`` - ``far`` being what the far end heard, "reset" or "nothing".
+    ``stale``: the destroy of a connection that closed after the list was read."""
+    failures = []
+    for name, got, far in (("plain reset", plain, "reset"), ("reset under loss", impaired, "nothing")):
+        if got.get("outcome") != "reset":
+            failures.append(f"{name}: ended {got.get('outcome')!r}, not 'reset'")
+        if got.get("client") != ECONNABORTED:
+            failures.append(f"{name}: the program heard errno {got.get('client')}, not ECONNABORTED")
+        if got.get("far") != far:
+            failures.append(f"{name}: the far end heard {got.get('far')!r}, expected {far!r}")
+    if stale.get("found") != 1:
+        failures.append(f"stale: {stale.get('found')} sockets listed for the connection, not 1")
+    if stale.get("stale") != "gone":
+        failures.append(f"stale: a closed connection's destroy ended {stale.get('stale')!r}, not 'gone'")
+    if stale.get("listener") != "alive":
+        failures.append(f"stale: the listener on its port: {stale.get('listener')} - the destroy took it")
     return failures
 
 
@@ -324,6 +401,90 @@ def _ping_phase():
     return failures
 
 
+def start_tcp_far_end():
+    """A TCP listener in the root namespace, in THIS process: the far end a reset reaches."""
+    far = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    far.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    far.bind((HOST, RESET_PORT))
+    far.listen(4)
+    far.settimeout(10)
+    return far
+
+
+def heard(conn, wait):
+    """What the far end of a connection hears within ``wait`` s - "reset" or "nothing"
+    ("closed" or "data" no reset should bring) - and the far end's socket closed."""
+    conn.settimeout(wait)
+    try:
+        data = conn.recv(16)
+    except ConnectionResetError:
+        return "reset"
+    except TimeoutError:
+        return "nothing"
+    finally:
+        conn.close()
+    return "data" if data else "closed"
+
+
+def held_connection(far, clients, ends):
+    """The reset client, connected from the namespace and waiting; and the far end's
+    socket of it, or None when it never connected. The client goes on ``clients`` and the
+    far end's socket on ``ends`` before anything can fail, so the caller stops and
+    closes them on every path."""
+    p = subprocess.Popen(in_namespace(sys.executable, "-c", RESET_CLIENT, HOST, str(RESET_PORT)),
+                         cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True)
+    clients.append(p)
+    if p.stdout.readline().strip() != "ready":
+        return p, None
+    try:
+        conn = far.accept()[0]
+    except OSError:                 # the far end's 10 s wait ran out
+        return p, None
+    ends.append(conn)
+    return p, conn
+
+
+def fire(client, conn, wait):
+    """Reset the held connection: the client's report, and what the far end heard."""
+    client.stdin.write("go\n")
+    client.stdin.flush()
+    got = json.loads(client.stdout.readline() or "{}")
+    got["far"] = heard(conn, wait)
+    return got
+
+
+def _reset_phase():
+    far = start_tcp_far_end()
+    clients, ends = [], []
+    try:
+        client, conn = held_connection(far, clients, ends)
+        plain = fire(client, conn, 2.0) if conn else {"outcome": "never connected"}
+        # Connected BEFORE the session: --loss 100 would keep a new connection out. The
+        # far end listens 1.5 s of a 6 s session.
+        client, conn = held_connection(far, clients, ends)
+        if conn is None:
+            return ["reset under loss: the client never connected"]
+        result, lines, code = run_session(
+            ["--dst-ip", HOST, "--dst-port", str(RESET_PORT), "--loss", "100", "--duration", "6"],
+            lambda: fire(client, conn, 1.5))
+        failures = _session_failures("reset", result, lines, code)
+        r = subprocess.run(in_namespace(sys.executable, "-c", STALE_CLIENT), cwd=ROOT,
+                           capture_output=True, text=True, timeout=30)
+        stale = json.loads(r.stdout.strip() or "{}")
+        failures += judge_reset(plain, result or {}, stale)
+        print("reset:", json.dumps({"plain": plain, "under loss": result, "stale": stale}))
+        return failures
+    finally:
+        for client in clients:
+            if client.poll() is None:
+                client.kill()
+            client.wait(10)
+        for conn in ends:           # closed already by heard(), unless a step failed first
+            conn.close()
+        far.close()
+
+
 def main(argv=None, environment=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--require", action="store_true",
@@ -348,6 +509,7 @@ def main(argv=None, environment=None):
         failures += _latency_phase()
         failures += _loss_phase()
         failures += _ping_phase()
+        failures += _reset_phase()
     except Exception as exc:                      # a phase that could not run is a failure
         failures.append(f"{type(exc).__name__}: {exc}")
     finally:

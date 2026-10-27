@@ -422,7 +422,8 @@ def test_connection_menu_needs_a_row_to_act_on():
 
 def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
     """Windows resets TCP over IPv4 only (``tcpreset``): every other row gets the
-    entry greyed, the way a row with no process gets "Target this process"."""
+    entry greyed, the way a row with no process gets "Target this process". Linux
+    resets TCP over IPv6 too. Each system's rule, on either runner."""
     run_gui("""
         from beantester import tcpreset
         from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
@@ -440,15 +441,18 @@ def test_connection_menu_offers_a_reset_only_for_tcp_over_ipv4():
             values[keys.index("proto")], values[keys.index("remote_ip")] = proto, ip
             return values
 
-        for proto, ip, state in (("TCP", "198.51.100.7", MENU_ENTRY_LIVE),
-                                 ("UDP", "198.51.100.7", MENU_ENTRY_INERT),
-                                 ("ICMP", "198.51.100.7", MENU_ENTRY_INERT),
-                                 ("TCP", "2001:db8::7", MENU_ENTRY_INERT)):
-            page.table.sync([("r", row(proto, ip))])
-            tree.row_at = page.table._slots[0]
-            page.table.row_menu_at_pointer(Ev())
-            got = page.menu.entry_states[page.RESET_INDEX]
-            assert got == state, (proto, ip, got)
+        for system, ipv6 in ((tcpreset._System, MENU_ENTRY_INERT),
+                             (tcpreset._Linux, MENU_ENTRY_LIVE)):
+            tcpreset._system_class = lambda system=system: system
+            for proto, ip, state in (("TCP", "198.51.100.7", MENU_ENTRY_LIVE),
+                                     ("UDP", "198.51.100.7", MENU_ENTRY_INERT),
+                                     ("ICMP", "198.51.100.7", MENU_ENTRY_INERT),
+                                     ("TCP", "2001:db8::7", ipv6)):
+                page.table.sync([("r", row(proto, ip))])
+                tree.row_at = page.table._slots[0]
+                page.table.row_menu_at_pointer(Ev())
+                got = page.menu.entry_states[page.RESET_INDEX]
+                assert got == state, (system.__name__, proto, ip, got)
         assert page._reset_connection() is None, "a row with no port numbers starts nothing"
     """)
 
@@ -617,6 +621,21 @@ def test_a_connection_reset_runs_off_the_ui_thread_and_says_how_it_ended():
                                         tcpreset.REFUSED, tcpreset.NEEDS_ADMIN,
                                         tcpreset.UNREADABLE, tcpreset.NOT_IPV4,
                                         tcpreset.FAILED}, "an outcome with no sentence"
+        # Linux says three of them in its own words (root, its rule on states, and a
+        # socket that may belong to another network namespace), the rest as Windows.
+        linux, windows = conns.reset_log("linux"), conns.reset_log("win32")
+        assert windows is conns.RESET_LOG, "Windows' sentences changed"
+        assert set(linux) == set(windows), "an outcome with no Linux sentence"
+        assert {kind for kind in linux if linux[kind] != windows[kind]} == {
+            tcpreset.GONE, tcpreset.REFUSED, tcpreset.NEEDS_ADMIN}, linux
+        from beantester.i18n import T
+        assert all(T(key) != key for key in linux.values()), "a sentence with no text"
+        # ... and the worker says the sentence of the system it is on.
+        conns.reset_log = lambda platform=None: linux
+        conns.reset_connection(app, row).join(20)
+        app._logview.drain()
+        said = T("log.conn_reset_refused_linux", address="198.51.100.7:443", state="TIME_WAIT")
+        assert said in app._log_lines[-1], (said, app._log_lines[-1:])
     """)
 
 

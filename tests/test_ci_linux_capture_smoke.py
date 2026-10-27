@@ -78,6 +78,32 @@ def test_every_broken_ping_through_a_session_is_named():
               f"({failures})")
 
 
+def test_every_broken_reset_is_named():
+    plain = {"outcome": "reset", "client": smoke.ECONNABORTED, "far": "reset"}
+    impaired = {"outcome": "reset", "client": smoke.ECONNABORTED, "far": "nothing"}
+    stale = {"found": 1, "stale": "gone", "listener": "alive"}
+    check("a reset that did its job passes", smoke.judge_reset(plain, impaired, stale) == [])
+    cases = {
+        "nothing reset": ((dict(plain, outcome="gone"), impaired, stale), "plain reset"),
+        "the program heard nothing": ((dict(plain, client=None), impaired, stale), "plain reset"),
+        "the far end got no reset": ((dict(plain, far="nothing"), impaired, stale), "plain reset"),
+        "the reset got through --loss 100": ((plain, dict(impaired, far="reset"), stale),
+                                             "reset under loss"),
+        "no reset under the session": ((plain, dict(impaired, outcome="failed"), stale),
+                                       "reset under loss"),
+        "a session that never ran": ((plain, {}, stale), "reset under loss"),
+        "the connection not in the list": ((plain, impaired, dict(stale, found=0)), "stale"),
+        "a gone connection read as reset": ((plain, impaired, dict(stale, stale="reset")), "stale"),
+        "the listener taken": ((plain, impaired, dict(stale, listener="ConnectionRefusedError")),
+                               "stale"),
+        "nothing measured": ((plain, impaired, {}), "stale"),
+    }
+    for name, (got, phase) in cases.items():
+        failures = smoke.judge_reset(*got)
+        check(f"{name}: failed, naming {phase}", any(f.startswith(phase) for f in failures),
+              f"({failures})")
+
+
 def test_a_machine_that_cannot_run_it_skips_and_ci_turns_that_into_a_failure(capsys):
     check("not Linux", smoke.skip_reason("win32", 0, True) == "not Linux")
     check("not root", "root" in smoke.skip_reason("linux", 1000, True))

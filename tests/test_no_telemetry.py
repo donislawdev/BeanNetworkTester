@@ -118,6 +118,8 @@ ALLOWED_IMPORTS = {
         "Ping's name lookup (getaddrinfo, below) and the address family constants",
     ("beantester/icmpsock.py", "socket"):
         "Ping on Linux: the ICMP socket an echo request goes through (below)",
+    ("beantester/sockdiag.py", "socket"):
+        "Linux: the netlink socket to the kernel's own list of TCP sockets (below)",
     ("beantester/gui/links.py", "webbrowser"):
         "the page buttons (support page, GitHub page), opened on a click",
     ("beantester/winenv.py", "subprocess"):
@@ -169,6 +171,11 @@ ALLOWED_CALLS = {
     ("beantester/icmpsock.py", "socket", "if_nametoindex"):
         "the number of a named interface, for an IPv6 zone typed as a name "
         "(fe80::1%eth0): a lookup in this machine's own interface list, nothing sent",
+    ("beantester/sockdiag.py", "socket", "socket"):
+        "a netlink socket (AF_NETLINK, sock_diag): it talks to this machine's kernel and "
+        "to nothing else - the list of TCP sockets, and for tcpreset the one SOCK_DESTROY "
+        "a reset is. Opened per request and closed before it returns. What a destroy "
+        "makes the kernel send is SOCK_DESTROY's entry in WIRE_FUNCTIONS",
     ("beantester/gui/links.py", "webbrowser", "open_new_tab"):
         "opens the support page or the project's GitHub page in the user's browser, "
         "only when they click its button (header or About window)",
@@ -222,6 +229,13 @@ ALLOWED_LIBRARIES = {
 # TCB made Windows send a RST to the far end - seen there 1 ms later over a real
 # adapter, and over loopback.
 #
+# SOCK_DESTROY is Linux's, and a number in a netlink request rather than a function
+# (``include/uapi/linux/sock_diag.h``) - matched as a NAME too, which is how a module
+# spells a constant of the kernel's. MEASURED 2026-10-26 on Ubuntu 26.04: destroying an
+# open connection's socket made the kernel send a RST to the far end (ECONNRESET there).
+# A module that writes the bare number 21 walks past this, as a module that writes an
+# ordinal past ``iphlpapi`` would: a name list is a floor, not a proof.
+#
 # winhttp's, from Microsoft Learn (read 2026-10-14): WinHttpSendRequest "sends the
 # specified request to the HTTP server", WinHttpWriteData "writes request data to
 # an HTTP server", the WebSocket send, shutdown ("sends a close frame") and close;
@@ -247,6 +261,7 @@ WIRE_FUNCTIONS = {
     "WinHttpGetProxyForUrlEx": "the same, asynchronous form",
     "WinHttpDetectAutoProxyConfigUrl": "proxy discovery over DHCP and DNS",
     "SetTcpEntry": "a TCP reset to the far end of the connection it deletes",
+    "SOCK_DESTROY": "on Linux, a TCP reset to the far end of the connection whose socket it destroys",
 }
 
 # The one place each sending function may be named, with why that is the product
@@ -266,6 +281,8 @@ WIRE_FUNCTIONS = {
 WIRE_ALLOWED = {
     ("beantester/tcpreset.py", "SetTcpEntry"):
         "resets the one connection the tester chose in the Connections row menu",
+    ("beantester/tcpreset.py", "SOCK_DESTROY"):
+        "the same reset on Linux (2026-10-26): that one connection's socket, by its id",
     ("beantester/icmp.py", "IcmpSendEcho2"):
         "Ping on the Tools tab: an IPv4 echo request to the typed address, Start to Stop",
     ("beantester/icmp.py", "Icmp6SendEcho2"):
@@ -429,6 +446,21 @@ def _string_findings(node, docstrings):
     return out
 
 
+def _wire_name(node):
+    """The sending name ``node`` spells, if any. A function reached as an attribute, off
+    whatever holds the library - a loader chain or a handle stored in an instance;
+    matching the attribute alone is what covers the handle case, which no static scan
+    can trace. Or a plain name: a constant a module holds of the kernel's, the way
+    Linux's SOCK_DESTROY is held."""
+    if isinstance(node, ast.Attribute):
+        name = node.attr
+    elif isinstance(node, ast.Name):
+        name = node.id
+    else:
+        return None
+    return name if name in WIRE_FUNCTIONS else None
+
+
 def findings(source, rel):
     """Every network finding in one module: a list of ``(kind, detail, line)``.
 
@@ -470,11 +502,9 @@ def findings(source, rel):
             if owner in ("subprocess", "os") and name in SPAWN_CALLS:
                 found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
         found.extend(_string_findings(node, docstrings))
-        # A function reached as an attribute, off whatever holds the library - a
-        # loader chain or a handle stored in an instance. Matching the attribute
-        # alone is what covers the handle case, which no static scan can trace.
-        if isinstance(node, ast.Attribute) and node.attr in WIRE_FUNCTIONS:
-            found.append(("wire", node.attr, node.lineno))
+        wire = _wire_name(node)
+        if wire:
+            found.append(("wire", wire, node.lineno))
         library = _library_name(node)
         if library:
             found.append(("library", library.lower().removesuffix(".dll"),
@@ -572,9 +602,13 @@ def test_the_wire_allowlist_names_a_place_not_a_function():
     caught, and the allowed place is not let off for a different function."""
     reset = "import ctypes\nlib = ctypes.WinDLL('iphlpapi.dll')\nlib.SetTcpEntry(row)\n"
     ping = "import ctypes\nctypes.windll.iphlpapi.IcmpSendEcho2(h, 0, 0, 0, 0, 0, 0, 0, 0, 0)\n"
+    # Linux's reset: a constant of the kernel's, named where it is set and where it is used.
+    destroy = "SOCK_DESTROY = 21\nrequest(SOCK_DESTROY, 5, 2, sid)\n"
     cases = {"the allowed call in its own module": (reset, "beantester/tcpreset.py", False),
              "the same call in any other module": (reset, "beantester/gui/pages/conns.py", True),
-             "a ping in the allowed module": (ping, "beantester/tcpreset.py", True)}
+             "a ping in the allowed module": (ping, "beantester/tcpreset.py", True),
+             "Linux's destroy in its own module": (destroy, "beantester/tcpreset.py", False),
+             "the destroy anywhere else": (destroy, "beantester/sockdiag.py", True)}
     for name, (source, rel, caught) in cases.items():
         wire = [(rel, detail, line) for kind, detail, line in findings(source, rel)
                 if kind == "wire"]
