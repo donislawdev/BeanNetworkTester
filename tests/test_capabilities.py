@@ -123,14 +123,15 @@ def test_windows_offers_every_capability_and_linux_ping_when_it_may_send(
     Linux has Ping when this process may open an ICMP socket - ``icmpsock.kind``, stood
     in, because the real one asks this runner's kernel (on Windows it asks Winsock) -
     and Reset when its kernel destroys sockets (``tcpreset._Linux.can_destroy``, stood
-    in for the same reason), and none of the rest yet."""
+    in for the same reason). Adapters and Proxy always (rtnetlink and files, nothing to
+    be refused); TCP health not yet."""
     monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr(icmpsock, "kind", lambda: sockets)
     monkeypatch.setattr(tcpreset._Linux, "can_destroy", lambda _self: destroys)
     got = {name: capabilities.available(name) for name in capabilities.CAPABILITIES}
     windows = platform == "win32"
-    want = {name: windows or (name == "ping" and ping) or (name == "tcp_reset" and destroys)
-            for name in capabilities.CAPABILITIES}
+    want = {name: windows or name in ("adapters", "proxy") or (name == "ping" and ping)
+            or (name == "tcp_reset" and destroys) for name in capabilities.CAPABILITIES}
     check(f"{platform}, {sockets}, {destroys}: {want}", got == want, f"({got})")
 
 
@@ -144,7 +145,7 @@ def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):
     check("Linux: Ping's own words", capabilities.why_not("ping") == icmp.NOT_HERE_LINUX,
           f"({capabilities.why_not('ping')})")
     check("the others keep the shared ones",
-          capabilities.why_not("adapters") == capabilities.NOT_HERE)
+          capabilities.why_not("tcp_health") == capabilities.NOT_HERE)
     monkeypatch.setattr(paths, "running_as_root", lambda: True)
     check("as root: the words for root", capabilities.why_not("ping") == icmp.NOT_HERE_ROOT,
           f"({capabilities.why_not('ping')})")

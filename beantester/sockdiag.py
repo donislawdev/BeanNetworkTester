@@ -28,16 +28,17 @@ answers):
 """
 import errno
 import ipaddress
-import socket
 import struct
 from typing import NamedTuple
 
-AF_NETLINK = 16
-NETLINK_SOCK_DIAG = 4
+from . import netlink
+
+# The transport's numbers, under the names tcpreset and the tests read them by.
+NETLINK_SOCK_DIAG = netlink.NETLINK_SOCK_DIAG
+NLMSG_ERROR, NLMSG_DONE = netlink.NLMSG_ERROR, netlink.NLMSG_DONE
+NLM_F_REQUEST, NLM_F_ACK, NLM_F_DUMP = netlink.NLM_F_REQUEST, netlink.NLM_F_ACK, netlink.NLM_F_DUMP
+MSG_TRUNC = netlink.MSG_TRUNC
 SOCK_DIAG_BY_FAMILY = 20
-NLMSG_ERROR, NLMSG_DONE = 2, 3
-NLM_F_REQUEST, NLM_F_ACK, NLM_F_DUMP = 0x1, 0x4, 0x300
-MSG_TRUNC = 0x20
 LINUX_AF_INET, LINUX_AF_INET6 = 2, 10
 IPPROTO_TCP = 6
 TCP_LISTEN = 10
@@ -45,9 +46,6 @@ EVERY_STATE = 0xFFFFFFFF
 # A listener has no far end, so no Connections row can mean one.
 CONNECTED = EVERY_STATE & ~(1 << TCP_LISTEN)
 NO_COOKIE = (0xFFFFFFFF, 0xFFFFFFFF)    # INET_DIAG_NOCOOKIE: "any socket with this id"
-SEQ = 1                                 # one request per socket: the number tells nothing apart
-WAIT_S = 2.0                            # the kernel answers at once; a silence is a failure
-BUFFER = 1 << 16                        # a dump datagram is at most 32 KiB (netlink_recvmsg)
 
 # The kernel's TCP states (``include/net/tcp_states.h``) in ``portmap.TCP_STATES``' words,
 # so a state reads the same on both systems. 12 is the kernel's own: a connection request
@@ -56,12 +54,10 @@ STATES = {1: "ESTABLISHED", 2: "SYN_SENT", 3: "SYN_RECEIVED", 4: "FIN_WAIT_1",
           5: "FIN_WAIT_2", 6: "TIME_WAIT", 7: "CLOSED", 8: "CLOSE_WAIT", 9: "LAST_ACK",
           10: "LISTEN", 11: "CLOSING", 12: "NEW_SYN_RECV"}
 
-_HEADER = struct.Struct("=IHHII")       # nlmsghdr: length, type, flags, seq, pid
 _REQUEST = struct.Struct("=BBBBI")      # inet_diag_req_v2 up to its id: family, protocol,
                                         # extensions, pad, states
 _PORTS = struct.Struct("!HH")           # inet_diag_sockid: source and destination port
 _TAIL = struct.Struct("=III")           # ... its interface and the two halves of the cookie
-_ERROR = struct.Struct("=i")            # nlmsgerr and NLMSG_DONE: a negative errno, or 0
 SOCKID = 48
 MESSAGE = 72                            # inet_diag_msg; attributes may follow it
 _ID_AT = 4                              # family, state, timer, retransmits, then the id
@@ -89,49 +85,20 @@ def sockid(sport=0, dport=0, src=b"", dst=b"", interface=0, cookie=NO_COOKIE):
 def request(kind, flags, family, sid, states=EVERY_STATE):
     """One ``inet_diag_req_v2`` for TCP, in its netlink header."""
     body = _REQUEST.pack(family, IPPROTO_TCP, 0, 0, states) + sid
-    return _HEADER.pack(_HEADER.size + len(body), kind, flags, SEQ, 0) + body
+    return netlink.message(kind, flags, body)
 
 
-def _open():
-    nl = socket.socket(AF_NETLINK, socket.SOCK_RAW, NETLINK_SOCK_DIAG)
-    nl.settimeout(WAIT_S)
-    return nl
-
-
-def _messages(data):
-    """The netlink messages in one datagram, as ``(type, payload)``."""
-    out = []
-    offset = 0
-    while offset + _HEADER.size <= len(data):
-        length, kind = _HEADER.unpack_from(data, offset)[:2]
-        if length < _HEADER.size or offset + length > len(data):
-            raise OSError(errno.EBADMSG, "sock_diag: a message longer than its datagram")
-        out.append((kind, data[offset + _HEADER.size:offset + length]))
-        offset += (length + 3) & ~3
-    return out
+_open = netlink.opener(NETLINK_SOCK_DIAG)
 
 
 def exchange(message, opener=_open):
     """Send one request; the kernel's answer as ``(type, payload)`` pairs, up to the one
     that ends it - NLMSG_DONE after a list, NLMSG_ERROR otherwise (an acknowledgement is
-    an error of 0). A socket per request, closed before this returns."""
-    with opener() as nl:
-        nl.sendto(message, (0, 0))
-        replies: list = []
-        while not replies or replies[-1][0] not in (NLMSG_DONE, NLMSG_ERROR):
-            data, _ancillary, flags, _sender = nl.recvmsg(BUFFER)
-            if flags & MSG_TRUNC:
-                raise OSError(errno.EMSGSIZE, "sock_diag: an answer longer than the buffer")
-            replies.extend(_messages(data))
-        return replies
+    an error of 0). ``netlink.exchange`` over a sock_diag socket."""
+    return netlink.exchange(message, opener)
 
 
-def error_of(replies):
-    """The errno a request's answer ends in: 0 when the kernel did it."""
-    kind, payload = replies[-1]
-    if kind not in (NLMSG_ERROR, NLMSG_DONE) or len(payload) < _ERROR.size:
-        raise OSError(errno.EBADMSG, f"sock_diag: an answer that ends in type {kind}")
-    return -_ERROR.unpack_from(payload)[0]
+error_of = netlink.error_of
 
 
 def _address(packed):

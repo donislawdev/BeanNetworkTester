@@ -118,6 +118,9 @@ NATIVE_METHODS = ("_table", "socket_rows")
 # The Tools tab's adapter list and its route lookup (``adapters._Native``): read on a
 # click by a worker, never by a packet thread.
 ADAPTER_METHODS = ("adapters", "best_interface")
+# The same list on Linux (``adapters._Linux``): the kernel's tables over rtnetlink,
+# and a route lookup - by the same worker, never by a packet thread.
+LINUX_ADAPTER_METHODS = ("adapters", "best_interface")
 # "Reset this connection" on the Connections page (``tcpreset._System``): one call, on
 # a click, by a worker - never by a packet thread.
 RESET_METHODS = ("delete",)
@@ -153,6 +156,8 @@ def os_calls_recorded():
               for name in NATIVE_METHODS}
     native.update({(adapters._Native, name, "adapters." + name):
                    getattr(adapters._Native, name) for name in ADAPTER_METHODS})
+    native.update({(adapters._Linux, name, "adapters_linux." + name):
+                   getattr(adapters._Linux, name) for name in LINUX_ADAPTER_METHODS})
     native.update({(tcpreset._System, name, "tcpreset." + name):
                    getattr(tcpreset._System, name) for name in RESET_METHODS})
     native.update({(tcpreset._Linux, name, "tcpreset_linux." + name):
@@ -312,6 +317,16 @@ def test_the_recorder_sees_what_it_claims_to_see():
     check("the adapters' route lookup is recorded too", names == ["adapters.best_interface"],
           f"({names})")
     check("and unwrapped after", adapters._Native.best_interface.__name__ == "best_interface")
+
+    # And Linux's: a route lookup the kernel answers with "no route".
+    def no_route(message):
+        return [(2, bytes([0x9b, 0xff, 0xff, 0xff]) + message[:16])]     # NLMSG_ERROR -101
+    with os_calls_recorded() as calls:
+        adapters._Linux(talk=no_route).best_interface(4)
+        names = [name for name, _ in calls]
+    check("Linux's route lookup is recorded too", names == ["adapters_linux.best_interface"],
+          f"({names})")
+    check("and unwrapped after", adapters._Linux.best_interface.__name__ == "best_interface")
 
     # And the connection reset's: one SetTcpEntry through a fake binding.
     class Reset:

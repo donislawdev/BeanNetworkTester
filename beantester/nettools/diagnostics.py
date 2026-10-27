@@ -63,7 +63,9 @@ def diagnose():
     """Run the checks and every section's read. Blocking: the first call imports
     pydivert (~160 ms measured); the adapters add ~3 ms and the proxy ~2 ms (measured
     2026-10-13 and 2026-10-14), so they are read with every check rather than when a
-    box is ticked."""
+    box is ticked. On Linux the adapters take under 5 ms, and the proxy is one run of
+    gsettings: 26 ms typical, 273 ms the first time (measured 2026-10-27) - on the
+    worker, like the rest."""
     ok, rows = driver.doctor()
     found = {section.id: _found(section) for section in REPORT_SECTIONS if section.read}
     return Diagnosis(ok, tuple(Check(*row) for row in rows), user_data_dir(),

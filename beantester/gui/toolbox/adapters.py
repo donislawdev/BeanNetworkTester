@@ -13,16 +13,20 @@ question, and its details reuse the table and the row menu below - a program tha
 uses a proxy connects to IT, so its address is offered to the Control page like a
 gateway's.
 
+The same panel on Windows and Linux: the rows come from each system's own reader
+(``adapters._Native`` / ``adapters._Linux``, ``proxy`` likewise) in the same shapes,
+and only the "?" sheet and the name column's tip are each system's own.
+
 A snapshot, read when the tab is first looked at and then when asked - the
 pattern of the socket table: a list that re-read itself on every tick would move
-under the pointer. Windows only (the owner's decision, 2026-09-24): elsewhere the
-tab says so in one line.
+under the pointer.
 
 The chosen adapter is remembered by the name the system keeps for it
 (``AdapterName``), not by its index: Learn says an index may change when an
 adapter is disabled and enabled again, and the details would then belong to
 another one.
 """
+import sys
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -45,6 +49,10 @@ COLUMNS = {"name": "tools.adapters.col.name", "status": "tools.adapters.col.stat
            "kind": "tools.adapters.col.kind", "ipv4": "tools.adapters.col.ipv4",
            "internet": "tools.adapters.col.internet"}
 TIPS = {column: f"tips.tools_adapters_col_{column}" for column in COLUMNS}
+# What Linux says in its own words: the whole "?" sheet (nearly every paragraph of
+# Windows' names a Windows place), and where an adapter's name comes from.
+HELP, HELP_LINUX = "tools.adapters.help_body", "tools.adapters.help_linux"
+TIPS_LINUX = {**TIPS, "name": "tips.tools_adapters_col_name_linux"}
 MIN_CHARS = {"name": CHARS["adapter"], "status": CHARS["if_status"],
              "kind": CHARS["if_kind"], "ipv4": CHARS["address"],
              "internet": CHARS["internet"]}
@@ -55,6 +63,20 @@ DETAIL_TIPS = {column: f"tips.tools_adapters_col_{column}" for column in DETAIL_
 DETAIL_MIN_CHARS = {"item": CHARS["item"], "value": CHARS["address"], "note": CHARS["note"]}
 
 READ = "read"
+
+
+def _is_linux(platform=None):
+    return (platform or sys.platform).startswith("linux")
+
+
+def help_key(platform=None):
+    """The "?" sheet of this system."""
+    return HELP_LINUX if _is_linux(platform) else HELP
+
+
+def tips(platform=None):
+    """The list's column tips on this system."""
+    return TIPS_LINUX if _is_linux(platform) else TIPS
 
 # The list's menu: "Copy all of this adapter's details" (the owner's request, 2026-10-19).
 COPY_ADAPTER = 0
@@ -111,8 +133,7 @@ class AdaptersPanel:
                                         "tips.tools_adapters_refresh", self.read)
         self.copy_btn = self._button(bar, "tools.adapters.copy_report",
                                      "tips.tools_adapters_copy", self.copy_report)
-        dialogs.help_button(bar, app.root, "tools.adapters.help_title",
-                            "tools.adapters.help_body",
+        dialogs.help_button(bar, app.root, "tools.adapters.help_title", help_key(),
                             "tips.tools_adapters_help").pack(side="right")
         # How old the rows on screen are, after a read that failed. In the bar, where
         # the socket table keeps its row count, and not on a line of its own: the
@@ -130,7 +151,7 @@ class AdaptersPanel:
         top.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))
         self.table = SortableTree(
             top, COLUMNS, sort=self._sort("sort"), on_sort=self._on_sort,
-            height=ROWS["adapters"], min_chars=MIN_CHARS, tips=TIPS, tags=ADAPTER_COLORS,
+            height=ROWS["adapters"], min_chars=MIN_CHARS, tips=tips(), tags=ADAPTER_COLORS,
             selectmode="browse", empty_text="tools.common.working")
         self.table.bind_select(self._on_select)
         bottom = ttk.Frame(self.frame)

@@ -212,9 +212,8 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   through a raw socket, which needs the capability CAP_NET_RAW: root has it unless the system
   takes it away, as some containers do. A ping Linux refuses shows its own word for it:
   `EPERM` usually means a firewall rule on this computer.
-  A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health and
-  Adapters say that they work on Windows only for now, and so do the row menu entries that open
-  them, and the Diagnostics boxes that add the adapters or the proxy to the report. The
+  A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health says that
+  it works on Windows only for now, and so do the row menu entries that open it. The
   Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and pydivert.
 - **"Reset this connection"** on the Connections page works on Linux for TCP over IPv4 and IPv6,
   as root or with the capability CAP_NET_ADMIN. The program using the connection gets
@@ -222,6 +221,21 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   `CONFIG_INET_DIAG_DESTROY`: Ubuntu's is, WSL's is not, and there the entry is greyed out. A
   connection that is not in this system's list of connections has closed, or belongs to a
   container or another network namespace, and cannot be reset from here.
+- **Adapters** on the Tools tab works on Linux, without `sudo`. The adapters, their addresses,
+  the gateways and the route to the internet come from the kernel's own tables, as `ip addr`
+  and `ip route` show them, and the MAC address is written the way `ip` writes it. An adapter
+  whose driver reports no state, such as the loopback or a WireGuard tunnel, is Up when it has
+  a link (`ip` shows it as UNKNOWN). Each DNS server is listed at the adapter its questions
+  leave through: when systemd-resolved answers for this computer, `127.0.0.53` is at the
+  loopback and the servers it asks are at their own adapters. DHCP is Yes when an IPv4
+  address has a lease or the default route came from DHCP. The DHCP server and the DNS suffix
+  are not shown: only NetworkManager's own files hold them.
+- The **Proxy** row of Adapters shows the desktop's proxy settings (GNOME) and the proxy
+  variables in `/etc/environment`, the `environment.d` folders and your
+  `~/.config/environment.d`. Variables set in a shell's startup files, such as `~/.bashrc`, are
+  not read. The desktop's settings are read with `gsettings`, as you, also under `sudo`: this
+  is the one program the tool starts, and it sends nothing. There is no proxy for services as
+  on Windows (WinHTTP).
 
 ## The window
 
@@ -353,9 +367,9 @@ monitor is gone it returns to the centre of the current screen.
     field"** puts the expression into that field, replacing what is there. What you type
     stays until you close the program, even if you switch the language.
   - **Adapters** - every network adapter on this computer and the settings a test depends
-    on, the kind `ipconfig /all` prints (Windows only). The adapter your internet traffic
-    leaves through is at the top,
-    then the ones that are up. Choose one to see its addresses with their prefixes, the
+    on, the kind `ipconfig /all` prints (on Linux, `ip addr` and `ip route`). The adapter
+    your internet traffic leaves through is at the top, then the ones that are up. Choose
+    one to see its addresses with their prefixes, the
     gateway, the DNS servers, DHCP, the MAC address, the MTU and the link speed. A note
     warns when another device uses the same address. The list is read when you open the tab
     and when you press **Refresh**. Right-click a gateway or a DNS server to put its address
@@ -1603,9 +1617,11 @@ beantester/              the implementation package
   validators.py          number and range validation (shared by GUI, CLI and config file)
   portmap.py             socket table: local port -> PID (iphlpapi/ctypes; psutil fallback),
                          and every socket with its state for the Tools tab
-  adapters.py            network adapters and the route out (iphlpapi/ctypes), for the Tools tab
+  adapters.py            network adapters and the route out (iphlpapi/ctypes; on Linux the
+                         kernel's tables, sysfs and the resolver's files), for the Tools tab
   proxy.py               the proxy this account and this machine use (winhttp/ctypes and the
-                         registry), read only, for the Tools tab
+                         registry; on Linux gsettings and the environment files), read only,
+                         for the Tools tab
   tcpestats.py           what Windows' TCP stack measures for one connection (EStats,
                          iphlpapi/ctypes), for the Tools tab's TCP health
   tcpreset.py            reset one TCP connection (iphlpapi/ctypes; on Linux the kernel's
@@ -1614,6 +1630,10 @@ beantester/              the implementation package
                          finding it in the socket table, without calling Windows
   sockdiag.py            the kernel's own list of TCP sockets on Linux (sock_diag over
                          netlink), read only: where a reset finds the socket it destroys
+  rtnetlink.py           the kernel's tables of adapters, addresses and routes on Linux, and a
+                         route lookup (what ip route get asks), read only, for the adapters
+  netlink.py             the message socket to the Linux kernel under sockdiag and rtnetlink:
+                         one request out, its answer read to its end
   icmp.py                one ICMP echo request (iphlpapi/ctypes), for the Tools tab's Ping -
                          the only module that sends something of its own
   icmpsock.py            the same request on Linux, through the system's ping socket or a

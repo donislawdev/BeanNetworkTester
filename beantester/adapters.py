@@ -10,6 +10,12 @@ Nothing here sends a packet. Both calls answer from tables the system keeps - th
 adapter list and the routing table - and neither is in the wire-function list of
 ``tests/test_no_telemetry.py`` (the ping and ARP exports of the same DLL are).
 
+On Linux (``_Linux``) the same rows come from the kernel's own tables - what ``ip
+link``, ``ip addr`` and ``ip route`` read, through ``rtnetlink`` - with the device's
+driver, Wi-Fi and link speed from sysfs, and the DNS servers from the resolver's own
+files. Every field matched ``ip -j`` on a real kernel (``rtnetlink``'s docstring has
+the measurement); what Linux words differently is written at ``_Linux``.
+
 Why the structures are written with fixed-width integers
 -----------------------------------------------------
 ``wintypes.DWORD`` is 8 bytes on Linux (measured on CPython 3.14, see
@@ -32,11 +38,12 @@ list is refused as unreadable instead of read from memory nobody vouched for.
 """
 import ctypes
 import ipaddress
+import os
 import struct
 import sys
 from typing import NamedTuple
 
-from . import crashlog
+from . import crashlog, paths, rtnetlink
 from .utils import INTERNET_PROBES   # where "the internet" is, shared with host_identity
 
 # Address families as Windows numbers them (AF_INET6 is 23 there, not POSIX 10).
@@ -159,6 +166,9 @@ class AdapterRow(NamedTuple):
     dns_suffix: str
     ipv4_metric: int | None
     ipv6_metric: int | None
+    # The DNS servers above that are this computer's own resolver, which asks the
+    # servers on the other adapters (systemd-resolved on Linux). Windows lists none.
+    stub_dns: tuple = ()
 
 
 class Reading(NamedTuple):
@@ -168,7 +178,8 @@ class Reading(NamedTuple):
 
 class AdaptersUnavailable(Exception):
     """The adapter list could not be read. ``reason``: "not_ready" for the one
-    documented failure a person can wait out, "" for any other."""
+    documented failure a person can wait out, "changing" for a Linux list that kept
+    changing while it was read, "" for any other."""
 
     def __init__(self, reason, detail=""):
         super().__init__(detail or reason)
@@ -378,9 +389,269 @@ class _Native:
         return int(index.value) if rc == 0 else 0
 
 
+# -- Linux: the kernel's tables, in the rows above -------------------------------- #
+# The link layer (ARPHRD_*, include/uapi/linux/if_arp.h) as the IANA ifType Windows
+# reports, so one table of words serves both systems.
+ARPHRD_ETHER, ARPHRD_PPP, ARPHRD_LOOPBACK, ARPHRD_NONE = 1, 512, 772, 65534
+ARPHRD_TUNNELS = frozenset({768, 769, 776, 778, 823})   # ipip, ip6tnl, sit, gre, ip6gre
+IF_OTHER, IF_ETHERNET, IF_PPP, IF_LOOPBACK, IF_VIRTUAL, IF_WIFI, IF_TUNNEL = (
+    1, 6, 23, 24, 53, 71, 131)
+# IF_OPER_* are RFC 2863's states numbered the kernel's way; OperStatus numbers them
+# the RFC's way.
+IF_OPER_UNKNOWN = 0
+OPER_STATUS = {0: 4, 1: 6, 2: 2, 3: 7, 4: 3, 5: 5, 6: 1}
+STATUS_UP, STATUS_UNKNOWN = 1, 4
+IFF_UP, IFF_LOWER_UP = 0x1, 0x10000
+# IFA_F_* (include/uapi/linux/if_addr.h). 0x01 is TEMPORARY for IPv6 and SECONDARY
+# for IPv4 - one bit, two meanings (measured).
+IFA_F_TEMPORARY, IFA_F_OPTIMISTIC, IFA_F_DADFAILED = 0x01, 0x04, 0x08
+IFA_F_DEPRECATED, IFA_F_TENTATIVE, IFA_F_PERMANENT = 0x20, 0x40, 0x80
+IFA_F_MANAGETEMPADDR = 0x100
+IFA_PROTO_KERNEL_RA = 2
+RTPROT_DHCP = 16
+RT_TABLE_LOCAL = 255
+RTN_UNICAST = 1
+# NL_PREFIX_ORIGIN and NL_DAD_STATE, as AddressRow carries them, and one origin of
+# the program's own: an address with a lifetime the kernel cannot say the source of.
+ORIGIN_MANUAL, ORIGIN_WELL_KNOWN, ORIGIN_DHCP, ORIGIN_ROUTER = 1, 2, 3, 4
+LEASE = -1
+SUFFIX_RANDOM = 5
+DAD_TENTATIVE, DAD_DUPLICATE, DAD_DEPRECATED, DAD_PREFERRED = 1, 2, 3, 4
+_SCOPED = (ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("169.254.0.0/16"),
+           ipaddress.ip_network("::1/128"), ipaddress.ip_network("fe80::/10"))
+
+# The resolver's own files. glibc asks the first three servers (MAXNS) and nothing
+# after them; systemd-resolved, when /etc/resolv.conf sends programs to its stub,
+# asks the servers in its own file.
+RESOLV_CONF = "etc/resolv.conf"
+RESOLVED_CONF = "run/systemd/resolve/resolv.conf"
+RESOLVER_STUBS = frozenset({"127.0.0.53", "127.0.0.54"})
+MAX_NAMESERVERS = 3
+
+
+def _linux_status(link):
+    """OperStatus. The kernel says UNKNOWN for a driver that keeps no state - the
+    loopback, a dummy, WireGuard (measured) - and its documentation
+    (networking/operstates.rst) says such an adapter "must be considered for user
+    data": up, when it is switched on and has its link."""
+    if (link.operstate == IF_OPER_UNKNOWN
+            and link.flags & IFF_UP and link.flags & IFF_LOWER_UP):
+        return STATUS_UP
+    return OPER_STATUS.get(link.operstate, STATUS_UNKNOWN)
+
+
+def _linux_kind(link, wireless):
+    if link.arphrd == ARPHRD_LOOPBACK:
+        return IF_LOOPBACK
+    if link.arphrd == ARPHRD_ETHER:
+        if wireless:
+            return IF_WIFI
+        return IF_VIRTUAL if link.kind else IF_ETHERNET
+    if link.arphrd == ARPHRD_NONE or link.arphrd in ARPHRD_TUNNELS:
+        return IF_TUNNEL                    # tun, WireGuard, the IP-in-IP family
+    return IF_PPP if link.arphrd == ARPHRD_PPP else IF_OTHER
+
+
+def _linux_mac(raw):
+    """As ``ip link`` writes it; "" for none, and for the loopback's six zeros."""
+    return ":".join(f"{b:02x}" for b in raw) if any(raw) else ""
+
+
+def _linux_origin(address, ip):
+    if any(ip in network for network in _SCOPED if network.version == ip.version):
+        return ORIGIN_WELL_KNOWN
+    if address.flags & IFA_F_PERMANENT:
+        return ORIGIN_MANUAL
+    if (address.proto == IFA_PROTO_KERNEL_RA
+            or (ip.version == 6 and address.flags & (IFA_F_TEMPORARY | IFA_F_MANAGETEMPADDR))):
+        return ORIGIN_ROUTER
+    # A lifetime and no word from the kernel on who gave it: on IPv4 only DHCP does
+    # that; on IPv6 DHCPv6 and a router's advertisement both do, and NetworkManager
+    # makes the second kind itself, so the kernel cannot tell them apart.
+    return ORIGIN_DHCP if ip.version == 4 else LEASE
+
+
+def _linux_dad(address):
+    if address.flags & IFA_F_DADFAILED:     # it comes with TENTATIVE (measured)
+        return DAD_DUPLICATE
+    if address.flags & (IFA_F_TENTATIVE | IFA_F_OPTIMISTIC):
+        return DAD_TENTATIVE
+    if address.flags & IFA_F_DEPRECATED or address.preferred == 0:
+        return DAD_DEPRECATED
+    return DAD_PREFERRED
+
+
+def _linux_address(address):
+    ip = ipaddress.ip_address(address.ip)
+    suffix = SUFFIX_RANDOM if ip.version == 6 and address.flags & IFA_F_TEMPORARY else 0
+    return AddressRow(address.ip, ip.version, address.prefix, _linux_origin(address, ip),
+                      suffix, _linux_dad(address))
+
+
+def _nameservers(text, limit):
+    """The ``nameserver`` addresses of a resolv.conf, first ``limit`` of them."""
+    found = []
+    for line in (text or "").splitlines():
+        words = line.split()
+        if len(words) >= 2 and words[0] == "nameserver":
+            found.append(words[1])
+    return found[:limit]
+
+
+class _Device(NamedTuple):
+    driver: str
+    wireless: bool
+    speed_bps: int | None
+
+
+class _Linux:
+    """The kernel's tables as ``AdapterRow``s. ``talk`` (one rtnetlink request) and
+    ``root`` (where /sys, /etc and /run are) are injectable, so the rows are made in
+    tests anywhere from a real kernel's bytes.
+
+    Where Linux says it differently: the key is ``if:`` and the adapter's name - the
+    name stays when the adapter is made again, its index does not, and a name cannot
+    hold ":" (the kernel refuses it), so no key is ever the proxy row's. One index
+    serves IPv4 and IPv6. The MAC is written as ``ip link`` writes it. DHCP is "yes"
+    when an IPv4 address has a lease or a default route came from DHCP; who served
+    it, and the DNS suffix, sit only in files NetworkManager keeps for itself, so
+    they are not shown. The metric is the default route's. Each DNS server is shown
+    at the adapter the kernel would send to it through.
+    """
+
+    def __init__(self, talk=None, root="/"):
+        self.talk = talk or rtnetlink.exchange
+        self.root = root
+
+    def adapters(self):
+        try:
+            tables = rtnetlink.read(self.talk)
+        except rtnetlink.Changing as exc:
+            raise AdaptersUnavailable("changing", str(exc)) from exc
+        except OSError as exc:
+            raise AdaptersUnavailable("", f"rtnetlink: {exc}") from exc
+        links = tables.links[:MAX_ADAPTERS]
+        try:
+            dns, stubs = self._dns(links)
+        except OSError as exc:      # a resolver file it may not read costs the DNS servers only
+            crashlog.note(exc, "adapters.dns")
+            dns, stubs = {}, frozenset()
+        mine = _by_link(tables)
+        return tuple(self._row(link, mine.get(link.ifindex, ([], [])), dns.get(link.ifindex, ()),
+                               stubs) for link in links)
+
+    def best_interface(self, version):
+        return rtnetlink.route_to(INTERNET_PROBES[version], self.talk)
+
+    # -- one adapter -------------------------------------------------------- #
+    def _row(self, link, mine, dns, stubs):
+        """``mine``: the link's addresses and default routes (``_by_link``)."""
+        addresses, defaults = mine
+        name = link.name.decode("utf-8", errors="replace")
+        status = _linux_status(link)
+        device = self._device(link, status == STATUS_UP)
+        rows = tuple(_linux_address(a) for a in addresses[:MAX_ENTRIES])
+        gateways = tuple(dict.fromkeys(r.gateway for r in defaults if r.gateway))[:MAX_ENTRIES]
+        dhcp = (any(a.version == 4 and a.origin == ORIGIN_DHCP for a in rows)
+                or any(r.protocol == RTPROT_DHCP for r in defaults))
+        speed = device.speed_bps
+        return AdapterRow(
+            "if:" + link.name.decode("utf-8", errors="backslashreplace"), link.ifindex,
+            link.ifindex if any(a.version == 6 for a in rows) else 0, name,
+            device.driver or link.kind, _linux_kind(link, device.wireless), status,
+            _linux_mac(link.address), link.mtu, speed, speed, dhcp, "", rows, gateways,
+            tuple(dns[:MAX_ENTRIES]), "", _metric(defaults, rtnetlink.LINUX_AF_INET),
+            _metric(defaults, rtnetlink.LINUX_AF_INET6),
+            tuple(server for server in dns if server in stubs))
+
+    def _device(self, link, up):
+        """The driver, Wi-Fi and speed sysfs gives for ``link``; nothing of it for an
+        adapter gone since the list was read. The speed only for one that is up: down,
+        the kernel answers EINVAL, and some drivers ask the hardware first."""
+        try:
+            # sysfs names the adapter by its bytes (a Windows runner's path cannot
+            # hold them all: a ValueError there, never on Linux).
+            base = os.path.join(os.fsencode(self.root), b"sys", b"class", b"net", link.name)
+        except ValueError:
+            return _Device("", False, None)
+        try:
+            driver = os.path.basename(os.readlink(os.path.join(base, b"device", b"driver")))
+        except OSError:
+            driver = b""
+        wireless = (os.path.isdir(os.path.join(base, b"wireless"))
+                    or os.path.exists(os.path.join(base, b"phy80211")))
+        return _Device(driver.decode("utf-8", errors="replace"), wireless,
+                       _speed(os.path.join(base, b"speed")) if up else None)
+
+    # -- the DNS servers ---------------------------------------------------- #
+    def _dns(self, links):
+        """``{index: [server, ...]}`` and the servers that are a local stub."""
+        listed = _nameservers(paths.read_small_file(self._path(RESOLV_CONF)), MAX_NAMESERVERS)
+        stubs = RESOLVER_STUBS & set(listed)
+        servers = list(listed)
+        if stubs:
+            servers += _nameservers(paths.read_small_file(self._path(RESOLVED_CONF)),
+                                    MAX_ENTRIES)
+        by_name = {link.name.decode("utf-8", errors="replace"): link.ifindex for link in links}
+        out: dict = {}
+        for server in dict.fromkeys(servers):
+            index = self._dns_index(server, by_name)
+            if index:
+                out.setdefault(index, []).append(server.split("%")[0])
+        return out, stubs
+
+    def _dns_index(self, server, by_name):
+        """The adapter a query to ``server`` leaves through: the one its zone names,
+        else the kernel's route to it. 0 when there is none."""
+        ip, _, zone = server.partition("%")
+        if zone:
+            return by_name.get(zone, 0)
+        try:
+            return rtnetlink.route_to(ip, self.talk)
+        except (OSError, ValueError) as exc:
+            crashlog.note(exc, "adapters.dns_route")
+            return 0
+
+    def _path(self, relative):
+        return os.path.join(self.root, relative)
+
+
+def _by_link(tables):
+    """``{ifindex: ([address, ...], [default route, ...])}`` - each table walked once, not
+    once per adapter: a host with hundreds of container adapters has thousands of rows."""
+    out: dict = {}
+    for address in tables.addresses:
+        if address.ip:
+            out.setdefault(address.ifindex, ([], []))[0].append(address)
+    for route in tables.routes:
+        if route.dst_len == 0 and route.kind == RTN_UNICAST and route.table != RT_TABLE_LOCAL:
+            out.setdefault(route.oif, ([], []))[1].append(route)
+    return out
+
+
+def _speed(path):
+    """Bits per second from sysfs' ``speed`` (Mbit/s); None where it says none: no
+    file, EINVAL (no link speed to give) or -1 (the driver does not know)."""
+    try:
+        with open(path, "rb") as f:
+            mbps = int(f.read().strip() or b"0")
+    except (OSError, ValueError):
+        return None
+    return mbps * 10 ** 6 if mbps > 0 else None
+
+
+def _metric(defaults, family):
+    metrics = [r.priority for r in defaults if r.family == family and r.priority is not None]
+    return min(metrics) if metrics else None
+
+
 def supported():
-    """The adapter list is read on Windows only (the owner's decision, 2026-09-24)."""
-    return sys.platform.startswith("win")
+    """The adapter list is read on Windows (since 2026-09-24) and on Linux (2026-10-27)."""
+    return sys.platform.startswith(("win", "linux"))
+
+
+def _system_class():
+    return _Linux if sys.platform.startswith("linux") else _Native
 
 
 def read(native=None):
@@ -389,7 +660,7 @@ def read(native=None):
     A route lookup that fails costs the "internet" mark and nothing else: the list
     is still true without it.
     """
-    native = native or _Native()
+    native = native or _system_class()()
     rows = native.adapters()
     internet = {}
     for version in (4, 6):

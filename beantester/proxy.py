@@ -25,13 +25,35 @@ send - discovery, script download, requests - are watched by name in
 Why the structures are written with fixed-width integers: the same as
 ``adapters.py`` - ``wintypes`` and ``c_wchar_p`` change size and encoding on Linux,
 where the walk is tested against a fake, so text is read as UTF-16 by hand.
+
+On Linux (``_Linux``) there is no one place either, and two are read:
+
+* the desktop's proxy settings (GNOME Settings > Network > Proxy), which Firefox,
+  Chrome and GNOME's own programs follow, through ``gsettings`` - run as the person
+  whose desktop it is: under ``sudo`` as root it reads ROOT's settings, which say
+  "none" (measured 2026-10-27), so it is started as the person who typed ``sudo``
+  (``setpriv``). It is the one program this tool starts, and it sends nothing:
+  traced the same day, its only sockets were local ones to the system's account
+  database (``internal_tools`` probes ``2026-10-27-linux-adapters``);
+* the proxy variables from the files a program started from now on gets them from:
+  ``/etc/environment`` and the ``environment.d`` directories for every account, the
+  person's ``~/.config/environment.d`` for theirs. A shell's own startup files
+  (``~/.bashrc``, ``/etc/profile.d``) are scripts and are not read. The names are
+  case-sensitive there, and curl reads only the lowercase ``http_proxy``.
+
+A machine-wide proxy for services, as WinHTTP is, Linux does not have: that part of
+the reading stays empty without an error, which says "not on this system".
 """
 import ctypes
+import os
+import re
+import shutil
 import struct
+import subprocess
 import sys
 from typing import NamedTuple
 
-from . import crashlog
+from . import crashlog, paths
 
 ERROR_FILE_NOT_FOUND = 2        # Learn: "No Internet Explorer proxy settings can be found."
 WINHTTP_ACCESS_TYPE_NAMED_PROXY = 3
@@ -84,12 +106,15 @@ class Variable(NamedTuple):
 
 
 class Reading(NamedTuple):
+    """Each part, and why it could not be read. A part that is ``None`` with no
+    error is not on this system (Linux has no WinHTTP; a server has no desktop)."""
     user: UserProxy | None
     user_error: str
     machine: MachineProxy | None
     machine_error: str
     env: tuple                  # of Variable, in ENV_NAMES order
     env_error: str
+    system: str = "windows"     # whose places these are: "windows" or "linux"
 
 
 NOTHING = UserProxy(False, "", "", "")
@@ -166,6 +191,8 @@ def _registry_reader():  # pragma: no cover - Windows only (winreg)
 
 class _Native:
     """The three reads. Everything is injectable, so they run in tests anywhere."""
+    SYSTEM = "windows"
+    HAS_MACHINE = True
 
     def __init__(self, winhttp=None, kernel32=None, last_error=None, registry=None):
         self.winhttp = winhttp if winhttp is not None else _winhttp()
@@ -225,9 +252,250 @@ def _lookup(values, name):
     return None
 
 
+# -- Linux ------------------------------------------------------------------------- #
+GNOME_SCHEMA = "org.gnome.system.proxy"
+GNOME_SCHEMES = ("http", "https", "ftp", "socks")
+# gsettings prints the proxy's account and password with the rest; they are dropped
+# as the lines are read and never reach a Reading.
+GNOME_SECRETS = frozenset({"authentication-user", "authentication-password"})
+GSETTINGS_WAIT_S = 2.0          # measured: 26 ms typical, 273 ms the first time
+CHILD_PATH = "/usr/bin:/bin"
+CHILD_LOCALE = "C.UTF-8"        # UTF-8 text, and gsettings' own messages in English
+ENV_NAMES_LINUX = ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY",
+                   "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY")
+ENV_FILE = "etc/environment"    # pam_env: every account, at login
+# environment.d(5), the lowest first: a file of the same name further down replaces
+# one above, and the person's own directory comes last.
+ENV_DIRS = ("usr/lib/environment.d", "usr/local/lib/environment.d", "run/environment.d",
+            "etc/environment.d")
+USER_ENV_DIR = os.path.join(".config", "environment.d")
+MAX_ENV_FILES = 256
+_ASSIGNMENT = re.compile(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)")
+_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b", "f": "\f", "v": "\v"}
+_NUMBER = re.compile(r"-?[0-9]+")
+_LOOK_UP = object()             # _Linux's person: whoever paths.invoking_user() names
+
+
+def _string(text):
+    """A quoted GVariant string at the start of ``text``, and what follows it."""
+    quote, out, i = text[0], [], 1
+    while i < len(text):
+        char = text[i]
+        if char == quote:
+            return "".join(out), text[i + 1:]
+        if char == "\\" and i + 1 < len(text):
+            code = text[i + 1]
+            width = {"u": 4, "U": 8}.get(code)
+            if width:
+                out.append(chr(int(text[i + 2:i + 2 + width], 16)))
+                i += 2 + width
+            else:
+                out.append(_ESCAPES.get(code, code))
+                i += 2
+            continue
+        out.append(char)
+        i += 1
+    raise ValueError("gsettings: a string without its closing quote")
+
+
+def _array(text):
+    items, rest = [], text[1:].lstrip()
+    while not rest.startswith("]"):
+        value, rest = _value(rest)
+        items.append(value)
+        rest = rest.lstrip()
+        if rest.startswith(","):
+            rest = rest[1:].lstrip()
+        elif not rest.startswith("]"):
+            raise ValueError("gsettings: an array that does not close")
+    return items, rest[1:]
+
+
+def _value(text):
+    """One value as ``g_variant_print`` writes it - a string, a number, true or false,
+    an array of them - and what follows it."""
+    text = text.lstrip()
+    if text.startswith("@"):                # a type written before an empty value: @as []
+        text = text.split(None, 1)[1] if " " in text else ""
+    if text[:1] in ("'", '"'):
+        return _string(text)
+    if text.startswith("["):
+        return _array(text)
+    for word, value in (("true", True), ("false", False)):
+        if text.startswith(word):
+            return value, text[len(word):]
+    number = _NUMBER.match(text)
+    if number:
+        return int(number.group()), text[number.end():]
+    raise ValueError(f"gsettings: a value this program does not read: {text[:40]!r}")
+
+
+def gnome_values(text):
+    """``{(schema, key): value}`` from ``gsettings list-recursively``, without the
+    proxy's account and password."""
+    values = {}
+    for line in text.splitlines():
+        parts = line.split(" ", 2)
+        if len(parts) != 3 or parts[1] in GNOME_SECRETS:
+            continue
+        value, rest = _value(parts[2])
+        if rest.strip():
+            raise ValueError(f"gsettings: more after a value: {rest[:40]!r}")
+        values[(parts[0], parts[1])] = value
+    return values
+
+
+def _host_port(host, port):
+    host = f"[{host}]" if ":" in host else host
+    return f"{host}:{port}" if port else host
+
+
+def gnome_proxy(values):
+    """The desktop's settings as the account part, the way Windows' read: automatic
+    detection, a setup script, or the servers in Learn's list grammar
+    (``http=host:port;socks=host:port``), so the rows, the report and the masking
+    read them unchanged."""
+    def get(schema, key, default):
+        value = values.get((GNOME_SCHEMA + schema, key))
+        return default if value is None else value
+    mode = get("", "mode", "none")
+    if mode == "none":
+        return NOTHING
+    if mode == "auto":                      # no address: the network is asked (WPAD)
+        script = get("", "autoconfig-url", "")
+        return UserProxy(not script, script, "", "")
+    if mode == "manual":
+        servers = [f"{scheme}={_host_port(get('.' + scheme, 'host', ''), get('.' + scheme, 'port', 0))}"
+                   for scheme in GNOME_SCHEMES if get("." + scheme, "host", "")]
+        return UserProxy(False, "", ";".join(servers), ";".join(get("", "ignore-hosts", [])))
+    raise ValueError(f"gsettings: a proxy mode this program does not know: {mode!r}")
+
+
+def assignments(text):
+    """``(name, value)`` of each ``NAME=value`` line, outer quotes taken off; comments
+    and anything else skipped. ``${OTHER}`` is shown as written."""
+    out = []
+    for line in (text or "").splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        found = _ASSIGNMENT.fullmatch(line.rstrip())
+        if not found:
+            continue
+        value = found.group(2).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        out.append((found.group(1), value))
+    return out
+
+
+def _trusted_which(name):
+    """``name`` in the directories the child is given (``CHILD_PATH``), never in this
+    process's own PATH: under sudo setpriv is started as root, and a PATH with a
+    directory the person can write to would let them choose what root runs."""
+    return shutil.which(name, path=CHILD_PATH)
+
+
+def _run(argv, env):
+    """The one program this tool starts: gsettings (the docstring at the top says why,
+    and what it was measured to send - nothing). Nothing of this process reaches it -
+    not its terminal, its files or its environment - and it may take ``GSETTINGS_WAIT_S``."""
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
+                          timeout=GSETTINGS_WAIT_S, env=env, check=False)
+
+
+class _Linux:
+    """The desktop's settings and the variables' files. Who is asked - ``person``,
+    ``(uid, gid)`` of whoever typed ``sudo`` - how a program is run and found, and
+    where the files are are injectable, so this runs in tests anywhere."""
+    SYSTEM = "linux"
+    HAS_MACHINE = False
+
+    def __init__(self, run=None, which=None, root="/", person=_LOOK_UP, own_uid=None,
+                 home=None):
+        self.run = run or _run
+        self.which = which or _trusted_which
+        self.root = root
+        self.person = paths.invoking_user() if person is _LOOK_UP else person
+        # geteuid exists off Windows only; there a test brings its own.
+        self.own_uid = own_uid if own_uid is not None else getattr(os, "geteuid", lambda: 0)()
+        self.uid = self.person[0] if self.person else self.own_uid
+        # "" is a home that is not there, not a home to look up.
+        self.home = home if home is not None else paths.home_of(self.uid)
+
+    # -- the desktop's settings ---------------------------------------------- #
+    def user(self):
+        """GNOME's proxy settings; None where there is no GNOME to ask."""
+        text = self._gsettings()
+        return None if text is None else gnome_proxy(gnome_values(text))
+
+    def _gsettings(self):
+        program = self.which("gsettings")
+        if not program:
+            return None
+        if not self.home:
+            raise OSError(f"no home directory for the account {self.uid}")
+        argv = [program, "list-recursively", GNOME_SCHEMA]
+        if self.uid != self.own_uid:
+            setpriv = self.which("setpriv")
+            if not setpriv:
+                raise OSError("setpriv was not found, so the desktop of the person who "
+                              "typed sudo cannot be asked")
+            argv = [setpriv, f"--reuid={self.person[0]}", f"--regid={self.person[1]}",
+                    "--init-groups", *argv]
+        done = self.run(argv, {"HOME": self.home, "PATH": CHILD_PATH, "LC_ALL": CHILD_LOCALE})
+        said = done.stderr.decode("utf-8", errors="replace")
+        # No schema: not a GNOME system. The "memory" backend: GLib has nowhere the
+        # desktop keeps its settings, and answers with the defaults.
+        if "No such schema" in said or "'memory' GSettings backend" in said:
+            return None
+        if done.returncode:
+            first = said.strip().splitlines()[0] if said.strip() else ""
+            raise OSError(f"gsettings answered {done.returncode}: {first}")
+        return done.stdout.decode("utf-8", errors="replace")
+
+    # -- the variables ------------------------------------------------------- #
+    def env(self):
+        values, machine = {}, set()
+        sources = [(os.path.join(self.root, ENV_FILE), "machine", None), *self._env_files()]
+        for path, scope, owner in sources:
+            for name, value in assignments(paths.read_small_file(path, owner=owner)):
+                if name not in ENV_NAMES_LINUX:
+                    continue
+                if scope == "machine":
+                    machine.add(name)
+                values[name] = Variable(name, value, scope,
+                                        replaces=scope == "user" and name in machine)
+        # `http_proxy=` unsets it - the last word wins, and an empty one says "none", as
+        # an empty registry value does on Windows.
+        return tuple(values[name] for name in ENV_NAMES_LINUX
+                     if name in values and values[name].value)
+
+    def _env_files(self):
+        chosen = {}
+        for directory in ENV_DIRS:
+            for name in _conf_names(os.path.join(self.root, directory)):
+                chosen[name] = (os.path.join(self.root, directory, name), "machine", None)
+        if self.home:
+            own = os.path.join(self.home, USER_ENV_DIR)
+            for name in _conf_names(own, owner=self.uid):
+                chosen[name] = (os.path.join(own, name), "user", self.uid)
+        return [chosen[name] for name in sorted(chosen)][:MAX_ENV_FILES]
+
+
+def _conf_names(directory, owner=None):
+    """The ``*.conf`` names in ``directory``; none when it is missing, or - for a
+    person's own directory read by root - when it is not theirs."""
+    try:
+        if owner is not None and os.stat(directory).st_uid != owner:
+            return []
+        return sorted(n for n in os.listdir(directory) if n.endswith(".conf"))[:MAX_ENV_FILES]
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+
+
 def supported():
-    """Proxy settings are read on Windows only, like the adapters they sit beside."""
-    return sys.platform.startswith("win")
+    """Proxy settings are read on Windows and on Linux, like the adapters they sit beside."""
+    return sys.platform.startswith(("win", "linux"))
 
 
 def _part(read, area):
@@ -244,10 +512,16 @@ def read(native=None):
     adapter list is read in the same job, and a proxy that cannot be read must not
     cost it (a library that will not load included)."""
     if native is None:
-        native, why = _part(_Native, "proxy")
+        linux = sys.platform.startswith("linux")
+        native, why = _part(_Linux if linux else _Native, "proxy")
         if native is None:
-            return Reading(None, why, None, why, (), why)
+            return Reading(None, why, None, "" if linux else why, (), why,
+                           "linux" if linux else "windows")
+    # A reader that does not say otherwise has Windows' three places.
+    has_machine = getattr(native, "HAS_MACHINE", True)
     user, user_error = _part(native.user, "proxy.user")
-    machine, machine_error = _part(native.machine, "proxy.machine")
+    machine, machine_error = (_part(native.machine, "proxy.machine") if has_machine
+                              else (None, ""))
     env, env_error = _part(native.env, "proxy.env")
-    return Reading(user, user_error, machine, machine_error, env or (), env_error)
+    return Reading(user, user_error, machine, machine_error, env or (), env_error,
+                   getattr(native, "SYSTEM", "windows"))

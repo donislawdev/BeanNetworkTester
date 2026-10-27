@@ -10,6 +10,7 @@ which on the UI thread is a window that stops answering - and STOP lives in that
 window. The check runs by itself the first time the tab is shown; after that only
 when asked, and the status line says when the rows on screen were taken.
 """
+import sys
 import tkinter as tk
 from tkinter import ttk
 from typing import NamedTuple
@@ -52,6 +53,17 @@ OPTIONAL_BOXES = (
     Box("proxy", "tools.diagnostics.with_proxy", "tips.tools_diagnostics_proxy",
         "tools.diagnostics.help_proxy", "proxy"),
 )
+
+# Where a box's tip names Windows' places, the words Linux has for its own.
+BOX_TIPS_LINUX = {"proxy": "tips.tools_diagnostics_proxy_linux"}
+
+
+def box_tip(box, platform=None):
+    """``box``'s tip on this system."""
+    if (platform or sys.platform).startswith("linux"):
+        return BOX_TIPS_LINUX.get(box.section, box.tip)
+    return box.tip
+
 
 # What a box says when this system cannot read its section. Greyed out and still
 # there, as a row menu greys out what the system lacks (capabilities.py): the
@@ -123,7 +135,7 @@ class DiagnosticsPanel:
             box = ttk.Checkbutton(boxes, text=T(spec.text), variable=ticked, command=self._ticked)
             box.pack(side="left", padx=(0, space("inline")))
             if offered:
-                add_tooltip(box, spec.tip)
+                add_tooltip(box, box_tip(spec))
                 self.include[spec.section] = ticked
             else:
                 box.state(["disabled"])

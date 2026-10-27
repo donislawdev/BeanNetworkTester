@@ -32,6 +32,12 @@ went away" look the same from one side.
   other. And a connection that closed after the socket list was read: its destroy ends
   as "gone", and the listener on its port lives on (by its numbers alone, without the
   cookie, the kernel took the listener - measured 2026-10-26).
+* The Tools tab's Adapters, its own ``adapters.read``, against ``ip -j`` of the same
+  tables: in the namespace, given an address with a lease, a deprecated one and a
+  duplicate (the same IPv6 address on both ends of a veth pair, so DAD finds it), each
+  of which it must name; and on this machine as it is. Adapters, MTU, MAC, state, every
+  address with its prefix, DAD state and lease, and the adapter the route out leaves
+  through - field by field, as the probe that found no difference compared them.
 
 What bounds the damage (convention 6)
 -------------------------------------
@@ -52,6 +58,7 @@ import statistics
 import subprocess
 import sys
 import threading
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NS = "bntci"
@@ -137,6 +144,32 @@ STALE_CLIENT = (
     "except OSError as exc:\n"
     "    listener = type(exc).__name__\n"
     "print(json.dumps({'found': len(served), 'stale': stale, 'listener': listener}))\n")
+
+
+# Run INSIDE the namespace (and once outside it), from the checkout: the Adapters tool's
+# own read (adapters.read), and what `ip -j` says of the same tables.
+ADAPTERS_CLIENT = (
+    "import json, subprocess\n"
+    "from beantester import adapters\n"
+    "def ip(*a):\n"
+    "    r = subprocess.run(['ip', '-j', *a], capture_output=True, text=True, timeout=10)\n"
+    "    return json.loads(r.stdout or '[]')\n"
+    "r = adapters.read()\n"
+    "rows = [{'name': a.name, 'index': a.if_index, 'status': a.status, 'mtu': a.mtu,\n"
+    "         'mac': a.mac, 'addresses': [[x.ip, x.prefix, x.origin, x.dad] for x in a.addresses]}\n"
+    "        for a in r.adapters]\n"
+    "print(json.dumps({'product': rows, 'internet': r.internet.get(4, 0), 'link': ip('link'),\n"
+    "                  'addr': ip('addr'), 'route': ip('route', 'get', '8.8.8.8')}))\n")
+# Addresses in the states the Adapters tool names, made in the namespace. A duplicate is
+# what DAD finds when the address is on both ends of a veth pair: one end answers for it
+# (nodad) while the other asks.
+LEASED, DEPRECATED, DUPLICATE6 = "203.0.113.5", "203.0.113.6", "2001:db8:ac::1"
+# adapters.py's numbers (AddressRow.origin, .dad), written out: this script runs with
+# the checkout only on the namespace's side. tests/test_ci_linux_capture_smoke.py holds
+# them equal to the module's.
+ORIGIN_WELL_KNOWN, ORIGIN_DHCP, ORIGIN_ROUTER, ORIGIN_LEASE = 2, 3, 4, -1
+DAD_TENTATIVE, DAD_DUPLICATE, DAD_DEPRECATED, DAD_PREFERRED = 1, 2, 3, 4
+STATUS_UP = 1
 
 
 # -- the judges: pure, so a test can prove they fail ------------------------------ #
@@ -225,6 +258,91 @@ def judge_reset(plain, impaired, stale):
         failures.append(f"stale: a closed connection's destroy ended {stale.get('stale')!r}, not 'gone'")
     if stale.get("listener") != "alive":
         failures.append(f"stale: the listener on its port: {stale.get('listener')} - the destroy took it")
+    return failures
+
+
+def _ip_dad(address):
+    if address.get("dadfailed"):
+        return DAD_DUPLICATE
+    if address.get("tentative"):
+        return DAD_TENTATIVE
+    return DAD_DEPRECATED if address.get("deprecated") else DAD_PREFERRED
+
+
+def _ip_up(link):
+    """What the tool calls up: UP, or UNKNOWN switched on with its link."""
+    state, flags = link.get("operstate"), set(link.get("flags", []))
+    return state == "UP" or (state == "UNKNOWN" and {"UP", "LOWER_UP"} <= flags)
+
+
+def _judge_links(name, mine, theirs, where, private):
+    failures = []
+    if mine["index"] != theirs.get("ifindex"):
+        failures.append(f"adapters {where}: {name} index {mine['index']}, ip says "
+                        f"{theirs.get('ifindex')}")
+    if mine["mtu"] != theirs.get("mtu"):
+        failures.append(f"adapters {where}: {name} MTU {mine['mtu']}, ip says {theirs.get('mtu')}")
+    mac = theirs.get("address", "") if theirs.get("link_type") == "ether" else mine["mac"]
+    if mine["mac"] != mac:
+        said = "" if private else f" {mine['mac']!r}, ip says {mac!r}"
+        failures.append(f"adapters {where}: {name} MAC differs{said}")
+    if (mine["status"] == STATUS_UP) != _ip_up(theirs):
+        failures.append(f"adapters {where}: {name} status {mine['status']}, ip says "
+                        f"{theirs.get('operstate')} {theirs.get('flags')}")
+    return failures
+
+
+def _judge_address(key, mine, theirs, where, private):
+    shown = f"an address on {key[0]}" if private else str(key)
+    failures = []
+    if mine[3] != _ip_dad(theirs):
+        failures.append(f"adapters {where}: {shown} DAD state {mine[3]}, ip says {_ip_dad(theirs)}")
+    leased = mine[2] in (ORIGIN_DHCP, ORIGIN_ROUTER, ORIGIN_LEASE)
+    if mine[2] != ORIGIN_WELL_KNOWN and leased != bool(theirs.get("dynamic")):
+        failures.append(f"adapters {where}: {shown} origin {mine[2]}, ip says dynamic "
+                        f"{bool(theirs.get('dynamic'))}")
+    return failures
+
+
+def judge_adapters(seen, where, states=False, private=False):
+    """Failures (empty = pass): the Adapters tool's read of a namespace against ``ip -j``
+    of the same one - adapters, index, MTU, MAC, state; every address, its prefix, its
+    DAD state and whether it has a lease; the adapter the route out leaves through.
+    ``states``: the namespace was made with a lease, a deprecated address and a
+    duplicate, and the tool must have seen each - or the comparison proved nothing.
+    ``private``: the machine's own adapters - a failure names the adapter and what
+    differs, never its addresses or MAC, which a log pasted anywhere would carry."""
+    product = {a["name"]: a for a in seen.get("product", [])}
+    links = {link["ifname"]: link for link in seen.get("link", [])}
+    if not product:
+        return [f"adapters {where}: the tool listed no adapter"]
+    failures = []
+    if set(product) != set(links):
+        failures.append(f"adapters {where}: {sorted(product)}, ip lists {sorted(links)}")
+    for name in sorted(set(product) & set(links)):
+        failures += _judge_links(name, product[name], links[name], where, private)
+    theirs = {(link["ifname"], a["local"], a["prefixlen"]): a
+              for link in seen.get("addr", []) for a in link.get("addr_info", [])}
+    mine = {(name, x[0], x[1]): x for name, a in product.items() for x in a["addresses"]}
+    differ = sorted(set(mine) ^ set(theirs))
+    if differ:
+        said = (f"{len(differ)}, on {sorted({key[0] for key in differ})}" if private
+                else str(differ))
+        failures.append(f"adapters {where}: addresses differ: {said}")
+    for key in sorted(set(mine) & set(theirs)):
+        failures += _judge_address(key, mine[key], theirs[key], where, private)
+    route = seen.get("route") or []
+    out = links.get(route[0].get("dev"), {}).get("ifindex", 0) if route else 0
+    if seen.get("internet") != out:
+        failures.append(f"adapters {where}: the route out through {seen.get('internet')}, "
+                        f"ip says {out}")
+    # By address AND state: the duplicate is on both ends of its pair, in use on one.
+    for ip, field, value, what in ((LEASED, 2, ORIGIN_DHCP, "a lease"),
+                                   (DEPRECATED, 3, DAD_DEPRECATED, "deprecated"),
+                                   (DUPLICATE6, 3, DAD_DUPLICATE, "a duplicate")):
+        if states and not any(x[0] == ip and x[field] == value for x in mine.values()):
+            failures.append(f"adapters {where}: {ip} not seen as {what} "
+                            f"({[x for x in mine.values() if x[0] == ip]})")
     return failures
 
 
@@ -485,6 +603,45 @@ def _reset_phase():
         far.close()
 
 
+def _read_adapters(argv):
+    r = subprocess.run([*argv, sys.executable, "-c", ADAPTERS_CLIENT], cwd=ROOT,
+                       capture_output=True, text=True, timeout=60)
+    return json.loads(r.stdout.strip() or "{}")
+
+
+def _adapters_phase():
+    """The Adapters tool in the namespace, with an address in each state it names, and on
+    this machine as it is - each against ``ip -j``. Everything made here is the
+    namespace's and goes with it."""
+    dummy, pair = f"{NS}-d", (f"{NS}-a", f"{NS}-b")
+    _ip("-n", NS, "link", "add", dummy, "type", "dummy")
+    _ip("-n", NS, "link", "set", dummy, "up")
+    _ip("-n", NS, "addr", "add", f"{LEASED}/24", "dev", dummy, "valid_lft", "300",
+        "preferred_lft", "100")
+    _ip("-n", NS, "addr", "add", f"{DEPRECATED}/24", "dev", dummy, "valid_lft", "300",
+        "preferred_lft", "0")
+    _ip("-n", NS, "link", "add", pair[0], "type", "veth", "peer", "name", pair[1])
+    for end in pair:
+        _ip("-n", NS, "link", "set", end, "up")
+    _ip("-n", NS, "addr", "add", f"{DUPLICATE6}/64", "dev", pair[0], "nodad")
+    _ip("-n", NS, "addr", "add", f"{DUPLICATE6}/64", "dev", pair[1])
+    _ip("-n", NS, "route", "add", "default", "via", HOST)
+    for _ in range(50):                     # DAD takes about a second
+        shown = subprocess.run(["ip", "-n", NS, "-j", "addr", "show", "dev", pair[1]],
+                               capture_output=True, text=True, timeout=10).stdout
+        if '"dadfailed"' in shown:
+            break
+        time.sleep(0.1)
+    inside = _read_adapters(in_namespace())
+    outside = _read_adapters([])
+    # The namespace is this script's own, documentation addresses; of the machine itself
+    # only how many adapters it has - its addresses and names stay out of the log.
+    print("adapters:", json.dumps({"namespace": inside.get("product"),
+                                   "this machine": len(outside.get("product", []))}))
+    return judge_adapters(inside, "in the namespace", states=True) + judge_adapters(
+        outside, "on this machine", private=True)
+
+
 def main(argv=None, environment=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--require", action="store_true",
@@ -510,6 +667,7 @@ def main(argv=None, environment=None):
         failures += _loss_phase()
         failures += _ping_phase()
         failures += _reset_phase()
+        failures += _adapters_phase()       # last: it gives the namespace a default route
     except Exception as exc:                      # a phase that could not run is a failure
         failures.append(f"{type(exc).__name__}: {exc}")
     finally:
