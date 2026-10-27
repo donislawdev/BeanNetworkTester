@@ -52,8 +52,8 @@ from .pages import PAGES, teardown as teardown_pages
 from .profiles import ProfileStore
 from .rates import SessionPeaks
 from . import scope
-from .scaling import (geometry_fits, init_scaling, initial_geometry,
-                      max_window_size, min_window_size, scaled)
+from .scaling import (init_scaling, max_window_size, min_window_size, restored_geometry,
+                      scaled)
 from .scrollable import WheelDispatcher
 from .theme import (BG, FIELD, FG, MONO_FONT, MUT, apply_dark_titlebar,
                     disable_maximize, init_style, popdown_height,
@@ -266,15 +266,12 @@ class App:
         except Exception:
             screen_w, screen_h = 1366, 768
         maximum = max_window_size(screen_w, screen_h)
-        saved = str(self.ui.get("geometry", "") or "")
-        if saved and geometry_fits(saved, screen_w, screen_h, winenv.monitor_work_area):
-            geometry = saved
-        else:
-            w, h, x, y = initial_geometry(screen_w, screen_h)
-            geometry = f"{w}x{h}+{x}+{y}"
+        minimum = min_window_size(screen_w=screen_w, screen_h=screen_h)
+        geometry = restored_geometry(str(self.ui.get("geometry", "") or ""), minimum,
+                                     screen_w, screen_h, winenv.monitor_work_area)
         try:
             root.geometry(geometry)
-            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))
+            root.minsize(*minimum)
             # a capped size AND no maximise button: the layout has an upper bound
             # at which it still looks like a layout, so do not offer more
             root.maxsize(*maximum)

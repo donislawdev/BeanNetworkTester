@@ -39,7 +39,7 @@ from .. import dialogs
 from ..clipboard import copy_confirmed
 from ..theme import ADAPTER_COLORS, CHARS, ROWS, space, style_menu
 from ..tooltip import add_tooltip
-from ..widgets import SortableTree
+from ..widgets import SortableTree, make_room
 from .base import Poller, StatusLine, job, remembered
 from .details import DetailsMenu, popup, render_detail, say
 
@@ -56,6 +56,12 @@ TIPS_LINUX = {**TIPS, "name": "tips.tools_adapters_col_name_linux"}
 MIN_CHARS = {"name": CHARS["adapter"], "status": CHARS["if_status"],
              "kind": CHARS["if_kind"], "ipv4": CHARS["address"],
              "internet": CHARS["internet"]}
+
+PROXY_KIND = adapters.Words("tools.adapters.kind.proxy")
+# The words the list can say: each column is born as wide as the widest of them, in
+# the window's language (``widgets.make_room``) - the proxy row's among them.
+WORDS = {"status": (*adapters.vocabulary(adapters.STATUS, adapters.STATUS_PREFIX), *proxy.STATES),
+         "kind": (*adapters.vocabulary(adapters.KINDS, adapters.KIND_PREFIX), PROXY_KIND)}
 
 DETAIL_COLUMNS = {"item": "tools.adapters.col.item", "value": "tools.adapters.col.value",
                   "note": "tools.adapters.col.note"}
@@ -106,7 +112,7 @@ def render(adapter):
     """One adapter's cells, in ``COLUMNS`` order."""
     if isinstance(adapter, ProxyEntry):
         return (T("tools.adapters.proxy.row"), say(proxy.state_words(adapter.reading)),
-                T("tools.adapters.kind.proxy"), proxy.first_server(adapter.reading), "")
+                say(PROXY_KIND), proxy.first_server(adapter.reading), "")
     row = adapter.row
     return (row.name, say(adapters.status_words(row.status)),
             say(adapters.kind_words(row.kind)), adapter.first_ipv4(),
@@ -153,6 +159,7 @@ class AdaptersPanel:
             top, COLUMNS, sort=self._sort("sort"), on_sort=self._on_sort,
             height=ROWS["adapters"], min_chars=MIN_CHARS, tips=tips(), tags=ADAPTER_COLORS,
             selectmode="browse", empty_text="tools.common.working")
+        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})
         self.table.bind_select(self._on_select)
         bottom = ttk.Frame(self.frame)
         bottom.pack(fill="both", expand=True, padx=space("page"),

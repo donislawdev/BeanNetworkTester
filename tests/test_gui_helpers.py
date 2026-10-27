@@ -74,6 +74,31 @@ def test_geometry_fits_rejects_stale_saved_geometry():
     check("geometry: garbage is rejected", not scaling.geometry_fits("nonsense", 1366, 768))
 
 
+def test_a_saved_window_below_the_minimum_grows_on_its_own_monitor():
+    """A window an older, narrower version saved: grown to the minimum, and moved
+    left only as far as the growth would push it past its monitor's edge."""
+    grow = scaling.grown_to
+    check("grown in place where there is room",
+          grow("760x920+100+50", 960, 560, 1920, 1080) == "960x920+100+50")
+    check("moved left at the right edge, not 200 px past it",
+          grow("760x920+1150+50", 960, 560, 1920, 1080) == "960x920+960+50",
+          f"({grow('760x920+1150+50', 960, 560, 1920, 1080)})")
+    left_of_primary = lambda x, y: (-1920, 0, 0, 1040)  # noqa: E731
+    on_left = grow("760x900+-770+40", 960, 560, 1920, 1080, left_of_primary)
+    check("a monitor left of the primary one: kept on it", on_left == "960x900+-960+40",
+          f"({on_left})")
+    check("...and the result is still a geometry that is kept",
+          scaling.geometry_fits(on_left, 1920, 1080, left_of_primary))
+    check("a height below the minimum grows too, and up from the bottom",
+          grow("960x400+0+700", 960, 560, 1920, 1080) == "960x560+0+520")
+    check("never past the monitor's left edge",
+          grow("760x600+50+40", 960, 560, 900, 1080) == "960x600+0+40")
+    check("a window with the minimum is left exactly as saved",
+          grow("1200x900+700+30", 960, 560, 1920, 1080) == "1200x900+700+30")
+    check("garbage is handed on for geometry_fits to refuse",
+          grow("nonsense", 960, 560, 1920, 1080) == "nonsense")
+
+
 def _primary_only(x, y):
     """One monitor, 3840x2088 of work area. The nearest one is always this one."""
     return (0, 0, 3840, 2088)

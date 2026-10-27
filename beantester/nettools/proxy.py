@@ -114,12 +114,18 @@ CURL_SKIPS = "HTTP_PROXY"
 
 
 # -- the row on the adapter list ---------------------------------------------------- #
+IN_USE, UNREADABLE, NOT_SET = (Words("tools.adapters.proxy.state.in_use"),
+                               Words("tools.adapters.proxy.state.unreadable"),
+                               Words("tools.adapters.proxy.state.not_set"))
+STATES = (IN_USE, UNREADABLE, NOT_SET)      # what its column is sized for
+
+
 def state_words(reading):
     if in_use(reading):
-        return Words("tools.adapters.proxy.state.in_use")
+        return IN_USE
     if unreadable(reading):
-        return Words("tools.adapters.proxy.state.unreadable")
-    return Words("tools.adapters.proxy.state.not_set")
+        return UNREADABLE
+    return NOT_SET
 
 
 def first_server(reading):

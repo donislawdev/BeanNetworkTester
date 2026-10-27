@@ -37,16 +37,30 @@ def test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on():
         from beantester import winenv
 
         winenv.monitor_work_area = lambda x, y: (1920, 0, 3000, 1920)
-        app.ui.set("geometry", "800x600+2400+100")
+        app.ui.set("geometry", "1000x600+2400+100")
         app._restore_geometry()
-        assert root.kw["geometry"] == "800x600+2400+100", root.kw["geometry"]
+        assert root.kw["geometry"] == "1000x600+2400+100", root.kw["geometry"]
 
         # ...and with that monitor unplugged the window must NOT be put back there.
         winenv.monitor_work_area = lambda x, y: (0, 0, 1920, 1080)
         app._restore_geometry()
         spec = root.kw["geometry"]
-        assert spec != "800x600+2400+100", spec
+        assert spec != "1000x600+2400+100", spec
         assert int(spec.split("+")[1]) < 1920, spec
+    """)
+
+
+def test_a_window_saved_narrower_than_today_grows_and_stays_on_its_monitor():
+    """Wiring, not arithmetic (``scaling.grown_to``): a size an older version saved,
+    when its window was narrower, is grown here - where the corner can move - not by
+    Tk, which grows a window to the right and put this one 200 px past the edge."""
+    run_gui("""
+        from beantester.gui import scaling
+        min_w, min_h = scaling.min_window_size(screen_w=1920, screen_h=1080)
+        app.ui.set("geometry", f"{min_w - 200}x900+{1920 - (min_w - 200) - 10}+40")
+        app._restore_geometry()
+        spec = root.kw["geometry"]
+        assert spec == f"{min_w}x900+{1920 - min_w}+40", (spec, min_w)
     """)
 
 
@@ -485,6 +499,39 @@ def test_the_render_check_measures_every_row_of_tabs():
     counted = {n.id for n in ast.walk(verdict.value) if isinstance(n, ast.Name)}
     check("a squeezed row and a broken proof both fail the run",
           {"squeezed", "selftest"} <= counted, f"({sorted(counted)})")
+
+
+def test_the_render_check_measures_every_table_that_cannot_scroll_sideways():
+    """A column past the edge of a table without a sideways scrollbar is cut, header
+    and all: TCP health's list asked 699 to 716 px of 691 at the old 760 px window,
+    in every language and on both systems (2026-10-27), and the check said OK. It now
+    measures each such table on every surface, and first proves on tables made to
+    fail that it can tell one that does not fit from one that does - real Tk only,
+    so here the wiring is pinned on the source."""
+    func = next(n for n in ast.walk(_parsed("tools", "ci_gui_render.py"))
+                if isinstance(n, ast.FunctionDef) and n.name == "check_language")
+    scan = next(n for n in ast.walk(func)
+                if isinstance(n, ast.FunctionDef) and n.name == "scan")
+    in_scan = {n.func.id for n in ast.walk(scan)
+               if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("every surface's scan measures its tables", "_cut_tables" in in_scan,
+          f"({sorted(in_scan)})")
+    called = {n.func.id for n in ast.walk(func)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("the check first proves it can fail", "_table_check_can_fail" in called,
+          f"({sorted(called)})")
+    verdict = next(n for n in ast.walk(func)
+                   if isinstance(n, ast.Assign)
+                   and any(isinstance(t, ast.Name) and t.id == "ok" for t in n.targets))
+    counted = {n.id for n in ast.walk(verdict.value) if isinstance(n, ast.Name)}
+    check("a cut table fails the run", "tables" in counted, f"({sorted(counted)})")
+    # ...and a PLACED widget past its parent: the table's empty note was one (Linux,
+    # Polish, 905 px in 891), cut by the frame while it had all the width it asked for
+    check("every surface's scan measures what is placed", "_overflowing_placed" in in_scan,
+          f"({sorted(in_scan)})")
+    check("that check first proves it can fail", "_placed_check_can_fail" in called,
+          f"({sorted(called)})")
+    check("a cut placed widget fails the run", "placed" in counted, f"({sorted(counted)})")
 
 
 def test_the_notebooks_inside_a_page_have_the_narrower_tabs():

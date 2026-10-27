@@ -24,8 +24,13 @@ CHROME_W = 40
 # measured, and it showed: at the old 620 px minimum the Tools sub-tabs were cut in
 # every language but Chinese, Windows included (2026-10-26). Width is what cuts - a
 # row of tabs or buttons cannot wrap - while a shorter window scrolls, so the
-# minimum HEIGHT stays below the first-run one.
-FIRST_RUN = (760, 920)
+# minimum HEIGHT stays below the first-run one. 960 since 2026-10-27, 760 before: at
+# 760 the list of TCP health had a 691 px table for six columns that wanted 699 to
+# 716 (real Tk, Windows and Linux), so its last column was cut in every language, and
+# with whole words and the longest IPv4 address and port they want 858 - the table
+# is 891 at 960 (rendered, Linux's widest font). 960 also fits a 1366 px screen at
+# 125 %; at 150 % that screen caps it, as it always capped a wider window.
+FIRST_RUN = (960, 920)
 MIN_H = 560
 
 _scale = 1.0
@@ -93,6 +98,18 @@ def text_width(text, padding=16, font=None):
 def column_width(header, min_chars=0, padding=22):
     """Treeview column width: fits the header, never below ``min_chars``."""
     return max(text_width(header, padding), scaled(min_chars * 7 + padding))
+
+
+# A treeview cell shows its text whole from about 4 px wider than the text at 100 %
+# (6 at 150 %) - MEASURED 2026-10-27 on real Tk, the clam theme: the text starts that
+# far in, and nothing is kept on its right. 8 leaves room for a glyph whose ink
+# reaches past its advance.
+CELL_PAD = 8
+
+
+def cell_width(text, font=None):
+    """Width a table column needs to show ``text`` whole in one of its cells."""
+    return text_width(text, CELL_PAD, font)
 
 
 def initial_geometry(screen_w, screen_h, want=FIRST_RUN, scale=None):
@@ -183,12 +200,63 @@ def geometry_fits(geometry, screen_w, screen_h, bounds_at=None):
     size lost, not a window lost, and it buys the case that matters: a window on a
     monitor LARGER than the primary one, which the old check rejected outright.
     """
+    parsed = _parse_geometry(geometry)
+    if parsed is None:
+        return False
+    w, h, x, y = parsed
+    left, top, right, bottom = _monitor_of(x, y, screen_w, screen_h, bounds_at)
+    if w < 320 or h < 320 or w > right - left or h > bottom - top:
+        return False
+    # allow a little off-screen slack, but the title bar must stay reachable
+    return left - 20 <= x <= right - 100 and top <= y <= bottom - 60
+
+
+def restored_geometry(saved, minimum, screen_w, screen_h, bounds_at=None):
+    """The ``WxH+X+Y`` the main window opens with: the one saved, grown to
+    ``minimum`` (``grown_to``) while it still describes a reachable window
+    (``geometry_fits``), else the first-run size, centred."""
+    saved = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)
+    if saved and geometry_fits(saved, screen_w, screen_h, bounds_at):
+        return saved
+    w, h, x, y = initial_geometry(screen_w, screen_h)
+    return f"{w}x{h}+{x}+{y}"
+
+
+def grown_to(geometry, min_w, min_h, screen_w, screen_h, bounds_at=None):
+    """A saved ``WxH+X+Y`` no smaller than the window's minimum, still on its monitor.
+
+    Tk grows a window restored below its ``minsize`` by itself (measured 2026-10-27
+    on Windows and Linux: a saved 760x920 under a 960 minimum opens 960 wide), but it
+    grows it to the RIGHT, so a window an older version saved against the right edge
+    of its monitor opened with 200 px past that edge. The size is grown here instead,
+    and the corner moved left (or up) by as much as the growth would push the window
+    past its monitor, never past the monitor's left (top) edge. A window that already
+    has the minimum, and anything that is not a geometry, come back unchanged:
+    ``geometry_fits`` judges them as it always did.
+    """
+    parsed = _parse_geometry(geometry)
+    if parsed is None:
+        return geometry
+    w, h, x, y = parsed
+    if w >= min_w and h >= min_h:
+        return geometry
+    left, top, right, bottom = _monitor_of(x, y, screen_w, screen_h, bounds_at)
+    w, h = max(w, int(min_w)), max(h, int(min_h))
+    if x + w > right:
+        x = max(left, right - w)
+    if y + h > bottom:
+        y = max(top, bottom - h)
+    return f"{w}x{h}+{x}+{y}"
+
+
+def _parse_geometry(geometry):
+    """``(w, h, x, y)`` of a ``WxH+X+Y`` string, or ``None`` for anything else."""
     try:
         size, _, rest = str(geometry).partition("+")
         w_s, _, h_s = size.partition("x")
         w, h = int(w_s), int(h_s)
     except (TypeError, ValueError):
-        return False
+        return None
     parts = rest.split("+")
     try:
         # Tk writes a negative coordinate as "+-1882", so splitting on "+" leaves
@@ -196,16 +264,18 @@ def geometry_fits(geometry, screen_w, screen_h, bounds_at=None):
         # round trip through ui.json.
         x, y = (int(parts[0]), int(parts[1])) if len(parts) >= 2 else (0, 0)
     except ValueError:
-        return False
-    left, top, right, bottom = 0, 0, int(screen_w), int(screen_h)
+        return None
+    return w, h, x, y
+
+
+def _monitor_of(x, y, screen_w, screen_h, bounds_at):
+    """The work area a window's corner at ``(x, y)`` is judged by: the monitor
+    ``bounds_at`` names for it, else the primary screen."""
     if bounds_at is not None:
         area = bounds_at(x, y)
         if area is not None:
-            left, top, right, bottom = (int(edge) for edge in area)
-    if w < 320 or h < 320 or w > right - left or h > bottom - top:
-        return False
-    # allow a little off-screen slack, but the title bar must stay reachable
-    return left - 20 <= x <= right - 100 and top <= y <= bottom - 60
+            return tuple(int(edge) for edge in area)
+    return 0, 0, int(screen_w), int(screen_h)
 
 
 def centred_in(bounds, width, height):

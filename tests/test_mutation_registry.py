@@ -250,9 +250,8 @@ MUTATIONS = [
         # old primary-screen answer, so nothing looks broken.
         "label": "gui: the main window validates its geometry against the primary screen",
         "file": "beantester/gui/app.py",
-        "old": "        if saved and geometry_fits(saved, screen_w, screen_h,"
-               " winenv.monitor_work_area):",
-        "new": "        if saved and geometry_fits(saved, screen_w, screen_h):",
+        "old": "                                     screen_w, screen_h, winenv.monitor_work_area)\n",
+        "new": "                                     screen_w, screen_h)\n",
         "test": "test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on",
     },
     {
@@ -9686,8 +9685,8 @@ MUTATIONS = [
     {
         "label": "window: the main window does not say which screen its minimum is for",
         "file": "beantester/gui/app.py",
-        "old": "            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))\n",
-        "new": "            root.minsize(*min_window_size())\n",
+        "old": "        minimum = min_window_size(screen_w=screen_w, screen_h=screen_h)\n",
+        "new": "        minimum = min_window_size()\n",
         "test": "test_the_main_window_tells_its_minimum_which_screen_it_is_on",
     },
     {
@@ -9738,6 +9737,98 @@ MUTATIONS = [
         "old": "    selftest = _tab_check_can_fail(root)\n",
         "new": "    selftest = []\n",
         "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        # 2026-10-27: TCP health's list was cut at 760 px and the check said OK.
+        "label": "render check: a surface's tables are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        tables.extend(_cut_tables(root))\n",
+        "new": "        tables.extend([])\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a cut table passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not tables\n",
+        "new": "                                                          and True\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: the table check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest += _table_check_can_fail(root)\n",
+        "new": "    selftest += []\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a surface's placed widgets are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        placed.extend(_overflowing_placed(root))\n",
+        "new": "        placed.extend([])\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a placed widget past its parent passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not placed\n",
+        "new": "                                                          and True\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: the placed-widget check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest += _placed_check_can_fail(root)\n",
+        "new": "    selftest += []\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "tables: the empty note does not wrap inside its table",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self._empty_note.config(wraplength=int(self.tree.winfo_width() * NOTE_SHARE))\n",
+        "new": "            pass\n",
+        "test": "test_the_empty_note_wraps_inside_its_table",
+    },
+    {
+        "label": "tables: a column's words do not size it",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        if need > table._natural.get(col, 0):\n",
+        "new": "            if False:\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "tables: TCP health's list declares no words",
+        "file": "beantester/gui/toolbox/tcphealth.py",
+        "old": "        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})\n",
+        "new": "        make_room(self.table, {})\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "tables: the adapter list declares no words",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})\n",
+        "new": "        make_room(self.table, {})\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "adapters: the column words leave out the proxy row's type",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "         \"kind\": (*adapters.vocabulary(adapters.KINDS, adapters.KIND_PREFIX), PROXY_KIND)}\n",
+        "new": "         \"kind\": (*adapters.vocabulary(adapters.KINDS, adapters.KIND_PREFIX),)}\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "window: a size saved narrower is not grown here (Tk grows it rightwards)",
+        "file": "beantester/gui/scaling.py",
+        "old": "    if x + w > right:\n        x = max(left, right - w)\n",
+        "new": "",
+        "test": "test_a_saved_window_below_the_minimum_grows_on_its_own_monitor",
+    },
+    {
+        "label": "window: the main window restores a saved size without growing it",
+        "file": "beantester/gui/scaling.py",
+        "old": "    saved = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)\n",
+        "new": "    saved = str(saved)\n",
+        "test": "test_a_window_saved_narrower_than_today_grows_and_stays_on_its_monitor",
     },
 ]
 

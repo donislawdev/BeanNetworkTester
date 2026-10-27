@@ -369,7 +369,7 @@ class PingPanel:
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
-        # Wrapped inside both page margins: a Polish summary is longer than the 760 px
+        # Wrapped inside both page margins: a Polish summary can be longer than the
         # window (``PAGE_WRAP_PAD``).
         self.session = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.session.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
@@ -397,7 +397,7 @@ class PingPanel:
         # 71 px tall at 760x678 (rendered). The tip and the help say what it is.
         add_tooltip(self.canvas, "tips.tools_ping_chart")
         # Sideways scrolling: a router's answer ("TTL expired on the way (from ...)")
-        # is longer than the Result column at 760 px; widened, it scrolls instead of
+        # is longer than the Result column; widened, it scrolls instead of
         # squeezing the numbers. The copied results always carry it whole.
         self.table = SortableTree(
             body, COLUMNS, sort={"col": "", "reverse": False}, on_sort=lambda _s: self._show(),
