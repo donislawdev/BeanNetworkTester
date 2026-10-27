@@ -214,14 +214,14 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
   `EPERM` usually means a firewall rule on this computer.
   A zone of an IPv6 address can be the interface's name (`fe80::1%eth0`). TCP health and
   Adapters say that they work on Windows only for now, and so do the row menu entries that open
-  them, and the Diagnostics boxes that add the adapters or the proxy to the report.
+  them, and the Diagnostics boxes that add the adapters or the proxy to the report. The
+  Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and pydivert.
 - **"Reset this connection"** on the Connections page works on Linux for TCP over IPv4 and IPv6,
   as root or with the capability CAP_NET_ADMIN. The program using the connection gets
   `ECONNABORTED`, and the other end gets a reset. It needs a kernel built with
   `CONFIG_INET_DIAG_DESTROY`: Ubuntu's is, WSL's is not, and there the entry is greyed out. A
-  connection the list of this system's connections does not show has closed, or belongs to a
-  container or another network namespace: it cannot be reset from here. The Diagnostics help explains the Linux checks: capture rights, the kernel, BTF and
-  pydivert.
+  connection that is not in this system's list of connections has closed, or belongs to a
+  container or another network namespace, and cannot be reset from here.
 
 ## The window
 

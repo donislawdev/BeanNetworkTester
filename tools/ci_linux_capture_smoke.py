@@ -426,15 +426,23 @@ def heard(conn, wait):
     return "data" if data else "closed"
 
 
-def held_connection(far):
+def held_connection(far, clients, ends):
     """The reset client, connected from the namespace and waiting; and the far end's
-    socket of it, or None when it never connected."""
+    socket of it, or None when it never connected. The client goes on ``clients`` and the
+    far end's socket on ``ends`` before anything can fail, so the caller stops and
+    closes them on every path."""
     p = subprocess.Popen(in_namespace(sys.executable, "-c", RESET_CLIENT, HOST, str(RESET_PORT)),
                          cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, text=True)
+    clients.append(p)
     if p.stdout.readline().strip() != "ready":
         return p, None
-    return p, far.accept()[0]
+    try:
+        conn = far.accept()[0]
+    except OSError:                 # the far end's 10 s wait ran out
+        return p, None
+    ends.append(conn)
+    return p, conn
 
 
 def fire(client, conn, wait):
@@ -448,15 +456,13 @@ def fire(client, conn, wait):
 
 def _reset_phase():
     far = start_tcp_far_end()
-    clients = []
+    clients, ends = [], []
     try:
-        client, conn = held_connection(far)
-        clients.append(client)
+        client, conn = held_connection(far, clients, ends)
         plain = fire(client, conn, 2.0) if conn else {"outcome": "never connected"}
         # Connected BEFORE the session: --loss 100 would keep a new connection out. The
         # far end listens 1.5 s of a 6 s session.
-        client, conn = held_connection(far)
-        clients.append(client)
+        client, conn = held_connection(far, clients, ends)
         if conn is None:
             return ["reset under loss: the client never connected"]
         result, lines, code = run_session(
@@ -474,6 +480,8 @@ def _reset_phase():
             if client.poll() is None:
                 client.kill()
             client.wait(10)
+        for conn in ends:           # closed already by heard(), unless a step failed first
+            conn.close()
         far.close()
 
 
