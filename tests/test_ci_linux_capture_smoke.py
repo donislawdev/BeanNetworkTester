@@ -171,12 +171,23 @@ def test_every_broken_adapters_reading_is_named():
         "a lease read as set by hand": lambda s: product(s, "bntci-d")["addresses"][0].__setitem__(
             2, 1),
         "the wrong way out": lambda s: s.update(internet=3),
+        "an adapter's index another than ip's": lambda s: product(s, "lo").update(index=7),
         "nothing listed": lambda s: s.update(product=[]),
     }
     for name, change in cases.items():
         failures = broken(change)
         check(f"{name}: failed, naming the adapters", any(f.startswith("adapters here")
                                                          for f in failures), f"({failures})")
+    leaky = _adapters_seen()
+    product(leaky, "bntci-d")["addresses"].pop()
+    product(leaky, "bntci-b").update(mac="02:00:00:00:00:0b")
+    product(leaky, "lo")["addresses"][0][3] = smoke.DAD_DEPRECATED
+    said = smoke.judge_adapters(leaky, "here", private=True)
+    check("the machine's own adapters: what differs is named, never an address or a MAC",
+          len(said) == 3 and not any(x in " ".join(said) for x in (
+              smoke.DEPRECATED, "127.0.0.1", "02:00:00:00:00:0")), f"({said})")
+    check("the same failures with the namespace's details",
+          smoke.DEPRECATED in " ".join(smoke.judge_adapters(leaky, "here")))
     other = _adapters_seen()
     product(other, "lo")["addresses"][0][3] = smoke.DAD_DEPRECATED
     check("a DAD state ip does not show, on a machine with no states required",

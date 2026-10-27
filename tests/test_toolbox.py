@@ -520,7 +520,12 @@ def test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read(
         dg.cleanup_blocker = lambda: capture_backend.current().CLEANUP_BLOCKER
         real_is_windows = driver.is_windows
 
+        import sys
+        real_platform = sys.platform
+
         def build(windows, backend, readable):
+            # the platform too: a box's tip follows it (gui/toolbox/diagnostics.box_tip)
+            sys.platform = "win32" if windows else "linux"
             driver.is_windows = lambda: windows
             capture_backend._CURRENT = backend
             for spec in OPTIONAL_BOXES:
@@ -529,6 +534,7 @@ def test_diagnostics_on_linux_speaks_of_linux_and_greys_out_what_it_cannot_read(
                 return DiagnosticsPanel(app, app.root)
             finally:
                 driver.is_windows = real_is_windows
+                sys.platform = real_platform
 
         def sheet(panel):
             opened = []

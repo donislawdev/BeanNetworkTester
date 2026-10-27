@@ -531,22 +531,26 @@ class _Linux:
         except OSError as exc:
             raise AdaptersUnavailable("", f"rtnetlink: {exc}") from exc
         links = tables.links[:MAX_ADAPTERS]
-        dns, stubs = self._dns(links)
-        return tuple(self._row(link, tables, dns.get(link.ifindex, ()), stubs) for link in links)
+        try:
+            dns, stubs = self._dns(links)
+        except OSError as exc:      # a resolver file it may not read costs the DNS servers only
+            crashlog.note(exc, "adapters.dns")
+            dns, stubs = {}, frozenset()
+        mine = _by_link(tables)
+        return tuple(self._row(link, mine.get(link.ifindex, ([], [])), dns.get(link.ifindex, ()),
+                               stubs) for link in links)
 
     def best_interface(self, version):
         return rtnetlink.route_to(INTERNET_PROBES[version], self.talk)
 
     # -- one adapter -------------------------------------------------------- #
-    def _row(self, link, tables, dns, stubs):
+    def _row(self, link, mine, dns, stubs):
+        """``mine``: the link's addresses and default routes (``_by_link``)."""
+        addresses, defaults = mine
         name = link.name.decode("utf-8", errors="replace")
         status = _linux_status(link)
         device = self._device(link, status == STATUS_UP)
-        addresses = [a for a in tables.addresses if a.ifindex == link.ifindex and a.ip]
         rows = tuple(_linux_address(a) for a in addresses[:MAX_ENTRIES])
-        defaults = [r for r in tables.routes
-                    if r.dst_len == 0 and r.kind == RTN_UNICAST and r.oif == link.ifindex
-                    and r.table != RT_TABLE_LOCAL]
         gateways = tuple(dict.fromkeys(r.gateway for r in defaults if r.gateway))[:MAX_ENTRIES]
         dhcp = (any(a.version == 4 and a.origin == ORIGIN_DHCP for a in rows)
                 or any(r.protocol == RTPROT_DHCP for r in defaults))
@@ -610,6 +614,19 @@ class _Linux:
 
     def _path(self, relative):
         return os.path.join(self.root, relative)
+
+
+def _by_link(tables):
+    """``{ifindex: ([address, ...], [default route, ...])}`` - each table walked once, not
+    once per adapter: a host with hundreds of container adapters has thousands of rows."""
+    out: dict = {}
+    for address in tables.addresses:
+        if address.ip:
+            out.setdefault(address.ifindex, ([], []))[0].append(address)
+    for route in tables.routes:
+        if route.dst_len == 0 and route.kind == RTN_UNICAST and route.table != RT_TABLE_LOCAL:
+            out.setdefault(route.oif, ([], []))[1].append(route)
+    return out
 
 
 def _speed(path):

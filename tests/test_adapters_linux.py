@@ -151,6 +151,20 @@ def test_linux_reads_resolveds_servers_only_when_programs_ask_its_stub(tmp_path)
           not any(row.dns_servers for row in found.values()))
 
 
+def test_a_resolver_file_it_may_not_read_costs_the_dns_servers_only(tmp_path, monkeypatch):
+    def refused(path, owner=None, limit=paths.SMALL_FILE):
+        raise PermissionError(13, "Permission denied", path)
+    noted = []
+    monkeypatch.setattr(paths, "read_small_file", refused)
+    monkeypatch.setattr(adapters.crashlog, "note", lambda exc, area: noted.append(area))
+    found, reading = rows(tmp_path)
+    check("every adapter still listed, with its addresses",
+          len(found) == 8 and found["bv0"].addresses and reading.internet == {4: 2, 6: 2})
+    check("no DNS server, and the reason kept for the crash log",
+          not any(r.dns_servers for r in found.values()) and noted == ["adapters.dns"],
+          f"({noted})")
+
+
 def test_linux_failures_say_which_one(tmp_path):
     def changing(message):
         raise rtnetlink.Changing(11, "rtnetlink: the lists kept changing while they were read")
@@ -172,7 +186,7 @@ def test_a_linux_name_that_is_not_utf8_is_shown_and_keyed_apart(tmp_path):
     tables = rtnetlink.Tables((rtnetlink.Link(9, b"eth\xff", 1, 0, 2, 1500, b"", ""),
                                rtnetlink.Link(10, b"eth\xfe", 1, 0, 2, 1500, b"", ""),
                                rtnetlink.Link(11, b"proxy", 1, 0, 2, 1500, b"", "")), (), ())
-    made = [native._row(link, tables, (), frozenset()) for link in tables.links]
+    made = [native._row(link, ([], []), (), frozenset()) for link in tables.links]
     check("shown with the byte replaced", made[0].name == "eth�")
     check("two such names keep two keys", made[0].key != made[1].key, f"({made[0].key})")
     check("an adapter called proxy is not the proxy row", made[2].key == "if:proxy")

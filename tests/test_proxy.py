@@ -178,16 +178,26 @@ def test_one_part_that_fails_costs_only_itself(monkeypatch):
 
 
 def test_a_binding_that_will_not_load_costs_the_proxy_and_raises_nothing(monkeypatch):
-    """The adapter list is read in the same job: the proxy must never cost it."""
+    """The adapter list is read in the same job: the proxy must never cost it. Windows'
+    reader on any runner (the platform stood in: on Linux ``read`` takes ``_Linux``)."""
     monkeypatch.setattr(crashlog, "note", lambda *a: None)
 
     def will_not_load(*_a, **_k):
         raise OSError("winhttp.dll did not load, on purpose")
     monkeypatch.setattr(proxy, "_Native", will_not_load)
+    monkeypatch.setattr(proxy.sys, "platform", "win32")
     reading = proxy.read()
     check("three parts, each saying why", reading.user is None and reading.machine is None
           and all("on purpose" in e for e in (reading.user_error, reading.machine_error,
                                                reading.env_error)), f"({reading})")
+    # Linux's reader the same way: its two parts say why, the part it has not is not a failure.
+    monkeypatch.setattr(proxy, "_Linux", will_not_load)
+    monkeypatch.setattr(proxy.sys, "platform", "linux")
+    reading = proxy.read()
+    check("Linux: the desktop and the variables say why, no WinHTTP part",
+          (reading.system, reading.machine, reading.machine_error) == ("linux", None, "")
+          and "on purpose" in reading.user_error and "on purpose" in reading.env_error,
+          f"({reading})")
 
 
 def test_a_text_is_read_up_to_its_bound(monkeypatch):

@@ -109,7 +109,11 @@ def test_gvariant_text_reads_as_g_variant_print_writes_it():
         proxy.gnome_values("org.gnome.system.proxy mode 'none' 'again'\n")
 
 
-def test_under_sudo_the_desktop_asked_is_the_persons_and_nothing_else_reaches_the_child():
+def test_under_sudo_the_desktop_asked_is_the_persons_and_nothing_else_reaches_the_child(
+        monkeypatch):
+    # An account database that knows everyone: "" must still mean "no home", on a
+    # runner with a uid 1000 as on one without.
+    monkeypatch.setattr(proxy.paths, "home_of", lambda uid: "/home/looked-up")
     run = Gsettings()
     linux(run, person=(1000, 1000), own_uid=0).user()
     argv, env = run.calls[0]
@@ -200,6 +204,28 @@ def test_the_variables_come_from_every_file_a_new_program_gets_them_from(tmp_pat
     check("export allowed, a variable shown as written",
           (got["HTTP_PROXY"].value, got["no_proxy"].value)
           == ("http://192.0.2.4:8080", "localhost,${OTHER}"))
+
+
+def test_an_empty_variable_unsets_it_and_sends_nobody_anywhere(tmp_path):
+    root, home = str(tmp_path / "root"), str(tmp_path / "home")
+    _write(root, "etc/environment", "http_proxy=http://192.0.2.1:3128\nno_proxy=localhost\n")
+    _write(home, ".config/environment.d/10-mine.conf", "http_proxy=\nNO_PROXY=''\n")
+    native = linux(root=root, home=home, own_uid=os.stat(home).st_uid, person=None)
+    got = native.env()
+    check("the person's empty http_proxy= unsets every account's; empty is not a value",
+          got == (proxy.Variable("no_proxy", "localhost", "machine"),), f"({got})")
+    reading = proxy.Reading(proxy.NOTHING, "", None, "", got, "", "linux")
+    check("and nothing is in use", not logic.in_use(reading))
+
+
+def test_the_programs_started_are_found_where_the_child_looks_never_on_this_path(monkeypatch):
+    asked = []
+    monkeypatch.setattr(proxy.shutil, "which", lambda name, path=None: asked.append(
+        (name, path)) or None)
+    native = proxy._Linux(person=(1000, 1000), own_uid=0, home=HOME)
+    check("nothing found: no desktop to ask", native.user() is None)
+    check("looked up in CHILD_PATH only", asked == [("gsettings", proxy.CHILD_PATH)],
+          f"({asked})")
 
 
 def test_a_persons_files_that_are_not_theirs_are_not_read(tmp_path):

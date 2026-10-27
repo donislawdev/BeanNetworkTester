@@ -388,6 +388,13 @@ def assignments(text):
     return out
 
 
+def _trusted_which(name):
+    """``name`` in the directories the child is given (``CHILD_PATH``), never in this
+    process's own PATH: under sudo setpriv is started as root, and a PATH with a
+    directory the person can write to would let them choose what root runs."""
+    return shutil.which(name, path=CHILD_PATH)
+
+
 def _run(argv, env):
     """The one program this tool starts: gsettings (the docstring at the top says why,
     and what it was measured to send - nothing). Nothing of this process reaches it -
@@ -406,13 +413,14 @@ class _Linux:
     def __init__(self, run=None, which=None, root="/", person=_LOOK_UP, own_uid=None,
                  home=None):
         self.run = run or _run
-        self.which = which or shutil.which
+        self.which = which or _trusted_which
         self.root = root
         self.person = paths.invoking_user() if person is _LOOK_UP else person
         # geteuid exists off Windows only; there a test brings its own.
         self.own_uid = own_uid if own_uid is not None else getattr(os, "geteuid", lambda: 0)()
         self.uid = self.person[0] if self.person else self.own_uid
-        self.home = home or paths.home_of(self.uid)
+        # "" is a home that is not there, not a home to look up.
+        self.home = home if home is not None else paths.home_of(self.uid)
 
     # -- the desktop's settings ---------------------------------------------- #
     def user(self):
@@ -457,7 +465,10 @@ class _Linux:
                     machine.add(name)
                 values[name] = Variable(name, value, scope,
                                         replaces=scope == "user" and name in machine)
-        return tuple(values[name] for name in ENV_NAMES_LINUX if name in values)
+        # `http_proxy=` unsets it - the last word wins, and an empty one says "none", as
+        # an empty registry value does on Windows.
+        return tuple(values[name] for name in ENV_NAMES_LINUX
+                     if name in values and values[name].value)
 
     def _env_files(self):
         chosen = {}

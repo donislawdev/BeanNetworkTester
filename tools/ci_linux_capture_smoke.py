@@ -275,36 +275,43 @@ def _ip_up(link):
     return state == "UP" or (state == "UNKNOWN" and {"UP", "LOWER_UP"} <= flags)
 
 
-def _judge_links(name, mine, theirs, where):
+def _judge_links(name, mine, theirs, where, private):
     failures = []
+    if mine["index"] != theirs.get("ifindex"):
+        failures.append(f"adapters {where}: {name} index {mine['index']}, ip says "
+                        f"{theirs.get('ifindex')}")
     if mine["mtu"] != theirs.get("mtu"):
         failures.append(f"adapters {where}: {name} MTU {mine['mtu']}, ip says {theirs.get('mtu')}")
     mac = theirs.get("address", "") if theirs.get("link_type") == "ether" else mine["mac"]
     if mine["mac"] != mac:
-        failures.append(f"adapters {where}: {name} MAC {mine['mac']!r}, ip says {mac!r}")
+        said = "" if private else f" {mine['mac']!r}, ip says {mac!r}"
+        failures.append(f"adapters {where}: {name} MAC differs{said}")
     if (mine["status"] == STATUS_UP) != _ip_up(theirs):
         failures.append(f"adapters {where}: {name} status {mine['status']}, ip says "
                         f"{theirs.get('operstate')} {theirs.get('flags')}")
     return failures
 
 
-def _judge_address(key, mine, theirs, where):
+def _judge_address(key, mine, theirs, where, private):
+    shown = f"an address on {key[0]}" if private else str(key)
     failures = []
     if mine[3] != _ip_dad(theirs):
-        failures.append(f"adapters {where}: {key} DAD state {mine[3]}, ip says {_ip_dad(theirs)}")
+        failures.append(f"adapters {where}: {shown} DAD state {mine[3]}, ip says {_ip_dad(theirs)}")
     leased = mine[2] in (ORIGIN_DHCP, ORIGIN_ROUTER, ORIGIN_LEASE)
     if mine[2] != ORIGIN_WELL_KNOWN and leased != bool(theirs.get("dynamic")):
-        failures.append(f"adapters {where}: {key} origin {mine[2]}, ip says dynamic "
+        failures.append(f"adapters {where}: {shown} origin {mine[2]}, ip says dynamic "
                         f"{bool(theirs.get('dynamic'))}")
     return failures
 
 
-def judge_adapters(seen, where, states=False):
+def judge_adapters(seen, where, states=False, private=False):
     """Failures (empty = pass): the Adapters tool's read of a namespace against ``ip -j``
-    of the same one - adapters, MTU, MAC, state; every address, its prefix, its DAD
-    state and whether it has a lease; the adapter the route out leaves through.
+    of the same one - adapters, index, MTU, MAC, state; every address, its prefix, its
+    DAD state and whether it has a lease; the adapter the route out leaves through.
     ``states``: the namespace was made with a lease, a deprecated address and a
-    duplicate, and the tool must have seen each - or the comparison proved nothing."""
+    duplicate, and the tool must have seen each - or the comparison proved nothing.
+    ``private``: the machine's own adapters - a failure names the adapter and what
+    differs, never its addresses or MAC, which a log pasted anywhere would carry."""
     product = {a["name"]: a for a in seen.get("product", [])}
     links = {link["ifname"]: link for link in seen.get("link", [])}
     if not product:
@@ -313,14 +320,17 @@ def judge_adapters(seen, where, states=False):
     if set(product) != set(links):
         failures.append(f"adapters {where}: {sorted(product)}, ip lists {sorted(links)}")
     for name in sorted(set(product) & set(links)):
-        failures += _judge_links(name, product[name], links[name], where)
+        failures += _judge_links(name, product[name], links[name], where, private)
     theirs = {(link["ifname"], a["local"], a["prefixlen"]): a
               for link in seen.get("addr", []) for a in link.get("addr_info", [])}
     mine = {(name, x[0], x[1]): x for name, a in product.items() for x in a["addresses"]}
-    if set(mine) != set(theirs):
-        failures.append(f"adapters {where}: addresses differ: {sorted(set(mine) ^ set(theirs))}")
+    differ = sorted(set(mine) ^ set(theirs))
+    if differ:
+        said = (f"{len(differ)}, on {sorted({key[0] for key in differ})}" if private
+                else str(differ))
+        failures.append(f"adapters {where}: addresses differ: {said}")
     for key in sorted(set(mine) & set(theirs)):
-        failures += _judge_address(key, mine[key], theirs[key], where)
+        failures += _judge_address(key, mine[key], theirs[key], where, private)
     route = seen.get("route") or []
     out = links.get(route[0].get("dev"), {}).get("ifindex", 0) if route else 0
     if seen.get("internet") != out:
@@ -624,10 +634,12 @@ def _adapters_phase():
         time.sleep(0.1)
     inside = _read_adapters(in_namespace())
     outside = _read_adapters([])
+    # The namespace is this script's own, documentation addresses; of the machine itself
+    # only how many adapters it has - its addresses and names stay out of the log.
     print("adapters:", json.dumps({"namespace": inside.get("product"),
-                                   "this machine": [a["name"] for a in outside.get("product", [])]}))
+                                   "this machine": len(outside.get("product", []))}))
     return judge_adapters(inside, "in the namespace", states=True) + judge_adapters(
-        outside, "on this machine")
+        outside, "on this machine", private=True)
 
 
 def main(argv=None, environment=None):
